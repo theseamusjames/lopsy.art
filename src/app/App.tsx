@@ -6,6 +6,7 @@ import { ToolSettingsPanel } from '../panels/ToolSettingsPanel/ToolSettingsPanel
 import { PanelContainer } from '../panels/PanelContainer/PanelContainer';
 import { MenuBar } from './MenuBar/MenuBar';
 import { StatusBar } from './StatusBar/StatusBar';
+import { NewDocumentModal } from '../components/NewDocumentModal/NewDocumentModal';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useCanvasInteraction, strokeCurrentPath } from './useCanvasInteraction';
@@ -44,10 +45,41 @@ export function App() {
   const cropRect = useUIStore((s) => s.cropRect);
   const transform = useUIStore((s) => s.transform);
 
+  const documentReady = useEditorStore((s) => s.documentReady);
+  const createDocument = useEditorStore((s) => s.createDocument);
+  const openImageAsDocument = useEditorStore((s) => s.openImageAsDocument);
+  const showNewDocumentModal = useUIStore((s) => s.showNewDocumentModal);
+  const setShowNewDocumentModal = useUIStore((s) => s.setShowNewDocumentModal);
+
   const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+
+  const handleCreateDocument = useCallback((width: number, height: number, background: 'white' | 'transparent') => {
+    createDocument(width, height, background === 'transparent');
+    setShowNewDocumentModal(false);
+  }, [createDocument, setShowNewDocumentModal]);
+
+  const handleOpenFile = useCallback((file: File) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        const name = file.name.replace(/\.[^.]+$/, '');
+        openImageAsDocument(imageData, name);
+      }
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+    setShowNewDocumentModal(false);
+  }, [openImageAsDocument, setShowNewDocumentModal]);
 
   // Render canvas
   useEffect(() => {
@@ -571,8 +603,28 @@ export function App() {
   const [toolSettingsCollapsed, setToolSettingsCollapsed] = useState(false);
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
 
+  const showModal = !documentReady || showNewDocumentModal;
+
+  if (!documentReady) {
+    return (
+      <div className={styles.app}>
+        <NewDocumentModal
+          onCreateDocument={handleCreateDocument}
+          onOpenFile={handleOpenFile}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={styles.app}>
+      {showModal && (
+        <NewDocumentModal
+          onCreateDocument={handleCreateDocument}
+          onOpenFile={handleOpenFile}
+          onCancel={() => setShowNewDocumentModal(false)}
+        />
+      )}
       <div className={styles.header}>
         <MenuBar />
       </div>

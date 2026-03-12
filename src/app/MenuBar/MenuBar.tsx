@@ -123,13 +123,50 @@ function fillSelection() {
   state.updateLayerPixelData(activeId, buf.toImageData());
 }
 
+function openFileFromDisk(): void {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        const name = file.name.replace(/\.[^.]+$/, '');
+        useEditorStore.getState().openImageAsDocument(imageData, name);
+      }
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  };
+  input.click();
+}
+
 function getMenus(): MenuDef[] {
   return [
     {
       label: 'File',
       items: [
-        { label: 'New', shortcut: '\u2318N', disabled: true },
-        { label: 'Open...', shortcut: '\u2318O', disabled: true },
+        {
+          label: 'New',
+          shortcut: '\u2318N',
+          action: () => {
+            useUIStore.getState().setShowNewDocumentModal(true);
+          },
+        },
+        {
+          label: 'Open...',
+          shortcut: '\u2318O',
+          action: () => openFileFromDisk(),
+        },
         { separator: true, label: '' },
         { label: 'Save', shortcut: '\u2318S', disabled: true },
         { label: 'Save As...', shortcut: '\u21E7\u2318S', disabled: true },
