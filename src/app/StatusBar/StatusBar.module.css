@@ -1,0 +1,38 @@
+.bar {
+  display: flex;
+  align-items: center;
+  height: var(--status-bar-height);
+  padding: 0 var(--space-3);
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.item {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.number {
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+}
+
+.divider {
+  width: 1px;
+  height: 12px;
+  background: var(--color-border);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.toolName {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}

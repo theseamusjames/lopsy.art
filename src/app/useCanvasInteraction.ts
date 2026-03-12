@@ -1,0 +1,1057 @@
+import { useCallback, useRef } from 'react';
+import { useUIStore } from './ui-store';
+import { useEditorStore } from './editor-store';
+import { useToolSettingsStore } from './tool-settings-store';
+import { PixelBuffer } from '../engine/pixel-data';
+import { generateBrushStamp, interpolatePoints, applyBrushDab } from '../tools/brush/brush';
+import { drawPencilLine } from '../tools/pencil/pencil';
+import { generateBrushStamp as generateEraserStamp } from '../tools/brush/brush';
+import { applyEraserDab } from '../tools/eraser/eraser';
+import { floodFill, applyFill } from '../tools/fill/fill';
+import { sampleColor } from '../tools/eyedropper/eyedropper';
+import { createRectSelection, createEllipseSelection, selectionBounds } from '../selection/selection';
+import { interpolateGradient, computeLinearGradientT, computeRadialGradientT } from '../tools/gradient/gradient';
+import { drawShape } from '../tools/shape/shape';
+import {
+  hitTestHandle,
+  isScaleHandle,
+  isRotateHandle,
+  computeScale,
+  computeRotation,
+  createTransformState,
+  applyTransformToMask,
+} from '../tools/transform/transform';
+import type { TransformHandle, TransformState } from '../tools/transform/transform';
+import type { Point, ToolId } from '../types';
+import type { PathAnchor } from './ui-store';
+
+interface InteractionState {
+  drawing: boolean;
+  lastPoint: Point | null;
+  pixelBuffer: PixelBuffer | null;
+  originalPixelBuffer: PixelBuffer | null;
+  layerId: string | null;
+  tool: ToolId | null;
+  startPoint: Point | null;
+  layerStartX: number;
+  layerStartY: number;
+  transformHandle: TransformHandle | null;
+  transformStartState: TransformState | null;
+  transformStartAngle: number;
+}
+
+const DEFAULT_TRANSFORM_FIELDS = {
+  transformHandle: null as TransformHandle | null,
+  transformStartState: null as TransformState | null,
+  transformStartAngle: 0,
+};
+
+function applyStampDab(
+  dest: PixelBuffer,
+  source: PixelBuffer,
+  pos: Point,
+  offset: Point,
+  size: number,
+): void {
+  const radius = Math.floor(size / 2);
+  const cx = Math.round(pos.x);
+  const cy = Math.round(pos.y);
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > radius * radius) continue;
+      const destX = cx + dx;
+      const destY = cy + dy;
+      const srcX = destX + Math.round(offset.x);
+      const srcY = destY + Math.round(offset.y);
+      const pixel = source.getPixel(srcX, srcY);
+      if (pixel.a > 0) {
+        dest.setPixel(destX, destY, pixel);
+      }
+    }
+  }
+}
+
+function applyDodgeBurn(
+  buf: PixelBuffer,
+  pos: Point,
+  size: number,
+  mode: 'dodge' | 'burn',
+  exposure: number,
+): void {
+  const radius = Math.floor(size / 2);
+  const cx = Math.round(pos.x);
+  const cy = Math.round(pos.y);
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > radius * radius) continue;
+      const px = cx + dx;
+      const py = cy + dy;
+      const pixel = buf.getPixel(px, py);
+      if (pixel.a <= 0) continue;
+      if (mode === 'dodge') {
+        buf.setPixel(px, py, {
+          r: Math.min(255, Math.round(pixel.r + (255 - pixel.r) * exposure)),
+          g: Math.min(255, Math.round(pixel.g + (255 - pixel.g) * exposure)),
+          b: Math.min(255, Math.round(pixel.b + (255 - pixel.b) * exposure)),
+          a: pixel.a,
+        });
+      } else {
+        buf.setPixel(px, py, {
+          r: Math.max(0, Math.round(pixel.r * (1 - exposure))),
+          g: Math.max(0, Math.round(pixel.g * (1 - exposure))),
+          b: Math.max(0, Math.round(pixel.b * (1 - exposure))),
+          a: pixel.a,
+        });
+      }
+    }
+  }
+}
+
+function renderText(
+  buf: PixelBuffer,
+  pos: Point,
+  text: string,
+  fontSize: number,
+  fontFamily: string,
+  color: { r: number; g: number; b: number; a: number },
+): void {
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = buf.width;
+  tempCanvas.height = buf.height;
+  const ctx = tempCanvas.getContext('2d');
+  if (!ctx) return;
+
+  ctx.font = `${fontSize}px ${fontFamily}`;
+  ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${color.a})`;
+  ctx.textBaseline = 'top';
+  ctx.fillText(text, pos.x, pos.y);
+
+  const textData = ctx.getImageData(0, 0, buf.width, buf.height);
+  for (let i = 0; i < textData.data.length; i += 4) {
+    const sa = (textData.data[i + 3] ?? 0) / 255;
+    if (sa <= 0) continue;
+    const px = (i / 4) % buf.width;
+    const py = Math.floor(i / 4 / buf.width);
+    const existing = buf.getPixel(px, py);
+    const outA = sa + existing.a * (1 - sa);
+    if (outA > 0) {
+      buf.setPixel(px, py, {
+        r: Math.round(((textData.data[i] ?? 0) * sa + existing.r * existing.a * (1 - sa)) / outA),
+        g: Math.round(((textData.data[i + 1] ?? 0) * sa + existing.g * existing.a * (1 - sa)) / outA),
+        b: Math.round(((textData.data[i + 2] ?? 0) * sa + existing.b * existing.a * (1 - sa)) / outA),
+        a: outA,
+      });
+    }
+  }
+}
+
+function createPolygonMask(
+  points: { x: number; y: number }[],
+  width: number,
+  height: number,
+): Uint8ClampedArray {
+  const mask = new Uint8ClampedArray(width * height);
+  if (points.length < 3) return mask;
+
+  // Scanline polygon fill
+  for (let y = 0; y < height; y++) {
+    const intersections: number[] = [];
+    for (let i = 0; i < points.length; i++) {
+      const p1 = points[i];
+      const p2 = points[(i + 1) % points.length];
+      if (!p1 || !p2) continue;
+      if ((p1.y <= y && p2.y > y) || (p2.y <= y && p1.y > y)) {
+        const t = (y - p1.y) / (p2.y - p1.y);
+        intersections.push(p1.x + t * (p2.x - p1.x));
+      }
+    }
+    intersections.sort((a, b) => a - b);
+    for (let i = 0; i < intersections.length - 1; i += 2) {
+      const x0 = Math.max(0, Math.ceil(intersections[i] ?? 0));
+      const x1 = Math.min(width, Math.floor(intersections[i + 1] ?? 0));
+      for (let x = x0; x <= x1; x++) {
+        mask[y * width + x] = 255;
+      }
+    }
+  }
+  return mask;
+}
+
+function rasterizePathToLayer(
+  anchors: PathAnchor[],
+  closed: boolean,
+  layerId: string,
+  editorState: ReturnType<typeof useEditorStore.getState>,
+) {
+  editorState.pushHistory();
+  const imageData = editorState.getOrCreateLayerPixelData(layerId);
+  const buf = PixelBuffer.fromImageData(imageData);
+  const color = useUIStore.getState().foregroundColor;
+  const strokeWidth = useToolSettingsStore.getState().pathStrokeWidth;
+
+  // Use an offscreen canvas to draw the path, then copy pixels
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = buf.width;
+  tempCanvas.height = buf.height;
+  const ctx = tempCanvas.getContext('2d');
+  if (!ctx) return;
+
+  ctx.strokeStyle = `rgba(${color.r},${color.g},${color.b},${color.a})`;
+  ctx.lineWidth = strokeWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  ctx.beginPath();
+  for (let i = 0; i < anchors.length; i++) {
+    const anchor = anchors[i];
+    if (!anchor) continue;
+    if (i === 0) {
+      ctx.moveTo(anchor.point.x, anchor.point.y);
+    } else {
+      const prev = anchors[i - 1];
+      if (!prev) continue;
+      const cp1 = prev.handleOut ?? prev.point;
+      const cp2 = anchor.handleIn ?? anchor.point;
+      ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, anchor.point.x, anchor.point.y);
+    }
+  }
+  if (closed && anchors.length >= 2) {
+    const last = anchors[anchors.length - 1];
+    const first = anchors[0];
+    if (last && first) {
+      const cp1 = last.handleOut ?? last.point;
+      const cp2 = first.handleIn ?? first.point;
+      ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, first.point.x, first.point.y);
+    }
+  }
+  ctx.stroke();
+
+  // Composite the stroked path onto the pixel buffer
+  const pathData = ctx.getImageData(0, 0, buf.width, buf.height);
+  for (let i = 0; i < pathData.data.length; i += 4) {
+    const sa = (pathData.data[i + 3] ?? 0) / 255;
+    if (sa <= 0) continue;
+    const px = (i / 4) % buf.width;
+    const py = Math.floor(i / 4 / buf.width);
+    const existing = buf.getPixel(px, py);
+    const outA = sa + existing.a * (1 - sa);
+    if (outA > 0) {
+      buf.setPixel(px, py, {
+        r: Math.round(((pathData.data[i] ?? 0) * sa + existing.r * existing.a * (1 - sa)) / outA),
+        g: Math.round(((pathData.data[i + 1] ?? 0) * sa + existing.g * existing.a * (1 - sa)) / outA),
+        b: Math.round(((pathData.data[i + 2] ?? 0) * sa + existing.b * existing.a * (1 - sa)) / outA),
+        a: outA,
+      });
+    }
+  }
+
+  editorState.updateLayerPixelData(layerId, buf.toImageData());
+  useUIStore.getState().clearPath();
+}
+
+export function strokeCurrentPath() {
+  const uiState = useUIStore.getState();
+  const editorState = useEditorStore.getState();
+  const anchors = uiState.pathAnchors;
+  const activeId = editorState.document.activeLayerId;
+  if (anchors.length < 2 || !activeId) {
+    uiState.clearPath();
+    return;
+  }
+  rasterizePathToLayer(anchors, uiState.pathClosed, activeId, editorState);
+}
+
+export function useCanvasInteraction(
+  screenToCanvas: (screenX: number, screenY: number) => Point,
+  containerRef: React.RefObject<HTMLDivElement | null>,
+) {
+  const stateRef = useRef<InteractionState>({
+    drawing: false,
+    lastPoint: null,
+    pixelBuffer: null,
+    originalPixelBuffer: null,
+    layerId: null,
+    tool: null,
+    startPoint: null,
+    layerStartX: 0,
+    layerStartY: 0,
+    transformHandle: null,
+    transformStartState: null,
+    transformStartAngle: 0,
+  });
+
+  // Clone stamp: source point persists across strokes, offset is computed on first stroke
+  const stampSourceRef = useRef<Point | null>(null);
+  const stampOffsetRef = useRef<Point | null>(null);
+
+  const handleToolDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+
+      const activeTool = useUIStore.getState().activeTool;
+      const editorState = useEditorStore.getState();
+      const activeLayerId = editorState.document.activeLayerId;
+
+      if (!activeLayerId) return;
+
+      const activeLayer = editorState.document.layers.find((l) => l.id === activeLayerId);
+      if (!activeLayer || activeLayer.locked) return;
+
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      const canvasPos = screenToCanvas(screenX, screenY);
+
+      const toolSettings = useToolSettingsStore.getState();
+
+      // Check for transform handle interaction on selection
+      const uiState = useUIStore.getState();
+      const currentTransform = uiState.transform;
+      if (currentTransform && editorState.selection.active) {
+        const handleRadius = 8 / editorState.viewport.zoom;
+        const hit = hitTestHandle(canvasPos, currentTransform, handleRadius);
+        if (hit) {
+          const startAngle = isRotateHandle(hit)
+            ? computeRotation(canvasPos, currentTransform) - currentTransform.rotation
+            : 0;
+          stateRef.current = {
+            drawing: true,
+            lastPoint: canvasPos,
+            pixelBuffer: null,
+            originalPixelBuffer: null,
+            layerId: activeLayerId,
+            tool: activeTool,
+            startPoint: canvasPos,
+            layerStartX: 0,
+            layerStartY: 0,
+            transformHandle: hit,
+            transformStartState: { ...currentTransform },
+            transformStartAngle: startAngle,
+          };
+          uiState.setActiveTransformHandle(hit);
+          return;
+        }
+      }
+
+      // Get or create pixel data for this layer
+      const imageData = editorState.getOrCreateLayerPixelData(activeLayerId);
+      const pixelBuffer = PixelBuffer.fromImageData(imageData);
+
+      // Convert canvas coords to layer-local coords for painting tools
+      const layerPos: Point = {
+        x: canvasPos.x - activeLayer.x,
+        y: canvasPos.y - activeLayer.y,
+      };
+
+      switch (activeTool) {
+        case 'move': {
+          editorState.pushHistory();
+          const sel = editorState.selection;
+          if (sel.active && sel.mask) {
+            // Move only the selected pixels: cut them out, store original buffer with hole
+            const original = pixelBuffer.clone();
+            const floated = new PixelBuffer(pixelBuffer.width, pixelBuffer.height);
+            for (let y = 0; y < pixelBuffer.height; y++) {
+              for (let x = 0; x < pixelBuffer.width; x++) {
+                if ((sel.mask[y * sel.maskWidth + x] ?? 0) > 0) {
+                  floated.setPixel(x, y, pixelBuffer.getPixel(x, y));
+                  original.setPixel(x, y, { r: 0, g: 0, b: 0, a: 0 });
+                }
+              }
+            }
+            stateRef.current = {
+              drawing: true,
+              lastPoint: canvasPos,
+              pixelBuffer: floated,
+              originalPixelBuffer: original,
+              layerId: activeLayerId,
+              tool: 'move',
+              startPoint: canvasPos,
+              layerStartX: 0,
+              layerStartY: 0,
+              ...DEFAULT_TRANSFORM_FIELDS,
+            };
+          } else {
+            stateRef.current = {
+              drawing: true,
+              lastPoint: canvasPos,
+              pixelBuffer: null,
+              originalPixelBuffer: null,
+              layerId: activeLayerId,
+              tool: 'move',
+              startPoint: canvasPos,
+              layerStartX: activeLayer.x,
+              layerStartY: activeLayer.y,
+              ...DEFAULT_TRANSFORM_FIELDS,
+            };
+          }
+          break;
+        }
+
+        case 'marquee-rect':
+        case 'marquee-ellipse': {
+          useUIStore.getState().setTransform(null);
+          stateRef.current = {
+            drawing: true,
+            lastPoint: canvasPos,
+            pixelBuffer: null,
+            originalPixelBuffer: null,
+            layerId: activeLayerId,
+            tool: activeTool,
+            startPoint: canvasPos,
+            layerStartX: 0,
+            layerStartY: 0,
+            transformHandle: null,
+            transformStartState: null,
+            transformStartAngle: 0,
+          };
+          break;
+        }
+
+        case 'brush':
+        case 'pencil':
+        case 'eraser': {
+          editorState.pushHistory();
+          stateRef.current = {
+            drawing: true,
+            lastPoint: layerPos,
+            pixelBuffer: pixelBuffer,
+            originalPixelBuffer: null,
+            layerId: activeLayerId,
+            tool: activeTool,
+            startPoint: null,
+            layerStartX: activeLayer.x,
+            layerStartY: activeLayer.y,
+            ...DEFAULT_TRANSFORM_FIELDS,
+          };
+
+          if (activeTool === 'brush') {
+            const size = toolSettings.brushSize;
+            const hardness = toolSettings.brushHardness / 100;
+            const opacity = toolSettings.brushOpacity / 100;
+            const stamp = generateBrushStamp(size, hardness);
+            const color = useUIStore.getState().foregroundColor;
+            applyBrushDab(pixelBuffer, layerPos, stamp, size, color, opacity, 1);
+          } else if (activeTool === 'pencil') {
+            const color = useUIStore.getState().foregroundColor;
+            const size = toolSettings.pencilSize;
+            drawPencilLine(pixelBuffer, layerPos, layerPos, color, size);
+          } else {
+            const size = toolSettings.eraserSize;
+            const hardness = 0.8;
+            const opacity = toolSettings.eraserOpacity / 100;
+            const stamp = generateEraserStamp(size, hardness);
+            applyEraserDab(pixelBuffer, layerPos, stamp, size, opacity);
+          }
+
+          editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
+          break;
+        }
+
+        case 'fill': {
+          editorState.pushHistory();
+          const color = useUIStore.getState().foregroundColor;
+          const tolerance = toolSettings.fillTolerance;
+          const contiguous = toolSettings.fillContiguous;
+          const pixels = floodFill(pixelBuffer, layerPos.x, layerPos.y, color, tolerance, contiguous);
+          applyFill(pixelBuffer, pixels, color);
+          editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
+          break;
+        }
+
+        case 'eyedropper': {
+          const color = sampleColor(pixelBuffer, layerPos.x, layerPos.y, 'point');
+          useUIStore.getState().setForegroundColor(color);
+          stateRef.current = {
+            drawing: true,
+            lastPoint: layerPos,
+            pixelBuffer: pixelBuffer,
+            originalPixelBuffer: null,
+            layerId: activeLayerId,
+            tool: 'eyedropper',
+            startPoint: null,
+            layerStartX: activeLayer.x,
+            layerStartY: activeLayer.y,
+            ...DEFAULT_TRANSFORM_FIELDS,
+          };
+          break;
+        }
+
+        case 'wand': {
+          const wandTolerance = toolSettings.wandTolerance;
+          const wandContiguous = toolSettings.wandContiguous;
+          const { width: docW, height: docH } = editorState.document;
+          const wandPixels = floodFill(pixelBuffer, layerPos.x, layerPos.y, { r: 0, g: 0, b: 0, a: 0 }, wandTolerance, wandContiguous);
+          const wandMask = new Uint8ClampedArray(docW * docH);
+          for (const pt of wandPixels) {
+            const mx = pt.x + activeLayer.x;
+            const my = pt.y + activeLayer.y;
+            if (mx >= 0 && mx < docW && my >= 0 && my < docH) {
+              wandMask[my * docW + mx] = 255;
+            }
+          }
+          const wandBounds = selectionBounds(wandMask, docW, docH);
+          if (wandBounds) {
+            editorState.setSelection(wandBounds, wandMask, docW, docH);
+            useUIStore.getState().setTransform(createTransformState(wandBounds));
+          }
+          break;
+        }
+
+        case 'lasso': {
+          useUIStore.getState().setLassoPoints([canvasPos]);
+          stateRef.current = {
+            drawing: true,
+            lastPoint: canvasPos,
+            pixelBuffer: null,
+            originalPixelBuffer: null,
+            layerId: activeLayerId,
+            tool: 'lasso',
+            startPoint: canvasPos,
+            layerStartX: 0,
+            layerStartY: 0,
+            ...DEFAULT_TRANSFORM_FIELDS,
+          };
+          break;
+        }
+
+        case 'dodge': {
+          editorState.pushHistory();
+          const dodgeMode = toolSettings.dodgeMode;
+          const exposure = toolSettings.dodgeExposure / 100;
+          const dodgeSize = toolSettings.brushSize;
+          applyDodgeBurn(pixelBuffer, layerPos, dodgeSize, dodgeMode, exposure);
+          editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
+          stateRef.current = {
+            drawing: true,
+            lastPoint: layerPos,
+            pixelBuffer: pixelBuffer,
+            originalPixelBuffer: null,
+            layerId: activeLayerId,
+            tool: 'dodge',
+            startPoint: null,
+            layerStartX: activeLayer.x,
+            layerStartY: activeLayer.y,
+            ...DEFAULT_TRANSFORM_FIELDS,
+          };
+          break;
+        }
+
+        case 'crop': {
+          useUIStore.getState().setCropRect(null);
+          stateRef.current = {
+            drawing: true,
+            lastPoint: canvasPos,
+            pixelBuffer: null,
+            originalPixelBuffer: null,
+            layerId: activeLayerId,
+            tool: 'crop',
+            startPoint: canvasPos,
+            layerStartX: 0,
+            layerStartY: 0,
+            ...DEFAULT_TRANSFORM_FIELDS,
+          };
+          break;
+        }
+
+        case 'text': {
+          editorState.pushHistory();
+          const textContent = toolSettings.textContent;
+          const fontSize = toolSettings.textFontSize;
+          const fontFamily = toolSettings.textFontFamily;
+          const textColor = useUIStore.getState().foregroundColor;
+          renderText(pixelBuffer, layerPos, textContent, fontSize, fontFamily, textColor);
+          editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
+          break;
+        }
+
+        case 'stamp': {
+          if (e.altKey) {
+            // Set clone source point
+            stampSourceRef.current = layerPos;
+            stampOffsetRef.current = null;
+            break;
+          }
+          if (!stampSourceRef.current) break; // No source set yet
+          editorState.pushHistory();
+          // Compute offset on first stroke from this source
+          if (!stampOffsetRef.current) {
+            stampOffsetRef.current = {
+              x: stampSourceRef.current.x - layerPos.x,
+              y: stampSourceRef.current.y - layerPos.y,
+            };
+          }
+          stateRef.current = {
+            drawing: true,
+            lastPoint: layerPos,
+            pixelBuffer: pixelBuffer,
+            originalPixelBuffer: pixelBuffer.clone(),
+            layerId: activeLayerId,
+            tool: 'stamp',
+            startPoint: layerPos,
+            layerStartX: activeLayer.x,
+            layerStartY: activeLayer.y,
+            ...DEFAULT_TRANSFORM_FIELDS,
+          };
+          // Apply initial dab
+          applyStampDab(pixelBuffer, pixelBuffer, layerPos, stampOffsetRef.current, toolSettings.stampSize);
+          editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
+          break;
+        }
+
+        case 'path': {
+          const uiState = useUIStore.getState();
+          const anchors = uiState.pathAnchors;
+          // Check if clicking near the first point to close path
+          if (anchors.length >= 2) {
+            const first = anchors[0];
+            if (first) {
+              const dx = layerPos.x - first.point.x;
+              const dy = layerPos.y - first.point.y;
+              if (Math.sqrt(dx * dx + dy * dy) < 8) {
+                uiState.closePath();
+                // Rasterize the path onto the layer
+                rasterizePathToLayer([...anchors], true, activeLayerId, editorState);
+                break;
+              }
+            }
+          }
+          // Add new anchor point
+          const newAnchor = { point: layerPos, handleIn: null, handleOut: null };
+          uiState.addPathAnchor(newAnchor);
+          stateRef.current = {
+            drawing: true,
+            lastPoint: layerPos,
+            pixelBuffer: null,
+            originalPixelBuffer: null,
+            layerId: activeLayerId,
+            tool: 'path',
+            startPoint: layerPos,
+            layerStartX: activeLayer.x,
+            layerStartY: activeLayer.y,
+            ...DEFAULT_TRANSFORM_FIELDS,
+          };
+          break;
+        }
+
+        case 'gradient':
+        case 'shape': {
+          editorState.pushHistory();
+          stateRef.current = {
+            drawing: true,
+            lastPoint: layerPos,
+            pixelBuffer: pixelBuffer,
+            originalPixelBuffer: pixelBuffer.clone(),
+            layerId: activeLayerId,
+            tool: activeTool,
+            startPoint: layerPos,
+            layerStartX: activeLayer.x,
+            layerStartY: activeLayer.y,
+            ...DEFAULT_TRANSFORM_FIELDS,
+          };
+          break;
+        }
+
+        default:
+          break;
+      }
+    },
+    [screenToCanvas, containerRef],
+  );
+
+  const handleToolMove = useCallback(
+    (e: React.MouseEvent) => {
+      const state = stateRef.current;
+      if (!state.drawing || !state.layerId) return;
+
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      const canvasPos = screenToCanvas(screenX, screenY);
+
+      // Convert to layer-local coords for painting tools
+      const layerLocalPos: Point = {
+        x: canvasPos.x - state.layerStartX,
+        y: canvasPos.y - state.layerStartY,
+      };
+
+      const toolSettings = useToolSettingsStore.getState();
+
+      // Handle transform dragging
+      if (state.transformHandle && state.transformStartState && state.startPoint) {
+        const handle = state.transformHandle;
+        const startState = state.transformStartState;
+
+        if (isScaleHandle(handle)) {
+          const result = computeScale(
+            handle,
+            state.startPoint,
+            canvasPos,
+            startState,
+            e.shiftKey,
+          );
+          const newTransform: TransformState = {
+            ...startState,
+            scaleX: result.scaleX,
+            scaleY: result.scaleY,
+            translateX: result.translateX,
+            translateY: result.translateY,
+          };
+          useUIStore.getState().setTransform(newTransform);
+
+          // Update selection mask to reflect transform
+          const editorState = useEditorStore.getState();
+          const sel = editorState.selection;
+          if (sel.mask) {
+            const { mask, bounds } = applyTransformToMask(
+              sel.mask, sel.maskWidth, sel.maskHeight, newTransform,
+            );
+            if (bounds) {
+              editorState.setSelection(bounds, mask, sel.maskWidth, sel.maskHeight);
+            }
+          }
+        } else if (isRotateHandle(handle)) {
+          const currentAngle = computeRotation(canvasPos, startState);
+          const newRotation = currentAngle - state.transformStartAngle;
+          // Snap to 15° increments when shift is held
+          const snappedRotation = e.shiftKey
+            ? Math.round(newRotation / (Math.PI / 12)) * (Math.PI / 12)
+            : newRotation;
+          const newTransform: TransformState = {
+            ...startState,
+            rotation: snappedRotation,
+          };
+          useUIStore.getState().setTransform(newTransform);
+
+          const editorState = useEditorStore.getState();
+          const sel = editorState.selection;
+          if (sel.mask) {
+            const { mask, bounds } = applyTransformToMask(
+              sel.mask, sel.maskWidth, sel.maskHeight, newTransform,
+            );
+            if (bounds) {
+              editorState.setSelection(bounds, mask, sel.maskWidth, sel.maskHeight);
+            }
+          }
+        }
+        useEditorStore.getState().notifyRender();
+        return;
+      }
+
+      switch (state.tool) {
+        case 'move': {
+          if (!state.startPoint) break;
+          const dx = Math.round(canvasPos.x - state.startPoint.x);
+          const dy = Math.round(canvasPos.y - state.startPoint.y);
+          if (state.pixelBuffer && state.originalPixelBuffer) {
+            // Moving selected pixels: composite floated pixels at offset onto the base
+            const base = state.originalPixelBuffer.clone();
+            const floated = state.pixelBuffer;
+            for (let y = 0; y < floated.height; y++) {
+              for (let x = 0; x < floated.width; x++) {
+                const fp = floated.getPixel(x, y);
+                if (fp.a <= 0) continue;
+                const destX = x + dx;
+                const destY = y + dy;
+                if (destX < 0 || destX >= base.width || destY < 0 || destY >= base.height) continue;
+                const bp = base.getPixel(destX, destY);
+                const outA = fp.a + bp.a * (1 - fp.a);
+                if (outA > 0) {
+                  base.setPixel(destX, destY, {
+                    r: Math.round((fp.r * fp.a + bp.r * bp.a * (1 - fp.a)) / outA),
+                    g: Math.round((fp.g * fp.a + bp.g * bp.a * (1 - fp.a)) / outA),
+                    b: Math.round((fp.b * fp.a + bp.b * bp.a * (1 - fp.a)) / outA),
+                    a: outA,
+                  });
+                }
+              }
+            }
+            useEditorStore.getState().updateLayerPixelData(state.layerId, base.toImageData());
+          } else {
+            useEditorStore.getState().updateLayerPosition(
+              state.layerId,
+              state.layerStartX + dx,
+              state.layerStartY + dy,
+            );
+          }
+          break;
+        }
+
+        case 'marquee-rect':
+        case 'marquee-ellipse': {
+          if (!state.startPoint) break;
+          const editorState = useEditorStore.getState();
+          const x = Math.min(state.startPoint.x, canvasPos.x);
+          const y = Math.min(state.startPoint.y, canvasPos.y);
+          const w = Math.abs(canvasPos.x - state.startPoint.x);
+          const h = Math.abs(canvasPos.y - state.startPoint.y);
+
+          if (w > 0 && h > 0) {
+            const selRect = { x, y, width: w, height: h };
+            const mask = state.tool === 'marquee-rect'
+              ? createRectSelection(selRect, editorState.document.width, editorState.document.height)
+              : createEllipseSelection(selRect, editorState.document.width, editorState.document.height);
+            editorState.setSelection(selRect, mask, editorState.document.width, editorState.document.height);
+            useUIStore.getState().setTransform(createTransformState(selRect));
+          }
+          break;
+        }
+
+        case 'brush': {
+          if (!state.pixelBuffer || !state.lastPoint) break;
+          const size = toolSettings.brushSize;
+          const hardness = toolSettings.brushHardness / 100;
+          const opacity = toolSettings.brushOpacity / 100;
+          const spacing = Math.max(1, size * 0.25);
+          const stamp = generateBrushStamp(size, hardness);
+          const color = useUIStore.getState().foregroundColor;
+          const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
+          for (const pt of points) {
+            applyBrushDab(state.pixelBuffer, pt, stamp, size, color, opacity, 1);
+          }
+          state.lastPoint = layerLocalPos;
+          useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+          break;
+        }
+
+        case 'pencil': {
+          if (!state.pixelBuffer || !state.lastPoint) break;
+          const color = useUIStore.getState().foregroundColor;
+          const size = toolSettings.pencilSize;
+          drawPencilLine(state.pixelBuffer, state.lastPoint, layerLocalPos, color, size);
+          state.lastPoint = layerLocalPos;
+          useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+          break;
+        }
+
+        case 'eraser': {
+          if (!state.pixelBuffer || !state.lastPoint) break;
+          const size = toolSettings.eraserSize;
+          const hardness = 0.8;
+          const opacity = toolSettings.eraserOpacity / 100;
+          const spacing = Math.max(1, size * 0.25);
+          const stamp = generateEraserStamp(size, hardness);
+          const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
+          for (const pt of points) {
+            applyEraserDab(state.pixelBuffer, pt, stamp, size, opacity);
+          }
+          state.lastPoint = layerLocalPos;
+          useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+          break;
+        }
+
+        case 'stamp': {
+          if (!state.pixelBuffer || !state.originalPixelBuffer || !state.lastPoint || !stampOffsetRef.current) break;
+          const stampSpacing = Math.max(1, toolSettings.stampSize * 0.25);
+          const stampPoints = interpolatePoints(state.lastPoint, layerLocalPos, stampSpacing);
+          for (const pt of stampPoints) {
+            applyStampDab(state.pixelBuffer, state.originalPixelBuffer, pt, stampOffsetRef.current, toolSettings.stampSize);
+          }
+          state.lastPoint = layerLocalPos;
+          useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+          break;
+        }
+
+        case 'eyedropper': {
+          if (!state.pixelBuffer) break;
+          const eyeColor = sampleColor(state.pixelBuffer, layerLocalPos.x, layerLocalPos.y, 'point');
+          useUIStore.getState().setForegroundColor(eyeColor);
+          break;
+        }
+
+        case 'lasso': {
+          const lassoPoints = useUIStore.getState().lassoPoints;
+          useUIStore.getState().setLassoPoints([...lassoPoints, canvasPos]);
+          useEditorStore.getState().notifyRender();
+          break;
+        }
+
+        case 'dodge': {
+          if (!state.pixelBuffer || !state.lastPoint) break;
+          const dodgeMode = toolSettings.dodgeMode;
+          const exposure = toolSettings.dodgeExposure / 100;
+          const dodgeSize = toolSettings.brushSize;
+          const dodgeSpacing = Math.max(1, dodgeSize * 0.25);
+          const dodgePoints = interpolatePoints(state.lastPoint, layerLocalPos, dodgeSpacing);
+          for (const pt of dodgePoints) {
+            applyDodgeBurn(state.pixelBuffer, pt, dodgeSize, dodgeMode, exposure);
+          }
+          state.lastPoint = layerLocalPos;
+          useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+          break;
+        }
+
+        case 'crop': {
+          if (!state.startPoint) break;
+          const cx = Math.min(state.startPoint.x, canvasPos.x);
+          const cy = Math.min(state.startPoint.y, canvasPos.y);
+          const cw = Math.abs(canvasPos.x - state.startPoint.x);
+          const ch = Math.abs(canvasPos.y - state.startPoint.y);
+          if (cw > 0 && ch > 0) {
+            useUIStore.getState().setCropRect({ x: cx, y: cy, width: cw, height: ch });
+            useEditorStore.getState().notifyRender();
+          }
+          break;
+        }
+
+        case 'path': {
+          if (!state.startPoint) break;
+          // Dragging after placing a point creates bezier handles
+          const dx = layerLocalPos.x - state.startPoint.x;
+          const dy = layerLocalPos.y - state.startPoint.y;
+          if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+            const handleOut: Point = { x: state.startPoint.x + dx, y: state.startPoint.y + dy };
+            const handleIn: Point = { x: state.startPoint.x - dx, y: state.startPoint.y - dy };
+            useUIStore.getState().updateLastPathAnchor({
+              point: state.startPoint,
+              handleIn,
+              handleOut,
+            });
+            useEditorStore.getState().notifyRender();
+          }
+          break;
+        }
+
+        case 'shape': {
+          if (!state.pixelBuffer || !state.originalPixelBuffer || !state.startPoint) break;
+          // Restore original pixels, then draw shape preview
+          const restored = state.originalPixelBuffer.clone();
+          const color = useUIStore.getState().foregroundColor;
+          drawShape(restored, state.startPoint, layerLocalPos, color, {
+            mode: toolSettings.shapeMode,
+            fill: toolSettings.shapeFill,
+            strokeWidth: toolSettings.shapeStrokeWidth,
+          });
+          state.pixelBuffer = restored;
+          useEditorStore.getState().updateLayerPixelData(state.layerId, restored.toImageData());
+          break;
+        }
+
+        case 'gradient': {
+          if (!state.pixelBuffer || !state.originalPixelBuffer || !state.startPoint) break;
+          // Restore original pixels, then apply gradient preview
+          const restored = state.originalPixelBuffer.clone();
+          const fg = useUIStore.getState().foregroundColor;
+          const bg = useUIStore.getState().backgroundColor;
+          const gradType = toolSettings.gradientType;
+          const stops = [
+            { position: 0, color: fg },
+            { position: 1, color: bg },
+          ] as const;
+
+          for (let y = 0; y < restored.height; y++) {
+            for (let x = 0; x < restored.width; x++) {
+              let t: number;
+              if (gradType === 'linear') {
+                t = computeLinearGradientT(
+                  x, y,
+                  state.startPoint.x, state.startPoint.y,
+                  layerLocalPos.x, layerLocalPos.y,
+                );
+              } else {
+                const dx = layerLocalPos.x - state.startPoint.x;
+                const dy = layerLocalPos.y - state.startPoint.y;
+                const radius = Math.sqrt(dx * dx + dy * dy);
+                t = computeRadialGradientT(x, y, state.startPoint.x, state.startPoint.y, radius);
+              }
+              const gradColor = interpolateGradient(stops, t);
+              // Alpha-composite gradient over existing pixel
+              const existing = restored.getPixel(x, y);
+              const ga = gradColor.a;
+              const ea = existing.a;
+              const outA = ga + ea * (1 - ga);
+              if (outA > 0) {
+                restored.setPixel(x, y, {
+                  r: Math.round((gradColor.r * ga + existing.r * ea * (1 - ga)) / outA),
+                  g: Math.round((gradColor.g * ga + existing.g * ea * (1 - ga)) / outA),
+                  b: Math.round((gradColor.b * ga + existing.b * ea * (1 - ga)) / outA),
+                  a: outA,
+                });
+              }
+            }
+          }
+          state.pixelBuffer = restored;
+          useEditorStore.getState().updateLayerPixelData(state.layerId, restored.toImageData());
+          break;
+        }
+
+        default:
+          break;
+      }
+    },
+    [screenToCanvas, containerRef],
+  );
+
+  const handleToolUp = useCallback((e: React.MouseEvent) => {
+    const state = stateRef.current;
+    // If marquee tool ended without dragging, clear the selection
+    if (
+      (state.tool === 'marquee-rect' || state.tool === 'marquee-ellipse') &&
+      state.startPoint
+    ) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+        const canvasPos = screenToCanvas(screenX, screenY);
+        const dx = Math.abs(canvasPos.x - state.startPoint.x);
+        const dy = Math.abs(canvasPos.y - state.startPoint.y);
+        if (dx < 2 && dy < 2) {
+          useEditorStore.getState().clearSelection();
+          useUIStore.getState().setTransform(null);
+        }
+      }
+    }
+
+    // Lasso: create polygon selection from collected points
+    if (state.tool === 'lasso') {
+      const lassoPoints = useUIStore.getState().lassoPoints;
+      if (lassoPoints.length >= 3) {
+        const editorState = useEditorStore.getState();
+        const { width: docW, height: docH } = editorState.document;
+        const lassoMask = createPolygonMask(lassoPoints, docW, docH);
+        const lassoBounds = selectionBounds(lassoMask, docW, docH);
+        if (lassoBounds) {
+          editorState.setSelection(lassoBounds, lassoMask, docW, docH);
+          useUIStore.getState().setTransform(createTransformState(lassoBounds));
+        }
+      }
+      useUIStore.getState().clearLassoPoints();
+    }
+
+    // Crop: apply the crop
+    if (state.tool === 'crop') {
+      const cropRect = useUIStore.getState().cropRect;
+      if (cropRect && cropRect.width > 1 && cropRect.height > 1) {
+        useEditorStore.getState().cropCanvas(cropRect);
+      }
+      useUIStore.getState().setCropRect(null);
+    }
+
+    // Clear active transform handle
+    if (stateRef.current.transformHandle) {
+      useUIStore.getState().setActiveTransformHandle(null);
+    }
+
+    stateRef.current = {
+      drawing: false,
+      lastPoint: null,
+      pixelBuffer: null,
+      originalPixelBuffer: null,
+      layerId: null,
+      tool: null,
+      startPoint: null,
+      layerStartX: 0,
+      layerStartY: 0,
+      transformHandle: null,
+      transformStartState: null,
+      transformStartAngle: 0,
+    };
+  }, [screenToCanvas, containerRef]);
+
+  return { handleToolDown, handleToolMove, handleToolUp };
+}
