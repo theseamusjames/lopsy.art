@@ -1,0 +1,48 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.swatches {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.hexRow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  width: fit-content;
+}
+
+.hexLabel {
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  padding: 2px var(--space-1);
+}
+
+.hexInput {
+  width: 60px;
+  padding: 2px var(--space-1);
+  background: transparent;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  outline: none;
+  text-transform: uppercase;
+}
+
+.sliders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
