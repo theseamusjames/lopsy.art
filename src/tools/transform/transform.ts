@@ -274,10 +274,23 @@ export function applyTransformToMask(
   const cos = Math.cos(-state.rotation);
   const sin = Math.sin(-state.rotation);
 
-  const minX = Math.max(0, Math.floor(bounds.x - 1));
-  const minY = Math.max(0, Math.floor(bounds.y - 1));
-  const maxX = Math.min(maskWidth, Math.ceil(bounds.x + bounds.width + 1));
-  const maxY = Math.min(maskHeight, Math.ceil(bounds.y + bounds.height + 1));
+  // Compute axis-aligned bounding box of the rotated rectangle
+  const hw = bounds.width / 2;
+  const hh = bounds.height / 2;
+  const fwdCos = Math.cos(state.rotation);
+  const fwdSin = Math.sin(state.rotation);
+  const c0x = cx + (-hw) * fwdCos - (-hh) * fwdSin;
+  const c0y = cy + (-hw) * fwdSin + (-hh) * fwdCos;
+  const c1x = cx + (hw) * fwdCos - (-hh) * fwdSin;
+  const c1y = cy + (hw) * fwdSin + (-hh) * fwdCos;
+  const c2x = cx + (hw) * fwdCos - (hh) * fwdSin;
+  const c2y = cy + (hw) * fwdSin + (hh) * fwdCos;
+  const c3x = cx + (-hw) * fwdCos - (hh) * fwdSin;
+  const c3y = cy + (-hw) * fwdSin + (hh) * fwdCos;
+  const minX = Math.max(0, Math.floor(Math.min(c0x, c1x, c2x, c3x) - 1));
+  const minY = Math.max(0, Math.floor(Math.min(c0y, c1y, c2y, c3y) - 1));
+  const maxX = Math.min(maskWidth, Math.ceil(Math.max(c0x, c1x, c2x, c3x) + 1));
+  const maxY = Math.min(maskHeight, Math.ceil(Math.max(c0y, c1y, c2y, c3y) + 1));
 
   for (let y = minY; y < maxY; y++) {
     for (let x = minX; x < maxX; x++) {

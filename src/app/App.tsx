@@ -112,15 +112,40 @@ export function App() {
 
     // Draw selection (marching ants)
     if (selection.active && selection.bounds) {
-      const b = selection.bounds;
       ctx.save();
-      ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1 / viewport.zoom;
       ctx.setLineDash([4 / viewport.zoom, 4 / viewport.zoom]);
-      ctx.strokeRect(b.x, b.y, b.width, b.height);
-      ctx.strokeStyle = '#000000';
-      ctx.lineDashOffset = 4 / viewport.zoom;
-      ctx.strokeRect(b.x, b.y, b.width, b.height);
+
+      if (transform) {
+        // Draw marching ants along the rotated bounding box
+        const handles = getHandlePositions(transform);
+        const corners: TransformHandle[] = [
+          'top-left', 'top-right', 'bottom-right', 'bottom-left',
+        ];
+        const drawRotatedRect = () => {
+          ctx.beginPath();
+          for (let i = 0; i < corners.length; i++) {
+            const pos = handles[corners[i] as TransformHandle];
+            if (i === 0) ctx.moveTo(pos.x, pos.y);
+            else ctx.lineTo(pos.x, pos.y);
+          }
+          ctx.closePath();
+          ctx.stroke();
+        };
+        ctx.strokeStyle = '#ffffff';
+        drawRotatedRect();
+        ctx.strokeStyle = '#000000';
+        ctx.lineDashOffset = 4 / viewport.zoom;
+        drawRotatedRect();
+      } else {
+        const b = selection.bounds;
+        ctx.strokeStyle = '#ffffff';
+        ctx.strokeRect(b.x, b.y, b.width, b.height);
+        ctx.strokeStyle = '#000000';
+        ctx.lineDashOffset = 4 / viewport.zoom;
+        ctx.strokeRect(b.x, b.y, b.width, b.height);
+      }
+
       ctx.restore();
     }
 
@@ -369,7 +394,7 @@ export function App() {
   );
 
   // Canvas interaction (drawing tools)
-  const { handleToolDown, handleToolMove, handleToolUp } = useCanvasInteraction(screenToCanvas, containerRef);
+  const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform } = useCanvasInteraction(screenToCanvas, containerRef);
 
   // Mouse handlers
   const handleMouseMove = useCallback(
@@ -448,6 +473,7 @@ export function App() {
         } else {
           useEditorStore.getState().clearSelection();
           uiState.setTransform(null);
+          clearPersistentTransform();
         }
         return;
       }
@@ -515,6 +541,7 @@ export function App() {
           e.preventDefault();
           useEditorStore.getState().clearSelection();
           useUIStore.getState().setTransform(null);
+          clearPersistentTransform();
         } else if (e.key === 'z') {
           e.preventDefault();
           if (e.shiftKey) {
@@ -553,6 +580,7 @@ export function App() {
         <Toolbox />
         <div
           ref={containerRef}
+          data-testid="canvas-container"
           className={`${styles.canvas} ${isPanning || isSpaceDown ? styles.canvasGrab : styles.canvasCrosshair}`}
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}

@@ -20,6 +20,7 @@ import {
   computeRotation,
   createTransformState,
   applyTransformToMask,
+  getTransformedBounds,
 } from '../tools/transform/transform';
 import type { TransformHandle, TransformState } from '../tools/transform/transform';
 import type { Point, ToolId } from '../types';
@@ -38,12 +39,22 @@ interface InteractionState {
   transformHandle: TransformHandle | null;
   transformStartState: TransformState | null;
   transformStartAngle: number;
+  originalSelectionMask: Uint8ClampedArray | null;
+  originalSelectionMaskWidth: number;
+  originalSelectionMaskHeight: number;
+  transformCanvas: HTMLCanvasElement | null;
+  baseCanvas: HTMLCanvasElement | null;
 }
 
 const DEFAULT_TRANSFORM_FIELDS = {
   transformHandle: null as TransformHandle | null,
   transformStartState: null as TransformState | null,
   transformStartAngle: 0,
+  originalSelectionMask: null as Uint8ClampedArray | null,
+  originalSelectionMaskWidth: 0,
+  originalSelectionMaskHeight: 0,
+  transformCanvas: null as HTMLCanvasElement | null,
+  baseCanvas: null as HTMLCanvasElement | null,
 };
 
 function applyStampDab(
@@ -278,7 +289,22 @@ export function useCanvasInteraction(
     transformHandle: null,
     transformStartState: null,
     transformStartAngle: 0,
+    originalSelectionMask: null,
+    originalSelectionMaskWidth: 0,
+    originalSelectionMaskHeight: 0,
+    transformCanvas: null,
+    baseCanvas: null,
   });
+
+  // Persistent transform canvases — survive across handle grabs so we always
+  // transform from the original cut pixels (no re-extraction degradation)
+  const persistentTransformRef = useRef<{
+    transformCanvas: HTMLCanvasElement;
+    baseCanvas: HTMLCanvasElement;
+    originalMask: Uint8ClampedArray;
+    maskWidth: number;
+    maskHeight: number;
+  } | null>(null);
 
   // Clone stamp: source point persists across strokes, offset is computed on first stroke
   const stampSourceRef = useRef<Point | null>(null);
@@ -316,6 +342,63 @@ export function useCanvasInteraction(
           const startAngle = isRotateHandle(hit)
             ? computeRotation(canvasPos, currentTransform) - currentTransform.rotation
             : 0;
+
+          const sel = editorState.selection;
+          editorState.pushHistory();
+
+          // On first grab: cut pixels into persistent offscreen canvases.
+          // On subsequent grabs: reuse them so we always transform from the
+          // original unmodified pixels (no re-extraction degradation).
+          if (!persistentTransformRef.current && sel.active && sel.mask) {
+            const imageData = editorState.getOrCreateLayerPixelData(activeLayerId);
+            const w = imageData.width;
+            const h = imageData.height;
+
+            const txCanvas = document.createElement('canvas');
+            txCanvas.width = w;
+            txCanvas.height = h;
+            const txCtx = txCanvas.getContext('2d');
+
+            const bCanvas = document.createElement('canvas');
+            bCanvas.width = w;
+            bCanvas.height = h;
+            const bCtx = bCanvas.getContext('2d');
+
+            if (txCtx && bCtx) {
+              const floatedData = new ImageData(new Uint8ClampedArray(imageData.data), w, h);
+              const baseData = new ImageData(new Uint8ClampedArray(imageData.data), w, h);
+
+              for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                  const idx = (y * w + x) * 4;
+                  if ((sel.mask[y * sel.maskWidth + x] ?? 0) > 0) {
+                    baseData.data[idx] = 0;
+                    baseData.data[idx + 1] = 0;
+                    baseData.data[idx + 2] = 0;
+                    baseData.data[idx + 3] = 0;
+                  } else {
+                    floatedData.data[idx] = 0;
+                    floatedData.data[idx + 1] = 0;
+                    floatedData.data[idx + 2] = 0;
+                    floatedData.data[idx + 3] = 0;
+                  }
+                }
+              }
+              txCtx.putImageData(floatedData, 0, 0);
+              bCtx.putImageData(baseData, 0, 0);
+
+              persistentTransformRef.current = {
+                transformCanvas: txCanvas,
+                baseCanvas: bCanvas,
+                originalMask: new Uint8ClampedArray(sel.mask),
+                maskWidth: sel.maskWidth,
+                maskHeight: sel.maskHeight,
+              };
+            }
+          }
+
+          const persistent = persistentTransformRef.current;
+
           stateRef.current = {
             drawing: true,
             lastPoint: canvasPos,
@@ -329,6 +412,11 @@ export function useCanvasInteraction(
             transformHandle: hit,
             transformStartState: { ...currentTransform },
             transformStartAngle: startAngle,
+            originalSelectionMask: persistent?.originalMask ?? null,
+            originalSelectionMaskWidth: persistent?.maskWidth ?? 0,
+            originalSelectionMaskHeight: persistent?.maskHeight ?? 0,
+            transformCanvas: persistent?.transformCanvas ?? null,
+            baseCanvas: persistent?.baseCanvas ?? null,
           };
           uiState.setActiveTransformHandle(hit);
           return;
@@ -393,6 +481,7 @@ export function useCanvasInteraction(
         case 'marquee-rect':
         case 'marquee-ellipse': {
           useUIStore.getState().setTransform(null);
+          persistentTransformRef.current = null;
           stateRef.current = {
             drawing: true,
             lastPoint: canvasPos,
@@ -403,9 +492,7 @@ export function useCanvasInteraction(
             startPoint: canvasPos,
             layerStartX: 0,
             layerStartY: 0,
-            transformHandle: null,
-            transformStartState: null,
-            transformStartAngle: 0,
+            ...DEFAULT_TRANSFORM_FIELDS,
           };
           break;
         }
@@ -686,6 +773,8 @@ export function useCanvasInteraction(
         const handle = state.transformHandle;
         const startState = state.transformStartState;
 
+        let newTransform: TransformState;
+
         if (isScaleHandle(handle)) {
           const result = computeScale(
             handle,
@@ -694,51 +783,73 @@ export function useCanvasInteraction(
             startState,
             e.shiftKey,
           );
-          const newTransform: TransformState = {
+          newTransform = {
             ...startState,
             scaleX: result.scaleX,
             scaleY: result.scaleY,
             translateX: result.translateX,
             translateY: result.translateY,
           };
-          useUIStore.getState().setTransform(newTransform);
-
-          // Update selection mask to reflect transform
-          const editorState = useEditorStore.getState();
-          const sel = editorState.selection;
-          if (sel.mask) {
-            const { mask, bounds } = applyTransformToMask(
-              sel.mask, sel.maskWidth, sel.maskHeight, newTransform,
-            );
-            if (bounds) {
-              editorState.setSelection(bounds, mask, sel.maskWidth, sel.maskHeight);
-            }
-          }
-        } else if (isRotateHandle(handle)) {
+        } else {
           const currentAngle = computeRotation(canvasPos, startState);
           const newRotation = currentAngle - state.transformStartAngle;
-          // Snap to 15° increments when shift is held
           const snappedRotation = e.shiftKey
             ? Math.round(newRotation / (Math.PI / 12)) * (Math.PI / 12)
             : newRotation;
-          const newTransform: TransformState = {
+          newTransform = {
             ...startState,
             rotation: snappedRotation,
           };
-          useUIStore.getState().setTransform(newTransform);
+        }
 
-          const editorState = useEditorStore.getState();
-          const sel = editorState.selection;
-          if (sel.mask) {
-            const { mask, bounds } = applyTransformToMask(
-              sel.mask, sel.maskWidth, sel.maskHeight, newTransform,
-            );
-            if (bounds) {
-              editorState.setSelection(bounds, mask, sel.maskWidth, sel.maskHeight);
-            }
+        useUIStore.getState().setTransform(newTransform);
+
+        // Update selection mask using the original mask (not the already-transformed one)
+        const editorState = useEditorStore.getState();
+        const origMask = state.originalSelectionMask;
+        if (origMask) {
+          const { mask, bounds } = applyTransformToMask(
+            origMask, state.originalSelectionMaskWidth, state.originalSelectionMaskHeight, newTransform,
+          );
+          if (bounds) {
+            editorState.setSelection(bounds, mask, state.originalSelectionMaskWidth, state.originalSelectionMaskHeight);
           }
         }
-        useEditorStore.getState().notifyRender();
+
+        // Apply full cumulative transform to the original (persistent) pixels
+        if (state.transformCanvas && state.baseCanvas && state.layerId) {
+          const w = state.baseCanvas.width;
+          const h = state.baseCanvas.height;
+
+          // The persistent canvases have the original cut pixels.
+          // Apply the full cumulative transform from originalBounds.
+          const origBounds = newTransform.originalBounds;
+          const origCx = origBounds.x + origBounds.width / 2;
+          const origCy = origBounds.y + origBounds.height / 2;
+          const dstBounds = getTransformedBounds(newTransform);
+          const dstCx = dstBounds.x + dstBounds.width / 2;
+          const dstCy = dstBounds.y + dstBounds.height / 2;
+
+          const resultCanvas = document.createElement('canvas');
+          resultCanvas.width = w;
+          resultCanvas.height = h;
+          const rCtx = resultCanvas.getContext('2d');
+          if (rCtx) {
+            rCtx.drawImage(state.baseCanvas, 0, 0);
+            rCtx.save();
+            rCtx.translate(dstCx, dstCy);
+            rCtx.rotate(newTransform.rotation);
+            rCtx.scale(newTransform.scaleX, newTransform.scaleY);
+            rCtx.translate(-origCx, -origCy);
+            rCtx.drawImage(state.transformCanvas, 0, 0);
+            rCtx.restore();
+
+            const resultData = rCtx.getImageData(0, 0, w, h);
+            editorState.updateLayerPixelData(state.layerId, resultData);
+          }
+        }
+
+        editorState.notifyRender();
         return;
       }
 
@@ -1050,8 +1161,17 @@ export function useCanvasInteraction(
       transformHandle: null,
       transformStartState: null,
       transformStartAngle: 0,
+      originalSelectionMask: null,
+      originalSelectionMaskWidth: 0,
+      originalSelectionMaskHeight: 0,
+      transformCanvas: null,
+      baseCanvas: null,
     };
   }, [screenToCanvas, containerRef]);
 
-  return { handleToolDown, handleToolMove, handleToolUp };
+  const clearPersistentTransform = useCallback(() => {
+    persistentTransformRef.current = null;
+  }, []);
+
+  return { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform };
 }
