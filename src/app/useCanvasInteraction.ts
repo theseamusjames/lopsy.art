@@ -20,7 +20,6 @@ import {
   computeRotation,
   createTransformState,
   applyTransformToMask,
-  getTransformedBounds,
 } from '../tools/transform/transform';
 import type { TransformHandle, TransformState } from '../tools/transform/transform';
 import type { Point, ToolId } from '../types';
@@ -44,6 +43,8 @@ interface InteractionState {
   originalSelectionMaskHeight: number;
   transformCanvas: HTMLCanvasElement | null;
   baseCanvas: HTMLCanvasElement | null;
+  moveOriginalMask: Uint8ClampedArray | null;
+  moveOriginalBounds: { x: number; y: number; width: number; height: number } | null;
 }
 
 const DEFAULT_TRANSFORM_FIELDS = {
@@ -55,6 +56,8 @@ const DEFAULT_TRANSFORM_FIELDS = {
   originalSelectionMaskHeight: 0,
   transformCanvas: null as HTMLCanvasElement | null,
   baseCanvas: null as HTMLCanvasElement | null,
+  moveOriginalMask: null as Uint8ClampedArray | null,
+  moveOriginalBounds: null as { x: number; y: number; width: number; height: number } | null,
 };
 
 function applyStampDab(
@@ -294,6 +297,8 @@ export function useCanvasInteraction(
     originalSelectionMaskHeight: 0,
     transformCanvas: null,
     baseCanvas: null,
+    moveOriginalMask: null,
+    moveOriginalBounds: null,
   });
 
   // Persistent transform canvases — survive across handle grabs so we always
@@ -304,6 +309,17 @@ export function useCanvasInteraction(
     originalMask: Uint8ClampedArray;
     maskWidth: number;
     maskHeight: number;
+  } | null>(null);
+
+  // Persistent floating selection — survives across move tool grabs so we don't
+  // re-cut pixels on each mousedown (which would leave cumulative holes)
+  const floatingSelectionRef = useRef<{
+    floated: PixelBuffer;
+    base: PixelBuffer;
+    offsetX: number;
+    offsetY: number;
+    originalMask: Uint8ClampedArray;
+    originalBounds: { x: number; y: number; width: number; height: number };
   } | null>(null);
 
   // Clone stamp: source point persists across strokes, offset is computed on first stroke
@@ -345,6 +361,11 @@ export function useCanvasInteraction(
 
           const sel = editorState.selection;
           editorState.pushHistory();
+
+          // Clear floating selection from move tool — the transform will
+          // work from its own persistent canvases, and after the transform
+          // the move tool should re-cut from the updated pixel data.
+          floatingSelectionRef.current = null;
 
           // On first grab: cut pixels into persistent offscreen canvases.
           // On subsequent grabs: reuse them so we always transform from the
@@ -417,6 +438,8 @@ export function useCanvasInteraction(
             originalSelectionMaskHeight: persistent?.maskHeight ?? 0,
             transformCanvas: persistent?.transformCanvas ?? null,
             baseCanvas: persistent?.baseCanvas ?? null,
+            moveOriginalMask: null,
+            moveOriginalBounds: null,
           };
           uiState.setActiveTransformHandle(hit);
           return;
@@ -436,30 +459,51 @@ export function useCanvasInteraction(
       switch (activeTool) {
         case 'move': {
           editorState.pushHistory();
+          // Clear transform canvases — after moving, any subsequent
+          // rotation should re-cut from the moved pixel data.
+          persistentTransformRef.current = null;
           const sel = editorState.selection;
           if (sel.active && sel.mask) {
-            // Move only the selected pixels: cut them out, store original buffer with hole
-            const original = pixelBuffer.clone();
-            const floated = new PixelBuffer(pixelBuffer.width, pixelBuffer.height);
-            for (let y = 0; y < pixelBuffer.height; y++) {
-              for (let x = 0; x < pixelBuffer.width; x++) {
-                if ((sel.mask[y * sel.maskWidth + x] ?? 0) > 0) {
-                  floated.setPixel(x, y, pixelBuffer.getPixel(x, y));
-                  original.setPixel(x, y, { r: 0, g: 0, b: 0, a: 0 });
+            let floated: PixelBuffer;
+            let base: PixelBuffer;
+            const existing = floatingSelectionRef.current;
+
+            if (existing) {
+              // Reuse the persistent floating selection (don't re-cut)
+              floated = existing.floated;
+              base = existing.base;
+            } else {
+              // First move: cut selected pixels out of the layer
+              base = pixelBuffer.clone();
+              floated = new PixelBuffer(pixelBuffer.width, pixelBuffer.height);
+              for (let y = 0; y < pixelBuffer.height; y++) {
+                for (let x = 0; x < pixelBuffer.width; x++) {
+                  if ((sel.mask[y * sel.maskWidth + x] ?? 0) > 0) {
+                    floated.setPixel(x, y, pixelBuffer.getPixel(x, y));
+                    base.setPixel(x, y, { r: 0, g: 0, b: 0, a: 0 });
+                  }
                 }
               }
+              floatingSelectionRef.current = {
+                floated, base, offsetX: 0, offsetY: 0,
+                originalMask: new Uint8ClampedArray(sel.mask),
+                originalBounds: { ...sel.bounds! },
+              };
             }
+            const floatRef = floatingSelectionRef.current!;
             stateRef.current = {
               drawing: true,
               lastPoint: canvasPos,
               pixelBuffer: floated,
-              originalPixelBuffer: original,
+              originalPixelBuffer: base,
               layerId: activeLayerId,
               tool: 'move',
               startPoint: canvasPos,
               layerStartX: 0,
               layerStartY: 0,
               ...DEFAULT_TRANSFORM_FIELDS,
+              moveOriginalMask: floatRef.originalMask,
+              moveOriginalBounds: floatRef.originalBounds,
             };
           } else {
             stateRef.current = {
@@ -482,6 +526,7 @@ export function useCanvasInteraction(
         case 'marquee-ellipse': {
           useUIStore.getState().setTransform(null);
           persistentTransformRef.current = null;
+          floatingSelectionRef.current = null;
           stateRef.current = {
             drawing: true,
             lastPoint: canvasPos,
@@ -807,10 +852,14 @@ export function useCanvasInteraction(
         // Update selection mask using the original mask (not the already-transformed one)
         const editorState = useEditorStore.getState();
         const origMask = state.originalSelectionMask;
+        let transformedMask: Uint8ClampedArray | null = null;
+        let transformedMaskWidth = 0;
         if (origMask) {
           const { mask, bounds } = applyTransformToMask(
             origMask, state.originalSelectionMaskWidth, state.originalSelectionMaskHeight, newTransform,
           );
+          transformedMask = mask;
+          transformedMaskWidth = state.originalSelectionMaskWidth;
           if (bounds) {
             editorState.setSelection(bounds, mask, state.originalSelectionMaskWidth, state.originalSelectionMaskHeight);
           }
@@ -821,31 +870,60 @@ export function useCanvasInteraction(
           const w = state.baseCanvas.width;
           const h = state.baseCanvas.height;
 
-          // The persistent canvases have the original cut pixels.
-          // Apply the full cumulative transform from originalBounds.
           const origBounds = newTransform.originalBounds;
           const origCx = origBounds.x + origBounds.width / 2;
           const origCy = origBounds.y + origBounds.height / 2;
-          const dstBounds = getTransformedBounds(newTransform);
-          const dstCx = dstBounds.x + dstBounds.width / 2;
-          const dstCy = dstBounds.y + dstBounds.height / 2;
 
-          const resultCanvas = document.createElement('canvas');
-          resultCanvas.width = w;
-          resultCanvas.height = h;
-          const rCtx = resultCanvas.getContext('2d');
-          if (rCtx) {
-            rCtx.drawImage(state.baseCanvas, 0, 0);
-            rCtx.save();
-            rCtx.translate(dstCx, dstCy);
-            rCtx.rotate(newTransform.rotation);
-            rCtx.scale(newTransform.scaleX, newTransform.scaleY);
-            rCtx.translate(-origCx, -origCy);
-            rCtx.drawImage(state.transformCanvas, 0, 0);
-            rCtx.restore();
+          // Render rotated content onto a separate canvas
+          const rotatedCanvas = document.createElement('canvas');
+          rotatedCanvas.width = w;
+          rotatedCanvas.height = h;
+          const rotCtx = rotatedCanvas.getContext('2d');
+          if (rotCtx) {
+            rotCtx.save();
+            rotCtx.translate(origCx + newTransform.translateX, origCy + newTransform.translateY);
+            rotCtx.rotate(newTransform.rotation);
+            rotCtx.scale(newTransform.scaleX, newTransform.scaleY);
+            rotCtx.translate(-origCx, -origCy);
+            rotCtx.drawImage(state.transformCanvas, 0, 0);
+            rotCtx.restore();
 
-            const resultData = rCtx.getImageData(0, 0, w, h);
-            editorState.updateLayerPixelData(state.layerId, resultData);
+            // Composite: base + rotated pixels clipped to selection mask
+            const baseData = state.baseCanvas.getContext('2d')!.getImageData(0, 0, w, h);
+            const rotData = rotCtx.getImageData(0, 0, w, h);
+            const resultData = new ImageData(new Uint8ClampedArray(baseData.data), w, h);
+
+            for (let py = 0; py < h; py++) {
+              for (let px = 0; px < w; px++) {
+                const idx = (py * w + px) * 4;
+                const ra = rotData.data[idx + 3] ?? 0;
+                if (ra <= 0) continue;
+                // Clip to selection mask so rotated content doesn't bleed outside
+                if (transformedMask) {
+                  const maskVal = transformedMask[py * transformedMaskWidth + px] ?? 0;
+                  if (maskVal <= 0) continue;
+                }
+                // Alpha-composite rotated over base
+                const ba = resultData.data[idx + 3] ?? 0;
+                const raNorm = ra / 255;
+                const baNorm = ba / 255;
+                const outA = raNorm + baNorm * (1 - raNorm);
+                if (outA > 0) {
+                  resultData.data[idx] = Math.round(
+                    ((rotData.data[idx] ?? 0) * raNorm + (resultData.data[idx] ?? 0) * baNorm * (1 - raNorm)) / outA,
+                  );
+                  resultData.data[idx + 1] = Math.round(
+                    ((rotData.data[idx + 1] ?? 0) * raNorm + (resultData.data[idx + 1] ?? 0) * baNorm * (1 - raNorm)) / outA,
+                  );
+                  resultData.data[idx + 2] = Math.round(
+                    ((rotData.data[idx + 2] ?? 0) * raNorm + (resultData.data[idx + 2] ?? 0) * baNorm * (1 - raNorm)) / outA,
+                  );
+                  resultData.data[idx + 3] = Math.round(outA * 255);
+                }
+              }
+            }
+
+            useEditorStore.getState().updateLayerPixelData(state.layerId, resultData);
           }
         }
 
@@ -856,9 +934,13 @@ export function useCanvasInteraction(
       switch (state.tool) {
         case 'move': {
           if (!state.startPoint) break;
-          const dx = Math.round(canvasPos.x - state.startPoint.x);
-          const dy = Math.round(canvasPos.y - state.startPoint.y);
+          const dragDx = Math.round(canvasPos.x - state.startPoint.x);
+          const dragDy = Math.round(canvasPos.y - state.startPoint.y);
           if (state.pixelBuffer && state.originalPixelBuffer) {
+            // Total offset = persistent offset from prior moves + this drag's delta
+            const floatState = floatingSelectionRef.current;
+            const dx = (floatState?.offsetX ?? 0) + dragDx;
+            const dy = (floatState?.offsetY ?? 0) + dragDy;
             // Moving selected pixels: composite floated pixels at offset onto the base
             const base = state.originalPixelBuffer.clone();
             const floated = state.pixelBuffer;
@@ -882,11 +964,36 @@ export function useCanvasInteraction(
               }
             }
             useEditorStore.getState().updateLayerPixelData(state.layerId, base.toImageData());
+
+            // Shift selection bounds and mask to follow the moved content
+            if (state.moveOriginalMask && state.moveOriginalBounds) {
+              const edState = useEditorStore.getState();
+              const { width: docW, height: docH } = edState.document;
+              const origMask = state.moveOriginalMask;
+              const newMask = new Uint8ClampedArray(docW * docH);
+              for (let y = 0; y < docH; y++) {
+                for (let x = 0; x < docW; x++) {
+                  const srcX = x - dx;
+                  const srcY = y - dy;
+                  if (srcX >= 0 && srcX < docW && srcY >= 0 && srcY < docH) {
+                    newMask[y * docW + x] = origMask[srcY * docW + srcX] ?? 0;
+                  }
+                }
+              }
+              const newBounds = {
+                x: state.moveOriginalBounds.x + dx,
+                y: state.moveOriginalBounds.y + dy,
+                width: state.moveOriginalBounds.width,
+                height: state.moveOriginalBounds.height,
+              };
+              edState.setSelection(newBounds, newMask, docW, docH);
+              useUIStore.getState().setTransform(createTransformState(newBounds));
+            }
           } else {
             useEditorStore.getState().updateLayerPosition(
               state.layerId,
-              state.layerStartX + dx,
-              state.layerStartY + dy,
+              state.layerStartX + dragDx,
+              state.layerStartY + dragDy,
             );
           }
           break;
@@ -1118,6 +1225,20 @@ export function useCanvasInteraction(
       }
     }
 
+    // Move: update floating selection offset
+    if (state.tool === 'move' && state.pixelBuffer && state.startPoint && floatingSelectionRef.current) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+        const canvasPos = screenToCanvas(screenX, screenY);
+        const dragDx = Math.round(canvasPos.x - state.startPoint.x);
+        const dragDy = Math.round(canvasPos.y - state.startPoint.y);
+        floatingSelectionRef.current.offsetX += dragDx;
+        floatingSelectionRef.current.offsetY += dragDy;
+      }
+    }
+
     // Lasso: create polygon selection from collected points
     if (state.tool === 'lasso') {
       const lassoPoints = useUIStore.getState().lassoPoints;
@@ -1166,11 +1287,14 @@ export function useCanvasInteraction(
       originalSelectionMaskHeight: 0,
       transformCanvas: null,
       baseCanvas: null,
+      moveOriginalMask: null,
+      moveOriginalBounds: null,
     };
   }, [screenToCanvas, containerRef]);
 
   const clearPersistentTransform = useCallback(() => {
     persistentTransformRef.current = null;
+    floatingSelectionRef.current = null;
   }, []);
 
   return { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform };
