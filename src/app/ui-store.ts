@@ -22,6 +22,8 @@ interface UIState {
   cropRect: { x: number; y: number; width: number; height: number } | null;
   transform: TransformState | null;
   activeTransformHandle: TransformHandle | null;
+  showNewDocumentModal: boolean;
+  setShowNewDocumentModal: (show: boolean) => void;
   setActiveTool: (tool: ToolId) => void;
   setForegroundColor: (color: Color) => void;
   setBackgroundColor: (color: Color) => void;
@@ -56,6 +58,8 @@ export const useUIStore = create<UIState>((set) => ({
   cropRect: null,
   transform: null,
   activeTransformHandle: null,
+  showNewDocumentModal: false,
+  setShowNewDocumentModal: (show) => set({ showNewDocumentModal: show }),
 
   setActiveTool: (tool) => {
     // Clear path when switching away from path tool

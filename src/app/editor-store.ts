@@ -32,6 +32,11 @@ interface EditorState {
   redoStack: HistorySnapshot[];
   renderVersion: number;
   selection: SelectionData;
+  documentReady: boolean;
+
+  // Document creation
+  createDocument: (width: number, height: number, transparentBg: boolean) => void;
+  openImageAsDocument: (imageData: ImageData, name: string) => void;
 
   // Document mutations
   addLayer: () => void;
@@ -118,6 +123,95 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   redoStack: [],
   renderVersion: 0,
   selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
+  documentReady: false,
+
+  createDocument: (width: number, height: number, transparentBg: boolean) => {
+    const bgLayer: RasterLayer = {
+      id: generateId(),
+      name: 'Background',
+      type: 'raster',
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      x: 0,
+      y: 0,
+      clipToBelow: false,
+      maskId: null,
+      width,
+      height,
+    };
+    const bgColor = transparentBg
+      ? { r: 0, g: 0, b: 0, a: 0 }
+      : { r: 255, g: 255, b: 255, a: 1 };
+    const pixelData = new Map<string, ImageData>();
+    const imgData = new ImageData(width, height);
+    if (!transparentBg) {
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        imgData.data[i] = 255;
+        imgData.data[i + 1] = 255;
+        imgData.data[i + 2] = 255;
+        imgData.data[i + 3] = 255;
+      }
+    }
+    pixelData.set(bgLayer.id, imgData);
+    set({
+      document: {
+        id: generateId(),
+        name: 'Untitled',
+        width,
+        height,
+        layers: [bgLayer],
+        layerOrder: [bgLayer.id],
+        activeLayerId: bgLayer.id,
+        backgroundColor: bgColor,
+      },
+      layerPixelData: pixelData,
+      undoStack: [],
+      redoStack: [],
+      renderVersion: 0,
+      selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
+      documentReady: true,
+    });
+  },
+
+  openImageAsDocument: (imageData: ImageData, name: string) => {
+    const layer: RasterLayer = {
+      id: generateId(),
+      name: 'Background',
+      type: 'raster',
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      x: 0,
+      y: 0,
+      clipToBelow: false,
+      maskId: null,
+      width: imageData.width,
+      height: imageData.height,
+    };
+    const pixelData = new Map<string, ImageData>();
+    pixelData.set(layer.id, imageData);
+    set({
+      document: {
+        id: generateId(),
+        name,
+        width: imageData.width,
+        height: imageData.height,
+        layers: [layer],
+        layerOrder: [layer.id],
+        activeLayerId: layer.id,
+        backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      },
+      layerPixelData: pixelData,
+      undoStack: [],
+      redoStack: [],
+      renderVersion: 0,
+      selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
+      documentReady: true,
+    });
+  },
 
   addLayer: () => {
     const state = get();
