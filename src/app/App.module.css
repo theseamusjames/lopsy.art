@@ -1,0 +1,66 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.header {
+  flex-shrink: 0;
+  z-index: var(--z-header);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.canvas {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  background: var(--color-bg-canvas);
+  overflow: hidden;
+}
+
+.canvasCrosshair {
+  cursor: crosshair;
+}
+
+.canvasGrab {
+  cursor: grab;
+}
+
+.canvas canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.sidebar {
+  flex-shrink: 0;
+  width: var(--sidebar-width);
+  background: var(--color-bg-secondary);
+  border-left: 1px solid var(--color-border);
+  z-index: var(--z-panels);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarTop {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.sidebarBottom {
+  flex: 0 0 33.333%;
+  border-top: 1px solid var(--color-border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
