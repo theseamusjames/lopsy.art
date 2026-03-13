@@ -1,4 +1,4 @@
-# Loppsy — Development Rules
+# Lopsy — Development Rules
 
 Read SPEC.md for the full product specification.
 

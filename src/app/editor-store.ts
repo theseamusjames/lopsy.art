@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { DocumentState, Layer, LayerEffects, LayerMask, Rect, RasterLayer, ViewportState } from '../types';
+import { compositeOver } from '../engine/compositing';
 
 interface SelectionData {
   active: boolean;
@@ -14,12 +15,34 @@ interface HistorySnapshot {
   layerPixelData: Map<string, ImageData>;
 }
 
-function clonePixelDataMap(map: Map<string, ImageData>): Map<string, ImageData> {
+function cloneImageData(data: ImageData): ImageData {
+  const copy = new ImageData(data.width, data.height);
+  copy.data.set(data.data);
+  return copy;
+}
+
+function clonePixelDataMap(
+  current: Map<string, ImageData>,
+  dirtyIds: Set<string>,
+  previous: HistorySnapshot | undefined,
+): Map<string, ImageData> {
+  const clone = new Map<string, ImageData>();
+  for (const [id, data] of current) {
+    if (dirtyIds.has(id) || !previous?.layerPixelData.has(id)) {
+      // Layer was modified or is new — deep clone
+      clone.set(id, cloneImageData(data));
+    } else {
+      // Layer unchanged — share reference (structural sharing)
+      clone.set(id, previous.layerPixelData.get(id)!);
+    }
+  }
+  return clone;
+}
+
+function clonePixelDataMapFull(map: Map<string, ImageData>): Map<string, ImageData> {
   const clone = new Map<string, ImageData>();
   for (const [id, data] of map) {
-    const copy = new ImageData(data.width, data.height);
-    copy.data.set(data.data);
-    clone.set(id, copy);
+    clone.set(id, cloneImageData(data));
   }
   return clone;
 }
@@ -30,6 +53,7 @@ interface EditorState {
   layerPixelData: Map<string, ImageData>;
   undoStack: HistorySnapshot[];
   redoStack: HistorySnapshot[];
+  dirtyLayerIds: Set<string>;
   renderVersion: number;
   selection: SelectionData;
   documentReady: boolean;
@@ -133,6 +157,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   layerPixelData: new Map(),
   undoStack: [],
   redoStack: [],
+  dirtyLayerIds: new Set(),
   renderVersion: 0,
   selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
   documentReady: false,
@@ -382,26 +407,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     // Composite top onto bottom
     const result = new ImageData(bottomData.width, bottomData.height);
     result.data.set(bottomData.data);
-    const topOpacity = topLayer.opacity;
-    for (let y = 0; y < topData.height; y++) {
-      for (let x = 0; x < topData.width; x++) {
-        const destX = x + topLayer.x - bottomLayer.x;
-        const destY = y + topLayer.y - bottomLayer.y;
-        if (destX < 0 || destX >= result.width || destY < 0 || destY >= result.height) continue;
-        const si = (y * topData.width + x) * 4;
-        const di = (destY * result.width + destX) * 4;
-        const sa = ((topData.data[si + 3] ?? 0) / 255) * topOpacity;
-        if (sa <= 0) continue;
-        const da = (result.data[di + 3] ?? 0) / 255;
-        const outA = sa + da * (1 - sa);
-        if (outA > 0) {
-          result.data[di] = Math.round(((topData.data[si] ?? 0) * sa + (result.data[di] ?? 0) * da * (1 - sa)) / outA);
-          result.data[di + 1] = Math.round(((topData.data[si + 1] ?? 0) * sa + (result.data[di + 1] ?? 0) * da * (1 - sa)) / outA);
-          result.data[di + 2] = Math.round(((topData.data[si + 2] ?? 0) * sa + (result.data[di + 2] ?? 0) * da * (1 - sa)) / outA);
-          result.data[di + 3] = Math.round(outA * 255);
-        }
-      }
-    }
+    compositeOver(
+      topData.data, bottomData.data,
+      topData.width, topData.height,
+      bottomData.width, bottomData.height,
+      topLayer.x - bottomLayer.x, topLayer.y - bottomLayer.y,
+      topLayer.opacity, result.data,
+    );
 
     const pixelData = new Map(state.layerPixelData);
     pixelData.set(belowId, result);
@@ -440,26 +452,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (!layer || !layer.visible) continue;
       const data = state.layerPixelData.get(layerId);
       if (!data) continue;
-      const layerOpacity = layer.opacity;
-      for (let y = 0; y < data.height; y++) {
-        for (let x = 0; x < data.width; x++) {
-          const destX = x + layer.x;
-          const destY = y + layer.y;
-          if (destX < 0 || destX >= width || destY < 0 || destY >= height) continue;
-          const si = (y * data.width + x) * 4;
-          const di = (destY * width + destX) * 4;
-          const sa = ((data.data[si + 3] ?? 0) / 255) * layerOpacity;
-          if (sa <= 0) continue;
-          const da = (result.data[di + 3] ?? 0) / 255;
-          const outA = sa + da * (1 - sa);
-          if (outA > 0) {
-            result.data[di] = Math.round(((data.data[si] ?? 0) * sa + (result.data[di] ?? 0) * da * (1 - sa)) / outA);
-            result.data[di + 1] = Math.round(((data.data[si + 1] ?? 0) * sa + (result.data[di + 1] ?? 0) * da * (1 - sa)) / outA);
-            result.data[di + 2] = Math.round(((data.data[si + 2] ?? 0) * sa + (result.data[di + 2] ?? 0) * da * (1 - sa)) / outA);
-            result.data[di + 3] = Math.round(outA * 255);
-          }
-        }
-      }
+      compositeOver(
+        data.data, result.data,
+        data.width, data.height,
+        width, height,
+        layer.x, layer.y,
+        layer.opacity, result.data,
+      );
     }
 
     const newId = generateId();
@@ -596,7 +595,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const state = get();
     const pixelData = new Map(state.layerPixelData);
     pixelData.set(layerId, data);
-    set({ layerPixelData: pixelData, renderVersion: state.renderVersion + 1 });
+    const dirtyLayerIds = new Set(state.dirtyLayerIds);
+    dirtyLayerIds.add(layerId);
+    set({ layerPixelData: pixelData, dirtyLayerIds, renderVersion: state.renderVersion + 1 });
   },
 
   notifyRender: () => {
@@ -678,13 +679,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!previous) return;
     const currentSnapshot: HistorySnapshot = {
       document: state.document,
-      layerPixelData: clonePixelDataMap(state.layerPixelData),
+      layerPixelData: clonePixelDataMapFull(state.layerPixelData),
     };
     set({
       undoStack: state.undoStack.slice(0, -1),
       redoStack: [...state.redoStack, currentSnapshot],
       document: previous.document,
-      layerPixelData: previous.layerPixelData,
+      layerPixelData: clonePixelDataMapFull(previous.layerPixelData),
+      dirtyLayerIds: new Set(),
       renderVersion: state.renderVersion + 1,
     });
   },
@@ -696,26 +698,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!next) return;
     const currentSnapshot: HistorySnapshot = {
       document: state.document,
-      layerPixelData: clonePixelDataMap(state.layerPixelData),
+      layerPixelData: clonePixelDataMapFull(state.layerPixelData),
     };
     set({
       redoStack: state.redoStack.slice(0, -1),
       undoStack: [...state.undoStack, currentSnapshot],
       document: next.document,
-      layerPixelData: next.layerPixelData,
+      layerPixelData: clonePixelDataMapFull(next.layerPixelData),
+      dirtyLayerIds: new Set(),
       renderVersion: state.renderVersion + 1,
     });
   },
 
   pushHistory: () => {
     const state = get();
+    const prevSnapshot = state.undoStack[state.undoStack.length - 1];
     const snapshot: HistorySnapshot = {
       document: state.document,
-      layerPixelData: clonePixelDataMap(state.layerPixelData),
+      layerPixelData: clonePixelDataMap(state.layerPixelData, state.dirtyLayerIds, prevSnapshot),
     };
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],
       redoStack: [],
+      dirtyLayerIds: new Set(),
     });
   },
 }));

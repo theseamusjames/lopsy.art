@@ -1,2 +1,2 @@
-# loppsy.art
+# lopsy.art
 A single page image editor

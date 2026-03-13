@@ -1,6 +1,6 @@
-# Loppsy — Image Editor Spec
+# Lopsy — Image Editor Spec
 
-Loppsy is a browser-based image editor at loppsy.art. It runs entirely client-side as a single-page application. The goal is a capable, modern image editor — not a Photoshop clone, but one that covers the same core workflows: photo retouching, digital painting, compositing, and graphic design.
+Lopsy is a browser-based image editor at lopsy.art. It runs entirely client-side as a single-page application. The goal is a capable, modern image editor — not a Photoshop clone, but one that covers the same core workflows: photo retouching, digital painting, compositing, and graphic design.
 
 ---
 
@@ -523,7 +523,7 @@ The text tool needs a broad, curated library of fonts users can apply to text la
   - **Composed**: full editor layout with mock data, demonstrating panel arrangements.
 - Use Storybook's `args` / `controls` for interactive prop exploration.
 - **Chromatic** or Storybook's visual test addon for visual regression on component-level changes (complements the Playwright visual regression in the Testing section).
-- Storybook deployed as a static site alongside the app (e.g. `storybook.loppsy.art`) for team reference.
+- Storybook deployed as a static site alongside the app (e.g. `storybook.lopsy.art`) for team reference.
 
 ---
 
@@ -531,7 +531,7 @@ The text tool needs a broad, curated library of fonts users can apply to text la
 
 ### Architecture
 
-Loppsy is a fully static, client-side application. No backend, no server-side rendering, no API. The entire build output is HTML + JS + CSS + static assets.
+Lopsy is a fully static, client-side application. No backend, no server-side rendering, no API. The entire build output is HTML + JS + CSS + static assets.
 
 ### Hosting: Cloudflare Pages
 
@@ -542,10 +542,10 @@ Loppsy is a fully static, client-side application. No backend, no server-side re
 
 ### Domain & DNS
 
-- Domain: `loppsy.art`, DNS managed through Cloudflare.
-- `loppsy.art` → production deploy.
-- `storybook.loppsy.art` → Storybook deploy (separate Cloudflare Pages project or subdirectory).
-- Preview deploys get auto-generated URLs (e.g. `abc123.loppsy-art.pages.dev`).
+- Domain: `lopsy.art`, DNS managed through Cloudflare.
+- `lopsy.art` → production deploy.
+- `storybook.lopsy.art` → Storybook deploy (separate Cloudflare Pages project or subdirectory).
+- Preview deploys get auto-generated URLs (e.g. `abc123.lopsy-art.pages.dev`).
 
 ### Build & CI Pipeline
 
