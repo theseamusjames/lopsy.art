@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
+import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
 import { ColorPanel } from '../panels/ColorPanel/ColorPanel';
 import { ToolSettingsPanel } from '../panels/ToolSettingsPanel/ToolSettingsPanel';
 import { PanelContainer } from '../panels/PanelContainer/PanelContainer';
@@ -36,6 +37,7 @@ export function App() {
   const setActiveLayer = useEditorStore((s) => s.setActiveLayer);
   const toggleLayerVisibility = useEditorStore((s) => s.toggleLayerVisibility);
   const moveLayer = useEditorStore((s) => s.moveLayer);
+  const updateLayerOpacity = useEditorStore((s) => s.updateLayerOpacity);
   const setZoom = useEditorStore((s) => s.setZoom);
   const setPan = useEditorStore((s) => s.setPan);
   const renderVersion = useEditorStore((s) => s.renderVersion);
@@ -44,10 +46,12 @@ export function App() {
   const lassoPoints = useUIStore((s) => s.lassoPoints);
   const cropRect = useUIStore((s) => s.cropRect);
   const transform = useUIStore((s) => s.transform);
+  const gradientPreview = useUIStore((s) => s.gradientPreview);
 
   const documentReady = useEditorStore((s) => s.documentReady);
   const createDocument = useEditorStore((s) => s.createDocument);
   const openImageAsDocument = useEditorStore((s) => s.openImageAsDocument);
+  const maskEditMode = useUIStore((s) => s.maskEditMode);
   const showNewDocumentModal = useUIStore((s) => s.showNewDocumentModal);
   const setShowNewDocumentModal = useUIStore((s) => s.setShowNewDocumentModal);
 
@@ -131,7 +135,197 @@ export function App() {
       const tempCtx = tempCanvas.getContext('2d');
       if (tempCtx) {
         tempCtx.putImageData(data, 0, 0);
-        ctx.drawImage(tempCanvas, layer.x, layer.y);
+
+        // --- Outer Glow (behind content) ---
+        if (layer.effects.outerGlow) {
+          const glow = layer.effects.outerGlow;
+          const glowBlur = glow.size + glow.spread;
+          const pad = glowBlur * 2;
+          const glowCanvas = document.createElement('canvas');
+          glowCanvas.width = data.width + pad * 2;
+          glowCanvas.height = data.height + pad * 2;
+          const glowCtx = glowCanvas.getContext('2d');
+          if (glowCtx) {
+            glowCtx.filter = `blur(${glowBlur}px)`;
+            glowCtx.drawImage(tempCanvas, pad, pad);
+            glowCtx.globalCompositeOperation = 'source-in';
+            glowCtx.filter = 'none';
+            glowCtx.fillStyle = `rgba(${glow.color.r},${glow.color.g},${glow.color.b},${glow.opacity})`;
+            glowCtx.fillRect(0, 0, glowCanvas.width, glowCanvas.height);
+            ctx.drawImage(glowCanvas, layer.x - pad, layer.y - pad);
+          }
+        }
+
+        // --- Drop Shadow (behind content) ---
+        if (layer.effects.dropShadow) {
+          const shadow = layer.effects.dropShadow;
+          const pad = shadow.blur * 2;
+          const shadowCanvas = document.createElement('canvas');
+          shadowCanvas.width = data.width + pad * 2;
+          shadowCanvas.height = data.height + pad * 2;
+          const shadowCtx = shadowCanvas.getContext('2d');
+          if (shadowCtx) {
+            if (shadow.spread > 0) {
+              const spreadScale = 1 + (shadow.spread / Math.max(data.width, data.height)) * 2;
+              const spreadOffsetX = pad + (data.width * (1 - spreadScale)) / 2;
+              const spreadOffsetY = pad + (data.height * (1 - spreadScale)) / 2;
+              shadowCtx.filter = `blur(${shadow.blur}px)`;
+              shadowCtx.drawImage(tempCanvas, spreadOffsetX, spreadOffsetY, data.width * spreadScale, data.height * spreadScale);
+            } else {
+              shadowCtx.filter = `blur(${shadow.blur}px)`;
+              shadowCtx.drawImage(tempCanvas, pad, pad);
+            }
+            shadowCtx.globalCompositeOperation = 'source-in';
+            shadowCtx.filter = 'none';
+            shadowCtx.fillStyle = `rgba(${shadow.color.r},${shadow.color.g},${shadow.color.b},${shadow.color.a})`;
+            shadowCtx.fillRect(0, 0, shadowCanvas.width, shadowCanvas.height);
+            ctx.drawImage(shadowCanvas, layer.x + shadow.offsetX - pad, layer.y + shadow.offsetY - pad);
+          }
+        }
+
+        // --- Layer content (with mask application) ---
+        if (layer.mask && layer.mask.enabled && !maskEditMode) {
+          const maskedCanvas = document.createElement('canvas');
+          maskedCanvas.width = data.width;
+          maskedCanvas.height = data.height;
+          const maskedCtx = maskedCanvas.getContext('2d');
+          if (maskedCtx) {
+            maskedCtx.drawImage(tempCanvas, 0, 0);
+            const maskImageData = new ImageData(layer.mask.width, layer.mask.height);
+            for (let i = 0; i < layer.mask.data.length; i++) {
+              const idx = i * 4;
+              const val = layer.mask.data[i] ?? 0;
+              maskImageData.data[idx] = val;
+              maskImageData.data[idx + 1] = val;
+              maskImageData.data[idx + 2] = val;
+              maskImageData.data[idx + 3] = 255;
+            }
+            const maskCanvas = document.createElement('canvas');
+            maskCanvas.width = layer.mask.width;
+            maskCanvas.height = layer.mask.height;
+            const maskCtx = maskCanvas.getContext('2d');
+            if (maskCtx) {
+              maskCtx.putImageData(maskImageData, 0, 0);
+              maskedCtx.globalCompositeOperation = 'destination-in';
+              maskedCtx.drawImage(maskCanvas, 0, 0);
+            }
+            ctx.drawImage(maskedCanvas, layer.x, layer.y);
+          }
+        } else {
+          ctx.drawImage(tempCanvas, layer.x, layer.y);
+        }
+
+        // Mask edit mode overlay: show blue on hidden areas
+        if (maskEditMode && layer.mask && layer.id === activeLayerId) {
+          const overlayCanvas = document.createElement('canvas');
+          overlayCanvas.width = layer.mask.width;
+          overlayCanvas.height = layer.mask.height;
+          const overlayCtx = overlayCanvas.getContext('2d');
+          if (overlayCtx) {
+            const overlayData = overlayCtx.createImageData(layer.mask.width, layer.mask.height);
+            for (let i = 0; i < layer.mask.data.length; i++) {
+              const val = layer.mask.data[i] ?? 0;
+              const overlayAlpha = Math.round((1 - val / 255) * 128);
+              const idx = i * 4;
+              overlayData.data[idx] = 0;
+              overlayData.data[idx + 1] = 100;
+              overlayData.data[idx + 2] = 255;
+              overlayData.data[idx + 3] = overlayAlpha;
+            }
+            overlayCtx.putImageData(overlayData, 0, 0);
+            ctx.globalAlpha = 1;
+            ctx.drawImage(overlayCanvas, layer.x, layer.y);
+            ctx.globalAlpha = layer.opacity;
+          }
+        }
+
+        // --- Stroke (on top of content) ---
+        if (layer.effects.stroke) {
+          const stroke = layer.effects.stroke;
+          const sw = stroke.width;
+          const pad = sw * 2;
+          const strokeCanvas = document.createElement('canvas');
+          strokeCanvas.width = data.width + pad * 2;
+          strokeCanvas.height = data.height + pad * 2;
+          const strokeCtx = strokeCanvas.getContext('2d');
+          if (strokeCtx) {
+            if (stroke.position === 'outside') {
+              // Dilated version (blur-threshold approximation)
+              strokeCtx.filter = `blur(${sw / 2}px)`;
+              strokeCtx.drawImage(tempCanvas, pad, pad);
+              strokeCtx.filter = 'none';
+              // Strengthen the alpha to create dilation effect
+              strokeCtx.globalCompositeOperation = 'source-over';
+              for (let i = 0; i < 3; i++) {
+                strokeCtx.drawImage(strokeCanvas, 0, 0);
+              }
+              // Cut out the original shape to leave only the outer stroke
+              strokeCtx.globalCompositeOperation = 'destination-out';
+              strokeCtx.drawImage(tempCanvas, pad, pad);
+              // Color the stroke
+              strokeCtx.globalCompositeOperation = 'source-in';
+              strokeCtx.fillStyle = `rgba(${stroke.color.r},${stroke.color.g},${stroke.color.b},${stroke.color.a})`;
+              strokeCtx.fillRect(0, 0, strokeCanvas.width, strokeCanvas.height);
+            } else if (stroke.position === 'inside') {
+              // Draw original, then overlay colored version clipped to original
+              strokeCtx.drawImage(tempCanvas, pad, pad);
+              // Create an eroded version by blurring + thresholding via compositing
+              const erodeCanvas = document.createElement('canvas');
+              erodeCanvas.width = strokeCanvas.width;
+              erodeCanvas.height = strokeCanvas.height;
+              const erodeCtx = erodeCanvas.getContext('2d');
+              if (erodeCtx) {
+                erodeCtx.filter = `blur(${sw / 2}px)`;
+                erodeCtx.drawImage(tempCanvas, pad, pad);
+                erodeCtx.filter = 'none';
+                // Weaken alpha by drawing transparency over it
+                erodeCtx.globalCompositeOperation = 'destination-in';
+                erodeCtx.filter = `blur(${sw / 2}px)`;
+                erodeCtx.drawImage(tempCanvas, pad, pad);
+                erodeCtx.filter = 'none';
+              }
+              // Stroke = original minus eroded
+              strokeCtx.globalCompositeOperation = 'destination-out';
+              strokeCtx.drawImage(erodeCanvas, 0, 0);
+              // Color the remaining
+              strokeCtx.globalCompositeOperation = 'source-in';
+              strokeCtx.fillStyle = `rgba(${stroke.color.r},${stroke.color.g},${stroke.color.b},${stroke.color.a})`;
+              strokeCtx.fillRect(0, 0, strokeCanvas.width, strokeCanvas.height);
+            } else {
+              // center: half inside, half outside
+              const halfW = sw / 2;
+              // Dilated
+              strokeCtx.filter = `blur(${halfW / 2}px)`;
+              strokeCtx.drawImage(tempCanvas, pad, pad);
+              strokeCtx.filter = 'none';
+              for (let i = 0; i < 3; i++) {
+                strokeCtx.drawImage(strokeCanvas, 0, 0);
+              }
+              // Eroded
+              const erodeCanvas = document.createElement('canvas');
+              erodeCanvas.width = strokeCanvas.width;
+              erodeCanvas.height = strokeCanvas.height;
+              const erodeCtx = erodeCanvas.getContext('2d');
+              if (erodeCtx) {
+                erodeCtx.filter = `blur(${halfW / 2}px)`;
+                erodeCtx.drawImage(tempCanvas, pad, pad);
+                erodeCtx.filter = 'none';
+                erodeCtx.globalCompositeOperation = 'destination-in';
+                erodeCtx.filter = `blur(${halfW / 2}px)`;
+                erodeCtx.drawImage(tempCanvas, pad, pad);
+                erodeCtx.filter = 'none';
+              }
+              // Stroke = dilated minus eroded
+              strokeCtx.globalCompositeOperation = 'destination-out';
+              strokeCtx.drawImage(erodeCanvas, 0, 0);
+              // Color
+              strokeCtx.globalCompositeOperation = 'source-in';
+              strokeCtx.fillStyle = `rgba(${stroke.color.r},${stroke.color.g},${stroke.color.b},${stroke.color.a})`;
+              strokeCtx.fillRect(0, 0, strokeCanvas.width, strokeCanvas.height);
+            }
+            ctx.drawImage(strokeCanvas, layer.x - pad, layer.y - pad);
+          }
+        }
       }
     }
 
@@ -389,9 +583,45 @@ export function App() {
       ctx.restore();
     }
 
+    // Draw gradient preview line
+    if (gradientPreview) {
+      ctx.save();
+      ctx.lineWidth = 1.5 / viewport.zoom;
+      ctx.setLineDash([]);
+
+      const { start, end } = gradientPreview;
+
+      // Draw line
+      ctx.strokeStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 0.75 / viewport.zoom;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+
+      // Draw anchor points
+      const pointRadius = 4 / viewport.zoom;
+      for (const pt of [start, end]) {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, pointRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1 / viewport.zoom;
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
     ctx.restore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, viewport, layers, renderVersion, selection, pathAnchors, lassoPoints, cropRect, transform]);
+  }, [doc, viewport, layers, renderVersion, selection, pathAnchors, lassoPoints, cropRect, transform, maskEditMode, activeLayerId, gradientPreview]);
 
   // Resize observer
   useEffect(() => {
@@ -602,6 +832,7 @@ export function App() {
 
   const [toolSettingsCollapsed, setToolSettingsCollapsed] = useState(false);
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
+  const [effectsPanelCollapsed, setEffectsPanelCollapsed] = useState(false);
 
   const showModal = !documentReady || showNewDocumentModal;
 
@@ -675,7 +906,15 @@ export function App() {
                 onAddLayer={addLayer}
                 onRemoveLayer={removeLayer}
                 onReorderLayer={moveLayer}
+                onUpdateOpacity={updateLayerOpacity}
               />
+            </PanelContainer>
+            <PanelContainer
+              title="Layer Effects"
+              collapsed={effectsPanelCollapsed}
+              onToggle={() => setEffectsPanelCollapsed(!effectsPanelCollapsed)}
+            >
+              <LayerEffectsPanel />
             </PanelContainer>
           </div>
         </div>

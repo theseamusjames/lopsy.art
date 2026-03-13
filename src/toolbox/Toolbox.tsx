@@ -13,7 +13,6 @@ import {
   Pentagon,
   Crop,
   PenTool,
-  GalleryVerticalEnd,
 } from 'lucide-react';
 import { IconButton } from '../components/IconButton/IconButton';
 import { ColorSwatch } from '../components/ColorSwatch/ColorSwatch';
@@ -35,6 +34,20 @@ function MarqueeEllipseIcon({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <ellipse cx="12" cy="12" rx="9" ry="9" strokeDasharray="4 3" />
+    </svg>
+  );
+}
+
+function GradientIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="grad-icon" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="1" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" fill="url(#grad-icon)" />
     </svg>
   );
 }
@@ -62,7 +75,7 @@ const toolGroups: ToolDef[][] = [
   ],
   [
     { id: 'fill', icon: <PaintBucket size={ICON_SIZE} />, label: 'Fill (G)' },
-    { id: 'gradient', icon: <GalleryVerticalEnd size={ICON_SIZE} />, label: 'Gradient' },
+    { id: 'gradient', icon: <GradientIcon size={ICON_SIZE} />, label: 'Gradient' },
     { id: 'stamp', icon: <Stamp size={ICON_SIZE} />, label: 'Clone Stamp (S)' },
   ],
   [

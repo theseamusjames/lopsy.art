@@ -22,6 +22,8 @@ interface ToolSettings {
   textContent: string;
   textFontSize: number;
   textFontFamily: string;
+  textFontWeight: number;
+  textFontStyle: 'normal' | 'italic';
 
   setBrushSize: (size: number) => void;
   setStampSize: (size: number) => void;
@@ -33,6 +35,8 @@ interface ToolSettings {
   setTextContent: (content: string) => void;
   setTextFontSize: (size: number) => void;
   setTextFontFamily: (family: string) => void;
+  setTextFontWeight: (weight: number) => void;
+  setTextFontStyle: (style: 'normal' | 'italic') => void;
   setBrushOpacity: (opacity: number) => void;
   setBrushHardness: (hardness: number) => void;
   setPencilSize: (size: number) => void;
@@ -68,6 +72,8 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   textContent: 'Text',
   textFontSize: 24,
   textFontFamily: 'sans-serif',
+  textFontWeight: 400,
+  textFontStyle: 'normal' as const,
 
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(200, size)) }),
   setBrushOpacity: (opacity) => set({ brushOpacity: Math.max(1, Math.min(100, opacity)) }),
@@ -90,4 +96,6 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   setTextContent: (content) => set({ textContent: content }),
   setTextFontSize: (size) => set({ textFontSize: Math.max(1, Math.min(500, size)) }),
   setTextFontFamily: (family) => set({ textFontFamily: family }),
+  setTextFontWeight: (weight) => set({ textFontWeight: weight }),
+  setTextFontStyle: (style) => set({ textFontStyle: style }),
 }));

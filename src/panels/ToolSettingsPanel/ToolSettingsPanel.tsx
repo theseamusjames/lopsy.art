@@ -4,6 +4,23 @@ import { Slider } from '../../components/Slider/Slider';
 import type { ToolId } from '../../types';
 import styles from './ToolSettingsPanel.module.css';
 
+const FONT_OPTIONS = [
+  { value: 'Inter, sans-serif', label: 'Inter' },
+  { value: 'Arial, sans-serif', label: 'Arial' },
+  { value: 'Helvetica, Arial, sans-serif', label: 'Helvetica' },
+  { value: 'Georgia, serif', label: 'Georgia' },
+  { value: 'Times New Roman, serif', label: 'Times New Roman' },
+  { value: 'Courier New, monospace', label: 'Courier New' },
+  { value: 'JetBrains Mono, monospace', label: 'JetBrains Mono' },
+  { value: 'Verdana, sans-serif', label: 'Verdana' },
+  { value: 'Trebuchet MS, sans-serif', label: 'Trebuchet MS' },
+  { value: 'Impact, sans-serif', label: 'Impact' },
+  { value: 'Comic Sans MS, cursive', label: 'Comic Sans MS' },
+  { value: 'Palatino, serif', label: 'Palatino' },
+  { value: 'Garamond, serif', label: 'Garamond' },
+  { value: 'Brush Script MT, cursive', label: 'Brush Script' },
+];
+
 export function ToolSettingsPanel() {
   const activeTool = useUIStore((s) => s.activeTool);
   return <ToolOptions tool={activeTool} />;
@@ -31,6 +48,8 @@ function ToolOptions({ tool }: { tool: ToolId }) {
   const textContent = useToolSettingsStore((s) => s.textContent);
   const textFontSize = useToolSettingsStore((s) => s.textFontSize);
   const textFontFamily = useToolSettingsStore((s) => s.textFontFamily);
+  const textFontWeight = useToolSettingsStore((s) => s.textFontWeight);
+  const textFontStyle = useToolSettingsStore((s) => s.textFontStyle);
 
   const setBrushSize = useToolSettingsStore((s) => s.setBrushSize);
   const setBrushOpacity = useToolSettingsStore((s) => s.setBrushOpacity);
@@ -53,6 +72,8 @@ function ToolOptions({ tool }: { tool: ToolId }) {
   const setTextContent = useToolSettingsStore((s) => s.setTextContent);
   const setTextFontSize = useToolSettingsStore((s) => s.setTextFontSize);
   const setTextFontFamily = useToolSettingsStore((s) => s.setTextFontFamily);
+  const setTextFontWeight = useToolSettingsStore((s) => s.setTextFontWeight);
+  const setTextFontStyle = useToolSettingsStore((s) => s.setTextFontStyle);
 
   switch (tool) {
     case 'brush':
@@ -203,10 +224,33 @@ function ToolOptions({ tool }: { tool: ToolId }) {
               value={textFontFamily}
               onChange={(e) => setTextFontFamily(e.target.value)}
             >
-              <option value="sans-serif">Sans Serif</option>
-              <option value="serif">Serif</option>
-              <option value="monospace">Monospace</option>
-              <option value="cursive">Cursive</option>
+              {FONT_OPTIONS.map((font) => (
+                <option key={font.value} value={font.value}>
+                  {font.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.row}>
+            <span className={styles.label}>Weight</span>
+            <select
+              className={styles.select}
+              value={textFontWeight}
+              onChange={(e) => setTextFontWeight(Number(e.target.value))}
+            >
+              <option value={400}>Normal</option>
+              <option value={700}>Bold</option>
+            </select>
+          </div>
+          <div className={styles.row}>
+            <span className={styles.label}>Style</span>
+            <select
+              className={styles.select}
+              value={textFontStyle}
+              onChange={(e) => setTextFontStyle(e.target.value as 'normal' | 'italic')}
+            >
+              <option value="normal">Normal</option>
+              <option value="italic">Italic</option>
             </select>
           </div>
         </div>
