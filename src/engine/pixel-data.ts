@@ -1,4 +1,5 @@
 import type { Color } from '../types/index';
+import type { PixelSurface } from '../tools/fill/fill';
 
 export class PixelBuffer {
   readonly width: number;
@@ -70,5 +71,55 @@ export class PixelBuffer {
     const buffer = new PixelBuffer(imageData.width, imageData.height);
     buffer.data.set(imageData.data);
     return buffer;
+  }
+}
+
+/**
+ * Wraps a PixelBuffer so that setPixel only writes to pixels
+ * inside the selection mask. Coordinates are in layer-local space;
+ * layerX/layerY offset them into document/mask space.
+ */
+export class MaskedPixelBuffer implements PixelSurface {
+  readonly width: number;
+  readonly height: number;
+  private readonly inner: PixelBuffer;
+  private readonly mask: Uint8ClampedArray;
+  private readonly maskWidth: number;
+  private readonly maskHeight: number;
+  private readonly layerX: number;
+  private readonly layerY: number;
+
+  constructor(
+    inner: PixelBuffer,
+    mask: Uint8ClampedArray,
+    maskWidth: number,
+    maskHeight: number,
+    layerX: number,
+    layerY: number,
+  ) {
+    this.inner = inner;
+    this.width = inner.width;
+    this.height = inner.height;
+    this.mask = mask;
+    this.maskWidth = maskWidth;
+    this.maskHeight = maskHeight;
+    this.layerX = layerX;
+    this.layerY = layerY;
+  }
+
+  getPixel(x: number, y: number): Color {
+    return this.inner.getPixel(x, y);
+  }
+
+  setPixel(x: number, y: number, color: Color): void {
+    const dx = x + this.layerX;
+    const dy = y + this.layerY;
+    if (dx < 0 || dx >= this.maskWidth || dy < 0 || dy >= this.maskHeight) return;
+    if ((this.mask[dy * this.maskWidth + dx] ?? 0) < 128) return;
+    this.inner.setPixel(x, y, color);
+  }
+
+  toImageData(): ImageData {
+    return this.inner.toImageData();
   }
 }

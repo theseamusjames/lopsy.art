@@ -112,3 +112,44 @@ export function isEmptySelection(mask: Uint8ClampedArray): boolean {
   }
   return true;
 }
+
+/**
+ * Extract edge segments from a selection mask for marching ants rendering.
+ * Returns arrays of horizontal and vertical line segments at pixel boundaries
+ * where selected pixels border unselected pixels.
+ */
+export function getSelectionEdges(
+  mask: Uint8ClampedArray,
+  maskWidth: number,
+  maskHeight: number,
+): { h: Float64Array; v: Float64Array } {
+  const threshold = 128;
+  const hSegments: number[] = [];
+  const vSegments: number[] = [];
+
+  for (let y = 0; y < maskHeight; y++) {
+    for (let x = 0; x < maskWidth; x++) {
+      const selected = (mask[y * maskWidth + x] ?? 0) >= threshold;
+      if (!selected) continue;
+
+      // Top edge: selected pixel with unselected (or boundary) above
+      if (y === 0 || (mask[(y - 1) * maskWidth + x] ?? 0) < threshold) {
+        hSegments.push(x, y, x + 1, y);
+      }
+      // Bottom edge
+      if (y === maskHeight - 1 || (mask[(y + 1) * maskWidth + x] ?? 0) < threshold) {
+        hSegments.push(x, y + 1, x + 1, y + 1);
+      }
+      // Left edge
+      if (x === 0 || (mask[y * maskWidth + x - 1] ?? 0) < threshold) {
+        vSegments.push(x, y, x, y + 1);
+      }
+      // Right edge
+      if (x === maskWidth - 1 || (mask[y * maskWidth + x + 1] ?? 0) < threshold) {
+        vSegments.push(x + 1, y, x + 1, y + 1);
+      }
+    }
+  }
+
+  return { h: new Float64Array(hSegments), v: new Float64Array(vSegments) };
+}

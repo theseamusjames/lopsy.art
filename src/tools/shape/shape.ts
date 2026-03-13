@@ -1,5 +1,5 @@
 import type { Color, Point, Rect } from '../../types';
-import { PixelBuffer } from '../../engine/pixel-data';
+import type { PixelSurface } from '../fill/fill';
 
 export type ShapeMode = 'rectangle' | 'ellipse';
 
@@ -10,7 +10,7 @@ export interface ShapeOptions {
 }
 
 export function drawShape(
-  buffer: PixelBuffer,
+  buffer: PixelSurface,
   start: Point,
   end: Point,
   color: Color,
@@ -40,7 +40,7 @@ export function drawShape(
   }
 }
 
-function fillRect(buffer: PixelBuffer, rect: Rect, color: Color): void {
+function fillRect(buffer: PixelSurface, rect: Rect, color: Color): void {
   const x0 = Math.max(0, Math.floor(rect.x));
   const y0 = Math.max(0, Math.floor(rect.y));
   const x1 = Math.min(buffer.width, Math.ceil(rect.x + rect.width));
@@ -53,7 +53,7 @@ function fillRect(buffer: PixelBuffer, rect: Rect, color: Color): void {
   }
 }
 
-function strokeRect(buffer: PixelBuffer, rect: Rect, color: Color, width: number): void {
+function strokeRect(buffer: PixelSurface, rect: Rect, color: Color, width: number): void {
   const x0 = Math.max(0, Math.floor(rect.x));
   const y0 = Math.max(0, Math.floor(rect.y));
   const x1 = Math.min(buffer.width, Math.ceil(rect.x + rect.width));
@@ -73,7 +73,7 @@ function strokeRect(buffer: PixelBuffer, rect: Rect, color: Color, width: number
   }
 }
 
-function fillEllipse(buffer: PixelBuffer, rect: Rect, color: Color): void {
+function fillEllipse(buffer: PixelSurface, rect: Rect, color: Color): void {
   const cx = rect.x + rect.width / 2;
   const cy = rect.y + rect.height / 2;
   const rx = rect.width / 2;
@@ -96,7 +96,7 @@ function fillEllipse(buffer: PixelBuffer, rect: Rect, color: Color): void {
   }
 }
 
-function strokeEllipse(buffer: PixelBuffer, rect: Rect, color: Color, width: number): void {
+function strokeEllipse(buffer: PixelSurface, rect: Rect, color: Color, width: number): void {
   const cx = rect.x + rect.width / 2;
   const cy = rect.y + rect.height / 2;
   const rx = rect.width / 2;

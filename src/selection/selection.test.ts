@@ -6,6 +6,7 @@ import {
   combineSelections,
   selectionBounds,
   isEmptySelection,
+  getSelectionEdges,
 } from './selection';
 
 describe('createRectSelection', () => {
@@ -98,5 +99,37 @@ describe('isEmptySelection', () => {
     const mask = new Uint8ClampedArray(10);
     mask[5] = 1;
     expect(isEmptySelection(mask)).toBe(false);
+  });
+});
+
+describe('getSelectionEdges', () => {
+  it('returns edges for a single selected pixel', () => {
+    // 3x3 grid, center pixel selected
+    const mask = new Uint8ClampedArray(9);
+    mask[4] = 255; // (1,1)
+    const edges = getSelectionEdges(mask, 3, 3);
+    // Should have 4 horizontal segments (top + bottom) and 4 vertical segments (left + right)
+    // Top: (1,1)→(2,1), Bottom: (1,2)→(2,2), Left: (1,1)→(1,2), Right: (2,1)→(2,2)
+    expect(edges.h.length).toBe(8); // 2 segments × 4 values
+    expect(edges.v.length).toBe(8);
+  });
+
+  it('merges interior edges for adjacent pixels', () => {
+    // 4x1 row, two adjacent pixels selected: (1,0) and (2,0)
+    const mask = new Uint8ClampedArray(4);
+    mask[1] = 255;
+    mask[2] = 255;
+    const edges = getSelectionEdges(mask, 4, 1);
+    // Horizontal: top edge for each pixel (2 segments), bottom edge for each (2 segments) = 4
+    // Vertical: left of pixel 1, right of pixel 2, but NOT between 1 and 2 = 2
+    expect(edges.h.length).toBe(16); // 4 segments × 4 values
+    expect(edges.v.length).toBe(8);  // 2 segments × 4 values
+  });
+
+  it('returns empty for no selection', () => {
+    const mask = new Uint8ClampedArray(9);
+    const edges = getSelectionEdges(mask, 3, 3);
+    expect(edges.h.length).toBe(0);
+    expect(edges.v.length).toBe(0);
   });
 });
