@@ -30,6 +30,10 @@ export class CanvasPool {
       } else {
         entry.ctx.clearRect(0, 0, width, height);
       }
+      entry.ctx.globalCompositeOperation = 'source-over';
+      entry.ctx.filter = 'none';
+      entry.ctx.globalAlpha = 1;
+      entry.ctx.setTransform(1, 0, 0, 1, 0, 0);
       return {
         canvas: entry.canvas,
         ctx: entry.ctx,
