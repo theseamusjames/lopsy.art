@@ -2,12 +2,13 @@ import { useCallback, useRef } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useToolSettingsStore } from './tool-settings-store';
-import { PixelBuffer } from '../engine/pixel-data';
+import { PixelBuffer, MaskedPixelBuffer } from '../engine/pixel-data';
 import { generateBrushStamp, interpolatePoints, applyBrushDab } from '../tools/brush/brush';
 import { drawPencilLine } from '../tools/pencil/pencil';
 import { generateBrushStamp as generateEraserStamp } from '../tools/brush/brush';
 import { applyEraserDab } from '../tools/eraser/eraser';
 import { floodFill, applyFill } from '../tools/fill/fill';
+import type { PixelSurface } from '../tools/fill/fill';
 import { sampleColor } from '../tools/eyedropper/eyedropper';
 import { createRectSelection, createEllipseSelection, selectionBounds } from '../selection/selection';
 import { interpolateGradient, computeLinearGradientT, computeRadialGradientT } from '../tools/gradient/gradient';
@@ -60,6 +61,14 @@ const DEFAULT_TRANSFORM_FIELDS = {
   moveOriginalBounds: null as { x: number; y: number; width: number; height: number } | null,
 };
 
+function wrapWithSelectionMask(buffer: PixelBuffer, layerX: number, layerY: number): PixelBuffer | MaskedPixelBuffer {
+  const sel = useEditorStore.getState().selection;
+  if (sel.active && sel.mask) {
+    return new MaskedPixelBuffer(buffer, sel.mask, sel.maskWidth, sel.maskHeight, layerX, layerY);
+  }
+  return buffer;
+}
+
 function createMaskSurface(maskData: Uint8ClampedArray, width: number, height: number): PixelBuffer {
   // Wrap mask data as a grayscale PixelBuffer where R=G=B=maskValue, A=1
   const buf = new PixelBuffer(width, height);
@@ -84,8 +93,8 @@ function extractMaskFromSurface(buf: PixelBuffer, width: number, height: number)
 }
 
 function applyStampDab(
-  dest: PixelBuffer,
-  source: PixelBuffer,
+  dest: PixelSurface,
+  source: PixelSurface,
   pos: Point,
   offset: Point,
   size: number,
@@ -109,7 +118,7 @@ function applyStampDab(
 }
 
 function applyDodgeBurn(
-  buf: PixelBuffer,
+  buf: PixelSurface,
   pos: Point,
   size: number,
   mode: 'dodge' | 'burn',
@@ -145,7 +154,7 @@ function applyDodgeBurn(
 }
 
 function renderText(
-  buf: PixelBuffer,
+  buf: PixelSurface,
   pos: Point,
   text: string,
   fontSize: number,
@@ -379,6 +388,7 @@ export function useCanvasInteraction(
       if (currentTransform && editorState.selection.active) {
         const handleRadius = 8 / editorState.viewport.zoom;
         const hit = hitTestHandle(canvasPos, currentTransform, handleRadius);
+
         if (hit) {
           const startAngle = isRotateHandle(hit)
             ? computeRotation(canvasPos, currentTransform) - currentTransform.rotation
@@ -387,9 +397,9 @@ export function useCanvasInteraction(
           const sel = editorState.selection;
           editorState.pushHistory();
 
-          // Clear floating selection from move tool — the transform will
-          // work from its own persistent canvases, and after the transform
-          // the move tool should re-cut from the updated pixel data.
+          // Clear floating selection when entering transform mode.
+          // The persistent transform canvases should already be built
+          // from the move mouseup (with correctly separated content).
           floatingSelectionRef.current = null;
 
           // On first grab: cut pixels into persistent offscreen canvases.
@@ -475,6 +485,9 @@ export function useCanvasInteraction(
       const imageData = editorState.getOrCreateLayerPixelData(activeLayerId);
       const pixelBuffer = PixelBuffer.fromImageData(imageData);
 
+      // Wrap buffer so painting tools respect the active selection
+      const paintSurface = wrapWithSelectionMask(pixelBuffer, activeLayer.x, activeLayer.y);
+
       // Convert canvas coords to layer-local coords for painting tools
       const layerPos: Point = {
         x: canvasPos.x - activeLayer.x,
@@ -484,9 +497,6 @@ export function useCanvasInteraction(
       switch (activeTool) {
         case 'move': {
           editorState.pushHistory();
-          // Clear transform canvases — after moving, any subsequent
-          // rotation should re-cut from the moved pixel data.
-          persistentTransformRef.current = null;
           const sel = editorState.selection;
           if (sel.active && sel.mask) {
             let floated: PixelBuffer;
@@ -497,6 +507,91 @@ export function useCanvasInteraction(
               // Reuse the persistent floating selection (don't re-cut)
               floated = existing.floated;
               base = existing.base;
+            } else if (persistentTransformRef.current) {
+              // After a rotate/scale, derive floating selection from
+              // the already-separated transform canvases so we never
+              // re-cut from the composited layer data.
+              // We must render the transform canvas WITH the current
+              // rotation/scale applied so the floated pixels reflect
+              // the transformed state (not the original orientation).
+              const ptRef = persistentTransformRef.current;
+              const bCtx = ptRef.baseCanvas.getContext('2d');
+              const w = ptRef.transformCanvas.width;
+              const h = ptRef.transformCanvas.height;
+              const currentXform = useUIStore.getState().transform;
+              if (bCtx) {
+                // Render the transform canvas with current rotation/scale
+                const renderedCanvas = document.createElement('canvas');
+                renderedCanvas.width = w;
+                renderedCanvas.height = h;
+                const rCtx = renderedCanvas.getContext('2d')!;
+                if (currentXform && currentXform.rotation !== 0 || currentXform && (currentXform.scaleX !== 1 || currentXform.scaleY !== 1)) {
+                  const origBounds = sel.bounds!;
+                  const cx = origBounds.x + origBounds.width / 2;
+                  const cy = origBounds.y + origBounds.height / 2;
+                  rCtx.save();
+                  rCtx.translate(cx + currentXform.translateX, cy + currentXform.translateY);
+                  rCtx.rotate(currentXform.rotation);
+                  rCtx.scale(currentXform.scaleX, currentXform.scaleY);
+                  rCtx.translate(-cx, -cy);
+                  rCtx.drawImage(ptRef.transformCanvas, 0, 0);
+                  rCtx.restore();
+                } else {
+                  rCtx.drawImage(ptRef.transformCanvas, 0, 0);
+                }
+                const renderedImg = rCtx.getImageData(0, 0, w, h);
+                const bImg = bCtx.getImageData(0, 0, w, h);
+                floated = PixelBuffer.fromImageData(renderedImg);
+                base = PixelBuffer.fromImageData(bImg);
+
+                // Build a new mask from the rendered (rotated) pixels so
+                // the marching ants track the actual content, not the
+                // pre-rotation selection shape.
+                const edState = useEditorStore.getState();
+                const { width: docW, height: docH } = edState.document;
+                const newMask = new Uint8ClampedArray(docW * docH);
+                let minX = docW, minY = docH, maxX = 0, maxY = 0;
+                for (let py = 0; py < h && py < docH; py++) {
+                  for (let px = 0; px < w && px < docW; px++) {
+                    const alpha = renderedImg.data[(py * w + px) * 4 + 3] ?? 0;
+                    if (alpha > 0) {
+                      newMask[py * docW + px] = 255;
+                      if (px < minX) minX = px;
+                      if (px > maxX) maxX = px;
+                      if (py < minY) minY = py;
+                      if (py > maxY) maxY = py;
+                    }
+                  }
+                }
+                const newBounds = minX <= maxX
+                  ? { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 }
+                  : { ...sel.bounds! };
+                edState.setSelection(newBounds, newMask, docW, docH);
+                useUIStore.getState().setTransform(createTransformState(newBounds));
+
+                floatingSelectionRef.current = {
+                  floated, base, offsetX: 0, offsetY: 0,
+                  originalMask: newMask,
+                  originalBounds: newBounds,
+                };
+              } else {
+                // Fallback: cut from layer (shouldn't happen)
+                base = pixelBuffer.clone();
+                floated = new PixelBuffer(pixelBuffer.width, pixelBuffer.height);
+                for (let y = 0; y < pixelBuffer.height; y++) {
+                  for (let x = 0; x < pixelBuffer.width; x++) {
+                    if ((sel.mask[y * sel.maskWidth + x] ?? 0) > 0) {
+                      floated.setPixel(x, y, pixelBuffer.getPixel(x, y));
+                      base.setPixel(x, y, { r: 0, g: 0, b: 0, a: 0 });
+                    }
+                  }
+                }
+                floatingSelectionRef.current = {
+                  floated, base, offsetX: 0, offsetY: 0,
+                  originalMask: new Uint8ClampedArray(sel.mask),
+                  originalBounds: { ...sel.bounds! },
+                };
+              }
             } else {
               // First move: cut selected pixels out of the layer
               base = pixelBuffer.clone();
@@ -515,6 +610,8 @@ export function useCanvasInteraction(
                 originalBounds: { ...sel.bounds! },
               };
             }
+            // Clear transform canvases — they'll be rebuilt at move mouseup
+            persistentTransformRef.current = null;
             const floatRef = floatingSelectionRef.current!;
             stateRef.current = {
               drawing: true,
@@ -640,17 +737,17 @@ export function useCanvasInteraction(
             const opacity = toolSettings.brushOpacity / 100;
             const stamp = generateBrushStamp(size, hardness);
             const color = useUIStore.getState().foregroundColor;
-            applyBrushDab(pixelBuffer, layerPos, stamp, size, color, opacity, 1);
+            applyBrushDab(paintSurface, layerPos, stamp, size, color, opacity, 1);
           } else if (activeTool === 'pencil') {
             const color = useUIStore.getState().foregroundColor;
             const size = toolSettings.pencilSize;
-            drawPencilLine(pixelBuffer, layerPos, layerPos, color, size);
+            drawPencilLine(paintSurface, layerPos, layerPos, color, size);
           } else {
             const size = toolSettings.eraserSize;
             const hardness = 0.8;
             const opacity = toolSettings.eraserOpacity / 100;
             const stamp = generateEraserStamp(size, hardness);
-            applyEraserDab(pixelBuffer, layerPos, stamp, size, opacity);
+            applyEraserDab(paintSurface, layerPos, stamp, size, opacity);
           }
 
           editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
@@ -663,7 +760,7 @@ export function useCanvasInteraction(
           const tolerance = toolSettings.fillTolerance;
           const contiguous = toolSettings.fillContiguous;
           const pixels = floodFill(pixelBuffer, layerPos.x, layerPos.y, color, tolerance, contiguous);
-          applyFill(pixelBuffer, pixels, color);
+          applyFill(paintSurface, pixels, color);
           editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
           break;
         }
@@ -729,7 +826,7 @@ export function useCanvasInteraction(
           const dodgeMode = toolSettings.dodgeMode;
           const exposure = toolSettings.dodgeExposure / 100;
           const dodgeSize = toolSettings.brushSize;
-          applyDodgeBurn(pixelBuffer, layerPos, dodgeSize, dodgeMode, exposure);
+          applyDodgeBurn(paintSurface, layerPos, dodgeSize, dodgeMode, exposure);
           editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
           stateRef.current = {
             drawing: true,
@@ -771,7 +868,7 @@ export function useCanvasInteraction(
           const fontWeight = toolSettings.textFontWeight;
           const fontStyle = toolSettings.textFontStyle;
           const textColor = useUIStore.getState().foregroundColor;
-          renderText(pixelBuffer, layerPos, textContent, fontSize, fontFamily, textColor, fontWeight, fontStyle);
+          renderText(paintSurface, layerPos, textContent, fontSize, fontFamily, textColor, fontWeight, fontStyle);
           editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
           break;
         }
@@ -805,7 +902,7 @@ export function useCanvasInteraction(
             ...DEFAULT_TRANSFORM_FIELDS,
           };
           // Apply initial dab
-          applyStampDab(pixelBuffer, pixelBuffer, layerPos, stampOffsetRef.current, toolSettings.stampSize);
+          applyStampDab(paintSurface, pixelBuffer, layerPos, stampOffsetRef.current, toolSettings.stampSize);
           editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
           break;
         }
@@ -1112,9 +1209,10 @@ export function useCanvasInteraction(
           } else {
             color = useUIStore.getState().foregroundColor;
           }
+          const brushSurface = maskEditModeBrush ? state.pixelBuffer : wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
           const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
           for (const pt of points) {
-            applyBrushDab(state.pixelBuffer, pt, stamp, size, color, opacity, 1);
+            applyBrushDab(brushSurface, pt, stamp, size, color, opacity, 1);
           }
           state.lastPoint = layerLocalPos;
           if (maskEditModeBrush) {
@@ -1140,8 +1238,9 @@ export function useCanvasInteraction(
           } else {
             color = useUIStore.getState().foregroundColor;
           }
+          const pencilSurface = maskEditModePencil ? state.pixelBuffer : wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
           const size = toolSettings.pencilSize;
-          drawPencilLine(state.pixelBuffer, state.lastPoint, layerLocalPos, color, size);
+          drawPencilLine(pencilSurface, state.lastPoint, layerLocalPos, color, size);
           state.lastPoint = layerLocalPos;
           if (maskEditModePencil) {
             const activeLayer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
@@ -1179,8 +1278,9 @@ export function useCanvasInteraction(
               useEditorStore.getState().updateLayerMaskData(state.layerId, newMaskData);
             }
           } else {
+            const eraserSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
             for (const pt of points) {
-              applyEraserDab(state.pixelBuffer, pt, stamp, size, opacity);
+              applyEraserDab(eraserSurface, pt, stamp, size, opacity);
             }
             state.lastPoint = layerLocalPos;
             useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
@@ -1190,10 +1290,11 @@ export function useCanvasInteraction(
 
         case 'stamp': {
           if (!state.pixelBuffer || !state.originalPixelBuffer || !state.lastPoint || !stampOffsetRef.current) break;
+          const stampSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
           const stampSpacing = Math.max(1, toolSettings.stampSize * 0.25);
           const stampPoints = interpolatePoints(state.lastPoint, layerLocalPos, stampSpacing);
           for (const pt of stampPoints) {
-            applyStampDab(state.pixelBuffer, state.originalPixelBuffer, pt, stampOffsetRef.current, toolSettings.stampSize);
+            applyStampDab(stampSurface, state.originalPixelBuffer, pt, stampOffsetRef.current, toolSettings.stampSize);
           }
           state.lastPoint = layerLocalPos;
           useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
@@ -1220,9 +1321,10 @@ export function useCanvasInteraction(
           const exposure = toolSettings.dodgeExposure / 100;
           const dodgeSize = toolSettings.brushSize;
           const dodgeSpacing = Math.max(1, dodgeSize * 0.25);
+          const dodgeSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
           const dodgePoints = interpolatePoints(state.lastPoint, layerLocalPos, dodgeSpacing);
           for (const pt of dodgePoints) {
-            applyDodgeBurn(state.pixelBuffer, pt, dodgeSize, dodgeMode, exposure);
+            applyDodgeBurn(dodgeSurface, pt, dodgeSize, dodgeMode, exposure);
           }
           state.lastPoint = layerLocalPos;
           useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
@@ -1264,8 +1366,9 @@ export function useCanvasInteraction(
           if (!state.pixelBuffer || !state.originalPixelBuffer || !state.startPoint) break;
           // Restore original pixels, then draw shape preview
           const restored = state.originalPixelBuffer.clone();
+          const shapeSurface = wrapWithSelectionMask(restored, state.layerStartX, state.layerStartY);
           const color = useUIStore.getState().foregroundColor;
-          drawShape(restored, state.startPoint, layerLocalPos, color, {
+          drawShape(shapeSurface, state.startPoint, layerLocalPos, color, {
             mode: toolSettings.shapeMode,
             fill: toolSettings.shapeFill,
             strokeWidth: toolSettings.shapeStrokeWidth,
@@ -1279,6 +1382,7 @@ export function useCanvasInteraction(
           if (!state.pixelBuffer || !state.originalPixelBuffer || !state.startPoint) break;
           // Restore original pixels, then apply gradient preview
           const restored = state.originalPixelBuffer.clone();
+          const gradSurface = wrapWithSelectionMask(restored, state.layerStartX, state.layerStartY);
           const fg = useUIStore.getState().foregroundColor;
           const bg = useUIStore.getState().backgroundColor;
           const gradType = toolSettings.gradientType;
@@ -1309,7 +1413,7 @@ export function useCanvasInteraction(
               const ea = existing.a;
               const outA = ga + ea * (1 - ga);
               if (outA > 0) {
-                restored.setPixel(x, y, {
+                gradSurface.setPixel(x, y, {
                   r: Math.round((gradColor.r * ga + existing.r * ea * (1 - ga)) / outA),
                   g: Math.round((gradColor.g * ga + existing.g * ea * (1 - ga)) / outA),
                   b: Math.round((gradColor.b * ga + existing.b * ea * (1 - ga)) / outA),
@@ -1356,7 +1460,10 @@ export function useCanvasInteraction(
       }
     }
 
-    // Move: update floating selection offset
+    // Move: update floating selection offset, build persistent transform
+    // canvases so that any subsequent rotation/scale uses the correctly
+    // separated content (only the originally selected pixels, not whatever
+    // was underneath at the destination).
     if (state.tool === 'move' && state.pixelBuffer && state.startPoint && floatingSelectionRef.current) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
@@ -1367,6 +1474,55 @@ export function useCanvasInteraction(
         const dragDy = Math.round(canvasPos.y - state.startPoint.y);
         floatingSelectionRef.current.offsetX += dragDx;
         floatingSelectionRef.current.offsetY += dragDy;
+      }
+
+      // Build persistent transform canvases from the floating selection so
+      // that a subsequent rotation (on any tool) uses the already-separated
+      // floated/base pixel data instead of re-cutting from the composited layer.
+      const floatRef = floatingSelectionRef.current;
+      const sel = useEditorStore.getState().selection;
+      if (sel.active && sel.bounds && sel.mask) {
+        const baseImg = floatRef.base.toImageData();
+        const floatedImg = floatRef.floated.toImageData();
+        const w = baseImg.width;
+        const h = baseImg.height;
+        const txCanvas = document.createElement('canvas');
+        txCanvas.width = w;
+        txCanvas.height = h;
+        const txCtx = txCanvas.getContext('2d');
+        const bCanvas = document.createElement('canvas');
+        bCanvas.width = w;
+        bCanvas.height = h;
+        const bCtx = bCanvas.getContext('2d');
+        if (txCtx && bCtx) {
+          const shifted = new ImageData(w, h);
+          const ox = floatRef.offsetX;
+          const oy = floatRef.offsetY;
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const srcX = x - ox;
+              const srcY = y - oy;
+              if (srcX >= 0 && srcX < w && srcY >= 0 && srcY < h) {
+                const di = (y * w + x) * 4;
+                const si = (srcY * w + srcX) * 4;
+                shifted.data[di] = floatedImg.data[si]!;
+                shifted.data[di + 1] = floatedImg.data[si + 1]!;
+                shifted.data[di + 2] = floatedImg.data[si + 2]!;
+                shifted.data[di + 3] = floatedImg.data[si + 3]!;
+              }
+            }
+          }
+          txCtx.putImageData(shifted, 0, 0);
+          bCtx.putImageData(baseImg, 0, 0);
+          persistentTransformRef.current = {
+            transformCanvas: txCanvas,
+            baseCanvas: bCanvas,
+            originalMask: new Uint8ClampedArray(sel.mask),
+            maskWidth: sel.maskWidth,
+            maskHeight: sel.maskHeight,
+          };
+        }
+        useUIStore.getState().setTransform(createTransformState(sel.bounds));
       }
     }
 

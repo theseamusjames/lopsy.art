@@ -3,9 +3,9 @@ import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
 import { ColorPanel } from '../panels/ColorPanel/ColorPanel';
-import { ToolSettingsPanel } from '../panels/ToolSettingsPanel/ToolSettingsPanel';
 import { PanelContainer } from '../panels/PanelContainer/PanelContainer';
 import { MenuBar } from './MenuBar/MenuBar';
+import { OptionsBar } from './OptionsBar/OptionsBar';
 import { StatusBar } from './StatusBar/StatusBar';
 import { NewDocumentModal } from '../components/NewDocumentModal/NewDocumentModal';
 import { useUIStore } from './ui-store';
@@ -13,6 +13,7 @@ import { useEditorStore } from './editor-store';
 import { useCanvasInteraction, strokeCurrentPath } from './useCanvasInteraction';
 import { getHandlePositions } from '../tools/transform/transform';
 import type { TransformHandle } from '../tools/transform/transform';
+import { getSelectionEdges } from '../selection/selection';
 import styles from './App.module.css';
 
 export function App() {
@@ -23,7 +24,6 @@ export function App() {
   const backgroundColor = useUIStore((s) => s.backgroundColor);
   const setForegroundColor = useUIStore((s) => s.setForegroundColor);
   const setBackgroundColor = useUIStore((s) => s.setBackgroundColor);
-  const activeTool = useUIStore((s) => s.activeTool);
   const swapColors = useUIStore((s) => s.swapColors);
   const resetColors = useUIStore((s) => s.resetColors);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
@@ -336,46 +336,37 @@ export function App() {
     ctx.lineWidth = 1 / viewport.zoom;
     ctx.strokeRect(0, 0, doc.width, doc.height);
 
-    // Draw selection (marching ants)
-    if (selection.active && selection.bounds) {
+    // Draw selection marching ants from mask edges
+    if (selection.active && selection.mask) {
       ctx.save();
       ctx.lineWidth = 1 / viewport.zoom;
       ctx.setLineDash([4 / viewport.zoom, 4 / viewport.zoom]);
 
-      if (transform) {
-        // Draw marching ants along the rotated bounding box
-        const handles = getHandlePositions(transform);
-        const corners: TransformHandle[] = [
-          'top-left', 'top-right', 'bottom-right', 'bottom-left',
-        ];
-        const drawRotatedRect = () => {
-          ctx.beginPath();
-          for (let i = 0; i < corners.length; i++) {
-            const pos = handles[corners[i] as TransformHandle];
-            if (i === 0) ctx.moveTo(pos.x, pos.y);
-            else ctx.lineTo(pos.x, pos.y);
-          }
-          ctx.closePath();
-          ctx.stroke();
-        };
-        ctx.strokeStyle = '#ffffff';
-        drawRotatedRect();
-        ctx.strokeStyle = '#000000';
-        ctx.lineDashOffset = 4 / viewport.zoom;
-        drawRotatedRect();
-      } else {
-        const b = selection.bounds;
-        ctx.strokeStyle = '#ffffff';
-        ctx.strokeRect(b.x, b.y, b.width, b.height);
-        ctx.strokeStyle = '#000000';
-        ctx.lineDashOffset = 4 / viewport.zoom;
-        ctx.strokeRect(b.x, b.y, b.width, b.height);
-      }
+      const edges = getSelectionEdges(selection.mask, selection.maskWidth, selection.maskHeight);
+
+      const drawEdges = () => {
+        ctx.beginPath();
+        for (let i = 0; i < edges.h.length; i += 4) {
+          ctx.moveTo(edges.h[i] as number, edges.h[i + 1] as number);
+          ctx.lineTo(edges.h[i + 2] as number, edges.h[i + 3] as number);
+        }
+        for (let i = 0; i < edges.v.length; i += 4) {
+          ctx.moveTo(edges.v[i] as number, edges.v[i + 1] as number);
+          ctx.lineTo(edges.v[i + 2] as number, edges.v[i + 3] as number);
+        }
+        ctx.stroke();
+      };
+
+      ctx.strokeStyle = '#ffffff';
+      drawEdges();
+      ctx.strokeStyle = '#000000';
+      ctx.lineDashOffset = 4 / viewport.zoom;
+      drawEdges();
 
       ctx.restore();
     }
 
-    // Draw transform handles
+    // Draw free transform handles (separate from marching ants)
     if (selection.active && transform) {
       const handles = getHandlePositions(transform);
       const handleSize = 6 / viewport.zoom;
@@ -830,7 +821,6 @@ export function App() {
     };
   }, [setActiveTool, swapColors, resetColors, setZoom, setPan, viewport.zoom, doc.width, doc.height]);
 
-  const [toolSettingsCollapsed, setToolSettingsCollapsed] = useState(false);
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
   const [effectsPanelCollapsed, setEffectsPanelCollapsed] = useState(false);
 
@@ -858,6 +848,7 @@ export function App() {
       )}
       <div className={styles.header}>
         <MenuBar />
+        <OptionsBar />
       </div>
       <div className={styles.body}>
         <Toolbox />
@@ -875,13 +866,6 @@ export function App() {
         </div>
         <div className={styles.sidebar}>
           <div className={styles.sidebarTop}>
-            <PanelContainer
-              title="Tool Settings"
-              collapsed={toolSettingsCollapsed}
-              onToggle={() => setToolSettingsCollapsed(!toolSettingsCollapsed)}
-            >
-              <ToolSettingsPanel />
-            </PanelContainer>
             <PanelContainer
               title="Color"
               collapsed={colorPanelCollapsed}
@@ -925,7 +909,6 @@ export function App() {
         cursorY={cursorPos.y}
         docWidth={doc.width}
         docHeight={doc.height}
-        activeTool={activeTool}
       />
     </div>
   );

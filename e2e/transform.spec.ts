@@ -1160,4 +1160,217 @@ test.describe('Free Transform', () => {
     expect(countRatio).toBeGreaterThan(0.85);
     expect(countRatio).toBeLessThan(1.15);
   });
+
+  test('move selection over other content then rotate only transforms original selection', async ({ page }) => {
+    // 1. Paint a RED block at (350,250)-(450,350) and a BLUE block at (500,250)-(600,350)
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; width: number; height: number };
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          notifyRender: () => void;
+        };
+      };
+      const state = store.getState();
+      const { width: w } = state.document;
+      const imgData = state.getOrCreateLayerPixelData(state.document.activeLayerId);
+
+      // Red block
+      for (let y = 250; y < 350; y++) {
+        for (let x = 350; x < 450; x++) {
+          const i = (y * w + x) * 4;
+          imgData.data[i] = 255;
+          imgData.data[i + 1] = 0;
+          imgData.data[i + 2] = 0;
+          imgData.data[i + 3] = 255;
+        }
+      }
+      // Blue block
+      for (let y = 250; y < 350; y++) {
+        for (let x = 500; x < 600; x++) {
+          const i = (y * w + x) * 4;
+          imgData.data[i] = 0;
+          imgData.data[i + 1] = 0;
+          imgData.data[i + 2] = 255;
+          imgData.data[i + 3] = 255;
+        }
+      }
+      state.updateLayerPixelData(state.document.activeLayerId, imgData);
+      state.notifyRender();
+    });
+    await page.waitForTimeout(100);
+
+    // 2. Select the RED block with the marquee tool
+    await selectTool(page, 'm');
+    const selStart = await docToScreen(page, 345, 245);
+    const selEnd = await docToScreen(page, 455, 355);
+    await page.mouse.move(selStart.x, selStart.y);
+    await page.mouse.down();
+    await page.mouse.move(selEnd.x, selEnd.y);
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+
+    const sel = await getEditorState(page);
+    expect(sel.selection.active).toBe(true);
+
+    // 3. Switch to the move tool and drag the red block ON TOP of the blue block
+    await selectTool(page, 'v');
+    const moveFrom = await docToScreen(page, 400, 300);
+    const moveTo = await docToScreen(page, 550, 300);
+    await page.mouse.move(moveFrom.x, moveFrom.y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) {
+      const t = i / 10;
+      await page.mouse.move(
+        moveFrom.x + (moveTo.x - moveFrom.x) * t,
+        moveFrom.y,
+      );
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+
+    // 4. Snapshot the blue block region BEFORE rotation — the blue pixels
+    //    that are NOT covered by the moved red block should remain blue.
+    //    The red block (100x100) moved from x:350-450 to x:500-600,
+    //    so it now fully overlaps the blue block.
+    //    Snapshot the layer to compare after rotation.
+    const beforeRotate = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; width: number; height: number };
+          layerPixelData: Map<string, ImageData>;
+        };
+      };
+      const state = store.getState();
+      const imgData = state.layerPixelData.get(state.document.activeLayerId);
+      if (!imgData) return { bluePixelCount: 0, redPixelCount: 0 };
+      const w = state.document.width;
+
+      let bluePixelCount = 0;
+      let redPixelCount = 0;
+      for (let y = 0; y < state.document.height; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          const r = imgData.data[i] ?? 0;
+          const g = imgData.data[i + 1] ?? 0;
+          const b = imgData.data[i + 2] ?? 0;
+          const a = imgData.data[i + 3] ?? 0;
+          if (b > 200 && r < 50 && g < 50 && a > 200) bluePixelCount++;
+          if (r > 200 && g < 50 && b < 50 && a > 200) redPixelCount++;
+        }
+      }
+      return { bluePixelCount, redPixelCount };
+    });
+
+    // The red block now covers the blue block, so blue should be hidden
+    // and red should be at least 100x100 = 10000
+    console.log(`  Before rotate: red=${beforeRotate.redPixelCount}, blue=${beforeRotate.bluePixelCount}`);
+    expect(beforeRotate.redPixelCount).toBeGreaterThan(9000);
+
+    // 5. Rotate the selection using a transform handle.
+    //    The transform state should exist from the move mouseup.
+    const handleInfo = await page.evaluate(() => {
+      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { transform: Record<string, unknown> | null };
+      };
+      const transform = uiStore.getState().transform;
+      if (!transform) return null;
+
+      const ob = transform.originalBounds as { x: number; y: number; width: number; height: number };
+      const sX = Math.abs(transform.scaleX as number);
+      const sY = Math.abs(transform.scaleY as number);
+      const tX = transform.translateX as number;
+      const tY = transform.translateY as number;
+      const rot = transform.rotation as number;
+      const cx = ob.x + ob.width / 2 + tX;
+      const cy = ob.y + ob.height / 2 + tY;
+      const hw = ob.width * sX / 2;
+      const hh = ob.height * sY / 2;
+      const rotOff = 20;
+      const px = cx + hw + rotOff;
+      const py = cy - hh - rotOff;
+      const cos = Math.cos(rot);
+      const sin = Math.sin(rot);
+      const dx = px - cx;
+      const dy = py - cy;
+      return {
+        handleX: cx + dx * cos - dy * sin,
+        handleY: cy + dx * sin + dy * cos,
+        cx, cy,
+        radius: Math.sqrt(dx * dx + dy * dy),
+        handleAngle: Math.atan2(dy * cos + dx * sin, dx * cos - dy * sin),
+      };
+    });
+
+    expect(handleInfo).not.toBeNull();
+    if (!handleInfo) return;
+
+    // Rotate 45 degrees
+    const hs = await docToScreen(page, handleInfo.handleX, handleInfo.handleY);
+    await page.mouse.move(hs.x, hs.y);
+    await page.mouse.down();
+    const fromAngle = handleInfo.handleAngle;
+    const toAngle = fromAngle + Math.PI / 4;
+    for (let i = 1; i <= 10; i++) {
+      const t = i / 10;
+      const a = fromAngle + (toAngle - fromAngle) * t;
+      const docX = handleInfo.cx + handleInfo.radius * Math.cos(a);
+      const docY = handleInfo.cy + handleInfo.radius * Math.sin(a);
+      const sp = await docToScreen(page, docX, docY);
+      await page.mouse.move(sp.x, sp.y);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+
+    // 6. Check: the blue block pixels that were UNDERNEATH the selection
+    //    should have been restored (they should NOT have been rotated).
+    //    The bug was that the rotation re-cut from composited data, picking
+    //    up the blue pixels along with the red ones and rotating them all.
+    const afterRotate = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; width: number; height: number };
+          layerPixelData: Map<string, ImageData>;
+        };
+      };
+      const state = store.getState();
+      const imgData = state.layerPixelData.get(state.document.activeLayerId);
+      if (!imgData) return { blueInOriginalPosition: 0, totalBlue: 0 };
+      const w = state.document.width;
+
+      // Count blue pixels in the original blue block region (500-600, 250-350)
+      // These should be restored since the red selection was lifted off them
+      let blueInOriginalPosition = 0;
+      let totalBlue = 0;
+      for (let y = 0; y < state.document.height; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          const r = imgData.data[i] ?? 0;
+          const g = imgData.data[i + 1] ?? 0;
+          const b = imgData.data[i + 2] ?? 0;
+          const a = imgData.data[i + 3] ?? 0;
+          if (b > 200 && r < 50 && g < 50 && a > 200) {
+            totalBlue++;
+            if (x >= 500 && x < 600 && y >= 250 && y < 350) {
+              blueInOriginalPosition++;
+            }
+          }
+        }
+      }
+      return { blueInOriginalPosition, totalBlue };
+    });
+
+    console.log(`  After rotate: blue in original position=${afterRotate.blueInOriginalPosition}, total blue=${afterRotate.totalBlue}`);
+
+    // With the bug, blue pixels would be 0 because they'd be swept into the
+    // rotation along with the red pixels (the transform re-cut from composited
+    // data, including the blue underneath). With the fix, the base canvas
+    // preserves the blue block, so blue pixels are revealed as the red diamond
+    // rotates away from the corners. Due to the geometry (100x100 block rotated
+    // 45° still covers most of the area) and anti-aliasing, we expect ~900-1700
+    // pure blue pixels in the exposed corners.
+    expect(afterRotate.blueInOriginalPosition).toBeGreaterThan(500);
+    expect(afterRotate.totalBlue).toBeGreaterThan(500);
+  });
 });
