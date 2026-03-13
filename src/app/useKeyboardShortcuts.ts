@@ -105,6 +105,15 @@ export function useKeyboardShortcuts({
           e.preventDefault();
           setZoom(1);
           setPan(0, 0);
+        } else if (e.key === 'c') {
+          e.preventDefault();
+          useEditorStore.getState().copy();
+        } else if (e.key === 'x') {
+          e.preventDefault();
+          useEditorStore.getState().cut();
+        } else if (e.key === 'v') {
+          e.preventDefault();
+          useEditorStore.getState().paste();
         } else if (e.key === 'd') {
           e.preventDefault();
           useEditorStore.getState().clearSelection();
