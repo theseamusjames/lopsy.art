@@ -1,6 +1,16 @@
 import { useUIStore } from '../../ui-store';
 import { useEditorStore } from '../../editor-store';
+import {
+  CanvasAllocator,
+  renderOuterGlow,
+  renderDropShadow,
+  renderLayerContent,
+  renderStroke,
+} from '../../useCanvasRendering';
+import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
 import type { MenuDef } from './types';
+
+const METADATA_NOTE = 'Made with Lopsy — http://lopsy.art';
 
 export function openFileFromDisk(): void {
   const input = document.createElement('input');
@@ -41,30 +51,35 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
   ctx.fillStyle = `rgba(${backgroundColor.r},${backgroundColor.g},${backgroundColor.b},${backgroundColor.a})`;
   ctx.fillRect(0, 0, width, height);
 
+  const allocator = new CanvasAllocator();
   for (const layerId of state.document.layerOrder) {
     const layer = state.document.layers.find((l) => l.id === layerId);
     if (!layer || !layer.visible) continue;
     const data = state.layerPixelData.get(layerId);
     if (!data) continue;
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = data.width;
-    tempCanvas.height = data.height;
-    const tempCtx = tempCanvas.getContext('2d');
-    if (!tempCtx) continue;
+    const { canvas: tempCanvas, ctx: tempCtx } = allocator.acquire(data.width, data.height);
     tempCtx.putImageData(data, 0, 0);
     ctx.globalAlpha = layer.opacity;
-    ctx.drawImage(tempCanvas, layer.x, layer.y);
-    ctx.globalAlpha = 1;
+    renderOuterGlow(ctx, tempCanvas, layer, data, allocator);
+    renderDropShadow(ctx, tempCanvas, layer, data, allocator);
+    renderLayerContent(ctx, tempCanvas, layer, data, false, null, allocator);
+    renderStroke(ctx, tempCanvas, layer, data, allocator);
   }
+  ctx.globalAlpha = 1;
+  allocator.releaseAll();
 
   const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
   const ext = format === 'png' ? 'png' : 'jpg';
-  canvas.toBlob((blob) => {
+  canvas.toBlob(async (blob) => {
     if (!blob) return;
-    const url = URL.createObjectURL(blob);
+    const tagged =
+      format === 'png'
+        ? await addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE })
+        : await addJpegComment(blob, METADATA_NOTE);
+    const url = URL.createObjectURL(tagged);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${state.document.name}.${ext}`;
+    a.download = `lopsy.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
   }, mimeType, 0.92);

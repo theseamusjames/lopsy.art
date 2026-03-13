@@ -101,7 +101,7 @@ import type { Layer, Point, Rect } from '../types';
 import type { PathAnchor } from './ui-store';
 
 // Tracks pooled canvases acquired during a render pass so they can all be released at once
-class CanvasAllocator {
+export class CanvasAllocator {
   private handles: PooledCanvas[] = [];
 
   acquire(w: number, h: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
@@ -126,7 +126,7 @@ interface SelectionData {
   maskHeight: number;
 }
 
-function renderOuterGlow(
+export function renderOuterGlow(
   ctx: CanvasRenderingContext2D,
   tempCanvas: HTMLCanvasElement,
   layer: Layer,
@@ -147,7 +147,7 @@ function renderOuterGlow(
   ctx.drawImage(glowCanvas, layer.x - pad, layer.y - pad);
 }
 
-function renderDropShadow(
+export function renderDropShadow(
   ctx: CanvasRenderingContext2D,
   tempCanvas: HTMLCanvasElement,
   layer: Layer,
@@ -175,7 +175,7 @@ function renderDropShadow(
   ctx.drawImage(shadowCanvas, layer.x + shadow.offsetX - pad, layer.y + shadow.offsetY - pad);
 }
 
-function renderLayerContent(
+export function renderLayerContent(
   ctx: CanvasRenderingContext2D,
   tempCanvas: HTMLCanvasElement,
   layer: Layer,
@@ -225,7 +225,7 @@ function renderLayerContent(
   }
 }
 
-function renderStroke(
+export function renderStroke(
   ctx: CanvasRenderingContext2D,
   tempCanvas: HTMLCanvasElement,
   layer: Layer,
