@@ -1,13 +1,8 @@
 import { useEditorStore } from '../editor-store';
 import { PixelBuffer } from '../../engine/pixel-data';
-import {
-  invert,
-  desaturate,
-  posterize,
-  threshold,
-} from '../../filters/adjustments';
-import { filterRunner } from '../../filters/filter-runner';
-import type { FilterParam } from '../../components/FilterDialog/FilterDialog';
+import { invert, desaturate } from '../../filters/adjustments';
+import { filterRegistry } from './filters';
+import type { FilterDefinition } from './filters';
 
 export type FilterDialogId =
   | 'gaussian-blur'
@@ -66,94 +61,20 @@ export function applyFilterResult(activeId: string, result: PixelBuffer): void {
   }
 }
 
-export function getFilterDialogConfig(id: FilterDialogId): { title: string; params: FilterParam[] } | null {
-  switch (id) {
-    case 'gaussian-blur':
-      return {
-        title: 'Gaussian Blur',
-        params: [{ key: 'radius', label: 'Radius', min: 1, max: 100, step: 1, defaultValue: 5 }],
-      };
-    case 'box-blur':
-      return {
-        title: 'Box Blur',
-        params: [{ key: 'radius', label: 'Radius', min: 1, max: 100, step: 1, defaultValue: 5 }],
-      };
-    case 'unsharp-mask':
-      return {
-        title: 'Unsharp Mask',
-        params: [
-          { key: 'radius', label: 'Radius', min: 1, max: 50, step: 1, defaultValue: 3 },
-          { key: 'amount', label: 'Amount', min: 0.1, max: 5, step: 0.1, defaultValue: 1 },
-          { key: 'threshold', label: 'Threshold', min: 0, max: 255, step: 1, defaultValue: 0 },
-        ],
-      };
-    case 'brightness-contrast':
-      return {
-        title: 'Brightness/Contrast',
-        params: [
-          { key: 'brightness', label: 'Brightness', min: -100, max: 100, step: 1, defaultValue: 0 },
-          { key: 'contrast', label: 'Contrast', min: -100, max: 100, step: 1, defaultValue: 0 },
-        ],
-      };
-    case 'hue-saturation':
-      return {
-        title: 'Hue/Saturation',
-        params: [
-          { key: 'hue', label: 'Hue', min: -180, max: 180, step: 1, defaultValue: 0 },
-          { key: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1, defaultValue: 0 },
-          { key: 'lightness', label: 'Lightness', min: -100, max: 100, step: 1, defaultValue: 0 },
-        ],
-      };
-    case 'posterize':
-      return {
-        title: 'Posterize',
-        params: [{ key: 'levels', label: 'Levels', min: 2, max: 32, step: 1, defaultValue: 4 }],
-      };
-    case 'threshold':
-      return {
-        title: 'Threshold',
-        params: [{ key: 'level', label: 'Level', min: 0, max: 255, step: 1, defaultValue: 128 }],
-      };
-    default:
-      return null;
-  }
+export function getFilterDialogConfig(id: FilterDialogId): FilterDefinition | null {
+  return filterRegistry[id] ?? null;
 }
 
-// Heavy filters use web worker via FilterRunner; lightweight ones run on main thread
 export async function applyGenericFilter(id: FilterDialogId, values: Record<string, number>): Promise<void> {
+  const filter = filterRegistry[id];
+  if (!filter) return;
+
   const layerData = getActiveLayerBuffer();
   if (!layerData) return;
   const { buf, activeId } = layerData;
 
   useEditorStore.getState().pushHistory();
-
-  let result: PixelBuffer;
-  switch (id) {
-    case 'gaussian-blur':
-      result = await filterRunner.blur(buf, values['radius'] ?? 5);
-      break;
-    case 'box-blur':
-      result = await filterRunner.boxBlur(buf, values['radius'] ?? 5);
-      break;
-    case 'unsharp-mask':
-      result = await filterRunner.unsharpMask(buf, values['radius'] ?? 3, values['amount'] ?? 1, values['threshold'] ?? 0);
-      break;
-    case 'brightness-contrast':
-      result = await filterRunner.brightnessContrast(buf, values['brightness'] ?? 0, values['contrast'] ?? 0);
-      break;
-    case 'hue-saturation':
-      result = await filterRunner.hueSaturation(buf, values['hue'] ?? 0, values['saturation'] ?? 0, values['lightness'] ?? 0);
-      break;
-    case 'posterize':
-      result = posterize(buf, values['levels'] ?? 4);
-      break;
-    case 'threshold':
-      result = threshold(buf, values['level'] ?? 128);
-      break;
-    default:
-      return;
-  }
-
+  const result = await filter.apply(buf, values);
   applyFilterResult(activeId, result);
 }
 
