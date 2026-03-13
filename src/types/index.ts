@@ -1,5 +1,5 @@
 // ============================================================
-// Core Types for the Loppsy Image Editor
+// Core Types for the Lopsy Image Editor
 // ============================================================
 
 // --- Geometry ---
@@ -186,6 +186,15 @@ export type ToolId =
   | 'path';
 
 export type ShapeType = 'rectangle' | 'ellipse' | 'polygon' | 'line' | 'arrow' | 'star';
+
+// --- Pixel Surface ---
+
+export interface PixelSurface {
+  readonly width: number;
+  readonly height: number;
+  getPixel(x: number, y: number): Color;
+  setPixel(x: number, y: number, color: Color): void;
+}
 
 // --- Pointer Input ---
 

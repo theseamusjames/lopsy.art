@@ -1,11 +1,6 @@
-import type { Color, Point } from '../../types';
+import type { Color, Point, PixelSurface } from '../../types';
 
-export interface PixelSurface {
-  readonly width: number;
-  readonly height: number;
-  getPixel(x: number, y: number): Color;
-  setPixel(x: number, y: number, color: Color): void;
-}
+export type { PixelSurface };
 
 export interface FillSettings {
   readonly tolerance: number;

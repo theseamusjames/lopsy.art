@@ -3,16 +3,21 @@ import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useToolSettingsStore } from './tool-settings-store';
 import { PixelBuffer, MaskedPixelBuffer } from '../engine/pixel-data';
+import { createMaskSurface, extractMaskFromSurface } from '../engine/mask-utils';
 import { generateBrushStamp, interpolatePoints, applyBrushDab } from '../tools/brush/brush';
 import { drawPencilLine } from '../tools/pencil/pencil';
 import { generateBrushStamp as generateEraserStamp } from '../tools/brush/brush';
 import { applyEraserDab } from '../tools/eraser/eraser';
 import { floodFill, applyFill } from '../tools/fill/fill';
-import type { PixelSurface } from '../tools/fill/fill';
 import { sampleColor } from '../tools/eyedropper/eyedropper';
 import { createRectSelection, createEllipseSelection, selectionBounds } from '../selection/selection';
 import { interpolateGradient, computeLinearGradientT, computeRadialGradientT } from '../tools/gradient/gradient';
 import { drawShape } from '../tools/shape/shape';
+import { applyDodgeBurn } from '../tools/dodge/dodge';
+import { applyStampDab } from '../tools/stamp/stamp';
+import { renderText } from '../tools/text/text';
+import { createPolygonMask } from '../tools/lasso/lasso';
+import { rasterizePath } from '../tools/path/path';
 import {
   hitTestHandle,
   isScaleHandle,
@@ -69,162 +74,6 @@ function wrapWithSelectionMask(buffer: PixelBuffer, layerX: number, layerY: numb
   return buffer;
 }
 
-function createMaskSurface(maskData: Uint8ClampedArray, width: number, height: number): PixelBuffer {
-  // Wrap mask data as a grayscale PixelBuffer where R=G=B=maskValue, A=1
-  const buf = new PixelBuffer(width, height);
-  for (let i = 0; i < maskData.length; i++) {
-    const val = maskData[i] ?? 0;
-    const x = i % width;
-    const y = Math.floor(i / width);
-    buf.setPixel(x, y, { r: val, g: val, b: val, a: 1 });
-  }
-  return buf;
-}
-
-function extractMaskFromSurface(buf: PixelBuffer, width: number, height: number): Uint8ClampedArray {
-  const maskData = new Uint8ClampedArray(width * height);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const pixel = buf.getPixel(x, y);
-      maskData[y * width + x] = pixel.r;
-    }
-  }
-  return maskData;
-}
-
-function applyStampDab(
-  dest: PixelSurface,
-  source: PixelSurface,
-  pos: Point,
-  offset: Point,
-  size: number,
-): void {
-  const radius = Math.floor(size / 2);
-  const cx = Math.round(pos.x);
-  const cy = Math.round(pos.y);
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      if (dx * dx + dy * dy > radius * radius) continue;
-      const destX = cx + dx;
-      const destY = cy + dy;
-      const srcX = destX + Math.round(offset.x);
-      const srcY = destY + Math.round(offset.y);
-      const pixel = source.getPixel(srcX, srcY);
-      if (pixel.a > 0) {
-        dest.setPixel(destX, destY, pixel);
-      }
-    }
-  }
-}
-
-function applyDodgeBurn(
-  buf: PixelSurface,
-  pos: Point,
-  size: number,
-  mode: 'dodge' | 'burn',
-  exposure: number,
-): void {
-  const radius = Math.floor(size / 2);
-  const cx = Math.round(pos.x);
-  const cy = Math.round(pos.y);
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      if (dx * dx + dy * dy > radius * radius) continue;
-      const px = cx + dx;
-      const py = cy + dy;
-      const pixel = buf.getPixel(px, py);
-      if (pixel.a <= 0) continue;
-      if (mode === 'dodge') {
-        buf.setPixel(px, py, {
-          r: Math.min(255, Math.round(pixel.r + (255 - pixel.r) * exposure)),
-          g: Math.min(255, Math.round(pixel.g + (255 - pixel.g) * exposure)),
-          b: Math.min(255, Math.round(pixel.b + (255 - pixel.b) * exposure)),
-          a: pixel.a,
-        });
-      } else {
-        buf.setPixel(px, py, {
-          r: Math.max(0, Math.round(pixel.r * (1 - exposure))),
-          g: Math.max(0, Math.round(pixel.g * (1 - exposure))),
-          b: Math.max(0, Math.round(pixel.b * (1 - exposure))),
-          a: pixel.a,
-        });
-      }
-    }
-  }
-}
-
-function renderText(
-  buf: PixelSurface,
-  pos: Point,
-  text: string,
-  fontSize: number,
-  fontFamily: string,
-  color: { r: number; g: number; b: number; a: number },
-  fontWeight: number = 400,
-  fontStyle: 'normal' | 'italic' = 'normal',
-): void {
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = buf.width;
-  tempCanvas.height = buf.height;
-  const ctx = tempCanvas.getContext('2d');
-  if (!ctx) return;
-
-  ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
-  ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${color.a})`;
-  ctx.textBaseline = 'top';
-  ctx.fillText(text, pos.x, pos.y);
-
-  const textData = ctx.getImageData(0, 0, buf.width, buf.height);
-  for (let i = 0; i < textData.data.length; i += 4) {
-    const sa = (textData.data[i + 3] ?? 0) / 255;
-    if (sa <= 0) continue;
-    const px = (i / 4) % buf.width;
-    const py = Math.floor(i / 4 / buf.width);
-    const existing = buf.getPixel(px, py);
-    const outA = sa + existing.a * (1 - sa);
-    if (outA > 0) {
-      buf.setPixel(px, py, {
-        r: Math.round(((textData.data[i] ?? 0) * sa + existing.r * existing.a * (1 - sa)) / outA),
-        g: Math.round(((textData.data[i + 1] ?? 0) * sa + existing.g * existing.a * (1 - sa)) / outA),
-        b: Math.round(((textData.data[i + 2] ?? 0) * sa + existing.b * existing.a * (1 - sa)) / outA),
-        a: outA,
-      });
-    }
-  }
-}
-
-function createPolygonMask(
-  points: { x: number; y: number }[],
-  width: number,
-  height: number,
-): Uint8ClampedArray {
-  const mask = new Uint8ClampedArray(width * height);
-  if (points.length < 3) return mask;
-
-  // Scanline polygon fill
-  for (let y = 0; y < height; y++) {
-    const intersections: number[] = [];
-    for (let i = 0; i < points.length; i++) {
-      const p1 = points[i];
-      const p2 = points[(i + 1) % points.length];
-      if (!p1 || !p2) continue;
-      if ((p1.y <= y && p2.y > y) || (p2.y <= y && p1.y > y)) {
-        const t = (y - p1.y) / (p2.y - p1.y);
-        intersections.push(p1.x + t * (p2.x - p1.x));
-      }
-    }
-    intersections.sort((a, b) => a - b);
-    for (let i = 0; i < intersections.length - 1; i += 2) {
-      const x0 = Math.max(0, Math.ceil(intersections[i] ?? 0));
-      const x1 = Math.min(width, Math.floor(intersections[i + 1] ?? 0));
-      for (let x = x0; x <= x1; x++) {
-        mask[y * width + x] = 255;
-      }
-    }
-  }
-  return mask;
-}
-
 function rasterizePathToLayer(
   anchors: PathAnchor[],
   closed: boolean,
@@ -237,61 +86,7 @@ function rasterizePathToLayer(
   const color = useUIStore.getState().foregroundColor;
   const strokeWidth = useToolSettingsStore.getState().pathStrokeWidth;
 
-  // Use an offscreen canvas to draw the path, then copy pixels
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = buf.width;
-  tempCanvas.height = buf.height;
-  const ctx = tempCanvas.getContext('2d');
-  if (!ctx) return;
-
-  ctx.strokeStyle = `rgba(${color.r},${color.g},${color.b},${color.a})`;
-  ctx.lineWidth = strokeWidth;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  ctx.beginPath();
-  for (let i = 0; i < anchors.length; i++) {
-    const anchor = anchors[i];
-    if (!anchor) continue;
-    if (i === 0) {
-      ctx.moveTo(anchor.point.x, anchor.point.y);
-    } else {
-      const prev = anchors[i - 1];
-      if (!prev) continue;
-      const cp1 = prev.handleOut ?? prev.point;
-      const cp2 = anchor.handleIn ?? anchor.point;
-      ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, anchor.point.x, anchor.point.y);
-    }
-  }
-  if (closed && anchors.length >= 2) {
-    const last = anchors[anchors.length - 1];
-    const first = anchors[0];
-    if (last && first) {
-      const cp1 = last.handleOut ?? last.point;
-      const cp2 = first.handleIn ?? first.point;
-      ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, first.point.x, first.point.y);
-    }
-  }
-  ctx.stroke();
-
-  // Composite the stroked path onto the pixel buffer
-  const pathData = ctx.getImageData(0, 0, buf.width, buf.height);
-  for (let i = 0; i < pathData.data.length; i += 4) {
-    const sa = (pathData.data[i + 3] ?? 0) / 255;
-    if (sa <= 0) continue;
-    const px = (i / 4) % buf.width;
-    const py = Math.floor(i / 4 / buf.width);
-    const existing = buf.getPixel(px, py);
-    const outA = sa + existing.a * (1 - sa);
-    if (outA > 0) {
-      buf.setPixel(px, py, {
-        r: Math.round(((pathData.data[i] ?? 0) * sa + existing.r * existing.a * (1 - sa)) / outA),
-        g: Math.round(((pathData.data[i + 1] ?? 0) * sa + existing.g * existing.a * (1 - sa)) / outA),
-        b: Math.round(((pathData.data[i + 2] ?? 0) * sa + existing.b * existing.a * (1 - sa)) / outA),
-        a: outA,
-      });
-    }
-  }
+  rasterizePath(buf, anchors, closed, color, strokeWidth);
 
   editorState.updateLayerPixelData(layerId, buf.toImageData());
   useUIStore.getState().clearPath();

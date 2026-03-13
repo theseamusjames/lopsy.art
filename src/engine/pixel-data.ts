@@ -1,5 +1,4 @@
-import type { Color } from '../types/index';
-import type { PixelSurface } from '../tools/fill/fill';
+import type { Color, PixelSurface } from '../types/index';
 
 export class PixelBuffer {
   readonly width: number;
@@ -53,6 +52,20 @@ export class PixelBuffer {
 
   clear(): void {
     this.data.fill(0);
+  }
+
+  get rawData(): Uint8ClampedArray {
+    return this.data;
+  }
+
+  offsetOf(x: number, y: number): number {
+    return (y * this.width + x) * 4;
+  }
+
+  static fromData(data: Uint8ClampedArray, width: number, height: number): PixelBuffer {
+    const buf = new PixelBuffer(width, height);
+    buf.data.set(data);
+    return buf;
   }
 
   clone(): PixelBuffer {

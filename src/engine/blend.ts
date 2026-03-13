@@ -42,6 +42,34 @@ const BLEND_FNS: Record<string, BlendFn> = {
   difference: blendDifference,
 };
 
+// Pre-computed 256x256 lookup tables for hot-path blending
+type BlendLUT = Uint8Array;
+
+function buildLUT(fn: BlendFn): BlendLUT {
+  const lut = new Uint8Array(65536);
+  for (let s = 0; s < 256; s++) {
+    for (let d = 0; d < 256; d++) {
+      lut[s * 256 + d] = Math.round(Math.min(255, Math.max(0, fn(s, d))));
+    }
+  }
+  return lut;
+}
+
+const BLEND_LUTS: Record<string, BlendLUT> = {
+  multiply: buildLUT(blendMultiply),
+  screen: buildLUT(blendScreen),
+  overlay: buildLUT(blendOverlay),
+  difference: buildLUT(blendDifference),
+};
+
+export function blendChannelFast(mode: string, src: number, dst: number): number {
+  const lut = BLEND_LUTS[mode];
+  if (lut) return lut[src * 256 + dst] ?? 0;
+  const fn = BLEND_FNS[mode];
+  if (fn) return Math.round(Math.min(255, Math.max(0, fn(src, dst))));
+  return src;
+}
+
 export function blendColors(src: Color, dst: Color, mode: BlendMode): Color {
   const fn = BLEND_FNS[mode];
   if (!fn) {
