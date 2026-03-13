@@ -60,6 +60,29 @@ const DEFAULT_TRANSFORM_FIELDS = {
   moveOriginalBounds: null as { x: number; y: number; width: number; height: number } | null,
 };
 
+function createMaskSurface(maskData: Uint8ClampedArray, width: number, height: number): PixelBuffer {
+  // Wrap mask data as a grayscale PixelBuffer where R=G=B=maskValue, A=1
+  const buf = new PixelBuffer(width, height);
+  for (let i = 0; i < maskData.length; i++) {
+    const val = maskData[i] ?? 0;
+    const x = i % width;
+    const y = Math.floor(i / width);
+    buf.setPixel(x, y, { r: val, g: val, b: val, a: 1 });
+  }
+  return buf;
+}
+
+function extractMaskFromSurface(buf: PixelBuffer, width: number, height: number): Uint8ClampedArray {
+  const maskData = new Uint8ClampedArray(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const pixel = buf.getPixel(x, y);
+      maskData[y * width + x] = pixel.r;
+    }
+  }
+  return maskData;
+}
+
 function applyStampDab(
   dest: PixelBuffer,
   source: PixelBuffer,
@@ -128,6 +151,8 @@ function renderText(
   fontSize: number,
   fontFamily: string,
   color: { r: number; g: number; b: number; a: number },
+  fontWeight: number = 400,
+  fontStyle: 'normal' | 'italic' = 'normal',
 ): void {
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = buf.width;
@@ -135,7 +160,7 @@ function renderText(
   const ctx = tempCanvas.getContext('2d');
   if (!ctx) return;
 
-  ctx.font = `${fontSize}px ${fontFamily}`;
+  ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
   ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${color.a})`;
   ctx.textBaseline = 'top';
   ctx.fillText(text, pos.x, pos.y);
@@ -545,6 +570,56 @@ export function useCanvasInteraction(
         case 'brush':
         case 'pencil':
         case 'eraser': {
+          const maskEditMode = useUIStore.getState().maskEditMode;
+          if (maskEditMode && activeLayer.mask) {
+            // Paint on the mask instead of the layer pixels
+            // Foreground color determines mask value: black=hide, white=reveal (Photoshop convention)
+            editorState.pushHistory();
+            const maskBuf = createMaskSurface(activeLayer.mask.data, activeLayer.mask.width, activeLayer.mask.height);
+            const fg = useUIStore.getState().foregroundColor;
+            const bg = useUIStore.getState().backgroundColor;
+            const fgVal = Math.round(fg.r * 0.299 + fg.g * 0.587 + fg.b * 0.114);
+            const bgVal = Math.round(bg.r * 0.299 + bg.g * 0.587 + bg.b * 0.114);
+            const maskColor = activeTool === 'eraser'
+              ? { r: bgVal, g: bgVal, b: bgVal, a: 1 }
+              : { r: fgVal, g: fgVal, b: fgVal, a: 1 };
+
+            stateRef.current = {
+              drawing: true,
+              lastPoint: layerPos,
+              pixelBuffer: maskBuf,
+              originalPixelBuffer: null,
+              layerId: activeLayerId,
+              tool: activeTool,
+              startPoint: null,
+              layerStartX: activeLayer.x,
+              layerStartY: activeLayer.y,
+              ...DEFAULT_TRANSFORM_FIELDS,
+            };
+
+            if (activeTool === 'brush') {
+              const size = toolSettings.brushSize;
+              const hardness = toolSettings.brushHardness / 100;
+              const opacity = toolSettings.brushOpacity / 100;
+              const stamp = generateBrushStamp(size, hardness);
+              applyBrushDab(maskBuf, layerPos, stamp, size, maskColor, opacity, 1);
+            } else if (activeTool === 'pencil') {
+              const size = toolSettings.pencilSize;
+              drawPencilLine(maskBuf, layerPos, layerPos, maskColor, size);
+            } else {
+              const size = toolSettings.eraserSize;
+              const hardness = 0.8;
+              const opacity = toolSettings.eraserOpacity / 100;
+              const stamp = generateEraserStamp(size, hardness);
+              // For eraser on mask, paint black using brush dab
+              applyBrushDab(maskBuf, layerPos, stamp, size, maskColor, opacity, 1);
+            }
+
+            const newMaskData = extractMaskFromSurface(maskBuf, activeLayer.mask.width, activeLayer.mask.height);
+            editorState.updateLayerMaskData(activeLayerId, newMaskData);
+            break;
+          }
+
           editorState.pushHistory();
           stateRef.current = {
             drawing: true,
@@ -693,8 +768,10 @@ export function useCanvasInteraction(
           const textContent = toolSettings.textContent;
           const fontSize = toolSettings.textFontSize;
           const fontFamily = toolSettings.textFontFamily;
+          const fontWeight = toolSettings.textFontWeight;
+          const fontStyle = toolSettings.textFontStyle;
           const textColor = useUIStore.getState().foregroundColor;
-          renderText(pixelBuffer, layerPos, textContent, fontSize, fontFamily, textColor);
+          renderText(pixelBuffer, layerPos, textContent, fontSize, fontFamily, textColor, fontWeight, fontStyle);
           editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
           break;
         }
@@ -1021,44 +1098,93 @@ export function useCanvasInteraction(
 
         case 'brush': {
           if (!state.pixelBuffer || !state.lastPoint) break;
+          const maskEditModeBrush = useUIStore.getState().maskEditMode;
           const size = toolSettings.brushSize;
           const hardness = toolSettings.brushHardness / 100;
           const opacity = toolSettings.brushOpacity / 100;
           const spacing = Math.max(1, size * 0.25);
           const stamp = generateBrushStamp(size, hardness);
-          const color = useUIStore.getState().foregroundColor;
+          let color;
+          if (maskEditModeBrush) {
+            const fgC = useUIStore.getState().foregroundColor;
+            const v = Math.round(fgC.r * 0.299 + fgC.g * 0.587 + fgC.b * 0.114);
+            color = { r: v, g: v, b: v, a: 1 };
+          } else {
+            color = useUIStore.getState().foregroundColor;
+          }
           const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
           for (const pt of points) {
             applyBrushDab(state.pixelBuffer, pt, stamp, size, color, opacity, 1);
           }
           state.lastPoint = layerLocalPos;
-          useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+          if (maskEditModeBrush) {
+            const activeLayer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
+            if (activeLayer?.mask) {
+              const newMaskData = extractMaskFromSurface(state.pixelBuffer, activeLayer.mask.width, activeLayer.mask.height);
+              useEditorStore.getState().updateLayerMaskData(state.layerId, newMaskData);
+            }
+          } else {
+            useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+          }
           break;
         }
 
         case 'pencil': {
           if (!state.pixelBuffer || !state.lastPoint) break;
-          const color = useUIStore.getState().foregroundColor;
+          const maskEditModePencil = useUIStore.getState().maskEditMode;
+          let color;
+          if (maskEditModePencil) {
+            const fgC = useUIStore.getState().foregroundColor;
+            const v = Math.round(fgC.r * 0.299 + fgC.g * 0.587 + fgC.b * 0.114);
+            color = { r: v, g: v, b: v, a: 1 };
+          } else {
+            color = useUIStore.getState().foregroundColor;
+          }
           const size = toolSettings.pencilSize;
           drawPencilLine(state.pixelBuffer, state.lastPoint, layerLocalPos, color, size);
           state.lastPoint = layerLocalPos;
-          useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+          if (maskEditModePencil) {
+            const activeLayer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
+            if (activeLayer?.mask) {
+              const newMaskData = extractMaskFromSurface(state.pixelBuffer, activeLayer.mask.width, activeLayer.mask.height);
+              useEditorStore.getState().updateLayerMaskData(state.layerId, newMaskData);
+            }
+          } else {
+            useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+          }
           break;
         }
 
         case 'eraser': {
           if (!state.pixelBuffer || !state.lastPoint) break;
+          const maskEditModeEraser = useUIStore.getState().maskEditMode;
           const size = toolSettings.eraserSize;
           const hardness = 0.8;
           const opacity = toolSettings.eraserOpacity / 100;
           const spacing = Math.max(1, size * 0.25);
           const stamp = generateEraserStamp(size, hardness);
           const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
-          for (const pt of points) {
-            applyEraserDab(state.pixelBuffer, pt, stamp, size, opacity);
+          if (maskEditModeEraser) {
+            // Eraser on mask paints background color value
+            const bgC = useUIStore.getState().backgroundColor;
+            const bgV = Math.round(bgC.r * 0.299 + bgC.g * 0.587 + bgC.b * 0.114);
+            const maskColor = { r: bgV, g: bgV, b: bgV, a: 1 };
+            for (const pt of points) {
+              applyBrushDab(state.pixelBuffer, pt, stamp, size, maskColor, opacity, 1);
+            }
+            state.lastPoint = layerLocalPos;
+            const activeLayer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
+            if (activeLayer?.mask) {
+              const newMaskData = extractMaskFromSurface(state.pixelBuffer, activeLayer.mask.width, activeLayer.mask.height);
+              useEditorStore.getState().updateLayerMaskData(state.layerId, newMaskData);
+            }
+          } else {
+            for (const pt of points) {
+              applyEraserDab(state.pixelBuffer, pt, stamp, size, opacity);
+            }
+            state.lastPoint = layerLocalPos;
+            useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
           }
-          state.lastPoint = layerLocalPos;
-          useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
           break;
         }
 
@@ -1194,6 +1320,11 @@ export function useCanvasInteraction(
           }
           state.pixelBuffer = restored;
           useEditorStore.getState().updateLayerPixelData(state.layerId, restored.toImageData());
+          // Show gradient preview line
+          useUIStore.getState().setGradientPreview({
+            start: { x: state.startPoint.x + state.layerStartX, y: state.startPoint.y + state.layerStartY },
+            end: { x: layerLocalPos.x + state.layerStartX, y: layerLocalPos.y + state.layerStartY },
+          });
           break;
         }
 
@@ -1267,6 +1398,11 @@ export function useCanvasInteraction(
     // Clear active transform handle
     if (stateRef.current.transformHandle) {
       useUIStore.getState().setActiveTransformHandle(null);
+    }
+
+    // Clear gradient preview
+    if (stateRef.current.tool === 'gradient') {
+      useUIStore.getState().setGradientPreview(null);
     }
 
     stateRef.current = {

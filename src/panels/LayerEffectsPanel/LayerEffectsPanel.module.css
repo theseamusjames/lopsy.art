@@ -1,0 +1,100 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.effectSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-border-subtle);
+  padding-bottom: var(--space-2);
+}
+
+.effectSection:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.effectHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.checkbox {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.effectLabel {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.effectBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-6);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fieldLabel {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  min-width: 48px;
+  flex-shrink: 0;
+}
+
+.sliderWrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.positionGroup {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.positionBtn {
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.positionBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.positionBtnActive {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.noLayer {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-disabled);
+  padding: var(--space-4);
+  text-align: center;
+}

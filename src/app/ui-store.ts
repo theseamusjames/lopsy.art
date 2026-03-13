@@ -22,8 +22,12 @@ interface UIState {
   cropRect: { x: number; y: number; width: number; height: number } | null;
   transform: TransformState | null;
   activeTransformHandle: TransformHandle | null;
+  maskEditMode: boolean;
   showNewDocumentModal: boolean;
+  gradientPreview: { start: Point; end: Point } | null;
+  setMaskEditMode: (mode: boolean) => void;
   setShowNewDocumentModal: (show: boolean) => void;
+  setGradientPreview: (preview: { start: Point; end: Point } | null) => void;
   setActiveTool: (tool: ToolId) => void;
   setForegroundColor: (color: Color) => void;
   setBackgroundColor: (color: Color) => void;
@@ -58,8 +62,12 @@ export const useUIStore = create<UIState>((set) => ({
   cropRect: null,
   transform: null,
   activeTransformHandle: null,
+  maskEditMode: false,
   showNewDocumentModal: false,
+  gradientPreview: null,
+  setMaskEditMode: (mode) => set({ maskEditMode: mode }),
   setShowNewDocumentModal: (show) => set({ showNewDocumentModal: show }),
+  setGradientPreview: (preview) => set({ gradientPreview: preview }),
 
   setActiveTool: (tool) => {
     // Clear path when switching away from path tool

@@ -1,4 +1,10 @@
-import type { Color, GroupLayer, Layer, RasterLayer, TextLayer } from '../types';
+import type { Color, GroupLayer, Layer, LayerEffects, RasterLayer, TextLayer } from '../types';
+
+const DEFAULT_EFFECTS: LayerEffects = {
+  stroke: null,
+  dropShadow: null,
+  outerGlow: null,
+};
 
 export function createRasterLayer(params: {
   name: string;
@@ -16,7 +22,8 @@ export function createRasterLayer(params: {
     x: 0,
     y: 0,
     clipToBelow: false,
-    maskId: null,
+    effects: DEFAULT_EFFECTS,
+    mask: null,
     width: params.width,
     height: params.height,
   };
@@ -40,7 +47,8 @@ export function createTextLayer(params: {
     x: 0,
     y: 0,
     clipToBelow: false,
-    maskId: null,
+    effects: DEFAULT_EFFECTS,
+    mask: null,
     text: params.text,
     fontFamily: params.fontFamily ?? 'Inter',
     fontSize: params.fontSize ?? 24,
@@ -66,7 +74,8 @@ export function createGroupLayer(params: { name: string }): GroupLayer {
     x: 0,
     y: 0,
     clipToBelow: false,
-    maskId: null,
+    effects: DEFAULT_EFFECTS,
+    mask: null,
     children: [],
   };
 }

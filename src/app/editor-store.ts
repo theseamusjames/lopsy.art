@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { DocumentState, Layer, Rect, RasterLayer, ViewportState } from '../types';
+import type { DocumentState, Layer, LayerEffects, LayerMask, Rect, RasterLayer, ViewportState } from '../types';
 
 interface SelectionData {
   active: boolean;
@@ -49,6 +49,11 @@ interface EditorState {
   duplicateLayer: () => void;
   mergeDown: () => void;
   flattenImage: () => void;
+  updateLayerEffects: (id: string, effects: LayerEffects) => void;
+  addLayerMask: (id: string) => void;
+  removeLayerMask: (id: string) => void;
+  toggleLayerMask: (id: string) => void;
+  updateLayerMaskData: (layerId: string, maskData: Uint8ClampedArray) => void;
 
   // Selection
   setSelection: (bounds: Rect, mask: Uint8ClampedArray, maskWidth: number, maskHeight: number) => void;
@@ -73,6 +78,12 @@ interface EditorState {
   pushHistory: () => void;
 }
 
+const DEFAULT_EFFECTS: LayerEffects = {
+  stroke: null,
+  dropShadow: null,
+  outerGlow: null,
+};
+
 function generateId(): string {
   return crypto.randomUUID();
 }
@@ -89,7 +100,8 @@ function createDefaultLayer(): RasterLayer {
     x: 0,
     y: 0,
     clipToBelow: false,
-    maskId: null,
+    effects: DEFAULT_EFFECTS,
+    mask: null,
     width: 800,
     height: 600,
   };
@@ -137,7 +149,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       x: 0,
       y: 0,
       clipToBelow: false,
-      maskId: null,
+      effects: DEFAULT_EFFECTS,
+      mask: null,
       width,
       height,
     };
@@ -187,7 +200,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       x: 0,
       y: 0,
       clipToBelow: false,
-      maskId: null,
+      effects: DEFAULT_EFFECTS,
+      mask: null,
       width: imageData.width,
       height: imageData.height,
     };
@@ -227,7 +241,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       x: 0,
       y: 0,
       clipToBelow: false,
-      maskId: null,
+      effects: DEFAULT_EFFECTS,
+      mask: null,
       width: state.document.width,
       height: state.document.height,
     };
@@ -296,11 +311,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   moveLayer: (fromIndex: number, toIndex: number) => {
     const state = get();
     state.pushHistory();
+    const layers = [...state.document.layers];
     const order = [...state.document.layerOrder];
-    const [moved] = order.splice(fromIndex, 1);
-    if (moved === undefined) return;
-    order.splice(toIndex, 0, moved);
-    set({ document: { ...state.document, layerOrder: order } });
+    const [movedLayer] = layers.splice(fromIndex, 1);
+    const [movedOrder] = order.splice(fromIndex, 1);
+    if (movedLayer === undefined || movedOrder === undefined) return;
+    layers.splice(toIndex, 0, movedLayer);
+    order.splice(toIndex, 0, movedOrder);
+    set({ document: { ...state.document, layers, layerOrder: order }, renderVersion: state.renderVersion + 1 });
   },
 
   updateLayerPosition: (id: string, x: number, y: number) => {
@@ -456,7 +474,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       x: 0,
       y: 0,
       clipToBelow: false,
-      maskId: null,
+      effects: DEFAULT_EFFECTS,
+      mask: null,
       width,
       height,
     };
@@ -472,6 +491,82 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       layerPixelData: pixelData,
       renderVersion: state.renderVersion + 1,
     });
+  },
+
+  updateLayerEffects: (id: string, effects: LayerEffects) => {
+    set((state) => ({
+      document: {
+        ...state.document,
+        layers: state.document.layers.map((l) =>
+          l.id === id ? ({ ...l, effects } as Layer) : l,
+        ),
+      },
+      renderVersion: state.renderVersion + 1,
+    }));
+  },
+
+  addLayerMask: (id: string) => {
+    const state = get();
+    const layer = state.document.layers.find((l) => l.id === id);
+    if (!layer) return;
+    const width = layer.type === 'raster' || layer.type === 'shape' ? layer.width : state.document.width;
+    const height = layer.type === 'raster' || layer.type === 'shape' ? layer.height : state.document.height;
+    const maskData = new Uint8ClampedArray(width * height);
+    maskData.fill(255);
+    const layerMask: LayerMask = {
+      id: generateId(),
+      enabled: true,
+      data: maskData,
+      width,
+      height,
+    };
+    set((s) => ({
+      document: {
+        ...s.document,
+        layers: s.document.layers.map((l) =>
+          l.id === id ? ({ ...l, mask: layerMask } as Layer) : l,
+        ),
+      },
+      renderVersion: s.renderVersion + 1,
+    }));
+  },
+
+  removeLayerMask: (id: string) => {
+    set((state) => ({
+      document: {
+        ...state.document,
+        layers: state.document.layers.map((l) =>
+          l.id === id ? ({ ...l, mask: null } as Layer) : l,
+        ),
+      },
+      renderVersion: state.renderVersion + 1,
+    }));
+  },
+
+  toggleLayerMask: (id: string) => {
+    set((state) => ({
+      document: {
+        ...state.document,
+        layers: state.document.layers.map((l) => {
+          if (l.id !== id || !l.mask) return l;
+          return { ...l, mask: { ...l.mask, enabled: !l.mask.enabled } } as Layer;
+        }),
+      },
+      renderVersion: state.renderVersion + 1,
+    }));
+  },
+
+  updateLayerMaskData: (layerId: string, maskData: Uint8ClampedArray) => {
+    set((state) => ({
+      document: {
+        ...state.document,
+        layers: state.document.layers.map((l) => {
+          if (l.id !== layerId || !l.mask) return l;
+          return { ...l, mask: { ...l.mask, data: maskData } } as Layer;
+        }),
+      },
+      renderVersion: state.renderVersion + 1,
+    }));
   },
 
   setSelection: (bounds: Rect, mask: Uint8ClampedArray, maskWidth: number, maskHeight: number) => {
