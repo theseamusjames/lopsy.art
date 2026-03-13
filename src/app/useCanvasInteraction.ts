@@ -4,6 +4,11 @@ import { useEditorStore } from './editor-store';
 import { useToolSettingsStore } from './tool-settings-store';
 import { PixelBuffer, MaskedPixelBuffer } from '../engine/pixel-data';
 import { createMaskSurface, extractMaskFromSurface } from '../engine/mask-utils';
+
+// Shared buffer for the in-progress mask drawing. The renderer reads from
+// this during mask edit mode so we don't need to sync mask data every frame.
+let activeMaskEditBuffer: { layerId: string; buf: PixelBuffer; maskWidth: number; maskHeight: number } | null = null;
+export function getActiveMaskEditBuffer() { return activeMaskEditBuffer; }
 import { generateBrushStamp, interpolatePoints, applyBrushDab } from '../tools/brush/brush';
 import { drawPencilLine } from '../tools/pencil/pencil';
 import { generateBrushStamp as generateEraserStamp } from '../tools/brush/brush';
@@ -41,6 +46,7 @@ interface InteractionState {
   startPoint: Point | null;
   layerStartX: number;
   layerStartY: number;
+  maskMode: boolean;
   transformHandle: TransformHandle | null;
   transformStartState: TransformState | null;
   transformStartAngle: number;
@@ -54,6 +60,7 @@ interface InteractionState {
 }
 
 const DEFAULT_TRANSFORM_FIELDS = {
+  maskMode: false,
   transformHandle: null as TransformHandle | null,
   transformStartState: null as TransformState | null,
   transformStartAngle: 0,
@@ -118,6 +125,7 @@ export function useCanvasInteraction(
     startPoint: null,
     layerStartX: 0,
     layerStartY: 0,
+    maskMode: false,
     transformHandle: null,
     transformStartState: null,
     transformStartAngle: 0,
@@ -260,6 +268,7 @@ export function useCanvasInteraction(
             startPoint: canvasPos,
             layerStartX: 0,
             layerStartY: 0,
+            maskMode: false,
             transformHandle: hit,
             transformStartState: { ...currentTransform },
             transformStartAngle: startAngle,
@@ -464,17 +473,12 @@ export function useCanvasInteraction(
         case 'eraser': {
           const maskEditMode = useUIStore.getState().maskEditMode;
           if (maskEditMode && activeLayer.mask) {
-            // Paint on the mask instead of the layer pixels
-            // Foreground color determines mask value: black=hide, white=reveal (Photoshop convention)
             editorState.pushHistory();
             const maskBuf = createMaskSurface(activeLayer.mask.data, activeLayer.mask.width, activeLayer.mask.height);
-            const fg = useUIStore.getState().foregroundColor;
-            const bg = useUIStore.getState().backgroundColor;
-            const fgVal = Math.round(fg.r * 0.299 + fg.g * 0.587 + fg.b * 0.114);
-            const bgVal = Math.round(bg.r * 0.299 + bg.g * 0.587 + bg.b * 0.114);
+            // Paint tools hide (0), eraser reveals (255)
             const maskColor = activeTool === 'eraser'
-              ? { r: bgVal, g: bgVal, b: bgVal, a: 1 }
-              : { r: fgVal, g: fgVal, b: fgVal, a: 1 };
+              ? { r: 255, g: 255, b: 255, a: 1 }
+              : { r: 0, g: 0, b: 0, a: 1 };
 
             stateRef.current = {
               drawing: true,
@@ -487,6 +491,7 @@ export function useCanvasInteraction(
               layerStartX: activeLayer.x,
               layerStartY: activeLayer.y,
               ...DEFAULT_TRANSFORM_FIELDS,
+              maskMode: true,
             };
 
             if (activeTool === 'brush') {
@@ -503,12 +508,11 @@ export function useCanvasInteraction(
               const hardness = 0.8;
               const opacity = toolSettings.eraserOpacity / 100;
               const stamp = generateEraserStamp(size, hardness);
-              // For eraser on mask, paint black using brush dab
               applyBrushDab(maskBuf, layerPos, stamp, size, maskColor, opacity, 1);
             }
 
-            const newMaskData = extractMaskFromSurface(maskBuf, activeLayer.mask.width, activeLayer.mask.height);
-            editorState.updateLayerMaskData(activeLayerId, newMaskData);
+            activeMaskEditBuffer = { layerId: activeLayerId, buf: maskBuf, maskWidth: activeLayer.mask.width, maskHeight: activeLayer.mask.height };
+            editorState.notifyRender();
             break;
           }
 
@@ -990,32 +994,22 @@ export function useCanvasInteraction(
 
         case 'brush': {
           if (!state.pixelBuffer || !state.lastPoint) break;
-          const maskEditModeBrush = useUIStore.getState().maskEditMode;
           const size = toolSettings.brushSize;
           const hardness = toolSettings.brushHardness / 100;
           const opacity = toolSettings.brushOpacity / 100;
           const spacing = Math.max(1, size * 0.25);
           const stamp = generateBrushStamp(size, hardness);
-          let color;
-          if (maskEditModeBrush) {
-            const fgC = useUIStore.getState().foregroundColor;
-            const v = Math.round(fgC.r * 0.299 + fgC.g * 0.587 + fgC.b * 0.114);
-            color = { r: v, g: v, b: v, a: 1 };
-          } else {
-            color = useUIStore.getState().foregroundColor;
-          }
-          const brushSurface = maskEditModeBrush ? state.pixelBuffer : wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
+          const color = state.maskMode
+            ? { r: 0, g: 0, b: 0, a: 1 }
+            : useUIStore.getState().foregroundColor;
+          const brushSurface = state.maskMode ? state.pixelBuffer : wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
           const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
           for (const pt of points) {
             applyBrushDab(brushSurface, pt, stamp, size, color, opacity, 1);
           }
           state.lastPoint = layerLocalPos;
-          if (maskEditModeBrush) {
-            const activeLayer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
-            if (activeLayer?.mask) {
-              const newMaskData = extractMaskFromSurface(state.pixelBuffer, activeLayer.mask.width, activeLayer.mask.height);
-              useEditorStore.getState().updateLayerMaskData(state.layerId, newMaskData);
-            }
+          if (state.maskMode) {
+            useEditorStore.getState().notifyRender();
           } else {
             useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
           }
@@ -1024,25 +1018,15 @@ export function useCanvasInteraction(
 
         case 'pencil': {
           if (!state.pixelBuffer || !state.lastPoint) break;
-          const maskEditModePencil = useUIStore.getState().maskEditMode;
-          let color;
-          if (maskEditModePencil) {
-            const fgC = useUIStore.getState().foregroundColor;
-            const v = Math.round(fgC.r * 0.299 + fgC.g * 0.587 + fgC.b * 0.114);
-            color = { r: v, g: v, b: v, a: 1 };
-          } else {
-            color = useUIStore.getState().foregroundColor;
-          }
-          const pencilSurface = maskEditModePencil ? state.pixelBuffer : wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
+          const color = state.maskMode
+            ? { r: 0, g: 0, b: 0, a: 1 }
+            : useUIStore.getState().foregroundColor;
+          const pencilSurface = state.maskMode ? state.pixelBuffer : wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
           const size = toolSettings.pencilSize;
           drawPencilLine(pencilSurface, state.lastPoint, layerLocalPos, color, size);
           state.lastPoint = layerLocalPos;
-          if (maskEditModePencil) {
-            const activeLayer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
-            if (activeLayer?.mask) {
-              const newMaskData = extractMaskFromSurface(state.pixelBuffer, activeLayer.mask.width, activeLayer.mask.height);
-              useEditorStore.getState().updateLayerMaskData(state.layerId, newMaskData);
-            }
+          if (state.maskMode) {
+            useEditorStore.getState().notifyRender();
           } else {
             useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
           }
@@ -1051,27 +1035,19 @@ export function useCanvasInteraction(
 
         case 'eraser': {
           if (!state.pixelBuffer || !state.lastPoint) break;
-          const maskEditModeEraser = useUIStore.getState().maskEditMode;
           const size = toolSettings.eraserSize;
           const hardness = 0.8;
           const opacity = toolSettings.eraserOpacity / 100;
           const spacing = Math.max(1, size * 0.25);
           const stamp = generateEraserStamp(size, hardness);
           const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
-          if (maskEditModeEraser) {
-            // Eraser on mask paints background color value
-            const bgC = useUIStore.getState().backgroundColor;
-            const bgV = Math.round(bgC.r * 0.299 + bgC.g * 0.587 + bgC.b * 0.114);
-            const maskColor = { r: bgV, g: bgV, b: bgV, a: 1 };
+          if (state.maskMode) {
+            const maskColor = { r: 255, g: 255, b: 255, a: 1 };
             for (const pt of points) {
               applyBrushDab(state.pixelBuffer, pt, stamp, size, maskColor, opacity, 1);
             }
             state.lastPoint = layerLocalPos;
-            const activeLayer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
-            if (activeLayer?.mask) {
-              const newMaskData = extractMaskFromSurface(state.pixelBuffer, activeLayer.mask.width, activeLayer.mask.height);
-              useEditorStore.getState().updateLayerMaskData(state.layerId, newMaskData);
-            }
+            useEditorStore.getState().notifyRender();
           } else {
             const eraserSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
             for (const pt of points) {
@@ -1356,6 +1332,14 @@ export function useCanvasInteraction(
       useUIStore.getState().setGradientPreview(null);
     }
 
+    // Sync mask drawing buffer back to mask data
+    if (stateRef.current.maskMode && activeMaskEditBuffer && stateRef.current.pixelBuffer) {
+      const { layerId, maskWidth, maskHeight } = activeMaskEditBuffer;
+      const newMaskData = extractMaskFromSurface(stateRef.current.pixelBuffer, maskWidth, maskHeight);
+      useEditorStore.getState().updateLayerMaskData(layerId, newMaskData);
+      activeMaskEditBuffer = null;
+    }
+
     stateRef.current = {
       drawing: false,
       lastPoint: null,
@@ -1366,6 +1350,7 @@ export function useCanvasInteraction(
       startPoint: null,
       layerStartX: 0,
       layerStartY: 0,
+      maskMode: false,
       transformHandle: null,
       transformStartState: null,
       transformStartAngle: 0,
