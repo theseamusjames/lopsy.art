@@ -3,9 +3,9 @@ import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
 import { ColorPanel } from '../panels/ColorPanel/ColorPanel';
-import { ToolSettingsPanel } from '../panels/ToolSettingsPanel/ToolSettingsPanel';
 import { PanelContainer } from '../panels/PanelContainer/PanelContainer';
 import { MenuBar } from './MenuBar/MenuBar';
+import { OptionsBar } from './OptionsBar/OptionsBar';
 import { StatusBar } from './StatusBar/StatusBar';
 import { NewDocumentModal } from '../components/NewDocumentModal/NewDocumentModal';
 import { useUIStore } from './ui-store';
@@ -23,7 +23,6 @@ export function App() {
   const backgroundColor = useUIStore((s) => s.backgroundColor);
   const setForegroundColor = useUIStore((s) => s.setForegroundColor);
   const setBackgroundColor = useUIStore((s) => s.setBackgroundColor);
-  const activeTool = useUIStore((s) => s.activeTool);
   const swapColors = useUIStore((s) => s.swapColors);
   const resetColors = useUIStore((s) => s.resetColors);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
@@ -830,7 +829,6 @@ export function App() {
     };
   }, [setActiveTool, swapColors, resetColors, setZoom, setPan, viewport.zoom, doc.width, doc.height]);
 
-  const [toolSettingsCollapsed, setToolSettingsCollapsed] = useState(false);
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
   const [effectsPanelCollapsed, setEffectsPanelCollapsed] = useState(false);
 
@@ -858,6 +856,7 @@ export function App() {
       )}
       <div className={styles.header}>
         <MenuBar />
+        <OptionsBar />
       </div>
       <div className={styles.body}>
         <Toolbox />
@@ -875,13 +874,6 @@ export function App() {
         </div>
         <div className={styles.sidebar}>
           <div className={styles.sidebarTop}>
-            <PanelContainer
-              title="Tool Settings"
-              collapsed={toolSettingsCollapsed}
-              onToggle={() => setToolSettingsCollapsed(!toolSettingsCollapsed)}
-            >
-              <ToolSettingsPanel />
-            </PanelContainer>
             <PanelContainer
               title="Color"
               collapsed={colorPanelCollapsed}
@@ -925,7 +917,6 @@ export function App() {
         cursorY={cursorPos.y}
         docWidth={doc.width}
         docHeight={doc.height}
-        activeTool={activeTool}
       />
     </div>
   );
