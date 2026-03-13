@@ -137,6 +137,14 @@ async function selectTool(page: Page, key: string) {
 test.describe('Free Transform', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    // The app starts with a NewDocumentModal - create a document via the store
+    await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { createDocument: (w: number, h: number, transparent: boolean) => void };
+      };
+      store.getState().createDocument(800, 600, false);
+    });
     await page.waitForSelector('[data-testid="canvas-container"]');
     // Wait for canvas to render
     await page.waitForTimeout(200);
