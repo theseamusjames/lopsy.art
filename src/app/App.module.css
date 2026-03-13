@@ -58,9 +58,10 @@
 }
 
 .sidebarBottom {
-  flex: 0 0 33.333%;
+  flex: 1;
   border-top: 1px solid var(--color-border);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
