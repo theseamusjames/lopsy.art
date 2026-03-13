@@ -120,9 +120,9 @@ describe('getSelectionEdges', () => {
     mask[1] = 255;
     mask[2] = 255;
     const edges = getSelectionEdges(mask, 4, 1);
-    // Horizontal: top edge for each pixel (2 segments), bottom edge for each (2 segments) = 4
+    // Horizontal: top edge merged into 1 segment, bottom edge merged into 1 = 2
     // Vertical: left of pixel 1, right of pixel 2, but NOT between 1 and 2 = 2
-    expect(edges.h.length).toBe(16); // 4 segments × 4 values
+    expect(edges.h.length).toBe(8);  // 2 segments × 4 values
     expect(edges.v.length).toBe(8);  // 2 segments × 4 values
   });
 

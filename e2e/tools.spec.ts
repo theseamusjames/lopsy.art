@@ -2202,4 +2202,127 @@ test.describe('Mask Drawing', () => {
     // Eraser should have restored (white = reveal), so fewer dark pixels
     expect(darkAfter).toBeLessThan(darkBefore);
   });
+
+  test('convert mask to marquee then fill only affects selected area', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+
+    // Add a layer and add a mask to it
+    const layerId = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          addLayerMask: (id: string) => void;
+        };
+      };
+      const state = store.getState();
+      state.addLayerMask(state.document.activeLayerId);
+      return state.document.activeLayerId;
+    });
+
+    // Enable mask edit mode and select brush tool
+    await page.evaluate(() => {
+      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => {
+          setMaskEditMode: (m: boolean) => void;
+          setActiveTool: (t: string) => void;
+        };
+      };
+      uiStore.getState().setMaskEditMode(true);
+      uiStore.getState().setActiveTool('brush');
+    });
+    await setToolSetting(page, 'setBrushSize', 40);
+    await setToolSetting(page, 'setBrushOpacity', 100);
+    await setToolSetting(page, 'setBrushHardness', 100);
+
+    // Draw a rough circle on the mask (draws black = hide = blue overlay)
+    const cx = 100;
+    const cy = 100;
+    const radius = 40;
+    const steps = 24;
+    const firstX = cx + radius;
+    const firstY = cy;
+    const startScreen = await docToScreen(page, firstX, firstY);
+    await page.mouse.move(startScreen.x, startScreen.y);
+    await page.mouse.down();
+    for (let i = 1; i <= steps; i++) {
+      const angle = (2 * Math.PI * i) / steps;
+      const dx = cx + radius * Math.cos(angle);
+      const dy = cy + radius * Math.sin(angle);
+      const pt = await docToScreen(page, dx, dy);
+      await page.mouse.move(pt.x, pt.y, { steps: 2 });
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+
+    // Verify mask has dark pixels after drawing
+    const darkPixels = await page.evaluate((lid) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { layers: Array<{ id: string; mask: { data: Uint8ClampedArray } | null }> };
+        };
+      };
+      const layer = store.getState().document.layers.find((l) => l.id === lid);
+      if (!layer?.mask) return 0;
+      let count = 0;
+      for (let i = 0; i < layer.mask.data.length; i++) {
+        if ((layer.mask.data[i] ?? 255) < 128) count++;
+      }
+      return count;
+    }, layerId);
+    console.log(`Dark mask pixels after drawing circle: ${darkPixels}`);
+    expect(darkPixels).toBeGreaterThan(0);
+
+    // Convert mask to marquee by clicking the SquareDashed button
+    await page.click('button[title="Convert mask to selection"]');
+    await page.waitForTimeout(200);
+
+    // Verify a selection was created
+    const selState = await getEditorState(page);
+    expect(selState.selection.active).toBe(true);
+    expect(selState.selection.bounds).not.toBeNull();
+    console.log(`Selection bounds: ${JSON.stringify(selState.selection.bounds)}`);
+
+    // Exit mask edit mode should already be false after conversion
+    const uiAfter = await getUIState(page);
+    expect(uiAfter.activeTool).toBeDefined();
+
+    // Fill with a solid color (green) — should only fill the selected area
+    await setUIState(page, 'setForegroundColor', { r: 0, g: 255, b: 0, a: 1 });
+    await page.keyboard.press('g');
+    await setToolSetting(page, 'setFillTolerance', 255);
+    await setToolSetting(page, 'setFillContiguous', false);
+    await clickAtDoc(page, cx, cy);
+
+    // Check that NOT the entire image is filled green
+    const totalPixels = 200 * 200;
+    const greenPixels = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          layerPixelData: Map<string, ImageData>;
+        };
+      };
+      const state = store.getState();
+      const data = state.layerPixelData.get(state.document.activeLayerId);
+      if (!data) return 0;
+      let count = 0;
+      for (let i = 0; i < data.data.length; i += 4) {
+        if (
+          (data.data[i] ?? 0) === 0 &&
+          (data.data[i + 1] ?? 0) === 255 &&
+          (data.data[i + 2] ?? 0) === 0 &&
+          (data.data[i + 3] ?? 0) === 255
+        ) {
+          count++;
+        }
+      }
+      return count;
+    });
+
+    console.log(`Green pixels: ${greenPixels} out of ${totalPixels}`);
+    // Some pixels should be green (inside the selection)
+    expect(greenPixels).toBeGreaterThan(0);
+    // But not ALL pixels — the selection should constrain the fill
+    expect(greenPixels).toBeLessThan(totalPixels);
+  });
 });

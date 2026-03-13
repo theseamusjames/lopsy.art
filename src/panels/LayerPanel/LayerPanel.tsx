@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Eye, EyeOff, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, GripVertical, Plus, SquareDashed, Trash2 } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
+import { selectionBounds } from '../../selection/selection';
+import { createTransformState } from '../../tools/transform/transform';
 import type { Layer } from '../../types';
 import styles from './LayerPanel.module.css';
 
@@ -103,9 +105,32 @@ export function LayerPanel({
 }: LayerPanelProps) {
   const addLayerMask = useEditorStore((s) => s.addLayerMask);
   const removeLayerMask = useEditorStore((s) => s.removeLayerMask);
-  const toggleLayerMask = useEditorStore((s) => s.toggleLayerMask);
   const maskEditMode = useUIStore((s) => s.maskEditMode);
   const setMaskEditMode = useUIStore((s) => s.setMaskEditMode);
+
+  const handleConvertMaskToMarquee = useCallback((layerId: string) => {
+    const editorState = useEditorStore.getState();
+    const layer = editorState.document.layers.find((l) => l.id === layerId);
+    if (!layer?.mask) return;
+    const { mask } = layer;
+    const { width: docW, height: docH } = editorState.document;
+    const selMask = new Uint8ClampedArray(docW * docH);
+    for (let y = 0; y < mask.height; y++) {
+      for (let x = 0; x < mask.width; x++) {
+        const docX = x + layer.x;
+        const docY = y + layer.y;
+        if (docX >= 0 && docX < docW && docY >= 0 && docY < docH) {
+          selMask[docY * docW + docX] = 255 - (mask.data[y * mask.width + x] ?? 0);
+        }
+      }
+    }
+    const bounds = selectionBounds(selMask, docW, docH);
+    if (bounds) {
+      editorState.setSelection(bounds, selMask, docW, docH);
+      useUIStore.getState().setTransform(createTransformState(bounds));
+    }
+    setMaskEditMode(false);
+  }, [setMaskEditMode]);
 
   const reversedLayers = [...layers].reverse();
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -212,12 +237,12 @@ export function LayerPanel({
                     className={styles.maskBtn}
                     onClick={(e) => {
                       e.stopPropagation();
-                      toggleLayerMask(layer.id);
+                      handleConvertMaskToMarquee(layer.id);
                     }}
                     type="button"
-                    title={layer.mask.enabled ? 'Disable mask' : 'Enable mask'}
+                    title="Convert mask to selection"
                   >
-                    {layer.mask.enabled ? '●' : '○'}
+                    <SquareDashed size={12} />
                   </button>
                 </>
               )}

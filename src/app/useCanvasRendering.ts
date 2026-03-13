@@ -1,9 +1,10 @@
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useEditorStore } from './editor-store';
 import { useUIStore } from './ui-store';
+import { getActiveMaskEditBuffer } from './useCanvasInteraction';
 import { getHandlePositions } from '../tools/transform/transform';
 import type { TransformHandle, TransformState } from '../tools/transform/transform';
-import { getSelectionEdges } from '../selection/selection';
+import { traceSelectionContours } from '../selection/selection';
 import { canvasPool } from '../engine/canvas-pool';
 import type { PooledCanvas } from '../engine/canvas-pool';
 
@@ -23,6 +24,24 @@ export function useCanvasRendering(
   const transform = useUIStore((s) => s.transform);
   const gradientPreview = useUIStore((s) => s.gradientPreview);
   const maskEditMode = useUIStore((s) => s.maskEditMode);
+
+  const [antPhase, setAntPhase] = useState(0);
+  const antFrameRef = useRef(0);
+
+  useEffect(() => {
+    if (!selection.active) return;
+    let running = true;
+    const animate = () => {
+      if (!running) return;
+      setAntPhase((p) => p + 1);
+      antFrameRef.current = requestAnimationFrame(animate);
+    };
+    antFrameRef.current = requestAnimationFrame(animate);
+    return () => {
+      running = false;
+      cancelAnimationFrame(antFrameRef.current);
+    };
+  }, [selection.active]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -83,7 +102,7 @@ export function useCanvasRendering(
     ctx.lineWidth = 1 / viewport.zoom;
     ctx.strokeRect(0, 0, doc.width, doc.height);
 
-    renderSelectionAnts(ctx, selection, viewport.zoom);
+    renderSelectionAnts(ctx, selection, viewport.zoom, antPhase);
     renderTransformHandles(ctx, selection, transform, viewport.zoom);
     renderPathOverlay(ctx, pathAnchors, layers, doc.activeLayerId, viewport.zoom);
     renderLassoPreview(ctx, lassoPoints, viewport.zoom);
@@ -92,7 +111,7 @@ export function useCanvasRendering(
 
     ctx.restore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, viewport, layers, renderVersion, selection, pathAnchors, lassoPoints, cropRect, transform, maskEditMode, activeLayerId, gradientPreview]);
+  }, [doc, viewport, layers, renderVersion, selection, pathAnchors, lassoPoints, cropRect, transform, maskEditMode, activeLayerId, gradientPreview, antPhase]);
 }
 
 // --- Helper render functions ---
@@ -207,10 +226,17 @@ export function renderLayerContent(
 
   // Mask edit mode overlay
   if (maskEditMode && layer.mask && layer.id === activeLayerId) {
-    const { ctx: overlayCtx, canvas: overlayCanvas } = alloc.acquire(layer.mask.width, layer.mask.height);
-    const overlayData = overlayCtx.createImageData(layer.mask.width, layer.mask.height);
-    for (let i = 0; i < layer.mask.data.length; i++) {
-      const val = layer.mask.data[i] ?? 0;
+    const activeBuf = getActiveMaskEditBuffer();
+    const maskWidth = layer.mask.width;
+    const maskHeight = layer.mask.height;
+    const pixelCount = maskWidth * maskHeight;
+    const { ctx: overlayCtx, canvas: overlayCanvas } = alloc.acquire(maskWidth, maskHeight);
+    const overlayData = overlayCtx.createImageData(maskWidth, maskHeight);
+    // Read from the active drawing buffer if available, otherwise from stored mask data
+    const useBuffer = activeBuf && activeBuf.layerId === layer.id;
+    const bufRaw = useBuffer ? activeBuf.buf.rawData : null;
+    for (let i = 0; i < pixelCount; i++) {
+      const val = bufRaw ? (bufRaw[i * 4] ?? 0) : (layer.mask.data[i] ?? 0);
       const overlayAlpha = Math.round((1 - val / 255) * 128);
       const idx = i * 4;
       overlayData.data[idx] = 0;
@@ -296,33 +322,42 @@ function renderSelectionAnts(
   ctx: CanvasRenderingContext2D,
   selection: SelectionData,
   zoom: number,
+  antPhase: number,
 ): void {
   if (!selection.active || !selection.mask) return;
 
   ctx.save();
-  ctx.lineWidth = 1 / zoom;
-  ctx.setLineDash([4 / zoom, 4 / zoom]);
+  ctx.imageSmoothingEnabled = false;
+  const lw = 1.5 / zoom;
+  ctx.lineWidth = lw;
+  const dashLen = 8 / zoom;
+  ctx.setLineDash([dashLen, dashLen]);
 
-  const edges = getSelectionEdges(selection.mask, selection.maskWidth, selection.maskHeight);
+  const offset = (antPhase % 120) / 120 * dashLen * 2;
 
-  const drawEdges = () => {
-    ctx.beginPath();
-    for (let i = 0; i < edges.h.length; i += 4) {
-      ctx.moveTo(edges.h[i] as number, edges.h[i + 1] as number);
-      ctx.lineTo(edges.h[i + 2] as number, edges.h[i + 3] as number);
+  const contours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight);
+
+  const drawContours = () => {
+    for (const pts of contours) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0]!, pts[1]!);
+      for (let i = 2; i < pts.length; i += 2) {
+        ctx.lineTo(pts[i]!, pts[i + 1]!);
+      }
+      ctx.stroke();
     }
-    for (let i = 0; i < edges.v.length; i += 4) {
-      ctx.moveTo(edges.v[i] as number, edges.v[i + 1] as number);
-      ctx.lineTo(edges.v[i + 2] as number, edges.v[i + 3] as number);
-    }
-    ctx.stroke();
   };
 
-  ctx.strokeStyle = '#ffffff';
-  drawEdges();
+  // Black base — fully visible everywhere
+  ctx.setLineDash([]);
   ctx.strokeStyle = '#000000';
-  ctx.lineDashOffset = 4 / zoom;
-  drawEdges();
+  drawContours();
+
+  // White dashes march on top
+  ctx.setLineDash([dashLen, dashLen]);
+  ctx.lineDashOffset = -offset;
+  ctx.strokeStyle = '#ffffff';
+  drawContours();
 
   ctx.restore();
 }

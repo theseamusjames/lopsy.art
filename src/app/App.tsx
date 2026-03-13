@@ -119,6 +119,11 @@ export function App() {
     clearPersistentTransform,
   });
 
+  const handleSelectLayer = useCallback((id: string) => {
+    clearPersistentTransform();
+    setActiveLayer(id);
+  }, [clearPersistentTransform, setActiveLayer]);
+
   // Mouse handlers
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
@@ -242,7 +247,7 @@ export function App() {
               <LayerPanel
                 layers={[...layers]}
                 activeLayerId={activeLayerId}
-                onSelectLayer={setActiveLayer}
+                onSelectLayer={handleSelectLayer}
                 onToggleVisibility={toggleLayerVisibility}
                 onAddLayer={addLayer}
                 onRemoveLayer={removeLayer}
