@@ -7,7 +7,10 @@ import {
   renderLayerContent,
   renderStroke,
 } from '../../useCanvasRendering';
+import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
 import type { MenuDef } from './types';
+
+const METADATA_NOTE = 'Made with Lopsy — http://lopsy.art';
 
 export function openFileFromDisk(): void {
   const input = document.createElement('input');
@@ -67,12 +70,16 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
 
   const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
   const ext = format === 'png' ? 'png' : 'jpg';
-  canvas.toBlob((blob) => {
+  canvas.toBlob(async (blob) => {
     if (!blob) return;
-    const url = URL.createObjectURL(blob);
+    const tagged =
+      format === 'png'
+        ? await addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE })
+        : await addJpegComment(blob, METADATA_NOTE);
+    const url = URL.createObjectURL(tagged);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${state.document.name}.${ext}`;
+    a.download = `lopsy.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
   }, mimeType, 0.92);
