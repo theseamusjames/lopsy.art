@@ -102,6 +102,8 @@ interface EditorState {
 
   // Canvas
   cropCanvas: (rect: Rect) => void;
+  resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
+  resizeImage: (newWidth: number, newHeight: number) => void;
 
   // Viewport
   setZoom: (zoom: number) => void;
@@ -783,6 +785,117 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...state.document,
         width: cw,
         height: ch,
+        layers: newLayers,
+      },
+      layerPixelData: pixelData,
+      renderVersion: state.renderVersion + 1,
+    });
+  },
+
+  resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => {
+    const state = get();
+    state.pushHistory();
+    const oldW = state.document.width;
+    const oldH = state.document.height;
+    const offsetX = Math.round((newWidth - oldW) * anchorX);
+    const offsetY = Math.round((newHeight - oldH) * anchorY);
+
+    const pixelData = new Map<string, ImageData>();
+    const newLayers: Layer[] = [];
+
+    for (const layer of state.document.layers) {
+      if (layer.type !== 'raster') {
+        newLayers.push(layer);
+        continue;
+      }
+      const oldData = state.layerPixelData.get(layer.id);
+      const newData = new ImageData(newWidth, newHeight);
+      if (oldData) {
+        const lx = layer.x + offsetX;
+        const ly = layer.y + offsetY;
+        for (let y = 0; y < oldData.height; y++) {
+          for (let x = 0; x < oldData.width; x++) {
+            const dx = x + lx;
+            const dy = y + ly;
+            if (dx < 0 || dx >= newWidth || dy < 0 || dy >= newHeight) continue;
+            const si = (y * oldData.width + x) * 4;
+            const di = (dy * newWidth + dx) * 4;
+            newData.data[di] = oldData.data[si] ?? 0;
+            newData.data[di + 1] = oldData.data[si + 1] ?? 0;
+            newData.data[di + 2] = oldData.data[si + 2] ?? 0;
+            newData.data[di + 3] = oldData.data[si + 3] ?? 0;
+          }
+        }
+      }
+      pixelData.set(layer.id, newData);
+      newLayers.push({ ...layer, x: 0, y: 0, width: newWidth, height: newHeight } as Layer);
+    }
+
+    set({
+      document: {
+        ...state.document,
+        width: newWidth,
+        height: newHeight,
+        layers: newLayers,
+      },
+      layerPixelData: pixelData,
+      renderVersion: state.renderVersion + 1,
+    });
+  },
+
+  resizeImage: (newWidth: number, newHeight: number) => {
+    const state = get();
+    state.pushHistory();
+    const oldW = state.document.width;
+    const oldH = state.document.height;
+
+    const scaleX = newWidth / oldW;
+    const scaleY = newHeight / oldH;
+
+    const tmpCanvas = document.createElement('canvas');
+    const tmpCtx = tmpCanvas.getContext('2d');
+    if (!tmpCtx) return;
+
+    const pixelData = new Map<string, ImageData>();
+    const newLayers: Layer[] = [];
+
+    for (const layer of state.document.layers) {
+      if (layer.type !== 'raster') {
+        newLayers.push(layer);
+        continue;
+      }
+      const oldData = state.layerPixelData.get(layer.id);
+      if (oldData) {
+        tmpCanvas.width = oldData.width;
+        tmpCanvas.height = oldData.height;
+        tmpCtx.putImageData(oldData, 0, 0);
+
+        const scaledCanvas = document.createElement('canvas');
+        scaledCanvas.width = newWidth;
+        scaledCanvas.height = newHeight;
+        const scaledCtx = scaledCanvas.getContext('2d');
+        if (!scaledCtx) continue;
+        scaledCtx.imageSmoothingEnabled = true;
+        scaledCtx.imageSmoothingQuality = 'high';
+        scaledCtx.drawImage(tmpCanvas, 0, 0, oldData.width, oldData.height, 0, 0, newWidth, newHeight);
+        pixelData.set(layer.id, scaledCtx.getImageData(0, 0, newWidth, newHeight));
+      } else {
+        pixelData.set(layer.id, new ImageData(newWidth, newHeight));
+      }
+      newLayers.push({
+        ...layer,
+        x: Math.round(layer.x * scaleX),
+        y: Math.round(layer.y * scaleY),
+        width: newWidth,
+        height: newHeight,
+      } as Layer);
+    }
+
+    set({
+      document: {
+        ...state.document,
+        width: newWidth,
+        height: newHeight,
         layers: newLayers,
       },
       layerPixelData: pixelData,
