@@ -1,6 +1,7 @@
 import { useEffect, type RefObject } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
+import { useToolSettingsStore } from './tool-settings-store';
 import { strokeCurrentPath } from './useCanvasInteraction';
 
 interface KeyboardShortcutDeps {
@@ -114,6 +115,26 @@ export function useKeyboardShortcuts({
         const handler = toolMap[e.key.toLowerCase()];
         if (handler) {
           handler();
+          return;
+        }
+
+        if (e.key === '[' || e.key === ']') {
+          const delta = e.key === ']' ? 1 : -1;
+          const tool = useUIStore.getState().activeTool;
+          const ts = useToolSettingsStore.getState();
+          if (tool === 'brush' || tool === 'dodge') {
+            ts.setBrushSize(ts.brushSize + delta);
+          } else if (tool === 'pencil') {
+            ts.setPencilSize(ts.pencilSize + delta);
+          } else if (tool === 'eraser') {
+            ts.setEraserSize(ts.eraserSize + delta);
+          } else if (tool === 'stamp') {
+            ts.setStampSize(ts.stampSize + delta);
+          } else if (tool === 'path') {
+            ts.setPathStrokeWidth(ts.pathStrokeWidth + delta);
+          } else if (tool === 'shape') {
+            ts.setShapeStrokeWidth(ts.shapeStrokeWidth + delta);
+          }
           return;
         }
       }
