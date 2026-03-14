@@ -178,6 +178,7 @@ export function LayerEffectsPanel() {
   const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
   const layers = useEditorStore((s) => s.document.layers);
   const updateLayerEffects = useEditorStore((s) => s.updateLayerEffects);
+  const rasterizeLayerStyle = useEditorStore((s) => s.rasterizeLayerStyle);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
 
   const [selectedEffect, setSelectedEffect] = useState<EffectKey>('dropShadow');
@@ -222,6 +223,10 @@ export function LayerEffectsPanel() {
   const stroke = effects?.stroke;
   const outerGlow = effects?.outerGlow;
   const innerGlow = effects?.innerGlow;
+
+  const hasAnyEffect = !!(
+    shadow?.enabled || stroke?.enabled || outerGlow?.enabled || innerGlow?.enabled
+  );
 
   function renderForm() {
     if (!effects) return null;
@@ -284,6 +289,15 @@ export function LayerEffectsPanel() {
               </div>
             );
           })}
+          <div className={styles.effectListSpacer} />
+          <button
+            type="button"
+            className={styles.rasterizeBtn}
+            disabled={!hasAnyEffect}
+            onClick={rasterizeLayerStyle}
+          >
+            Rasterize Layer Style
+          </button>
         </div>
         <div className={styles.effectForm}>
           {renderForm() ?? (

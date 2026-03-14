@@ -112,6 +112,35 @@ export function LayerPanel({
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
 
+  const handleThumbnailCmdClick = useCallback((e: React.MouseEvent, layerId: string) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    e.stopPropagation();
+    const editorState = useEditorStore.getState();
+    const layer = editorState.document.layers.find((l) => l.id === layerId);
+    if (!layer) return;
+    const pixelData = editorState.layerPixelData.get(layerId);
+    if (!pixelData) return;
+
+    const { width: docW, height: docH } = editorState.document;
+    const selMask = new Uint8ClampedArray(docW * docH);
+    for (let y = 0; y < pixelData.height; y++) {
+      for (let x = 0; x < pixelData.width; x++) {
+        const alpha = pixelData.data[(y * pixelData.width + x) * 4 + 3] ?? 0;
+        if (alpha < 1) continue;
+        const docX = x + layer.x;
+        const docY = y + layer.y;
+        if (docX >= 0 && docX < docW && docY >= 0 && docY < docH) {
+          selMask[docY * docW + docX] = alpha;
+        }
+      }
+    }
+    const bounds = selectionBounds(selMask, docW, docH);
+    if (bounds) {
+      editorState.setSelection(bounds, selMask, docW, docH);
+      useUIStore.getState().setTransform(createTransformState(bounds));
+    }
+  }, []);
+
   const handleConvertMaskToMarquee = useCallback((layerId: string) => {
     const editorState = useEditorStore.getState();
     const layer = editorState.document.layers.find((l) => l.id === layerId);
@@ -216,7 +245,10 @@ export function LayerPanel({
               >
                 <GripVertical size={12} />
               </span>
-              <div className={styles.thumbnail}>
+              <div
+                className={styles.thumbnail}
+                onClick={(e) => handleThumbnailCmdClick(e, layer.id)}
+              >
                 <LayerThumbnail layer={layer} />
               </div>
               <span className={styles.name}>{layer.name}</span>
