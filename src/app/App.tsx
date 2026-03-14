@@ -16,6 +16,7 @@ import { useEditorStore } from './editor-store';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { useCanvasCursor } from './useCanvasCursor';
 import styles from './App.module.css';
 
 export function App() {
@@ -129,6 +130,9 @@ export function App() {
   // Canvas interaction (drawing tools)
   const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform } = useCanvasInteraction(screenToCanvas, containerRef);
 
+  // Cursor management
+  const { updateHoveredHandle } = useCanvasCursor(containerRef, isPanning, isSpaceDown);
+
   // Keyboard shortcuts (extracted to useKeyboardShortcuts)
   useKeyboardShortcuts({
     canvasRef,
@@ -158,10 +162,11 @@ export function App() {
         const dy = e.clientY - panStartRef.current.y;
         setPan(panStartRef.current.panX + dx, panStartRef.current.panY + dy);
       } else {
+        updateHoveredHandle(canvasPos);
         handleToolMove(e);
       }
     },
-    [isPanning, screenToCanvas, setPan, handleToolMove],
+    [isPanning, screenToCanvas, setPan, handleToolMove, updateHoveredHandle],
   );
 
   const handleMouseDown = useCallback(
@@ -251,7 +256,7 @@ export function App() {
         <div
           ref={containerRef}
           data-testid="canvas-container"
-          className={`${styles.canvas} ${isPanning || isSpaceDown ? styles.canvasGrab : styles.canvasCrosshair}`}
+          className={styles.canvas}
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
