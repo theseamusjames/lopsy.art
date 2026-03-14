@@ -77,6 +77,17 @@ export function App() {
     setShowNewDocumentModal(false);
   }, [openImageAsDocument, setShowNewDocumentModal]);
 
+  // Warn before navigating away with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (useEditorStore.getState().isDirty) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
   // Canvas rendering (extracted to useCanvasRendering)
   useCanvasRendering(canvasRef, containerRef);
 

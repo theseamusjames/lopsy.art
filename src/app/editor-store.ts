@@ -64,6 +64,7 @@ interface EditorState {
   renderVersion: number;
   selection: SelectionData;
   documentReady: boolean;
+  isDirty: boolean;
   clipboard: ClipboardData | null;
 
   // Document creation
@@ -117,6 +118,7 @@ interface EditorState {
   undo: () => void;
   redo: () => void;
   pushHistory: () => void;
+  markClean: () => void;
 }
 
 const DEFAULT_EFFECTS: LayerEffects = {
@@ -179,6 +181,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   renderVersion: 0,
   selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
   documentReady: false,
+  isDirty: false,
   clipboard: null,
 
   createDocument: (width: number, height: number, transparentBg: boolean) => {
@@ -229,6 +232,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       renderVersion: 0,
       selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
       documentReady: true,
+      isDirty: false,
     });
   },
 
@@ -268,6 +272,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       renderVersion: 0,
       selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
       documentReady: true,
+      isDirty: false,
     });
   },
 
@@ -1046,6 +1051,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       undoStack: [...state.undoStack.slice(-49), snapshot],
       redoStack: [],
       dirtyLayerIds: new Set(),
+      isDirty: true,
     });
+  },
+
+  markClean: () => {
+    set({ isDirty: false });
   },
 }));
