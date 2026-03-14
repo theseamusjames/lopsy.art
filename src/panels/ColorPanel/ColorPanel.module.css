@@ -17,6 +17,26 @@
   flex-shrink: 0;
 }
 
+.colorStack {
+  position: relative;
+  width: 32px;
+  height: 32px;
+}
+
+.foreground {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+}
+
+.background {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  z-index: 0;
+}
+
 .recentSwatches {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
