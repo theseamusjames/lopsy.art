@@ -295,6 +295,7 @@ export function LayerPanel({
                   min={0}
                   max={100}
                   value={Math.round(layer.opacity * 100)}
+                  onPointerDown={() => useEditorStore.getState().pushHistory('Change Opacity')}
                   onChange={(e) => onUpdateOpacity(layer.id, Number(e.target.value) / 100)}
                 />
               </div>

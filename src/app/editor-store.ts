@@ -413,16 +413,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   updateLayerOpacity: (id: string, opacity: number) => {
-    const state = get();
-    state.pushHistory('Change Opacity');
-    set({
+    set((state) => ({
       document: {
         ...state.document,
         layers: state.document.layers.map((l) =>
           l.id === id ? ({ ...l, opacity } as Layer) : l,
         ),
       },
-    });
+    }));
   },
 
   moveLayer: (fromIndex: number, toIndex: number) => {
