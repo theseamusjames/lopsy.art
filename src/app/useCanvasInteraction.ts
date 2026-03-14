@@ -1176,12 +1176,15 @@ export function useCanvasInteraction(
 
         case 'crop': {
           if (!state.startPoint) break;
-          const cx = Math.min(state.startPoint.x, canvasPos.x);
-          const cy = Math.min(state.startPoint.y, canvasPos.y);
-          const cw = Math.abs(canvasPos.x - state.startPoint.x);
-          const ch = Math.abs(canvasPos.y - state.startPoint.y);
+          const edDoc = useEditorStore.getState().document;
+          const x1 = Math.max(0, Math.min(state.startPoint.x, canvasPos.x));
+          const y1 = Math.max(0, Math.min(state.startPoint.y, canvasPos.y));
+          const x2 = Math.min(edDoc.width, Math.max(state.startPoint.x, canvasPos.x));
+          const y2 = Math.min(edDoc.height, Math.max(state.startPoint.y, canvasPos.y));
+          const cw = x2 - x1;
+          const ch = y2 - y1;
           if (cw > 0 && ch > 0) {
-            useUIStore.getState().setCropRect({ x: cx, y: cy, width: cw, height: ch });
+            useUIStore.getState().setCropRect({ x: x1, y: y1, width: cw, height: ch });
             useEditorStore.getState().notifyRender();
           }
           break;

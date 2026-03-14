@@ -827,10 +827,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   cropCanvas: (rect: Rect) => {
     const state = get();
     state.pushHistory('Crop Canvas');
-    const cx = Math.round(rect.x);
-    const cy = Math.round(rect.y);
-    const cw = Math.round(rect.width);
-    const ch = Math.round(rect.height);
+    const docW = state.document.width;
+    const docH = state.document.height;
+    const x1 = Math.max(0, Math.round(rect.x));
+    const y1 = Math.max(0, Math.round(rect.y));
+    const x2 = Math.min(docW, Math.round(rect.x + rect.width));
+    const y2 = Math.min(docH, Math.round(rect.y + rect.height));
+    const cx = x1;
+    const cy = y1;
+    const cw = x2 - x1;
+    const ch = y2 - y1;
     if (cw <= 0 || ch <= 0) return;
 
     const pixelData = new Map<string, ImageData>();

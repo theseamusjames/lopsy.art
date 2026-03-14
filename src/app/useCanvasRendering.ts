@@ -75,13 +75,16 @@ export function useCanvasRendering(
     ctx.scale(viewport.zoom, viewport.zoom);
     ctx.translate(-doc.width / 2, -doc.height / 2);
 
-    // Checkerboard for transparency
+    // Checkerboard for transparency — clamp tile size at document edges
+    // so tiles don't extend past the document bounds
     const checkSize = 8;
     for (let y = 0; y < doc.height; y += checkSize) {
+      const tileH = Math.min(checkSize, doc.height - y);
       for (let x = 0; x < doc.width; x += checkSize) {
+        const tileW = Math.min(checkSize, doc.width - x);
         const isLight = ((x / checkSize) + (y / checkSize)) % 2 === 0;
         ctx.fillStyle = isLight ? '#ffffff' : '#cccccc';
-        ctx.fillRect(x, y, checkSize, checkSize);
+        ctx.fillRect(x, y, tileW, tileH);
       }
     }
 
