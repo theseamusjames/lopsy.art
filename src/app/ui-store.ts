@@ -22,6 +22,8 @@ interface UIState {
   showGrid: boolean;
   showRulers: boolean;
   showGuides: boolean;
+  snapToGrid: boolean;
+  gridSize: number;
   sidebarCollapsed: boolean;
   pathAnchors: PathAnchor[];
   pathClosed: boolean;
@@ -50,6 +52,8 @@ interface UIState {
   toggleGrid: () => void;
   toggleRulers: () => void;
   toggleGuides: () => void;
+  toggleSnapToGrid: () => void;
+  setGridSize: (size: number) => void;
   toggleSidebar: () => void;
   addPathAnchor: (anchor: PathAnchor) => void;
   updateLastPathAnchor: (anchor: PathAnchor) => void;
@@ -70,6 +74,8 @@ export const useUIStore = create<UIState>((set) => ({
   showGrid: false,
   showRulers: true,
   showGuides: true,
+  snapToGrid: false,
+  gridSize: 16,
   sidebarCollapsed: false,
   pathAnchors: [],
   pathClosed: false,
@@ -129,6 +135,8 @@ export const useUIStore = create<UIState>((set) => ({
   toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
   toggleRulers: () => set((state) => ({ showRulers: !state.showRulers })),
   toggleGuides: () => set((state) => ({ showGuides: !state.showGuides })),
+  toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),
+  setGridSize: (size) => set({ gridSize: size }),
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
   addPathAnchor: (anchor) => set((state) => ({ pathAnchors: [...state.pathAnchors, anchor] })),
   updateLastPathAnchor: (anchor) =>
