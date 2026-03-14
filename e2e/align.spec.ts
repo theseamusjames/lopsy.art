@@ -1,0 +1,300 @@
+import { test, expect, type Page } from '@playwright/test';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function createDocument(page: Page, width = 200, height = 200, transparent = true) {
+  await page.evaluate(
+    ({ w, h, t }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { createDocument: (w: number, h: number, t: boolean) => void };
+      };
+      store.getState().createDocument(w, h, t);
+    },
+    { w: width, h: height, t: transparent },
+  );
+  await page.waitForTimeout(200);
+}
+
+async function paintRect(
+  page: Page,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: { r: number; g: number; b: number; a: number },
+  layerId?: string,
+) {
+  await page.evaluate(
+    ({ x, y, w, h, color, lid }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
+      };
+      const state = store.getState();
+      const id = lid ?? state.document.activeLayerId;
+      const data = state.getOrCreateLayerPixelData(id);
+      for (let py = y; py < y + h; py++) {
+        for (let px = x; px < x + w; px++) {
+          if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
+          const idx = (py * data.width + px) * 4;
+          data.data[idx] = color.r;
+          data.data[idx + 1] = color.g;
+          data.data[idx + 2] = color.b;
+          data.data[idx + 3] = color.a;
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    },
+    { x, y, w, h, color, lid: layerId ?? null },
+  );
+  await page.waitForTimeout(100);
+}
+
+async function getLayerPosition(page: Page, layerId?: string) {
+  return page.evaluate(
+    (lid) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: {
+            activeLayerId: string;
+            layers: Array<{ id: string; x: number; y: number }>;
+          };
+        };
+      };
+      const state = store.getState();
+      const id = lid ?? state.document.activeLayerId;
+      const layer = state.document.layers.find((l) => l.id === id);
+      if (!layer) return { x: 0, y: 0 };
+      return { x: layer.x, y: layer.y };
+    },
+    layerId ?? null,
+  );
+}
+
+async function getPixelAt(page: Page, x: number, y: number, layerId?: string) {
+  return page.evaluate(
+    ({ x, y, lid }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          layerPixelData: Map<string, ImageData>;
+        };
+      };
+      const state = store.getState();
+      const id = lid ?? state.document.activeLayerId;
+      const data = state.layerPixelData.get(id);
+      if (!data) return { r: 0, g: 0, b: 0, a: 0 };
+      const idx = (y * data.width + x) * 4;
+      return {
+        r: data.data[idx] ?? 0,
+        g: data.data[idx + 1] ?? 0,
+        b: data.data[idx + 2] ?? 0,
+        a: data.data[idx + 3] ?? 0,
+      };
+    },
+    { x, y, lid: layerId ?? null },
+  );
+}
+
+async function clickAlignButton(page: Page, label: string) {
+  await page.click(`button[aria-label="${label}"]`);
+  await page.waitForTimeout(100);
+}
+
+async function selectMoveTool(page: Page) {
+  await page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__uiStore as {
+      getState: () => { setActiveTool: (tool: string) => void };
+    };
+    store.getState().setActiveTool('move');
+  });
+  await page.waitForTimeout(100);
+}
+
+// ---------------------------------------------------------------------------
+// Common setup
+// ---------------------------------------------------------------------------
+
+test.beforeEach(async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
+  await page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { createDocument: (w: number, h: number, transparent: boolean) => void };
+    };
+    store.getState().createDocument(200, 200, true);
+  });
+  await page.waitForSelector('[data-testid="canvas-container"]');
+  await selectMoveTool(page);
+});
+
+// ---------------------------------------------------------------------------
+// Alignment tests — verify layer position moves correctly
+// ---------------------------------------------------------------------------
+
+test.describe('Align layer content', () => {
+  test('align left moves content to left edge', async ({ page }) => {
+    // Paint a 20x20 block at (50,50) within the 200x200 layer
+    await paintRect(page, 50, 50, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+
+    await clickAlignButton(page, 'Align left');
+
+    const pos = await getLayerPosition(page);
+    // Content was at layer-local (50,50). After align left, content left edge should be at doc x=0.
+    // So layer.x = 0 - 50 = -50
+    expect(pos.x).toBe(-50);
+    expect(pos.y).toBe(0); // y unchanged from initial 0
+  });
+
+  test('align right moves content to right edge', async ({ page }) => {
+    await paintRect(page, 50, 50, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+
+    await clickAlignButton(page, 'Align right');
+
+    const pos = await getLayerPosition(page);
+    // Content right edge should be at doc x=200.
+    // Content spans 50..69 in layer coords, width=20. layer.x = 200 - 20 - 50 = 130
+    expect(pos.x).toBe(130);
+    expect(pos.y).toBe(0);
+  });
+
+  test('align top moves content to top edge', async ({ page }) => {
+    await paintRect(page, 50, 50, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+
+    await clickAlignButton(page, 'Align top');
+
+    const pos = await getLayerPosition(page);
+    expect(pos.x).toBe(0);
+    expect(pos.y).toBe(-50);
+  });
+
+  test('align bottom moves content to bottom edge', async ({ page }) => {
+    await paintRect(page, 50, 50, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+
+    await clickAlignButton(page, 'Align bottom');
+
+    const pos = await getLayerPosition(page);
+    expect(pos.x).toBe(0);
+    expect(pos.y).toBe(130);
+  });
+
+  test('align center horizontally', async ({ page }) => {
+    await paintRect(page, 50, 50, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+
+    await clickAlignButton(page, 'Align center horizontally');
+
+    const pos = await getLayerPosition(page);
+    // Center of canvas = 100. Content width = 20. Target x = 100 - 10 = 90.
+    // Content starts at layer-local 50. layer.x = 90 - 50 = 40
+    expect(pos.x).toBe(40);
+    expect(pos.y).toBe(0);
+  });
+
+  test('align center vertically', async ({ page }) => {
+    await paintRect(page, 50, 50, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+
+    await clickAlignButton(page, 'Align center vertically');
+
+    const pos = await getLayerPosition(page);
+    expect(pos.x).toBe(0);
+    expect(pos.y).toBe(40);
+  });
+
+  test('pixel data moves with the layer', async ({ page }) => {
+    // Paint red block at layer-local (10,10)
+    await paintRect(page, 10, 10, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+
+    await clickAlignButton(page, 'Align left');
+
+    const pos = await getLayerPosition(page);
+    expect(pos.x).toBe(-10);
+
+    // Pixel data is in layer-local coords, so the red block is still at (10,10) in the layer
+    const pixel = await getPixelAt(page, 10, 10);
+    expect(pixel.r).toBe(255);
+    expect(pixel.a).toBe(255);
+
+    // And pixel at (0,0) in layer is still transparent
+    const emptyPixel = await getPixelAt(page, 0, 0);
+    expect(emptyPixel.a).toBe(0);
+  });
+
+  test('align only moves content, does not modify pixels', async ({ page }) => {
+    await paintRect(page, 30, 30, 40, 40, { r: 0, g: 255, b: 0, a: 255 });
+
+    // Read pixels before
+    const beforePixel = await getPixelAt(page, 50, 50);
+    expect(beforePixel.g).toBe(255);
+    expect(beforePixel.a).toBe(255);
+
+    await clickAlignButton(page, 'Align right');
+
+    // Pixel data in layer-local coords should be unchanged
+    const afterPixel = await getPixelAt(page, 50, 50);
+    expect(afterPixel.g).toBe(255);
+    expect(afterPixel.a).toBe(255);
+
+    // Empty area should still be empty
+    const emptyAfter = await getPixelAt(page, 0, 0);
+    expect(emptyAfter.a).toBe(0);
+  });
+
+  test('align with full-layer content', async ({ page }) => {
+    // Fill entire 200x200 layer
+    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 255, b: 0, a: 255 });
+
+    await clickAlignButton(page, 'Align left');
+
+    // Content fills entire layer, so no movement needed
+    const pos = await getLayerPosition(page);
+    expect(pos.x).toBe(0);
+    expect(pos.y).toBe(0);
+  });
+
+  test('sequential alignments compose correctly', async ({ page }) => {
+    await paintRect(page, 80, 80, 20, 20, { r: 255, g: 0, b: 255, a: 255 });
+
+    // Align to top-left corner
+    await clickAlignButton(page, 'Align left');
+    await clickAlignButton(page, 'Align top');
+
+    const pos = await getLayerPosition(page);
+    // After align-left: x = -80, y = 0
+    // After align-top: x = -80, y = -80
+    expect(pos.x).toBe(-80);
+    expect(pos.y).toBe(-80);
+  });
+
+  test('align to bottom-right corner', async ({ page }) => {
+    await paintRect(page, 10, 10, 30, 30, { r: 0, g: 0, b: 255, a: 255 });
+
+    await clickAlignButton(page, 'Align right');
+    await clickAlignButton(page, 'Align bottom');
+
+    const pos = await getLayerPosition(page);
+    // Content at (10,10) size 30x30
+    // Align right: layer.x = 200 - 30 - 10 = 160
+    // Align bottom: layer.y = 200 - 30 - 10 = 160
+    expect(pos.x).toBe(160);
+    expect(pos.y).toBe(160);
+  });
+
+  test('center both axes', async ({ page }) => {
+    await paintRect(page, 0, 0, 40, 60, { r: 128, g: 128, b: 128, a: 255 });
+
+    await clickAlignButton(page, 'Align center horizontally');
+    await clickAlignButton(page, 'Align center vertically');
+
+    const pos = await getLayerPosition(page);
+    // Content at (0,0) size 40x60
+    // Center h: layer.x = (200-40)/2 - 0 = 80
+    // Center v: layer.y = (200-60)/2 - 0 = 70
+    expect(pos.x).toBe(80);
+    expect(pos.y).toBe(70);
+  });
+});

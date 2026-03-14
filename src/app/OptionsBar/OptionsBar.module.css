@@ -66,6 +66,12 @@
   min-width: 0;
 }
 
+.alignGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .checkbox {
   display: flex;
   align-items: center;

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { DocumentState, Layer, LayerEffects, LayerMask, Rect, RasterLayer, ViewportState } from '../types';
 import { compositeOver } from '../engine/compositing';
+import { computeAlign, getContentBounds, type AlignEdge } from '../tools/move/move';
 
 interface SelectionData {
   active: boolean;
@@ -77,6 +78,7 @@ interface EditorState {
   updateLayerOpacity: (id: string, opacity: number) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
   updateLayerPosition: (id: string, x: number, y: number) => void;
+  alignLayer: (edge: AlignEdge) => void;
   duplicateLayer: () => void;
   mergeDown: () => void;
   flattenImage: () => void;
@@ -371,6 +373,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ),
       },
       renderVersion: state.renderVersion + 1,
+    }));
+  },
+
+  alignLayer: (edge: AlignEdge) => {
+    const state = get();
+    const activeId = state.document.activeLayerId;
+    if (!activeId) return;
+    const layer = state.document.layers.find((l) => l.id === activeId);
+    if (!layer) return;
+    const pixelData = state.layerPixelData.get(activeId);
+    if (!pixelData) return;
+
+    let bounds: Rect | null;
+    if (state.selection.active && state.selection.bounds) {
+      bounds = state.selection.bounds;
+    } else {
+      bounds = getContentBounds(pixelData, layer.x, layer.y);
+    }
+    if (!bounds) return;
+
+    state.pushHistory();
+    const pos = computeAlign(edge, bounds, state.document.width, state.document.height, layer.x, layer.y);
+    set((s) => ({
+      document: {
+        ...s.document,
+        layers: s.document.layers.map((l) =>
+          l.id === activeId ? ({ ...l, x: pos.x, y: pos.y } as Layer) : l,
+        ),
+      },
+      renderVersion: s.renderVersion + 1,
     }));
   },
 
