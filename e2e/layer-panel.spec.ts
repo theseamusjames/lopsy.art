@@ -335,7 +335,7 @@ test.describe('Effects Drawer', () => {
 
     // Verify the effect is stored
     const state = await getEditorState(page);
-    expect(state.document.layers[0]!.effects.dropShadow).not.toBeNull();
+    expect((state.document.layers[0]!.effects.dropShadow as { enabled: boolean }).enabled).toBe(true);
   });
 
   test('unchecking effect checkbox disables it', async ({ page }) => {
@@ -347,12 +347,12 @@ test.describe('Effects Drawer', () => {
     // Enable
     await checkbox.click();
     const state1 = await getEditorState(page);
-    expect(state1.document.layers[0]!.effects.dropShadow).not.toBeNull();
+    expect((state1.document.layers[0]!.effects.dropShadow as { enabled: boolean }).enabled).toBe(true);
 
     // Disable
     await checkbox.click();
     const state2 = await getEditorState(page);
-    expect(state2.document.layers[0]!.effects.dropShadow).toBeNull();
+    expect((state2.document.layers[0]!.effects.dropShadow as { enabled: boolean }).enabled).toBe(false);
   });
 
   test('closing effects drawer via X button', async ({ page }) => {
