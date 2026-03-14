@@ -313,18 +313,19 @@ export function renderStroke(
     alpha[i] = (srcData[i * 4 + 3] ?? 0) >= 128 ? 1 : 0;
   }
 
-  // Compute distance from each opaque pixel to the nearest transparent pixel
-  // and from each transparent pixel to the nearest opaque pixel using a
-  // two-pass chamfer distance transform (Manhattan approximation is sufficient
-  // for the widths we support).
+  // Compute distance fields using a two-pass 3-4 chamfer distance transform.
   const distInside = new Float32Array(w * h);
   const distOutside = new Float32Array(w * h);
   const INF = w + h;
 
-  // Initialise
+  // 8-connected chamfer distance (3-4 weights approximate Euclidean distance)
+  const D1 = 3; // cardinal cost
+  const D2 = 4; // diagonal cost
+  const SCALE = D1; // distances are scaled by D1
+
   for (let i = 0; i < w * h; i++) {
-    distInside[i] = alpha[i] ? INF : 0;
-    distOutside[i] = alpha[i] ? 0 : INF;
+    distInside[i] = alpha[i] ? INF * D1 : 0;
+    distOutside[i] = alpha[i] ? 0 : INF * D1;
   }
 
   // Forward pass (top-left to bottom-right)
@@ -332,12 +333,20 @@ export function renderStroke(
     for (let x = 0; x < w; x++) {
       const idx = y * w + x;
       if (x > 0) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - 1]! + 1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - 1]! + 1);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - 1]! + D1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - 1]! + D1);
       }
       if (y > 0) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w]! + 1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w]! + 1);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w]! + D1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w]! + D1);
+      }
+      if (x > 0 && y > 0) {
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w - 1]! + D2);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w - 1]! + D2);
+      }
+      if (x < w - 1 && y > 0) {
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w + 1]! + D2);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w + 1]! + D2);
       }
     }
   }
@@ -347,12 +356,20 @@ export function renderStroke(
     for (let x = w - 1; x >= 0; x--) {
       const idx = y * w + x;
       if (x < w - 1) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + 1]! + 1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + 1]! + 1);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + 1]! + D1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + 1]! + D1);
       }
       if (y < h - 1) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w]! + 1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w]! + 1);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w]! + D1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w]! + D1);
+      }
+      if (x < w - 1 && y < h - 1) {
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w + 1]! + D2);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w + 1]! + D2);
+      }
+      if (x > 0 && y < h - 1) {
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w - 1]! + D2);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w - 1]! + D2);
       }
     }
   }
@@ -367,6 +384,7 @@ export function renderStroke(
   const cg = stroke.color.g;
   const cb = stroke.color.b;
   const ca = Math.round(stroke.color.a * 255);
+  const scaledW = sw * SCALE;
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -374,14 +392,11 @@ export function renderStroke(
       let isStroke = false;
 
       if (stroke.position === 'outside') {
-        // Transparent pixels within sw distance of an opaque pixel
-        isStroke = !alpha[idx] && distOutside[idx]! <= sw;
+        isStroke = !alpha[idx] && distOutside[idx]! <= scaledW;
       } else if (stroke.position === 'inside') {
-        // Opaque pixels within sw distance of a transparent pixel
-        isStroke = !!alpha[idx] && distInside[idx]! <= sw;
+        isStroke = !!alpha[idx] && distInside[idx]! <= scaledW;
       } else {
-        // Center: half inside, half outside
-        const halfW = sw / 2;
+        const halfW = scaledW / 2;
         isStroke =
           (!!alpha[idx] && distInside[idx]! <= halfW) ||
           (!alpha[idx] && distOutside[idx]! <= halfW);
