@@ -81,3 +81,15 @@
   cursor: pointer;
   white-space: nowrap;
 }
+
+.snapCheckbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+}

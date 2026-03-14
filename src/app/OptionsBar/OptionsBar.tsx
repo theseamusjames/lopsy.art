@@ -56,6 +56,9 @@ const FONT_OPTIONS = [
 
 export function OptionsBar() {
   const activeTool = useUIStore((s) => s.activeTool);
+  const showGrid = useUIStore((s) => s.showGrid);
+  const snapToGrid = useUIStore((s) => s.snapToGrid);
+  const toggleSnapToGrid = useUIStore((s) => s.toggleSnapToGrid);
   const label = TOOL_LABELS[activeTool] ?? activeTool;
 
   return (
@@ -65,6 +68,16 @@ export function OptionsBar() {
       <div className={styles.options}>
         <ToolOptions tool={activeTool} />
       </div>
+      {showGrid && (
+        <label className={styles.snapCheckbox}>
+          <input
+            type="checkbox"
+            checked={snapToGrid}
+            onChange={toggleSnapToGrid}
+          />
+          Snap
+        </label>
+      )}
     </div>
   );
 }
