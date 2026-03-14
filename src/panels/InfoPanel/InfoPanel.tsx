@@ -24,6 +24,7 @@ export function InfoPanel({ collapsed = false }: InfoPanelProps) {
   if (collapsed) {
     return (
       <div className={styles.grid}>
+        <span className={styles.section}>Layer</span>
         <span className={styles.label}>X</span>
         <span className={styles.value}>{posX}</span>
         {layerWidth != null && (
