@@ -4,6 +4,9 @@ import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
 import { ColorPanel } from '../panels/ColorPanel/ColorPanel';
 import { PanelContainer } from '../panels/PanelContainer/PanelContainer';
+import { HistoryPanel } from '../panels/HistoryPanel/HistoryPanel';
+import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
+import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
 import { MenuBar } from './MenuBar/MenuBar';
 import { OptionsBar } from './OptionsBar/OptionsBar';
 import { StatusBar } from './StatusBar/StatusBar';
@@ -198,7 +201,10 @@ export function App() {
   );
 
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
+  const [historyPanelCollapsed, setHistoryPanelCollapsed] = useState(false);
+  const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(false);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
+  const visiblePanels = useUIStore((s) => s.visiblePanels);
 
   useLayoutEffect(() => {
     const bottom = sidebarBottomRef.current;
@@ -259,37 +265,60 @@ export function App() {
             </div>
           )}
           <div className={styles.sidebar}>
-            <div className={styles.sidebarTop}>
-              <PanelContainer
-                title="Color"
-                collapsed={colorPanelCollapsed}
-                onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
-              >
-                <ColorPanel
-                  foregroundColor={foregroundColor}
-                  backgroundColor={backgroundColor}
-                  recentColors={recentColors}
-                  onForegroundChange={setForegroundColor}
-                  onBackgroundChange={setBackgroundColor}
-                  onSwap={swapColors}
-                />
-              </PanelContainer>
+            <div className={styles.sidebarScroll}>
+              {visiblePanels.has('info') && (
+                <PanelContainer
+                  title="Info"
+                  collapsed={infoPanelCollapsed}
+                  onToggle={() => setInfoPanelCollapsed(!infoPanelCollapsed)}
+                >
+                  <InfoPanel />
+                </PanelContainer>
+              )}
+              {visiblePanels.has('color') && (
+                <PanelContainer
+                  title="Color"
+                  collapsed={colorPanelCollapsed}
+                  onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
+                >
+                  <ColorPanel
+                    foregroundColor={foregroundColor}
+                    backgroundColor={backgroundColor}
+                    recentColors={recentColors}
+                    onForegroundChange={setForegroundColor}
+                    onBackgroundChange={setBackgroundColor}
+                    onSwap={swapColors}
+                  />
+                </PanelContainer>
+              )}
+              {visiblePanels.has('history') && (
+                <PanelContainer
+                  title="History"
+                  collapsed={historyPanelCollapsed}
+                  onToggle={() => setHistoryPanelCollapsed(!historyPanelCollapsed)}
+                >
+                  <HistoryPanel />
+                </PanelContainer>
+              )}
             </div>
             <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
-              <PanelContainer title="Layers">
-                <LayerPanel
-                  layers={[...layers]}
-                  activeLayerId={activeLayerId}
-                  onSelectLayer={handleSelectLayer}
-                  onToggleVisibility={toggleLayerVisibility}
-                  onAddLayer={addLayer}
-                  onRemoveLayer={removeLayer}
-                  onReorderLayer={moveLayer}
-                  onUpdateOpacity={updateLayerOpacity}
-                />
-              </PanelContainer>
+              {visiblePanels.has('layers') && (
+                <PanelContainer title="Layers">
+                  <LayerPanel
+                    layers={[...layers]}
+                    activeLayerId={activeLayerId}
+                    onSelectLayer={handleSelectLayer}
+                    onToggleVisibility={toggleLayerVisibility}
+                    onAddLayer={addLayer}
+                    onRemoveLayer={removeLayer}
+                    onReorderLayer={moveLayer}
+                    onUpdateOpacity={updateLayerOpacity}
+                  />
+                </PanelContainer>
+              )}
             </div>
           </div>
+          <PanelToolbar />
         </div>
       </div>
       <StatusBar

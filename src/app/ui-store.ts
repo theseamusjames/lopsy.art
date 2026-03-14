@@ -32,10 +32,12 @@ interface UIState {
   maskEditMode: boolean;
   showNewDocumentModal: boolean;
   showEffectsDrawer: boolean;
+  visiblePanels: Set<string>;
   gradientPreview: { start: Point; end: Point } | null;
   setMaskEditMode: (mode: boolean) => void;
   setShowNewDocumentModal: (show: boolean) => void;
   setShowEffectsDrawer: (show: boolean) => void;
+  togglePanel: (panelId: string) => void;
   setGradientPreview: (preview: { start: Point; end: Point } | null) => void;
   addRecentColor: (color: Color) => void;
   setActiveTool: (tool: ToolId) => void;
@@ -76,10 +78,21 @@ export const useUIStore = create<UIState>((set) => ({
   maskEditMode: false,
   showNewDocumentModal: false,
   showEffectsDrawer: false,
+  visiblePanels: new Set(['color', 'layers']),
   gradientPreview: null,
   setMaskEditMode: (mode) => set({ maskEditMode: mode }),
   setShowNewDocumentModal: (show) => set({ showNewDocumentModal: show }),
   setShowEffectsDrawer: (show) => set({ showEffectsDrawer: show }),
+  togglePanel: (panelId) =>
+    set((state) => {
+      const next = new Set(state.visiblePanels);
+      if (next.has(panelId)) {
+        next.delete(panelId);
+      } else {
+        next.add(panelId);
+      }
+      return { visiblePanels: next };
+    }),
   setGradientPreview: (preview) => set({ gradientPreview: preview }),
 
   addRecentColor: (color) =>
