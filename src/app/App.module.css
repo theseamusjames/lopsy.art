@@ -45,6 +45,7 @@
   position: relative;
   flex-shrink: 0;
   z-index: var(--z-panels);
+  display: flex;
 }
 
 .effectsDrawer {
@@ -70,7 +71,7 @@
   flex-direction: column;
 }
 
-.sidebarTop {
+.sidebarScroll {
   flex-shrink: 0;
   overflow-y: auto;
 }

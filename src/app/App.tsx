@@ -4,6 +4,9 @@ import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
 import { ColorPanel } from '../panels/ColorPanel/ColorPanel';
 import { PanelContainer } from '../panels/PanelContainer/PanelContainer';
+import { HistoryPanel } from '../panels/HistoryPanel/HistoryPanel';
+import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
+import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
 import { MenuBar } from './MenuBar/MenuBar';
 import { OptionsBar } from './OptionsBar/OptionsBar';
 import { StatusBar } from './StatusBar/StatusBar';
@@ -47,7 +50,8 @@ export function App() {
   const showNewDocumentModal = useUIStore((s) => s.showNewDocumentModal);
   const setShowNewDocumentModal = useUIStore((s) => s.setShowNewDocumentModal);
 
-  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
+  const cursorPos = useUIStore((s) => s.cursorPosition);
+  const setCursorPos = useUIStore((s) => s.setCursorPosition);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -76,6 +80,17 @@ export function App() {
     img.src = url;
     setShowNewDocumentModal(false);
   }, [openImageAsDocument, setShowNewDocumentModal]);
+
+  // Warn before navigating away with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (useEditorStore.getState().isDirty) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   // Canvas rendering (extracted to useCanvasRendering)
   useCanvasRendering(canvasRef, containerRef);
@@ -187,7 +202,11 @@ export function App() {
   );
 
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
+  const [historyPanelCollapsed, setHistoryPanelCollapsed] = useState(false);
+  const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(false);
+  const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
+  const visiblePanels = useUIStore((s) => s.visiblePanels);
 
   useLayoutEffect(() => {
     const bottom = sidebarBottomRef.current;
@@ -248,37 +267,66 @@ export function App() {
             </div>
           )}
           <div className={styles.sidebar}>
-            <div className={styles.sidebarTop}>
-              <PanelContainer
-                title="Color"
-                collapsed={colorPanelCollapsed}
-                onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
-              >
-                <ColorPanel
-                  foregroundColor={foregroundColor}
-                  backgroundColor={backgroundColor}
-                  recentColors={recentColors}
-                  onForegroundChange={setForegroundColor}
-                  onBackgroundChange={setBackgroundColor}
-                  onSwap={swapColors}
-                />
-              </PanelContainer>
+            <div className={styles.sidebarScroll}>
+              {visiblePanels.has('info') && (
+                <PanelContainer
+                  title="Info"
+                  collapsed={infoPanelCollapsed}
+                  onToggle={() => setInfoPanelCollapsed(!infoPanelCollapsed)}
+                >
+                  <InfoPanel collapsed={infoPanelCollapsed} />
+                </PanelContainer>
+              )}
+              {visiblePanels.has('color') && (
+                <PanelContainer
+                  title="Color"
+                  collapsed={colorPanelCollapsed}
+                  onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
+                >
+                  <ColorPanel
+                    foregroundColor={foregroundColor}
+                    backgroundColor={backgroundColor}
+                    recentColors={recentColors}
+                    onForegroundChange={setForegroundColor}
+                    onBackgroundChange={setBackgroundColor}
+                    onSwap={swapColors}
+                    collapsed={colorPanelCollapsed}
+                  />
+                </PanelContainer>
+              )}
+              {visiblePanels.has('history') && (
+                <PanelContainer
+                  title="History"
+                  collapsed={historyPanelCollapsed}
+                  onToggle={() => setHistoryPanelCollapsed(!historyPanelCollapsed)}
+                >
+                  <HistoryPanel collapsed={historyPanelCollapsed} />
+                </PanelContainer>
+              )}
             </div>
             <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
-              <PanelContainer title="Layers">
-                <LayerPanel
-                  layers={[...layers]}
-                  activeLayerId={activeLayerId}
-                  onSelectLayer={handleSelectLayer}
-                  onToggleVisibility={toggleLayerVisibility}
-                  onAddLayer={addLayer}
-                  onRemoveLayer={removeLayer}
-                  onReorderLayer={moveLayer}
-                  onUpdateOpacity={updateLayerOpacity}
-                />
-              </PanelContainer>
+              {visiblePanels.has('layers') && (
+                <PanelContainer
+                  title="Layers"
+                  collapsed={layersPanelCollapsed}
+                  onToggle={() => setLayersPanelCollapsed(!layersPanelCollapsed)}
+                >
+                  <LayerPanel
+                    layers={[...layers]}
+                    activeLayerId={activeLayerId}
+                    onSelectLayer={handleSelectLayer}
+                    onToggleVisibility={toggleLayerVisibility}
+                    onAddLayer={addLayer}
+                    onRemoveLayer={removeLayer}
+                    onReorderLayer={moveLayer}
+                    onUpdateOpacity={updateLayerOpacity}
+                    collapsed={layersPanelCollapsed}
+                  />
+                </PanelContainer>
+              )}
             </div>
           </div>
+          <PanelToolbar />
         </div>
       </div>
       <StatusBar

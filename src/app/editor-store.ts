@@ -14,6 +14,7 @@ interface SelectionData {
 interface HistorySnapshot {
   document: DocumentState;
   layerPixelData: Map<string, ImageData>;
+  label: string;
 }
 
 function cloneImageData(data: ImageData): ImageData {
@@ -64,6 +65,7 @@ interface EditorState {
   renderVersion: number;
   selection: SelectionData;
   documentReady: boolean;
+  isDirty: boolean;
   clipboard: ClipboardData | null;
 
   // Document creation
@@ -116,7 +118,8 @@ interface EditorState {
   // History
   undo: () => void;
   redo: () => void;
-  pushHistory: () => void;
+  pushHistory: (label?: string) => void;
+  markClean: () => void;
 }
 
 const DEFAULT_EFFECTS: LayerEffects = {
@@ -179,6 +182,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   renderVersion: 0,
   selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
   documentReady: false,
+  isDirty: false,
   clipboard: null,
 
   createDocument: (width: number, height: number, transparentBg: boolean) => {
@@ -229,6 +233,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       renderVersion: 0,
       selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
       documentReady: true,
+      isDirty: false,
     });
   },
 
@@ -268,12 +273,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       renderVersion: 0,
       selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
       documentReady: true,
+      isDirty: false,
     });
   },
 
   addLayer: () => {
     const state = get();
-    state.pushHistory();
+    state.pushHistory('Add Layer');
     const newLayer: RasterLayer = {
       id: generateId(),
       name: `Layer ${state.document.layers.length + 1}`,
@@ -306,7 +312,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   removeLayer: (id: string) => {
     const state = get();
     if (state.document.layers.length <= 1) return;
-    state.pushHistory();
+    state.pushHistory('Delete Layer');
 
     const layers = state.document.layers.filter((l) => l.id !== id);
     const layerOrder = state.document.layerOrder.filter((lid) => lid !== id);
@@ -354,7 +360,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   moveLayer: (fromIndex: number, toIndex: number) => {
     const state = get();
-    state.pushHistory();
+    state.pushHistory('Reorder Layer');
     const layers = [...state.document.layers];
     const order = [...state.document.layerOrder];
     const [movedLayer] = layers.splice(fromIndex, 1);
@@ -394,7 +400,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
     if (!bounds) return;
 
-    state.pushHistory();
+    state.pushHistory('Align Layer');
     const pos = computeAlign(edge, bounds, state.document.width, state.document.height, layer.x, layer.y);
     set((s) => ({
       document: {
@@ -413,7 +419,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!activeId) return;
     const layer = state.document.layers.find((l) => l.id === activeId);
     if (!layer) return;
-    state.pushHistory();
+    state.pushHistory('Duplicate Layer');
     const newId = generateId();
     const newLayer = { ...layer, id: newId, name: `${layer.name} copy` } as Layer;
     const pixelData = new Map(state.layerPixelData);
@@ -445,7 +451,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (orderIdx <= 0) return; // No layer below
     const belowId = state.document.layerOrder[orderIdx - 1];
     if (!belowId) return;
-    state.pushHistory();
+    state.pushHistory('Merge Down');
 
     const topData = state.getOrCreateLayerPixelData(activeId);
     const bottomData = state.getOrCreateLayerPixelData(belowId);
@@ -483,7 +489,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   flattenImage: () => {
     const state = get();
     if (state.document.layers.length <= 1) return;
-    state.pushHistory();
+    state.pushHistory('Flatten Image');
 
     const { width, height, backgroundColor } = state.document;
     const result = new ImageData(width, height);
@@ -675,7 +681,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     state.copy();
 
     // Then clear the selected region
-    state.pushHistory();
+    state.pushHistory('Cut');
     const layerData = state.getOrCreateLayerPixelData(activeId);
     const layer = state.document.layers.find((l) => l.id === activeId);
     if (!layer) return;
@@ -706,7 +712,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const state = get();
     const clip = state.clipboard;
     if (!clip) return;
-    state.pushHistory();
+    state.pushHistory('Paste');
 
     const newId = generateId();
     const newLayer: RasterLayer = {
@@ -749,7 +755,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   pasteImageData: (imageData: ImageData) => {
     const state = get();
-    state.pushHistory();
+    state.pushHistory('Paste');
 
     const newId = generateId();
     const newLayer: RasterLayer = {
@@ -820,7 +826,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   cropCanvas: (rect: Rect) => {
     const state = get();
-    state.pushHistory();
+    state.pushHistory('Crop Canvas');
     const cx = Math.round(rect.x);
     const cy = Math.round(rect.y);
     const cw = Math.round(rect.width);
@@ -870,7 +876,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => {
     const state = get();
-    state.pushHistory();
+    state.pushHistory('Resize Canvas');
     const oldW = state.document.width;
     const oldH = state.document.height;
     const offsetX = Math.round((newWidth - oldW) * anchorX);
@@ -921,7 +927,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   resizeImage: (newWidth: number, newHeight: number) => {
     const state = get();
-    state.pushHistory();
+    state.pushHistory('Resize Image');
     const oldW = state.document.width;
     const oldH = state.document.height;
 
@@ -1005,6 +1011,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const currentSnapshot: HistorySnapshot = {
       document: state.document,
       layerPixelData: clonePixelDataMapFull(state.layerPixelData),
+      label: previous.label,
     };
     set({
       undoStack: state.undoStack.slice(0, -1),
@@ -1024,6 +1031,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const currentSnapshot: HistorySnapshot = {
       document: state.document,
       layerPixelData: clonePixelDataMapFull(state.layerPixelData),
+      label: next.label,
     };
     set({
       redoStack: state.redoStack.slice(0, -1),
@@ -1035,17 +1043,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  pushHistory: () => {
+  pushHistory: (label = 'Edit') => {
     const state = get();
     const prevSnapshot = state.undoStack[state.undoStack.length - 1];
     const snapshot: HistorySnapshot = {
       document: state.document,
       layerPixelData: clonePixelDataMap(state.layerPixelData, state.dirtyLayerIds, prevSnapshot),
+      label,
     };
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],
       redoStack: [],
       dirtyLayerIds: new Set(),
+      isDirty: true,
     });
+  },
+
+  markClean: () => {
+    set({ isDirty: false });
   },
 }));

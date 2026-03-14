@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowUpDown } from 'lucide-react';
 import { ColorSwatch } from '../../components/ColorSwatch/ColorSwatch';
 import { ColorPicker } from '../../components/ColorPicker/ColorPicker';
 import { Slider } from '../../components/Slider/Slider';
@@ -14,6 +14,7 @@ interface ColorPanelProps {
   onForegroundChange: (color: Color) => void;
   onBackgroundChange: (color: Color) => void;
   onSwap: () => void;
+  collapsed?: boolean;
 }
 
 function colorToHex(c: Color): string {
@@ -40,6 +41,7 @@ export function ColorPanel({
   onForegroundChange,
   onBackgroundChange,
   onSwap,
+  collapsed = false,
 }: ColorPanelProps) {
   const [hexInput, setHexInput] = useState(colorToHex(foregroundColor));
   const [editingBg, setEditingBg] = useState(false);
@@ -94,23 +96,29 @@ export function ColorPanel({
     <div className={styles.panel}>
       <div className={styles.topRow}>
         <div className={styles.swatches}>
-          <ColorSwatch
-            color={foregroundColor}
-            size="lg"
-            isActive={!editingBg}
-            onClick={() => setEditingBg(false)}
-          />
+          <div className={styles.colorStack}>
+            <div className={styles.foreground}>
+              <ColorSwatch
+                color={foregroundColor}
+                size="md"
+                isActive={!editingBg}
+                onClick={() => setEditingBg(false)}
+              />
+            </div>
+            <div className={styles.background}>
+              <ColorSwatch
+                color={backgroundColor}
+                size="sm"
+                isActive={editingBg}
+                onClick={() => setEditingBg(true)}
+              />
+            </div>
+          </div>
           <IconButton
-            icon={<ArrowLeftRight size={14} />}
+            icon={<ArrowUpDown size={14} />}
             label="Swap Colors (X)"
             onClick={onSwap}
             size="sm"
-          />
-          <ColorSwatch
-            color={backgroundColor}
-            size="lg"
-            isActive={editingBg}
-            onClick={() => setEditingBg(true)}
           />
         </div>
         {recentColors.length > 0 && (
@@ -126,8 +134,8 @@ export function ColorPanel({
           </div>
         )}
       </div>
-      <ColorPicker color={activeColor} onChange={handlePickerChange} />
-      <div className={styles.hexRow}>
+      {!collapsed && <ColorPicker color={activeColor} onChange={handlePickerChange} />}
+      {!collapsed && <div className={styles.hexRow}>
         <span className={styles.hexLabel}>#</span>
         <input
           className={styles.hexInput}
@@ -137,8 +145,8 @@ export function ColorPanel({
           onKeyDown={handleHexKeyDown}
           maxLength={6}
         />
-      </div>
-      <div className={styles.sliders}>
+      </div>}
+      {!collapsed && <div className={styles.sliders}>
         <Slider
           label="R"
           value={activeColor.r}
@@ -168,7 +176,7 @@ export function ColorPanel({
           onChange={(v) => onActiveChange({ ...activeColor, a: v / 100 })}
           showValue
         />
-      </div>
+      </div>}
     </div>
   );
 }

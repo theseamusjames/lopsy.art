@@ -20,6 +20,8 @@
   padding: 0 var(--space-3);
   background: none;
   border: none;
+  font-family: var(--font-ui);
+  font-weight: var(--font-weight-ui);
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
   cursor: pointer;
@@ -55,6 +57,8 @@
   padding: var(--space-1) var(--space-3);
   background: none;
   border: none;
+  font-family: var(--font-ui);
+  font-weight: var(--font-weight-ui);
   font-size: var(--font-size-sm);
   color: var(--color-text-primary);
   cursor: pointer;
@@ -90,4 +94,14 @@
   height: 1px;
   margin: var(--space-1) 0;
   background: var(--color-border);
+}
+
+.logo {
+  margin-left: auto;
+  padding: 0 var(--space-3);
+  font-family: 'Jersey 10', cursive;
+  font-size: 22px;
+  color: var(--color-text-secondary);
+  line-height: var(--header-height);
+  letter-spacing: 0.05em;
 }

@@ -16,6 +16,7 @@ body,
 
 body {
   font-family: var(--font-ui);
+  font-weight: var(--font-weight-ui);
   font-size: var(--font-size-md);
   color: var(--color-text-primary);
   background: var(--color-bg-primary);

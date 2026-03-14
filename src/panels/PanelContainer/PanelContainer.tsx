@@ -23,7 +23,7 @@ export function PanelContainer({
         </span>
         <span className={styles.title}>{title}</span>
       </button>
-      {!collapsed && <div className={styles.content}>{children}</div>}
+      <div className={styles.content}>{children}</div>
     </div>
   );
 }
