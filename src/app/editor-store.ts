@@ -700,6 +700,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   removeLayerMask: (id: string) => {
     const state = get();
+    const layer = state.document.layers.find((l) => l.id === id);
+    if (!layer?.mask) return;
     state.pushHistory('Remove Mask');
     set({
       document: {
@@ -714,6 +716,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   toggleLayerMask: (id: string) => {
     const state = get();
+    const layer = state.document.layers.find((l) => l.id === id);
+    if (!layer?.mask) return;
     state.pushHistory('Toggle Mask');
     set({
       document: {

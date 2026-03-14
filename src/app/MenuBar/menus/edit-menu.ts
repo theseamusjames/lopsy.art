@@ -8,6 +8,9 @@ export function fillSelection(): void {
   const state = useEditorStore.getState();
   const activeId = state.document.activeLayerId;
   if (!activeId) return;
+  const layer = state.document.layers.find((l) => l.id === activeId);
+  if (!layer) return;
+
   state.pushHistory();
   const imageData = state.getOrCreateLayerPixelData(activeId);
   const buf = PixelBuffer.fromImageData(imageData);
@@ -15,8 +18,6 @@ export function fillSelection(): void {
   const sel = state.selection;
 
   if (sel.active && sel.mask) {
-    const layer = state.document.layers.find((l) => l.id === activeId);
-    if (!layer) return;
     for (let y = 0; y < sel.maskHeight; y++) {
       for (let x = 0; x < sel.maskWidth; x++) {
         if (getSelectionMaskValue(sel, x, y) > 0) {
