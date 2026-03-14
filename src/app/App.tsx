@@ -128,7 +128,7 @@ export function App() {
   );
 
   // Canvas interaction (drawing tools)
-  const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform } = useCanvasInteraction(screenToCanvas, containerRef);
+  const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove } = useCanvasInteraction(screenToCanvas, containerRef);
 
   // Cursor management
   const { updateHoveredHandle } = useCanvasCursor(containerRef, isPanning, isSpaceDown);
@@ -139,6 +139,7 @@ export function App() {
     setIsSpaceDown,
     setIsPanning,
     clearPersistentTransform,
+    nudgeMove,
   });
 
   const handleSelectLayer = useCallback((id: string) => {

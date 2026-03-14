@@ -108,6 +108,17 @@ export function getContentBounds(
   };
 }
 
+export function snapPositionToGrid(
+  x: number,
+  y: number,
+  gridSize: number,
+): { x: number; y: number } {
+  return {
+    x: Math.round(x / gridSize) * gridSize,
+    y: Math.round(y / gridSize) * gridSize,
+  };
+}
+
 export function snapToGuide(
   position: number,
   guides: number[],

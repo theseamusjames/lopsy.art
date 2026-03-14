@@ -9,6 +9,7 @@ interface KeyboardShortcutDeps {
   setIsSpaceDown: (v: boolean) => void;
   setIsPanning: (v: boolean) => void;
   clearPersistentTransform: () => void;
+  nudgeMove: (dx: number, dy: number) => void;
 }
 
 export function useKeyboardShortcuts({
@@ -16,6 +17,7 @@ export function useKeyboardShortcuts({
   setIsSpaceDown,
   setIsPanning,
   clearPersistentTransform,
+  nudgeMove,
 }: KeyboardShortcutDeps): void {
   const setActiveTool = useUIStore((s) => s.setActiveTool);
   const swapColors = useUIStore((s) => s.swapColors);
@@ -115,6 +117,22 @@ export function useKeyboardShortcuts({
         const handler = toolMap[e.key.toLowerCase()];
         if (handler) {
           handler();
+          return;
+        }
+
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          const tool = useUIStore.getState().activeTool;
+          if (tool !== 'move') return;
+          const ui = useUIStore.getState();
+          const amount = ui.showGrid && ui.snapToGrid ? ui.gridSize : 1;
+          let dx = 0;
+          let dy = 0;
+          if (e.key === 'ArrowUp') dy = -amount;
+          else if (e.key === 'ArrowDown') dy = amount;
+          else if (e.key === 'ArrowLeft') dx = -amount;
+          else if (e.key === 'ArrowRight') dx = amount;
+          nudgeMove(dx, dy);
           return;
         }
 
@@ -223,5 +241,5 @@ export function useKeyboardShortcuts({
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [setActiveTool, swapColors, resetColors, setZoom, setPan, viewport.zoom, docWidth, docHeight, canvasRef, setIsSpaceDown, setIsPanning, clearPersistentTransform]);
+  }, [setActiveTool, swapColors, resetColors, setZoom, setPan, viewport.zoom, docWidth, docHeight, canvasRef, setIsSpaceDown, setIsPanning, clearPersistentTransform, nudgeMove]);
 }
