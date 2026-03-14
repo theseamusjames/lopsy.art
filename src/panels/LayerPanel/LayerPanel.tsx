@@ -17,6 +17,7 @@ interface LayerPanelProps {
   onRemoveLayer: (id: string) => void;
   onReorderLayer: (fromIndex: number, toIndex: number) => void;
   onUpdateOpacity: (id: string, opacity: number) => void;
+  collapsed?: boolean;
 }
 
 function LayerThumbnail({ layer }: { layer: Layer }) {
@@ -102,6 +103,7 @@ export function LayerPanel({
   onRemoveLayer,
   onReorderLayer,
   onUpdateOpacity,
+  collapsed = false,
 }: LayerPanelProps) {
   const addLayerMask = useEditorStore((s) => s.addLayerMask);
   const removeLayerMask = useEditorStore((s) => s.removeLayerMask);
@@ -190,7 +192,7 @@ export function LayerPanel({
     <div className={styles.panel}>
       <div
         ref={listRef}
-        className={styles.list}
+        className={collapsed ? styles.listCollapsed : styles.list}
       >
         {reversedLayers.map((layer, ri) => (
           <div key={layer.id} className={styles.itemWrapper}>

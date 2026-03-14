@@ -1,13 +1,24 @@
+import { useEffect, useRef } from 'react';
 import { useEditorStore } from '../../app/editor-store';
 import styles from './HistoryPanel.module.css';
 
-export function HistoryPanel() {
+interface HistoryPanelProps {
+  collapsed?: boolean;
+}
+
+export function HistoryPanel({ collapsed = false }: HistoryPanelProps) {
+  const listRef = useRef<HTMLDivElement>(null);
   const undoStack = useEditorStore((s) => s.undoStack);
   const redoStack = useEditorStore((s) => s.redoStack);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
 
   const currentIndex = undoStack.length;
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [undoStack.length]);
 
   const handleClick = (index: number) => {
     const diff = index - currentIndex;
@@ -23,7 +34,7 @@ export function HistoryPanel() {
   }
 
   return (
-    <div className={styles.list}>
+    <div className={collapsed ? styles.listCollapsed : styles.list} ref={listRef}>
       <button
         className={`${styles.entry} ${currentIndex === 0 ? styles.entryActive : ''}`}
         onClick={() => handleClick(0)}

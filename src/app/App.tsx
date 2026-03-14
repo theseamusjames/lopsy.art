@@ -50,7 +50,8 @@ export function App() {
   const showNewDocumentModal = useUIStore((s) => s.showNewDocumentModal);
   const setShowNewDocumentModal = useUIStore((s) => s.setShowNewDocumentModal);
 
-  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
+  const cursorPos = useUIStore((s) => s.cursorPosition);
+  const setCursorPos = useUIStore((s) => s.setCursorPosition);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -203,6 +204,7 @@ export function App() {
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
   const [historyPanelCollapsed, setHistoryPanelCollapsed] = useState(false);
   const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(false);
+  const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const visiblePanels = useUIStore((s) => s.visiblePanels);
 
@@ -272,7 +274,7 @@ export function App() {
                   collapsed={infoPanelCollapsed}
                   onToggle={() => setInfoPanelCollapsed(!infoPanelCollapsed)}
                 >
-                  <InfoPanel />
+                  <InfoPanel collapsed={infoPanelCollapsed} />
                 </PanelContainer>
               )}
               {visiblePanels.has('color') && (
@@ -288,6 +290,7 @@ export function App() {
                     onForegroundChange={setForegroundColor}
                     onBackgroundChange={setBackgroundColor}
                     onSwap={swapColors}
+                    collapsed={colorPanelCollapsed}
                   />
                 </PanelContainer>
               )}
@@ -297,13 +300,17 @@ export function App() {
                   collapsed={historyPanelCollapsed}
                   onToggle={() => setHistoryPanelCollapsed(!historyPanelCollapsed)}
                 >
-                  <HistoryPanel />
+                  <HistoryPanel collapsed={historyPanelCollapsed} />
                 </PanelContainer>
               )}
             </div>
             <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
               {visiblePanels.has('layers') && (
-                <PanelContainer title="Layers">
+                <PanelContainer
+                  title="Layers"
+                  collapsed={layersPanelCollapsed}
+                  onToggle={() => setLayersPanelCollapsed(!layersPanelCollapsed)}
+                >
                   <LayerPanel
                     layers={[...layers]}
                     activeLayerId={activeLayerId}
@@ -313,6 +320,7 @@ export function App() {
                     onRemoveLayer={removeLayer}
                     onReorderLayer={moveLayer}
                     onUpdateOpacity={updateLayerOpacity}
+                    collapsed={layersPanelCollapsed}
                   />
                 </PanelContainer>
               )}

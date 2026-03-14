@@ -12,10 +12,10 @@ interface PanelDef {
 }
 
 const panels: PanelDef[] = [
+  { id: 'info', icon: <Info size={ICON_SIZE} />, label: 'Info' },
   { id: 'color', icon: <Palette size={ICON_SIZE} />, label: 'Color' },
   { id: 'layers', icon: <Layers size={ICON_SIZE} />, label: 'Layers' },
   { id: 'history', icon: <History size={ICON_SIZE} />, label: 'History' },
-  { id: 'info', icon: <Info size={ICON_SIZE} />, label: 'Info' },
 ];
 
 export function PanelToolbar() {
