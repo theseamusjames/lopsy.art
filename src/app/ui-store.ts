@@ -33,7 +33,9 @@ interface UIState {
   showNewDocumentModal: boolean;
   showEffectsDrawer: boolean;
   visiblePanels: Set<string>;
+  cursorPosition: Point;
   gradientPreview: { start: Point; end: Point } | null;
+  setCursorPosition: (pos: Point) => void;
   setMaskEditMode: (mode: boolean) => void;
   setShowNewDocumentModal: (show: boolean) => void;
   setShowEffectsDrawer: (show: boolean) => void;
@@ -79,7 +81,9 @@ export const useUIStore = create<UIState>((set) => ({
   showNewDocumentModal: false,
   showEffectsDrawer: false,
   visiblePanels: new Set(['color', 'layers']),
+  cursorPosition: { x: 0, y: 0 },
   gradientPreview: null,
+  setCursorPosition: (pos) => set({ cursorPosition: pos }),
   setMaskEditMode: (mode) => set({ maskEditMode: mode }),
   setShowNewDocumentModal: (show) => set({ showNewDocumentModal: show }),
   setShowEffectsDrawer: (show) => set({ showEffectsDrawer: show }),
