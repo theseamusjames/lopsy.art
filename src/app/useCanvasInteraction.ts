@@ -91,6 +91,7 @@ function rasterizePathToLayer(
   const imageData = editorState.getOrCreateLayerPixelData(layerId);
   const buf = PixelBuffer.fromImageData(imageData);
   const color = useUIStore.getState().foregroundColor;
+  useUIStore.getState().addRecentColor(color);
   const strokeWidth = useToolSettingsStore.getState().pathStrokeWidth;
 
   rasterizePath(buf, anchors, closed, color, strokeWidth);
@@ -536,9 +537,11 @@ export function useCanvasInteraction(
             const opacity = toolSettings.brushOpacity / 100;
             const stamp = generateBrushStamp(size, hardness);
             const color = useUIStore.getState().foregroundColor;
+            useUIStore.getState().addRecentColor(color);
             applyBrushDab(paintSurface, layerPos, stamp, size, color, opacity, 1);
           } else if (activeTool === 'pencil') {
             const color = useUIStore.getState().foregroundColor;
+            useUIStore.getState().addRecentColor(color);
             const size = toolSettings.pencilSize;
             drawPencilLine(paintSurface, layerPos, layerPos, color, size);
           } else {
@@ -556,6 +559,7 @@ export function useCanvasInteraction(
         case 'fill': {
           editorState.pushHistory();
           const color = useUIStore.getState().foregroundColor;
+          useUIStore.getState().addRecentColor(color);
           const tolerance = toolSettings.fillTolerance;
           const contiguous = toolSettings.fillContiguous;
           const pixels = floodFill(pixelBuffer, layerPos.x, layerPos.y, color, tolerance, contiguous);
@@ -667,6 +671,7 @@ export function useCanvasInteraction(
           const fontWeight = toolSettings.textFontWeight;
           const fontStyle = toolSettings.textFontStyle;
           const textColor = useUIStore.getState().foregroundColor;
+          useUIStore.getState().addRecentColor(textColor);
           renderText(paintSurface, layerPos, textContent, fontSize, fontFamily, textColor, fontWeight, fontStyle);
           editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
           break;
@@ -744,6 +749,10 @@ export function useCanvasInteraction(
         case 'gradient':
         case 'shape': {
           editorState.pushHistory();
+          useUIStore.getState().addRecentColor(useUIStore.getState().foregroundColor);
+          if (activeTool === 'gradient') {
+            useUIStore.getState().addRecentColor(useUIStore.getState().backgroundColor);
+          }
           stateRef.current = {
             drawing: true,
             lastPoint: layerPos,

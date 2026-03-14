@@ -24,6 +24,7 @@ export function App() {
   const setForegroundColor = useUIStore((s) => s.setForegroundColor);
   const setBackgroundColor = useUIStore((s) => s.setBackgroundColor);
   const swapColors = useUIStore((s) => s.swapColors);
+  const recentColors = useUIStore((s) => s.recentColors);
 
   const doc = useEditorStore((s) => s.document);
   const viewport = useEditorStore((s) => s.viewport);
@@ -184,7 +185,7 @@ export function App() {
   );
 
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
-  const [effectsPanelCollapsed, setEffectsPanelCollapsed] = useState(false);
+  const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
 
   const showModal = !documentReady || showNewDocumentModal;
 
@@ -226,42 +227,43 @@ export function App() {
         >
           <canvas ref={canvasRef} />
         </div>
-        <div className={styles.sidebar}>
-          <div className={styles.sidebarTop}>
-            <PanelContainer
-              title="Color"
-              collapsed={colorPanelCollapsed}
-              onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
-            >
-              <ColorPanel
-                foregroundColor={foregroundColor}
-                backgroundColor={backgroundColor}
-                onForegroundChange={setForegroundColor}
-                onBackgroundChange={setBackgroundColor}
-                onSwap={swapColors}
-              />
-            </PanelContainer>
-          </div>
-          <div className={styles.sidebarBottom}>
-            <PanelContainer title="Layers">
-              <LayerPanel
-                layers={[...layers]}
-                activeLayerId={activeLayerId}
-                onSelectLayer={handleSelectLayer}
-                onToggleVisibility={toggleLayerVisibility}
-                onAddLayer={addLayer}
-                onRemoveLayer={removeLayer}
-                onReorderLayer={moveLayer}
-                onUpdateOpacity={updateLayerOpacity}
-              />
-            </PanelContainer>
-            <PanelContainer
-              title="Layer Effects"
-              collapsed={effectsPanelCollapsed}
-              onToggle={() => setEffectsPanelCollapsed(!effectsPanelCollapsed)}
-            >
+        <div className={styles.sidebarArea}>
+          {showEffectsDrawer && (
+            <div className={styles.effectsDrawer}>
               <LayerEffectsPanel />
-            </PanelContainer>
+            </div>
+          )}
+          <div className={styles.sidebar}>
+            <div className={styles.sidebarTop}>
+              <PanelContainer
+                title="Color"
+                collapsed={colorPanelCollapsed}
+                onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
+              >
+                <ColorPanel
+                  foregroundColor={foregroundColor}
+                  backgroundColor={backgroundColor}
+                  recentColors={recentColors}
+                  onForegroundChange={setForegroundColor}
+                  onBackgroundChange={setBackgroundColor}
+                  onSwap={swapColors}
+                />
+              </PanelContainer>
+            </div>
+            <div className={styles.sidebarBottom}>
+              <PanelContainer title="Layers">
+                <LayerPanel
+                  layers={[...layers]}
+                  activeLayerId={activeLayerId}
+                  onSelectLayer={handleSelectLayer}
+                  onToggleVisibility={toggleLayerVisibility}
+                  onAddLayer={addLayer}
+                  onRemoveLayer={removeLayer}
+                  onReorderLayer={moveLayer}
+                  onUpdateOpacity={updateLayerOpacity}
+                />
+              </PanelContainer>
+            </div>
           </div>
         </div>
       </div>

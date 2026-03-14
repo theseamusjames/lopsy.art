@@ -10,6 +10,7 @@ import styles from './ColorPanel.module.css';
 interface ColorPanelProps {
   foregroundColor: Color;
   backgroundColor: Color;
+  recentColors: readonly Color[];
   onForegroundChange: (color: Color) => void;
   onBackgroundChange: (color: Color) => void;
   onSwap: () => void;
@@ -35,6 +36,7 @@ function hexToColor(hex: string): Color | null {
 export function ColorPanel({
   foregroundColor,
   backgroundColor,
+  recentColors,
   onForegroundChange,
   onBackgroundChange,
   onSwap,
@@ -80,27 +82,49 @@ export function ColorPanel({
     [activeColor, onActiveChange],
   );
 
+  const handleRecentClick = useCallback(
+    (color: Color) => {
+      onActiveChange(color);
+      setHexInput(colorToHex(color));
+    },
+    [onActiveChange],
+  );
+
   return (
     <div className={styles.panel}>
-      <div className={styles.swatches}>
-        <ColorSwatch
-          color={foregroundColor}
-          size="lg"
-          isActive={!editingBg}
-          onClick={() => setEditingBg(false)}
-        />
-        <IconButton
-          icon={<ArrowLeftRight size={14} />}
-          label="Swap Colors (X)"
-          onClick={onSwap}
-          size="sm"
-        />
-        <ColorSwatch
-          color={backgroundColor}
-          size="lg"
-          isActive={editingBg}
-          onClick={() => setEditingBg(true)}
-        />
+      <div className={styles.topRow}>
+        <div className={styles.swatches}>
+          <ColorSwatch
+            color={foregroundColor}
+            size="lg"
+            isActive={!editingBg}
+            onClick={() => setEditingBg(false)}
+          />
+          <IconButton
+            icon={<ArrowLeftRight size={14} />}
+            label="Swap Colors (X)"
+            onClick={onSwap}
+            size="sm"
+          />
+          <ColorSwatch
+            color={backgroundColor}
+            size="lg"
+            isActive={editingBg}
+            onClick={() => setEditingBg(true)}
+          />
+        </div>
+        {recentColors.length > 0 && (
+          <div className={styles.recentSwatches} data-testid="recent-swatches">
+            {recentColors.map((color, i) => (
+              <ColorSwatch
+                key={i}
+                color={color}
+                size="sm"
+                onClick={() => handleRecentClick(color)}
+              />
+            ))}
+          </div>
+        )}
       </div>
       <ColorPicker color={activeColor} onChange={handlePickerChange} />
       <div className={styles.hexRow}>

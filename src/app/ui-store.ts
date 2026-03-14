@@ -8,10 +8,17 @@ export interface PathAnchor {
   handleOut: Point | null;
 }
 
+const MAX_RECENT_COLORS = 14;
+
+function colorsEqual(a: Color, b: Color): boolean {
+  return a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a;
+}
+
 interface UIState {
   activeTool: ToolId;
   foregroundColor: Color;
   backgroundColor: Color;
+  recentColors: readonly Color[];
   showGrid: boolean;
   showRulers: boolean;
   showGuides: boolean;
@@ -24,10 +31,13 @@ interface UIState {
   activeTransformHandle: TransformHandle | null;
   maskEditMode: boolean;
   showNewDocumentModal: boolean;
+  showEffectsDrawer: boolean;
   gradientPreview: { start: Point; end: Point } | null;
   setMaskEditMode: (mode: boolean) => void;
   setShowNewDocumentModal: (show: boolean) => void;
+  setShowEffectsDrawer: (show: boolean) => void;
   setGradientPreview: (preview: { start: Point; end: Point } | null) => void;
+  addRecentColor: (color: Color) => void;
   setActiveTool: (tool: ToolId) => void;
   setForegroundColor: (color: Color) => void;
   setBackgroundColor: (color: Color) => void;
@@ -52,6 +62,7 @@ export const useUIStore = create<UIState>((set) => ({
   activeTool: 'move',
   foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
   backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+  recentColors: [],
   showGrid: false,
   showRulers: true,
   showGuides: true,
@@ -64,10 +75,18 @@ export const useUIStore = create<UIState>((set) => ({
   activeTransformHandle: null,
   maskEditMode: false,
   showNewDocumentModal: false,
+  showEffectsDrawer: false,
   gradientPreview: null,
   setMaskEditMode: (mode) => set({ maskEditMode: mode }),
   setShowNewDocumentModal: (show) => set({ showNewDocumentModal: show }),
+  setShowEffectsDrawer: (show) => set({ showEffectsDrawer: show }),
   setGradientPreview: (preview) => set({ gradientPreview: preview }),
+
+  addRecentColor: (color) =>
+    set((state) => {
+      const filtered = state.recentColors.filter((c) => !colorsEqual(c, color));
+      return { recentColors: [color, ...filtered].slice(0, MAX_RECENT_COLORS) };
+    }),
 
   setActiveTool: (tool) => {
     // Clear path when switching away from path tool
