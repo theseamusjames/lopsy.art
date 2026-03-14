@@ -118,6 +118,7 @@ const DEFAULT_EFFECTS: LayerEffects = {
   stroke: null,
   dropShadow: null,
   outerGlow: null,
+  innerGlow: null,
 };
 
 function generateId(): string {

@@ -121,6 +121,7 @@ export interface LayerEffects {
   readonly stroke: StrokeEffect | null;
   readonly dropShadow: ShadowEffect | null;
   readonly outerGlow: GlowEffect | null;
+  readonly innerGlow: GlowEffect | null;
 }
 
 export interface StrokeEffect {
