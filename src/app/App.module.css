@@ -29,8 +29,40 @@
   cursor: crosshair;
 }
 
+.canvasNone {
+  cursor: none;
+}
+
+.canvasMove {
+  cursor: move;
+}
+
+.canvasText {
+  cursor: text;
+}
+
 .canvasGrab {
   cursor: grab;
+}
+
+.canvasPointer {
+  cursor: pointer;
+}
+
+.canvasNwseResize {
+  cursor: nwse-resize;
+}
+
+.canvasNsResize {
+  cursor: ns-resize;
+}
+
+.canvasNeswResize {
+  cursor: nesw-resize;
+}
+
+.canvasEwResize {
+  cursor: ew-resize;
 }
 
 .canvas canvas {

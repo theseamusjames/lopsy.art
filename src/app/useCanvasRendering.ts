@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useEditorStore } from './editor-store';
 import { useUIStore } from './ui-store';
+import { useToolSettingsStore } from './tool-settings-store';
 import { getActiveMaskEditBuffer } from './useCanvasInteraction';
+import { getBrushCursorInfo } from './useCanvasCursor';
 import { getHandlePositions } from '../tools/transform/transform';
 import type { TransformHandle, TransformState } from '../tools/transform/transform';
 import { traceSelectionContours } from '../selection/selection';
@@ -24,6 +26,12 @@ export function useCanvasRendering(
   const transform = useUIStore((s) => s.transform);
   const gradientPreview = useUIStore((s) => s.gradientPreview);
   const maskEditMode = useUIStore((s) => s.maskEditMode);
+  const activeTool = useUIStore((s) => s.activeTool);
+  const cursorPosition = useUIStore((s) => s.cursorPosition);
+  const brushSize = useToolSettingsStore((s) => s.brushSize);
+  const pencilSize = useToolSettingsStore((s) => s.pencilSize);
+  const eraserSize = useToolSettingsStore((s) => s.eraserSize);
+  const stampSize = useToolSettingsStore((s) => s.stampSize);
 
   const [antPhase, setAntPhase] = useState(0);
   const antFrameRef = useRef(0);
@@ -110,9 +118,14 @@ export function useCanvasRendering(
     renderCropPreview(ctx, cropRect, doc.width, doc.height, viewport.zoom);
     renderGradientPreview(ctx, gradientPreview, viewport.zoom);
 
+    const brushCursor = getBrushCursorInfo(activeTool);
+    if (brushCursor !== null) {
+      renderBrushCursor(ctx, cursorPosition, brushCursor.size, viewport.zoom, brushCursor.shape);
+    }
+
     ctx.restore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, viewport, layers, renderVersion, selection, pathAnchors, lassoPoints, cropRect, transform, maskEditMode, activeLayerId, gradientPreview, antPhase]);
+  }, [doc, viewport, layers, renderVersion, selection, pathAnchors, lassoPoints, cropRect, transform, maskEditMode, activeLayerId, gradientPreview, antPhase, activeTool, cursorPosition, brushSize, pencilSize, eraserSize, stampSize]);
 }
 
 // --- Helper render functions ---
@@ -708,6 +721,64 @@ function renderGradientPreview(
     ctx.fill();
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 1 / zoom;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function renderBrushCursor(
+  ctx: CanvasRenderingContext2D,
+  position: Point,
+  size: number,
+  zoom: number,
+  shape: 'circle' | 'square',
+): void {
+  const half = size / 2;
+
+  ctx.save();
+
+  // Draw a crosshair at center for very small brushes
+  if (size * zoom < 4) {
+    const crossSize = 5 / zoom;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(position.x - crossSize, position.y);
+    ctx.lineTo(position.x + crossSize, position.y);
+    ctx.moveTo(position.x, position.y - crossSize);
+    ctx.lineTo(position.x, position.y + crossSize);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 0.75 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(position.x - crossSize, position.y);
+    ctx.lineTo(position.x + crossSize, position.y);
+    ctx.moveTo(position.x, position.y - crossSize);
+    ctx.lineTo(position.x, position.y + crossSize);
+    ctx.stroke();
+  } else if (shape === 'square') {
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.strokeRect(position.x - half, position.y - half, size, size);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 0.75 / zoom;
+    ctx.strokeRect(position.x - half, position.y - half, size, size);
+  } else {
+    // Outer dark ring
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.beginPath();
+    ctx.arc(position.x, position.y, half, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Inner light ring
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 0.75 / zoom;
+    ctx.beginPath();
+    ctx.arc(position.x, position.y, half, 0, Math.PI * 2);
     ctx.stroke();
   }
 

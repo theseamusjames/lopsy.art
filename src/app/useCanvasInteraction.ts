@@ -164,6 +164,9 @@ export function useCanvasInteraction(
   const stampSourceRef = useRef<Point | null>(null);
   const stampOffsetRef = useRef<Point | null>(null);
 
+  // Last paint endpoint for shift-click line drawing (layer-local coords)
+  const lastPaintPointRef = useRef<{ point: Point; layerId: string } | null>(null);
+
   const handleToolDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
@@ -472,6 +475,12 @@ export function useCanvasInteraction(
         case 'brush':
         case 'pencil':
         case 'eraser': {
+          // Shift+click: draw a line from the last paint point to here
+          const shiftLine = e.shiftKey
+            && lastPaintPointRef.current
+            && lastPaintPointRef.current.layerId === activeLayerId;
+          const lineFrom = shiftLine ? lastPaintPointRef.current!.point : layerPos;
+
           const maskEditMode = useUIStore.getState().maskEditMode;
           if (maskEditMode && activeLayer.mask) {
             editorState.pushHistory();
@@ -500,16 +509,32 @@ export function useCanvasInteraction(
               const hardness = toolSettings.brushHardness / 100;
               const opacity = toolSettings.brushOpacity / 100;
               const stamp = generateBrushStamp(size, hardness);
-              applyBrushDab(maskBuf, layerPos, stamp, size, maskColor, opacity, 1);
+              if (shiftLine) {
+                const spacing = Math.max(1, size * 0.25);
+                const pts = interpolatePoints(lineFrom, layerPos, spacing);
+                for (const pt of pts) {
+                  applyBrushDab(maskBuf, pt, stamp, size, maskColor, opacity, 1);
+                }
+              } else {
+                applyBrushDab(maskBuf, layerPos, stamp, size, maskColor, opacity, 1);
+              }
             } else if (activeTool === 'pencil') {
               const size = toolSettings.pencilSize;
-              drawPencilLine(maskBuf, layerPos, layerPos, maskColor, size);
+              drawPencilLine(maskBuf, lineFrom, layerPos, maskColor, size);
             } else {
               const size = toolSettings.eraserSize;
               const hardness = 0.8;
               const opacity = toolSettings.eraserOpacity / 100;
               const stamp = generateEraserStamp(size, hardness);
-              applyBrushDab(maskBuf, layerPos, stamp, size, maskColor, opacity, 1);
+              if (shiftLine) {
+                const spacing = Math.max(1, size * 0.25);
+                const pts = interpolatePoints(lineFrom, layerPos, spacing);
+                for (const pt of pts) {
+                  applyBrushDab(maskBuf, pt, stamp, size, maskColor, opacity, 1);
+                }
+              } else {
+                applyBrushDab(maskBuf, layerPos, stamp, size, maskColor, opacity, 1);
+              }
             }
 
             activeMaskEditBuffer = { layerId: activeLayerId, buf: maskBuf, maskWidth: activeLayer.mask.width, maskHeight: activeLayer.mask.height };
@@ -538,18 +563,34 @@ export function useCanvasInteraction(
             const stamp = generateBrushStamp(size, hardness);
             const color = useUIStore.getState().foregroundColor;
             useUIStore.getState().addRecentColor(color);
-            applyBrushDab(paintSurface, layerPos, stamp, size, color, opacity, 1);
+            if (shiftLine) {
+              const spacing = Math.max(1, size * 0.25);
+              const pts = interpolatePoints(lineFrom, layerPos, spacing);
+              for (const pt of pts) {
+                applyBrushDab(paintSurface, pt, stamp, size, color, opacity, 1);
+              }
+            } else {
+              applyBrushDab(paintSurface, layerPos, stamp, size, color, opacity, 1);
+            }
           } else if (activeTool === 'pencil') {
             const color = useUIStore.getState().foregroundColor;
             useUIStore.getState().addRecentColor(color);
             const size = toolSettings.pencilSize;
-            drawPencilLine(paintSurface, layerPos, layerPos, color, size);
+            drawPencilLine(paintSurface, lineFrom, layerPos, color, size);
           } else {
             const size = toolSettings.eraserSize;
             const hardness = 0.8;
             const opacity = toolSettings.eraserOpacity / 100;
             const stamp = generateEraserStamp(size, hardness);
-            applyEraserDab(paintSurface, layerPos, stamp, size, opacity);
+            if (shiftLine) {
+              const spacing = Math.max(1, size * 0.25);
+              const pts = interpolatePoints(lineFrom, layerPos, spacing);
+              for (const pt of pts) {
+                applyEraserDab(paintSurface, pt, stamp, size, opacity);
+              }
+            } else {
+              applyEraserDab(paintSurface, layerPos, stamp, size, opacity);
+            }
           }
 
           editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
@@ -629,7 +670,18 @@ export function useCanvasInteraction(
           const dodgeMode = toolSettings.dodgeMode;
           const exposure = toolSettings.dodgeExposure / 100;
           const dodgeSize = toolSettings.brushSize;
-          applyDodgeBurn(paintSurface, layerPos, dodgeSize, dodgeMode, exposure);
+          const dodgeShiftLine = e.shiftKey
+            && lastPaintPointRef.current
+            && lastPaintPointRef.current.layerId === activeLayerId;
+          if (dodgeShiftLine) {
+            const spacing = Math.max(1, dodgeSize * 0.25);
+            const pts = interpolatePoints(lastPaintPointRef.current!.point, layerPos, spacing);
+            for (const pt of pts) {
+              applyDodgeBurn(paintSurface, pt, dodgeSize, dodgeMode, exposure);
+            }
+          } else {
+            applyDodgeBurn(paintSurface, layerPos, dodgeSize, dodgeMode, exposure);
+          }
           editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
           stateRef.current = {
             drawing: true,
@@ -705,8 +757,19 @@ export function useCanvasInteraction(
             layerStartY: activeLayer.y,
             ...DEFAULT_TRANSFORM_FIELDS,
           };
-          // Apply initial dab
-          applyStampDab(paintSurface, pixelBuffer, layerPos, stampOffsetRef.current, toolSettings.stampSize);
+          // Shift+click: stamp a line from the last paint point
+          const stampShiftLine = e.shiftKey
+            && lastPaintPointRef.current
+            && lastPaintPointRef.current.layerId === activeLayerId;
+          if (stampShiftLine) {
+            const spacing = Math.max(1, toolSettings.stampSize * 0.25);
+            const pts = interpolatePoints(lastPaintPointRef.current!.point, layerPos, spacing);
+            for (const pt of pts) {
+              applyStampDab(paintSurface, pixelBuffer, pt, stampOffsetRef.current, toolSettings.stampSize);
+            }
+          } else {
+            applyStampDab(paintSurface, pixelBuffer, layerPos, stampOffsetRef.current, toolSettings.stampSize);
+          }
           editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
           break;
         }
@@ -1329,6 +1392,12 @@ export function useCanvasInteraction(
         useEditorStore.getState().cropCanvas(cropRect);
       }
       useUIStore.getState().setCropRect(null);
+    }
+
+    // Save last paint point for shift+click line drawing
+    const paintTools: ReadonlySet<ToolId> = new Set(['brush', 'pencil', 'eraser', 'dodge', 'stamp']);
+    if (state.tool && paintTools.has(state.tool) && state.lastPoint && state.layerId) {
+      lastPaintPointRef.current = { point: state.lastPoint, layerId: state.layerId };
     }
 
     // Clear active transform handle
