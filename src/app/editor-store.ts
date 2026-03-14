@@ -3,6 +3,7 @@ import type { DocumentState, Layer, LayerEffects, LayerMask, Rect, RasterLayer, 
 import { compositeOver } from '../engine/compositing';
 import { computeAlign, getContentBounds, type AlignEdge } from '../tools/move/move';
 import { CanvasAllocator, renderOuterGlow, renderDropShadow, renderInnerGlow, renderStroke } from '../engine/effects-renderer';
+import { getSelectionMaskValue } from '../selection/selection';
 
 interface SelectionData {
   active: boolean;
@@ -399,25 +400,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   toggleLayerVisibility: (id: string) => {
-    set((state) => ({
+    const state = get();
+    state.pushHistory('Toggle Visibility');
+    set({
       document: {
         ...state.document,
         layers: state.document.layers.map((l) =>
           l.id === id ? ({ ...l, visible: !l.visible } as Layer) : l,
         ),
       },
-    }));
+    });
   },
 
   updateLayerOpacity: (id: string, opacity: number) => {
-    set((state) => ({
+    const state = get();
+    state.pushHistory('Change Opacity');
+    set({
       document: {
         ...state.document,
         layers: state.document.layers.map((l) =>
           l.id === id ? ({ ...l, opacity } as Layer) : l,
         ),
       },
-    }));
+    });
   },
 
   moveLayer: (fromIndex: number, toIndex: number) => {
@@ -620,7 +625,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   updateLayerEffects: (id: string, effects: LayerEffects) => {
-    set((state) => ({
+    const state = get();
+    state.pushHistory('Update Effects');
+    set({
       document: {
         ...state.document,
         layers: state.document.layers.map((l) =>
@@ -628,7 +635,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ),
       },
       renderVersion: state.renderVersion + 1,
-    }));
+    });
   },
 
   rasterizeLayerStyle: () => {
@@ -670,6 +677,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const state = get();
     const layer = state.document.layers.find((l) => l.id === id);
     if (!layer) return;
+    state.pushHistory('Add Mask');
     const width = layer.type === 'raster' || layer.type === 'shape' ? layer.width : state.document.width;
     const height = layer.type === 'raster' || layer.type === 'shape' ? layer.height : state.document.height;
     const maskData = new Uint8ClampedArray(width * height);
@@ -681,19 +689,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       width,
       height,
     };
-    set((s) => ({
+    set({
       document: {
-        ...s.document,
-        layers: s.document.layers.map((l) =>
+        ...state.document,
+        layers: state.document.layers.map((l) =>
           l.id === id ? ({ ...l, mask: layerMask } as Layer) : l,
         ),
       },
-      renderVersion: s.renderVersion + 1,
-    }));
+      renderVersion: state.renderVersion + 1,
+    });
   },
 
   removeLayerMask: (id: string) => {
-    set((state) => ({
+    const state = get();
+    state.pushHistory('Remove Mask');
+    set({
       document: {
         ...state.document,
         layers: state.document.layers.map((l) =>
@@ -701,11 +711,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ),
       },
       renderVersion: state.renderVersion + 1,
-    }));
+    });
   },
 
   toggleLayerMask: (id: string) => {
-    set((state) => ({
+    const state = get();
+    state.pushHistory('Toggle Mask');
+    set({
       document: {
         ...state.document,
         layers: state.document.layers.map((l) => {
@@ -714,7 +726,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         }),
       },
       renderVersion: state.renderVersion + 1,
-    }));
+    });
   },
 
   updateLayerMaskData: (layerId: string, maskData: Uint8ClampedArray) => {
@@ -759,7 +771,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         for (let x = 0; x < w; x++) {
           const docX = bx + x;
           const docY = by + y;
-          const maskVal = sel.mask[docY * sel.maskWidth + docX] ?? 0;
+          const maskVal = getSelectionMaskValue(sel, docX, docY);
           if (maskVal < 128) continue;
           const srcX = docX - layer.x;
           const srcY = docY - layer.y;
@@ -798,7 +810,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (sel.active && sel.bounds && sel.mask) {
       for (let y = 0; y < sel.maskHeight; y++) {
         for (let x = 0; x < sel.maskWidth; x++) {
-          if ((sel.mask[y * sel.maskWidth + x] ?? 0) < 128) continue;
+          if (getSelectionMaskValue(sel, x, y) < 128) continue;
           const srcX = x - layer.x;
           const srcY = y - layer.y;
           if (srcX < 0 || srcX >= result.width || srcY < 0 || srcY >= result.height) continue;
@@ -1131,7 +1143,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       redoStack: [...state.redoStack, currentSnapshot],
       document: previous.document,
       layerPixelData: clonePixelDataMapFull(previous.layerPixelData),
-      dirtyLayerIds: new Set(),
+      dirtyLayerIds: new Set(previous.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
   },
@@ -1151,7 +1163,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       undoStack: [...state.undoStack, currentSnapshot],
       document: next.document,
       layerPixelData: clonePixelDataMapFull(next.layerPixelData),
-      dirtyLayerIds: new Set(),
+      dirtyLayerIds: new Set(next.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
   },

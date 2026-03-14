@@ -1,5 +1,6 @@
 import { useEditorStore } from '../editor-store';
 import { PixelBuffer } from '../../engine/pixel-data';
+import { getSelectionMaskValue } from '../../selection/selection';
 import { invert, desaturate } from '../../filters/adjustments';
 import { filterRegistry } from './filters';
 import type { FilterDefinition } from './filters';
@@ -33,10 +34,13 @@ export function applyFilterResult(activeId: string, result: PixelBuffer): void {
     const original = PixelBuffer.fromImageData(imageData);
     const blended = original.clone();
     const { width, height } = original;
+    const layer = state.document.layers.find((l) => l.id === activeId);
+    const ox = layer?.x ?? 0;
+    const oy = layer?.y ?? 0;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const maskValue = (sel.mask[y * sel.maskWidth + x] ?? 0) / 255;
+        const maskValue = getSelectionMaskValue(sel, x + ox, y + oy) / 255;
         if (maskValue <= 0) continue;
 
         const origPixel = original.getPixel(x, y);
