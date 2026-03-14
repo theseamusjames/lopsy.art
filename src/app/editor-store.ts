@@ -96,6 +96,7 @@ interface EditorState {
   copy: () => void;
   cut: () => void;
   paste: () => void;
+  pasteImageData: (imageData: ImageData) => void;
 
   // Pixel data
   getOrCreateLayerPixelData: (layerId: string) => ImageData;
@@ -119,10 +120,10 @@ interface EditorState {
 }
 
 const DEFAULT_EFFECTS: LayerEffects = {
-  stroke: null,
-  dropShadow: null,
-  outerGlow: null,
-  innerGlow: null,
+  stroke: { enabled: false, color: { r: 0, g: 0, b: 0, a: 1 }, width: 2, position: 'outside' },
+  dropShadow: { enabled: false, color: { r: 0, g: 0, b: 0, a: 0.75 }, offsetX: 4, offsetY: 4, blur: 8, spread: 0 },
+  outerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
+  innerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
 };
 
 function generateId(): string {
@@ -727,6 +728,49 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     const pixelData = new Map(state.layerPixelData);
     pixelData.set(newId, cloneImageData(clip.imageData));
+
+    const orderIdx = state.document.activeLayerId
+      ? state.document.layerOrder.indexOf(state.document.activeLayerId) + 1
+      : state.document.layerOrder.length;
+    const newOrder = [...state.document.layerOrder];
+    newOrder.splice(orderIdx, 0, newId);
+
+    set({
+      document: {
+        ...state.document,
+        layers: [...state.document.layers, newLayer],
+        layerOrder: newOrder,
+        activeLayerId: newId,
+      },
+      layerPixelData: pixelData,
+      renderVersion: state.renderVersion + 1,
+    });
+  },
+
+  pasteImageData: (imageData: ImageData) => {
+    const state = get();
+    state.pushHistory();
+
+    const newId = generateId();
+    const newLayer: RasterLayer = {
+      id: newId,
+      name: 'Pasted Layer',
+      type: 'raster',
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      x: 0,
+      y: 0,
+      clipToBelow: false,
+      effects: DEFAULT_EFFECTS,
+      mask: null,
+      width: imageData.width,
+      height: imageData.height,
+    };
+
+    const pixelData = new Map(state.layerPixelData);
+    pixelData.set(newId, imageData);
 
     const orderIdx = state.document.activeLayerId
       ? state.document.layerOrder.indexOf(state.document.activeLayerId) + 1

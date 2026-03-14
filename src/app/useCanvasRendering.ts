@@ -153,7 +153,7 @@ export function renderOuterGlow(
   data: ImageData,
   alloc: CanvasAllocator,
 ): void {
-  if (!layer.effects.outerGlow) return;
+  if (!layer.effects.outerGlow.enabled) return;
   const glow = layer.effects.outerGlow;
   const glowBlur = glow.size + glow.spread;
   const pad = glowBlur * 2;
@@ -174,7 +174,7 @@ export function renderDropShadow(
   data: ImageData,
   alloc: CanvasAllocator,
 ): void {
-  if (!layer.effects.dropShadow) return;
+  if (!layer.effects.dropShadow.enabled) return;
   const shadow = layer.effects.dropShadow;
   const pad = shadow.blur * 2;
   const { canvas: shadowCanvas, ctx: shadowCtx } = alloc.acquire(data.width + pad * 2, data.height + pad * 2);
@@ -259,7 +259,7 @@ export function renderInnerGlow(
   data: ImageData,
   alloc: CanvasAllocator,
 ): void {
-  if (!layer.effects.innerGlow) return;
+  if (!layer.effects.innerGlow.enabled) return;
   const glow = layer.effects.innerGlow;
   const glowBlur = glow.size + glow.spread;
   const pad = glowBlur * 2;
@@ -297,7 +297,7 @@ export function renderStroke(
   data: ImageData,
   alloc: CanvasAllocator,
 ): void {
-  if (!layer.effects.stroke) return;
+  if (!layer.effects.stroke.enabled) return;
   const stroke = layer.effects.stroke;
   const sw = stroke.width;
   const pad = sw + 1;
