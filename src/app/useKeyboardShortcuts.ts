@@ -147,7 +147,29 @@ export function useKeyboardShortcuts({
           useEditorStore.getState().cut();
         } else if (e.key === 'v') {
           e.preventDefault();
-          useEditorStore.getState().paste();
+          navigator.clipboard.read().then(async (items) => {
+            for (const item of items) {
+              const imageType = item.types.find((t) => t.startsWith('image/'));
+              if (imageType) {
+                const blob = await item.getType(imageType);
+                const bitmap = await createImageBitmap(blob);
+                const canvas = document.createElement('canvas');
+                canvas.width = bitmap.width;
+                canvas.height = bitmap.height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                  ctx.drawImage(bitmap, 0, 0);
+                  const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+                  useEditorStore.getState().pasteImageData(imageData);
+                }
+                bitmap.close();
+                return;
+              }
+            }
+            useEditorStore.getState().paste();
+          }).catch(() => {
+            useEditorStore.getState().paste();
+          });
         } else if (e.key === 'e') {
           e.preventDefault();
           useEditorStore.getState().mergeDown();
