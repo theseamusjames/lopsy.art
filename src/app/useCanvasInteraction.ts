@@ -23,6 +23,7 @@ import { applyStampDab } from '../tools/stamp/stamp';
 import { renderText } from '../tools/text/text';
 import { createPolygonMask } from '../tools/lasso/lasso';
 import { rasterizePath } from '../tools/path/path';
+import { snapPositionToGrid } from '../tools/move/move';
 import {
   hitTestHandle,
   isScaleHandle,
@@ -984,8 +985,14 @@ export function useCanvasInteraction(
           if (state.pixelBuffer && state.originalPixelBuffer) {
             // Total offset = persistent offset from prior moves + this drag's delta
             const floatState = floatingSelectionRef.current;
-            const dx = (floatState?.offsetX ?? 0) + dragDx;
-            const dy = (floatState?.offsetY ?? 0) + dragDy;
+            let dx = (floatState?.offsetX ?? 0) + dragDx;
+            let dy = (floatState?.offsetY ?? 0) + dragDy;
+            const uiSnap = useUIStore.getState();
+            if (uiSnap.showGrid && uiSnap.snapToGrid) {
+              const snapped = snapPositionToGrid(dx, dy, uiSnap.gridSize);
+              dx = snapped.x;
+              dy = snapped.y;
+            }
             // Moving selected pixels: composite floated pixels at offset onto the base
             const base = state.originalPixelBuffer.clone();
             const floated = state.pixelBuffer;
@@ -1035,10 +1042,18 @@ export function useCanvasInteraction(
               useUIStore.getState().setTransform(createTransformState(newBounds));
             }
           } else {
+            let newX = state.layerStartX + dragDx;
+            let newY = state.layerStartY + dragDy;
+            const uiState = useUIStore.getState();
+            if (uiState.showGrid && uiState.snapToGrid) {
+              const snapped = snapPositionToGrid(newX, newY, uiState.gridSize);
+              newX = snapped.x;
+              newY = snapped.y;
+            }
             useEditorStore.getState().updateLayerPosition(
               state.layerId,
-              state.layerStartX + dragDx,
-              state.layerStartY + dragDy,
+              newX,
+              newY,
             );
           }
           break;
@@ -1048,10 +1063,17 @@ export function useCanvasInteraction(
         case 'marquee-ellipse': {
           if (!state.startPoint) break;
           const editorState = useEditorStore.getState();
-          const x = Math.min(state.startPoint.x, canvasPos.x);
-          const y = Math.min(state.startPoint.y, canvasPos.y);
-          const w = Math.abs(canvasPos.x - state.startPoint.x);
-          const h = Math.abs(canvasPos.y - state.startPoint.y);
+          let mStart = state.startPoint;
+          let mEnd = canvasPos;
+          const uiMarquee = useUIStore.getState();
+          if (uiMarquee.showGrid && uiMarquee.snapToGrid) {
+            mStart = snapPositionToGrid(mStart.x, mStart.y, uiMarquee.gridSize);
+            mEnd = snapPositionToGrid(mEnd.x, mEnd.y, uiMarquee.gridSize);
+          }
+          const x = Math.min(mStart.x, mEnd.x);
+          const y = Math.min(mStart.y, mEnd.y);
+          const w = Math.abs(mEnd.x - mStart.x);
+          const h = Math.abs(mEnd.y - mStart.y);
 
           if (w > 0 && h > 0) {
             const selRect = { x, y, width: w, height: h };
@@ -1450,5 +1472,103 @@ export function useCanvasInteraction(
     floatingSelectionRef.current = null;
   }, []);
 
-  return { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform };
+  const nudgeMove = useCallback((dx: number, dy: number) => {
+    const editor = useEditorStore.getState();
+    const activeId = editor.document.activeLayerId;
+    if (!activeId) return;
+    const layer = editor.document.layers.find((l) => l.id === activeId);
+    if (!layer || layer.locked) return;
+
+    const sel = editor.selection;
+    editor.pushHistory();
+
+    if (sel.active && sel.mask) {
+      // Cut selected pixels into a floating buffer if not already floating
+      const existing = floatingSelectionRef.current;
+      let floated: PixelBuffer;
+      let base: PixelBuffer;
+      let origMask: Uint8ClampedArray;
+      let origBounds: { x: number; y: number; width: number; height: number };
+
+      if (existing) {
+        floated = existing.floated;
+        base = existing.base;
+        origMask = existing.originalMask;
+        origBounds = existing.originalBounds;
+      } else {
+        const imageData = editor.getOrCreateLayerPixelData(activeId);
+        const pixelBuffer = PixelBuffer.fromImageData(imageData);
+        base = pixelBuffer.clone();
+        floated = new PixelBuffer(pixelBuffer.width, pixelBuffer.height);
+        for (let y = 0; y < pixelBuffer.height; y++) {
+          for (let x = 0; x < pixelBuffer.width; x++) {
+            if ((sel.mask[y * sel.maskWidth + x] ?? 0) > 0) {
+              floated.setPixel(x, y, pixelBuffer.getPixel(x, y));
+              base.setPixel(x, y, { r: 0, g: 0, b: 0, a: 0 });
+            }
+          }
+        }
+        origMask = new Uint8ClampedArray(sel.mask);
+        origBounds = { ...sel.bounds! };
+        persistentTransformRef.current = null;
+      }
+
+      const newOffsetX = (existing?.offsetX ?? 0) + dx;
+      const newOffsetY = (existing?.offsetY ?? 0) + dy;
+
+      floatingSelectionRef.current = {
+        floated, base, offsetX: newOffsetX, offsetY: newOffsetY,
+        originalMask: origMask,
+        originalBounds: origBounds,
+      };
+
+      // Composite floated onto base at new offset
+      const composited = base.clone();
+      for (let y = 0; y < floated.height; y++) {
+        for (let x = 0; x < floated.width; x++) {
+          const fp = floated.getPixel(x, y);
+          if (fp.a <= 0) continue;
+          const destX = x + newOffsetX;
+          const destY = y + newOffsetY;
+          if (destX < 0 || destX >= composited.width || destY < 0 || destY >= composited.height) continue;
+          const bp = composited.getPixel(destX, destY);
+          const outA = fp.a + bp.a * (1 - fp.a);
+          if (outA > 0) {
+            composited.setPixel(destX, destY, {
+              r: Math.round((fp.r * fp.a + bp.r * bp.a * (1 - fp.a)) / outA),
+              g: Math.round((fp.g * fp.a + bp.g * bp.a * (1 - fp.a)) / outA),
+              b: Math.round((fp.b * fp.a + bp.b * bp.a * (1 - fp.a)) / outA),
+              a: outA,
+            });
+          }
+        }
+      }
+      editor.updateLayerPixelData(activeId, composited.toImageData());
+
+      // Shift selection mask
+      const { width: docW, height: docH } = editor.document;
+      const newMask = new Uint8ClampedArray(docW * docH);
+      for (let y = 0; y < docH; y++) {
+        for (let x = 0; x < docW; x++) {
+          const srcX = x - newOffsetX;
+          const srcY = y - newOffsetY;
+          if (srcX >= 0 && srcX < docW && srcY >= 0 && srcY < docH) {
+            newMask[y * docW + x] = origMask[srcY * docW + srcX] ?? 0;
+          }
+        }
+      }
+      const newBounds = {
+        x: origBounds.x + newOffsetX,
+        y: origBounds.y + newOffsetY,
+        width: origBounds.width,
+        height: origBounds.height,
+      };
+      editor.setSelection(newBounds, newMask, docW, docH);
+      useUIStore.getState().setTransform(createTransformState(newBounds));
+    } else {
+      editor.updateLayerPosition(activeId, layer.x + dx, layer.y + dy);
+    }
+  }, []);
+
+  return { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove };
 }
