@@ -26,6 +26,13 @@ const DEFAULT_GLOW: GlowEffect = {
   opacity: 0.75,
 };
 
+const DEFAULT_INNER_GLOW: GlowEffect = {
+  color: { r: 255, g: 255, b: 100, a: 1 },
+  size: 10,
+  spread: 0,
+  opacity: 0.75,
+};
+
 type StrokePosition = StrokeEffect['position'];
 
 function colorToHex(c: Color): string {
@@ -72,10 +79,12 @@ export function LayerEffectsPanel() {
   const hasDropShadow = effects?.dropShadow !== null;
   const hasStroke = effects?.stroke !== null;
   const hasGlow = effects?.outerGlow !== null;
+  const hasInnerGlow = effects?.innerGlow !== null;
 
   const shadow = effects?.dropShadow ?? DEFAULT_SHADOW;
   const stroke = effects?.stroke ?? DEFAULT_STROKE;
   const glow = effects?.outerGlow ?? DEFAULT_GLOW;
+  const innerGlow = effects?.innerGlow ?? DEFAULT_INNER_GLOW;
 
   const handleToggleDropShadow = () => {
     update({ dropShadow: hasDropShadow ? null : DEFAULT_SHADOW });
@@ -87,6 +96,10 @@ export function LayerEffectsPanel() {
 
   const handleToggleGlow = () => {
     update({ outerGlow: hasGlow ? null : DEFAULT_GLOW });
+  };
+
+  const handleToggleInnerGlow = () => {
+    update({ innerGlow: hasInnerGlow ? null : DEFAULT_INNER_GLOW });
   };
 
   const handleShadowColor = (hex: string) => {
@@ -102,6 +115,11 @@ export function LayerEffectsPanel() {
   const handleGlowColor = (hex: string) => {
     if (!hasGlow) return;
     update({ outerGlow: { ...glow, color: hexToColor(hex, glow.color.a) } });
+  };
+
+  const handleInnerGlowColor = (hex: string) => {
+    if (!hasInnerGlow) return;
+    update({ innerGlow: { ...innerGlow, color: hexToColor(hex, innerGlow.color.a) } });
   };
 
   const handleStrokePosition = (position: StrokePosition) => {
@@ -285,6 +303,65 @@ export function LayerEffectsPanel() {
                   min={0}
                   max={100}
                   onChange={(v) => update({ outerGlow: { ...glow, opacity: v / 100 } })}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Inner Glow */}
+      <div className={styles.effectSection}>
+        <label className={styles.effectHeader}>
+          <input
+            type="checkbox"
+            className={styles.checkbox}
+            checked={hasInnerGlow}
+            onChange={handleToggleInnerGlow}
+          />
+          <span className={styles.effectLabel}>Inner Glow</span>
+        </label>
+        {hasInnerGlow && (
+          <div className={styles.effectBody}>
+            <div className={styles.row}>
+              <span className={styles.fieldLabel}>Color</span>
+              <ColorSwatch color={innerGlow.color} size="sm" />
+              <input
+                type="color"
+                value={colorToHex(innerGlow.color)}
+                onChange={(e) => handleInnerGlowColor(e.target.value)}
+              />
+            </div>
+            <div className={styles.row}>
+              <span className={styles.fieldLabel}>Size</span>
+              <div className={styles.sliderWrap}>
+                <Slider
+                  value={innerGlow.size}
+                  min={0}
+                  max={100}
+                  onChange={(v) => update({ innerGlow: { ...innerGlow, size: v } })}
+                />
+              </div>
+            </div>
+            <div className={styles.row}>
+              <span className={styles.fieldLabel}>Spread</span>
+              <div className={styles.sliderWrap}>
+                <Slider
+                  value={innerGlow.spread}
+                  min={0}
+                  max={100}
+                  onChange={(v) => update({ innerGlow: { ...innerGlow, spread: v } })}
+                />
+              </div>
+            </div>
+            <div className={styles.row}>
+              <span className={styles.fieldLabel}>Opacity</span>
+              <div className={styles.sliderWrap}>
+                <Slider
+                  value={Math.round(innerGlow.opacity * 100)}
+                  min={0}
+                  max={100}
+                  onChange={(v) => update({ innerGlow: { ...innerGlow, opacity: v / 100 } })}
                 />
               </div>
             </div>

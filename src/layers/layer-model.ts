@@ -4,6 +4,7 @@ const DEFAULT_EFFECTS: LayerEffects = {
   stroke: null,
   dropShadow: null,
   outerGlow: null,
+  innerGlow: null,
 };
 
 export function createRasterLayer(params: {

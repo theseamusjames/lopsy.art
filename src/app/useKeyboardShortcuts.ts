@@ -55,6 +55,40 @@ export function useKeyboardShortcuts({
         return;
       }
 
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        const editor = useEditorStore.getState();
+        const sel = editor.selection;
+        const activeId = editor.document.activeLayerId;
+        if (!activeId) return;
+
+        if (sel.active && sel.mask) {
+          editor.pushHistory();
+          const layerData = editor.getOrCreateLayerPixelData(activeId);
+          const layer = editor.document.layers.find((l) => l.id === activeId);
+          if (!layer) return;
+          const result = new ImageData(layerData.width, layerData.height);
+          result.data.set(layerData.data);
+          for (let y = 0; y < sel.maskHeight; y++) {
+            for (let x = 0; x < sel.maskWidth; x++) {
+              if ((sel.mask[y * sel.maskWidth + x] ?? 0) < 128) continue;
+              const srcX = x - layer.x;
+              const srcY = y - layer.y;
+              if (srcX < 0 || srcX >= result.width || srcY < 0 || srcY >= result.height) continue;
+              const idx = (srcY * result.width + srcX) * 4;
+              result.data[idx] = 0;
+              result.data[idx + 1] = 0;
+              result.data[idx + 2] = 0;
+              result.data[idx + 3] = 0;
+            }
+          }
+          editor.updateLayerPixelData(activeId, result);
+        } else {
+          editor.removeLayer(activeId);
+        }
+        return;
+      }
+
       // Tool shortcuts
       if (!e.metaKey && !e.ctrlKey && !e.altKey) {
         const toolMap: Record<string, () => void> = {
@@ -105,12 +139,24 @@ export function useKeyboardShortcuts({
           e.preventDefault();
           setZoom(1);
           setPan(0, 0);
+        } else if (e.key === 'c') {
+          e.preventDefault();
+          useEditorStore.getState().copy();
+        } else if (e.key === 'x') {
+          e.preventDefault();
+          useEditorStore.getState().cut();
+        } else if (e.key === 'v') {
+          e.preventDefault();
+          useEditorStore.getState().paste();
+        } else if (e.key === 'e') {
+          e.preventDefault();
+          useEditorStore.getState().mergeDown();
         } else if (e.key === 'd') {
           e.preventDefault();
           useEditorStore.getState().clearSelection();
           useUIStore.getState().setTransform(null);
           clearPersistentTransform();
-        } else if (e.key === 'z') {
+        } else if (e.key === 'z' || e.key === 'Z') {
           e.preventDefault();
           if (e.shiftKey) {
             useEditorStore.getState().redo();

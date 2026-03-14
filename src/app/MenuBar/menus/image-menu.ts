@@ -40,15 +40,19 @@ export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
   state.updateLayerPixelData(activeId, result.toImageData());
 }
 
-export const imageMenu: MenuDef = {
+export type ImageDialogId = 'canvas-size' | 'image-size';
+
+export function createImageMenu(showDialog: (id: ImageDialogId) => void): MenuDef {
+  return {
   label: 'Image',
   items: [
-    { label: 'Canvas Size...', disabled: true },
-    { label: 'Image Size...', disabled: true },
+    { label: 'Canvas Size...', action: () => showDialog('canvas-size') },
+    { label: 'Image Size...', action: () => showDialog('image-size') },
     { separator: true, label: '' },
     { label: 'Rotate 90\u00B0 CW', action: () => rotateActiveLayer('cw') },
     { label: 'Rotate 90\u00B0 CCW', action: () => rotateActiveLayer('ccw') },
     { label: 'Flip Horizontal', action: () => flipActiveLayer('horizontal') },
     { label: 'Flip Vertical', action: () => flipActiveLayer('vertical') },
   ],
-};
+  };
+}

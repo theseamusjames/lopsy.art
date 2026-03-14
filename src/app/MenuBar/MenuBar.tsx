@@ -10,12 +10,15 @@ import {
   getFilterDialogConfig,
   applyGenericFilter,
 } from './filter-actions';
-import { getMenus, type MenuItem } from './menus';
+import { getMenus, type MenuItem, type ImageDialogId } from './menus';
+import { CanvasSizeModal } from '../../components/CanvasSizeModal/CanvasSizeModal';
+import { ImageSizeModal } from '../../components/ImageSizeModal/ImageSizeModal';
 import styles from './MenuBar.module.css';
 
 export function MenuBar() {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const [activeDialog, setActiveDialog] = useState<FilterDialogId | null>(null);
+  const [imageDialog, setImageDialog] = useState<ImageDialogId | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
   const showFilterDialog = useCallback((id: FilterDialogId) => {
@@ -23,7 +26,12 @@ export function MenuBar() {
     setActiveDialog(id);
   }, []);
 
-  const menus = getMenus(showFilterDialog);
+  const showImageDialog = useCallback((id: ImageDialogId) => {
+    setOpenMenu(null);
+    setImageDialog(id);
+  }, []);
+
+  const menus = getMenus(showFilterDialog, showImageDialog);
 
   const handleMenuClick = useCallback((index: number) => {
     setOpenMenu((prev) => (prev === index ? null : index));
@@ -145,6 +153,12 @@ export function MenuBar() {
           onApply={handleFillNoiseApply}
           onCancel={handleDialogCancel}
         />
+      )}
+      {imageDialog === 'canvas-size' && (
+        <CanvasSizeModal onClose={() => setImageDialog(null)} />
+      )}
+      {imageDialog === 'image-size' && (
+        <ImageSizeModal onClose={() => setImageDialog(null)} />
       )}
     </>
   );

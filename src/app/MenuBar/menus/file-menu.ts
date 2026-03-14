@@ -3,6 +3,7 @@ import { useEditorStore } from '../../editor-store';
 import {
   CanvasAllocator,
   renderOuterGlow,
+  renderInnerGlow,
   renderDropShadow,
   renderLayerContent,
   renderStroke,
@@ -63,6 +64,7 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
     renderOuterGlow(ctx, tempCanvas, layer, data, allocator);
     renderDropShadow(ctx, tempCanvas, layer, data, allocator);
     renderLayerContent(ctx, tempCanvas, layer, data, false, null, allocator);
+    renderInnerGlow(ctx, tempCanvas, layer, data, allocator);
     renderStroke(ctx, tempCanvas, layer, data, allocator);
   }
   ctx.globalAlpha = 1;

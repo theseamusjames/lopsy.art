@@ -92,6 +92,7 @@ export function useCanvasRendering(
       renderOuterGlow(ctx, tempCanvas, layer, data, allocator);
       renderDropShadow(ctx, tempCanvas, layer, data, allocator);
       renderLayerContent(ctx, tempCanvas, layer, data, maskEditMode, activeLayerId, allocator);
+      renderInnerGlow(ctx, tempCanvas, layer, data, allocator);
       renderStroke(ctx, tempCanvas, layer, data, allocator);
     }
 
@@ -251,9 +252,47 @@ export function renderLayerContent(
   }
 }
 
-export function renderStroke(
+export function renderInnerGlow(
   ctx: CanvasRenderingContext2D,
   tempCanvas: HTMLCanvasElement,
+  layer: Layer,
+  data: ImageData,
+  alloc: CanvasAllocator,
+): void {
+  if (!layer.effects.innerGlow) return;
+  const glow = layer.effects.innerGlow;
+  const glowBlur = glow.size + glow.spread;
+  const pad = glowBlur * 2;
+  const cw = data.width + pad * 2;
+  const ch = data.height + pad * 2;
+
+  // Build an eroded version of the layer content
+  const { canvas: erodeCanvas, ctx: erodeCtx } = alloc.acquire(cw, ch);
+  erodeCtx.filter = `blur(${glowBlur}px)`;
+  erodeCtx.drawImage(tempCanvas, pad, pad);
+  erodeCtx.filter = 'none';
+  erodeCtx.globalCompositeOperation = 'destination-in';
+  erodeCtx.filter = `blur(${glowBlur}px)`;
+  erodeCtx.drawImage(tempCanvas, pad, pad);
+  erodeCtx.filter = 'none';
+
+  // Start from original, subtract eroded to get inner border
+  const { canvas: glowCanvas, ctx: glowCtx } = alloc.acquire(cw, ch);
+  glowCtx.drawImage(tempCanvas, pad, pad);
+  glowCtx.globalCompositeOperation = 'destination-out';
+  glowCtx.drawImage(erodeCanvas, 0, 0);
+
+  // Color the remaining inner fringe
+  glowCtx.globalCompositeOperation = 'source-in';
+  glowCtx.fillStyle = `rgba(${glow.color.r},${glow.color.g},${glow.color.b},${glow.opacity})`;
+  glowCtx.fillRect(0, 0, cw, ch);
+
+  ctx.drawImage(glowCanvas, layer.x - pad, layer.y - pad);
+}
+
+export function renderStroke(
+  ctx: CanvasRenderingContext2D,
+  _tempCanvas: HTMLCanvasElement,
   layer: Layer,
   data: ImageData,
   alloc: CanvasAllocator,
@@ -261,60 +300,104 @@ export function renderStroke(
   if (!layer.effects.stroke) return;
   const stroke = layer.effects.stroke;
   const sw = stroke.width;
-  const pad = sw * 2;
-  const { canvas: strokeCanvas, ctx: strokeCtx } = alloc.acquire(data.width + pad * 2, data.height + pad * 2);
+  const pad = sw + 1;
 
-  if (stroke.position === 'outside') {
-    strokeCtx.filter = `blur(${sw / 2}px)`;
-    strokeCtx.drawImage(tempCanvas, pad, pad);
-    strokeCtx.filter = 'none';
-    strokeCtx.globalCompositeOperation = 'source-over';
-    for (let i = 0; i < 3; i++) {
-      strokeCtx.drawImage(strokeCanvas, 0, 0);
-    }
-    strokeCtx.globalCompositeOperation = 'destination-out';
-    strokeCtx.drawImage(tempCanvas, pad, pad);
-    strokeCtx.globalCompositeOperation = 'source-in';
-    strokeCtx.fillStyle = `rgba(${stroke.color.r},${stroke.color.g},${stroke.color.b},${stroke.color.a})`;
-    strokeCtx.fillRect(0, 0, strokeCanvas.width, strokeCanvas.height);
-  } else if (stroke.position === 'inside') {
-    strokeCtx.drawImage(tempCanvas, pad, pad);
-    const { canvas: erodeCanvas, ctx: erodeCtx } = alloc.acquire(strokeCanvas.width, strokeCanvas.height);
-    erodeCtx.filter = `blur(${sw / 2}px)`;
-    erodeCtx.drawImage(tempCanvas, pad, pad);
-    erodeCtx.filter = 'none';
-    erodeCtx.globalCompositeOperation = 'destination-in';
-    erodeCtx.filter = `blur(${sw / 2}px)`;
-    erodeCtx.drawImage(tempCanvas, pad, pad);
-    erodeCtx.filter = 'none';
-    strokeCtx.globalCompositeOperation = 'destination-out';
-    strokeCtx.drawImage(erodeCanvas, 0, 0);
-    strokeCtx.globalCompositeOperation = 'source-in';
-    strokeCtx.fillStyle = `rgba(${stroke.color.r},${stroke.color.g},${stroke.color.b},${stroke.color.a})`;
-    strokeCtx.fillRect(0, 0, strokeCanvas.width, strokeCanvas.height);
-  } else {
-    // center
-    const halfW = sw / 2;
-    strokeCtx.filter = `blur(${halfW / 2}px)`;
-    strokeCtx.drawImage(tempCanvas, pad, pad);
-    strokeCtx.filter = 'none';
-    for (let i = 0; i < 3; i++) {
-      strokeCtx.drawImage(strokeCanvas, 0, 0);
-    }
-    const { canvas: erodeCanvas, ctx: erodeCtx } = alloc.acquire(strokeCanvas.width, strokeCanvas.height);
-    erodeCtx.filter = `blur(${halfW / 2}px)`;
-    erodeCtx.drawImage(tempCanvas, pad, pad);
-    erodeCtx.filter = 'none';
-    erodeCtx.globalCompositeOperation = 'destination-in';
-    erodeCtx.filter = `blur(${halfW / 2}px)`;
-    erodeCtx.drawImage(tempCanvas, pad, pad);
-    erodeCtx.filter = 'none';
-    strokeCtx.globalCompositeOperation = 'destination-out';
-    strokeCtx.drawImage(erodeCanvas, 0, 0);
-    strokeCtx.globalCompositeOperation = 'source-in';
-    strokeCtx.fillStyle = `rgba(${stroke.color.r},${stroke.color.g},${stroke.color.b},${stroke.color.a})`;
-    strokeCtx.fillRect(0, 0, strokeCanvas.width, strokeCanvas.height);
+  // Build an alpha mask from the layer content
+  const srcData = data.data;
+  const w = data.width;
+  const h = data.height;
+
+  // Build a binary alpha mask (1 = opaque pixel)
+  const alpha = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    alpha[i] = (srcData[i * 4 + 3] ?? 0) >= 128 ? 1 : 0;
   }
+
+  // Compute distance from each opaque pixel to the nearest transparent pixel
+  // and from each transparent pixel to the nearest opaque pixel using a
+  // two-pass chamfer distance transform (Manhattan approximation is sufficient
+  // for the widths we support).
+  const distInside = new Float32Array(w * h);
+  const distOutside = new Float32Array(w * h);
+  const INF = w + h;
+
+  // Initialise
+  for (let i = 0; i < w * h; i++) {
+    distInside[i] = alpha[i] ? INF : 0;
+    distOutside[i] = alpha[i] ? 0 : INF;
+  }
+
+  // Forward pass (top-left to bottom-right)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = y * w + x;
+      if (x > 0) {
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - 1]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - 1]! + 1);
+      }
+      if (y > 0) {
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w]! + 1);
+      }
+    }
+  }
+
+  // Backward pass (bottom-right to top-left)
+  for (let y = h - 1; y >= 0; y--) {
+    for (let x = w - 1; x >= 0; x--) {
+      const idx = y * w + x;
+      if (x < w - 1) {
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + 1]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + 1]! + 1);
+      }
+      if (y < h - 1) {
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w]! + 1);
+      }
+    }
+  }
+
+  // Build the stroke ImageData
+  const outW = w + pad * 2;
+  const outH = h + pad * 2;
+  const { canvas: strokeCanvas, ctx: strokeCtx } = alloc.acquire(outW, outH);
+  const strokeImg = strokeCtx.createImageData(outW, outH);
+  const sd = strokeImg.data;
+  const cr = stroke.color.r;
+  const cg = stroke.color.g;
+  const cb = stroke.color.b;
+  const ca = Math.round(stroke.color.a * 255);
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = y * w + x;
+      let isStroke = false;
+
+      if (stroke.position === 'outside') {
+        // Transparent pixels within sw distance of an opaque pixel
+        isStroke = !alpha[idx] && distOutside[idx]! <= sw;
+      } else if (stroke.position === 'inside') {
+        // Opaque pixels within sw distance of a transparent pixel
+        isStroke = !!alpha[idx] && distInside[idx]! <= sw;
+      } else {
+        // Center: half inside, half outside
+        const halfW = sw / 2;
+        isStroke =
+          (!!alpha[idx] && distInside[idx]! <= halfW) ||
+          (!alpha[idx] && distOutside[idx]! <= halfW);
+      }
+
+      if (isStroke) {
+        const oi = ((y + pad) * outW + (x + pad)) * 4;
+        sd[oi] = cr;
+        sd[oi + 1] = cg;
+        sd[oi + 2] = cb;
+        sd[oi + 3] = ca;
+      }
+    }
+  }
+
+  strokeCtx.putImageData(strokeImg, 0, 0);
   ctx.drawImage(strokeCanvas, layer.x - pad, layer.y - pad);
 }
 

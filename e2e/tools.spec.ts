@@ -1610,6 +1610,7 @@ test.describe('Layer Effects', () => {
             spread: 0,
           },
           outerGlow: null,
+          innerGlow: null,
         });
       },
       layerId,
@@ -1642,6 +1643,7 @@ test.describe('Layer Effects', () => {
           },
           dropShadow: null,
           outerGlow: null,
+          innerGlow: null,
         });
       },
       layerId,
@@ -1679,6 +1681,7 @@ test.describe('Layer Effects', () => {
             spread: 0,
           },
           outerGlow: null,
+          innerGlow: null,
         });
       },
       layerId,
