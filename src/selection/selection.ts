@@ -1,5 +1,25 @@
 import type { Rect } from '../types';
 
+interface SelectionMask {
+  mask: Uint8ClampedArray | null;
+  maskWidth: number;
+  maskHeight: number;
+}
+
+/**
+ * Look up a selection mask value in document/canvas space,
+ * returning 0 for any out-of-bounds coordinate or null mask.
+ */
+export function getSelectionMaskValue(
+  sel: SelectionMask,
+  canvasX: number,
+  canvasY: number,
+): number {
+  if (!sel.mask) return 0;
+  if (canvasX < 0 || canvasX >= sel.maskWidth || canvasY < 0 || canvasY >= sel.maskHeight) return 0;
+  return sel.mask[canvasY * sel.maskWidth + canvasX] ?? 0;
+}
+
 export function createRectSelection(
   rect: Rect,
   canvasWidth: number,

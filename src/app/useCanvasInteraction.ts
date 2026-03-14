@@ -15,7 +15,7 @@ import { generateBrushStamp as generateEraserStamp } from '../tools/brush/brush'
 import { applyEraserDab } from '../tools/eraser/eraser';
 import { floodFill, applyFill } from '../tools/fill/fill';
 import { sampleColor } from '../tools/eyedropper/eyedropper';
-import { createRectSelection, createEllipseSelection, selectionBounds } from '../selection/selection';
+import { createRectSelection, createEllipseSelection, selectionBounds, getSelectionMaskValue } from '../selection/selection';
 import { interpolateGradient, computeLinearGradientT, computeRadialGradientT } from '../tools/gradient/gradient';
 import { drawShape } from '../tools/shape/shape';
 import { applyDodgeBurn } from '../tools/dodge/dodge';
@@ -235,7 +235,7 @@ export function useCanvasInteraction(
               for (let y = 0; y < h; y++) {
                 for (let x = 0; x < w; x++) {
                   const idx = (y * w + x) * 4;
-                  if ((sel.mask[y * sel.maskWidth + x] ?? 0) > 0) {
+                  if (getSelectionMaskValue(sel, x + activeLayer.x, y + activeLayer.y) > 0) {
                     baseData.data[idx] = 0;
                     baseData.data[idx + 1] = 0;
                     baseData.data[idx + 2] = 0;
@@ -389,7 +389,7 @@ export function useCanvasInteraction(
                 floated = new PixelBuffer(pixelBuffer.width, pixelBuffer.height);
                 for (let y = 0; y < pixelBuffer.height; y++) {
                   for (let x = 0; x < pixelBuffer.width; x++) {
-                    if ((sel.mask[y * sel.maskWidth + x] ?? 0) > 0) {
+                    if (getSelectionMaskValue(sel, x + activeLayer.x, y + activeLayer.y) > 0) {
                       floated.setPixel(x, y, pixelBuffer.getPixel(x, y));
                       base.setPixel(x, y, { r: 0, g: 0, b: 0, a: 0 });
                     }
@@ -407,7 +407,7 @@ export function useCanvasInteraction(
               floated = new PixelBuffer(pixelBuffer.width, pixelBuffer.height);
               for (let y = 0; y < pixelBuffer.height; y++) {
                 for (let x = 0; x < pixelBuffer.width; x++) {
-                  if ((sel.mask[y * sel.maskWidth + x] ?? 0) > 0) {
+                  if (getSelectionMaskValue(sel, x + activeLayer.x, y + activeLayer.y) > 0) {
                     floated.setPixel(x, y, pixelBuffer.getPixel(x, y));
                     base.setPixel(x, y, { r: 0, g: 0, b: 0, a: 0 });
                   }
@@ -1502,7 +1502,7 @@ export function useCanvasInteraction(
         floated = new PixelBuffer(pixelBuffer.width, pixelBuffer.height);
         for (let y = 0; y < pixelBuffer.height; y++) {
           for (let x = 0; x < pixelBuffer.width; x++) {
-            if ((sel.mask[y * sel.maskWidth + x] ?? 0) > 0) {
+            if (getSelectionMaskValue(sel, x + layer.x, y + layer.y) > 0) {
               floated.setPixel(x, y, pixelBuffer.getPixel(x, y));
               base.setPixel(x, y, { r: 0, g: 0, b: 0, a: 0 });
             }

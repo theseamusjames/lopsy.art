@@ -4,6 +4,7 @@ import { useEditorStore } from './editor-store';
 import { useToolSettingsStore } from './tool-settings-store';
 import { strokeCurrentPath } from './useCanvasInteraction';
 import { selectAll, invertSelectionAction } from './MenuBar/menus/select-menu';
+import { getSelectionMaskValue } from '../selection/selection';
 
 interface KeyboardShortcutDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -75,7 +76,7 @@ export function useKeyboardShortcuts({
           result.data.set(layerData.data);
           for (let y = 0; y < sel.maskHeight; y++) {
             for (let x = 0; x < sel.maskWidth; x++) {
-              if ((sel.mask[y * sel.maskWidth + x] ?? 0) < 128) continue;
+              if (getSelectionMaskValue(sel, x, y) < 128) continue;
               const srcX = x - layer.x;
               const srcY = y - layer.y;
               if (srcX < 0 || srcX >= result.width || srcY < 0 || srcY >= result.height) continue;
