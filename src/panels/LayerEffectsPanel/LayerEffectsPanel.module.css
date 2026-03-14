@@ -1,27 +1,62 @@
-.panel {
+.drawer {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-2);
+  height: 100%;
+  background: var(--color-bg-secondary);
+  overflow: hidden;
 }
 
-.effectSection {
+.drawerHeader {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  border-bottom: 1px solid var(--color-border-subtle);
-  padding-bottom: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
-.effectSection:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
+.drawerTitle {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
 }
 
-.effectHeader {
+.split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.effectList {
+  width: 150px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border-subtle);
+  overflow-y: auto;
+}
+
+.effectRow {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  user-select: none;
+}
+
+.effectRow:hover {
+  background: var(--color-bg-hover);
+}
+
+.effectRowSelected {
+  background: var(--color-accent-subtle);
+}
+
+.effectRowSelected:hover {
+  background: var(--color-accent-subtle);
 }
 
 .checkbox {
@@ -34,17 +69,20 @@
 
 .effectLabel {
   font-size: var(--font-size-sm);
-  font-weight: 600;
   color: var(--color-text-primary);
-  cursor: pointer;
-  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.effectBody {
+.effectForm {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding-left: var(--space-6);
 }
 
 .row {
@@ -58,6 +96,24 @@
   color: var(--color-text-secondary);
   min-width: 48px;
   flex-shrink: 0;
+}
+
+.colorSwatch {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  display: block;
+  flex-shrink: 0;
+}
+
+.colorInput {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+  pointer-events: none;
 }
 
 .sliderWrap {
@@ -97,4 +153,11 @@
   color: var(--color-text-disabled);
   padding: var(--space-4);
   text-align: center;
+}
+
+.hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  font-style: italic;
+  padding: var(--space-2) 0;
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
@@ -18,12 +18,15 @@ import styles from './App.module.css';
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const sidebarBottomRef = useRef<HTMLDivElement>(null);
+  const effectsDrawerRef = useRef<HTMLDivElement>(null);
 
   const foregroundColor = useUIStore((s) => s.foregroundColor);
   const backgroundColor = useUIStore((s) => s.backgroundColor);
   const setForegroundColor = useUIStore((s) => s.setForegroundColor);
   const setBackgroundColor = useUIStore((s) => s.setBackgroundColor);
   const swapColors = useUIStore((s) => s.swapColors);
+  const recentColors = useUIStore((s) => s.recentColors);
 
   const doc = useEditorStore((s) => s.document);
   const viewport = useEditorStore((s) => s.viewport);
@@ -184,7 +187,19 @@ export function App() {
   );
 
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
-  const [effectsPanelCollapsed, setEffectsPanelCollapsed] = useState(false);
+  const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
+
+  useLayoutEffect(() => {
+    const bottom = sidebarBottomRef.current;
+    const drawer = effectsDrawerRef.current;
+    if (!bottom || !drawer) return;
+    const parentRect = bottom.offsetParent?.getBoundingClientRect();
+    const bottomRect = bottom.getBoundingClientRect();
+    if (!parentRect) return;
+    const top = bottomRect.top - parentRect.top;
+    drawer.style.top = `${top}px`;
+    drawer.style.bottom = '0';
+  }, [showEffectsDrawer, colorPanelCollapsed]);
 
   const showModal = !documentReady || showNewDocumentModal;
 
@@ -226,42 +241,43 @@ export function App() {
         >
           <canvas ref={canvasRef} />
         </div>
-        <div className={styles.sidebar}>
-          <div className={styles.sidebarTop}>
-            <PanelContainer
-              title="Color"
-              collapsed={colorPanelCollapsed}
-              onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
-            >
-              <ColorPanel
-                foregroundColor={foregroundColor}
-                backgroundColor={backgroundColor}
-                onForegroundChange={setForegroundColor}
-                onBackgroundChange={setBackgroundColor}
-                onSwap={swapColors}
-              />
-            </PanelContainer>
-          </div>
-          <div className={styles.sidebarBottom}>
-            <PanelContainer title="Layers">
-              <LayerPanel
-                layers={[...layers]}
-                activeLayerId={activeLayerId}
-                onSelectLayer={handleSelectLayer}
-                onToggleVisibility={toggleLayerVisibility}
-                onAddLayer={addLayer}
-                onRemoveLayer={removeLayer}
-                onReorderLayer={moveLayer}
-                onUpdateOpacity={updateLayerOpacity}
-              />
-            </PanelContainer>
-            <PanelContainer
-              title="Layer Effects"
-              collapsed={effectsPanelCollapsed}
-              onToggle={() => setEffectsPanelCollapsed(!effectsPanelCollapsed)}
-            >
+        <div className={styles.sidebarArea}>
+          {showEffectsDrawer && (
+            <div className={styles.effectsDrawer} ref={effectsDrawerRef}>
               <LayerEffectsPanel />
-            </PanelContainer>
+            </div>
+          )}
+          <div className={styles.sidebar}>
+            <div className={styles.sidebarTop}>
+              <PanelContainer
+                title="Color"
+                collapsed={colorPanelCollapsed}
+                onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
+              >
+                <ColorPanel
+                  foregroundColor={foregroundColor}
+                  backgroundColor={backgroundColor}
+                  recentColors={recentColors}
+                  onForegroundChange={setForegroundColor}
+                  onBackgroundChange={setBackgroundColor}
+                  onSwap={swapColors}
+                />
+              </PanelContainer>
+            </div>
+            <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
+              <PanelContainer title="Layers">
+                <LayerPanel
+                  layers={[...layers]}
+                  activeLayerId={activeLayerId}
+                  onSelectLayer={handleSelectLayer}
+                  onToggleVisibility={toggleLayerVisibility}
+                  onAddLayer={addLayer}
+                  onRemoveLayer={removeLayer}
+                  onReorderLayer={moveLayer}
+                  onUpdateOpacity={updateLayerOpacity}
+                />
+              </PanelContainer>
+            </div>
           </div>
         </div>
       </div>

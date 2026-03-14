@@ -118,19 +118,21 @@ export type Layer = RasterLayer | TextLayer | ShapeLayer | GroupLayer;
 // --- Layer Effects ---
 
 export interface LayerEffects {
-  readonly stroke: StrokeEffect | null;
-  readonly dropShadow: ShadowEffect | null;
-  readonly outerGlow: GlowEffect | null;
-  readonly innerGlow: GlowEffect | null;
+  readonly stroke: StrokeEffect;
+  readonly dropShadow: ShadowEffect;
+  readonly outerGlow: GlowEffect;
+  readonly innerGlow: GlowEffect;
 }
 
 export interface StrokeEffect {
+  readonly enabled: boolean;
   readonly color: Color;
   readonly width: number; // pixels
   readonly position: 'outside' | 'inside' | 'center';
 }
 
 export interface ShadowEffect {
+  readonly enabled: boolean;
   readonly color: Color;
   readonly offsetX: number;
   readonly offsetY: number;
@@ -139,6 +141,7 @@ export interface ShadowEffect {
 }
 
 export interface GlowEffect {
+  readonly enabled: boolean;
   readonly color: Color;
   readonly size: number;
   readonly spread: number;

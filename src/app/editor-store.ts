@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { DocumentState, Layer, LayerEffects, LayerMask, Rect, RasterLayer, ViewportState } from '../types';
 import { compositeOver } from '../engine/compositing';
+import { computeAlign, getContentBounds, type AlignEdge } from '../tools/move/move';
 
 interface SelectionData {
   active: boolean;
@@ -77,6 +78,7 @@ interface EditorState {
   updateLayerOpacity: (id: string, opacity: number) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
   updateLayerPosition: (id: string, x: number, y: number) => void;
+  alignLayer: (edge: AlignEdge) => void;
   duplicateLayer: () => void;
   mergeDown: () => void;
   flattenImage: () => void;
@@ -94,6 +96,7 @@ interface EditorState {
   copy: () => void;
   cut: () => void;
   paste: () => void;
+  pasteImageData: (imageData: ImageData) => void;
 
   // Pixel data
   getOrCreateLayerPixelData: (layerId: string) => ImageData;
@@ -117,10 +120,10 @@ interface EditorState {
 }
 
 const DEFAULT_EFFECTS: LayerEffects = {
-  stroke: null,
-  dropShadow: null,
-  outerGlow: null,
-  innerGlow: null,
+  stroke: { enabled: false, color: { r: 0, g: 0, b: 0, a: 1 }, width: 2, position: 'outside' },
+  dropShadow: { enabled: false, color: { r: 0, g: 0, b: 0, a: 0.75 }, offsetX: 4, offsetY: 4, blur: 8, spread: 0 },
+  outerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
+  innerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
 };
 
 function generateId(): string {
@@ -371,6 +374,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ),
       },
       renderVersion: state.renderVersion + 1,
+    }));
+  },
+
+  alignLayer: (edge: AlignEdge) => {
+    const state = get();
+    const activeId = state.document.activeLayerId;
+    if (!activeId) return;
+    const layer = state.document.layers.find((l) => l.id === activeId);
+    if (!layer) return;
+    const pixelData = state.layerPixelData.get(activeId);
+    if (!pixelData) return;
+
+    let bounds: Rect | null;
+    if (state.selection.active && state.selection.bounds) {
+      bounds = state.selection.bounds;
+    } else {
+      bounds = getContentBounds(pixelData, layer.x, layer.y);
+    }
+    if (!bounds) return;
+
+    state.pushHistory();
+    const pos = computeAlign(edge, bounds, state.document.width, state.document.height, layer.x, layer.y);
+    set((s) => ({
+      document: {
+        ...s.document,
+        layers: s.document.layers.map((l) =>
+          l.id === activeId ? ({ ...l, x: pos.x, y: pos.y } as Layer) : l,
+        ),
+      },
+      renderVersion: s.renderVersion + 1,
     }));
   },
 
@@ -695,6 +728,49 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     const pixelData = new Map(state.layerPixelData);
     pixelData.set(newId, cloneImageData(clip.imageData));
+
+    const orderIdx = state.document.activeLayerId
+      ? state.document.layerOrder.indexOf(state.document.activeLayerId) + 1
+      : state.document.layerOrder.length;
+    const newOrder = [...state.document.layerOrder];
+    newOrder.splice(orderIdx, 0, newId);
+
+    set({
+      document: {
+        ...state.document,
+        layers: [...state.document.layers, newLayer],
+        layerOrder: newOrder,
+        activeLayerId: newId,
+      },
+      layerPixelData: pixelData,
+      renderVersion: state.renderVersion + 1,
+    });
+  },
+
+  pasteImageData: (imageData: ImageData) => {
+    const state = get();
+    state.pushHistory();
+
+    const newId = generateId();
+    const newLayer: RasterLayer = {
+      id: newId,
+      name: 'Pasted Layer',
+      type: 'raster',
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      x: 0,
+      y: 0,
+      clipToBelow: false,
+      effects: DEFAULT_EFFECTS,
+      mask: null,
+      width: imageData.width,
+      height: imageData.height,
+    };
+
+    const pixelData = new Map(state.layerPixelData);
+    pixelData.set(newId, imageData);
 
     const orderIdx = state.document.activeLayerId
       ? state.document.layerOrder.indexOf(state.document.activeLayerId) + 1

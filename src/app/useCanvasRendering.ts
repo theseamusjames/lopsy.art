@@ -153,7 +153,7 @@ export function renderOuterGlow(
   data: ImageData,
   alloc: CanvasAllocator,
 ): void {
-  if (!layer.effects.outerGlow) return;
+  if (!layer.effects.outerGlow.enabled) return;
   const glow = layer.effects.outerGlow;
   const glowBlur = glow.size + glow.spread;
   const pad = glowBlur * 2;
@@ -174,7 +174,7 @@ export function renderDropShadow(
   data: ImageData,
   alloc: CanvasAllocator,
 ): void {
-  if (!layer.effects.dropShadow) return;
+  if (!layer.effects.dropShadow.enabled) return;
   const shadow = layer.effects.dropShadow;
   const pad = shadow.blur * 2;
   const { canvas: shadowCanvas, ctx: shadowCtx } = alloc.acquire(data.width + pad * 2, data.height + pad * 2);
@@ -259,7 +259,7 @@ export function renderInnerGlow(
   data: ImageData,
   alloc: CanvasAllocator,
 ): void {
-  if (!layer.effects.innerGlow) return;
+  if (!layer.effects.innerGlow.enabled) return;
   const glow = layer.effects.innerGlow;
   const glowBlur = glow.size + glow.spread;
   const pad = glowBlur * 2;
@@ -297,7 +297,7 @@ export function renderStroke(
   data: ImageData,
   alloc: CanvasAllocator,
 ): void {
-  if (!layer.effects.stroke) return;
+  if (!layer.effects.stroke.enabled) return;
   const stroke = layer.effects.stroke;
   const sw = stroke.width;
   const pad = sw + 1;
@@ -313,49 +313,22 @@ export function renderStroke(
     alpha[i] = (srcData[i * 4 + 3] ?? 0) >= 128 ? 1 : 0;
   }
 
-  // Compute distance from each opaque pixel to the nearest transparent pixel
-  // and from each transparent pixel to the nearest opaque pixel using a
-  // two-pass chamfer distance transform (Manhattan approximation is sufficient
-  // for the widths we support).
-  const distInside = new Float32Array(w * h);
-  const distOutside = new Float32Array(w * h);
-  const INF = w + h;
+  // Exact Euclidean Distance Transform (Felzenszwalb-Huttenlocher algorithm).
+  // Produces true circular distance contours for smooth strokes on any shape.
+  const distSqInside = new Float64Array(w * h);
+  const distSqOutside = new Float64Array(w * h);
+  const EDT_INF = 1e20;
 
-  // Initialise
   for (let i = 0; i < w * h; i++) {
-    distInside[i] = alpha[i] ? INF : 0;
-    distOutside[i] = alpha[i] ? 0 : INF;
+    distSqInside[i] = alpha[i] ? EDT_INF : 0;
+    distSqOutside[i] = alpha[i] ? 0 : EDT_INF;
   }
 
-  // Forward pass (top-left to bottom-right)
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const idx = y * w + x;
-      if (x > 0) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - 1]! + 1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - 1]! + 1);
-      }
-      if (y > 0) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w]! + 1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w]! + 1);
-      }
-    }
-  }
+  edt2d(distSqInside, w, h);
+  edt2d(distSqOutside, w, h);
 
-  // Backward pass (bottom-right to top-left)
-  for (let y = h - 1; y >= 0; y--) {
-    for (let x = w - 1; x >= 0; x--) {
-      const idx = y * w + x;
-      if (x < w - 1) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + 1]! + 1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + 1]! + 1);
-      }
-      if (y < h - 1) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w]! + 1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w]! + 1);
-      }
-    }
-  }
+  // Compare against squared stroke width to avoid sqrt per pixel
+  const swSq = sw * sw;
 
   // Build the stroke ImageData
   const outW = w + pad * 2;
@@ -374,17 +347,14 @@ export function renderStroke(
       let isStroke = false;
 
       if (stroke.position === 'outside') {
-        // Transparent pixels within sw distance of an opaque pixel
-        isStroke = !alpha[idx] && distOutside[idx]! <= sw;
+        isStroke = !alpha[idx] && distSqOutside[idx]! <= swSq;
       } else if (stroke.position === 'inside') {
-        // Opaque pixels within sw distance of a transparent pixel
-        isStroke = !!alpha[idx] && distInside[idx]! <= sw;
+        isStroke = !!alpha[idx] && distSqInside[idx]! <= swSq;
       } else {
-        // Center: half inside, half outside
-        const halfW = sw / 2;
+        const halfSq = (sw / 2) * (sw / 2);
         isStroke =
-          (!!alpha[idx] && distInside[idx]! <= halfW) ||
-          (!alpha[idx] && distOutside[idx]! <= halfW);
+          (!!alpha[idx] && distSqInside[idx]! <= halfSq) ||
+          (!alpha[idx] && distSqOutside[idx]! <= halfSq);
       }
 
       if (isStroke) {
@@ -399,6 +369,61 @@ export function renderStroke(
 
   strokeCtx.putImageData(strokeImg, 0, 0);
   ctx.drawImage(strokeCanvas, layer.x - pad, layer.y - pad);
+}
+
+// Felzenszwalb-Huttenlocher 2D squared Euclidean distance transform (in-place).
+function edt2d(grid: Float64Array, w: number, h: number): void {
+  const maxDim = Math.max(w, h);
+  const f = new Float64Array(maxDim);
+  const d = new Float64Array(maxDim);
+  const v = new Int32Array(maxDim);
+  const z = new Float64Array(maxDim + 1);
+
+  // Transform columns
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) f[y] = grid[y * w + x]!;
+    edt1d(f, d, v, z, h);
+    for (let y = 0; y < h; y++) grid[y * w + x] = d[y]!;
+  }
+
+  // Transform rows
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) f[x] = grid[y * w + x]!;
+    edt1d(f, d, v, z, w);
+    for (let x = 0; x < w; x++) grid[y * w + x] = d[x]!;
+  }
+}
+
+function edt1d(
+  f: Float64Array,
+  d: Float64Array,
+  v: Int32Array,
+  z: Float64Array,
+  n: number,
+): void {
+  let k = 0;
+  v[0] = 0;
+  z[0] = -1e20;
+  z[1] = 1e20;
+
+  for (let q = 1; q < n; q++) {
+    const fq = f[q]! + q * q;
+    let s = (fq - (f[v[k]!]! + v[k]! * v[k]!)) / (2 * q - 2 * v[k]!);
+    while (s <= z[k]!) {
+      k--;
+      s = (fq - (f[v[k]!]! + v[k]! * v[k]!)) / (2 * q - 2 * v[k]!);
+    }
+    k++;
+    v[k] = q;
+    z[k] = s;
+    z[k + 1] = 1e20;
+  }
+
+  k = 0;
+  for (let q = 0; q < n; q++) {
+    while (z[k + 1]! < q) k++;
+    d[q] = (q - v[k]!) * (q - v[k]!) + f[v[k]!]!;
+  }
 }
 
 function renderSelectionAnts(

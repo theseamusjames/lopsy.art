@@ -1601,16 +1601,17 @@ test.describe('Layer Effects', () => {
           };
         };
         store.getState().updateLayerEffects(id, {
-          stroke: null,
+          stroke: { enabled: false, color: { r: 0, g: 0, b: 0, a: 1 }, width: 2, position: 'outside' },
           dropShadow: {
+            enabled: true,
             color: { r: 0, g: 0, b: 0, a: 0.5 },
             offsetX: 4,
             offsetY: 4,
             blur: 8,
             spread: 0,
           },
-          outerGlow: null,
-          innerGlow: null,
+          outerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
+          innerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
         });
       },
       layerId,
@@ -1618,7 +1619,7 @@ test.describe('Layer Effects', () => {
 
     const updated = await getEditorState(page);
     const effects = updated.document.layers[0]!.effects;
-    expect(effects.dropShadow).not.toBeNull();
+    expect(effects.dropShadow.enabled).toBe(true);
   });
 
   test('setting stroke on layer', async ({ page }) => {
@@ -1637,13 +1638,14 @@ test.describe('Layer Effects', () => {
         };
         store.getState().updateLayerEffects(id, {
           stroke: {
+            enabled: true,
             color: { r: 255, g: 0, b: 0, a: 1 },
             width: 2,
             position: 'outside',
           },
-          dropShadow: null,
-          outerGlow: null,
-          innerGlow: null,
+          dropShadow: { enabled: false, color: { r: 0, g: 0, b: 0, a: 0.75 }, offsetX: 4, offsetY: 4, blur: 8, spread: 0 },
+          outerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
+          innerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
         });
       },
       layerId,
@@ -1651,7 +1653,7 @@ test.describe('Layer Effects', () => {
 
     const updated = await getEditorState(page);
     const effects = updated.document.layers[0]!.effects;
-    expect(effects.stroke).not.toBeNull();
+    expect(effects.stroke.enabled).toBe(true);
   });
 
   test('effects persist after undo/redo', async ({ page }) => {
@@ -1672,16 +1674,17 @@ test.describe('Layer Effects', () => {
         };
         store.getState().pushHistory();
         store.getState().updateLayerEffects(id, {
-          stroke: null,
+          stroke: { enabled: false, color: { r: 0, g: 0, b: 0, a: 1 }, width: 2, position: 'outside' },
           dropShadow: {
+            enabled: true,
             color: { r: 0, g: 0, b: 0, a: 0.5 },
             offsetX: 4,
             offsetY: 4,
             blur: 8,
             spread: 0,
           },
-          outerGlow: null,
-          innerGlow: null,
+          outerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
+          innerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
         });
       },
       layerId,
@@ -1696,7 +1699,7 @@ test.describe('Layer Effects', () => {
     });
 
     const afterUndo = await getEditorState(page);
-    expect(afterUndo.document.layers[0]!.effects.dropShadow).toBeNull();
+    expect(afterUndo.document.layers[0]!.effects.dropShadow.enabled).toBe(false);
 
     // Redo
     await page.evaluate(() => {
@@ -1707,7 +1710,7 @@ test.describe('Layer Effects', () => {
     });
 
     const afterRedo = await getEditorState(page);
-    expect(afterRedo.document.layers[0]!.effects.dropShadow).not.toBeNull();
+    expect(afterRedo.document.layers[0]!.effects.dropShadow.enabled).toBe(true);
   });
 });
 

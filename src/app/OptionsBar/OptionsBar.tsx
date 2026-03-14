@@ -1,7 +1,18 @@
 import { useUIStore } from '../ui-store';
+import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { Slider } from '../../components/Slider/Slider';
+import { IconButton } from '../../components/IconButton/IconButton';
+import {
+  AlignHorizontalJustifyStart,
+  AlignHorizontalJustifyCenter,
+  AlignHorizontalJustifyEnd,
+  AlignVerticalJustifyStart,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
+} from 'lucide-react';
 import type { ToolId } from '../../types';
+import type { AlignEdge } from '../../tools/move/move';
 import styles from './OptionsBar.module.css';
 
 const TOOL_LABELS: Record<ToolId, string> = {
@@ -107,7 +118,29 @@ function ToolOptions({ tool }: { tool: ToolId }) {
   const setTextFontWeight = useToolSettingsStore((s) => s.setTextFontWeight);
   const setTextFontStyle = useToolSettingsStore((s) => s.setTextFontStyle);
 
+  const alignLayer = useEditorStore((s) => s.alignLayer);
+
   switch (tool) {
+    case 'move':
+      return (
+        <div className={styles.alignGroup}>
+          {([
+            ['left', AlignHorizontalJustifyStart, 'Align left'],
+            ['center-h', AlignHorizontalJustifyCenter, 'Align center horizontally'],
+            ['right', AlignHorizontalJustifyEnd, 'Align right'],
+            ['top', AlignVerticalJustifyStart, 'Align top'],
+            ['center-v', AlignVerticalJustifyCenter, 'Align center vertically'],
+            ['bottom', AlignVerticalJustifyEnd, 'Align bottom'],
+          ] as const).map(([edge, Icon, label]) => (
+            <IconButton
+              key={edge}
+              icon={<Icon size={16} />}
+              label={label}
+              onClick={() => alignLayer(edge as AlignEdge)}
+            />
+          ))}
+        </div>
+      );
     case 'brush':
       return (
         <>
