@@ -6,7 +6,7 @@ import { createImageMenu, type ImageDialogId } from './image-menu';
 import { layerMenu } from './layer-menu';
 import { selectMenu } from './select-menu';
 import { createFilterMenu } from './filter-menu';
-import { viewMenu } from './view-menu';
+import { createViewMenu } from './view-menu';
 import { createHelpMenu, type HelpDialogId } from './help-menu';
 
 export type { MenuDef, MenuItem } from './types';
@@ -25,7 +25,7 @@ export function getMenus(
     layerMenu,
     selectMenu,
     createFilterMenu(showFilterDialog),
-    viewMenu,
+    createViewMenu(),
     createHelpMenu(showHelpDialog),
   ];
 }

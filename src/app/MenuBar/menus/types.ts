@@ -4,6 +4,7 @@ export interface MenuItem {
   action?: () => void;
   disabled?: boolean;
   separator?: boolean;
+  checked?: boolean;
 }
 
 export interface MenuDef {

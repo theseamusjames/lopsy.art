@@ -130,7 +130,12 @@ export function MenuBar() {
                       onClick={() => handleItemClick(item)}
                       type="button"
                     >
-                      <span>{item.label}</span>
+                      <span>
+                        {item.checked !== undefined && (
+                          <span className={styles.checkmark}>{item.checked ? '\u2713' : ''}</span>
+                        )}
+                        {item.label}
+                      </span>
                       {item.shortcut && <span className={styles.shortcut}>{item.shortcut}</span>}
                     </button>
                   ),
