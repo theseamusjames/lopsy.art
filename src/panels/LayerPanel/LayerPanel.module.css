@@ -89,6 +89,29 @@
   white-space: nowrap;
 }
 
+.effectsBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.effectsBtn:hover {
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
+}
+
+.effectsBtnActive {
+  color: var(--color-accent);
+}
+
 .opacity {
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
@@ -135,6 +158,40 @@
 }
 
 .visibilityBtn:hover {
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
+}
+
+.maskRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2) 2px calc(var(--space-2) + 16px);
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.maskLabel {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  flex: 1;
+}
+
+.maskActionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.maskActionBtn:hover {
   background: var(--color-bg-active);
   color: var(--color-text-primary);
 }

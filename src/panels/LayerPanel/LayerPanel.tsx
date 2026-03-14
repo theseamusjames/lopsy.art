@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Eye, EyeOff, GripVertical, Plus, SquareDashed, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, GripVertical, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, X } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
@@ -107,6 +107,8 @@ export function LayerPanel({
   const removeLayerMask = useEditorStore((s) => s.removeLayerMask);
   const maskEditMode = useUIStore((s) => s.maskEditMode);
   const setMaskEditMode = useUIStore((s) => s.setMaskEditMode);
+  const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
+  const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
 
   const handleConvertMaskToMarquee = useCallback((layerId: string) => {
     const editorState = useEditorStore.getState();
@@ -216,36 +218,20 @@ export function LayerPanel({
                 <LayerThumbnail layer={layer} />
               </div>
               <span className={styles.name}>{layer.name}</span>
-              {layer.mask && (
-                <>
-                  <div
-                    className={[
-                      styles.maskThumbnail,
-                      maskEditMode && layer.id === activeLayerId ? styles.maskThumbnailActive : '',
-                      !layer.mask.enabled ? styles.maskDisabled : '',
-                    ].filter(Boolean).join(' ')}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectLayer(layer.id);
-                      setMaskEditMode(!maskEditMode || layer.id !== activeLayerId);
-                    }}
-                    title="Click to edit mask"
-                  >
-                    <MaskThumbnail layer={layer} />
-                  </div>
-                  <button
-                    className={styles.maskBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleConvertMaskToMarquee(layer.id);
-                    }}
-                    type="button"
-                    title="Convert mask to selection"
-                  >
-                    <SquareDashed size={12} />
-                  </button>
-                </>
-              )}
+              <button
+                className={`${styles.effectsBtn} ${showEffectsDrawer && layer.id === activeLayerId ? styles.effectsBtnActive : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectLayer(layer.id);
+                  if (!showEffectsDrawer) {
+                    setShowEffectsDrawer(true);
+                  }
+                }}
+                type="button"
+                title="Layer effects"
+              >
+                <Sparkles size={12} />
+              </button>
               <span
                 className={styles.opacity}
                 onClick={(e) => {
@@ -279,6 +265,49 @@ export function LayerPanel({
                 />
               </div>
             )}
+            {layer.mask && (
+              <div className={styles.maskRow}>
+                <div
+                  className={[
+                    styles.maskThumbnail,
+                    maskEditMode && layer.id === activeLayerId ? styles.maskThumbnailActive : '',
+                    !layer.mask.enabled ? styles.maskDisabled : '',
+                  ].filter(Boolean).join(' ')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectLayer(layer.id);
+                    setMaskEditMode(!maskEditMode || layer.id !== activeLayerId);
+                  }}
+                  title="Click to edit mask"
+                >
+                  <MaskThumbnail layer={layer} />
+                </div>
+                <span className={styles.maskLabel}>Mask</span>
+                <button
+                  className={styles.maskActionBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleConvertMaskToMarquee(layer.id);
+                  }}
+                  type="button"
+                  title="Convert mask to selection"
+                >
+                  <SquareDashed size={12} />
+                </button>
+                <button
+                  className={styles.maskActionBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeLayerMask(layer.id);
+                    setMaskEditMode(false);
+                  }}
+                  type="button"
+                  title="Delete mask"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -298,31 +327,13 @@ export function LayerPanel({
         />
         {activeLayerId && (() => {
           const activeLayer = layers.find((l) => l.id === activeLayerId);
-          if (!activeLayer) return null;
-          if (activeLayer.mask) {
-            return (
-              <button
-                className={styles.maskBtn}
-                onClick={() => {
-                  removeLayerMask(activeLayerId);
-                  setMaskEditMode(false);
-                }}
-                type="button"
-                title="Delete Mask"
-              >
-                ✕M
-              </button>
-            );
-          }
+          if (!activeLayer || activeLayer.mask) return null;
           return (
-            <button
-              className={styles.maskBtn}
+            <IconButton
+              icon={<RectangleCircle size={16} />}
+              label="Add Mask"
               onClick={() => addLayerMask(activeLayerId)}
-              type="button"
-              title="Add Mask"
-            >
-              +M
-            </button>
+            />
           );
         })()}
       </div>
