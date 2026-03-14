@@ -313,19 +313,15 @@ export function renderStroke(
     alpha[i] = (srcData[i * 4 + 3] ?? 0) >= 128 ? 1 : 0;
   }
 
-  // Compute distance fields using a two-pass 3-4 chamfer distance transform.
-  const distInside = new Float32Array(w * h);
-  const distOutside = new Float32Array(w * h);
+  // Chebyshev (L-infinity) distance transform — all 8 neighbours cost 1.
+  // Produces square distance contours so strokes keep sharp corners.
+  const distInside = new Uint16Array(w * h);
+  const distOutside = new Uint16Array(w * h);
   const INF = w + h;
 
-  // 8-connected chamfer distance (3-4 weights approximate Euclidean distance)
-  const D1 = 3; // cardinal cost
-  const D2 = 4; // diagonal cost
-  const SCALE = D1; // distances are scaled by D1
-
   for (let i = 0; i < w * h; i++) {
-    distInside[i] = alpha[i] ? INF * D1 : 0;
-    distOutside[i] = alpha[i] ? 0 : INF * D1;
+    distInside[i] = alpha[i] ? INF : 0;
+    distOutside[i] = alpha[i] ? 0 : INF;
   }
 
   // Forward pass (top-left to bottom-right)
@@ -333,20 +329,20 @@ export function renderStroke(
     for (let x = 0; x < w; x++) {
       const idx = y * w + x;
       if (x > 0) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - 1]! + D1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - 1]! + D1);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - 1]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - 1]! + 1);
       }
       if (y > 0) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w]! + D1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w]! + D1);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w]! + 1);
       }
       if (x > 0 && y > 0) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w - 1]! + D2);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w - 1]! + D2);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w - 1]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w - 1]! + 1);
       }
       if (x < w - 1 && y > 0) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w + 1]! + D2);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w + 1]! + D2);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx - w + 1]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx - w + 1]! + 1);
       }
     }
   }
@@ -356,20 +352,20 @@ export function renderStroke(
     for (let x = w - 1; x >= 0; x--) {
       const idx = y * w + x;
       if (x < w - 1) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + 1]! + D1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + 1]! + D1);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + 1]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + 1]! + 1);
       }
       if (y < h - 1) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w]! + D1);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w]! + D1);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w]! + 1);
       }
       if (x < w - 1 && y < h - 1) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w + 1]! + D2);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w + 1]! + D2);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w + 1]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w + 1]! + 1);
       }
       if (x > 0 && y < h - 1) {
-        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w - 1]! + D2);
-        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w - 1]! + D2);
+        distInside[idx] = Math.min(distInside[idx]!, distInside[idx + w - 1]! + 1);
+        distOutside[idx] = Math.min(distOutside[idx]!, distOutside[idx + w - 1]! + 1);
       }
     }
   }
@@ -384,7 +380,6 @@ export function renderStroke(
   const cg = stroke.color.g;
   const cb = stroke.color.b;
   const ca = Math.round(stroke.color.a * 255);
-  const scaledW = sw * SCALE;
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -392,11 +387,11 @@ export function renderStroke(
       let isStroke = false;
 
       if (stroke.position === 'outside') {
-        isStroke = !alpha[idx] && distOutside[idx]! <= scaledW;
+        isStroke = !alpha[idx] && distOutside[idx]! <= sw;
       } else if (stroke.position === 'inside') {
-        isStroke = !!alpha[idx] && distInside[idx]! <= scaledW;
+        isStroke = !!alpha[idx] && distInside[idx]! <= sw;
       } else {
-        const halfW = scaledW / 2;
+        const halfW = sw / 2;
         isStroke =
           (!!alpha[idx] && distInside[idx]! <= halfW) ||
           (!alpha[idx] && distOutside[idx]! <= halfW);
