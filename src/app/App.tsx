@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
@@ -18,6 +18,8 @@ import styles from './App.module.css';
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const sidebarBottomRef = useRef<HTMLDivElement>(null);
+  const effectsDrawerRef = useRef<HTMLDivElement>(null);
 
   const foregroundColor = useUIStore((s) => s.foregroundColor);
   const backgroundColor = useUIStore((s) => s.backgroundColor);
@@ -187,6 +189,18 @@ export function App() {
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
 
+  useLayoutEffect(() => {
+    const bottom = sidebarBottomRef.current;
+    const drawer = effectsDrawerRef.current;
+    if (!bottom || !drawer) return;
+    const parentRect = bottom.offsetParent?.getBoundingClientRect();
+    const bottomRect = bottom.getBoundingClientRect();
+    if (!parentRect) return;
+    const top = bottomRect.top - parentRect.top;
+    drawer.style.top = `${top}px`;
+    drawer.style.bottom = '0';
+  }, [showEffectsDrawer, colorPanelCollapsed]);
+
   const showModal = !documentReady || showNewDocumentModal;
 
   if (!documentReady) {
@@ -229,7 +243,7 @@ export function App() {
         </div>
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
-            <div className={styles.effectsDrawer}>
+            <div className={styles.effectsDrawer} ref={effectsDrawerRef}>
               <LayerEffectsPanel />
             </div>
           )}
@@ -250,7 +264,7 @@ export function App() {
                 />
               </PanelContainer>
             </div>
-            <div className={styles.sidebarBottom}>
+            <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
               <PanelContainer title="Layers">
                 <LayerPanel
                   layers={[...layers]}

@@ -3,38 +3,9 @@ import { X } from 'lucide-react';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { Slider } from '../../components/Slider/Slider';
-import { ColorSwatch } from '../../components/ColorSwatch/ColorSwatch';
 import { IconButton } from '../../components/IconButton/IconButton';
 import type { Color, LayerEffects, ShadowEffect, StrokeEffect, GlowEffect } from '../../types';
 import styles from './LayerEffectsPanel.module.css';
-
-const DEFAULT_SHADOW: ShadowEffect = {
-  color: { r: 0, g: 0, b: 0, a: 0.75 },
-  offsetX: 4,
-  offsetY: 4,
-  blur: 8,
-  spread: 0,
-};
-
-const DEFAULT_STROKE: StrokeEffect = {
-  color: { r: 0, g: 0, b: 0, a: 1 },
-  width: 2,
-  position: 'outside',
-};
-
-const DEFAULT_GLOW: GlowEffect = {
-  color: { r: 255, g: 255, b: 100, a: 1 },
-  size: 10,
-  spread: 0,
-  opacity: 0.75,
-};
-
-const DEFAULT_INNER_GLOW: GlowEffect = {
-  color: { r: 255, g: 255, b: 100, a: 1 },
-  size: 10,
-  spread: 0,
-  opacity: 0.75,
-};
 
 type EffectKey = 'dropShadow' | 'stroke' | 'outerGlow' | 'innerGlow';
 type StrokePosition = StrokeEffect['position'];
@@ -45,13 +16,6 @@ const EFFECT_LIST: { key: EffectKey; label: string }[] = [
   { key: 'outerGlow', label: 'Outer Glow' },
   { key: 'innerGlow', label: 'Inner Glow' },
 ];
-
-const DEFAULTS: Record<EffectKey, ShadowEffect | StrokeEffect | GlowEffect> = {
-  dropShadow: DEFAULT_SHADOW,
-  stroke: DEFAULT_STROKE,
-  outerGlow: DEFAULT_GLOW,
-  innerGlow: DEFAULT_INNER_GLOW,
-};
 
 function colorToHex(c: Color): string {
   const r = c.r.toString(16).padStart(2, '0');
@@ -81,12 +45,14 @@ function DropShadowForm({
     <>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Color</span>
-        <ColorSwatch color={shadow.color} size="sm" />
-        <input
-          type="color"
-          value={colorToHex(shadow.color)}
-          onChange={(e) => onChange({ ...shadow, color: hexToColor(e.target.value, shadow.color.a) })}
-        />
+        <label className={styles.colorSwatch} style={{ backgroundColor: `rgb(${shadow.color.r}, ${shadow.color.g}, ${shadow.color.b})` }}>
+          <input
+            type="color"
+            className={styles.colorInput}
+            value={colorToHex(shadow.color)}
+            onChange={(e) => onChange({ ...shadow, color: hexToColor(e.target.value, shadow.color.a) })}
+          />
+        </label>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Offset X</span>
@@ -127,12 +93,14 @@ function StrokeForm({
     <>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Color</span>
-        <ColorSwatch color={stroke.color} size="sm" />
-        <input
-          type="color"
-          value={colorToHex(stroke.color)}
-          onChange={(e) => onChange({ ...stroke, color: hexToColor(e.target.value, stroke.color.a) })}
-        />
+        <label className={styles.colorSwatch} style={{ backgroundColor: `rgb(${stroke.color.r}, ${stroke.color.g}, ${stroke.color.b})` }}>
+          <input
+            type="color"
+            className={styles.colorInput}
+            value={colorToHex(stroke.color)}
+            onChange={(e) => onChange({ ...stroke, color: hexToColor(e.target.value, stroke.color.a) })}
+          />
+        </label>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Width</span>
@@ -170,12 +138,14 @@ function GlowForm({
     <>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Color</span>
-        <ColorSwatch color={glow.color} size="sm" />
-        <input
-          type="color"
-          value={colorToHex(glow.color)}
-          onChange={(e) => onChange({ ...glow, color: hexToColor(e.target.value, glow.color.a) })}
-        />
+        <label className={styles.colorSwatch} style={{ backgroundColor: `rgb(${glow.color.r}, ${glow.color.g}, ${glow.color.b})` }}>
+          <input
+            type="color"
+            className={styles.colorInput}
+            value={colorToHex(glow.color)}
+            onChange={(e) => onChange({ ...glow, color: hexToColor(e.target.value, glow.color.a) })}
+          />
+        </label>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Size</span>
@@ -225,8 +195,9 @@ export function LayerEffectsPanel() {
 
   const handleToggle = useCallback(
     (key: EffectKey) => {
-      const isEnabled = effects?.[key] !== null;
-      update({ [key]: isEnabled ? null : DEFAULTS[key] });
+      if (!effects) return;
+      const current = effects[key];
+      update({ [key]: { ...current, enabled: !current.enabled } });
     },
     [effects, update],
   );
@@ -247,27 +218,30 @@ export function LayerEffectsPanel() {
     );
   }
 
-  const shadow = effects?.dropShadow ?? DEFAULT_SHADOW;
-  const stroke = effects?.stroke ?? DEFAULT_STROKE;
-  const outerGlow = effects?.outerGlow ?? DEFAULT_GLOW;
-  const innerGlow = effects?.innerGlow ?? DEFAULT_INNER_GLOW;
+  const shadow = effects?.dropShadow;
+  const stroke = effects?.stroke;
+  const outerGlow = effects?.outerGlow;
+  const innerGlow = effects?.innerGlow;
 
   function renderForm() {
+    if (!effects) return null;
+    const selected = effects[selectedEffect];
+    if (!selected.enabled) return null;
     switch (selectedEffect) {
       case 'dropShadow':
-        return effects?.dropShadow ? (
+        return shadow ? (
           <DropShadowForm shadow={shadow} onChange={(s) => update({ dropShadow: s })} />
         ) : null;
       case 'stroke':
-        return effects?.stroke ? (
+        return stroke ? (
           <StrokeForm stroke={stroke} onChange={(s) => update({ stroke: s })} />
         ) : null;
       case 'outerGlow':
-        return effects?.outerGlow ? (
+        return outerGlow ? (
           <GlowForm glow={outerGlow} onChange={(g) => update({ outerGlow: g })} />
         ) : null;
       case 'innerGlow':
-        return effects?.innerGlow ? (
+        return innerGlow ? (
           <GlowForm glow={innerGlow} onChange={(g) => update({ innerGlow: g })} />
         ) : null;
       default:
@@ -288,7 +262,7 @@ export function LayerEffectsPanel() {
       <div className={styles.split}>
         <div className={styles.effectList}>
           {EFFECT_LIST.map(({ key, label }) => {
-            const isEnabled = effects?.[key] !== null;
+            const isEnabled = effects?.[key]?.enabled ?? false;
             const isSelected = selectedEffect === key;
             return (
               <div
@@ -300,7 +274,10 @@ export function LayerEffectsPanel() {
                   type="checkbox"
                   className={styles.checkbox}
                   checked={isEnabled}
-                  onChange={() => handleToggle(key)}
+                  onChange={() => {
+                    handleToggle(key);
+                    setSelectedEffect(key);
+                  }}
                   onClick={(e) => e.stopPropagation()}
                 />
                 <span className={styles.effectLabel}>{label}</span>

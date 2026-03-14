@@ -50,9 +50,8 @@
 .effectsDrawer {
   position: absolute;
   right: 100%;
-  top: 0;
-  bottom: 0;
-  width: 340px;
+  width: 420px;
+  z-index: 1;
   background: var(--color-bg-secondary);
   border-left: 1px solid var(--color-border);
   border-right: 1px solid var(--color-border);
