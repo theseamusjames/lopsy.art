@@ -139,6 +139,7 @@ export function MenuBar() {
             )}
           </div>
         ))}
+        <span className={styles.logo}>LOPSY</span>
       </div>
       {filterDef && (
         <FilterDialog
