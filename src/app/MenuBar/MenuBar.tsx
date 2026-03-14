@@ -10,15 +10,18 @@ import {
   getFilterDialogConfig,
   applyGenericFilter,
 } from './filter-actions';
-import { getMenus, type MenuItem, type ImageDialogId } from './menus';
+import { getMenus, type MenuItem, type ImageDialogId, type HelpDialogId } from './menus';
 import { CanvasSizeModal } from '../../components/CanvasSizeModal/CanvasSizeModal';
 import { ImageSizeModal } from '../../components/ImageSizeModal/ImageSizeModal';
+import { KeyboardShortcutsModal } from '../../components/KeyboardShortcutsModal/KeyboardShortcutsModal';
+import { AboutModal } from '../../components/AboutModal/AboutModal';
 import styles from './MenuBar.module.css';
 
 export function MenuBar() {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const [activeDialog, setActiveDialog] = useState<FilterDialogId | null>(null);
   const [imageDialog, setImageDialog] = useState<ImageDialogId | null>(null);
+  const [helpDialog, setHelpDialog] = useState<HelpDialogId | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
   const showFilterDialog = useCallback((id: FilterDialogId) => {
@@ -31,7 +34,12 @@ export function MenuBar() {
     setImageDialog(id);
   }, []);
 
-  const menus = getMenus(showFilterDialog, showImageDialog);
+  const showHelpDialog = useCallback((id: HelpDialogId) => {
+    setOpenMenu(null);
+    setHelpDialog(id);
+  }, []);
+
+  const menus = getMenus(showFilterDialog, showImageDialog, showHelpDialog);
 
   const handleMenuClick = useCallback((index: number) => {
     setOpenMenu((prev) => (prev === index ? null : index));
@@ -159,6 +167,12 @@ export function MenuBar() {
       )}
       {imageDialog === 'image-size' && (
         <ImageSizeModal onClose={() => setImageDialog(null)} />
+      )}
+      {helpDialog === 'keyboard-shortcuts' && (
+        <KeyboardShortcutsModal onClose={() => setHelpDialog(null)} />
+      )}
+      {helpDialog === 'about' && (
+        <AboutModal onClose={() => setHelpDialog(null)} />
       )}
     </>
   );

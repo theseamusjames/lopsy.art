@@ -13,7 +13,13 @@ import type { MenuDef } from './types';
 
 const METADATA_NOTE = 'Made with Lopsy — http://lopsy.art';
 
+function confirmIfDirty(): boolean {
+  if (!useEditorStore.getState().isDirty) return true;
+  return window.confirm('You have unsaved changes. Are you sure you want to continue?');
+}
+
 export function openFileFromDisk(): void {
+  if (!confirmIfDirty()) return;
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
@@ -84,17 +90,15 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
     a.download = `lopsy.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
+    useEditorStore.getState().markClean();
   }, mimeType, 0.92);
 }
 
 export const fileMenu: MenuDef = {
   label: 'File',
   items: [
-    { label: 'New', shortcut: '\u2318N', action: () => useUIStore.getState().setShowNewDocumentModal(true) },
+    { label: 'New', shortcut: '\u2318N', action: () => { if (confirmIfDirty()) useUIStore.getState().setShowNewDocumentModal(true); } },
     { label: 'Open...', shortcut: '\u2318O', action: () => openFileFromDisk() },
-    { separator: true, label: '' },
-    { label: 'Save', shortcut: '\u2318S', disabled: true },
-    { label: 'Save As...', shortcut: '\u21E7\u2318S', disabled: true },
     { separator: true, label: '' },
     { label: 'Export PNG', shortcut: '\u21E7\u2318E', action: () => exportCanvas('png') },
     { label: 'Export JPEG', action: () => exportCanvas('jpeg') },

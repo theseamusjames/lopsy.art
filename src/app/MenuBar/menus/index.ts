@@ -7,14 +7,16 @@ import { layerMenu } from './layer-menu';
 import { selectMenu } from './select-menu';
 import { createFilterMenu } from './filter-menu';
 import { viewMenu } from './view-menu';
-import { helpMenu } from './help-menu';
+import { createHelpMenu, type HelpDialogId } from './help-menu';
 
 export type { MenuDef, MenuItem } from './types';
 export type { ImageDialogId } from './image-menu';
+export type { HelpDialogId } from './help-menu';
 
 export function getMenus(
   showFilterDialog: (id: FilterDialogId) => void,
   showImageDialog: (id: ImageDialogId) => void,
+  showHelpDialog: (id: HelpDialogId) => void,
 ): MenuDef[] {
   return [
     fileMenu,
@@ -24,6 +26,6 @@ export function getMenus(
     selectMenu,
     createFilterMenu(showFilterDialog),
     viewMenu,
-    helpMenu,
+    createHelpMenu(showHelpDialog),
   ];
 }

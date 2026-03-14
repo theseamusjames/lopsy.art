@@ -1,9 +1,13 @@
 import type { MenuDef } from './types';
 
-export const helpMenu: MenuDef = {
-  label: 'Help',
-  items: [
-    { label: 'Keyboard Shortcuts', disabled: true },
-    { label: 'About Lopsy', disabled: true },
-  ],
-};
+export type HelpDialogId = 'keyboard-shortcuts' | 'about';
+
+export function createHelpMenu(showDialog: (id: HelpDialogId) => void): MenuDef {
+  return {
+    label: 'Help',
+    items: [
+      { label: 'Keyboard Shortcuts', action: () => showDialog('keyboard-shortcuts') },
+      { label: 'About Lopsy', action: () => showDialog('about') },
+    ],
+  };
+}
