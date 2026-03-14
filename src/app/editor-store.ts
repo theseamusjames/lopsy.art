@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { DocumentState, Layer, LayerEffects, LayerMask, Rect, RasterLayer, ViewportState } from '../types';
 import { compositeOver } from '../engine/compositing';
 import { computeAlign, getContentBounds, type AlignEdge } from '../tools/move/move';
+import { CanvasAllocator, renderOuterGlow, renderDropShadow, renderInnerGlow, renderStroke } from '../engine/effects-renderer';
 
 interface SelectionData {
   active: boolean;
@@ -49,6 +50,66 @@ function clonePixelDataMapFull(map: Map<string, ImageData>): Map<string, ImageDa
   return clone;
 }
 
+function hasEnabledEffects(effects: LayerEffects): boolean {
+  return effects.dropShadow.enabled || effects.stroke.enabled ||
+    effects.outerGlow.enabled || effects.innerGlow.enabled;
+}
+
+function rasterizeEffectsToImageData(
+  layer: Layer,
+  data: ImageData,
+): { imageData: ImageData; offsetX: number; offsetY: number } {
+  const effects = layer.effects;
+
+  let pad = 0;
+  if (effects.outerGlow.enabled) {
+    pad = Math.max(pad, (effects.outerGlow.size + effects.outerGlow.spread) * 2);
+  }
+  if (effects.dropShadow.enabled) {
+    const s = effects.dropShadow;
+    pad = Math.max(pad, s.blur * 2 + Math.max(Math.abs(s.offsetX), Math.abs(s.offsetY)) + s.spread);
+  }
+  if (effects.innerGlow.enabled) {
+    pad = Math.max(pad, (effects.innerGlow.size + effects.innerGlow.spread) * 2);
+  }
+  if (effects.stroke.enabled) {
+    pad = Math.max(pad, effects.stroke.width + 1);
+  }
+  pad = Math.ceil(pad);
+
+  const outW = data.width + pad * 2;
+  const outH = data.height + pad * 2;
+
+  const destCanvas = document.createElement('canvas');
+  destCanvas.width = outW;
+  destCanvas.height = outH;
+  const destCtx = destCanvas.getContext('2d')!;
+
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = data.width;
+  tempCanvas.height = data.height;
+  const tempCtx = tempCanvas.getContext('2d')!;
+  tempCtx.putImageData(data, 0, 0);
+
+  const fakeLayer = { ...layer, x: pad, y: pad } as Layer;
+  const alloc = new CanvasAllocator();
+
+  destCtx.globalAlpha = 1;
+  renderOuterGlow(destCtx, tempCanvas, fakeLayer, data, alloc);
+  renderDropShadow(destCtx, tempCanvas, fakeLayer, data, alloc);
+  destCtx.drawImage(tempCanvas, pad, pad);
+  renderInnerGlow(destCtx, tempCanvas, fakeLayer, data, alloc);
+  renderStroke(destCtx, tempCanvas, fakeLayer, data, alloc);
+
+  alloc.releaseAll();
+
+  return {
+    imageData: destCtx.getImageData(0, 0, outW, outH),
+    offsetX: -pad,
+    offsetY: -pad,
+  };
+}
+
 interface ClipboardData {
   imageData: ImageData;
   offsetX: number;
@@ -84,6 +145,7 @@ interface EditorState {
   duplicateLayer: () => void;
   mergeDown: () => void;
   flattenImage: () => void;
+  rasterizeLayerStyle: () => void;
   updateLayerEffects: (id: string, effects: LayerEffects) => void;
   addLayerMask: (id: string) => void;
   removeLayerMask: (id: string) => void;
@@ -453,11 +515,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!belowId) return;
     state.pushHistory('Merge Down');
 
-    const topData = state.getOrCreateLayerPixelData(activeId);
+    let topData = state.getOrCreateLayerPixelData(activeId);
     const bottomData = state.getOrCreateLayerPixelData(belowId);
     const topLayer = state.document.layers.find((l) => l.id === activeId);
     const bottomLayer = state.document.layers.find((l) => l.id === belowId);
     if (!topLayer || !bottomLayer) return;
+
+    let topX = topLayer.x;
+    let topY = topLayer.y;
+
+    if (hasEnabledEffects(topLayer.effects)) {
+      const rasterized = rasterizeEffectsToImageData(topLayer, topData);
+      topData = rasterized.imageData;
+      topX += rasterized.offsetX;
+      topY += rasterized.offsetY;
+    }
 
     // Composite top onto bottom
     const result = new ImageData(bottomData.width, bottomData.height);
@@ -466,7 +538,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       topData.data, bottomData.data,
       topData.width, topData.height,
       bottomData.width, bottomData.height,
-      topLayer.x - bottomLayer.x, topLayer.y - bottomLayer.y,
+      topX - bottomLayer.x, topY - bottomLayer.y,
       topLayer.opacity, result.data,
     );
 
@@ -557,6 +629,41 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       },
       renderVersion: state.renderVersion + 1,
     }));
+  },
+
+  rasterizeLayerStyle: () => {
+    const state = get();
+    const activeId = state.document.activeLayerId;
+    if (!activeId) return;
+    const layer = state.document.layers.find((l) => l.id === activeId);
+    if (!layer || !hasEnabledEffects(layer.effects)) return;
+
+    state.pushHistory('Rasterize Layer Style');
+
+    const data = state.getOrCreateLayerPixelData(activeId);
+    const result = rasterizeEffectsToImageData(layer, data);
+
+    const pixelData = new Map(state.layerPixelData);
+    pixelData.set(activeId, result.imageData);
+
+    set({
+      document: {
+        ...state.document,
+        layers: state.document.layers.map((l) =>
+          l.id === activeId
+            ? {
+                ...l,
+                x: l.x + result.offsetX,
+                y: l.y + result.offsetY,
+                effects: DEFAULT_EFFECTS,
+                ...(l.type === 'raster' ? { width: result.imageData.width, height: result.imageData.height } : {}),
+              } as Layer
+            : l,
+        ),
+      },
+      layerPixelData: pixelData,
+      renderVersion: state.renderVersion + 1,
+    });
   },
 
   addLayerMask: (id: string) => {

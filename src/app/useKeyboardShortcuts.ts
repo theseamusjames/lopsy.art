@@ -3,6 +3,7 @@ import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useToolSettingsStore } from './tool-settings-store';
 import { strokeCurrentPath } from './useCanvasInteraction';
+import { selectAll, invertSelectionAction } from './MenuBar/menus/select-menu';
 
 interface KeyboardShortcutDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -212,11 +213,25 @@ export function useKeyboardShortcuts({
         } else if (e.key === 'e') {
           e.preventDefault();
           useEditorStore.getState().mergeDown();
+        } else if (e.key === 'a') {
+          e.preventDefault();
+          selectAll();
+        } else if (e.key === 'i' || e.key === 'I') {
+          if (e.shiftKey) {
+            e.preventDefault();
+            invertSelectionAction();
+          }
         } else if (e.key === 'd') {
           e.preventDefault();
           useEditorStore.getState().clearSelection();
           useUIStore.getState().setTransform(null);
           clearPersistentTransform();
+        } else if (e.key === "'") {
+          e.preventDefault();
+          useUIStore.getState().toggleGrid();
+        } else if (e.key === ';') {
+          e.preventDefault();
+          useUIStore.getState().toggleGuides();
         } else if (e.key === 'z' || e.key === 'Z') {
           e.preventDefault();
           if (e.shiftKey) {

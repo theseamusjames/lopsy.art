@@ -5,9 +5,9 @@ import {
   renderOuterGlow,
   renderInnerGlow,
   renderDropShadow,
-  renderLayerContent,
   renderStroke,
-} from '../../useCanvasRendering';
+} from '../../../engine/effects-renderer';
+import { renderLayerContent } from '../../useCanvasRendering';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
 import type { MenuDef } from './types';
 

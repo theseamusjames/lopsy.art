@@ -31,10 +31,16 @@
 }
 
 .effectList {
+  display: flex;
+  flex-direction: column;
   width: 150px;
   flex-shrink: 0;
   border-right: 1px solid var(--color-border-subtle);
   overflow-y: auto;
+}
+
+.effectListSpacer {
+  flex: 1;
 }
 
 .effectRow {
@@ -153,6 +159,28 @@
   color: var(--color-text-disabled);
   padding: var(--space-4);
   text-align: center;
+}
+
+.rasterizeBtn {
+  margin: 0 var(--space-2) var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.rasterizeBtn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.rasterizeBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .hint {
