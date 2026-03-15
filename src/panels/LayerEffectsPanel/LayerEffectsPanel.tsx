@@ -7,15 +7,17 @@ import type { LayerEffects } from '../../types';
 import { DropShadowForm } from './DropShadowForm';
 import { StrokeForm } from './StrokeForm';
 import { GlowForm } from './GlowForm';
+import { ColorOverlayForm } from './ColorOverlayForm';
 import styles from './LayerEffectsPanel.module.css';
 
-type EffectKey = 'dropShadow' | 'stroke' | 'outerGlow' | 'innerGlow';
+type EffectKey = 'dropShadow' | 'stroke' | 'outerGlow' | 'innerGlow' | 'colorOverlay';
 
 const EFFECT_LIST: { key: EffectKey; label: string }[] = [
   { key: 'dropShadow', label: 'Drop Shadow' },
   { key: 'stroke', label: 'Stroke' },
   { key: 'outerGlow', label: 'Outer Glow' },
   { key: 'innerGlow', label: 'Inner Glow' },
+  { key: 'colorOverlay', label: 'Color Overlay' },
 ];
 
 export function LayerEffectsPanel() {
@@ -67,9 +69,10 @@ export function LayerEffectsPanel() {
   const stroke = effects?.stroke;
   const outerGlow = effects?.outerGlow;
   const innerGlow = effects?.innerGlow;
+  const colorOverlay = effects?.colorOverlay;
 
   const hasAnyEffect = !!(
-    shadow?.enabled || stroke?.enabled || outerGlow?.enabled || innerGlow?.enabled
+    shadow?.enabled || stroke?.enabled || outerGlow?.enabled || innerGlow?.enabled || colorOverlay?.enabled
   );
 
   function renderForm() {
@@ -92,6 +95,10 @@ export function LayerEffectsPanel() {
       case 'innerGlow':
         return innerGlow ? (
           <GlowForm glow={innerGlow} onChange={(g) => update({ innerGlow: g })} />
+        ) : null;
+      case 'colorOverlay':
+        return colorOverlay ? (
+          <ColorOverlayForm overlay={colorOverlay} onChange={(o) => update({ colorOverlay: o })} />
         ) : null;
       default:
         return null;

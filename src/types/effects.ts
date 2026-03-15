@@ -1,10 +1,16 @@
 import type { Color } from './color';
 
+export interface ColorOverlayEffect {
+  readonly enabled: boolean;
+  readonly color: Color;
+}
+
 export interface LayerEffects {
   readonly stroke: StrokeEffect;
   readonly dropShadow: ShadowEffect;
   readonly outerGlow: GlowEffect;
   readonly innerGlow: GlowEffect;
+  readonly colorOverlay: ColorOverlayEffect;
 }
 
 export interface StrokeEffect {

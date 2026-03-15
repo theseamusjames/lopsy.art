@@ -176,6 +176,20 @@ export function renderStroke(
   ctx.drawImage(strokeCanvas, layer.x - pad, layer.y - pad);
 }
 
+export function applyColorOverlay(
+  data: ImageData,
+  layer: Layer,
+): void {
+  if (!layer.effects.colorOverlay.enabled) return;
+  const { r, g, b } = layer.effects.colorOverlay.color;
+  const d = data.data;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = r;
+    d[i + 1] = g;
+    d[i + 2] = b;
+  }
+}
+
 export function rasterizeEffectsToImageData(
   layer: Layer,
   data: ImageData,
@@ -214,6 +228,11 @@ export function rasterizeEffectsToImageData(
 
   const fakeLayer = { ...layer, x: pad, y: pad } as Layer;
   const alloc = new CanvasAllocator();
+
+  applyColorOverlay(data, layer);
+  if (layer.effects.colorOverlay.enabled) {
+    tempCtx.putImageData(data, 0, 0);
+  }
 
   destCtx.globalAlpha = 1;
   renderOuterGlow(destCtx, tempCanvas, fakeLayer, data, alloc);
