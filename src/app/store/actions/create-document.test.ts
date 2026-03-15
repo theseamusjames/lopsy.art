@@ -8,9 +8,9 @@ describe('computeCreateDocument', () => {
     const result = computeCreateDocument(800, 600, false);
     expect(result.document?.width).toBe(800);
     expect(result.document?.height).toBe(600);
-    expect(result.document?.layers).toHaveLength(1);
-    expect(result.document?.layerOrder).toHaveLength(1);
-    expect(result.document?.activeLayerId).toBe(result.document?.layers[0]?.id);
+    expect(result.document?.layers).toHaveLength(2);
+    expect(result.document?.layerOrder).toHaveLength(2);
+    expect(result.document?.activeLayerId).toBe(result.document?.layers[1]?.id);
   });
 
   it('creates white-filled pixel data for non-transparent background', () => {

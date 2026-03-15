@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import type { Color, Point, ToolId } from '../types';
 import type { TransformHandle, TransformState } from '../tools/transform/transform';
+import { useToolSettingsStore } from './tool-settings-store';
+import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
+import type { ImageAdjustments } from '../filters/image-adjustments';
 
 export interface PathAnchor {
   point: Point;
@@ -8,7 +11,7 @@ export interface PathAnchor {
   handleOut: Point | null;
 }
 
-const MAX_RECENT_COLORS = 14;
+const MAX_RECENT_COLORS = 20;
 
 function colorsEqual(a: Color, b: Color): boolean {
   return a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a;
@@ -64,13 +67,19 @@ interface UIState {
   setCropRect: (rect: { x: number; y: number; width: number; height: number } | null) => void;
   setTransform: (transform: TransformState | null) => void;
   setActiveTransformHandle: (handle: TransformHandle | null) => void;
+  pendingShapeClick: { center: Point; layerId: string; layerX: number; layerY: number } | null;
+  setPendingShapeClick: (pending: { center: Point; layerId: string; layerX: number; layerY: number } | null) => void;
+  adjustments: ImageAdjustments;
+  adjustmentsEnabled: boolean;
+  setAdjustments: (adj: ImageAdjustments) => void;
+  setAdjustmentsEnabled: (enabled: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
   activeTool: 'move',
   foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
   backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
-  recentColors: [],
+  recentColors: Array.from({ length: MAX_RECENT_COLORS }, () => ({ r: 46, g: 46, b: 46, a: 1 })),
   showGrid: false,
   showRulers: true,
   showGuides: true,
@@ -88,6 +97,12 @@ export const useUIStore = create<UIState>((set) => ({
   showEffectsDrawer: false,
   visiblePanels: new Set(['color', 'layers']),
   cursorPosition: { x: 0, y: 0 },
+  pendingShapeClick: null,
+  setPendingShapeClick: (pending) => set({ pendingShapeClick: pending }),
+  adjustments: { ...DEFAULT_ADJUSTMENTS },
+  adjustmentsEnabled: true,
+  setAdjustments: (adj) => set({ adjustments: adj }),
+  setAdjustmentsEnabled: (enabled) => set({ adjustmentsEnabled: enabled }),
   gradientPreview: null,
   setCursorPosition: (pos) => set({ cursorPosition: pos }),
   setMaskEditMode: (mode) => set({ maskEditMode: mode }),
@@ -119,6 +134,9 @@ export const useUIStore = create<UIState>((set) => ({
     } else {
       set({ activeTool: tool });
     }
+    if (tool === 'shape') {
+      useToolSettingsStore.getState().setShapeFillColor(current.foregroundColor);
+    }
   },
   setForegroundColor: (color) => set({ foregroundColor: color }),
   setBackgroundColor: (color) => set({ backgroundColor: color }),
@@ -132,7 +150,10 @@ export const useUIStore = create<UIState>((set) => ({
       foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
     }),
-  toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
+  toggleGrid: () => set((state) => {
+    const showGrid = !state.showGrid;
+    return showGrid ? { showGrid, snapToGrid: true } : { showGrid };
+  }),
   toggleRulers: () => set((state) => ({ showRulers: !state.showRulers })),
   toggleGuides: () => set((state) => ({ showGuides: !state.showGuides })),
   toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),

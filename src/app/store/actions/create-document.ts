@@ -21,6 +21,18 @@ export function computeCreateDocument(
     }
   }
   pixelData.set(bgLayer.id, imgData);
+
+  const layers = [bgLayer];
+  const layerOrder = [bgLayer.id];
+  let activeLayerId = bgLayer.id;
+
+  if (!transparentBg) {
+    const drawLayer = createRasterLayer({ name: 'Layer 1', width, height });
+    layers.push(drawLayer);
+    layerOrder.push(drawLayer.id);
+    activeLayerId = drawLayer.id;
+  }
+
   const selection: SelectionData = { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 };
   return {
     document: {
@@ -28,9 +40,9 @@ export function computeCreateDocument(
       name: 'Untitled',
       width,
       height,
-      layers: [bgLayer],
-      layerOrder: [bgLayer.id],
-      activeLayerId: bgLayer.id,
+      layers,
+      layerOrder,
+      activeLayerId,
       backgroundColor: bgColor,
     },
     layerPixelData: pixelData,
