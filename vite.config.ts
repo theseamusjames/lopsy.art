@@ -15,4 +15,13 @@ export default defineConfig({
       localsConvention: 'camelCaseOnly',
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          canvaskit: ['canvaskit-wasm'],
+        },
+      },
+    },
+  },
 });

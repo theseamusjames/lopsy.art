@@ -81,6 +81,20 @@ export class PixelBuffer {
     return imageData;
   }
 
+  /**
+   * Return an ImageData that shares the same backing buffer — zero-copy.
+   * Modifications to the PixelBuffer are immediately visible through this
+   * ImageData, making it suitable for hot-path updates where the caller
+   * writes pixels and then just needs to notify the compositor.
+   */
+  private cachedImageData: ImageData | null = null;
+  asImageData(): ImageData {
+    if (!this.cachedImageData) {
+      this.cachedImageData = new ImageData(this.data as unknown as Uint8ClampedArray<ArrayBuffer>, this.width, this.height);
+    }
+    return this.cachedImageData;
+  }
+
   static fromImageData(imageData: ImageData): PixelBuffer {
     const buffer = new PixelBuffer(imageData.width, imageData.height);
     buffer.data.set(imageData.data);

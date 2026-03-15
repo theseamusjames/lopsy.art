@@ -1,6 +1,6 @@
 import type { SliceCreator } from './types';
 import { createImageData } from '../../engine/color-space';
-import { updateBitmapCache } from '../../engine/bitmap-cache';
+import { getRenderScheduler, getGpuCompositor } from '../../engine/renderer-registry';
 
 export interface PixelDataSlice {
   layerPixelData: Map<string, ImageData>;
@@ -33,15 +33,40 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
 
   updateLayerPixelData: (layerId: string, data: ImageData) => {
     const state = get();
+    const existing = state.layerPixelData.get(layerId);
+
+    // Hot path: same ImageData reference (in-place modification via PixelBuffer.asImageData).
+    // Skip Map cloning and bitmap cache — just notify the compositor.
+    // Still track dirty state so history snapshots clone this layer's data.
+    if (existing === data) {
+      state.dirtyLayerIds.add(layerId);
+      const compositor = getGpuCompositor();
+      if (compositor) {
+        compositor.bumpPixelVersion(layerId);
+        getRenderScheduler()?.markCompositeDirty();
+        return;
+      }
+      // CPU fallback: bump renderVersion so the useEffect re-composites
+      set({ renderVersion: state.renderVersion + 1 });
+      return;
+    }
+
+    // Cold path: new ImageData reference (first set, undo, image load, etc.)
     const pixelData = new Map(state.layerPixelData);
     pixelData.set(layerId, data);
     const dirtyLayerIds = new Set(state.dirtyLayerIds);
     dirtyLayerIds.add(layerId);
     set({ layerPixelData: pixelData, dirtyLayerIds, renderVersion: state.renderVersion + 1 });
-    updateBitmapCache(layerId, data);
+
+    const compositor = getGpuCompositor();
+    if (compositor) {
+      compositor.bumpPixelVersion(layerId);
+      getRenderScheduler()?.markCompositeDirty();
+    }
   },
 
   notifyRender: () => {
     set((state) => ({ renderVersion: state.renderVersion + 1 }));
+    getRenderScheduler()?.markCompositeDirty();
   },
 });

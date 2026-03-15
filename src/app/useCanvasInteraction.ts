@@ -30,6 +30,7 @@ const INITIAL_STATE: InteractionState = {
   startPoint: null,
   layerStartX: 0,
   layerStartY: 0,
+  cachedStamp: null,
   maskMode: false,
   transformHandle: null,
   transformStartState: null,

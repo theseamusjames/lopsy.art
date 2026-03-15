@@ -90,6 +90,14 @@ export function handlePaintDown(
 
   editorState.pushHistory();
 
+  // Pre-compute and cache the brush stamp for the entire drag
+  let cachedStamp: Float32Array | null = null;
+  if (tool === 'brush') {
+    cachedStamp = generateBrushStamp(toolSettings.brushSize, toolSettings.brushHardness / 100);
+  } else if (tool === 'eraser') {
+    cachedStamp = generateBrushStamp(toolSettings.eraserSize, 0.8);
+  }
+
   const state: InteractionState = {
     drawing: true,
     lastPoint: layerPos,
@@ -101,23 +109,22 @@ export function handlePaintDown(
     layerStartX: activeLayer.x,
     layerStartY: activeLayer.y,
     ...DEFAULT_TRANSFORM_FIELDS,
+    cachedStamp,
   };
 
   if (tool === 'brush') {
     const size = toolSettings.brushSize;
-    const hardness = toolSettings.brushHardness / 100;
     const opacity = toolSettings.brushOpacity / 100;
-    const stamp = generateBrushStamp(size, hardness);
     const color = useUIStore.getState().foregroundColor;
     useUIStore.getState().addRecentColor(color);
     if (shiftLine) {
       const spacing = Math.max(1, size * 0.25);
       const pts = interpolatePoints(lineFrom, layerPos, spacing);
       for (const pt of pts) {
-        applyBrushDab(paintSurface, pt, stamp, size, color, opacity, 1);
+        applyBrushDab(paintSurface, pt, cachedStamp!, size, color, opacity, 1);
       }
     } else {
-      applyBrushDab(paintSurface, layerPos, stamp, size, color, opacity, 1);
+      applyBrushDab(paintSurface, layerPos, cachedStamp!, size, color, opacity, 1);
     }
   } else if (tool === 'pencil') {
     const color = useUIStore.getState().foregroundColor;
@@ -126,21 +133,22 @@ export function handlePaintDown(
     drawPencilLine(paintSurface, lineFrom, layerPos, color, size);
   } else {
     const size = toolSettings.eraserSize;
-    const hardness = 0.8;
     const opacity = toolSettings.eraserOpacity / 100;
-    const stamp = generateBrushStamp(size, hardness);
     if (shiftLine) {
       const spacing = Math.max(1, size * 0.25);
       const pts = interpolatePoints(lineFrom, layerPos, spacing);
       for (const pt of pts) {
-        applyEraserDab(paintSurface, pt, stamp, size, opacity);
+        applyEraserDab(paintSurface, pt, cachedStamp!, size, opacity);
       }
     } else {
-      applyEraserDab(paintSurface, layerPos, stamp, size, opacity);
+      applyEraserDab(paintSurface, layerPos, cachedStamp!, size, opacity);
     }
   }
 
-  editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
+  // Zero-copy: asImageData() wraps the PixelBuffer's backing array.
+  // First call takes the cold path (registers in store Map).
+  // Subsequent calls from handlePaintMove detect same reference → hot path.
+  editorState.updateLayerPixelData(activeLayerId, pixelBuffer.asImageData());
   return state;
 }
 
@@ -158,10 +166,9 @@ export function handlePaintMove(
   switch (state.tool) {
     case 'brush': {
       const size = toolSettings.brushSize;
-      const hardness = toolSettings.brushHardness / 100;
       const opacity = toolSettings.brushOpacity / 100;
       const spacing = Math.max(1, size * 0.25);
-      const stamp = generateBrushStamp(size, hardness);
+      const stamp = state.cachedStamp ?? generateBrushStamp(size, toolSettings.brushHardness / 100);
       const color = state.maskMode
         ? { r: 0, g: 0, b: 0, a: 1 }
         : useUIStore.getState().foregroundColor;
@@ -176,7 +183,7 @@ export function handlePaintMove(
       if (state.maskMode) {
         useEditorStore.getState().notifyRender();
       } else {
-        useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+        useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.asImageData());
       }
       break;
     }
@@ -194,17 +201,16 @@ export function handlePaintMove(
       if (state.maskMode) {
         useEditorStore.getState().notifyRender();
       } else {
-        useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+        useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.asImageData());
       }
       break;
     }
 
     case 'eraser': {
       const size = toolSettings.eraserSize;
-      const hardness = 0.8;
       const opacity = toolSettings.eraserOpacity / 100;
       const spacing = Math.max(1, size * 0.25);
-      const stamp = generateBrushStamp(size, hardness);
+      const stamp = state.cachedStamp ?? generateBrushStamp(size, 0.8);
       const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
       if (state.maskMode) {
         const maskColor = { r: 255, g: 255, b: 255, a: 1 };
@@ -219,7 +225,7 @@ export function handlePaintMove(
           applyEraserDab(eraserSurface, pt, stamp, size, opacity);
         }
         state.lastPoint = layerLocalPos;
-        useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+        useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.asImageData());
       }
       break;
     }

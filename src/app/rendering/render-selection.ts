@@ -9,6 +9,28 @@ export interface SelectionData {
   maskHeight: number;
 }
 
+// Cache contour paths — only recompute when selection mask changes.
+// traceSelectionContours is O(width × height) and must NOT run every frame.
+let cachedContours: number[][] = [];
+let cachedContourMask: Uint8ClampedArray | null = null;
+let cachedContourWidth = 0;
+let cachedContourHeight = 0;
+
+function getCachedContours(
+  mask: Uint8ClampedArray,
+  maskWidth: number,
+  maskHeight: number,
+): number[][] {
+  if (mask === cachedContourMask && maskWidth === cachedContourWidth && maskHeight === cachedContourHeight) {
+    return cachedContours;
+  }
+  cachedContours = traceSelectionContours(mask, maskWidth, maskHeight);
+  cachedContourMask = mask;
+  cachedContourWidth = maskWidth;
+  cachedContourHeight = maskHeight;
+  return cachedContours;
+}
+
 export function renderSelectionAnts(
   ctx: CanvasRenderingContext2D,
   selection: SelectionData,
@@ -26,7 +48,7 @@ export function renderSelectionAnts(
 
   const offset = (antPhase % 120) / 120 * dashLen * 2;
 
-  const contours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight);
+  const contours = getCachedContours(selection.mask, selection.maskWidth, selection.maskHeight);
 
   const drawContours = () => {
     for (const pts of contours) {

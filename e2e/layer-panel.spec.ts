@@ -196,8 +196,9 @@ test.describe('Add Mask Button', () => {
     await page.locator('[aria-label="Add Mask"]').click();
 
     const state = await getEditorState(page);
-    expect(state.document.layers[0]!.mask).not.toBeNull();
-    expect(state.document.layers[0]!.mask!.enabled).toBe(true);
+    const activeLayer = state.document.layers.find(l => l.id === state.document.activeLayerId)!;
+    expect(activeLayer.mask).not.toBeNull();
+    expect(activeLayer.mask!.enabled).toBe(true);
   });
 
   test('add mask button is hidden when active layer already has a mask', async ({ page }) => {
@@ -221,20 +222,22 @@ test.describe('Add Mask Button', () => {
 
 test.describe('Layer Effects Button', () => {
   test('effects button exists on each layer row', async ({ page }) => {
-    // One layer = one effects button
-    await expect(page.locator('button[title="Layer effects"]')).toHaveCount(1);
+    const state = await getEditorState(page);
+    const layerCount = state.document.layers.length;
+    // One effects button per layer
+    await expect(page.locator('button[title="Layer effects"]')).toHaveCount(layerCount);
 
     await addLayer(page);
 
-    // Two layers = two effects buttons
-    await expect(page.locator('button[title="Layer effects"]')).toHaveCount(2);
+    // After adding a layer, one more effects button
+    await expect(page.locator('button[title="Layer effects"]')).toHaveCount(layerCount + 1);
   });
 
   test('clicking effects button opens the effects drawer', async ({ page }) => {
     const uiBefore = await getUIState(page);
     expect(uiBefore.showEffectsDrawer).toBe(false);
 
-    await page.locator('button[title="Layer effects"]').click();
+    await page.locator('button[title="Layer effects"]').first().click();
 
     const uiAfter = await getUIState(page);
     expect(uiAfter.showEffectsDrawer).toBe(true);
@@ -244,12 +247,13 @@ test.describe('Layer Effects Button', () => {
     await addLayer(page);
 
     const state = await getEditorState(page);
+    // The newly added layer is active
+    const activeId = state.document.activeLayerId;
+    // The first layer (Background) is at index 0
     const firstLayerId = state.document.layers[0]!.id;
+    expect(activeId).not.toBe(firstLayerId);
 
-    // Active layer is the second (newly added) layer
-    expect(state.document.activeLayerId).toBe(state.document.layers[1]!.id);
-
-    // Click effects button on first layer (which is rendered last in reversed order)
+    // Click effects button on first layer (rendered last in reversed order)
     const buttons = page.locator('button[title="Layer effects"]');
     await buttons.last().click();
 
@@ -291,7 +295,7 @@ test.describe('Effects Drawer', () => {
     const sizeBefore = await container.boundingBox();
 
     // Open effects drawer
-    await page.locator('button[title="Layer effects"]').click();
+    await page.locator('button[title="Layer effects"]').first().click();
     await page.waitForTimeout(100);
 
     const sizeAfter = await container.boundingBox();
@@ -300,7 +304,7 @@ test.describe('Effects Drawer', () => {
   });
 
   test('effects drawer is positioned to the left of the sidebar', async ({ page }) => {
-    await page.locator('button[title="Layer effects"]').click();
+    await page.locator('button[title="Layer effects"]').first().click();
     await page.waitForTimeout(100);
 
     const sidebar = page.locator('[data-testid="canvas-container"]').locator('..').locator('> :last-child');
@@ -312,7 +316,7 @@ test.describe('Effects Drawer', () => {
   });
 
   test('effects drawer shows effect list with checkboxes', async ({ page }) => {
-    await page.locator('button[title="Layer effects"]').click();
+    await page.locator('button[title="Layer effects"]').first().click();
     await page.waitForTimeout(100);
 
     // Should see all four effect labels
@@ -323,7 +327,7 @@ test.describe('Effects Drawer', () => {
   });
 
   test('toggling effect checkbox enables and shows form', async ({ page }) => {
-    await page.locator('button[title="Layer effects"]').click();
+    await page.locator('button[title="Layer effects"]').first().click();
     await page.waitForTimeout(100);
 
     // Drop Shadow row should be visible, click its checkbox
@@ -333,30 +337,33 @@ test.describe('Effects Drawer', () => {
     // After enabling, the form should show (e.g., Offset X slider label)
     await expect(page.locator('text=Offset X')).toBeVisible();
 
-    // Verify the effect is stored
+    // Verify the effect is stored on the active layer
     const state = await getEditorState(page);
-    expect((state.document.layers[0]!.effects.dropShadow as { enabled: boolean }).enabled).toBe(true);
+    const activeLayer = state.document.layers.find(l => l.id === state.document.activeLayerId)!;
+    expect((activeLayer.effects.dropShadow as { enabled: boolean }).enabled).toBe(true);
   });
 
   test('unchecking effect checkbox disables it', async ({ page }) => {
-    await page.locator('button[title="Layer effects"]').click();
+    await page.locator('button[title="Layer effects"]').first().click();
     await page.waitForTimeout(100);
 
     const checkbox = page.locator('text=Drop Shadow').locator('..').locator('input[type="checkbox"]');
 
     // Enable
     await checkbox.click();
-    const state1 = await getEditorState(page);
-    expect((state1.document.layers[0]!.effects.dropShadow as { enabled: boolean }).enabled).toBe(true);
+    let state = await getEditorState(page);
+    let activeLayer = state.document.layers.find(l => l.id === state.document.activeLayerId)!;
+    expect((activeLayer.effects.dropShadow as { enabled: boolean }).enabled).toBe(true);
 
     // Disable
     await checkbox.click();
-    const state2 = await getEditorState(page);
-    expect((state2.document.layers[0]!.effects.dropShadow as { enabled: boolean }).enabled).toBe(false);
+    state = await getEditorState(page);
+    activeLayer = state.document.layers.find(l => l.id === state.document.activeLayerId)!;
+    expect((activeLayer.effects.dropShadow as { enabled: boolean }).enabled).toBe(false);
   });
 
   test('closing effects drawer via X button', async ({ page }) => {
-    await page.locator('button[title="Layer effects"]').click();
+    await page.locator('button[title="Layer effects"]').first().click();
     const ui1 = await getUIState(page);
     expect(ui1.showEffectsDrawer).toBe(true);
 

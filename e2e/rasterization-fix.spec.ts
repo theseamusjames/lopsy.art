@@ -264,14 +264,14 @@ test.beforeEach(async ({ page }) => {
 
 test.describe('Rasterize Layer Style', () => {
   test('rasterize button is visible in effects drawer', async ({ page }) => {
-    await page.locator('button[title="Layer effects"]').click();
+    await page.locator('button[title="Layer effects"]').first().click();
     await page.waitForTimeout(100);
 
     await expect(page.locator('text=Rasterize Layer Style')).toBeVisible();
   });
 
   test('rasterize button is disabled when no effects are enabled', async ({ page }) => {
-    await page.locator('button[title="Layer effects"]').click();
+    await page.locator('button[title="Layer effects"]').first().click();
     await page.waitForTimeout(100);
 
     const btn = page.locator('button:has-text("Rasterize Layer Style")');
@@ -284,7 +284,7 @@ test.describe('Rasterize Layer Style', () => {
 
     await enableEffect(page, layerId, 'stroke');
 
-    await page.locator('button[title="Layer effects"]').click();
+    await page.locator('button[title="Layer effects"]').first().click();
     await page.waitForTimeout(100);
 
     const btn = page.locator('button:has-text("Rasterize Layer Style")');

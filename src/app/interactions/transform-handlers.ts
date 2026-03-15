@@ -114,6 +114,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     startPoint: canvasPos,
     layerStartX: 0,
     layerStartY: 0,
+    cachedStamp: null,
     maskMode: false,
     transformHandle: hit,
     transformStartState: { ...currentTransform },

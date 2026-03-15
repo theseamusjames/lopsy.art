@@ -14,6 +14,8 @@ export interface InteractionState {
   layerStartX: number;
   layerStartY: number;
   maskMode: boolean;
+  /** Cached brush/eraser stamp — computed once on mousedown, reused on moves. */
+  cachedStamp: Float32Array | null;
   transformHandle: TransformHandle | null;
   transformStartState: TransformState | null;
   transformStartAngle: number;
@@ -27,6 +29,7 @@ export interface InteractionState {
 }
 
 export const DEFAULT_TRANSFORM_FIELDS = {
+  cachedStamp: null as Float32Array | null,
   maskMode: false,
   transformHandle: null as TransformHandle | null,
   transformStartState: null as TransformState | null,

@@ -46,9 +46,9 @@ async function docToScreen(page: Page, docX: number, docY: number) {
   );
 }
 
-async function getPixelAt(page: Page, x: number, y: number) {
+async function getPixelAt(page: Page, x: number, y: number, layerId?: string) {
   return page.evaluate(
-    ({ x, y }) => {
+    ({ x, y, lid }) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
@@ -56,7 +56,8 @@ async function getPixelAt(page: Page, x: number, y: number) {
         };
       };
       const state = store.getState();
-      const data = state.layerPixelData.get(state.document.activeLayerId);
+      const id = lid ?? state.document.activeLayerId;
+      const data = state.layerPixelData.get(id);
       if (!data) return { r: 0, g: 0, b: 0, a: 0 };
       const idx = (y * data.width + x) * 4;
       return {
@@ -66,7 +67,7 @@ async function getPixelAt(page: Page, x: number, y: number) {
         a: data.data[idx + 3] ?? 0,
       };
     },
-    { x, y },
+    { x, y, lid: layerId ?? null },
   );
 }
 
@@ -211,7 +212,11 @@ test.beforeEach(async ({ page }) => {
 test.describe('Document Creation', () => {
   test('create document with white background', async ({ page }) => {
     await createDocument(page, 400, 300, false);
-    const pixel = await getPixelAt(page, 10, 10);
+    // White bg docs have a locked Background layer (white) + transparent Layer 1.
+    // Read from the Background layer (layers[0]) to verify white fill.
+    const state = await getEditorState(page);
+    const bgLayerId = state.document.layers[0]!.id;
+    const pixel = await getPixelAt(page, 10, 10, bgLayerId);
     expect(pixel.r).toBe(255);
     expect(pixel.g).toBe(255);
     expect(pixel.b).toBe(255);
@@ -227,10 +232,12 @@ test.describe('Document Creation', () => {
   test('verify default layer exists after creation', async ({ page }) => {
     await createDocument(page, 400, 300, false);
     const state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(1);
+    // White bg docs have 2 layers: Background (white) + Layer 1 (transparent, active)
+    expect(state.document.layers).toHaveLength(2);
     expect(state.document.layers[0]!.name).toBe('Background');
-    expect(state.document.layerOrder).toHaveLength(1);
-    expect(state.document.activeLayerId).toBe(state.document.layers[0]!.id);
+    expect(state.document.layers[1]!.name).toBe('Layer 1');
+    expect(state.document.layerOrder).toHaveLength(2);
+    expect(state.document.activeLayerId).toBe(state.document.layers[1]!.id);
   });
 });
 
@@ -342,6 +349,26 @@ test.describe('Eraser Tool', () => {
   });
 
   test('eraser removes pixels from a previously drawn area', async ({ page }) => {
+    // Fill active layer with opaque pixels (Layer 1 is transparent by default)
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const data = state.getOrCreateLayerPixelData(id);
+      for (let i = 0; i < data.data.length; i += 4) {
+        data.data[i] = 255;
+        data.data[i + 1] = 0;
+        data.data[i + 2] = 0;
+        data.data[i + 3] = 255;
+      }
+      state.updateLayerPixelData(id, data);
+    });
     const beforeErase = await countOpaquePixels(page);
 
     await page.keyboard.press('e');
@@ -582,7 +609,20 @@ test.describe('Eyedropper Tool', () => {
   test('sampled color becomes foreground color', async ({ page }) => {
     await createDocument(page, 400, 300, false);
 
-    // Canvas is white, sample it
+    // Switch to Background layer (white) so eyedropper reads white pixels
+    const state = await getEditorState(page);
+    const bgLayerId = state.document.layers[0]!.id;
+    await page.evaluate(
+      (id) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { setActiveLayer: (id: string) => void };
+        };
+        store.getState().setActiveLayer(id);
+      },
+      bgLayerId,
+    );
+
+    // Canvas is white on Background layer, sample it
     await page.keyboard.press('i');
     await clickAtDoc(page, 100, 100);
 
@@ -986,6 +1026,9 @@ test.describe('Layer Operations', () => {
   });
 
   test('add layer creates new layer', async ({ page }) => {
+    const stateBefore = await getEditorState(page);
+    const layersBefore = stateBefore.document.layers.length;
+
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => { addLayer: () => void };
@@ -994,12 +1037,15 @@ test.describe('Layer Operations', () => {
     });
 
     const state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(2);
-    expect(state.document.layerOrder).toHaveLength(2);
+    expect(state.document.layers).toHaveLength(layersBefore + 1);
+    expect(state.document.layerOrder).toHaveLength(layersBefore + 1);
   });
 
   test('delete layer removes it', async ({ page }) => {
-    // Add a second layer then delete it
+    const stateBefore = await getEditorState(page);
+    const layersBefore = stateBefore.document.layers.length;
+
+    // Add a layer then delete it
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => { addLayer: () => void };
@@ -1008,8 +1054,8 @@ test.describe('Layer Operations', () => {
     });
 
     let state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(2);
-    const secondLayerId = state.document.layers[1]!.id;
+    expect(state.document.layers).toHaveLength(layersBefore + 1);
+    const newLayerId = state.document.activeLayerId;
 
     await page.evaluate(
       (id) => {
@@ -1018,11 +1064,11 @@ test.describe('Layer Operations', () => {
         };
         store.getState().removeLayer(id);
       },
-      secondLayerId,
+      newLayerId,
     );
 
     state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(1);
+    expect(state.document.layers).toHaveLength(layersBefore);
   });
 
   test('toggle visibility hides layer', async ({ page }) => {
@@ -1044,6 +1090,8 @@ test.describe('Layer Operations', () => {
   });
 
   test('duplicate layer copies pixel data', async ({ page }) => {
+    const stateBefore = await getEditorState(page);
+    const layersBefore = stateBefore.document.layers.length;
     const beforeOpaque = await countOpaquePixels(page);
 
     await page.evaluate(() => {
@@ -1054,7 +1102,7 @@ test.describe('Layer Operations', () => {
     });
 
     const state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(2);
+    expect(state.document.layers).toHaveLength(layersBefore + 1);
 
     // The duplicated layer should have the same pixel data
     const newLayerId = state.document.activeLayerId;
@@ -1269,19 +1317,19 @@ test.describe('Filters', () => {
   });
 
   test('invert filter inverts pixel colors', async ({ page }) => {
-    // Canvas is white (255,255,255). Set some pixels to a known color.
+    // Set some pixels to a known color on the active layer.
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          layerPixelData: Map<string, ImageData>;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: () => void;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const data = state.layerPixelData.get(id)!;
+      const data = state.getOrCreateLayerPixelData(id);
       // Set pixel at (50,50) to red
       const idx = (50 * data.width + 50) * 4;
       data.data[idx] = 200;
@@ -1294,18 +1342,17 @@ test.describe('Filters', () => {
 
     // Apply invert filter via evaluate
     await page.evaluate(() => {
-      // Dynamically import not possible in evaluate, so reimplement inline
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          layerPixelData: Map<string, ImageData>;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: () => void;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const src = state.layerPixelData.get(id)!;
+      const src = state.getOrCreateLayerPixelData(id);
       const result = new ImageData(src.width, src.height);
       for (let i = 0; i < src.data.length; i += 4) {
         result.data[i] = 255 - (src.data[i] ?? 0);
@@ -1329,13 +1376,13 @@ test.describe('Filters', () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          layerPixelData: Map<string, ImageData>;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const data = state.layerPixelData.get(id)!;
+      const data = state.getOrCreateLayerPixelData(id);
       const idx = (50 * data.width + 50) * 4;
       data.data[idx] = 255;
       data.data[idx + 1] = 0;
@@ -1349,14 +1396,14 @@ test.describe('Filters', () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          layerPixelData: Map<string, ImageData>;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: () => void;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const src = state.layerPixelData.get(id)!;
+      const src = state.getOrCreateLayerPixelData(id);
       const result = new ImageData(src.width, src.height);
       for (let i = 0; i < src.data.length; i += 4) {
         const r = src.data[i] ?? 0;
@@ -1384,14 +1431,14 @@ test.describe('Filters', () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          layerPixelData: Map<string, ImageData>;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: () => void;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const src = state.layerPixelData.get(id)!;
+      const src = state.getOrCreateLayerPixelData(id);
       // Set a mid-gray pixel first
       const idx = (50 * src.width + 50) * 4;
       src.data[idx] = 128;

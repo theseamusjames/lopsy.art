@@ -74,7 +74,7 @@ export function handleDodgeDown(ctx: InteractionContext): InteractionState {
   } else {
     applyDodgeBurn(paintSurface, layerPos, dodgeSize, dodgeMode, exposure);
   }
-  editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
+  editorState.updateLayerPixelData(activeLayerId, pixelBuffer.asImageData());
   return {
     drawing: true,
     lastPoint: layerPos,
@@ -102,7 +102,7 @@ export function handleDodgeMove(state: InteractionState, layerLocalPos: Point): 
     applyDodgeBurn(dodgeSurface, pt, dodgeSize, dodgeMode, exposure);
   }
   state.lastPoint = layerLocalPos;
-  useEditorStore.getState().updateLayerPixelData(state.layerId!, state.pixelBuffer.toImageData());
+  useEditorStore.getState().updateLayerPixelData(state.layerId!, state.pixelBuffer.asImageData());
 }
 
 export function handleStampDown(ctx: InteractionContext): InteractionState | undefined {
@@ -151,7 +151,7 @@ export function handleStampDown(ctx: InteractionContext): InteractionState | und
   } else {
     applyStampDab(paintSurface, pixelBuffer, layerPos, ctx.stampOffsetRef.current, toolSettings.stampSize);
   }
-  editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
+  editorState.updateLayerPixelData(activeLayerId, pixelBuffer.asImageData());
   return state;
 }
 
@@ -169,7 +169,7 @@ export function handleStampMove(
     applyStampDab(stampSurface, state.originalPixelBuffer, pt, stampOffsetRef.current, toolSettings.stampSize);
   }
   state.lastPoint = layerLocalPos;
-  useEditorStore.getState().updateLayerPixelData(state.layerId!, state.pixelBuffer.toImageData());
+  useEditorStore.getState().updateLayerPixelData(state.layerId!, state.pixelBuffer.asImageData());
 }
 
 export function handleTextDown(ctx: InteractionContext): void {

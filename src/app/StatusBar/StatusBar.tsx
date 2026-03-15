@@ -1,4 +1,5 @@
 import { canvasColorSpace } from '../../engine/color-space';
+import { getRenderer } from '../../engine/renderer-registry';
 import styles from './StatusBar.module.css';
 
 interface StatusBarProps {
@@ -7,11 +8,13 @@ interface StatusBarProps {
   cursorY: number;
   docWidth: number;
   docHeight: number;
+  rendererStatus?: string;
 }
 
 const colorSpaceLabel = canvasColorSpace === 'display-p3' ? 'Display P3' : 'sRGB';
 
-export function StatusBar({ zoom, cursorX, cursorY, docWidth, docHeight }: StatusBarProps) {
+export function StatusBar({ zoom, cursorX, cursorY, docWidth, docHeight, rendererStatus }: StatusBarProps) {
+  const rendererLabel = rendererStatus ?? (getRenderer().type === 'canvaskit' ? 'GPU' : 'CPU');
   return (
     <div className={styles.bar}>
       <span className={styles.item}>{Math.round(zoom * 100)}%</span>
@@ -26,6 +29,8 @@ export function StatusBar({ zoom, cursorX, cursorY, docWidth, docHeight }: Statu
         <span className={styles.number}>{docHeight}</span> px
       </span>
       <span className={styles.spacer} />
+      <span className={styles.item}>{rendererLabel}</span>
+      <span className={styles.divider} />
       <span className={styles.item}>{colorSpaceLabel}</span>
     </div>
   );

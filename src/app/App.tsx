@@ -25,10 +25,12 @@ import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
+import { initRenderer } from '../engine/renderer-registry';
 import styles from './App.module.css';
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sidebarBottomRef = useRef<HTMLDivElement>(null);
   const effectsDrawerRef = useRef<HTMLDivElement>(null);
@@ -67,6 +69,17 @@ export function App() {
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const [rendererStatus, setRendererStatus] = useState<string | undefined>(undefined);
+
+  // Kick off renderer initialisation in the background
+  useEffect(() => {
+    setRendererStatus('Loading GPU...');
+    initRenderer().then((driver) => {
+      const status = driver.type === 'canvaskit' ? 'GPU' : 'CPU';
+      setRendererStatus(status);
+      (window as unknown as Record<string, unknown>).__rendererStatus = status;
+    });
+  }, []);
 
   const handleCreateDocument = useCallback((width: number, height: number, background: 'white' | 'transparent') => {
     createDocument(width, height, background === 'transparent');
@@ -129,31 +142,10 @@ export function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  // Canvas rendering (extracted to useCanvasRendering)
-  useCanvasRendering(canvasRef, containerRef);
+  // Canvas rendering: document canvas (worker) + overlay canvas (main thread)
+  useCanvasRendering(canvasRef, overlayCanvasRef, containerRef, rendererStatus === 'GPU');
 
-  // Resize observer
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    let hasInitialFit = false;
-    const observer = new ResizeObserver(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = container.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-      useEditorStore.getState().setViewportSize(rect.width, rect.height);
-      if (!hasInitialFit && rect.width > 0 && rect.height > 0) {
-        hasInitialFit = true;
-        useEditorStore.getState().fitToView();
-      }
-    });
-
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [documentReady]);
+  // Resize observer is handled inside useCanvasRendering
 
   // Screen to canvas coordinate transform
   const screenToCanvas = useCallback(
@@ -188,9 +180,12 @@ export function App() {
     setActiveLayer(id);
   }, [clearPersistentTransform, setActiveLayer]);
 
-  // Mouse handlers
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
+  // Pointer handlers — use PointerEvent + getCoalescedEvents for smooth drawing.
+  // Browsers coalesce multiple physical pointer samples into one event;
+  // getCoalescedEvents() recovers the intermediate points so tools draw
+  // continuous strokes even when the main thread is busy.
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
 
@@ -205,7 +200,17 @@ export function App() {
         setPan(panStartRef.current.panX + dx, panStartRef.current.panY + dy);
       } else {
         updateHoveredHandle(canvasPos);
-        handleToolMove(e);
+
+        // Process coalesced events so tools see every physical input sample
+        const coalesced = e.nativeEvent.getCoalescedEvents?.();
+        if (coalesced && coalesced.length > 1) {
+          for (const ce of coalesced) {
+            const synth = { ...e, clientX: ce.clientX, clientY: ce.clientY } as React.MouseEvent;
+            handleToolMove(synth);
+          }
+        } else {
+          handleToolMove(e);
+        }
       }
     },
     [isPanning, screenToCanvas, setPan, handleToolMove, updateHoveredHandle],
@@ -306,13 +311,14 @@ export function App() {
           ref={containerRef}
           data-testid="canvas-container"
           className={styles.canvas}
-          onMouseMove={handleMouseMove}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onPointerMove={handlePointerMove}
+          onPointerDown={handleMouseDown}
+          onPointerUp={handleMouseUp}
+          onPointerLeave={handleMouseUp}
           onWheel={handleWheel}
         >
           <canvas ref={canvasRef} />
+          <canvas ref={overlayCanvasRef} />
         </div>
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
@@ -398,6 +404,7 @@ export function App() {
         cursorY={cursorPos.y}
         docWidth={doc.width}
         docHeight={doc.height}
+        rendererStatus={rendererStatus}
       />
     </div>
   );

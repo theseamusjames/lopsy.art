@@ -1,4 +1,11 @@
 import { PixelBuffer } from '../engine/pixel-data';
+import {
+  gpuGaussianBlur,
+  gpuBrightnessContrast,
+  gpuInvert,
+  gpuDesaturate,
+  gpuHueSaturation,
+} from '../engine/gpu-filters';
 
 interface PendingFilter {
   resolve: (buf: PixelBuffer) => void;
@@ -51,6 +58,15 @@ export class FilterRunner {
     params: Record<string, unknown>,
     options?: FilterRunnerOptions,
   ): Promise<PixelBuffer> {
+    // GPU-first path for filters that go through runFilter directly
+    if (type === 'invert') {
+      const gpu = gpuInvert(buf);
+      if (gpu) return gpu;
+    } else if (type === 'desaturate') {
+      const gpu = gpuDesaturate(buf);
+      if (gpu) return gpu;
+    }
+
     const id = crypto.randomUUID();
     const data = buf.rawData.buffer.slice(0);
 
@@ -72,6 +88,8 @@ export class FilterRunner {
   }
 
   async blur(buf: PixelBuffer, radius: number, options?: FilterRunnerOptions): Promise<PixelBuffer> {
+    const gpu = gpuGaussianBlur(buf, radius);
+    if (gpu) return gpu;
     return this.runFilter('gaussianBlur', buf, { radius }, options);
   }
 
@@ -84,10 +102,14 @@ export class FilterRunner {
   }
 
   async brightnessContrast(buf: PixelBuffer, brightness: number, contrast: number, options?: FilterRunnerOptions): Promise<PixelBuffer> {
+    const gpu = gpuBrightnessContrast(buf, brightness, contrast);
+    if (gpu) return gpu;
     return this.runFilter('brightnessContrast', buf, { brightness, contrast }, options);
   }
 
   async hueSaturation(buf: PixelBuffer, hue: number, saturation: number, lightness: number, options?: FilterRunnerOptions): Promise<PixelBuffer> {
+    const gpu = gpuHueSaturation(buf, hue, saturation, lightness);
+    if (gpu) return gpu;
     return this.runFilter('hueSaturation', buf, { hue, saturation, lightness }, options);
   }
 
