@@ -6,6 +6,7 @@ import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { createRectSelection, createEllipseSelection, selectionBounds } from '../../selection/selection';
 import { floodFill } from '../../tools/fill/fill';
+import { OffsetSurface } from '../../engine/pixel-data';
 import { createPolygonMask } from '../../tools/lasso/lasso';
 import { createTransformState } from '../../tools/transform/transform';
 import { snapPositionToGrid } from '../../tools/move/move';
@@ -14,7 +15,7 @@ export function handleSelectionDown(
   ctx: InteractionContext,
   tool: 'marquee-rect' | 'marquee-ellipse' | 'wand' | 'lasso',
 ): InteractionState | undefined {
-  const { canvasPos, layerPos, activeLayerId, activeLayer, pixelBuffer } = ctx;
+  const { canvasPos, activeLayerId, activeLayer, pixelBuffer } = ctx;
 
   if (tool === 'marquee-rect' || tool === 'marquee-ellipse') {
     useUIStore.getState().setTransform(null);
@@ -40,13 +41,12 @@ export function handleSelectionDown(
     const wandContiguous = toolSettings.wandContiguous;
     const editorState = useEditorStore.getState();
     const { width: docW, height: docH } = editorState.document;
-    const wandPixels = floodFill(pixelBuffer, layerPos.x, layerPos.y, { r: 0, g: 0, b: 0, a: 0 }, wandTolerance, wandContiguous);
+    const canvasSurface = new OffsetSurface(pixelBuffer, docW, docH, activeLayer.x, activeLayer.y);
+    const wandPixels = floodFill(canvasSurface, canvasPos.x, canvasPos.y, { r: 0, g: 0, b: 0, a: 0 }, wandTolerance, wandContiguous);
     const wandMask = new Uint8ClampedArray(docW * docH);
     for (const pt of wandPixels) {
-      const mx = pt.x + activeLayer.x;
-      const my = pt.y + activeLayer.y;
-      if (mx >= 0 && mx < docW && my >= 0 && my < docH) {
-        wandMask[my * docW + mx] = 255;
+      if (pt.x >= 0 && pt.x < docW && pt.y >= 0 && pt.y < docH) {
+        wandMask[pt.y * docW + pt.x] = 255;
       }
     }
     const wandBounds = selectionBounds(wandMask, docW, docH);
