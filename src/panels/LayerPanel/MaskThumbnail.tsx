@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useEditorStore } from '../../app/editor-store';
+import { contextOptions } from '../../engine/color-space';
 import type { Layer } from '../../types';
 
 export function MaskThumbnail({ layer }: { layer: Layer }) {
@@ -10,7 +11,7 @@ export function MaskThumbnail({ layer }: { layer: Layer }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !mask) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', contextOptions);
     if (!ctx) return;
 
     canvas.width = 20;

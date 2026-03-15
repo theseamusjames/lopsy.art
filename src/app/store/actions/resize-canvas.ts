@@ -1,6 +1,7 @@
 import type { DocumentState, Layer } from '../../../types';
 import type { EditorState } from '../types';
 import { resizeCanvasPixelData } from '../../../engine/canvas-ops';
+import { createImageData } from '../../../engine/color-space';
 
 export function computeResizeCanvas(
   doc: DocumentState,
@@ -27,7 +28,7 @@ export function computeResizeCanvas(
     const oldData = layerPixelData.get(layer.id);
     const newData = oldData
       ? resizeCanvasPixelData(oldData, layer.x, layer.y, newWidth, newHeight, offsetX, offsetY)
-      : new ImageData(newWidth, newHeight);
+      : createImageData(newWidth, newHeight);
     pixelData.set(layer.id, newData);
     newLayers.push({ ...layer, x: 0, y: 0, width: newWidth, height: newHeight } as Layer);
   }

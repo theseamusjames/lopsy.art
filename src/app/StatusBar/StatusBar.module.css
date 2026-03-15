@@ -20,6 +20,10 @@
   color: var(--color-text-primary);
 }
 
+.spacer {
+  flex: 1;
+}
+
 .divider {
   width: 1px;
   height: 12px;

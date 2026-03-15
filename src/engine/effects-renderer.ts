@@ -1,6 +1,7 @@
 import { canvasPool } from './canvas-pool';
 import type { PooledCanvas } from './canvas-pool';
 import type { Layer } from '../types';
+import { contextOptions } from './color-space';
 
 export class CanvasAllocator {
   private handles: PooledCanvas[] = [];
@@ -218,12 +219,12 @@ export function rasterizeEffectsToImageData(
   const destCanvas = document.createElement('canvas');
   destCanvas.width = outW;
   destCanvas.height = outH;
-  const destCtx = destCanvas.getContext('2d')!;
+  const destCtx = destCanvas.getContext('2d', contextOptions)!;
 
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = data.width;
   tempCanvas.height = data.height;
-  const tempCtx = tempCanvas.getContext('2d')!;
+  const tempCtx = tempCanvas.getContext('2d', contextOptions)!;
   tempCtx.putImageData(data, 0, 0);
 
   const fakeLayer = { ...layer, x: pad, y: pad } as Layer;

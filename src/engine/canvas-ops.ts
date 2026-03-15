@@ -1,5 +1,7 @@
+import { createImageData, contextOptions } from './color-space';
+
 export function cloneImageData(data: ImageData): ImageData {
-  const copy = new ImageData(data.width, data.height);
+  const copy = createImageData(data.width, data.height);
   copy.data.set(data.data);
   return copy;
 }
@@ -13,7 +15,7 @@ export function cropLayerPixelData(
   cropW: number,
   cropH: number,
 ): ImageData {
-  const newData = new ImageData(cropW, cropH);
+  const newData = createImageData(cropW, cropH);
   for (let y = 0; y < cropH; y++) {
     for (let x = 0; x < cropW; x++) {
       const srcX = x + cropX - layerX;
@@ -39,7 +41,7 @@ export function resizeCanvasPixelData(
   offsetX: number,
   offsetY: number,
 ): ImageData {
-  const newData = new ImageData(newW, newH);
+  const newData = createImageData(newW, newH);
   const lx = layerX + offsetX;
   const ly = layerY + offsetY;
   for (let y = 0; y < oldData.height; y++) {
@@ -64,7 +66,7 @@ export function scalePixelData(
   newH: number,
 ): ImageData | null {
   const tmpCanvas = document.createElement('canvas');
-  const tmpCtx = tmpCanvas.getContext('2d');
+  const tmpCtx = tmpCanvas.getContext('2d', contextOptions);
   if (!tmpCtx) return null;
 
   tmpCanvas.width = oldData.width;
@@ -74,7 +76,7 @@ export function scalePixelData(
   const scaledCanvas = document.createElement('canvas');
   scaledCanvas.width = newW;
   scaledCanvas.height = newH;
-  const scaledCtx = scaledCanvas.getContext('2d');
+  const scaledCtx = scaledCanvas.getContext('2d', contextOptions);
   if (!scaledCtx) return null;
 
   scaledCtx.imageSmoothingEnabled = true;

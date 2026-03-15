@@ -3,6 +3,7 @@ import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { strokeCurrentPath } from './useCanvasInteraction';
 import { getSelectionMaskValue } from '../selection/selection';
+import { createImageData } from '../engine/color-space';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
@@ -103,7 +104,7 @@ function handleDeleteKey(): void {
     const layerData = editor.getOrCreateLayerPixelData(activeId);
     const layer = editor.document.layers.find((l) => l.id === activeId);
     if (!layer) return;
-    const result = new ImageData(layerData.width, layerData.height);
+    const result = createImageData(layerData.width, layerData.height);
     result.data.set(layerData.data);
     for (let y = 0; y < sel.maskHeight; y++) {
       for (let x = 0; x < sel.maskWidth; x++) {

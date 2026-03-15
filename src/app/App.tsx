@@ -19,6 +19,8 @@ import { useCanvasInteraction } from './useCanvasInteraction';
 import { useToolSettingsStore } from './tool-settings-store';
 import { drawShape } from '../tools/shape/shape';
 import { PixelBuffer } from '../engine/pixel-data';
+import { contextOptions } from '../engine/color-space';
+import { seedBitmapFromBlob } from '../engine/bitmap-cache';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
@@ -78,12 +80,14 @@ export function App() {
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', contextOptions);
       if (ctx) {
         ctx.drawImage(img, 0, 0);
         const imageData = ctx.getImageData(0, 0, img.width, img.height);
         const name = file.name.replace(/\.[^.]+$/, '');
         openImageAsDocument(imageData, name);
+        const layerId = useEditorStore.getState().document.activeLayerId;
+        if (layerId) seedBitmapFromBlob(layerId, file);
       }
       URL.revokeObjectURL(url);
     };

@@ -11,6 +11,9 @@ import {
 import { renderLayerContent } from '../../rendering/render-layers';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
 import { hasActiveAdjustments, applyAdjustmentsToImageData } from '../../../filters/image-adjustments';
+import { contextOptions, canvasColorSpace } from '../../../engine/color-space';
+import { getCachedBitmap, seedBitmapFromBlob } from '../../../engine/bitmap-cache';
+import { hasEnabledEffects } from '../../../layers/layer-model';
 import type { MenuDef } from './types';
 
 const METADATA_NOTE = 'Made with Lopsy — http://lopsy.art';
@@ -34,12 +37,17 @@ export function openFileFromDisk(): void {
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', contextOptions);
       if (ctx) {
         ctx.drawImage(img, 0, 0);
         const imageData = ctx.getImageData(0, 0, img.width, img.height);
         const name = file.name.replace(/\.[^.]+$/, '');
         useEditorStore.getState().openImageAsDocument(imageData, name);
+        // Seed the bitmap cache from the original file so the rendering
+        // path uses the browser's native decoded bitmap rather than one
+        // rebuilt from the canvas-round-tripped ImageData.
+        const layerId = useEditorStore.getState().document.activeLayerId;
+        if (layerId) seedBitmapFromBlob(layerId, file);
       }
       URL.revokeObjectURL(url);
     };
@@ -54,7 +62,7 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', contextOptions);
   if (!ctx) return;
 
   // Fill background
@@ -68,8 +76,23 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
     if (!layer || !layer.visible) continue;
     const data = state.layerPixelData.get(layerId);
     if (!data) continue;
+
+    ctx.globalAlpha = layer.opacity;
+
+    // Use cached bitmap for layers without effects for color-correct export
+    const bitmap = getCachedBitmap(layerId);
+    const hasMask = layer.mask?.enabled;
+    if (bitmap && !hasEnabledEffects(layer.effects) && !hasMask) {
+      ctx.drawImage(bitmap, layer.x, layer.y);
+      continue;
+    }
+
     const { canvas: tempCanvas, ctx: tempCtx } = allocator.acquire(data.width, data.height);
-    tempCtx.putImageData(data, 0, 0);
+    if (bitmap && !layer.effects.colorOverlay.enabled) {
+      tempCtx.drawImage(bitmap, 0, 0);
+    } else {
+      tempCtx.putImageData(data, 0, 0);
+    }
 
     if (layer.effects.colorOverlay.enabled) {
       const overlaid = tempCtx.getImageData(0, 0, data.width, data.height);
@@ -77,7 +100,6 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
       tempCtx.putImageData(overlaid, 0, 0);
     }
 
-    ctx.globalAlpha = layer.opacity;
     renderOuterGlow(ctx, tempCanvas, layer, data, allocator);
     renderDropShadow(ctx, tempCanvas, layer, data, allocator);
     renderLayerContent(ctx, tempCanvas, layer, data, false, null, allocator);
@@ -97,8 +119,8 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
 
   const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
   const ext = format === 'png' ? 'png' : 'jpg';
-  canvas.toBlob(async (blob) => {
-    if (!blob) return;
+
+  const finishExport = async (blob: Blob) => {
     const tagged =
       format === 'png'
         ? await addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE })
@@ -110,6 +132,24 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
     a.click();
     URL.revokeObjectURL(url);
     useEditorStore.getState().markClean();
+  };
+
+  // Prefer OffscreenCanvas.convertToBlob which passes colorSpace to the
+  // encoder, producing a color-space-aware blob.  Fall back to toBlob.
+  if (typeof OffscreenCanvas !== 'undefined') {
+    const offscreen = new OffscreenCanvas(width, height);
+    const offCtx = offscreen.getContext('2d', contextOptions);
+    if (offCtx) {
+      offCtx.drawImage(canvas, 0, 0);
+      offscreen.convertToBlob({ type: mimeType, quality: 0.92, colorSpace: canvasColorSpace } as ImageEncodeOptions)
+        .then(finishExport);
+      return;
+    }
+  }
+
+  canvas.toBlob(async (blob) => {
+    if (!blob) return;
+    await finishExport(blob);
   }, mimeType, 0.92);
 }
 

@@ -1,3 +1,4 @@
+import { canvasColorSpace } from '../../engine/color-space';
 import styles from './StatusBar.module.css';
 
 interface StatusBarProps {
@@ -7,6 +8,8 @@ interface StatusBarProps {
   docWidth: number;
   docHeight: number;
 }
+
+const colorSpaceLabel = canvasColorSpace === 'display-p3' ? 'Display P3' : 'sRGB';
 
 export function StatusBar({ zoom, cursorX, cursorY, docWidth, docHeight }: StatusBarProps) {
   return (
@@ -22,6 +25,8 @@ export function StatusBar({ zoom, cursorX, cursorY, docWidth, docHeight }: Statu
         <span className={styles.number}>{docWidth}</span> x{' '}
         <span className={styles.number}>{docHeight}</span> px
       </span>
+      <span className={styles.spacer} />
+      <span className={styles.item}>{colorSpaceLabel}</span>
     </div>
   );
 }

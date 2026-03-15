@@ -1,6 +1,7 @@
 import { getActiveMaskEditBuffer } from '../useCanvasInteraction';
 import type { CanvasAllocator } from '../../engine/effects-renderer';
 import type { Layer } from '../../types';
+import { createImageData } from '../../engine/color-space';
 
 export function renderLayerContent(
   ctx: CanvasRenderingContext2D,
@@ -14,7 +15,7 @@ export function renderLayerContent(
   if (layer.mask && layer.mask.enabled && !maskEditMode) {
     const { canvas: maskedCanvas, ctx: maskedCtx } = alloc.acquire(data.width, data.height);
     maskedCtx.drawImage(tempCanvas, 0, 0);
-    const maskImageData = new ImageData(layer.mask.width, layer.mask.height);
+    const maskImageData = createImageData(layer.mask.width, layer.mask.height);
     for (let i = 0; i < layer.mask.data.length; i++) {
       const idx = i * 4;
       const val = layer.mask.data[i] ?? 0;

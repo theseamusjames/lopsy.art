@@ -1,4 +1,5 @@
 import type { Point, PixelSurface } from '../../types';
+import { contextOptions } from '../../engine/color-space';
 
 export function renderText(
   buf: PixelSurface,
@@ -13,7 +14,7 @@ export function renderText(
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = buf.width;
   tempCanvas.height = buf.height;
-  const ctx = tempCanvas.getContext('2d');
+  const ctx = tempCanvas.getContext('2d', contextOptions);
   if (!ctx) return;
 
   ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
