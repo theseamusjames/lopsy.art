@@ -7,7 +7,7 @@ import {
   renderDropShadow,
   renderStroke,
 } from '../../../engine/effects-renderer';
-import { renderLayerContent } from '../../useCanvasRendering';
+import { renderLayerContent } from '../../rendering/render-layers';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
 import type { MenuDef } from './types';
 
