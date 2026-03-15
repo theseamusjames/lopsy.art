@@ -88,6 +88,36 @@ export class PixelBuffer {
 }
 
 /**
+ * Read-only surface that projects a layer's pixels into canvas/document
+ * coordinate space. Pixels outside the layer bounds read as transparent.
+ * Used by the wand tool so flood-fill covers the full canvas, not just
+ * the layer's pixel buffer.
+ */
+export class OffsetSurface implements PixelSurface {
+  readonly width: number;
+  readonly height: number;
+  private readonly inner: PixelBuffer;
+  private readonly layerX: number;
+  private readonly layerY: number;
+
+  constructor(inner: PixelBuffer, canvasWidth: number, canvasHeight: number, layerX: number, layerY: number) {
+    this.inner = inner;
+    this.width = canvasWidth;
+    this.height = canvasHeight;
+    this.layerX = layerX;
+    this.layerY = layerY;
+  }
+
+  getPixel(x: number, y: number): Color {
+    return this.inner.getPixel(x - this.layerX, y - this.layerY);
+  }
+
+  setPixel(_x: number, _y: number, _color: Color): void {
+    // read-only; wand only needs getPixel
+  }
+}
+
+/**
  * Wraps a PixelBuffer so that setPixel only writes to pixels
  * inside the selection mask. Coordinates are in layer-local space;
  * layerX/layerY offset them into document/mask space.
