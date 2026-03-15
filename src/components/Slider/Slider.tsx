@@ -6,6 +6,7 @@ interface SliderProps {
   max: number;
   step?: number;
   label?: string;
+  defaultValue?: number;
   onChange: (value: number) => void;
   showValue?: boolean;
 }
@@ -16,11 +17,16 @@ export function Slider({
   max,
   step = 1,
   label,
+  defaultValue,
   onChange,
   showValue = true,
 }: SliderProps) {
+  const handleDoubleClick = () => {
+    onChange(defaultValue ?? min);
+  };
+
   return (
-    <div className={styles.container}>
+    <div className={styles.container} onDoubleClick={handleDoubleClick}>
       {label && <span className={styles.label}>{label}</span>}
       <input
         type="range"

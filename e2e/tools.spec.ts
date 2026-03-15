@@ -602,13 +602,15 @@ test.describe('Shape Tool', () => {
     await createDocument(page, 400, 300, true);
   });
 
-  test('drawing rectangle creates filled pixels', async ({ page }) => {
+  test('drawing polygon creates filled pixels', async ({ page }) => {
     await page.keyboard.press('u');
-    await setToolSetting(page, 'setShapeMode', 'rectangle');
-    await setToolSetting(page, 'setShapeFill', true);
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setToolSetting(page, 'setShapeMode', 'polygon');
+    await setToolSetting(page, 'setShapePolygonSides', 6);
+    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setToolSetting(page, 'setShapeStrokeColor', null);
 
-    await drawStroke(page, { x: 50, y: 50 }, { x: 200, y: 200 }, 5);
+    // Center-outward: click center at 125,125, drag to 200,200 (radius ~75px)
+    await drawStroke(page, { x: 125, y: 125 }, { x: 200, y: 200 }, 5);
 
     const pixel = await getPixelAt(page, 125, 125);
     expect(pixel.a).toBeGreaterThan(0);
@@ -618,10 +620,11 @@ test.describe('Shape Tool', () => {
   test('drawing ellipse creates filled pixels', async ({ page }) => {
     await page.keyboard.press('u');
     await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFill', true);
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setToolSetting(page, 'setShapeStrokeColor', null);
 
-    await drawStroke(page, { x: 100, y: 50 }, { x: 300, y: 250 }, 5);
+    // Center-outward: click center at 200,150, drag to 300,250 (100x100 radii)
+    await drawStroke(page, { x: 200, y: 150 }, { x: 300, y: 250 }, 5);
 
     // Center of the ellipse should be filled
     const center = await getPixelAt(page, 200, 150);
@@ -629,22 +632,23 @@ test.describe('Shape Tool', () => {
     expect(center.r).toBe(255);
   });
 
-  test('shape tool with fill disabled creates outline only', async ({ page }) => {
+  test('shape tool with stroke only creates outline', async ({ page }) => {
     await page.keyboard.press('u');
-    await setToolSetting(page, 'setShapeMode', 'rectangle');
-    await setToolSetting(page, 'setShapeFill', false);
+    await setToolSetting(page, 'setShapeMode', 'ellipse');
+    await setToolSetting(page, 'setShapeFillColor', null);
+    await setToolSetting(page, 'setShapeStrokeColor', { r: 0, g: 255, b: 0, a: 1 });
     await setToolSetting(page, 'setShapeStrokeWidth', 3);
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 255, b: 0, a: 1 });
 
-    await drawStroke(page, { x: 50, y: 50 }, { x: 200, y: 200 }, 5);
+    // Center-outward: click center at 125,125, drag to 200,200
+    await drawStroke(page, { x: 125, y: 125 }, { x: 200, y: 200 }, 5);
 
-    // The center of the rectangle should be empty (transparent)
+    // The center of the ellipse should be empty (transparent)
     const center = await getPixelAt(page, 125, 125);
     expect(center.a).toBe(0);
 
-    // But the border should have pixels
-    const border = await getPixelAt(page, 50, 125);
-    expect(border.a).toBeGreaterThan(0);
+    // But the edge should have pixels (check near the top edge)
+    const edge = await getPixelAt(page, 125, 51);
+    expect(edge.a).toBeGreaterThan(0);
   });
 });
 
@@ -1846,12 +1850,13 @@ test.describe('Comprehensive Scenarios', () => {
   test('draw shape, apply filter, then verify data', async ({ page }) => {
     await createDocument(page, 200, 200, true);
 
-    // Draw a filled rectangle
+    // Draw a filled ellipse
     await page.keyboard.press('u');
-    await setToolSetting(page, 'setShapeMode', 'rectangle');
-    await setToolSetting(page, 'setShapeFill', true);
-    await setUIState(page, 'setForegroundColor', { r: 100, g: 150, b: 200, a: 1 });
-    await drawStroke(page, { x: 20, y: 20 }, { x: 180, y: 180 }, 5);
+    await setToolSetting(page, 'setShapeMode', 'ellipse');
+    await setToolSetting(page, 'setShapeFillColor', { r: 100, g: 150, b: 200, a: 1 });
+    await setToolSetting(page, 'setShapeStrokeColor', null);
+    // Center-outward: center at 100,100, drag to 180,180 (80px radii)
+    await drawStroke(page, { x: 100, y: 100 }, { x: 180, y: 180 }, 5);
 
     const beforeInvert = await getPixelAt(page, 100, 100);
     expect(beforeInvert.a).toBeGreaterThan(0);

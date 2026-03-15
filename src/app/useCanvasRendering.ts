@@ -3,11 +3,12 @@ import { useEditorStore } from './editor-store';
 import { useUIStore } from './ui-store';
 import { useToolSettingsStore } from './tool-settings-store';
 import { getBrushCursorInfo } from './useCanvasCursor';
-import { CanvasAllocator, renderOuterGlow, renderDropShadow, renderInnerGlow, renderStroke } from '../engine/effects-renderer';
+import { CanvasAllocator, applyColorOverlay, renderOuterGlow, renderDropShadow, renderInnerGlow, renderStroke } from '../engine/effects-renderer';
 import { renderLayerContent } from './rendering/render-layers';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
 import { renderGrid, renderRulers } from './rendering/render-grid';
+import { hasActiveAdjustments, applyAdjustmentsToImageData } from '../filters/image-adjustments';
 
 export { renderLayerContent } from './rendering/render-layers';
 
@@ -35,6 +36,8 @@ export function useCanvasRendering(
   const showGrid = useUIStore((s) => s.showGrid);
   const showRulers = useUIStore((s) => s.showRulers);
   const gridSize = useUIStore((s) => s.gridSize);
+  const adjustments = useUIStore((s) => s.adjustments);
+  const adjustmentsEnabled = useUIStore((s) => s.adjustmentsEnabled);
   const brushSize = useToolSettingsStore((s) => s.brushSize);
   const pencilSize = useToolSettingsStore((s) => s.pencilSize);
   const eraserSize = useToolSettingsStore((s) => s.eraserSize);
@@ -107,6 +110,12 @@ export function useCanvasRendering(
       const { canvas: tempCanvas, ctx: tempCtx } = allocator.acquire(data.width, data.height);
       tempCtx.putImageData(data, 0, 0);
 
+      if (layer.effects.colorOverlay.enabled) {
+        const overlaid = tempCtx.getImageData(0, 0, data.width, data.height);
+        applyColorOverlay(overlaid, layer);
+        tempCtx.putImageData(overlaid, 0, 0);
+      }
+
       renderOuterGlow(ctx, tempCanvas, layer, data, allocator);
       renderDropShadow(ctx, tempCanvas, layer, data, allocator);
       renderLayerContent(ctx, tempCanvas, layer, data, maskEditMode, activeLayerId, allocator);
@@ -115,6 +124,23 @@ export function useCanvasRendering(
     }
 
     ctx.globalAlpha = 1;
+
+    // Post-composite image adjustments
+    if (adjustmentsEnabled && hasActiveAdjustments(adjustments)) {
+      const dx = viewport.panX + canvas.width / 2 - (doc.width / 2) * viewport.zoom;
+      const dy = viewport.panY + canvas.height / 2 - (doc.height / 2) * viewport.zoom;
+      const sx = Math.max(0, Math.floor(dx));
+      const sy = Math.max(0, Math.floor(dy));
+      const ex = Math.min(canvas.width, Math.ceil(dx + doc.width * viewport.zoom));
+      const ey = Math.min(canvas.height, Math.ceil(dy + doc.height * viewport.zoom));
+      const sw = ex - sx;
+      const sh = ey - sy;
+      if (sw > 0 && sh > 0) {
+        const imgData = ctx.getImageData(sx, sy, sw, sh);
+        applyAdjustmentsToImageData(imgData, adjustments);
+        ctx.putImageData(imgData, sx, sy);
+      }
+    }
 
     // Document border
     ctx.strokeStyle = '#666666';
@@ -143,5 +169,5 @@ export function useCanvasRendering(
       renderRulers(ctx, canvas.width, canvas.height, viewport, doc.width, doc.height, cursorPosition);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, viewport, layers, renderVersion, selection, pathAnchors, lassoPoints, cropRect, transform, maskEditMode, activeLayerId, gradientPreview, antPhase, activeTool, cursorPosition, brushSize, pencilSize, eraserSize, stampSize, showGrid, showRulers, gridSize]);
+  }, [doc, viewport, layers, renderVersion, selection, pathAnchors, lassoPoints, cropRect, transform, maskEditMode, activeLayerId, gradientPreview, antPhase, activeTool, cursorPosition, brushSize, pencilSize, eraserSize, stampSize, showGrid, showRulers, gridSize, adjustments, adjustmentsEnabled]);
 }

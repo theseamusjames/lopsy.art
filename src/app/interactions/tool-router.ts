@@ -12,7 +12,7 @@ import {
   handleTextDown,
   handleCropDown, handleCropMove, handleCropUp,
   handlePathDown, handlePathMove,
-  handleShapeGradientDown, handleShapeMove, handleGradientMove,
+  handleShapeGradientDown, handleShapeUp, handleShapeMove, handleGradientMove,
 } from './misc-handlers';
 
 export const toolHandlers: Partial<Record<ToolId, ToolHandler>> = {
@@ -81,6 +81,7 @@ export const toolHandlers: Partial<Record<ToolId, ToolHandler>> = {
   shape: {
     down: (ctx) => handleShapeGradientDown(ctx, 'shape'),
     move: (ctx, state) => handleShapeMove(state, ctx.layerPos),
+    up: (ctx, state) => handleShapeUp(state, ctx.layerPos),
   },
   gradient: {
     down: (ctx) => handleShapeGradientDown(ctx, 'gradient'),

@@ -2,6 +2,7 @@ import { useUIStore } from '../../ui-store';
 import { useEditorStore } from '../../editor-store';
 import {
   CanvasAllocator,
+  applyColorOverlay,
   renderOuterGlow,
   renderInnerGlow,
   renderDropShadow,
@@ -9,6 +10,7 @@ import {
 } from '../../../engine/effects-renderer';
 import { renderLayerContent } from '../../rendering/render-layers';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
+import { hasActiveAdjustments, applyAdjustmentsToImageData } from '../../../filters/image-adjustments';
 import type { MenuDef } from './types';
 
 const METADATA_NOTE = 'Made with Lopsy — http://lopsy.art';
@@ -55,9 +57,11 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  // Fill background
   ctx.fillStyle = `rgba(${backgroundColor.r},${backgroundColor.g},${backgroundColor.b},${backgroundColor.a})`;
   ctx.fillRect(0, 0, width, height);
 
+  // Composite all visible layers
   const allocator = new CanvasAllocator();
   for (const layerId of state.document.layerOrder) {
     const layer = state.document.layers.find((l) => l.id === layerId);
@@ -66,6 +70,13 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
     if (!data) continue;
     const { canvas: tempCanvas, ctx: tempCtx } = allocator.acquire(data.width, data.height);
     tempCtx.putImageData(data, 0, 0);
+
+    if (layer.effects.colorOverlay.enabled) {
+      const overlaid = tempCtx.getImageData(0, 0, data.width, data.height);
+      applyColorOverlay(overlaid, layer);
+      tempCtx.putImageData(overlaid, 0, 0);
+    }
+
     ctx.globalAlpha = layer.opacity;
     renderOuterGlow(ctx, tempCanvas, layer, data, allocator);
     renderDropShadow(ctx, tempCanvas, layer, data, allocator);
@@ -75,6 +86,14 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
   }
   ctx.globalAlpha = 1;
   allocator.releaseAll();
+
+  // Apply post-composite image adjustments
+  const uiState = useUIStore.getState();
+  if (uiState.adjustmentsEnabled && hasActiveAdjustments(uiState.adjustments)) {
+    const imgData = ctx.getImageData(0, 0, width, height);
+    applyAdjustmentsToImageData(imgData, uiState.adjustments);
+    ctx.putImageData(imgData, 0, 0);
+  }
 
   const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
   const ext = format === 'png' ? 'png' : 'jpg';

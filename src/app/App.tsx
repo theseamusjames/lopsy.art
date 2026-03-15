@@ -6,14 +6,20 @@ import { ColorPanel } from '../panels/ColorPanel/ColorPanel';
 import { PanelContainer } from '../panels/PanelContainer/PanelContainer';
 import { HistoryPanel } from '../panels/HistoryPanel/HistoryPanel';
 import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
+import { AdjustmentsPanel } from '../panels/AdjustmentsPanel/AdjustmentsPanel';
 import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
 import { MenuBar } from './MenuBar/MenuBar';
 import { OptionsBar } from './OptionsBar/OptionsBar';
 import { StatusBar } from './StatusBar/StatusBar';
 import { NewDocumentModal } from '../components/NewDocumentModal/NewDocumentModal';
+import { ShapeSizeModal } from '../components/ShapeSizeModal/ShapeSizeModal';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useCanvasInteraction } from './useCanvasInteraction';
+import { useToolSettingsStore } from './tool-settings-store';
+import { drawShape } from '../tools/shape/shape';
+import { PixelBuffer } from '../engine/pixel-data';
+import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
@@ -51,6 +57,9 @@ export function App() {
   const showNewDocumentModal = useUIStore((s) => s.showNewDocumentModal);
   const setShowNewDocumentModal = useUIStore((s) => s.setShowNewDocumentModal);
 
+  const pendingShapeClick = useUIStore((s) => s.pendingShapeClick);
+  const setPendingShapeClick = useUIStore((s) => s.setPendingShapeClick);
+
   const cursorPos = useUIStore((s) => s.cursorPosition);
   const setCursorPos = useUIStore((s) => s.setCursorPosition);
   const [isPanning, setIsPanning] = useState(false);
@@ -82,6 +91,29 @@ export function App() {
     setShowNewDocumentModal(false);
   }, [openImageAsDocument, setShowNewDocumentModal]);
 
+  const handleShapeSizeConfirm = useCallback((width: number, height: number) => {
+    const pending = useUIStore.getState().pendingShapeClick;
+    if (!pending) return;
+    const editorState = useEditorStore.getState();
+    const imageData = editorState.getOrCreateLayerPixelData(pending.layerId);
+    const pixelBuffer = PixelBuffer.fromImageData(imageData);
+    const surface = wrapWithSelectionMask(pixelBuffer, pending.layerX, pending.layerY);
+    const ts = useToolSettingsStore.getState();
+    editorState.pushHistory();
+    if (ts.shapeFillColor) useUIStore.getState().addRecentColor(ts.shapeFillColor);
+    if (ts.shapeStrokeColor) useUIStore.getState().addRecentColor(ts.shapeStrokeColor);
+    const edge = { x: pending.center.x + width / 2, y: pending.center.y + height / 2 };
+    drawShape(surface, pending.center, edge, {
+      mode: ts.shapeMode,
+      fillColor: ts.shapeFillColor,
+      strokeColor: ts.shapeStrokeColor,
+      strokeWidth: ts.shapeStrokeWidth,
+      sides: ts.shapePolygonSides,
+    });
+    editorState.updateLayerPixelData(pending.layerId, pixelBuffer.toImageData());
+    setPendingShapeClick(null);
+  }, [setPendingShapeClick]);
+
   // Warn before navigating away with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -101,6 +133,7 @@ export function App() {
     const container = containerRef.current;
     if (!container) return;
 
+    let hasInitialFit = false;
     const observer = new ResizeObserver(() => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -108,11 +141,15 @@ export function App() {
       canvas.width = rect.width;
       canvas.height = rect.height;
       useEditorStore.getState().setViewportSize(rect.width, rect.height);
+      if (!hasInitialFit && rect.width > 0 && rect.height > 0) {
+        hasInitialFit = true;
+        useEditorStore.getState().fitToView();
+      }
     });
 
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [documentReady]);
 
   // Screen to canvas coordinate transform
   const screenToCanvas = useCallback(
@@ -211,6 +248,7 @@ export function App() {
   const [historyPanelCollapsed, setHistoryPanelCollapsed] = useState(false);
   const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(false);
   const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
+  const [adjustmentsPanelCollapsed, setAdjustmentsPanelCollapsed] = useState(false);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const visiblePanels = useUIStore((s) => s.visiblePanels);
 
@@ -241,6 +279,12 @@ export function App() {
 
   return (
     <div className={styles.app}>
+      {pendingShapeClick && (
+        <ShapeSizeModal
+          onConfirm={handleShapeSizeConfirm}
+          onCancel={() => setPendingShapeClick(null)}
+        />
+      )}
       {showModal && (
         <NewDocumentModal
           onCreateDocument={handleCreateDocument}
@@ -307,6 +351,15 @@ export function App() {
                   onToggle={() => setHistoryPanelCollapsed(!historyPanelCollapsed)}
                 >
                   <HistoryPanel collapsed={historyPanelCollapsed} />
+                </PanelContainer>
+              )}
+              {visiblePanels.has('adjustments') && (
+                <PanelContainer
+                  title="Adjustments"
+                  collapsed={adjustmentsPanelCollapsed}
+                  onToggle={() => setAdjustmentsPanelCollapsed(!adjustmentsPanelCollapsed)}
+                >
+                  {!adjustmentsPanelCollapsed && <AdjustmentsPanel />}
                 </PanelContainer>
               )}
             </div>

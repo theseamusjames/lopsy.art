@@ -1,5 +1,6 @@
 import { useEditorStore } from '../../editor-store';
 import { PixelBuffer } from '../../../engine/pixel-data';
+import type { Layer } from '../../../types';
 import type { MenuDef } from './types';
 
 export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
@@ -20,13 +21,7 @@ export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
   state.updateLayerPixelData(activeId, result.toImageData());
 }
 
-export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
-  const state = useEditorStore.getState();
-  const activeId = state.document.activeLayerId;
-  if (!activeId) return;
-  state.pushHistory();
-  const imageData = state.getOrCreateLayerPixelData(activeId);
-  const buf = PixelBuffer.fromImageData(imageData);
+function rotatePixelBuffer(buf: PixelBuffer, direction: 'cw' | 'ccw'): PixelBuffer {
   const result = new PixelBuffer(buf.height, buf.width);
   for (let y = 0; y < buf.height; y++) {
     for (let x = 0; x < buf.width; x++) {
@@ -37,7 +32,59 @@ export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
       }
     }
   }
-  state.updateLayerPixelData(activeId, result.toImageData());
+  return result;
+}
+
+export function rotateImage(direction: 'cw' | 'ccw'): void {
+  const state = useEditorStore.getState();
+  const doc = state.document;
+  state.pushHistory();
+
+  const newWidth = doc.height;
+  const newHeight = doc.width;
+  const newLayers: Layer[] = [];
+  const pixelData = new Map<string, ImageData>();
+
+  for (const layer of doc.layers) {
+    if (layer.type !== 'raster') {
+      newLayers.push(layer);
+      continue;
+    }
+    const imageData = state.getOrCreateLayerPixelData(layer.id);
+    const buf = PixelBuffer.fromImageData(imageData);
+    const rotated = rotatePixelBuffer(buf, direction);
+    pixelData.set(layer.id, rotated.toImageData());
+
+    // Rotate layer position around document center
+    let newX: number;
+    let newY: number;
+    if (direction === 'cw') {
+      newX = doc.height - layer.y - buf.height;
+      newY = layer.x;
+    } else {
+      newX = layer.y;
+      newY = doc.width - layer.x - buf.width;
+    }
+
+    newLayers.push({
+      ...layer,
+      x: newX,
+      y: newY,
+      width: rotated.width,
+      height: rotated.height,
+    } as Layer);
+  }
+
+  useEditorStore.setState({
+    document: {
+      ...doc,
+      width: newWidth,
+      height: newHeight,
+      layers: newLayers,
+    },
+    layerPixelData: pixelData,
+    renderVersion: state.renderVersion + 1,
+  });
 }
 
 export type ImageDialogId = 'canvas-size' | 'image-size';
@@ -49,8 +96,8 @@ export function createImageMenu(showDialog: (id: ImageDialogId) => void): MenuDe
     { label: 'Canvas Size...', action: () => showDialog('canvas-size') },
     { label: 'Image Size...', action: () => showDialog('image-size') },
     { separator: true, label: '' },
-    { label: 'Rotate 90\u00B0 CW', action: () => rotateActiveLayer('cw') },
-    { label: 'Rotate 90\u00B0 CCW', action: () => rotateActiveLayer('ccw') },
+    { label: 'Rotate 90\u00B0 CW', action: () => rotateImage('cw') },
+    { label: 'Rotate 90\u00B0 CCW', action: () => rotateImage('ccw') },
     { label: 'Flip Horizontal', action: () => flipActiveLayer('horizontal') },
     { label: 'Flip Vertical', action: () => flipActiveLayer('vertical') },
   ],

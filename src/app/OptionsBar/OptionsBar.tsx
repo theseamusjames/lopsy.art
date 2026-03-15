@@ -6,6 +6,7 @@ import { PencilOptions } from './tool-options/PencilOptions';
 import { EraserOptions } from './tool-options/EraserOptions';
 import { FillOptions } from './tool-options/FillOptions';
 import { WandOptions } from './tool-options/WandOptions';
+import { MarqueeOptions } from './tool-options/MarqueeOptions';
 import { DodgeOptions } from './tool-options/DodgeOptions';
 import { ShapeOptions } from './tool-options/ShapeOptions';
 import { GradientOptions } from './tool-options/GradientOptions';
@@ -50,6 +51,8 @@ function ToolOptions({ tool }: { tool: ToolId }) {
     case 'stamp': return <StampOptions />;
     case 'path': return <PathOptions />;
     case 'text': return <TextOptions />;
+    case 'marquee-rect':
+    case 'marquee-ellipse': return <MarqueeOptions />;
     case 'crop': return <span className={styles.hint}>Drag to select crop area</span>;
     default: return null;
   }
@@ -60,6 +63,8 @@ export function OptionsBar() {
   const showGrid = useUIStore((s) => s.showGrid);
   const snapToGrid = useUIStore((s) => s.snapToGrid);
   const toggleSnapToGrid = useUIStore((s) => s.toggleSnapToGrid);
+  const gridSize = useUIStore((s) => s.gridSize);
+  const setGridSize = useUIStore((s) => s.setGridSize);
   const label = TOOL_LABELS[activeTool] ?? activeTool;
 
   return (
@@ -70,14 +75,26 @@ export function OptionsBar() {
         <ToolOptions tool={activeTool} />
       </div>
       {showGrid && (
-        <label className={styles.snapCheckbox}>
+        <>
+          <span className={styles.label}>Grid</span>
           <input
-            type="checkbox"
-            checked={snapToGrid}
-            onChange={toggleSnapToGrid}
+            className={styles.gridSlider}
+            type="range"
+            min={4}
+            max={128}
+            step={1}
+            value={gridSize}
+            onChange={(e) => setGridSize(Number(e.target.value))}
           />
-          Snap
-        </label>
+          <label className={styles.snapCheckbox}>
+            <input
+              type="checkbox"
+              checked={snapToGrid}
+              onChange={toggleSnapToGrid}
+            />
+            Snap
+          </label>
+        </>
       )}
     </div>
   );

@@ -82,6 +82,7 @@ export interface EditorState {
   setZoom: (zoom: number) => void;
   setPan: (x: number, y: number) => void;
   setViewportSize: (width: number, height: number) => void;
+  fitToView: () => void;
 
   // History
   undo: () => void;
