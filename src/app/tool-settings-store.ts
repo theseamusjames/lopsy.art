@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { Color } from '../types';
 
 interface ToolSettings {
   brushSize: number;
@@ -9,9 +10,14 @@ interface ToolSettings {
   eraserOpacity: number;
   fillTolerance: number;
   fillContiguous: boolean;
-  shapeMode: 'rectangle' | 'ellipse';
-  shapeFill: boolean;
+  shapeMode: 'ellipse' | 'polygon';
+  shapeFillColor: Color | null;
+  shapeStrokeColor: Color | null;
   shapeStrokeWidth: number;
+  shapePolygonSides: number;
+  aspectRatioW: number;
+  aspectRatioH: number;
+  aspectRatioLocked: boolean;
   gradientType: 'linear' | 'radial';
   stampSize: number;
   pathStrokeWidth: number;
@@ -44,9 +50,14 @@ interface ToolSettings {
   setEraserOpacity: (opacity: number) => void;
   setFillTolerance: (tolerance: number) => void;
   setFillContiguous: (contiguous: boolean) => void;
-  setShapeMode: (mode: 'rectangle' | 'ellipse') => void;
-  setShapeFill: (fill: boolean) => void;
+  setShapeMode: (mode: 'ellipse' | 'polygon') => void;
+  setShapeFillColor: (color: Color | null) => void;
+  setShapeStrokeColor: (color: Color | null) => void;
   setShapeStrokeWidth: (width: number) => void;
+  setShapePolygonSides: (sides: number) => void;
+  setAspectRatioW: (w: number) => void;
+  setAspectRatioH: (h: number) => void;
+  setAspectRatioLocked: (locked: boolean) => void;
   setGradientType: (type: 'linear' | 'radial') => void;
 }
 
@@ -59,9 +70,14 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   eraserOpacity: 100,
   fillTolerance: 32,
   fillContiguous: true,
-  shapeMode: 'rectangle',
-  shapeFill: true,
+  shapeMode: 'ellipse',
+  shapeFillColor: { r: 255, g: 255, b: 255, a: 1 },
+  shapeStrokeColor: null,
   shapeStrokeWidth: 2,
+  shapePolygonSides: 6,
+  aspectRatioW: 1,
+  aspectRatioH: 1,
+  aspectRatioLocked: false,
   gradientType: 'linear',
   stampSize: 20,
   pathStrokeWidth: 2,
@@ -84,8 +100,13 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   setFillTolerance: (tolerance) => set({ fillTolerance: Math.max(0, Math.min(255, tolerance)) }),
   setFillContiguous: (contiguous) => set({ fillContiguous: contiguous }),
   setShapeMode: (mode) => set({ shapeMode: mode }),
-  setShapeFill: (fill) => set({ shapeFill: fill }),
+  setShapeFillColor: (color) => set({ shapeFillColor: color }),
+  setShapeStrokeColor: (color) => set({ shapeStrokeColor: color }),
   setShapeStrokeWidth: (width) => set({ shapeStrokeWidth: Math.max(1, Math.min(50, width)) }),
+  setShapePolygonSides: (sides) => set({ shapePolygonSides: Math.max(3, Math.min(64, Math.round(sides))) }),
+  setAspectRatioW: (w) => set({ aspectRatioW: Math.max(0.01, w) }),
+  setAspectRatioH: (h) => set({ aspectRatioH: Math.max(0.01, h) }),
+  setAspectRatioLocked: (locked) => set({ aspectRatioLocked: locked }),
   setGradientType: (type) => set({ gradientType: type }),
   setStampSize: (size) => set({ stampSize: Math.max(1, Math.min(200, size)) }),
   setPathStrokeWidth: (width) => set({ pathStrokeWidth: Math.max(1, Math.min(50, width)) }),

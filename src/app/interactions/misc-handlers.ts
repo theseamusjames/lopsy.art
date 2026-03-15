@@ -287,8 +287,12 @@ export function handleShapeGradientDown(
   const { layerPos, activeLayerId, activeLayer, pixelBuffer } = ctx;
   const editorState = useEditorStore.getState();
   editorState.pushHistory();
-  useUIStore.getState().addRecentColor(useUIStore.getState().foregroundColor);
-  if (tool === 'gradient') {
+  if (tool === 'shape') {
+    const ts = useToolSettingsStore.getState();
+    if (ts.shapeFillColor) useUIStore.getState().addRecentColor(ts.shapeFillColor);
+    if (ts.shapeStrokeColor) useUIStore.getState().addRecentColor(ts.shapeStrokeColor);
+  } else {
+    useUIStore.getState().addRecentColor(useUIStore.getState().foregroundColor);
     useUIStore.getState().addRecentColor(useUIStore.getState().backgroundColor);
   }
   return {
@@ -305,16 +309,53 @@ export function handleShapeGradientDown(
   };
 }
 
+const CLICK_THRESHOLD = 4;
+
+export function handleShapeUp(state: InteractionState, layerLocalPos: Point): void {
+  if (!state.startPoint || !state.pixelBuffer || !state.originalPixelBuffer) return;
+  const dx = layerLocalPos.x - state.startPoint.x;
+  const dy = layerLocalPos.y - state.startPoint.y;
+  if (Math.sqrt(dx * dx + dy * dy) < CLICK_THRESHOLD) {
+    // Undo the history push from mousedown since nothing was drawn
+    useEditorStore.getState().undo();
+    useUIStore.getState().setPendingShapeClick({
+      center: state.startPoint,
+      layerId: state.layerId!,
+      layerX: state.layerStartX,
+      layerY: state.layerStartY,
+    });
+  }
+}
+
+function constrainToAspectRatio(center: Point, edge: Point): Point {
+  const ts = useToolSettingsStore.getState();
+  if (!ts.aspectRatioLocked || ts.aspectRatioW <= 0 || ts.aspectRatioH <= 0) return edge;
+  const ratio = ts.aspectRatioW / ts.aspectRatioH;
+  let rx = Math.abs(edge.x - center.x);
+  let ry = Math.abs(edge.y - center.y);
+  if (rx / (ry || 1) > ratio) {
+    rx = ry * ratio;
+  } else {
+    ry = rx / ratio;
+  }
+  return {
+    x: center.x + rx * Math.sign(edge.x - center.x || 1),
+    y: center.y + ry * Math.sign(edge.y - center.y || 1),
+  };
+}
+
 export function handleShapeMove(state: InteractionState, layerLocalPos: Point): void {
   if (!state.pixelBuffer || !state.originalPixelBuffer || !state.startPoint) return;
   const restored = state.originalPixelBuffer.clone();
   const shapeSurface = wrapWithSelectionMask(restored, state.layerStartX, state.layerStartY);
-  const color = useUIStore.getState().foregroundColor;
   const toolSettings = useToolSettingsStore.getState();
-  drawShape(shapeSurface, state.startPoint, layerLocalPos, color, {
+  const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos);
+  drawShape(shapeSurface, state.startPoint, constrainedEdge, {
     mode: toolSettings.shapeMode,
-    fill: toolSettings.shapeFill,
+    fillColor: toolSettings.shapeFillColor,
+    strokeColor: toolSettings.shapeStrokeColor,
     strokeWidth: toolSettings.shapeStrokeWidth,
+    sides: toolSettings.shapePolygonSides,
   });
   state.pixelBuffer = restored;
   useEditorStore.getState().updateLayerPixelData(state.layerId!, restored.toImageData());
