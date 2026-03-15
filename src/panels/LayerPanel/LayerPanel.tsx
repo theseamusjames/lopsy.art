@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Eye, EyeOff, GripVertical, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, X } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
-import { selectionBounds } from '../../selection/selection';
-import { createTransformState } from '../../tools/transform/transform';
 import type { Layer } from '../../types';
+import { LayerThumbnail } from './LayerThumbnail';
+import { MaskThumbnail } from './MaskThumbnail';
+import { selectLayerAlpha, convertMaskToMarquee } from './layer-selection';
 import styles from './LayerPanel.module.css';
 
 interface LayerPanelProps {
@@ -18,80 +19,6 @@ interface LayerPanelProps {
   onReorderLayer: (fromIndex: number, toIndex: number) => void;
   onUpdateOpacity: (id: string, opacity: number) => void;
   collapsed?: boolean;
-}
-
-function LayerThumbnail({ layer }: { layer: Layer }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const renderVersion = useEditorStore((s) => s.renderVersion);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const thumbSize = 24;
-    canvas.width = thumbSize;
-    canvas.height = thumbSize;
-
-    const pixelData = useEditorStore.getState().layerPixelData.get(layer.id);
-    if (!pixelData) {
-      ctx.clearRect(0, 0, thumbSize, thumbSize);
-      return;
-    }
-
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = pixelData.width;
-    tempCanvas.height = pixelData.height;
-    const tempCtx = tempCanvas.getContext('2d');
-    if (!tempCtx) return;
-    tempCtx.putImageData(pixelData, 0, 0);
-
-    ctx.clearRect(0, 0, thumbSize, thumbSize);
-    const scale = Math.min(thumbSize / pixelData.width, thumbSize / pixelData.height);
-    const w = pixelData.width * scale;
-    const h = pixelData.height * scale;
-    ctx.drawImage(tempCanvas, (thumbSize - w) / 2, (thumbSize - h) / 2, w, h);
-  }, [layer.id, renderVersion]);
-
-  return <canvas ref={canvasRef} className={styles.thumbnailCanvas} />;
-}
-
-function MaskThumbnail({ layer }: { layer: Layer }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mask = layer.mask;
-  const renderVersion = useEditorStore((s) => s.renderVersion);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !mask) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    canvas.width = 20;
-    canvas.height = 20;
-
-    const imgData = ctx.createImageData(20, 20);
-    const scaleX = mask.width / 20;
-    const scaleY = mask.height / 20;
-    for (let y = 0; y < 20; y++) {
-      for (let x = 0; x < 20; x++) {
-        const srcX = Math.floor(x * scaleX);
-        const srcY = Math.floor(y * scaleY);
-        const val = mask.data[srcY * mask.width + srcX] ?? 0;
-        const idx = (y * 20 + x) * 4;
-        imgData.data[idx] = val;
-        imgData.data[idx + 1] = val;
-        imgData.data[idx + 2] = val;
-        imgData.data[idx + 3] = 255;
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
-  }, [mask, renderVersion]);
-
-  if (!mask) return null;
-
-  return <canvas ref={canvasRef} />;
 }
 
 export function LayerPanel({
@@ -115,55 +42,12 @@ export function LayerPanel({
   const handleThumbnailCmdClick = useCallback((e: React.MouseEvent, layerId: string) => {
     if (!(e.metaKey || e.ctrlKey)) return;
     e.stopPropagation();
-    const editorState = useEditorStore.getState();
-    const layer = editorState.document.layers.find((l) => l.id === layerId);
-    if (!layer) return;
-    const pixelData = editorState.layerPixelData.get(layerId);
-    if (!pixelData) return;
-
-    const { width: docW, height: docH } = editorState.document;
-    const selMask = new Uint8ClampedArray(docW * docH);
-    for (let y = 0; y < pixelData.height; y++) {
-      for (let x = 0; x < pixelData.width; x++) {
-        const alpha = pixelData.data[(y * pixelData.width + x) * 4 + 3] ?? 0;
-        if (alpha < 1) continue;
-        const docX = x + layer.x;
-        const docY = y + layer.y;
-        if (docX >= 0 && docX < docW && docY >= 0 && docY < docH) {
-          selMask[docY * docW + docX] = alpha;
-        }
-      }
-    }
-    const bounds = selectionBounds(selMask, docW, docH);
-    if (bounds) {
-      editorState.setSelection(bounds, selMask, docW, docH);
-      useUIStore.getState().setTransform(createTransformState(bounds));
-    }
+    selectLayerAlpha(layerId);
   }, []);
 
   const handleConvertMaskToMarquee = useCallback((layerId: string) => {
-    const editorState = useEditorStore.getState();
-    const layer = editorState.document.layers.find((l) => l.id === layerId);
-    if (!layer?.mask) return;
-    const { mask } = layer;
-    const { width: docW, height: docH } = editorState.document;
-    const selMask = new Uint8ClampedArray(docW * docH);
-    for (let y = 0; y < mask.height; y++) {
-      for (let x = 0; x < mask.width; x++) {
-        const docX = x + layer.x;
-        const docY = y + layer.y;
-        if (docX >= 0 && docX < docW && docY >= 0 && docY < docH) {
-          selMask[docY * docW + docX] = 255 - (mask.data[y * mask.width + x] ?? 0);
-        }
-      }
-    }
-    const bounds = selectionBounds(selMask, docW, docH);
-    if (bounds) {
-      editorState.setSelection(bounds, selMask, docW, docH);
-      useUIStore.getState().setTransform(createTransformState(bounds));
-    }
-    setMaskEditMode(false);
-  }, [setMaskEditMode]);
+    convertMaskToMarquee(layerId);
+  }, []);
 
   const reversedLayers = [...layers].reverse();
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -183,7 +67,6 @@ export function LayerPanel({
       const list = listRef.current;
       if (!list || !dragRef.current) return;
       const items = list.querySelectorAll(`.${styles.itemWrapper}`);
-      // Gap positions: 0=before first, 1=between 0&1, ..., N=after last
       let gap = items.length;
       for (let i = 0; i < items.length; i++) {
         const rect = items[i]!.getBoundingClientRect();
@@ -205,7 +88,6 @@ export function LayerPanel({
       setDropGap(null);
       if (!drag) return;
       const { from, gap } = drag;
-      // Dropping at gap === from or from+1 is a no-op (same position)
       if (gap === from || gap === from + 1) return;
       const fromArrayIdx = layers.length - 1 - from;
       const rawToArrayIdx = layers.length - gap;

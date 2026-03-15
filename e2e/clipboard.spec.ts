@@ -17,6 +17,19 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
   await page.waitForTimeout(200);
 }
 
+async function waitForLayerCount(page: Page, count: number) {
+  await page.waitForFunction(
+    (expected) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: unknown[] } };
+      };
+      return store.getState().document.layers.length === expected;
+    },
+    count,
+    { timeout: 5000 },
+  );
+}
+
 async function getEditorState(page: Page) {
   return page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -290,6 +303,7 @@ test.describe('Paste', () => {
 
     await page.keyboard.press(`${mod}+KeyC`);
     await page.keyboard.press(`${mod}+KeyV`);
+    await waitForLayerCount(page, 2);
 
     const state = await getEditorState(page);
     expect(state.document.layers).toHaveLength(2);
@@ -304,6 +318,7 @@ test.describe('Paste', () => {
     await setSelection(page, 10, 10, 30, 30);
     await page.keyboard.press(`${mod}+KeyC`);
     await page.keyboard.press(`${mod}+KeyV`);
+    await waitForLayerCount(page, 2);
 
     // The pasted layer should have the green pixels
     const pixel = await getPixelAt(page, 5, 5);
@@ -318,6 +333,7 @@ test.describe('Paste', () => {
     await setSelection(page, 100, 100, 20, 20);
     await page.keyboard.press(`${mod}+KeyC`);
     await page.keyboard.press(`${mod}+KeyV`);
+    await waitForLayerCount(page, 2);
 
     const state = await getEditorState(page);
     const pastedLayer = state.document.layers.find((l) => l.name === 'Pasted Layer');
@@ -342,6 +358,7 @@ test.describe('Paste', () => {
 
     const before = await getEditorState(page);
     await page.keyboard.press(`${mod}+KeyV`);
+    await waitForLayerCount(page, 2);
     const after = await getEditorState(page);
 
     expect(after.undoStack).toBeGreaterThan(before.undoStack);
@@ -359,7 +376,9 @@ test.describe('Paste', () => {
     await page.keyboard.press(`${mod}+KeyC`);
 
     await page.keyboard.press(`${mod}+KeyV`);
+    await waitForLayerCount(page, 2);
     await page.keyboard.press(`${mod}+KeyV`);
+    await waitForLayerCount(page, 3);
 
     const state = await getEditorState(page);
     expect(state.document.layers).toHaveLength(3);
@@ -386,6 +405,7 @@ test.describe('Cut and Paste round-trip', () => {
 
     // Paste
     await page.keyboard.press(`${mod}+KeyV`);
+    await waitForLayerCount(page, 2);
 
     const afterPaste = await getEditorState(page);
     expect(afterPaste.document.layers).toHaveLength(2);

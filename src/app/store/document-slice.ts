@@ -1,0 +1,215 @@
+import type { LayerEffects, Rect } from '../../types';
+import type { AlignEdge } from '../../tools/move/move';
+import { createRasterLayer } from '../../layers/layer-model';
+import type { SliceCreator } from './types';
+
+import { computeCreateDocument } from './actions/create-document';
+import { computeOpenImage } from './actions/open-image';
+import { computeAddLayer } from './actions/add-layer';
+import { computeRemoveLayer } from './actions/remove-layer';
+import { computeMoveLayer } from './actions/move-layer';
+import { computeDuplicateLayer } from './actions/duplicate-layer';
+import { computeMergeDown } from './actions/merge-down';
+import { computeFlattenImage } from './actions/flatten-image';
+import { computeRasterizeStyle } from './actions/rasterize-style';
+import { computeCropCanvas } from './actions/crop-canvas';
+import { computeResizeCanvas } from './actions/resize-canvas';
+import { computeResizeImage } from './actions/resize-image';
+import { computeAlignLayer } from './actions/align-layer';
+import { computeAddLayerMask } from './actions/add-layer-mask';
+import { computeRemoveLayerMask } from './actions/remove-layer-mask';
+import {
+  computeSetActiveLayer,
+  computeToggleVisibility,
+  computeUpdateOpacity,
+  computeUpdatePosition,
+  computeUpdateEffects,
+  computeToggleMask,
+  computeUpdateMaskData,
+} from './actions/layer-property-updates';
+
+function createInitialDocument() {
+  const bg = createRasterLayer({ name: 'Background', width: 800, height: 600 });
+  return {
+    id: crypto.randomUUID(),
+    name: 'Untitled' as const,
+    width: 800,
+    height: 600,
+    layers: [bg],
+    layerOrder: [bg.id],
+    activeLayerId: bg.id,
+    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+  };
+}
+
+export interface DocumentSlice {
+  document: ReturnType<typeof createInitialDocument>;
+  documentReady: boolean;
+  createDocument: (width: number, height: number, transparentBg: boolean) => void;
+  openImageAsDocument: (imageData: ImageData, name: string) => void;
+  addLayer: () => void;
+  removeLayer: (id: string) => void;
+  setActiveLayer: (id: string) => void;
+  toggleLayerVisibility: (id: string) => void;
+  updateLayerOpacity: (id: string, opacity: number) => void;
+  moveLayer: (fromIndex: number, toIndex: number) => void;
+  updateLayerPosition: (id: string, x: number, y: number) => void;
+  alignLayer: (edge: AlignEdge) => void;
+  duplicateLayer: () => void;
+  mergeDown: () => void;
+  flattenImage: () => void;
+  rasterizeLayerStyle: () => void;
+  updateLayerEffects: (id: string, effects: LayerEffects) => void;
+  addLayerMask: (id: string) => void;
+  removeLayerMask: (id: string) => void;
+  toggleLayerMask: (id: string) => void;
+  updateLayerMaskData: (layerId: string, maskData: Uint8ClampedArray) => void;
+  cropCanvas: (rect: Rect) => void;
+  resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
+  resizeImage: (newWidth: number, newHeight: number) => void;
+}
+
+export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
+  document: createInitialDocument(),
+  documentReady: false,
+
+  createDocument: (width, height, transparentBg) => {
+    set(computeCreateDocument(width, height, transparentBg));
+  },
+
+  openImageAsDocument: (imageData, name) => {
+    set(computeOpenImage(imageData, name));
+  },
+
+  addLayer: () => {
+    const s = get();
+    s.pushHistory('Add Layer');
+    const result = computeAddLayer(s.document, s.layerPixelData);
+    if (result) set(result);
+  },
+
+  removeLayer: (id) => {
+    const s = get();
+    const result = computeRemoveLayer(s.document, s.layerPixelData, id);
+    if (!result) return;
+    s.pushHistory('Delete Layer');
+    set(result);
+  },
+
+  setActiveLayer: (id) => {
+    set(computeSetActiveLayer(get().document, id));
+  },
+
+  toggleLayerVisibility: (id) => {
+    const s = get();
+    s.pushHistory('Toggle Visibility');
+    set(computeToggleVisibility(s.document, id));
+  },
+
+  updateLayerOpacity: (id, opacity) => {
+    set(computeUpdateOpacity(get().document, id, opacity));
+  },
+
+  moveLayer: (fromIndex, toIndex) => {
+    const s = get();
+    s.pushHistory('Reorder Layer');
+    const result = computeMoveLayer(s.document, s.renderVersion, fromIndex, toIndex);
+    if (result) set(result);
+  },
+
+  updateLayerPosition: (id, x, y) => {
+    set(computeUpdatePosition(get().document, get().renderVersion, id, x, y));
+  },
+
+  alignLayer: (edge) => {
+    const s = get();
+    const result = computeAlignLayer(s.document, s.layerPixelData, s.selection, s.renderVersion, edge);
+    if (!result) return;
+    s.pushHistory('Align Layer');
+    set(result);
+  },
+
+  duplicateLayer: () => {
+    const s = get();
+    const result = computeDuplicateLayer(s.document, s.layerPixelData);
+    if (!result) return;
+    s.pushHistory('Duplicate Layer');
+    set(result);
+  },
+
+  mergeDown: () => {
+    const s = get();
+    const result = computeMergeDown(s.document, s.layerPixelData);
+    if (!result) return;
+    s.pushHistory('Merge Down');
+    set(result);
+  },
+
+  flattenImage: () => {
+    const s = get();
+    const result = computeFlattenImage(s.document, s.layerPixelData);
+    if (!result) return;
+    s.pushHistory('Flatten Image');
+    set(result);
+  },
+
+  rasterizeLayerStyle: () => {
+    const s = get();
+    const result = computeRasterizeStyle(s.document, s.layerPixelData);
+    if (!result) return;
+    s.pushHistory('Rasterize Layer Style');
+    set(result);
+  },
+
+  updateLayerEffects: (id, effects) => {
+    const s = get();
+    s.pushHistory('Update Effects');
+    set(computeUpdateEffects(s.document, s.renderVersion, id, effects));
+  },
+
+  addLayerMask: (id) => {
+    const s = get();
+    s.pushHistory('Add Mask');
+    const result = computeAddLayerMask(s.document, s.renderVersion, id);
+    if (result) set(result);
+  },
+
+  removeLayerMask: (id) => {
+    const s = get();
+    const result = computeRemoveLayerMask(s.document, s.renderVersion, id);
+    if (!result) return;
+    s.pushHistory('Remove Mask');
+    set(result);
+  },
+
+  toggleLayerMask: (id) => {
+    const s = get();
+    const result = computeToggleMask(s.document, s.renderVersion, id);
+    if (!result) return;
+    s.pushHistory('Toggle Mask');
+    set(result);
+  },
+
+  updateLayerMaskData: (layerId, maskData) => {
+    set(computeUpdateMaskData(get().document, get().renderVersion, layerId, maskData));
+  },
+
+  cropCanvas: (rect) => {
+    const s = get();
+    s.pushHistory('Crop Canvas');
+    const result = computeCropCanvas(s.document, s.layerPixelData, s.renderVersion, rect);
+    if (result) set(result);
+  },
+
+  resizeCanvas: (newWidth, newHeight, anchorX, anchorY) => {
+    const s = get();
+    s.pushHistory('Resize Canvas');
+    set(computeResizeCanvas(s.document, s.layerPixelData, s.renderVersion, newWidth, newHeight, anchorX, anchorY));
+  },
+
+  resizeImage: (newWidth, newHeight) => {
+    const s = get();
+    s.pushHistory('Resize Image');
+    set(computeResizeImage(s.document, s.layerPixelData, s.renderVersion, newWidth, newHeight));
+  },
+});

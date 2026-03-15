@@ -176,6 +176,61 @@ export function renderStroke(
   ctx.drawImage(strokeCanvas, layer.x - pad, layer.y - pad);
 }
 
+export function rasterizeEffectsToImageData(
+  layer: Layer,
+  data: ImageData,
+): { imageData: ImageData; offsetX: number; offsetY: number } {
+  const effects = layer.effects;
+
+  let pad = 0;
+  if (effects.outerGlow.enabled) {
+    pad = Math.max(pad, (effects.outerGlow.size + effects.outerGlow.spread) * 2);
+  }
+  if (effects.dropShadow.enabled) {
+    const s = effects.dropShadow;
+    pad = Math.max(pad, s.blur * 2 + Math.max(Math.abs(s.offsetX), Math.abs(s.offsetY)) + s.spread);
+  }
+  if (effects.innerGlow.enabled) {
+    pad = Math.max(pad, (effects.innerGlow.size + effects.innerGlow.spread) * 2);
+  }
+  if (effects.stroke.enabled) {
+    pad = Math.max(pad, effects.stroke.width + 1);
+  }
+  pad = Math.ceil(pad);
+
+  const outW = data.width + pad * 2;
+  const outH = data.height + pad * 2;
+
+  const destCanvas = document.createElement('canvas');
+  destCanvas.width = outW;
+  destCanvas.height = outH;
+  const destCtx = destCanvas.getContext('2d')!;
+
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = data.width;
+  tempCanvas.height = data.height;
+  const tempCtx = tempCanvas.getContext('2d')!;
+  tempCtx.putImageData(data, 0, 0);
+
+  const fakeLayer = { ...layer, x: pad, y: pad } as Layer;
+  const alloc = new CanvasAllocator();
+
+  destCtx.globalAlpha = 1;
+  renderOuterGlow(destCtx, tempCanvas, fakeLayer, data, alloc);
+  renderDropShadow(destCtx, tempCanvas, fakeLayer, data, alloc);
+  destCtx.drawImage(tempCanvas, pad, pad);
+  renderInnerGlow(destCtx, tempCanvas, fakeLayer, data, alloc);
+  renderStroke(destCtx, tempCanvas, fakeLayer, data, alloc);
+
+  alloc.releaseAll();
+
+  return {
+    imageData: destCtx.getImageData(0, 0, outW, outH),
+    offsetX: -pad,
+    offsetY: -pad,
+  };
+}
+
 function edt2d(grid: Float64Array, w: number, h: number): void {
   const maxDim = Math.max(w, h);
   const f = new Float64Array(maxDim);

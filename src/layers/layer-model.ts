@@ -1,6 +1,6 @@
 import type { Color, GroupLayer, Layer, LayerEffects, RasterLayer, TextLayer } from '../types';
 
-const DEFAULT_EFFECTS: LayerEffects = {
+export const DEFAULT_EFFECTS: LayerEffects = {
   stroke: { enabled: false, color: { r: 0, g: 0, b: 0, a: 1 }, width: 2, position: 'outside' },
   dropShadow: { enabled: false, color: { r: 0, g: 0, b: 0, a: 0.75 }, offsetX: 4, offsetY: 4, blur: 8, spread: 0 },
   outerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
@@ -91,6 +91,11 @@ export function reorderLayers(
   if (moved === undefined) return result;
   result.splice(toIndex, 0, moved);
   return result;
+}
+
+export function hasEnabledEffects(effects: LayerEffects): boolean {
+  return effects.dropShadow.enabled || effects.stroke.enabled ||
+    effects.outerGlow.enabled || effects.innerGlow.enabled;
 }
 
 export function duplicateLayer(layer: Layer): Layer {
