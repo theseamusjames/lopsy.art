@@ -38,11 +38,15 @@
 }
 
 .recentSwatches {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  display: flex;
+  flex-wrap: wrap;
   flex: 1;
   min-width: 0;
+}
+
+.recentSwatches > * {
+  margin-right: -1px;
+  margin-bottom: -1px;
 }
 
 .hexRow {

@@ -15,7 +15,6 @@ import {
   PenTool,
 } from 'lucide-react';
 import { IconButton } from '../components/IconButton/IconButton';
-import { ColorSwatch } from '../components/ColorSwatch/ColorSwatch';
 import { useUIStore } from '../app/ui-store';
 import type { ToolId } from '../types';
 import styles from './Toolbox.module.css';
@@ -95,9 +94,6 @@ const toolGroups: ToolDef[][] = [
 export function Toolbox() {
   const activeTool = useUIStore((s) => s.activeTool);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
-  const foregroundColor = useUIStore((s) => s.foregroundColor);
-  const backgroundColor = useUIStore((s) => s.backgroundColor);
-  const swapColors = useUIStore((s) => s.swapColors);
 
   return (
     <div className={styles.toolbox}>
@@ -115,16 +111,6 @@ export function Toolbox() {
             ))}
           </div>
         ))}
-      </div>
-      <div className={styles.colors}>
-        <div className={styles.colorStack}>
-          <div className={styles.foreground}>
-            <ColorSwatch color={foregroundColor} size="md" />
-          </div>
-          <div className={styles.background}>
-            <ColorSwatch color={backgroundColor} size="sm" onClick={swapColors} />
-          </div>
-        </div>
       </div>
     </div>
   );
