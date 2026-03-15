@@ -57,9 +57,11 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  // Fill background
   ctx.fillStyle = `rgba(${backgroundColor.r},${backgroundColor.g},${backgroundColor.b},${backgroundColor.a})`;
   ctx.fillRect(0, 0, width, height);
 
+  // Composite all visible layers
   const allocator = new CanvasAllocator();
   for (const layerId of state.document.layerOrder) {
     const layer = state.document.layers.find((l) => l.id === layerId);
@@ -83,15 +85,15 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
     renderStroke(ctx, tempCanvas, layer, data, allocator);
   }
   ctx.globalAlpha = 1;
+  allocator.releaseAll();
 
+  // Apply post-composite image adjustments
   const uiState = useUIStore.getState();
   if (uiState.adjustmentsEnabled && hasActiveAdjustments(uiState.adjustments)) {
     const imgData = ctx.getImageData(0, 0, width, height);
     applyAdjustmentsToImageData(imgData, uiState.adjustments);
     ctx.putImageData(imgData, 0, 0);
   }
-
-  allocator.releaseAll();
 
   const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
   const ext = format === 'png' ? 'png' : 'jpg';
