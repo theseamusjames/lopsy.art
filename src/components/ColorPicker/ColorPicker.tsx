@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { rgbToHsv, hsvToRgb } from '../../utils/color';
+import { contextOptions } from '../../engine/color-space';
 import type { Color } from '../../types';
 import styles from './ColorPicker.module.css';
 
@@ -49,7 +50,7 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
     canvas.width = width;
     canvas.height = height;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', contextOptions);
     if (!ctx) return;
 
     const hsv = hsvRef.current;
@@ -84,7 +85,7 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
     canvas.width = width;
     canvas.height = height;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', contextOptions);
     if (!ctx) return;
 
     const grad = ctx.createLinearGradient(0, 0, width, 0);
@@ -118,7 +119,7 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
     canvas.width = width;
     canvas.height = height;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', contextOptions);
     if (!ctx) return;
 
     const rgb = hsvToRgb(hsvRef.current);

@@ -2,6 +2,8 @@ import type { MutableRefObject } from 'react';
 import type { Point } from '../../types';
 import { PixelBuffer } from '../../engine/pixel-data';
 import { getSelectionMaskValue } from '../../selection/selection';
+import { createImageData } from '../../engine/color-space';
+import { contextOptions } from '../../engine/color-space';
 import { snapPositionToGrid } from '../../tools/move/move';
 import { createTransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
@@ -45,7 +47,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       // rotation/scale applied so the floated pixels reflect
       // the transformed state (not the original orientation).
       const ptRef = persistentTransformRef.current;
-      const bCtx = ptRef.baseCanvas.getContext('2d');
+      const bCtx = ptRef.baseCanvas.getContext('2d', contextOptions);
       const w = ptRef.transformCanvas.width;
       const h = ptRef.transformCanvas.height;
       const currentXform = useUIStore.getState().transform;
@@ -54,7 +56,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
         const renderedCanvas = document.createElement('canvas');
         renderedCanvas.width = w;
         renderedCanvas.height = h;
-        const rCtx = renderedCanvas.getContext('2d')!;
+        const rCtx = renderedCanvas.getContext('2d', contextOptions)!;
         if (currentXform && currentXform.rotation !== 0 || currentXform && (currentXform.scaleX !== 1 || currentXform.scaleY !== 1)) {
           const origBounds = sel.bounds!;
           const cx = origBounds.x + origBounds.width / 2;
@@ -284,13 +286,13 @@ export function handleMoveUp(
     const txCanvas = document.createElement('canvas');
     txCanvas.width = w;
     txCanvas.height = h;
-    const txCtx = txCanvas.getContext('2d');
+    const txCtx = txCanvas.getContext('2d', contextOptions);
     const bCanvas = document.createElement('canvas');
     bCanvas.width = w;
     bCanvas.height = h;
-    const bCtx = bCanvas.getContext('2d');
+    const bCtx = bCanvas.getContext('2d', contextOptions);
     if (txCtx && bCtx) {
-      const shifted = new ImageData(w, h);
+      const shifted = createImageData(w, h);
       const ox = floatRef.offsetX;
       const oy = floatRef.offsetY;
       for (let y = 0; y < h; y++) {

@@ -1,4 +1,5 @@
 import type { Color, PixelSurface } from '../types/index';
+import { createImageData } from './color-space';
 
 export class PixelBuffer {
   readonly width: number;
@@ -75,7 +76,7 @@ export class PixelBuffer {
   }
 
   toImageData(): ImageData {
-    const imageData = new ImageData(this.width, this.height);
+    const imageData = createImageData(this.width, this.height);
     imageData.data.set(this.data);
     return imageData;
   }

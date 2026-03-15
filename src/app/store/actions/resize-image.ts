@@ -1,6 +1,7 @@
 import type { DocumentState, Layer } from '../../../types';
 import type { EditorState } from '../types';
 import { scalePixelData } from '../../../engine/canvas-ops';
+import { createImageData } from '../../../engine/color-space';
 
 export function computeResizeImage(
   doc: DocumentState,
@@ -28,7 +29,7 @@ export function computeResizeImage(
       if (!scaled) continue;
       pixelData.set(layer.id, scaled);
     } else {
-      pixelData.set(layer.id, new ImageData(newWidth, newHeight));
+      pixelData.set(layer.id, createImageData(newWidth, newHeight));
     }
     newLayers.push({
       ...layer,

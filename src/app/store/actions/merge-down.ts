@@ -3,6 +3,7 @@ import type { EditorState } from '../types';
 import { compositeOver } from '../../../engine/compositing';
 import { rasterizeEffectsToImageData } from '../../../engine/effects-renderer';
 import { hasEnabledEffects } from '../../../layers/layer-model';
+import { createImageData } from '../../../engine/color-space';
 
 export function computeMergeDown(
   doc: DocumentState,
@@ -19,8 +20,8 @@ export function computeMergeDown(
   const bottomLayer = doc.layers.find((l) => l.id === belowId);
   if (!topLayer || !bottomLayer) return undefined;
 
-  let topData = layerPixelData.get(activeId) ?? new ImageData(doc.width, doc.height);
-  const bottomData = layerPixelData.get(belowId) ?? new ImageData(doc.width, doc.height);
+  let topData = layerPixelData.get(activeId) ?? createImageData(doc.width, doc.height);
+  const bottomData = layerPixelData.get(belowId) ?? createImageData(doc.width, doc.height);
 
   let topX = topLayer.x;
   let topY = topLayer.y;
@@ -32,7 +33,7 @@ export function computeMergeDown(
     topY += rasterized.offsetY;
   }
 
-  const result = new ImageData(bottomData.width, bottomData.height);
+  const result = createImageData(bottomData.width, bottomData.height);
   result.data.set(bottomData.data);
   compositeOver(
     topData.data, bottomData.data,

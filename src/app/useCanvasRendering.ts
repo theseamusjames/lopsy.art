@@ -9,6 +9,9 @@ import { renderSelectionAnts, renderTransformHandles } from './rendering/render-
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
 import { renderGrid, renderRulers } from './rendering/render-grid';
 import { hasActiveAdjustments, applyAdjustmentsToImageData } from '../filters/image-adjustments';
+import { contextOptions } from '../engine/color-space';
+import { getCachedBitmap } from '../engine/bitmap-cache';
+import { hasEnabledEffects } from '../layers/layer-model';
 
 export { renderLayerContent } from './rendering/render-layers';
 
@@ -65,7 +68,7 @@ export function useCanvasRendering(
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', contextOptions);
     if (!ctx) return;
 
     const container = containerRef.current;
@@ -107,8 +110,24 @@ export function useCanvasRendering(
       if (!data) continue;
 
       ctx.globalAlpha = layer.opacity;
+
+      // Fast path: draw cached ImageBitmap directly for layers with no
+      // effects or masks.  This avoids the putImageData → drawImage chain
+      // that can introduce color-management rounding.
+      const hasMask = layer.mask?.enabled && !maskEditMode;
+      const isMaskOverlay = maskEditMode && layer.mask && layer.id === activeLayerId;
+      const bitmap = getCachedBitmap(layer.id);
+      if (bitmap && !hasEnabledEffects(layer.effects) && !hasMask && !isMaskOverlay) {
+        ctx.drawImage(bitmap, layer.x, layer.y);
+        continue;
+      }
+
       const { canvas: tempCanvas, ctx: tempCtx } = allocator.acquire(data.width, data.height);
-      tempCtx.putImageData(data, 0, 0);
+      if (bitmap && !layer.effects.colorOverlay.enabled) {
+        tempCtx.drawImage(bitmap, 0, 0);
+      } else {
+        tempCtx.putImageData(data, 0, 0);
+      }
 
       if (layer.effects.colorOverlay.enabled) {
         const overlaid = tempCtx.getImageData(0, 0, data.width, data.height);

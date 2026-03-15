@@ -1,3 +1,5 @@
+import { contextOptions } from './color-space';
+
 export interface PooledCanvas {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -44,7 +46,7 @@ export class CanvasPool {
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', contextOptions);
     if (!ctx) {
       throw new Error('Failed to get 2d context from canvas');
     }

@@ -1,3 +1,5 @@
+import { isWideGamut } from '../engine/color-space';
+
 const crcTable = new Uint32Array(256);
 for (let n = 0; n < 256; n++) {
   let c = n;
@@ -51,6 +53,84 @@ function createPngSrgbChunk(): Uint8Array {
   return chunk;
 }
 
+/** Create a PNG iCCP chunk embedding a compressed ICC profile. */
+function createPngIccpChunk(profileName: string, iccProfile: Uint8Array): Uint8Array {
+  const enc = new TextEncoder();
+  const nameBytes = enc.encode(profileName);
+  // iCCP payload: profile name (null terminated) + compression method (0 = deflate) + compressed data
+  // Use uncompressed deflate (stored blocks) since we don't have zlib here
+  const compressed = deflateStored(iccProfile);
+  const payloadLen = nameBytes.length + 1 + 1 + compressed.length;
+
+  const typeAndPayload = new Uint8Array(4 + payloadLen);
+  typeAndPayload.set(enc.encode('iCCP'), 0);
+  let off = 4;
+  typeAndPayload.set(nameBytes, off);
+  off += nameBytes.length;
+  typeAndPayload[off++] = 0; // null terminator
+  typeAndPayload[off++] = 0; // compression method: deflate
+  typeAndPayload.set(compressed, off);
+
+  const chunk = new Uint8Array(4 + typeAndPayload.length + 4);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, payloadLen);
+  chunk.set(typeAndPayload, 4);
+  view.setUint32(chunk.length - 4, crc32(typeAndPayload));
+  return chunk;
+}
+
+/** Wrap data in a valid deflate stream using stored (uncompressed) blocks. */
+function deflateStored(data: Uint8Array): Uint8Array {
+  // Zlib header (CM=8, CINFO=7, FCHECK for valid header)
+  const zlibHeader = new Uint8Array([0x78, 0x01]);
+  // Split into stored blocks of up to 65535 bytes
+  const maxBlock = 65535;
+  const blockCount = Math.ceil(data.length / maxBlock) || 1;
+  const blockHeaderSize = 5; // BFINAL/BTYPE + LEN + NLEN
+  const deflateSize = blockCount * blockHeaderSize + data.length;
+  const out = new Uint8Array(zlibHeader.length + deflateSize + 4); // +4 for Adler-32
+  out.set(zlibHeader, 0);
+  let pos = zlibHeader.length;
+  let remaining = data.length;
+  let srcOff = 0;
+
+  for (let i = 0; i < blockCount; i++) {
+    const isLast = i === blockCount - 1;
+    const len = Math.min(remaining, maxBlock);
+    out[pos++] = isLast ? 0x01 : 0x00; // BFINAL=1 for last, BTYPE=00 (stored)
+    out[pos++] = len & 0xff;
+    out[pos++] = (len >> 8) & 0xff;
+    out[pos++] = ~len & 0xff;
+    out[pos++] = (~len >> 8) & 0xff;
+    out.set(data.subarray(srcOff, srcOff + len), pos);
+    pos += len;
+    srcOff += len;
+    remaining -= len;
+  }
+
+  // Adler-32 checksum
+  let a = 1, b = 0;
+  for (let i = 0; i < data.length; i++) {
+    a = (a + data[i]!) % 65521;
+    b = (b + a) % 65521;
+  }
+  const adler = ((b << 16) | a) >>> 0;
+  out[pos++] = (adler >> 24) & 0xff;
+  out[pos++] = (adler >> 16) & 0xff;
+  out[pos++] = (adler >> 8) & 0xff;
+  out[pos++] = adler & 0xff;
+
+  return out.subarray(0, pos);
+}
+
+/** Create the PNG color profile chunk appropriate for the active color space. */
+function createPngColorChunk(): Uint8Array {
+  if (isWideGamut()) {
+    return createPngIccpChunk('Display P3', displayP3IccProfile);
+  }
+  return createPngSrgbChunk();
+}
+
 function findIhdrEnd(): number {
   // PNG signature is 8 bytes, IHDR chunk follows: 4 (length) + 4 (type) + 13 (data) + 4 (crc) = 25
   return 8 + 25;
@@ -62,11 +142,10 @@ export async function addPngMetadata(
 ): Promise<Blob> {
   const data = new Uint8Array(await blob.arrayBuffer());
 
-  // Insert sRGB chunk right after IHDR (before IDAT)
-  const srgbChunk = createPngSrgbChunk();
+  const colorChunk = createPngColorChunk();
 
   const chunks = Object.entries(entries).map(([k, v]) => createPngTextChunk(k, v));
-  const extra = srgbChunk.length + chunks.reduce((s, c) => s + c.length, 0);
+  const extra = colorChunk.length + chunks.reduce((s, c) => s + c.length, 0);
   const ihdrEnd = findIhdrEnd();
   const iend = data.length - 12;
   const result = new Uint8Array(data.length + extra);
@@ -75,9 +154,9 @@ export async function addPngMetadata(
   result.set(data.subarray(0, ihdrEnd), 0);
   let offset = ihdrEnd;
 
-  // sRGB chunk must come before IDAT
-  result.set(srgbChunk, offset);
-  offset += srgbChunk.length;
+  // Color profile chunk must come before IDAT
+  result.set(colorChunk, offset);
+  offset += colorChunk.length;
 
   // Copy everything between IHDR end and IEND
   result.set(data.subarray(ihdrEnd, iend), offset);
@@ -94,10 +173,7 @@ export async function addPngMetadata(
   return new Blob([result], { type: 'image/png' });
 }
 
-function buildMinimalSrgbIcc(): Uint8Array {
-  // Minimal ICC profile declaring sRGB color space
-  // Based on the ICC v2 specification for a minimal monitor RGB profile
-  const desc = 'sRGB';
+function buildMinimalIcc(desc: string): Uint8Array {
   const enc = new TextEncoder();
   const descBytes = enc.encode(desc);
 
@@ -209,7 +285,12 @@ function createJpegIccMarker(iccProfile: Uint8Array): Uint8Array {
   return marker;
 }
 
-const srgbIccProfile = buildMinimalSrgbIcc();
+const srgbIccProfile = buildMinimalIcc('sRGB');
+const displayP3IccProfile = buildMinimalIcc('Display P3');
+
+function getActiveIccProfile(): Uint8Array {
+  return isWideGamut() ? displayP3IccProfile : srgbIccProfile;
+}
 
 export async function addJpegComment(blob: Blob, comment: string): Promise<Blob> {
   const data = new Uint8Array(await blob.arrayBuffer());
@@ -225,7 +306,7 @@ export async function addJpegComment(blob: Blob, comment: string): Promise<Blob>
   commentMarker.set(bytes, 4);
 
   // Build ICC profile marker
-  const iccMarker = createJpegIccMarker(srgbIccProfile);
+  const iccMarker = createJpegIccMarker(getActiveIccProfile());
 
   // Insert both after SOI (first 2 bytes)
   const result = new Uint8Array(data.length + commentMarker.length + iccMarker.length);

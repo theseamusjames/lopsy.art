@@ -1,5 +1,6 @@
 import type { EditorState, SelectionData } from '../types';
 import { createRasterLayer } from '../../../layers/layer-model';
+import { createImageData } from '../../../engine/color-space';
 
 export function computeCreateDocument(
   width: number,
@@ -11,7 +12,7 @@ export function computeCreateDocument(
     ? { r: 0, g: 0, b: 0, a: 0 }
     : { r: 255, g: 255, b: 255, a: 1 };
   const pixelData = new Map<string, ImageData>();
-  const imgData = new ImageData(width, height);
+  const imgData = createImageData(width, height);
   if (!transparentBg) {
     for (let i = 0; i < imgData.data.length; i += 4) {
       imgData.data[i] = 255;

@@ -1,6 +1,7 @@
 import type { DocumentState } from '../../../types';
 import type { EditorState } from '../types';
 import { createRasterLayer } from '../../../layers/layer-model';
+import { createImageData } from '../../../engine/color-space';
 
 export function computeAddLayer(
   doc: DocumentState,
@@ -12,7 +13,7 @@ export function computeAddLayer(
     height: doc.height,
   });
   const pixelData = new Map(layerPixelData);
-  pixelData.set(newLayer.id, new ImageData(newLayer.width, newLayer.height));
+  pixelData.set(newLayer.id, createImageData(newLayer.width, newLayer.height));
   return {
     document: {
       ...doc,

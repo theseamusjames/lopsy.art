@@ -1,6 +1,7 @@
 import { cloneImageData } from '../../engine/canvas-ops';
 import { getSelectionMaskValue } from '../../selection/selection';
 import { createRasterLayer } from '../../layers/layer-model';
+import { createImageData } from '../../engine/color-space';
 import type { ClipboardData, SliceCreator } from './types';
 
 export interface ClipboardSlice {
@@ -30,7 +31,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
       const h = Math.round(b.height);
       const bx = Math.round(b.x);
       const by = Math.round(b.y);
-      const copied = new ImageData(w, h);
+      const copied = createImageData(w, h);
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const docX = bx + x;

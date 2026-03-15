@@ -1,4 +1,5 @@
 import type { Point, PixelSurface } from '../../types';
+import { contextOptions } from '../../engine/color-space';
 
 export interface PathAnchor {
   point: Point;
@@ -16,7 +17,7 @@ export function rasterizePath(
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = buf.width;
   tempCanvas.height = buf.height;
-  const ctx = tempCanvas.getContext('2d');
+  const ctx = tempCanvas.getContext('2d', contextOptions);
   if (!ctx) return;
 
   ctx.strokeStyle = `rgba(${color.r},${color.g},${color.b},${color.a})`;

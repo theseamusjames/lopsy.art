@@ -8,6 +8,7 @@ import {
 } from '../../tools/transform/transform';
 import type { TransformState } from '../../tools/transform/transform';
 import { getSelectionMaskValue } from '../../selection/selection';
+import { createImageDataFromArray, contextOptions } from '../../engine/color-space';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import type { InteractionState, InteractionContext } from './interaction-types';
@@ -59,16 +60,16 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     const txCanvas = document.createElement('canvas');
     txCanvas.width = w;
     txCanvas.height = h;
-    const txCtx = txCanvas.getContext('2d');
+    const txCtx = txCanvas.getContext('2d', contextOptions);
 
     const bCanvas = document.createElement('canvas');
     bCanvas.width = w;
     bCanvas.height = h;
-    const bCtx = bCanvas.getContext('2d');
+    const bCtx = bCanvas.getContext('2d', contextOptions);
 
     if (txCtx && bCtx) {
-      const floatedData = new ImageData(new Uint8ClampedArray(imageData.data), w, h);
-      const baseData = new ImageData(new Uint8ClampedArray(imageData.data), w, h);
+      const floatedData = createImageDataFromArray(new Uint8ClampedArray(imageData.data), w, h);
+      const baseData = createImageDataFromArray(new Uint8ClampedArray(imageData.data), w, h);
 
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
@@ -208,7 +209,7 @@ export function handleTransformMove(
     const rotatedCanvas = document.createElement('canvas');
     rotatedCanvas.width = w;
     rotatedCanvas.height = h;
-    const rotCtx = rotatedCanvas.getContext('2d');
+    const rotCtx = rotatedCanvas.getContext('2d', contextOptions);
     if (rotCtx) {
       rotCtx.save();
       rotCtx.translate(origCx + newTransform.translateX, origCy + newTransform.translateY);
@@ -219,9 +220,9 @@ export function handleTransformMove(
       rotCtx.restore();
 
       // Composite: base + rotated pixels clipped to selection mask
-      const baseData = state.baseCanvas.getContext('2d')!.getImageData(0, 0, w, h);
+      const baseData = state.baseCanvas.getContext('2d', contextOptions)!.getImageData(0, 0, w, h);
       const rotData = rotCtx.getImageData(0, 0, w, h);
-      const resultData = new ImageData(new Uint8ClampedArray(baseData.data), w, h);
+      const resultData = createImageDataFromArray(new Uint8ClampedArray(baseData.data), w, h);
 
       for (let py = 0; py < h; py++) {
         for (let px = 0; px < w; px++) {

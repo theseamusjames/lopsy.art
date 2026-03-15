@@ -2,6 +2,7 @@ import type { DocumentState } from '../../../types';
 import type { EditorState } from '../types';
 import { compositeOver } from '../../../engine/compositing';
 import { createRasterLayer } from '../../../layers/layer-model';
+import { createImageData } from '../../../engine/color-space';
 
 export function computeFlattenImage(
   doc: DocumentState,
@@ -10,7 +11,7 @@ export function computeFlattenImage(
   if (doc.layers.length <= 1) return undefined;
 
   const { width, height, backgroundColor } = doc;
-  const result = new ImageData(width, height);
+  const result = createImageData(width, height);
   for (let i = 0; i < result.data.length; i += 4) {
     result.data[i] = backgroundColor.r;
     result.data[i + 1] = backgroundColor.g;

@@ -1,6 +1,7 @@
 import type { DocumentState, Layer, Rect } from '../../../types';
 import type { EditorState } from '../types';
 import { cropLayerPixelData } from '../../../engine/canvas-ops';
+import { createImageData } from '../../../engine/color-space';
 
 export function computeCropCanvas(
   doc: DocumentState,
@@ -31,7 +32,7 @@ export function computeCropCanvas(
     const oldData = layerPixelData.get(layer.id);
     const newData = oldData
       ? cropLayerPixelData(oldData, layer.x, layer.y, cx, cy, cw, ch)
-      : new ImageData(cw, ch);
+      : createImageData(cw, ch);
     pixelData.set(layer.id, newData);
     newLayers.push({ ...layer, x: 0, y: 0, width: cw, height: ch } as Layer);
   }
