@@ -87,10 +87,19 @@ export function handleSelectionMove(
       mStart = snapPositionToGrid(mStart.x, mStart.y, uiMarquee.gridSize);
       mEnd = snapPositionToGrid(mEnd.x, mEnd.y, uiMarquee.gridSize);
     }
-    const x = Math.min(mStart.x, mEnd.x);
-    const y = Math.min(mStart.y, mEnd.y);
-    const w = Math.abs(mEnd.x - mStart.x);
-    const h = Math.abs(mEnd.y - mStart.y);
+    const toolSettings = useToolSettingsStore.getState();
+    let w = Math.abs(mEnd.x - mStart.x);
+    let h = Math.abs(mEnd.y - mStart.y);
+    if (toolSettings.aspectRatioLocked && toolSettings.aspectRatioW > 0 && toolSettings.aspectRatioH > 0) {
+      const ratio = toolSettings.aspectRatioW / toolSettings.aspectRatioH;
+      if (w / h > ratio) {
+        w = h * ratio;
+      } else {
+        h = w / ratio;
+      }
+    }
+    const x = mEnd.x >= mStart.x ? mStart.x : mStart.x - w;
+    const y = mEnd.y >= mStart.y ? mStart.y : mStart.y - h;
 
     if (w > 0 && h > 0) {
       const selRect = { x, y, width: w, height: h };
