@@ -1,13 +1,14 @@
 import { useEffect, useRef } from 'react';
-import { useEditorStore } from '../../app/editor-store';
 import { contextOptions } from '../../engine/color-space';
 import type { Layer } from '../../types';
 
 export function MaskThumbnail({ layer }: { layer: Layer }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mask = layer.mask;
-  const renderVersion = useEditorStore((s) => s.renderVersion);
 
+  // No store subscription needed — mask data comes via the layer prop.
+  // The parent LayerPanel re-renders when document state changes,
+  // which provides the updated layer object with fresh mask data.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !mask) return;
@@ -33,7 +34,7 @@ export function MaskThumbnail({ layer }: { layer: Layer }) {
       }
     }
     ctx.putImageData(imgData, 0, 0);
-  }, [mask, renderVersion]);
+  }, [mask]);
 
   if (!mask) return null;
 

@@ -7,7 +7,7 @@ import {
   computeShiftClickLine,
   defaultBrushSettings,
 } from './brush';
-import type { PixelSurface } from './brush';
+import type { PixelSurface } from '../../types';
 
 function createMockSurface(w: number, h: number): PixelSurface & { data: Color[][] } {
   const data: Color[][] = [];

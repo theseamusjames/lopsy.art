@@ -10,9 +10,23 @@ export interface SelectionData {
   maskHeight: number;
 }
 
+export interface CropInfo {
+  x: number;
+  y: number;
+  fullWidth: number;
+  fullHeight: number;
+}
+
+export interface SparseLayerEntry {
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly sparse: import('../../engine/canvas-ops').SparsePixelData;
+}
+
 export interface HistorySnapshot {
   document: DocumentState;
   layerPixelData: Map<string, ImageData>;
+  layerCropInfo: Map<string, CropInfo>;
   label: string;
 }
 
@@ -26,6 +40,7 @@ export interface EditorState {
   document: DocumentState;
   viewport: ViewportState;
   layerPixelData: Map<string, ImageData>;
+  sparseLayerData: Map<string, SparseLayerEntry>;
   undoStack: HistorySnapshot[];
   redoStack: HistorySnapshot[];
   dirtyLayerIds: Set<string>;
@@ -72,6 +87,9 @@ export interface EditorState {
   getOrCreateLayerPixelData: (layerId: string) => ImageData;
   updateLayerPixelData: (layerId: string, data: ImageData) => void;
   notifyRender: () => void;
+  cropLayerToContent: (layerId: string) => void;
+  expandLayerForEditing: (layerId: string) => ImageData;
+  resolvePixelData: (layerId: string) => ImageData | undefined;
 
   // Canvas
   cropCanvas: (rect: Rect) => void;

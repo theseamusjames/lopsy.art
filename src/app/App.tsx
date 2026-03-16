@@ -27,6 +27,16 @@ import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
 import styles from './App.module.css';
 
+// Isolated component for canvas rendering — prevents renderVersion and
+// cursorPosition changes from re-rendering the entire App tree.
+function CanvasRenderer({ canvasRef, containerRef }: {
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  useCanvasRendering(canvasRef, containerRef);
+  return null;
+}
+
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,8 +72,6 @@ export function App() {
   const pendingShapeClick = useUIStore((s) => s.pendingShapeClick);
   const setPendingShapeClick = useUIStore((s) => s.setPendingShapeClick);
 
-  const cursorPos = useUIStore((s) => s.cursorPosition);
-  const setCursorPos = useUIStore((s) => s.setCursorPosition);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -129,8 +137,8 @@ export function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  // Canvas rendering (extracted to useCanvasRendering)
-  useCanvasRendering(canvasRef, containerRef);
+  // Canvas rendering is in a separate component (CanvasRenderer) so that
+  // renderVersion / cursorPosition changes don't re-render the full App tree.
 
   // Resize observer
   useEffect(() => {
@@ -188,6 +196,23 @@ export function App() {
     setActiveLayer(id);
   }, [clearPersistentTransform, setActiveLayer]);
 
+  // Throttle cursor position updates to once per animation frame.
+  // Without this, every mouse move triggers StatusBar + CanvasRenderer
+  // re-renders via the cursorPosition subscription.
+  const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
+  const cursorRafRef = useRef(0);
+  const flushCursorPosition = useCallback((pos: { x: number; y: number }) => {
+    pendingCursorRef.current = pos;
+    if (cursorRafRef.current) return;
+    cursorRafRef.current = requestAnimationFrame(() => {
+      cursorRafRef.current = 0;
+      if (pendingCursorRef.current) {
+        useUIStore.getState().setCursorPosition(pendingCursorRef.current);
+        pendingCursorRef.current = null;
+      }
+    });
+  }, []);
+
   // Mouse handlers
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
@@ -197,7 +222,7 @@ export function App() {
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
       const canvasPos = screenToCanvas(screenX, screenY);
-      setCursorPos(canvasPos);
+      flushCursorPosition(canvasPos);
 
       if (isPanning) {
         const dx = e.clientX - panStartRef.current.x;
@@ -208,7 +233,7 @@ export function App() {
         handleToolMove(e);
       }
     },
-    [isPanning, screenToCanvas, setPan, handleToolMove, updateHoveredHandle],
+    [isPanning, screenToCanvas, setPan, handleToolMove, updateHoveredHandle, flushCursorPosition],
   );
 
   const handleMouseDown = useCallback(
@@ -313,6 +338,7 @@ export function App() {
           onWheel={handleWheel}
         >
           <canvas ref={canvasRef} />
+          <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} />
         </div>
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
@@ -392,13 +418,7 @@ export function App() {
           <PanelToolbar />
         </div>
       </div>
-      <StatusBar
-        zoom={viewport.zoom}
-        cursorX={cursorPos.x}
-        cursorY={cursorPos.y}
-        docWidth={doc.width}
-        docHeight={doc.height}
-      />
+      <StatusBar />
     </div>
   );
 }

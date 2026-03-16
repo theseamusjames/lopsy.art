@@ -102,7 +102,7 @@ export function handleDodgeMove(state: InteractionState, layerLocalPos: Point): 
     applyDodgeBurn(dodgeSurface, pt, dodgeSize, dodgeMode, exposure);
   }
   state.lastPoint = layerLocalPos;
-  useEditorStore.getState().updateLayerPixelData(state.layerId!, state.pixelBuffer.toImageData());
+  useEditorStore.getState().notifyRender();
 }
 
 export function handleStampDown(ctx: InteractionContext): InteractionState | undefined {
@@ -169,7 +169,7 @@ export function handleStampMove(
     applyStampDab(stampSurface, state.originalPixelBuffer, pt, stampOffsetRef.current, toolSettings.stampSize);
   }
   state.lastPoint = layerLocalPos;
-  useEditorStore.getState().updateLayerPixelData(state.layerId!, state.pixelBuffer.toImageData());
+  useEditorStore.getState().notifyRender();
 }
 
 export function handleTextDown(ctx: InteractionContext): void {

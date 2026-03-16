@@ -5,6 +5,7 @@ import { createMaskSurface } from '../../engine/mask-utils';
 import { generateBrushStamp, interpolatePoints, applyBrushDab } from '../../tools/brush/brush';
 import { drawPencilLine } from '../../tools/pencil/pencil';
 import { applyEraserDab } from '../../tools/eraser/eraser';
+import { markPaintDirty } from '../../engine/bitmap-cache';
 import { setActiveMaskEditBuffer } from './mask-buffer';
 import { wrapWithSelectionMask } from './selection-mask-wrap';
 import type { InteractionContext, InteractionState } from './interaction-types';
@@ -140,8 +141,17 @@ export function handlePaintDown(
     }
   }
 
-  editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
+  editorState.notifyRender();
   return state;
+}
+
+function markStrokeDirty(layerId: string, from: { x: number; y: number }, to: { x: number; y: number }, brushSize: number): void {
+  const half = Math.ceil(brushSize / 2) + 1;
+  const x = Math.min(from.x, to.x) - half;
+  const y = Math.min(from.y, to.y) - half;
+  const x2 = Math.max(from.x, to.x) + half;
+  const y2 = Math.max(from.y, to.y) + half;
+  markPaintDirty(layerId, x, y, x2 - x, y2 - y);
 }
 
 export function handlePaintMove(
@@ -172,12 +182,9 @@ export function handlePaintMove(
       for (const pt of points) {
         applyBrushDab(brushSurface, pt, stamp, size, color, opacity, 1);
       }
+      if (!state.maskMode) markStrokeDirty(state.layerId, state.lastPoint, layerLocalPos, size);
       state.lastPoint = layerLocalPos;
-      if (state.maskMode) {
-        useEditorStore.getState().notifyRender();
-      } else {
-        useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
-      }
+      useEditorStore.getState().notifyRender();
       break;
     }
 
@@ -190,12 +197,9 @@ export function handlePaintMove(
         : wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
       const size = toolSettings.pencilSize;
       drawPencilLine(pencilSurface, state.lastPoint, layerLocalPos, color, size);
+      if (!state.maskMode) markStrokeDirty(state.layerId, state.lastPoint, layerLocalPos, size);
       state.lastPoint = layerLocalPos;
-      if (state.maskMode) {
-        useEditorStore.getState().notifyRender();
-      } else {
-        useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
-      }
+      useEditorStore.getState().notifyRender();
       break;
     }
 
@@ -211,16 +215,15 @@ export function handlePaintMove(
         for (const pt of points) {
           applyBrushDab(state.pixelBuffer, pt, stamp, size, maskColor, opacity, 1);
         }
-        state.lastPoint = layerLocalPos;
-        useEditorStore.getState().notifyRender();
       } else {
         const eraserSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
         for (const pt of points) {
           applyEraserDab(eraserSurface, pt, stamp, size, opacity);
         }
-        state.lastPoint = layerLocalPos;
-        useEditorStore.getState().updateLayerPixelData(state.layerId, state.pixelBuffer.toImageData());
+        markStrokeDirty(state.layerId, state.lastPoint, layerLocalPos, size);
       }
+      state.lastPoint = layerLocalPos;
+      useEditorStore.getState().notifyRender();
       break;
     }
 

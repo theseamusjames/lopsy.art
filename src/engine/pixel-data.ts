@@ -1,15 +1,15 @@
 import type { Color, PixelSurface } from '../types/index';
-import { createImageData } from './color-space';
+import { createImageDataFromArray } from './color-space';
 
 export class PixelBuffer {
   readonly width: number;
   readonly height: number;
   private readonly data: Uint8ClampedArray;
 
-  constructor(width: number, height: number) {
+  constructor(width: number, height: number, data?: Uint8ClampedArray) {
     this.width = width;
     this.height = height;
-    this.data = new Uint8ClampedArray(width * height * 4);
+    this.data = data ?? new Uint8ClampedArray(width * height * 4);
   }
 
   private getOffset(x: number, y: number): number {
@@ -43,12 +43,10 @@ export class PixelBuffer {
   }
 
   fill(color: Color): void {
-    for (let i = 0; i < this.data.length; i += 4) {
-      this.data[i] = color.r;
-      this.data[i + 1] = color.g;
-      this.data[i + 2] = color.b;
-      this.data[i + 3] = Math.round(color.a * 255);
-    }
+    const a8 = Math.round(color.a * 255);
+    const u32 = new Uint32Array(this.data.buffer, this.data.byteOffset, this.data.byteLength / 4);
+    const packed = (a8 << 24) | (color.b << 16) | (color.g << 8) | color.r;
+    u32.fill(packed);
   }
 
   clear(): void {
@@ -76,15 +74,18 @@ export class PixelBuffer {
   }
 
   toImageData(): ImageData {
-    const imageData = createImageData(this.width, this.height);
-    imageData.data.set(this.data);
-    return imageData;
+    return createImageDataFromArray(this.data, this.width, this.height);
   }
 
   static fromImageData(imageData: ImageData): PixelBuffer {
     const buffer = new PixelBuffer(imageData.width, imageData.height);
     buffer.data.set(imageData.data);
     return buffer;
+  }
+
+  /** Wrap an ImageData's buffer directly — no copy. */
+  static wrapImageData(imageData: ImageData): PixelBuffer {
+    return new PixelBuffer(imageData.width, imageData.height, imageData.data);
   }
 }
 

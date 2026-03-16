@@ -1,11 +1,4 @@
-import type { Color, Point } from '../../types';
-
-export interface PixelSurface {
-  readonly width: number;
-  readonly height: number;
-  getPixel(x: number, y: number): Color;
-  setPixel(x: number, y: number, color: Color): void;
-}
+import type { Color, Point, PixelSurface } from '../../types';
 
 export interface BrushSettings {
   readonly size: number;
@@ -19,7 +12,16 @@ export function defaultBrushSettings(): BrushSettings {
   return { size: 10, hardness: 0.8, opacity: 1, flow: 1, spacing: 0.25 };
 }
 
+// Stamp cache — avoids allocating Float32Array + sqrt per pixel on every move
+let cachedStamp: Float32Array | null = null;
+let cachedStampSize = -1;
+let cachedStampHardness = -1;
+
 export function generateBrushStamp(size: number, hardness: number): Float32Array {
+  if (cachedStamp && cachedStampSize === size && cachedStampHardness === hardness) {
+    return cachedStamp;
+  }
+
   const stamp = new Float32Array(size * size);
   const center = (size - 1) / 2;
   const radius = size / 2;
@@ -43,6 +45,10 @@ export function generateBrushStamp(size: number, hardness: number): Float32Array
       }
     }
   }
+
+  cachedStamp = stamp;
+  cachedStampSize = size;
+  cachedStampHardness = hardness;
   return stamp;
 }
 
@@ -64,6 +70,62 @@ export function interpolatePoints(from: Point, to: Point, spacing: number): Poin
   return points;
 }
 
+/**
+ * Fast path: apply brush dab directly to a Uint8ClampedArray buffer.
+ * Eliminates per-pixel getPixel/setPixel virtual dispatch and Color
+ * object allocation that causes GC pressure during sustained painting.
+ */
+export function applyBrushDabDirect(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  center: Point,
+  stamp: Float32Array,
+  stampSize: number,
+  color: Color,
+  opacity: number,
+  flow: number,
+): void {
+  const halfSize = Math.floor(stampSize / 2);
+  const startX = Math.round(center.x) - halfSize;
+  const startY = Math.round(center.y) - halfSize;
+  const combinedAlpha = opacity * flow * color.a;
+  const cr = color.r;
+  const cg = color.g;
+  const cb = color.b;
+
+  // Clamp loop bounds to avoid per-pixel bounds checks
+  const minSx = Math.max(0, -startX);
+  const minSy = Math.max(0, -startY);
+  const maxSx = Math.min(stampSize, width - startX);
+  const maxSy = Math.min(stampSize, height - startY);
+
+  for (let sy = minSy; sy < maxSy; sy++) {
+    const py = startY + sy;
+    const rowOffset = py * width;
+    const stampRow = sy * stampSize;
+    for (let sx = minSx; sx < maxSx; sx++) {
+      const stampAlpha = stamp[stampRow + sx]!;
+      if (stampAlpha <= 0) continue;
+
+      const alpha = stampAlpha * combinedAlpha;
+      const px = startX + sx;
+      const offset = (rowOffset + px) * 4;
+
+      const ea = (data[offset + 3]!) / 255;
+      const outA = alpha + ea * (1 - alpha);
+      if (outA <= 0) continue;
+
+      const invOutA = 1 / outA;
+      const eaOneMinusAlpha = ea * (1 - alpha);
+      data[offset] = Math.min(255, Math.max(0, Math.round((cr * alpha + (data[offset]!) * eaOneMinusAlpha) * invOutA)));
+      data[offset + 1] = Math.min(255, Math.max(0, Math.round((cg * alpha + (data[offset + 1]!) * eaOneMinusAlpha) * invOutA)));
+      data[offset + 2] = Math.min(255, Math.max(0, Math.round((cb * alpha + (data[offset + 2]!) * eaOneMinusAlpha) * invOutA)));
+      data[offset + 3] = Math.min(255, Math.round(outA * 255));
+    }
+  }
+}
+
 export function applyBrushDab(
   surface: PixelSurface,
   center: Point,
@@ -73,6 +135,13 @@ export function applyBrushDab(
   opacity: number,
   flow: number,
 ): void {
+  // Fast path for surfaces with direct buffer access
+  if ('rawData' in surface) {
+    const raw = surface as { rawData: Uint8ClampedArray };
+    applyBrushDabDirect(raw.rawData, surface.width, surface.height, center, stamp, stampSize, color, opacity, flow);
+    return;
+  }
+
   const halfSize = Math.floor(stampSize / 2);
   const startX = Math.round(center.x) - halfSize;
   const startY = Math.round(center.y) - halfSize;

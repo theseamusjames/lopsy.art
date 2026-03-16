@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Color } from '../../types';
 import { applyEraserDab, defaultEraserSettings } from './eraser';
-import type { PixelSurface } from './eraser';
+import type { PixelSurface } from '../../types';
 
 function createMockSurface(w: number, h: number, fillColor: Color): PixelSurface & { data: Color[][] } {
   const data: Color[][] = [];

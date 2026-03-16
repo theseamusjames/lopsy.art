@@ -74,7 +74,7 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
   for (const layerId of state.document.layerOrder) {
     const layer = state.document.layers.find((l) => l.id === layerId);
     if (!layer || !layer.visible) continue;
-    const data = state.layerPixelData.get(layerId);
+    const data = state.resolvePixelData(layerId);
     if (!data) continue;
 
     ctx.globalAlpha = layer.opacity;

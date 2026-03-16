@@ -22,36 +22,26 @@ function makeDoc(): DocumentState {
 describe('computeAddLayer', () => {
   it('adds a new layer to layers array', () => {
     const doc = makeDoc();
-    const pixelData = new Map<string, ImageData>();
-    const result = computeAddLayer(doc, pixelData);
+    const result = computeAddLayer(doc);
     expect(result.document!.layers).toHaveLength(2);
   });
 
   it('adds to layerOrder', () => {
     const doc = makeDoc();
-    const pixelData = new Map<string, ImageData>();
-    const result = computeAddLayer(doc, pixelData);
+    const result = computeAddLayer(doc);
     expect(result.document!.layerOrder).toHaveLength(2);
   });
 
   it('sets new layer as active', () => {
     const doc = makeDoc();
-    const pixelData = new Map<string, ImageData>();
-    const result = computeAddLayer(doc, pixelData);
+    const result = computeAddLayer(doc);
     const newLayer = result.document!.layers[1]!;
     expect(result.document!.activeLayerId).toBe(newLayer.id);
   });
 
-  it('creates empty pixel data for new layer', () => {
+  it('does not include layerPixelData in result', () => {
     const doc = makeDoc();
-    const pixelData = new Map<string, ImageData>();
-    const result = computeAddLayer(doc, pixelData);
-    const newLayer = result.document!.layers[1]!;
-    const data = result.layerPixelData!.get(newLayer.id)!;
-    expect(data.width).toBe(100);
-    expect(data.height).toBe(100);
-    for (let i = 0; i < data.data.length; i++) {
-      expect(data.data[i]).toBe(0);
-    }
+    const result = computeAddLayer(doc);
+    expect(result.layerPixelData).toBeUndefined();
   });
 });

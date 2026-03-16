@@ -42,6 +42,7 @@ describe('editor-store history', () => {
     state.pushHistory();
     const modified = new ImageData(10, 10);
     modified.data[0] = 200;
+    modified.data[3] = 255;
     state.updateLayerPixelData(layerId, modified);
     state.pushHistory();
 
@@ -63,6 +64,7 @@ describe('editor-store history', () => {
     useEditorStore.getState().pushHistory();
     const modified = new ImageData(10, 10);
     modified.data[0] = 42;
+    modified.data[3] = 255;
     useEditorStore.getState().updateLayerPixelData(layer2Id, modified);
 
     // Push another snapshot
