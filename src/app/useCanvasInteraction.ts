@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { PixelBuffer } from '../engine/pixel-data';
+import { invalidateBitmapCache, createPaintingCanvas, destroyPaintingCanvas } from '../engine/bitmap-cache';
 import { extractMaskFromSurface } from '../engine/mask-utils';
 
 import { clearActiveMaskEditBuffer } from './interactions/mask-buffer';
@@ -87,7 +88,12 @@ export function useCanvasInteraction(
       const canvasPos = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
       const layerPos: Point = { x: canvasPos.x - activeLayer.x, y: canvasPos.y - activeLayer.y };
       const imageData = editorState.getOrCreateLayerPixelData(activeLayerId);
-      const pixelBuffer = PixelBuffer.fromImageData(imageData);
+      const pixelBuffer = PixelBuffer.wrapImageData(imageData);
+      // Invalidate bitmap and create a painting canvas with full initial content.
+      // During the stroke, only dirty regions get updated on the painting canvas
+      // instead of full putImageData each frame.
+      invalidateBitmapCache(activeLayerId);
+      createPaintingCanvas(activeLayerId, imageData);
       const paintSurface = wrapWithSelectionMask(pixelBuffer, activeLayer.x, activeLayer.y);
       const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, activeLayer, pixelBuffer, paintSurface);
 
@@ -173,6 +179,16 @@ export function useCanvasInteraction(
     };
 
     toolHandlers[state.tool]?.up?.(ctx, state);
+
+    // Finalize paint stroke: destroy painting canvas, rebuild bitmap, mark layer dirty
+    if (PAINT_TOOLS.has(state.tool) && state.layerId && !state.maskMode) {
+      destroyPaintingCanvas(state.layerId);
+      const editorState = useEditorStore.getState();
+      const layerData = editorState.layerPixelData.get(state.layerId);
+      if (layerData) {
+        editorState.updateLayerPixelData(state.layerId, layerData);
+      }
+    }
 
     // Save last paint point for shift+click line drawing
     if (PAINT_TOOLS.has(state.tool) && state.lastPoint && state.layerId) {

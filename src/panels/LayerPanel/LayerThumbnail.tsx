@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../app/editor-store';
 import { contextOptions } from '../../engine/color-space';
 import type { Layer } from '../../types';
@@ -7,6 +7,30 @@ import styles from './LayerPanel.module.css';
 export function LayerThumbnail({ layer }: { layer: Layer }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderVersion = useEditorStore((s) => s.renderVersion);
+
+  // Throttle thumbnail updates to at most once per 500ms to avoid
+  // re-rendering on every mouse move during sustained painting
+  const [throttledVersion, setThrottledVersion] = useState(renderVersion);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestVersionRef = useRef(renderVersion);
+  latestVersionRef.current = renderVersion;
+
+  useEffect(() => {
+    if (timerRef.current !== null) return;
+    setThrottledVersion(renderVersion);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      if (latestVersionRef.current !== renderVersion) {
+        setThrottledVersion(latestVersionRef.current);
+      }
+    }, 500);
+    return () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [renderVersion]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,7 +60,7 @@ export function LayerThumbnail({ layer }: { layer: Layer }) {
     const w = pixelData.width * scale;
     const h = pixelData.height * scale;
     ctx.drawImage(tempCanvas, (thumbSize - w) / 2, (thumbSize - h) / 2, w, h);
-  }, [layer.id, renderVersion]);
+  }, [layer.id, throttledVersion]);
 
   return <canvas ref={canvasRef} className={styles.thumbnailCanvas} />;
 }

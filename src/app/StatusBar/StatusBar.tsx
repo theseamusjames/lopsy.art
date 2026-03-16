@@ -1,17 +1,17 @@
+import { useUIStore } from '../ui-store';
+import { useEditorStore } from '../editor-store';
 import { canvasColorSpace } from '../../engine/color-space';
 import styles from './StatusBar.module.css';
 
-interface StatusBarProps {
-  zoom: number;
-  cursorX: number;
-  cursorY: number;
-  docWidth: number;
-  docHeight: number;
-}
-
 const colorSpaceLabel = canvasColorSpace === 'display-p3' ? 'Display P3' : 'sRGB';
 
-export function StatusBar({ zoom, cursorX, cursorY, docWidth, docHeight }: StatusBarProps) {
+export function StatusBar() {
+  const zoom = useEditorStore((s) => s.viewport.zoom);
+  const docWidth = useEditorStore((s) => s.document.width);
+  const docHeight = useEditorStore((s) => s.document.height);
+  const cursorX = useUIStore((s) => s.cursorPosition.x);
+  const cursorY = useUIStore((s) => s.cursorPosition.y);
+
   return (
     <div className={styles.bar}>
       <span className={styles.item}>{Math.round(zoom * 100)}%</span>

@@ -1,6 +1,5 @@
 import type { SliceCreator } from './types';
 import { createImageData } from '../../engine/color-space';
-import { updateBitmapCache } from '../../engine/bitmap-cache';
 
 export interface PixelDataSlice {
   layerPixelData: Map<string, ImageData>;
@@ -38,7 +37,6 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     const dirtyLayerIds = new Set(state.dirtyLayerIds);
     dirtyLayerIds.add(layerId);
     set({ layerPixelData: pixelData, dirtyLayerIds, renderVersion: state.renderVersion + 1 });
-    updateBitmapCache(layerId, data);
   },
 
   notifyRender: () => {
