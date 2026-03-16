@@ -31,14 +31,14 @@ function makeDoc(layerCount: number): { doc: DocumentState; pixelData: Map<strin
 describe('computeRemoveLayer', () => {
   it('returns undefined when only 1 layer', () => {
     const { doc, pixelData } = makeDoc(1);
-    const result = computeRemoveLayer(doc, pixelData, doc.layers[0]!.id);
+    const result = computeRemoveLayer(doc, pixelData, new Map(), doc.layers[0]!.id);
     expect(result).toBeUndefined();
   });
 
   it('removes the layer and its pixel data', () => {
     const { doc, pixelData } = makeDoc(2);
     const removeId = doc.layers[0]!.id;
-    const result = computeRemoveLayer(doc, pixelData, removeId)!;
+    const result = computeRemoveLayer(doc, pixelData, new Map(), removeId)!;
     expect(result.document!.layers).toHaveLength(1);
     expect(result.document!.layerOrder).not.toContain(removeId);
     expect(result.layerPixelData!.has(removeId)).toBe(false);
@@ -47,7 +47,7 @@ describe('computeRemoveLayer', () => {
   it('updates activeLayerId if removed layer was active', () => {
     const { doc, pixelData } = makeDoc(2);
     const activeId = doc.activeLayerId!;
-    const result = computeRemoveLayer(doc, pixelData, activeId)!;
+    const result = computeRemoveLayer(doc, pixelData, new Map(), activeId)!;
     expect(result.document!.activeLayerId).not.toBe(activeId);
     expect(result.document!.layerOrder).toContain(result.document!.activeLayerId);
   });

@@ -4,7 +4,6 @@ import { createRasterLayer } from '../../../layers/layer-model';
 
 export function computeAddLayer(
   doc: DocumentState,
-  layerPixelData: Map<string, ImageData>,
 ): Partial<EditorState> {
   const newLayer = createRasterLayer({
     name: `Layer ${doc.layers.length + 1}`,
@@ -20,6 +19,5 @@ export function computeAddLayer(
       layerOrder: [...doc.layerOrder, newLayer.id],
       activeLayerId: newLayer.id,
     },
-    layerPixelData,
   };
 }

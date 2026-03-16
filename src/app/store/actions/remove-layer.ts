@@ -1,9 +1,10 @@
 import type { DocumentState } from '../../../types';
-import type { EditorState } from '../types';
+import type { EditorState, SparseLayerEntry } from '../types';
 
 export function computeRemoveLayer(
   doc: DocumentState,
   layerPixelData: Map<string, ImageData>,
+  sparseLayerData: Map<string, SparseLayerEntry>,
   id: string,
 ): Partial<EditorState> | undefined {
   if (doc.layers.length <= 1) return undefined;
@@ -18,8 +19,12 @@ export function computeRemoveLayer(
   const pixelData = new Map(layerPixelData);
   pixelData.delete(id);
 
+  const sparse = new Map(sparseLayerData);
+  sparse.delete(id);
+
   return {
     document: { ...doc, layers, layerOrder, activeLayerId },
     layerPixelData: pixelData,
+    sparseLayerData: sparse,
   };
 }

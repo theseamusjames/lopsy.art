@@ -22,31 +22,26 @@ function makeDoc(): DocumentState {
 describe('computeAddLayer', () => {
   it('adds a new layer to layers array', () => {
     const doc = makeDoc();
-    const pixelData = new Map<string, ImageData>();
-    const result = computeAddLayer(doc, pixelData);
+    const result = computeAddLayer(doc);
     expect(result.document!.layers).toHaveLength(2);
   });
 
   it('adds to layerOrder', () => {
     const doc = makeDoc();
-    const pixelData = new Map<string, ImageData>();
-    const result = computeAddLayer(doc, pixelData);
+    const result = computeAddLayer(doc);
     expect(result.document!.layerOrder).toHaveLength(2);
   });
 
   it('sets new layer as active', () => {
     const doc = makeDoc();
-    const pixelData = new Map<string, ImageData>();
-    const result = computeAddLayer(doc, pixelData);
+    const result = computeAddLayer(doc);
     const newLayer = result.document!.layers[1]!;
     expect(result.document!.activeLayerId).toBe(newLayer.id);
   });
 
-  it('does not eagerly allocate pixel data for new layer', () => {
+  it('does not include layerPixelData in result', () => {
     const doc = makeDoc();
-    const pixelData = new Map<string, ImageData>();
-    const result = computeAddLayer(doc, pixelData);
-    const newLayer = result.document!.layers[1]!;
-    expect(result.layerPixelData!.has(newLayer.id)).toBe(false);
+    const result = computeAddLayer(doc);
+    expect(result.layerPixelData).toBeUndefined();
   });
 });

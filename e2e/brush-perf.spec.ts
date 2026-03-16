@@ -210,12 +210,12 @@ test.describe('Brush performance', () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          layerPixelData: Map<string, ImageData>;
+          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       const activeId = state.document.activeLayerId;
-      const data = state.layerPixelData.get(activeId);
+      const data = state.resolvePixelData(activeId);
       if (!data) return 0;
       let count = 0;
       const d = data.data;

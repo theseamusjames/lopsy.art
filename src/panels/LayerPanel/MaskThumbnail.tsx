@@ -1,36 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import { useEditorStore } from '../../app/editor-store';
+import { useEffect, useRef } from 'react';
 import { contextOptions } from '../../engine/color-space';
 import type { Layer } from '../../types';
 
 export function MaskThumbnail({ layer }: { layer: Layer }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mask = layer.mask;
-  const renderVersion = useEditorStore((s) => s.renderVersion);
 
-  // Throttle updates to avoid re-rendering on every mouse move
-  const [throttledVersion, setThrottledVersion] = useState(renderVersion);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestVersionRef = useRef(renderVersion);
-  latestVersionRef.current = renderVersion;
-
-  useEffect(() => {
-    if (timerRef.current !== null) return;
-    setThrottledVersion(renderVersion);
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-      if (latestVersionRef.current !== renderVersion) {
-        setThrottledVersion(latestVersionRef.current);
-      }
-    }, 500);
-    return () => {
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [renderVersion]);
-
+  // No store subscription needed — mask data comes via the layer prop.
+  // The parent LayerPanel re-renders when document state changes,
+  // which provides the updated layer object with fresh mask data.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !mask) return;
@@ -56,7 +34,7 @@ export function MaskThumbnail({ layer }: { layer: Layer }) {
       }
     }
     ctx.putImageData(imgData, 0, 0);
-  }, [mask, throttledVersion]);
+  }, [mask]);
 
   if (!mask) return null;
 

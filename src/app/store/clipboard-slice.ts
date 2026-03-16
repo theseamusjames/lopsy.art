@@ -19,7 +19,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     const state = get();
     const activeId = state.document.activeLayerId;
     if (!activeId) return;
-    const layerData = state.layerPixelData.get(activeId);
+    const layerData = state.resolvePixelData(activeId);
     if (!layerData) return;
     const layer = state.document.layers.find((l) => l.id === activeId);
     if (!layer) return;

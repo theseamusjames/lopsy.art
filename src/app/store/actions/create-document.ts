@@ -47,6 +47,7 @@ export function computeCreateDocument(
       backgroundColor: bgColor,
     },
     layerPixelData: pixelData,
+    sparseLayerData: new Map(),
     undoStack: [],
     redoStack: [],
     renderVersion: 0,

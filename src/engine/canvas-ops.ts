@@ -40,7 +40,7 @@ export interface ContentCrop {
 
 /**
  * Scan content bounds and crop ImageData to the smallest rectangle
- * containing all non-transparent pixels. Returns null if fully empty.
+ * containing all non-zero pixels (any channel). Returns null if fully empty.
  */
 export function cropToContentBounds(src: ImageData): ContentCrop | null {
   const { width, height, data } = src;
@@ -49,9 +49,11 @@ export function cropToContentBounds(src: ImageData): ContentCrop | null {
   let maxX = -1;
   let maxY = -1;
 
+  // Use Uint32Array view for fast 4-channel zero check
+  const u32 = new Uint32Array(data.buffer, data.byteOffset, data.byteLength / 4);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if ((data[(y * width + x) * 4 + 3] ?? 0) > 0) {
+      if (u32[y * width + x] !== 0) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;
@@ -107,6 +109,106 @@ export function expandFromCrop(
     full.data.set(cropped.data.subarray(srcOffset, srcOffset + cw * 4), dstOffset);
   }
   return full;
+}
+
+// ---------------------------------------------------------------------------
+// Sparse pixel storage — only stores pixels with alpha > 0
+// ---------------------------------------------------------------------------
+
+export interface SparsePixelData {
+  readonly width: number;
+  readonly height: number;
+  readonly count: number;
+  readonly indices: Uint32Array;   // flat pixel indices (y * width + x)
+  readonly rgba: Uint8ClampedArray; // 4 bytes per pixel, length = count * 4
+}
+
+/**
+ * Convert ImageData to sparse format, dropping pixels with alpha === 0.
+ * Returns null if less than 50% of pixels are transparent (not worth it).
+ */
+export function toSparsePixelData(src: ImageData): SparsePixelData | null {
+  const { width, height, data } = src;
+  const totalPixels = width * height;
+
+  // First pass: count non-zero-alpha pixels
+  let count = 0;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] !== 0) count++;
+  }
+
+  // Not worth sparsifying if more than half the pixels have content
+  if (count > totalPixels * 0.5) return null;
+
+  const indices = new Uint32Array(count);
+  const rgba = new Uint8ClampedArray(count * 4);
+  let writeIdx = 0;
+
+  for (let px = 0; px < totalPixels; px++) {
+    const si = px * 4;
+    if (data[si + 3] !== 0) {
+      indices[writeIdx] = px;
+      const di = writeIdx * 4;
+      rgba[di] = data[si]!;
+      rgba[di + 1] = data[si + 1]!;
+      rgba[di + 2] = data[si + 2]!;
+      rgba[di + 3] = data[si + 3]!;
+      writeIdx++;
+    }
+  }
+
+  return { width, height, count, indices, rgba };
+}
+
+/**
+ * Expand sparse data back into a full ImageData.
+ */
+export function fromSparsePixelData(
+  sparse: SparsePixelData,
+  fullWidth: number,
+  fullHeight: number,
+  offsetX: number,
+  offsetY: number,
+): ImageData {
+  const full = createImageData(fullWidth, fullHeight);
+  const { width, count, indices, rgba } = sparse;
+
+  for (let i = 0; i < count; i++) {
+    const px = indices[i]!;
+    const sx = px % width;
+    const sy = (px - sx) / width;
+    const dx = sx + offsetX;
+    const dy = sy + offsetY;
+    if (dx < 0 || dx >= fullWidth || dy < 0 || dy >= fullHeight) continue;
+    const di = (dy * fullWidth + dx) * 4;
+    const si = i * 4;
+    full.data[di] = rgba[si]!;
+    full.data[di + 1] = rgba[si + 1]!;
+    full.data[di + 2] = rgba[si + 2]!;
+    full.data[di + 3] = rgba[si + 3]!;
+  }
+
+  return full;
+}
+
+/**
+ * Expand sparse data into an ImageData at its own dimensions (no offset).
+ * Used for bitmap cache rebuilds.
+ */
+export function sparseToImageData(sparse: SparsePixelData): ImageData {
+  const result = createImageData(sparse.width, sparse.height);
+  const { count, indices, rgba } = sparse;
+
+  for (let i = 0; i < count; i++) {
+    const di = indices[i]! * 4;
+    const si = i * 4;
+    result.data[di] = rgba[si]!;
+    result.data[di + 1] = rgba[si + 1]!;
+    result.data[di + 2] = rgba[si + 2]!;
+    result.data[di + 3] = rgba[si + 3]!;
+  }
+
+  return result;
 }
 
 export function resizeCanvasPixelData(

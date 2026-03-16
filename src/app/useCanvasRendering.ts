@@ -11,6 +11,7 @@ import { renderGrid, renderRulers } from './rendering/render-grid';
 import { hasActiveAdjustments, applyAdjustmentsToImageData } from '../filters/image-adjustments';
 import { contextOptions } from '../engine/color-space';
 import { getCachedBitmap, getPaintingCanvas } from '../engine/bitmap-cache';
+import { sparseToImageData } from '../engine/canvas-ops';
 import { hasEnabledEffects } from '../layers/layer-model';
 
 // Pre-rendered checkerboard pattern — avoids ~190K fillRect calls per frame on 4K
@@ -65,6 +66,7 @@ function renderFrame(
   const activeLayerId = doc.activeLayerId;
   const selection = editorState.selection;
   const pixelData = editorState.layerPixelData;
+  const sparseData = editorState.sparseLayerData;
 
   const maskEditMode = uiState.maskEditMode;
   const activeTool = uiState.activeTool;
@@ -99,8 +101,12 @@ function renderFrame(
   allocator.releaseAll();
   for (const layer of layers) {
     if (!layer.visible) continue;
-    const data = pixelData.get(layer.id);
-    if (!data) continue;
+    let data = pixelData.get(layer.id);
+
+    // For sparse layers with no ImageData, try bitmap cache first (common case).
+    // If no bitmap yet, expand sparse data to a temporary ImageData for rendering.
+    const sparseEntry = !data ? sparseData.get(layer.id) : undefined;
+    if (!data && !sparseEntry) continue;
 
     ctx.globalAlpha = layer.opacity;
 
@@ -113,6 +119,12 @@ function renderFrame(
       ctx.drawImage(bitmap, layer.x, layer.y);
       continue;
     }
+
+    // Sparse layer without bitmap — expand temporarily for this frame
+    if (!data && sparseEntry) {
+      data = sparseToImageData(sparseEntry.sparse);
+    }
+    if (!data) continue;
 
     // Fast path: during painting, use the persistent painting canvas
     // which only updates the dirty region instead of full putImageData.

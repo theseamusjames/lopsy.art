@@ -1,5 +1,5 @@
-import { cloneImageData, cropToContentBounds, expandFromCrop } from '../../engine/canvas-ops';
-import type { CropInfo, HistorySnapshot, SliceCreator } from './types';
+import { cloneImageData, cropToContentBounds, expandFromCrop, sparseToImageData } from '../../engine/canvas-ops';
+import type { CropInfo, HistorySnapshot, SliceCreator, SparseLayerEntry } from './types';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -19,6 +19,7 @@ export interface HistorySlice {
  */
 function snapshotPixelData(
   current: Map<string, ImageData>,
+  sparseMap: Map<string, SparseLayerEntry>,
   dirtyIds: Set<string>,
   previous: HistorySnapshot | undefined,
 ): { pixelData: Map<string, ImageData>; cropInfo: Map<string, CropInfo> } {
@@ -37,6 +38,20 @@ function snapshotPixelData(
       pixelData.set(id, previous.layerPixelData.get(id)!);
       const prevCrop = previous.layerCropInfo.get(id);
       if (prevCrop) cropInfo.set(id, prevCrop);
+    }
+  }
+
+  // Include sparse layers — convert to compact ImageData for the snapshot
+  for (const [id, entry] of sparseMap) {
+    if (pixelData.has(id)) continue; // already handled above
+    if (!dirtyIds.has(id) && previous?.layerPixelData.has(id)) {
+      pixelData.set(id, previous.layerPixelData.get(id)!);
+      const prevCrop = previous.layerCropInfo.get(id);
+      if (prevCrop) cropInfo.set(id, prevCrop);
+    } else {
+      const data = sparseToImageData(entry.sparse);
+      pixelData.set(id, data);
+      cropInfo.set(id, { x: entry.offsetX, y: entry.offsetY, fullWidth: entry.sparse.width, fullHeight: entry.sparse.height });
     }
   }
 
@@ -67,7 +82,11 @@ function restorePixelData(
  * Crops all layers to content bounds.
  */
 function snapshotCurrentState(
-  state: { document: HistorySnapshot['document']; layerPixelData: Map<string, ImageData> },
+  state: {
+    document: HistorySnapshot['document'];
+    layerPixelData: Map<string, ImageData>;
+    sparseLayerData: Map<string, SparseLayerEntry>;
+  },
   label: string,
 ): HistorySnapshot {
   const pixelData = new Map<string, ImageData>();
@@ -79,6 +98,13 @@ function snapshotCurrentState(
     if (crop.x !== 0 || crop.y !== 0 || crop.data.width !== data.width || crop.data.height !== data.height) {
       cropInfo.set(id, { x: crop.x, y: crop.y, fullWidth: data.width, fullHeight: data.height });
     }
+  }
+  // Include sparse layers
+  for (const [id, entry] of state.sparseLayerData) {
+    if (pixelData.has(id)) continue;
+    const data = sparseToImageData(entry.sparse);
+    pixelData.set(id, data);
+    cropInfo.set(id, { x: entry.offsetX, y: entry.offsetY, fullWidth: entry.sparse.width, fullHeight: entry.sparse.height });
   }
   return { document: state.document, layerPixelData: pixelData, layerCropInfo: cropInfo, label };
 }
@@ -99,6 +125,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       redoStack: [...state.redoStack, currentSnapshot],
       document: previous.document,
       layerPixelData: restorePixelData(previous),
+      sparseLayerData: new Map(),
       dirtyLayerIds: new Set(previous.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
@@ -115,6 +142,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       undoStack: [...state.undoStack, currentSnapshot],
       document: next.document,
       layerPixelData: restorePixelData(next),
+      sparseLayerData: new Map(),
       dirtyLayerIds: new Set(next.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
@@ -123,7 +151,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   pushHistory: (label = 'Edit') => {
     const state = get();
     const prevSnapshot = state.undoStack[state.undoStack.length - 1];
-    const { pixelData, cropInfo } = snapshotPixelData(state.layerPixelData, state.dirtyLayerIds, prevSnapshot);
+    const { pixelData, cropInfo } = snapshotPixelData(state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds, prevSnapshot);
     const snapshot: HistorySnapshot = {
       document: state.document,
       layerPixelData: pixelData,

@@ -7,7 +7,7 @@ export function selectLayerAlpha(layerId: string): void {
   const editorState = useEditorStore.getState();
   const layer = editorState.document.layers.find((l) => l.id === layerId);
   if (!layer) return;
-  const pixelData = editorState.layerPixelData.get(layerId);
+  const pixelData = editorState.resolvePixelData(layerId);
   if (!pixelData) return;
 
   const { width: docW, height: docH } = editorState.document;
