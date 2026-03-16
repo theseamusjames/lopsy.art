@@ -1,7 +1,6 @@
 import type { DocumentState } from '../../../types';
 import type { EditorState } from '../types';
 import { createRasterLayer } from '../../../layers/layer-model';
-import { createImageData } from '../../../engine/color-space';
 
 export function computeAddLayer(
   doc: DocumentState,
@@ -12,8 +11,8 @@ export function computeAddLayer(
     width: doc.width,
     height: doc.height,
   });
-  const pixelData = new Map(layerPixelData);
-  pixelData.set(newLayer.id, createImageData(newLayer.width, newLayer.height));
+  // Pixel data is allocated lazily by getOrCreateLayerPixelData when
+  // a tool first writes to the layer — avoids 48MB per empty layer on 4K.
   return {
     document: {
       ...doc,
@@ -21,6 +20,6 @@ export function computeAddLayer(
       layerOrder: [...doc.layerOrder, newLayer.id],
       activeLayerId: newLayer.id,
     },
-    layerPixelData: pixelData,
+    layerPixelData,
   };
 }

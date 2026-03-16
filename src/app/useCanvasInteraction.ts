@@ -86,16 +86,19 @@ export function useCanvasInteraction(
       if (!rect) return;
 
       const canvasPos = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
-      const layerPos: Point = { x: canvasPos.x - activeLayer.x, y: canvasPos.y - activeLayer.y };
-      const imageData = editorState.getOrCreateLayerPixelData(activeLayerId);
+      // Expand cropped layer back to full canvas size for editing
+      const imageData = editorState.expandLayerForEditing(activeLayerId);
+      // Re-read activeLayer after expand (position may have changed)
+      const expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
+      const layerPos: Point = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
       const pixelBuffer = PixelBuffer.wrapImageData(imageData);
       // Invalidate bitmap and create a painting canvas with full initial content.
       // During the stroke, only dirty regions get updated on the painting canvas
       // instead of full putImageData each frame.
       invalidateBitmapCache(activeLayerId);
       createPaintingCanvas(activeLayerId, imageData);
-      const paintSurface = wrapWithSelectionMask(pixelBuffer, activeLayer.x, activeLayer.y);
-      const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, activeLayer, pixelBuffer, paintSurface);
+      const paintSurface = wrapWithSelectionMask(pixelBuffer, expandedLayer.x, expandedLayer.y);
+      const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer, pixelBuffer, paintSurface);
 
       // Transform handle interaction (pre-tool dispatch)
       const transformResult = handleTransformDown(ctx);
@@ -180,7 +183,8 @@ export function useCanvasInteraction(
 
     toolHandlers[state.tool]?.up?.(ctx, state);
 
-    // Finalize paint stroke: destroy painting canvas, rebuild bitmap, mark layer dirty
+    // Finalize paint stroke: destroy painting canvas, update pixel data
+    // (updateLayerPixelData auto-crops to content bounds)
     if (PAINT_TOOLS.has(state.tool) && state.layerId && !state.maskMode) {
       destroyPaintingCanvas(state.layerId);
       const editorState = useEditorStore.getState();

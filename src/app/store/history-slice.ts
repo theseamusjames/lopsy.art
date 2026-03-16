@@ -1,5 +1,5 @@
-import { cloneImageData } from '../../engine/canvas-ops';
-import type { HistorySnapshot, SliceCreator } from './types';
+import { cloneImageData, cropToContentBounds, expandFromCrop } from '../../engine/canvas-ops';
+import type { CropInfo, HistorySnapshot, SliceCreator } from './types';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -11,28 +11,76 @@ export interface HistorySlice {
   markClean: () => void;
 }
 
-function clonePixelDataMap(
+/**
+ * Clone pixel data map for a history snapshot.
+ * Dirty layers are cropped to content bounds to minimize memory.
+ * Unchanged layers share references with the previous snapshot.
+ * Fully empty layers are omitted entirely.
+ */
+function snapshotPixelData(
   current: Map<string, ImageData>,
   dirtyIds: Set<string>,
   previous: HistorySnapshot | undefined,
-): Map<string, ImageData> {
-  const clone = new Map<string, ImageData>();
+): { pixelData: Map<string, ImageData>; cropInfo: Map<string, CropInfo> } {
+  const pixelData = new Map<string, ImageData>();
+  const cropInfo = new Map<string, CropInfo>();
+
   for (const [id, data] of current) {
     if (dirtyIds.has(id) || !previous?.layerPixelData.has(id)) {
-      clone.set(id, cloneImageData(data));
+      const crop = cropToContentBounds(data);
+      if (!crop) continue; // fully empty — skip
+      pixelData.set(id, crop.data);
+      if (crop.x !== 0 || crop.y !== 0 || crop.data.width !== data.width || crop.data.height !== data.height) {
+        cropInfo.set(id, { x: crop.x, y: crop.y, fullWidth: data.width, fullHeight: data.height });
+      }
     } else {
-      clone.set(id, previous.layerPixelData.get(id)!);
+      pixelData.set(id, previous.layerPixelData.get(id)!);
+      const prevCrop = previous.layerCropInfo.get(id);
+      if (prevCrop) cropInfo.set(id, prevCrop);
     }
   }
-  return clone;
+
+  return { pixelData, cropInfo };
 }
 
-function clonePixelDataMapFull(map: Map<string, ImageData>): Map<string, ImageData> {
-  const clone = new Map<string, ImageData>();
-  for (const [id, data] of map) {
-    clone.set(id, cloneImageData(data));
+/**
+ * Restore pixel data from a snapshot, expanding cropped entries
+ * back to full canvas size for live editing.
+ */
+function restorePixelData(
+  snapshot: HistorySnapshot,
+): Map<string, ImageData> {
+  const restored = new Map<string, ImageData>();
+  for (const [id, data] of snapshot.layerPixelData) {
+    const crop = snapshot.layerCropInfo.get(id);
+    if (crop) {
+      restored.set(id, expandFromCrop(data, crop.x, crop.y, crop.fullWidth, crop.fullHeight));
+    } else {
+      restored.set(id, cloneImageData(data));
+    }
   }
-  return clone;
+  return restored;
+}
+
+/**
+ * Snapshot the current live state for pushing onto undo/redo.
+ * Crops all layers to content bounds.
+ */
+function snapshotCurrentState(
+  state: { document: HistorySnapshot['document']; layerPixelData: Map<string, ImageData> },
+  label: string,
+): HistorySnapshot {
+  const pixelData = new Map<string, ImageData>();
+  const cropInfo = new Map<string, CropInfo>();
+  for (const [id, data] of state.layerPixelData) {
+    const crop = cropToContentBounds(data);
+    if (!crop) continue;
+    pixelData.set(id, crop.data);
+    if (crop.x !== 0 || crop.y !== 0 || crop.data.width !== data.width || crop.data.height !== data.height) {
+      cropInfo.set(id, { x: crop.x, y: crop.y, fullWidth: data.width, fullHeight: data.height });
+    }
+  }
+  return { document: state.document, layerPixelData: pixelData, layerCropInfo: cropInfo, label };
 }
 
 export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
@@ -45,16 +93,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     if (state.undoStack.length === 0) return;
     const previous = state.undoStack[state.undoStack.length - 1];
     if (!previous) return;
-    const currentSnapshot: HistorySnapshot = {
-      document: state.document,
-      layerPixelData: clonePixelDataMapFull(state.layerPixelData),
-      label: previous.label,
-    };
+    const currentSnapshot = snapshotCurrentState(state, previous.label);
     set({
       undoStack: state.undoStack.slice(0, -1),
       redoStack: [...state.redoStack, currentSnapshot],
       document: previous.document,
-      layerPixelData: clonePixelDataMapFull(previous.layerPixelData),
+      layerPixelData: restorePixelData(previous),
       dirtyLayerIds: new Set(previous.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
@@ -65,16 +109,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     if (state.redoStack.length === 0) return;
     const next = state.redoStack[state.redoStack.length - 1];
     if (!next) return;
-    const currentSnapshot: HistorySnapshot = {
-      document: state.document,
-      layerPixelData: clonePixelDataMapFull(state.layerPixelData),
-      label: next.label,
-    };
+    const currentSnapshot = snapshotCurrentState(state, next.label);
     set({
       redoStack: state.redoStack.slice(0, -1),
       undoStack: [...state.undoStack, currentSnapshot],
       document: next.document,
-      layerPixelData: clonePixelDataMapFull(next.layerPixelData),
+      layerPixelData: restorePixelData(next),
       dirtyLayerIds: new Set(next.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
@@ -83,9 +123,11 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   pushHistory: (label = 'Edit') => {
     const state = get();
     const prevSnapshot = state.undoStack[state.undoStack.length - 1];
+    const { pixelData, cropInfo } = snapshotPixelData(state.layerPixelData, state.dirtyLayerIds, prevSnapshot);
     const snapshot: HistorySnapshot = {
       document: state.document,
-      layerPixelData: clonePixelDataMap(state.layerPixelData, state.dirtyLayerIds, prevSnapshot),
+      layerPixelData: pixelData,
+      layerCropInfo: cropInfo,
       label,
     };
     set({

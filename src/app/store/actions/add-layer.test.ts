@@ -42,16 +42,11 @@ describe('computeAddLayer', () => {
     expect(result.document!.activeLayerId).toBe(newLayer.id);
   });
 
-  it('creates empty pixel data for new layer', () => {
+  it('does not eagerly allocate pixel data for new layer', () => {
     const doc = makeDoc();
     const pixelData = new Map<string, ImageData>();
     const result = computeAddLayer(doc, pixelData);
     const newLayer = result.document!.layers[1]!;
-    const data = result.layerPixelData!.get(newLayer.id)!;
-    expect(data.width).toBe(100);
-    expect(data.height).toBe(100);
-    for (let i = 0; i < data.data.length; i++) {
-      expect(data.data[i]).toBe(0);
-    }
+    expect(result.layerPixelData!.has(newLayer.id)).toBe(false);
   });
 });
