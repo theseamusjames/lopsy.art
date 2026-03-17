@@ -1,4 +1,4 @@
-import { cloneImageData, cropToContentBounds, expandFromCrop, sparseToImageData } from '../../engine/canvas-ops';
+import { cloneImageData, cropToContentBounds, sparseToImageData } from '../../engine/canvas-ops';
 import type { CropInfo, HistorySnapshot, SliceCreator, SparseLayerEntry } from './types';
 
 export interface HistorySlice {
@@ -67,12 +67,10 @@ function restorePixelData(
 ): Map<string, ImageData> {
   const restored = new Map<string, ImageData>();
   for (const [id, data] of snapshot.layerPixelData) {
-    const crop = snapshot.layerCropInfo.get(id);
-    if (crop) {
-      restored.set(id, expandFromCrop(data, crop.x, crop.y, crop.fullWidth, crop.fullHeight));
-    } else {
-      restored.set(id, cloneImageData(data));
-    }
+    // Keep data at its cropped dimensions — the document's layer positions
+    // already match. Expanding to full canvas would double-offset because
+    // the renderer applies layer.x/y again.
+    restored.set(id, cloneImageData(data));
   }
   return restored;
 }
