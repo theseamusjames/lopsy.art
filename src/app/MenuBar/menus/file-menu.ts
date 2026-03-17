@@ -89,12 +89,24 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, form
     applyAdjustmentsToImageData(imageData, uiState.adjustments);
   }
 
+  // GPU output is sRGB. Place onto an sRGB canvas first, then drawImage
+  // onto the export canvas — drawImage handles color space conversion
+  // automatically (sRGB → Display P3 if the export canvas is P3).
+  // Using putImageData directly would bypass color management and produce
+  // wrong colors when the export canvas is P3.
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = width;
+  srcCanvas.height = height;
+  const srcCtx = srcCanvas.getContext('2d', { colorSpace: 'srgb' });
+  if (!srcCtx) return;
+  srcCtx.putImageData(imageData, 0, 0);
+
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d', contextOptions);
   if (!ctx) return;
-  ctx.putImageData(imageData, 0, 0);
+  ctx.drawImage(srcCanvas, 0, 0);
 
   finishCanvasExport(canvas, width, height, format);
 }

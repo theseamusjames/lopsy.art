@@ -11,6 +11,9 @@ void main() {
     vec4 src = texture(u_srcTex, v_uv);
     vec4 dst = texture(u_dstTex, v_uv);
 
+    // Source (stroke texture) is premultiplied — un-premultiply first
+    vec3 srcRGB = src.a > 0.001 ? src.rgb / src.a : vec3(0.0);
+
     float sa = src.a * u_opacity;
     float da = dst.a;
     float outA = sa + da * (1.0 - sa);
@@ -20,6 +23,6 @@ void main() {
         return;
     }
 
-    vec3 outRGB = (src.rgb * sa + dst.rgb * da * (1.0 - sa)) / outA;
+    vec3 outRGB = (srcRGB * sa + dst.rgb * da * (1.0 - sa)) / outA;
     fragColor = vec4(outRGB, outA);
 }

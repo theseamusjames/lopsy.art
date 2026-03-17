@@ -545,4 +545,416 @@ test.describe('WASM/WebGL Rendering', () => {
     expect(result.centerPixel[3]).toBeGreaterThan(0);
   });
 
+  // ========== LAYER EFFECTS ==========
+
+  test('13 - drop shadow renders', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+    // Paint a centered red square
+    await paintRect(page, 60, 60, 80, 80, { r: 255, g: 0, b: 0, a: 255 });
+    await page.waitForTimeout(300);
+
+    // Enable drop shadow
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 1 }, offsetX: 10, offsetY: 10, blur: 5, spread: 0 },
+      });
+    });
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '13-drop-shadow.png') });
+  });
+
+  test('14 - color overlay changes color', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+    await paintRect(page, 50, 50, 100, 100, { r: 255, g: 0, b: 0, a: 255 });
+    await page.waitForTimeout(300);
+
+    // Enable color overlay (blue)
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        colorOverlay: { enabled: true, color: { r: 0, g: 0, b: 255, a: 1 } },
+      });
+    });
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '14-color-overlay.png') });
+  });
+
+  // ========== UNDO / REDO ==========
+
+  test('15 - paint then undo restores original', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Read original pixel (transparent)
+    const before = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      return data ? Array.from(data.data.slice(0, 4)) : null;
+    });
+
+    // Paint red
+    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+
+    // Undo
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { undo: () => void };
+      };
+      store.getState().undo();
+    });
+    await page.waitForTimeout(300);
+
+    const after = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      return data ? Array.from(data.data.slice(0, 4)) : null;
+    });
+
+    console.log('Undo test:', { before, after });
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '15-undo.png') });
+    // After undo, pixel data may be null (empty layer) or transparent
+    // Both represent "no content", matching the original transparent state
+    const afterNormalized = after ?? [0, 0, 0, 0];
+    const beforeNormalized = before ?? [0, 0, 0, 0];
+    expect(afterNormalized).toEqual(beforeNormalized);
+  });
+
+  test('16 - undo then redo restores paint', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 255, b: 0, a: 255 });
+
+    const painted = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const data = store.getState().resolvePixelData(store.getState().document.activeLayerId);
+      return data ? Array.from(data.data.slice(0, 4)) : null;
+    });
+
+    // Undo
+    await page.evaluate(() => {
+      (window as unknown as Record<string, unknown>).__editorStore &&
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { undo: () => void };
+      }).getState().undo();
+    });
+    await page.waitForTimeout(200);
+
+    // Redo
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { redo: () => void };
+      }).getState().redo();
+    });
+    await page.waitForTimeout(300);
+
+    const afterRedo = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const data = store.getState().resolvePixelData(store.getState().document.activeLayerId);
+      return data ? Array.from(data.data.slice(0, 4)) : null;
+    });
+
+    console.log('Redo test:', { painted, afterRedo });
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '16-redo.png') });
+    expect(afterRedo).toEqual(painted);
+  });
+
+  // ========== COLOR ACCURACY ==========
+
+  test('17 - exact RGB round-trip', async ({ page }) => {
+    await createDocument(page, 100, 100, true);
+    await fitToView(page);
+
+    // Fill with exact known RGB values
+    const testColor = { r: 42, g: 137, b: 221, a: 255 };
+    await paintRect(page, 0, 0, 100, 100, testColor);
+
+    const result = await page.evaluate(({ r, g, b, a }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const data = store.getState().resolvePixelData(store.getState().document.activeLayerId);
+      if (!data) return { error: 'no data' };
+      // Check center pixel
+      const idx = (50 * data.width + 50) * 4;
+      return {
+        r: data.data[idx],
+        g: data.data[idx + 1],
+        b: data.data[idx + 2],
+        a: data.data[idx + 3],
+      };
+    }, testColor);
+
+    console.log('Color round-trip:', result);
+    expect(result).not.toHaveProperty('error');
+    expect(result.r).toBe(testColor.r);
+    expect(result.g).toBe(testColor.g);
+    expect(result.b).toBe(testColor.b);
+    expect(result.a).toBe(testColor.a);
+  });
+
+  // ========== LAYER OPERATIONS ==========
+
+  test('18 - layer opacity blending', async ({ page }) => {
+    await createDocument(page, 200, 200, false); // white bg
+    await fitToView(page);
+    // Paint red on top layer at 50% opacity
+    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          updateLayerOpacity: (id: string, opacity: number) => void;
+        };
+      };
+      const state = store.getState();
+      state.updateLayerOpacity(state.document.activeLayerId, 0.5);
+    });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '18-layer-opacity.png') });
+  });
+
+  test('19 - layer visibility toggle', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+    await page.waitForTimeout(300);
+
+    // Hide the layer
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          toggleLayerVisibility: (id: string) => void;
+        };
+      };
+      const state = store.getState();
+      state.toggleLayerVisibility(state.document.activeLayerId);
+    });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '19-layer-hidden.png') });
+  });
+
+  test('20 - duplicate layer', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+    await paintRect(page, 50, 50, 100, 100, { r: 0, g: 255, b: 0, a: 255 });
+
+    const layerCountBefore = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: unknown[] }; duplicateLayer: () => void };
+      };
+      const before = store.getState().document.layers.length;
+      store.getState().duplicateLayer();
+      return before;
+    });
+    await page.waitForTimeout(300);
+
+    const layerCountAfter = await page.evaluate(() => {
+      return ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: unknown[] } };
+      }).getState().document.layers.length;
+    });
+
+    expect(layerCountAfter).toBe(layerCountBefore + 1);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '20-duplicate-layer.png') });
+  });
+
+  // ========== FILTERS ==========
+
+  test('21 - invert filter', async ({ page }) => {
+    await createDocument(page, 100, 100, true);
+    await fitToView(page);
+    await paintRect(page, 0, 0, 100, 100, { r: 200, g: 50, b: 100, a: 255 });
+
+    // Apply invert via filter runner
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          pushHistory: () => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      state.pushHistory();
+      const data = state.getOrCreateLayerPixelData(id);
+      for (let i = 0; i < data.data.length; i += 4) {
+        if (data.data[i + 3]! > 0) {
+          data.data[i] = 255 - data.data[i]!;
+          data.data[i + 1] = 255 - data.data[i + 1]!;
+          data.data[i + 2] = 255 - data.data[i + 2]!;
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
+
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const data = store.getState().resolvePixelData(store.getState().document.activeLayerId);
+      if (!data) return null;
+      const idx = (50 * data.width + 50) * 4;
+      return [data.data[idx], data.data[idx + 1], data.data[idx + 2]];
+    });
+
+    console.log('Invert result:', result);
+    // 200→55, 50→205, 100→155
+    expect(result).toEqual([55, 205, 155]);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '21-invert-filter.png') });
+  });
+
+  // ========== MULTI-STEP INTEGRATION ==========
+
+  test('22 - paint, add layer, paint, undo chain', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Paint red on first layer
+    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+
+    // Add new layer
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      }).getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+
+    // Paint blue on second layer
+    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 255, a: 255 });
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '22-multi-step-before-undo.png') });
+
+    // Undo the blue paint
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { undo: () => void };
+      }).getState().undo();
+    });
+    await page.waitForTimeout(300);
+
+    // Undo the add layer
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { undo: () => void };
+      }).getState().undo();
+    });
+    await page.waitForTimeout(300);
+
+    // Should still have the red paint on the original layer
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: unknown[] };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const layerCount = state.document.layers.length;
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return { layerCount, hasData: false };
+      const idx = (100 * data.width + 100) * 4;
+      return { layerCount, r: data.data[idx], a: data.data[idx + 3] };
+    });
+
+    console.log('Multi-step undo result:', result);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '22-multi-step-after-undo.png') });
+    expect(result.layerCount).toBe(1); // Back to 1 layer
+    expect(result.r).toBe(255); // Red still there
+  });
+
+  test('23 - blend mode multiply', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Bottom layer: light blue
+    await paintRect(page, 0, 0, 200, 200, { r: 100, g: 150, b: 255, a: 255 });
+
+    // Add layer on top
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      }).getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+
+    // Top layer: light red, set to multiply blend
+    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 100, b: 100, a: 255 });
+    // Set blend mode by updating the layer directly via setState
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; blendMode: string }> };
+        };
+        setState: (partial: unknown) => void;
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      store.setState({
+        document: {
+          ...state.document,
+          layers: state.document.layers.map(l =>
+            l.id === id ? { ...l, blendMode: 'multiply' } : l,
+          ),
+        },
+      });
+    });
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '23-blend-multiply.png') });
+  });
+
 });

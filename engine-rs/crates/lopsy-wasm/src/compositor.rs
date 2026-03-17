@@ -73,6 +73,9 @@ pub fn composite(engine: &mut EngineInner) {
                 if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
                     gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
                 }
+                if let Some(loc) = gl.get_uniform_location(prog, "u_srcPremultiplied") {
+                    gl.uniform1i(Some(&loc), 0); // Layer textures are straight alpha
+                }
 
                 // Render to scratch A
                 engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
@@ -123,6 +126,9 @@ pub fn composite(engine: &mut EngineInner) {
                         }
                         if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
                             gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+                        }
+                        if let Some(loc) = gl.get_uniform_location(prog, "u_srcPremultiplied") {
+                            gl.uniform1i(Some(&loc), 1); // Stroke texture is premultiplied
                         }
                         engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
                         engine.draw_fullscreen_quad();
@@ -240,6 +246,9 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
                 }
                 if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
                     gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+                }
+                if let Some(loc) = gl.get_uniform_location(prog, "u_srcPremultiplied") {
+                    gl.uniform1i(Some(&loc), 0);
                 }
 
                 engine.fbo_pool.bind(gl, engine.scratch_fbo_a);

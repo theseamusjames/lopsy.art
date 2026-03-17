@@ -20,20 +20,215 @@ import {
 import { renderGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
+import { renderLayerContent } from './rendering/render-layers';
+import { CanvasAllocator, applyColorOverlay, renderOuterGlow, renderDropShadow, renderInnerGlow, renderStroke } from '../engine/effects-renderer';
 import { contextOptions } from '../engine/color-space';
+import { hasEnabledEffects } from '../layers/layer-model';
+import { getCachedBitmap, getPaintingCanvas } from '../engine/bitmap-cache';
+import { sparseToImageData } from '../engine/canvas-ops';
+import { hasActiveAdjustments, applyAdjustmentsToImageData } from '../filters/image-adjustments';
 
 export { renderLayerContent } from './rendering/render-layers';
 
+// Pre-rendered checkerboard pattern for CPU fallback path
+let checkerPattern: CanvasPattern | null = null;
+function getCheckerPattern(ctx: CanvasRenderingContext2D): CanvasPattern {
+  if (!checkerPattern) {
+    const tile = document.createElement('canvas');
+    tile.width = 16;
+    tile.height = 16;
+    const tCtx = tile.getContext('2d')!;
+    tCtx.fillStyle = '#ffffff';
+    tCtx.fillRect(0, 0, 16, 16);
+    tCtx.fillStyle = '#cccccc';
+    tCtx.fillRect(8, 0, 8, 8);
+    tCtx.fillRect(0, 8, 8, 8);
+    checkerPattern = ctx.createPattern(tile, 'repeat');
+  }
+  return checkerPattern!;
+}
+
+// Module-level allocator reused each frame (CPU path)
+const cpuAllocator = new CanvasAllocator();
+
 /**
- * Render loop driven by requestAnimationFrame, NOT by React effects.
- * Reads all state directly from Zustand stores inside the rAF callback.
- *
- * The WebGL engine handles layer compositing, selection ants, grid,
- * tool overlays, and the brush cursor. A transparent Canvas 2D overlay
- * canvas is used only for rulers (which render in screen space, outside
- * the document transform).
+ * Check if any visible layer has effects enabled.
+ * When effects are present, we fall back to CPU compositing because
+ * the WASM engine doesn't implement GPU effects yet.
  */
-function renderFrame(
+function anyLayerHasEffects(layers: readonly import('../types').Layer[]): boolean {
+  return layers.some((l) => l.visible && hasEnabledEffects(l.effects));
+}
+
+/**
+ * CPU fallback render path — used when layers have effects.
+ * This is the original Canvas 2D compositing pipeline that handles
+ * effects (glow, shadow, stroke, color overlay) and masks correctly.
+ */
+function renderFrameCpu(
+  overlayCanvas: HTMLCanvasElement,
+  container: HTMLDivElement,
+  antPhaseRef: { current: number },
+): void {
+  // When effects are active, render everything on the overlay canvas
+  // (the WebGL canvas underneath will be hidden by the opaque overlay)
+  const ctx = overlayCanvas.getContext('2d', contextOptions);
+  if (!ctx) return;
+
+  const rect = container.getBoundingClientRect();
+  if (overlayCanvas.width !== rect.width || overlayCanvas.height !== rect.height) {
+    overlayCanvas.width = rect.width;
+    overlayCanvas.height = rect.height;
+  }
+
+  const editorState = useEditorStore.getState();
+  const uiState = useUIStore.getState();
+  const toolState = useToolSettingsStore.getState();
+
+  const doc = editorState.document;
+  const viewport = editorState.viewport;
+  const layers = doc.layers;
+  const activeLayerId = doc.activeLayerId;
+  const selection = editorState.selection;
+  const pixelData = editorState.layerPixelData;
+  const sparseData = editorState.sparseLayerData;
+
+  const maskEditMode = uiState.maskEditMode;
+  const activeTool = uiState.activeTool;
+  const cursorPosition = uiState.cursorPosition;
+  const showGrid = uiState.showGrid;
+  const showRulers = uiState.showRulers;
+  const gridSize = uiState.gridSize;
+  const adjustments = uiState.adjustments;
+  const adjustmentsEnabled = uiState.adjustmentsEnabled;
+  const pathAnchors = uiState.pathAnchors;
+  const lassoPoints = uiState.lassoPoints;
+  const cropRect = uiState.cropRect;
+  const transform = uiState.transform;
+  const gradientPreview = uiState.gradientPreview;
+
+  // Clear
+  ctx.fillStyle = '#3c3c3c';
+  ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+  ctx.save();
+  ctx.translate(viewport.panX + overlayCanvas.width / 2, viewport.panY + overlayCanvas.height / 2);
+  ctx.scale(viewport.zoom, viewport.zoom);
+  ctx.translate(-doc.width / 2, -doc.height / 2);
+
+  // Checkerboard
+  const pattern = getCheckerPattern(ctx);
+  ctx.fillStyle = pattern;
+  ctx.fillRect(0, 0, doc.width, doc.height);
+
+  // Composite layers with effects
+  cpuAllocator.releaseAll();
+  for (const layer of layers) {
+    if (!layer.visible) continue;
+    let data = pixelData.get(layer.id);
+    const sparseEntry = !data ? sparseData.get(layer.id) : undefined;
+    if (!data && !sparseEntry) continue;
+
+    ctx.globalAlpha = layer.opacity;
+
+    const hasMask = layer.mask?.enabled && !maskEditMode;
+    const isMaskOverlay = maskEditMode && layer.mask && layer.id === activeLayerId;
+    const bitmap = getCachedBitmap(layer.id);
+    if (bitmap && !hasEnabledEffects(layer.effects) && !hasMask && !isMaskOverlay) {
+      ctx.drawImage(bitmap, layer.x, layer.y);
+      continue;
+    }
+
+    if (!data && sparseEntry) {
+      data = sparseToImageData(sparseEntry.sparse);
+    }
+    if (!data) continue;
+
+    const paintCanvas = getPaintingCanvas(layer.id, data);
+    const { canvas: tempCanvas, ctx: tempCtx } = paintCanvas
+      ? { canvas: paintCanvas, ctx: paintCanvas.getContext('2d', contextOptions)! }
+      : cpuAllocator.acquire(data.width, data.height);
+
+    if (!paintCanvas) {
+      if (bitmap && !layer.effects.colorOverlay.enabled) {
+        tempCtx.drawImage(bitmap, 0, 0);
+      } else {
+        tempCtx.putImageData(data, 0, 0);
+      }
+    }
+
+    if (layer.effects.colorOverlay.enabled) {
+      const overlaid = tempCtx.getImageData(0, 0, data.width, data.height);
+      applyColorOverlay(overlaid, layer);
+      tempCtx.putImageData(overlaid, 0, 0);
+    }
+
+    renderOuterGlow(ctx, tempCanvas, layer, data, cpuAllocator);
+    renderDropShadow(ctx, tempCanvas, layer, data, cpuAllocator);
+    renderLayerContent(ctx, tempCanvas, layer, data, maskEditMode, activeLayerId, cpuAllocator);
+    renderInnerGlow(ctx, tempCanvas, layer, data, cpuAllocator);
+    renderStroke(ctx, tempCanvas, layer, data, cpuAllocator);
+  }
+
+  ctx.globalAlpha = 1;
+
+  // Post-composite adjustments
+  if (adjustmentsEnabled && hasActiveAdjustments(adjustments)) {
+    const cw = overlayCanvas.width;
+    const ch = overlayCanvas.height;
+    const dx = viewport.panX + cw / 2 - (doc.width / 2) * viewport.zoom;
+    const dy = viewport.panY + ch / 2 - (doc.height / 2) * viewport.zoom;
+    const sx = Math.max(0, Math.floor(dx));
+    const sy = Math.max(0, Math.floor(dy));
+    const ex = Math.min(cw, Math.ceil(dx + doc.width * viewport.zoom));
+    const ey = Math.min(ch, Math.ceil(dy + doc.height * viewport.zoom));
+    const sw = ex - sx;
+    const sh = ey - sy;
+    if (sw > 0 && sh > 0) {
+      const imgData = ctx.getImageData(sx, sy, sw, sh);
+      applyAdjustmentsToImageData(imgData, adjustments);
+      ctx.putImageData(imgData, sx, sy);
+    }
+  }
+
+  // Document border
+  ctx.strokeStyle = '#666666';
+  ctx.lineWidth = 1 / viewport.zoom;
+  ctx.strokeRect(0, 0, doc.width, doc.height);
+
+  if (showGrid) {
+    renderGrid(ctx, doc.width, doc.height, gridSize, viewport.zoom);
+  }
+
+  renderSelectionAnts(ctx, selection, viewport.zoom, antPhaseRef.current);
+  renderTransformHandles(ctx, selection, transform, viewport.zoom);
+  renderPathOverlay(ctx, pathAnchors, layers, doc.activeLayerId, viewport.zoom);
+  renderLassoPreview(ctx, lassoPoints, viewport.zoom);
+  renderCropPreview(ctx, cropRect, doc.width, doc.height, viewport.zoom);
+  renderGradientPreview(ctx, gradientPreview, viewport.zoom);
+
+  const brushCursor = getBrushCursorInfo(activeTool);
+  if (brushCursor !== null) {
+    const size = activeTool === 'brush' ? toolState.brushSize
+      : activeTool === 'pencil' ? toolState.pencilSize
+      : activeTool === 'eraser' ? toolState.eraserSize
+      : activeTool === 'stamp' ? toolState.stampSize
+      : brushCursor.size;
+    renderBrushCursor(ctx, cursorPosition, size, viewport.zoom, brushCursor.shape);
+  }
+
+  ctx.restore();
+
+  if (showRulers) {
+    renderRulers(ctx, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height, cursorPosition);
+  }
+}
+
+/**
+ * GPU render path — used when no effects are active.
+ * The WASM engine handles all compositing on the GPU.
+ */
+function renderFrameGpu(
   overlayCanvas: HTMLCanvasElement,
   container: HTMLDivElement,
   antPhaseRef: { current: number },
@@ -45,13 +240,11 @@ function renderFrame(
   const screenW = rect.width;
   const screenH = rect.height;
 
-  // Resize overlay canvas to match container
   if (overlayCanvas.width !== screenW || overlayCanvas.height !== screenH) {
     overlayCanvas.width = screenW;
     overlayCanvas.height = screenH;
   }
 
-  // Read all state from stores
   const editorState = useEditorStore.getState();
   const uiState = useUIStore.getState();
   const toolState = useToolSettingsStore.getState();
@@ -77,7 +270,6 @@ function renderFrame(
   const transform = uiState.transform;
   const gradientPreview = uiState.gradientPreview;
 
-  // Sync document state to engine
   syncDocumentSize(engine, doc.width, doc.height);
   syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
   syncViewport(engine, viewport.zoom, viewport.panX, viewport.panY, screenW, screenH);
@@ -87,15 +279,13 @@ function renderFrame(
   syncRulers(engine, showRulers);
   syncAdjustments(engine, adjustments, adjustmentsEnabled);
 
-  // GPU render — composites all layers
   renderEngine(engine);
 
-  // Overlay canvas: selection ants, cursors, guides, rulers (Canvas 2D)
+  // Overlay canvas: selection ants, cursors, guides, rulers
   const overlayCtx = overlayCanvas.getContext('2d', contextOptions);
   if (overlayCtx) {
     overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
-    // Document-space overlays need the viewport transform
     overlayCtx.save();
     overlayCtx.translate(viewport.panX + overlayCanvas.width / 2, viewport.panY + overlayCanvas.height / 2);
     overlayCtx.scale(viewport.zoom, viewport.zoom);
@@ -127,6 +317,26 @@ function renderFrame(
     if (showRulers) {
       renderRulers(overlayCtx, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height, cursorPosition);
     }
+  }
+}
+
+/**
+ * Main render frame dispatcher.
+ * Uses GPU path when no effects active, CPU fallback when effects are present.
+ */
+function renderFrame(
+  overlayCanvas: HTMLCanvasElement,
+  container: HTMLDivElement,
+  antPhaseRef: { current: number },
+): void {
+  const layers = useEditorStore.getState().document.layers;
+
+  if (anyLayerHasEffects(layers)) {
+    // CPU path: render everything on the overlay canvas (opaque, hides WebGL canvas)
+    renderFrameCpu(overlayCanvas, container, antPhaseRef);
+  } else {
+    // GPU path: render layers on WebGL canvas, overlays on overlay canvas (transparent)
+    renderFrameGpu(overlayCanvas, container, antPhaseRef);
   }
 }
 

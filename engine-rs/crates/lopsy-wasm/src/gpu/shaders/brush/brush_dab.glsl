@@ -28,5 +28,6 @@ void main() {
 
     float a = stamp * u_opacity * u_flow;
     // Premultiplied alpha output for (ONE, ONE_MINUS_SRC_ALPHA) blending
-    fragColor = vec4(u_brushColor.rgb * a, u_brushColor.a * a);
+    // during dab accumulation on the stroke texture.
+    fragColor = vec4(u_brushColor.rgb * a, a);
 }

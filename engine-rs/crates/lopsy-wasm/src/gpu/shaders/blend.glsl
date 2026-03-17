@@ -9,6 +9,7 @@ uniform int u_blendMode;
 uniform vec2 u_srcOffset;  // layer position in document pixels
 uniform vec2 u_srcSize;    // layer texture size in pixels
 uniform vec2 u_docSize;    // document size in pixels
+uniform int u_srcPremultiplied; // 1 if source is premultiplied alpha
 out vec4 fragColor;
 
 // RGB <-> HSL helpers
@@ -137,6 +138,11 @@ void main() {
     }
 
     vec4 src = texture(u_srcTex, layerUV);
+
+    // Un-premultiply if source is premultiplied (e.g. stroke texture)
+    if (u_srcPremultiplied == 1 && src.a > 0.001) {
+        src.rgb /= src.a;
+    }
 
     float sa = src.a * u_opacity;
     float da = dst.a;
