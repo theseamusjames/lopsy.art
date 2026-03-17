@@ -109,5 +109,7 @@ pub fn read_pixels(
     engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
     engine.gl.delete_framebuffer(Some(&fbo));
 
+    // readPixels starts from GL row 0 (bottom), which is ImageData row 0
+    // because we upload without UNPACK_FLIP_Y_WEBGL. No flip needed.
     Ok(pixels)
 }

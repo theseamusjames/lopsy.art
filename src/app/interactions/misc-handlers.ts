@@ -16,6 +16,26 @@ import { drawShape } from '../../tools/shape/shape';
 import { interpolateGradient, computeLinearGradientT, computeRadialGradientT } from '../../tools/gradient/gradient';
 import { interpolatePoints } from '../../tools/brush/brush';
 
+/**
+ * Reset a layer's position in the document model.
+ * Used before updateLayerPixelData when passing full-canvas-size data
+ * to prevent cropLayerToContent from accumulating position offsets.
+ */
+function resetLayerPosition(layerId: string, x: number, y: number): void {
+  const state = useEditorStore.getState();
+  const layer = state.document.layers.find((l) => l.id === layerId);
+  if (layer && (layer.x !== x || layer.y !== y)) {
+    useEditorStore.setState({
+      document: {
+        ...state.document,
+        layers: state.document.layers.map((l) =>
+          l.id === layerId ? { ...l, x, y } : l,
+        ),
+      },
+    });
+  }
+}
+
 export function handleFillDown(ctx: InteractionContext): void {
   const { layerPos, activeLayerId, pixelBuffer, paintSurface } = ctx;
   const editorState = useEditorStore.getState();
@@ -358,6 +378,7 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point): 
     sides: toolSettings.shapePolygonSides,
   });
   state.pixelBuffer = restored;
+  resetLayerPosition(state.layerId!, state.layerStartX, state.layerStartY);
   useEditorStore.getState().updateLayerPixelData(state.layerId!, restored.toImageData());
 }
 
@@ -405,6 +426,10 @@ export function handleGradientMove(state: InteractionState, layerLocalPos: Point
     }
   }
   state.pixelBuffer = restored;
+  // Reset layer position before update — the data is full-canvas-size (from
+  // originalPixelBuffer clone), so cropLayerToContent must start from (0,0).
+  // Without this, the crop offset accumulates on every mouse move.
+  resetLayerPosition(state.layerId!, state.layerStartX, state.layerStartY);
   useEditorStore.getState().updateLayerPixelData(state.layerId!, restored.toImageData());
   useUIStore.getState().setGradientPreview({
     start: { x: state.startPoint.x + state.layerStartX, y: state.startPoint.y + state.layerStartY },

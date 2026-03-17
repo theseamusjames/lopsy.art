@@ -17,10 +17,15 @@ vec3 linearToSrgb(vec3 c) {
 }
 
 void main() {
-    // Convert screen UV to canvas coordinates
-    vec2 screenPos = v_uv * u_resolution;
+    // Convert screen UV to canvas coordinates.
+    // v_uv.y=0 is bottom in WebGL; screen Y=0 is top. Flip Y.
+    vec2 screenPos = vec2(v_uv.x, 1.0 - v_uv.y) * u_resolution;
+
+    // Canvas 2D convention: pan is in screen pixels, (0,0) centers the document.
+    // screenPos = (canvasPos - docCenter) * zoom + screenCenter + pan
+    // => canvasPos = (screenPos - screenCenter - pan) / zoom + docCenter
     vec2 center = u_resolution * 0.5;
-    vec2 canvasPos = (screenPos - center) / u_zoom + u_pan;
+    vec2 canvasPos = (screenPos - center - u_pan) / u_zoom + u_docSize * 0.5;
 
     // Map canvas coordinates to document UV
     vec2 docUV = canvasPos / u_docSize;
@@ -43,6 +48,6 @@ void main() {
         color.a = 1.0;
     }
 
-    // Linear to sRGB
-    fragColor = vec4(linearToSrgb(color.rgb), color.a);
+    // Pixel data is already sRGB from ImageData — pass through directly
+    fragColor = color;
 }

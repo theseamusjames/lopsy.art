@@ -22,6 +22,8 @@ export interface InteractionState {
   originalSelectionMaskHeight: number;
   transformCanvas: HTMLCanvasElement | null;
   baseCanvas: HTMLCanvasElement | null;
+  _scratchCanvas?: HTMLCanvasElement;
+  _usedGpuStroke?: boolean;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
 }

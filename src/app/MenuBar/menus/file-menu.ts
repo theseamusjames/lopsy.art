@@ -14,6 +14,8 @@ import { hasActiveAdjustments, applyAdjustmentsToImageData } from '../../../filt
 import { contextOptions, canvasColorSpace } from '../../../engine/color-space';
 import { getCachedBitmap, seedBitmapFromBlob } from '../../../engine/bitmap-cache';
 import { hasEnabledEffects } from '../../../layers/layer-model';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { compositeForExport, getCompositeSize } from '../../../engine-wasm/wasm-bridge';
 import type { MenuDef } from './types';
 
 const METADATA_NOTE = 'Made with Lopsy — http://lopsy.art';
@@ -56,7 +58,48 @@ export function openFileFromDisk(): void {
   input.click();
 }
 
+/**
+ * Export using the WASM engine's GPU compositor.
+ * Falls back to the CPU compositing path if the engine is unavailable.
+ */
 export function exportCanvas(format: 'png' | 'jpeg'): void {
+  const engine = getEngine();
+
+  if (engine) {
+    exportViaEngine(engine, format);
+  } else {
+    exportViaCpu(format);
+  }
+}
+
+function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, format: 'png' | 'jpeg'): void {
+  const sizeArr = getCompositeSize(engine);
+  const width = sizeArr[0] ?? 0;
+  const height = sizeArr[1] ?? 0;
+  if (width === 0 || height === 0) return;
+
+  const rawPixels = compositeForExport(engine);
+  const clamped = new Uint8ClampedArray(width * height * 4);
+  clamped.set(rawPixels);
+  const imageData = new ImageData(clamped, width, height);
+
+  // Apply post-composite image adjustments
+  const uiState = useUIStore.getState();
+  if (uiState.adjustmentsEnabled && hasActiveAdjustments(uiState.adjustments)) {
+    applyAdjustmentsToImageData(imageData, uiState.adjustments);
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', contextOptions);
+  if (!ctx) return;
+  ctx.putImageData(imageData, 0, 0);
+
+  finishCanvasExport(canvas, width, height, format);
+}
+
+function exportViaCpu(format: 'png' | 'jpeg'): void {
   const state = useEditorStore.getState();
   const { width, height, backgroundColor } = state.document;
   const canvas = document.createElement('canvas');
@@ -117,6 +160,10 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
     ctx.putImageData(imgData, 0, 0);
   }
 
+  finishCanvasExport(canvas, width, height, format);
+}
+
+function finishCanvasExport(canvas: HTMLCanvasElement, width: number, height: number, format: 'png' | 'jpeg'): void {
   const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
   const ext = format === 'png' ? 'png' : 'jpg';
 

@@ -160,29 +160,6 @@ impl ShaderPrograms {
     pub fn compile_all(gl: &WebGl2RenderingContext) -> Result<Self, String> {
         let v = FULLSCREEN_QUAD_VERT;
 
-        // The brush_dab and eraser_dab shaders use v_alpha input which requires
-        // a different vertex shader for instanced rendering. For now, compile them
-        // with a brush-specific vertex shader that provides v_alpha.
-        let brush_vert = r#"#version 300 es
-precision highp float;
-uniform vec2 u_center;
-uniform float u_size;
-uniform vec2 u_texSize;
-out vec2 v_uv;
-out float v_alpha;
-void main() {
-    float x = float((gl_VertexID & 1) << 2) - 1.0;
-    float y = float((gl_VertexID & 2) << 1) - 1.0;
-    // Map fullscreen quad to dab region
-    vec2 dabUV = vec2(x * 0.5 + 0.5, y * 0.5 + 0.5);
-    vec2 pos = u_center + (dabUV - 0.5) * u_size;
-    v_uv = dabUV;
-    v_alpha = 1.0;
-    // Convert pixel position to clip space
-    gl_Position = vec4(pos / u_texSize * 2.0 - 1.0, 0.0, 1.0);
-}
-"#;
-
         Ok(Self {
             // Core
             blit: compile_program(gl, v, BLIT_FRAG)?,
@@ -205,9 +182,9 @@ void main() {
             noise: compile_program(gl, v, NOISE_FRAG)?,
             sharpen: compile_program(gl, v, SHARPEN_FRAG)?,
             vignette: compile_program(gl, v, VIGNETTE_FRAG)?,
-            // Brush
-            brush_dab: compile_program(gl, brush_vert, BRUSH_DAB_FRAG)?,
-            eraser_dab: compile_program(gl, brush_vert, ERASER_DAB_FRAG)?,
+            // Brush — use standard fullscreen quad vert; dab positioning via fragment shader
+            brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,
+            eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,
             dodge_burn: compile_program(gl, v, DODGE_BURN_FRAG)?,
             clone_stamp: compile_program(gl, v, CLONE_STAMP_FRAG)?,
             // Gradient

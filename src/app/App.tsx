@@ -29,16 +29,18 @@ import styles from './App.module.css';
 
 // Isolated component for canvas rendering — prevents renderVersion and
 // cursorPosition changes from re-rendering the entire App tree.
-function CanvasRenderer({ canvasRef, containerRef }: {
+function CanvasRenderer({ canvasRef, containerRef, overlayCanvasRef }: {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   containerRef: React.RefObject<HTMLDivElement | null>;
+  overlayCanvasRef: React.RefObject<HTMLCanvasElement | null>;
 }) {
-  useCanvasRendering(canvasRef, containerRef);
+  useCanvasRendering(canvasRef, containerRef, overlayCanvasRef);
   return null;
 }
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sidebarBottomRef = useRef<HTMLDivElement>(null);
   const effectsDrawerRef = useRef<HTMLDivElement>(null);
@@ -338,7 +340,8 @@ export function App() {
           onWheel={handleWheel}
         >
           <canvas ref={canvasRef} />
-          <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} />
+          <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />
+          <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </div>
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (

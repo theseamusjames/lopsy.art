@@ -6,6 +6,9 @@ uniform sampler2D u_srcTex;
 uniform sampler2D u_dstTex;
 uniform float u_opacity;
 uniform int u_blendMode;
+uniform vec2 u_srcOffset;  // layer position in document pixels
+uniform vec2 u_srcSize;    // layer texture size in pixels
+uniform vec2 u_docSize;    // document size in pixels
 out vec4 fragColor;
 
 // RGB <-> HSL helpers
@@ -121,8 +124,19 @@ vec3 blendMode(vec3 s, vec3 d) {
 }
 
 void main() {
-    vec4 src = texture(u_srcTex, v_uv);
     vec4 dst = texture(u_dstTex, v_uv);
+
+    // Map document UV to layer-local UV
+    vec2 docPos = v_uv * u_docSize;
+    vec2 layerUV = (docPos - u_srcOffset) / u_srcSize;
+
+    // Outside layer bounds: pass through destination
+    if (layerUV.x < 0.0 || layerUV.x > 1.0 || layerUV.y < 0.0 || layerUV.y > 1.0) {
+        fragColor = dst;
+        return;
+    }
+
+    vec4 src = texture(u_srcTex, layerUV);
 
     float sa = src.a * u_opacity;
     float da = dst.a;

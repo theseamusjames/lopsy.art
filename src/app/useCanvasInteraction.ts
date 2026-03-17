@@ -4,6 +4,9 @@ import { useEditorStore } from './editor-store';
 import { PixelBuffer } from '../engine/pixel-data';
 import { invalidateBitmapCache, createPaintingCanvas, destroyPaintingCanvas } from '../engine/bitmap-cache';
 import { extractMaskFromSurface } from '../engine/mask-utils';
+import { getEngine } from '../engine-wasm/engine-state';
+import { beginStroke, endStroke, readLayerPixels, uploadLayerPixels } from '../engine-wasm/wasm-bridge';
+import { createImageData } from '../engine/color-space';
 
 import { clearActiveMaskEditBuffer } from './interactions/mask-buffer';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
@@ -92,11 +95,27 @@ export function useCanvasInteraction(
       const expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
       const layerPos: Point = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
       const pixelBuffer = PixelBuffer.wrapImageData(imageData);
-      // Invalidate bitmap and create a painting canvas with full initial content.
-      // During the stroke, only dirty regions get updated on the painting canvas
-      // instead of full putImageData each frame.
-      invalidateBitmapCache(activeLayerId);
-      createPaintingCanvas(activeLayerId, imageData);
+
+      const engine = getEngine();
+      const isPaintTool = PAINT_TOOLS.has(activeTool);
+      const maskEditMode = useUIStore.getState().maskEditMode;
+
+      // Fall back to CPU when:
+      // - pencil (needs hard pixel blocks, not antialiased circles)
+      // - mask edit mode (paints on mask surface)
+      // - active selection (GPU brush doesn't clip to selection mask yet)
+      const hasSelection = useEditorStore.getState().selection.active;
+      const useGpuStroke = engine && isPaintTool && activeTool !== 'pencil' && !maskEditMode && !hasSelection;
+      if (useGpuStroke) {
+        // GPU stroke: sync expanded layer data to engine before starting stroke
+        const rawBytes = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
+        uploadLayerPixels(engine, activeLayerId, rawBytes, imageData.width, imageData.height, expandedLayer.x, expandedLayer.y);
+        beginStroke(engine, activeLayerId);
+      } else {
+        // CPU fallback: use bitmap cache painting canvas
+        invalidateBitmapCache(activeLayerId);
+        createPaintingCanvas(activeLayerId, imageData);
+      }
       const paintSurface = wrapWithSelectionMask(pixelBuffer, expandedLayer.x, expandedLayer.y);
       const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer, pixelBuffer, paintSurface);
 
@@ -110,6 +129,7 @@ export function useCanvasInteraction(
       const handler = toolHandlers[activeTool];
       const newState = handler?.down?.(ctx);
       if (newState) {
+        newState._usedGpuStroke = !!useGpuStroke;
         stateRef.current = newState;
       }
     },
@@ -183,14 +203,35 @@ export function useCanvasInteraction(
 
     toolHandlers[state.tool]?.up?.(ctx, state);
 
-    // Finalize paint stroke: destroy painting canvas, update pixel data
-    // (updateLayerPixelData auto-crops to content bounds)
+    // Finalize paint stroke
     if (PAINT_TOOLS.has(state.tool) && state.layerId && !state.maskMode) {
-      destroyPaintingCanvas(state.layerId);
-      const editorState = useEditorStore.getState();
-      const layerData = editorState.layerPixelData.get(state.layerId);
-      if (layerData) {
-        editorState.updateLayerPixelData(state.layerId, layerData);
+      const engine = getEngine();
+      if (engine && state._usedGpuStroke) {
+        // GPU path: composite stroke onto layer, read back for undo/crop
+        endStroke(engine, state.layerId);
+        try {
+          const pixels = readLayerPixels(engine, state.layerId);
+          const layer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
+          if (layer && pixels.length > 0) {
+            const w = 'width' in layer ? (layer.width ?? 0) : 0;
+            const h = 'height' in layer ? (layer.height ?? 0) : 0;
+            if (w > 0 && h > 0) {
+              const imageData = createImageData(w, h);
+              imageData.data.set(pixels);
+              useEditorStore.getState().updateLayerPixelData(state.layerId, imageData);
+            }
+          }
+        } catch {
+          // readLayerPixels may fail if layer was removed mid-stroke
+        }
+      } else {
+        // CPU fallback
+        destroyPaintingCanvas(state.layerId);
+        const editorState = useEditorStore.getState();
+        const layerData = editorState.layerPixelData.get(state.layerId);
+        if (layerData) {
+          editorState.updateLayerPixelData(state.layerId, layerData);
+        }
       }
     }
 

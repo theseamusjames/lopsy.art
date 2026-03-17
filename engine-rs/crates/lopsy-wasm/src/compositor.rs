@@ -27,6 +27,10 @@ pub fn composite(engine: &mut EngineInner) {
         let layer_id = layer.id.clone();
         let opacity = layer.opacity;
         let blend_mode = layer.blend_mode as i32;
+        let layer_x = layer.x as f32;
+        let layer_y = layer.y as f32;
+        let layer_w = layer.width as f32;
+        let layer_h = layer.height as f32;
 
         if let Some(&tex_handle) = engine.layer_textures.get(&layer_id) {
             if let Some(layer_tex) = engine.texture_pool.get(tex_handle) {
@@ -57,13 +61,24 @@ pub fn composite(engine: &mut EngineInner) {
                 if let Some(loc) = gl.get_uniform_location(prog, "u_blendMode") {
                     gl.uniform1i(Some(&loc), blend_mode);
                 }
+                // Layer positioning uniforms
+                if let Some(loc) = gl.get_uniform_location(prog, "u_srcOffset") {
+                    gl.uniform2f(Some(&loc), layer_x, layer_y);
+                }
+                if let Some(loc) = gl.get_uniform_location(prog, "u_srcSize") {
+                    // Use actual texture size, not layer desc size (texture may differ after upload)
+                    let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((layer_w as u32, layer_h as u32));
+                    gl.uniform2f(Some(&loc), tw as f32, th as f32);
+                }
+                if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
+                    gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+                }
 
                 // Render to scratch A
                 engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
                 engine.draw_fullscreen_quad();
 
                 // Copy scratch A back to composite
-                // (swap composite and scratch textures for the blit)
                 engine.fbo_pool.bind(gl, engine.composite_fbo);
                 gl.use_program(Some(&engine.shaders.blit.program));
                 gl.active_texture(WebGl2RenderingContext::TEXTURE0);
@@ -74,6 +89,56 @@ pub fn composite(engine: &mut EngineInner) {
                     gl.uniform1i(Some(&loc), 0);
                 }
                 engine.draw_fullscreen_quad();
+
+                // If there's an active stroke texture for this layer, composite it on top
+                if let Some(&stroke_tex_handle) = engine.stroke_textures.get(&layer_id) {
+                    if let Some(stroke_tex) = engine.texture_pool.get(stroke_tex_handle) {
+                        gl.use_program(Some(&engine.shaders.blend.program));
+                        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+                        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(stroke_tex));
+                        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+                        if let Some(comp_tex) = engine.texture_pool.get(engine.composite_texture) {
+                            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(comp_tex));
+                        }
+                        let prog = &engine.shaders.blend.program;
+                        if let Some(loc) = gl.get_uniform_location(prog, "u_srcTex") {
+                            gl.uniform1i(Some(&loc), 0);
+                        }
+                        if let Some(loc) = gl.get_uniform_location(prog, "u_dstTex") {
+                            gl.uniform1i(Some(&loc), 1);
+                        }
+                        if let Some(loc) = gl.get_uniform_location(prog, "u_opacity") {
+                            gl.uniform1f(Some(&loc), opacity);
+                        }
+                        if let Some(loc) = gl.get_uniform_location(prog, "u_blendMode") {
+                            gl.uniform1i(Some(&loc), 0); // Normal blend for stroke
+                        }
+                        // Stroke texture covers same area as layer
+                        if let Some(loc) = gl.get_uniform_location(prog, "u_srcOffset") {
+                            gl.uniform2f(Some(&loc), layer_x, layer_y);
+                        }
+                        if let Some(loc) = gl.get_uniform_location(prog, "u_srcSize") {
+                            let (sw, sh) = engine.texture_pool.get_size(stroke_tex_handle).unwrap_or((1, 1));
+                            gl.uniform2f(Some(&loc), sw as f32, sh as f32);
+                        }
+                        if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
+                            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+                        }
+                        engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
+                        engine.draw_fullscreen_quad();
+
+                        engine.fbo_pool.bind(gl, engine.composite_fbo);
+                        gl.use_program(Some(&engine.shaders.blit.program));
+                        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+                        if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
+                            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
+                        }
+                        if let Some(loc) = gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") {
+                            gl.uniform1i(Some(&loc), 0);
+                        }
+                        engine.draw_fullscreen_quad();
+                    }
+                }
             }
         }
     }
@@ -140,6 +205,8 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
         let layer_id = layer.id.clone();
         let opacity = layer.opacity;
         let blend_mode = layer.blend_mode as i32;
+        let layer_x = layer.x as f32;
+        let layer_y = layer.y as f32;
 
         if let Some(&tex_handle) = engine.layer_textures.get(&layer_id) {
             if let Some(layer_tex) = engine.texture_pool.get(tex_handle) {
@@ -163,6 +230,16 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
                 }
                 if let Some(loc) = gl.get_uniform_location(prog, "u_blendMode") {
                     gl.uniform1i(Some(&loc), blend_mode);
+                }
+                if let Some(loc) = gl.get_uniform_location(prog, "u_srcOffset") {
+                    gl.uniform2f(Some(&loc), layer_x, layer_y);
+                }
+                if let Some(loc) = gl.get_uniform_location(prog, "u_srcSize") {
+                    let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+                    gl.uniform2f(Some(&loc), tw as f32, th as f32);
+                }
+                if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
+                    gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
                 }
 
                 engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
@@ -195,6 +272,8 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
 
     engine.fbo_pool.unbind(gl);
 
+    // readPixels starts from GL row 0 (bottom), which matches ImageData row 0
+    // because textures are uploaded without UNPACK_FLIP_Y_WEBGL. No flip needed.
     Ok(pixels)
 }
 

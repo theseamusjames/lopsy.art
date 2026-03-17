@@ -51,35 +51,6 @@ pub fn apply_dab_batch(
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
 
-    // Generate stamp texture
-    let stamp_size = size.ceil() as u32;
-    if stamp_size == 0 { return; }
-    let stamp = lopsy_core::brush::generate_brush_stamp(stamp_size, hardness);
-    let mut stamp_rgba = vec![0u8; (stamp_size * stamp_size * 4) as usize];
-    for i in 0..(stamp_size * stamp_size) as usize {
-        let v = if i < stamp.len() { (stamp[i] * 255.0) as u8 } else { 0 };
-        stamp_rgba[i * 4] = v;
-        stamp_rgba[i * 4 + 1] = 0;
-        stamp_rgba[i * 4 + 2] = 0;
-        stamp_rgba[i * 4 + 3] = 255;
-    }
-
-    let stamp_tex_handle = match engine.texture_pool.acquire(gl, stamp_size, stamp_size) {
-        Ok(h) => h,
-        Err(_) => return,
-    };
-    if let Some(tex) = engine.texture_pool.get(stamp_tex_handle) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex));
-        let _ = gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
-            WebGl2RenderingContext::TEXTURE_2D,
-            0, 0, 0,
-            stamp_size as i32, stamp_size as i32,
-            WebGl2RenderingContext::RGBA,
-            WebGl2RenderingContext::UNSIGNED_BYTE,
-            Some(&stamp_rgba),
-        );
-    }
-
     // Bind FBO targeting the stroke/layer texture
     if let Some(fbo) = engine.stroke_fbo {
         if let Some(tex) = engine.texture_pool.get(tex_handle) {
@@ -87,7 +58,6 @@ pub fn apply_dab_batch(
             engine.fbo_pool.bind(gl, fbo);
         }
     } else {
-        // Create temp FBO
         let fbo = gl.create_framebuffer();
         gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, fbo.as_ref());
         if let Some(tex) = engine.texture_pool.get(tex_handle) {
@@ -112,14 +82,7 @@ pub fn apply_dab_batch(
     let prog = &engine.shaders.brush_dab.program;
     gl.use_program(Some(prog));
 
-    // Bind stamp texture
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(tex) = engine.texture_pool.get(stamp_tex_handle) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex));
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_stampTex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
+    // Set uniforms (no stamp texture needed — computed analytically in shader)
     if let Some(loc) = gl.get_uniform_location(prog, "u_brushColor") {
         gl.uniform4f(Some(&loc), r, g, b, a);
     }
@@ -129,6 +92,9 @@ pub fn apply_dab_batch(
     if let Some(loc) = gl.get_uniform_location(prog, "u_flow") {
         gl.uniform1f(Some(&loc), flow);
     }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_hardness") {
+        gl.uniform1f(Some(&loc), hardness);
+    }
     if let Some(loc) = gl.get_uniform_location(prog, "u_texSize") {
         gl.uniform2f(Some(&loc), w as f32, h as f32);
     }
@@ -136,7 +102,7 @@ pub fn apply_dab_batch(
         gl.uniform1f(Some(&loc), size);
     }
 
-    // Render each dab as a separate draw call (positioned via u_center uniform)
+    // Render each dab as a separate draw call
     for chunk in points.chunks(2) {
         if chunk.len() < 2 { break; }
         if let Some(loc) = gl.get_uniform_location(prog, "u_center") {
@@ -148,7 +114,6 @@ pub fn apply_dab_batch(
     gl.disable(WebGl2RenderingContext::BLEND);
     gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
 
-    engine.texture_pool.release(stamp_tex_handle);
     engine.mark_layer_dirty(layer_id);
 }
 
