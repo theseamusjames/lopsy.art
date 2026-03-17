@@ -129,14 +129,21 @@ function renderFrameCpu(
     const sparseEntry = !data ? sparseData.get(layer.id) : undefined;
     if (!data && !sparseEntry) continue;
 
+    // Reset composite state for each layer — prevents bleed from effects code
     ctx.globalAlpha = layer.opacity;
+    ctx.globalCompositeOperation = 'source-over';
 
     const hasMask = layer.mask?.enabled && !maskEditMode;
     const isMaskOverlay = maskEditMode && layer.mask && layer.id === activeLayerId;
-    const bitmap = getCachedBitmap(layer.id);
-    if (bitmap && !hasEnabledEffects(layer.effects) && !hasMask && !isMaskOverlay) {
-      ctx.drawImage(bitmap, layer.x, layer.y);
-      continue;
+    const hasEffects = hasEnabledEffects(layer.effects);
+
+    // Fast path: layers without effects/masks can use bitmap cache directly
+    if (!hasEffects && !hasMask && !isMaskOverlay) {
+      const bitmap = getCachedBitmap(layer.id);
+      if (bitmap) {
+        ctx.drawImage(bitmap, layer.x, layer.y);
+        continue;
+      }
     }
 
     if (!data && sparseEntry) {
@@ -144,17 +151,16 @@ function renderFrameCpu(
     }
     if (!data) continue;
 
-    const paintCanvas = getPaintingCanvas(layer.id, data);
+    // For layers with effects: ALWAYS use putImageData to ensure tempCanvas
+    // content matches `data` exactly. The bitmap cache can be stale (wrong
+    // size, from before crop, async rebuild not complete).
+    const paintCanvas = hasEffects ? null : getPaintingCanvas(layer.id, data);
     const { canvas: tempCanvas, ctx: tempCtx } = paintCanvas
       ? { canvas: paintCanvas, ctx: paintCanvas.getContext('2d', contextOptions)! }
       : cpuAllocator.acquire(data.width, data.height);
 
     if (!paintCanvas) {
-      if (bitmap && !layer.effects.colorOverlay.enabled) {
-        tempCtx.drawImage(bitmap, 0, 0);
-      } else {
-        tempCtx.putImageData(data, 0, 0);
-      }
+      tempCtx.putImageData(data, 0, 0);
     }
 
     if (layer.effects.colorOverlay.enabled) {

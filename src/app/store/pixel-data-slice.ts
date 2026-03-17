@@ -8,6 +8,7 @@ import {
   fromSparsePixelData,
   sparseToImageData,
 } from '../../engine/canvas-ops';
+import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 
 export interface PixelDataSlice {
   layerPixelData: Map<string, ImageData>;
@@ -46,6 +47,9 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     // Clear any sparse entry — we have live ImageData now
     const sparseMap = new Map(state.sparseLayerData);
     sparseMap.delete(layerId);
+    // Invalidate stale bitmap — the data may have been modified in-place
+    // (same reference) so the subscription won't detect the change.
+    invalidateBitmapCache(layerId);
     set({ layerPixelData: pixelData, sparseLayerData: sparseMap, dirtyLayerIds, renderVersion: state.renderVersion + 1 });
     // Auto-crop/sparsify after every write to keep memory tight
     get().cropLayerToContent(layerId);
