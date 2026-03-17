@@ -5,8 +5,11 @@
   "type": "module",
   "description": "A browser-based image editor",
   "scripts": {
+    "wasm:build": "cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --out-dir ../../src/engine-wasm/pkg",
+    "wasm:build:dev": "cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --dev --out-dir ../../src/engine-wasm/pkg",
+    "wasm:test": "cd engine-rs && cargo test",
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run wasm:build && tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -29,6 +32,8 @@
     "playwright": "^1.58.2",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.6.0",
     "vitest": "^4.0.18"
   }
 }
