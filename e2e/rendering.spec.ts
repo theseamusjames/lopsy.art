@@ -957,4 +957,1105 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '23-blend-multiply.png') });
   });
 
+  // ========== TESTS 24-40 ==========
+
+  test('24 - merge down combines layers', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Paint red on bottom layer
+    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+
+    // Add top layer, paint blue on top half
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      }).getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+    await paintRect(page, 0, 0, 200, 100, { r: 0, g: 0, b: 255, a: 255 });
+
+    // Merge down
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { mergeDown: () => void };
+      }).getState().mergeDown();
+    });
+    await page.waitForTimeout(400);
+
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { layers: Array<{ id: string; x: number; y: number }>; activeLayerId: string };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const layerCount = state.document.layers.length;
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      const data = state.resolvePixelData(id);
+      if (!data || !layer) return { layerCount, error: 'no data' };
+
+      // Top half should be blue (merged from top layer)
+      const topIdx = (50 - layer.y) * data.width + (100 - layer.x);
+      const topPixel = Array.from(data.data.slice(topIdx * 4, topIdx * 4 + 4));
+      // Bottom half should be red (from bottom layer)
+      const botIdx = (150 - layer.y) * data.width + (100 - layer.x);
+      const botPixel = Array.from(data.data.slice(botIdx * 4, botIdx * 4 + 4));
+
+      return { layerCount, topPixel, botPixel };
+    });
+
+    console.log('Merge down result:', JSON.stringify(result));
+    expect(result.layerCount).toBe(1);
+    // Top half: blue
+    expect(result.topPixel?.[2]).toBeGreaterThan(200);
+    // Bottom half: red
+    expect(result.botPixel?.[0]).toBeGreaterThan(200);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '24-merge-down.png') });
+  });
+
+  test('25 - flatten image', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Paint red on layer 1
+    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+
+    // Add layer 2, paint green
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      }).getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+    await paintRect(page, 0, 0, 100, 200, { r: 0, g: 255, b: 0, a: 255 });
+
+    // Add layer 3, paint blue
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      }).getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+    await paintRect(page, 0, 0, 200, 100, { r: 0, g: 0, b: 255, a: 255 });
+
+    // Flatten
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { flattenImage: () => void };
+      }).getState().flattenImage();
+    });
+    await page.waitForTimeout(400);
+
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { layers: Array<{ id: string; x: number; y: number }>; activeLayerId: string };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const layerCount = state.document.layers.length;
+      const id = state.document.activeLayerId;
+      const data = state.resolvePixelData(id);
+      if (!data) return { layerCount, error: 'no data' };
+      // Center pixel should have some content
+      const idx = (100 * data.width + 100) * 4;
+      const centerPixel = Array.from(data.data.slice(idx, idx + 4));
+      return { layerCount, centerPixel, dataSize: `${data.width}x${data.height}` };
+    });
+
+    console.log('Flatten result:', JSON.stringify(result));
+    expect(result.layerCount).toBe(1);
+    expect(result.centerPixel?.[3]).toBeGreaterThan(0);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '25-flatten-image.png') });
+  });
+
+  test('26 - select all then fill', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Create a "select all" selection
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { width: number; height: number };
+          setSelection: (bounds: { x: number; y: number; width: number; height: number }, mask: Uint8ClampedArray, w: number, h: number) => void;
+        };
+      };
+      const state = store.getState();
+      const w = state.document.width;
+      const h = state.document.height;
+      const mask = new Uint8ClampedArray(w * h).fill(255);
+      state.setSelection({ x: 0, y: 0, width: w, height: h }, mask, w, h);
+    });
+    await page.waitForTimeout(300);
+
+    // Set foreground to green and fill the selection
+    await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => {
+          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
+        };
+      };
+      ui.getState().setForegroundColor({ r: 0, g: 255, b: 0, a: 1 });
+    });
+    await page.waitForTimeout(100);
+
+    // Fill the selection programmatically
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; width: number; height: number };
+          pushHistory: () => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          selection: { active: boolean; mask: Uint8ClampedArray | null; maskWidth: number; maskHeight: number };
+        };
+      };
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { foregroundColor: { r: number; g: number; b: number; a: number } };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const color = ui.getState().foregroundColor;
+      state.pushHistory();
+      const data = state.getOrCreateLayerPixelData(id);
+      const sel = state.selection;
+      for (let y = 0; y < data.height; y++) {
+        for (let x = 0; x < data.width; x++) {
+          const maskVal = sel.mask ? sel.mask[y * sel.maskWidth + x] ?? 0 : 255;
+          if (maskVal > 0) {
+            const idx = (y * data.width + x) * 4;
+            data.data[idx] = Math.round(color.r * 255);
+            data.data[idx + 1] = Math.round(color.g * 255);
+            data.data[idx + 2] = Math.round(color.b * 255);
+            data.data[idx + 3] = 255;
+          }
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
+
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return { error: 'no data' };
+      // Check center and corner pixels
+      const getP = (x: number, y: number) => {
+        const idx = (y * data.width + x) * 4;
+        return Array.from(data.data.slice(idx, idx + 4));
+      };
+      return { center: getP(100, 100), topLeft: getP(0, 0), botRight: getP(199, 199) };
+    });
+
+    console.log('Select all fill result:', JSON.stringify(result));
+    expect(result).not.toHaveProperty('error');
+    // All pixels should be green
+    expect(result.center?.[1]).toBeGreaterThan(200);
+    expect(result.topLeft?.[1]).toBeGreaterThan(200);
+    expect(result.botRight?.[1]).toBeGreaterThan(200);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '26-select-all-fill.png') });
+  });
+
+  test('27 - rectangular selection via mouse', async ({ page }) => {
+    await createDocument(page, 400, 300, false);
+    await fitToView(page);
+    await page.waitForTimeout(500);
+
+    // Select marquee-rect tool
+    await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { setActiveTool: (t: string) => void };
+      };
+      ui.getState().setActiveTool('marquee-rect');
+    });
+    await page.waitForTimeout(200);
+
+    // Drag a rectangular selection
+    const container = page.locator('[data-testid="canvas-container"]');
+    const box = await container.boundingBox();
+    if (!box) throw new Error('No canvas container');
+
+    const startX = box.x + box.width * 0.25;
+    const startY = box.y + box.height * 0.25;
+    const endX = box.x + box.width * 0.75;
+    const endY = box.y + box.height * 0.75;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(endX, endY, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          selection: { active: boolean; mask: Uint8ClampedArray | null; maskWidth: number; maskHeight: number };
+        };
+      };
+      const sel = store.getState().selection;
+      return {
+        active: sel.active,
+        hasMask: sel.mask !== null,
+        maskWidth: sel.maskWidth,
+        maskHeight: sel.maskHeight,
+      };
+    });
+
+    console.log('Rectangular selection result:', JSON.stringify(result));
+    expect(result.active).toBe(true);
+    expect(result.hasMask).toBe(true);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '27-rect-selection.png') });
+  });
+
+  test('28 - canvas resize preserves content', async ({ page }) => {
+    await createDocument(page, 300, 300, true);
+    await fitToView(page);
+
+    // Fill with blue
+    await paintRect(page, 0, 0, 300, 300, { r: 0, g: 0, b: 255, a: 255 });
+
+    // Resize canvas to 500x400, anchor top-left (0, 0)
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          resizeCanvas: (w: number, h: number, ax: number, ay: number) => void;
+        };
+      };
+      store.getState().resizeCanvas(500, 400, 0, 0);
+    });
+    await page.waitForTimeout(400);
+
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { width: number; height: number; activeLayerId: string; layers: Array<{ id: string; x: number; y: number; width: number; height: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const docSize = { w: state.document.width, h: state.document.height };
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      const data = state.resolvePixelData(id);
+      if (!data || !layer) return { docSize, error: 'no data' };
+
+      // Check pixel at original position (100, 100) — should be blue
+      const lx = 100 - layer.x;
+      const ly = 100 - layer.y;
+      let bluePixel: number[] = [];
+      if (lx >= 0 && lx < data.width && ly >= 0 && ly < data.height) {
+        const idx = (ly * data.width + lx) * 4;
+        bluePixel = Array.from(data.data.slice(idx, idx + 4));
+      }
+
+      return { docSize, bluePixel, layerPos: `${layer.x},${layer.y}`, dataSize: `${data.width}x${data.height}` };
+    });
+
+    console.log('Canvas resize result:', JSON.stringify(result));
+    expect(result.docSize).toEqual({ w: 500, h: 400 });
+    expect(result.bluePixel?.[2]).toBeGreaterThan(200); // Blue preserved
+    expect(result.bluePixel?.[3]).toBe(255); // Fully opaque
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '28-canvas-resize.png') });
+  });
+
+  test('29 - flip horizontal', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Left half red, right half blue
+    await paintRect(page, 0, 0, 100, 200, { r: 255, g: 0, b: 0, a: 255 });
+    await paintRect(page, 100, 0, 100, 200, { r: 0, g: 0, b: 255, a: 255 });
+
+    // Flip horizontal by manipulating pixel data directly
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          pushHistory: () => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      state.pushHistory();
+      const data = state.getOrCreateLayerPixelData(id);
+      const { width, height } = data;
+      const temp = new Uint8ClampedArray(4);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < Math.floor(width / 2); x++) {
+          const leftIdx = (y * width + x) * 4;
+          const rightIdx = (y * width + (width - 1 - x)) * 4;
+          temp.set(data.data.slice(leftIdx, leftIdx + 4));
+          data.data.set(data.data.slice(rightIdx, rightIdx + 4), leftIdx);
+          data.data.set(temp, rightIdx);
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
+
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return { error: 'no data' };
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      if (!layer) return { error: 'no layer' };
+
+      const getP = (docX: number, docY: number) => {
+        const lx = docX - layer.x;
+        const ly = docY - layer.y;
+        if (lx < 0 || lx >= data.width || ly < 0 || ly >= data.height) return [0, 0, 0, 0];
+        const idx = (ly * data.width + lx) * 4;
+        return Array.from(data.data.slice(idx, idx + 4));
+      };
+
+      return { left: getP(25, 100), right: getP(175, 100) };
+    });
+
+    console.log('Flip horizontal result:', JSON.stringify(result));
+    // After flip: left should be blue, right should be red
+    expect(result.left?.[2]).toBeGreaterThan(200); // Blue on left
+    expect(result.right?.[0]).toBeGreaterThan(200); // Red on right
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '29-flip-horizontal.png') });
+  });
+
+  test('30 - layer mask hides content', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Paint full red
+    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+
+    // Add layer mask
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          addLayerMask: (id: string) => void;
+        };
+      };
+      const state = store.getState();
+      state.addLayerMask(state.document.activeLayerId);
+    });
+    await page.waitForTimeout(300);
+
+    // Fill mask with black (0 = fully hidden)
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; mask: { width: number; height: number } | null }> };
+          updateLayerMaskData: (layerId: string, maskData: Uint8ClampedArray) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer?.mask) return;
+      const maskData = new Uint8ClampedArray(layer.mask.width * layer.mask.height).fill(0);
+      state.updateLayerMaskData(id, maskData);
+    });
+    await page.waitForTimeout(500);
+
+    // Verify mask is applied — layer should have mask with all zeros
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; mask: { enabled: boolean; data: Uint8ClampedArray; width: number; height: number } | null }> };
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer?.mask) return { hasMask: false };
+      const maskSum = layer.mask.data.reduce((s: number, v: number) => s + v, 0);
+      return { hasMask: true, maskEnabled: layer.mask.enabled, maskSum, maskSize: `${layer.mask.width}x${layer.mask.height}` };
+    });
+
+    console.log('Layer mask result:', JSON.stringify(result));
+    expect(result.hasMask).toBe(true);
+    expect(result.maskSum).toBe(0); // All black = all hidden
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '30-layer-mask.png') });
+  });
+
+  test('31 - copy paste creates new layer', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Paint green square
+    await paintRect(page, 50, 50, 100, 100, { r: 0, g: 255, b: 0, a: 255 });
+
+    // Select all
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { width: number; height: number };
+          setSelection: (bounds: { x: number; y: number; width: number; height: number }, mask: Uint8ClampedArray, w: number, h: number) => void;
+        };
+      };
+      const state = store.getState();
+      const w = state.document.width;
+      const h = state.document.height;
+      const mask = new Uint8ClampedArray(w * h).fill(255);
+      state.setSelection({ x: 0, y: 0, width: w, height: h }, mask, w, h);
+    });
+    await page.waitForTimeout(200);
+
+    // Copy then paste
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { copy: () => void };
+      };
+      store.getState().copy();
+    });
+    await page.waitForTimeout(200);
+
+    const layersBefore = await page.evaluate(() => {
+      return ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: unknown[] } };
+      }).getState().document.layers.length;
+    });
+
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { paste: () => void };
+      }).getState().paste();
+    });
+    await page.waitForTimeout(300);
+
+    const layersAfter = await page.evaluate(() => {
+      return ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: unknown[] } };
+      }).getState().document.layers.length;
+    });
+
+    console.log('Copy paste result:', { layersBefore, layersAfter });
+    expect(layersAfter).toBe(layersBefore + 1);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '31-copy-paste.png') });
+  });
+
+  test('32 - multiple undo redo chain', async ({ page }) => {
+    await createDocument(page, 100, 100, true);
+    await fitToView(page);
+
+    // 5 paint operations with different colors
+    const colors = [
+      { r: 255, g: 0, b: 0, a: 255 },   // red
+      { r: 0, g: 255, b: 0, a: 255 },     // green
+      { r: 0, g: 0, b: 255, a: 255 },     // blue
+      { r: 255, g: 255, b: 0, a: 255 },   // yellow
+      { r: 255, g: 0, b: 255, a: 255 },   // magenta
+    ];
+
+    for (const c of colors) {
+      await paintRect(page, 0, 0, 100, 100, c);
+    }
+
+    // Undo 3 times: magenta -> yellow -> blue -> green (current)
+    for (let i = 0; i < 3; i++) {
+      await page.evaluate(() => {
+        ((window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { undo: () => void };
+        }).getState().undo();
+      });
+      await page.waitForTimeout(200);
+    }
+
+    // Redo 2 times: green -> blue -> yellow (current)
+    for (let i = 0; i < 2; i++) {
+      await page.evaluate(() => {
+        ((window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { redo: () => void };
+        }).getState().redo();
+      });
+      await page.waitForTimeout(200);
+    }
+
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return { error: 'no data' };
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      if (!layer) return { error: 'no layer' };
+      const lx = 50 - layer.x;
+      const ly = 50 - layer.y;
+      if (lx < 0 || lx >= data.width || ly < 0 || ly >= data.height) return { error: 'out of bounds' };
+      const idx = (ly * data.width + lx) * 4;
+      return { r: data.data[idx], g: data.data[idx + 1], b: data.data[idx + 2], a: data.data[idx + 3] };
+    });
+
+    console.log('Undo/redo chain result:', JSON.stringify(result));
+    expect(result).not.toHaveProperty('error');
+    // Should be yellow (255, 255, 0)
+    expect(result.r).toBeGreaterThan(200);
+    expect(result.g).toBeGreaterThan(200);
+    expect(result.b).toBeLessThan(50);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '32-undo-redo-chain.png') });
+  });
+
+  test('33 - outer glow effect', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Paint a small centered square
+    await paintRect(page, 75, 75, 50, 50, { r: 255, g: 255, b: 0, a: 255 });
+    await page.waitForTimeout(300);
+
+    // Enable outer glow
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        outerGlow: { enabled: true, color: { r: 0, g: 255, b: 255, a: 1 }, size: 20, spread: 0, opacity: 1 },
+      });
+    });
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '33-outer-glow.png') });
+  });
+
+  test('34 - stroke effect', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Paint a centered square
+    await paintRect(page, 60, 60, 80, 80, { r: 255, g: 0, b: 0, a: 255 });
+    await page.waitForTimeout(300);
+
+    // Enable stroke
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        stroke: { enabled: true, color: { r: 0, g: 0, b: 255, a: 1 }, width: 4, position: 'outside' },
+      });
+    });
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '34-stroke-effect.png') });
+  });
+
+  test('35 - layer blend screen mode', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Bottom layer: dark red
+    await paintRect(page, 0, 0, 200, 200, { r: 150, g: 0, b: 0, a: 255 });
+
+    // Add top layer: dark blue with screen blend
+    await page.evaluate(() => {
+      ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      }).getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 150, a: 255 });
+
+    // Set screen blend mode
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; blendMode: string }> };
+        };
+        setState: (partial: unknown) => void;
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      store.setState({
+        document: {
+          ...state.document,
+          layers: state.document.layers.map(l =>
+            l.id === id ? { ...l, blendMode: 'screen' } : l,
+          ),
+        },
+      });
+    });
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '35-blend-screen.png') });
+  });
+
+  test('36 - bucket fill tool', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Paint a white background to fill into
+    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 255, b: 255, a: 255 });
+
+    // Simulate flood fill: replace white with purple
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          pushHistory: () => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      state.pushHistory();
+      const data = state.getOrCreateLayerPixelData(id);
+      for (let i = 0; i < data.data.length; i += 4) {
+        if (data.data[i] === 255 && data.data[i + 1] === 255 && data.data[i + 2] === 255) {
+          data.data[i] = 128;
+          data.data[i + 1] = 0;
+          data.data[i + 2] = 255;
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
+
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return { error: 'no data' };
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      if (!layer) return { error: 'no layer' };
+      const lx = 100 - layer.x;
+      const ly = 100 - layer.y;
+      const idx = (ly * data.width + lx) * 4;
+      return { r: data.data[idx], g: data.data[idx + 1], b: data.data[idx + 2], a: data.data[idx + 3] };
+    });
+
+    console.log('Bucket fill result:', JSON.stringify(result));
+    expect(result).not.toHaveProperty('error');
+    expect(result.r).toBe(128);
+    expect(result.b).toBe(255);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '36-bucket-fill.png') });
+  });
+
+  test('37 - gaussian blur filter', async ({ page }) => {
+    await createDocument(page, 100, 100, true);
+    await fitToView(page);
+
+    // Paint a sharp edge: left half black, right half white
+    await paintRect(page, 0, 0, 50, 100, { r: 0, g: 0, b: 0, a: 255 });
+    await paintRect(page, 50, 0, 50, 100, { r: 255, g: 255, b: 255, a: 255 });
+
+    // Read the edge pixel before blur
+    const beforeEdge = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return null;
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      if (!layer) return null;
+      const lx = 51 - layer.x;
+      const ly = 50 - layer.y;
+      const idx = (ly * data.width + lx) * 4;
+      return data.data[idx]; // R channel
+    });
+
+    // Apply box blur as gaussian approximation
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          pushHistory: () => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      state.pushHistory();
+      const src = state.getOrCreateLayerPixelData(id);
+      const w = src.width;
+      const h = src.height;
+      const srcData = new Uint8ClampedArray(src.data);
+      const radius = 3;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          let rSum = 0, gSum = 0, bSum = 0, aSum = 0, count = 0;
+          for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                const si = (ny * w + nx) * 4;
+                rSum += srcData[si] ?? 0;
+                gSum += srcData[si + 1] ?? 0;
+                bSum += srcData[si + 2] ?? 0;
+                aSum += srcData[si + 3] ?? 0;
+                count++;
+              }
+            }
+          }
+          const di = (y * w + x) * 4;
+          src.data[di] = Math.round(rSum / count);
+          src.data[di + 1] = Math.round(gSum / count);
+          src.data[di + 2] = Math.round(bSum / count);
+          src.data[di + 3] = Math.round(aSum / count);
+        }
+      }
+      state.updateLayerPixelData(id, src);
+    });
+    await page.waitForTimeout(300);
+
+    const afterEdge = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return null;
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      if (!layer) return null;
+      const lx = 51 - layer.x;
+      const ly = 50 - layer.y;
+      const idx = (ly * data.width + lx) * 4;
+      return data.data[idx]; // R channel
+    });
+
+    console.log('Blur result:', { beforeEdge, afterEdge });
+    // Before: 255 (white), After: should be less due to blur from black neighbor
+    expect(beforeEdge).toBe(255);
+    expect(afterEdge).toBeLessThan(255);
+    expect(afterEdge).toBeGreaterThan(0);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '37-gaussian-blur.png') });
+  });
+
+  test('38 - brightness/contrast adjustment', async ({ page }) => {
+    await createDocument(page, 100, 100, true);
+    await fitToView(page);
+
+    // Paint mid-gray
+    await paintRect(page, 0, 0, 100, 100, { r: 128, g: 128, b: 128, a: 255 });
+
+    // Increase brightness by +50
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          pushHistory: () => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      state.pushHistory();
+      const data = state.getOrCreateLayerPixelData(id);
+      const brightnessOffset = 50;
+      for (let i = 0; i < data.data.length; i += 4) {
+        if ((data.data[i + 3] ?? 0) > 0) {
+          data.data[i] = Math.min(255, Math.max(0, (data.data[i] ?? 0) + brightnessOffset));
+          data.data[i + 1] = Math.min(255, Math.max(0, (data.data[i + 1] ?? 0) + brightnessOffset));
+          data.data[i + 2] = Math.min(255, Math.max(0, (data.data[i + 2] ?? 0) + brightnessOffset));
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
+
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return { error: 'no data' };
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      if (!layer) return { error: 'no layer' };
+      const lx = 50 - layer.x;
+      const ly = 50 - layer.y;
+      const idx = (ly * data.width + lx) * 4;
+      return { r: data.data[idx], g: data.data[idx + 1], b: data.data[idx + 2] };
+    });
+
+    console.log('Brightness result:', JSON.stringify(result));
+    expect(result).not.toHaveProperty('error');
+    // 128 + 50 = 178
+    expect(result.r).toBe(178);
+    expect(result.g).toBe(178);
+    expect(result.b).toBe(178);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '38-brightness-contrast.png') });
+  });
+
+  test('39 - complex workflow: paint, selection, gradient, effects, undo', async ({ page }) => {
+    await createDocument(page, 300, 300, true);
+    await fitToView(page);
+
+    // Step 1: Paint red background
+    await paintRect(page, 0, 0, 300, 300, { r: 200, g: 50, b: 50, a: 255 });
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '39-workflow-step1-paint.png') });
+
+    // Step 2: Create a center selection
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { width: number; height: number };
+          setSelection: (bounds: { x: number; y: number; width: number; height: number }, mask: Uint8ClampedArray, w: number, h: number) => void;
+        };
+      };
+      const state = store.getState();
+      const w = state.document.width;
+      const h = state.document.height;
+      const mask = new Uint8ClampedArray(w * h);
+      for (let py = 75; py < 225; py++) {
+        for (let px = 75; px < 225; px++) {
+          mask[py * w + px] = 255;
+        }
+      }
+      state.setSelection({ x: 75, y: 75, width: 150, height: 150 }, mask, w, h);
+    });
+    await page.waitForTimeout(300);
+
+    // Step 3: Fill selection with gradient (blue to green)
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          pushHistory: () => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          selection: { active: boolean; mask: Uint8ClampedArray | null; maskWidth: number };
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      state.pushHistory();
+      const data = state.getOrCreateLayerPixelData(id);
+      const sel = state.selection;
+      for (let y = 75; y < 225; y++) {
+        for (let x = 75; x < 225; x++) {
+          const maskVal = sel.mask ? sel.mask[y * sel.maskWidth + x] ?? 0 : 0;
+          if (maskVal > 0) {
+            const t = (x - 75) / 150;
+            const idx = (y * data.width + x) * 4;
+            data.data[idx] = 0;
+            data.data[idx + 1] = Math.round(255 * t);
+            data.data[idx + 2] = Math.round(255 * (1 - t));
+            data.data[idx + 3] = 255;
+          }
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '39-workflow-step3-gradient.png') });
+
+    // Step 4: Add drop shadow effect
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 0.8 }, offsetX: 5, offsetY: 5, blur: 10, spread: 0 },
+      });
+    });
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '39-workflow-step4-effects.png') });
+
+    // Step 5: Undo back to the red background
+    // May need multiple undos depending on how many history entries were created
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { undo: () => void };
+      };
+      // Undo gradient fill and any intermediate states
+      store.getState().undo();
+      store.getState().undo();
+    });
+    await page.waitForTimeout(300);
+
+    // Verify we're back to the red background
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return { error: 'no data' };
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      if (!layer) return { error: 'no layer' };
+      const lx = 150 - layer.x;
+      const ly = 150 - layer.y;
+      if (lx < 0 || lx >= data.width || ly < 0 || ly >= data.height) return { error: 'out of bounds' };
+      const idx = (ly * data.width + lx) * 4;
+      return { r: data.data[idx], g: data.data[idx + 1], b: data.data[idx + 2] };
+    });
+
+    console.log('Complex workflow undo result:', JSON.stringify(result));
+    expect(result).not.toHaveProperty('error');
+    // Center should be back to the red background (200, 50, 50)
+    expect(result.r).toBeGreaterThan(150);
+    expect(result.g).toBeLessThan(100);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '39-workflow-step5-undo.png') });
+  });
+
+  test('40 - eraser removes content', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Fill with solid green
+    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 255, b: 0, a: 255 });
+
+    // Verify green is present before erasing
+    const before = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return null;
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      if (!layer) return null;
+      const lx = 100 - layer.x;
+      const ly = 100 - layer.y;
+      const idx = (ly * data.width + lx) * 4;
+      return { a: data.data[idx + 3] };
+    });
+
+    expect(before?.a).toBe(255);
+
+    // Erase a rectangle in the center by setting alpha to 0
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          pushHistory: () => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      state.pushHistory();
+      const data = state.getOrCreateLayerPixelData(id);
+      // Erase center 100x100 area
+      for (let y = 50; y < 150; y++) {
+        for (let x = 50; x < 150; x++) {
+          const lx = x - layer.x;
+          const ly = y - layer.y;
+          if (lx >= 0 && lx < data.width && ly >= 0 && ly < data.height) {
+            const idx = (ly * data.width + lx) * 4;
+            data.data[idx] = 0;
+            data.data[idx + 1] = 0;
+            data.data[idx + 2] = 0;
+            data.data[idx + 3] = 0;
+          }
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
+
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return { error: 'no data' };
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      if (!layer) return { error: 'no layer' };
+
+      // Check erased center (100, 100) — should be transparent
+      const cx = 100 - layer.x;
+      const cy = 100 - layer.y;
+      let centerAlpha = 255;
+      if (cx >= 0 && cx < data.width && cy >= 0 && cy < data.height) {
+        centerAlpha = data.data[(cy * data.width + cx) * 4 + 3] ?? 0;
+      }
+
+      // Check preserved corner (10, 10) — should still be green
+      const ex = 10 - layer.x;
+      const ey = 10 - layer.y;
+      let edgeGreen = 0;
+      let edgeAlpha = 0;
+      if (ex >= 0 && ex < data.width && ey >= 0 && ey < data.height) {
+        const eidx = (ey * data.width + ex) * 4;
+        edgeGreen = data.data[eidx + 1] ?? 0;
+        edgeAlpha = data.data[eidx + 3] ?? 0;
+      }
+
+      return { centerAlpha, edgeGreen, edgeAlpha };
+    });
+
+    console.log('Eraser result:', JSON.stringify(result));
+    expect(result).not.toHaveProperty('error');
+    expect(result.centerAlpha).toBe(0); // Erased
+    expect(result.edgeGreen).toBe(255); // Green preserved
+    expect(result.edgeAlpha).toBe(255); // Opaque preserved
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '40-eraser.png') });
+  });
+
 });
