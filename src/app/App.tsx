@@ -19,7 +19,7 @@ import { useCanvasInteraction } from './useCanvasInteraction';
 import { useToolSettingsStore } from './tool-settings-store';
 import { drawShape } from '../tools/shape/shape';
 import { PixelBuffer } from '../engine/pixel-data';
-import { contextOptions } from '../engine/color-space';
+// color-space contextOptions no longer needed here — sRGB used for image loading
 import { seedBitmapFromBlob } from '../engine/bitmap-cache';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { useCanvasRendering } from './useCanvasRendering';
@@ -90,7 +90,10 @@ export function App() {
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
-      const ctx = canvas.getContext('2d', contextOptions);
+      // Use sRGB context for loading — the internal pipeline (WASM engine)
+      // works in sRGB space. Using P3 here would produce P3 values that
+      // the engine misinterprets as sRGB, causing color shifts on export.
+      const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
       if (ctx) {
         ctx.drawImage(img, 0, 0);
         const imageData = ctx.getImageData(0, 0, img.width, img.height);

@@ -39,7 +39,8 @@ export function openFileFromDisk(): void {
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
-      const ctx = canvas.getContext('2d', contextOptions);
+      // Use sRGB context — internal pipeline works in sRGB
+      const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
       if (ctx) {
         ctx.drawImage(img, 0, 0);
         const imageData = ctx.getImageData(0, 0, img.width, img.height);
