@@ -49,12 +49,12 @@ pub fn composite(engine: &mut EngineInner) {
         // --- "Behind" effects: outer glow, drop shadow ---
         if let Some(ref glow) = effects.outer_glow {
             if glow.enabled {
-                render_glow(engine, tex_handle, tw, th, glow, 0);
+                render_glow(engine, tex_handle, tw, th, glow, 0, *layer_x, *layer_y);
             }
         }
         if let Some(ref shadow) = effects.drop_shadow {
             if shadow.enabled {
-                render_shadow(engine, tex_handle, tw, th, shadow);
+                render_shadow(engine, tex_handle, tw, th, shadow, *layer_x, *layer_y);
             }
         }
 
@@ -87,12 +87,12 @@ pub fn composite(engine: &mut EngineInner) {
         // --- "On top" effects: inner glow, stroke effect ---
         if let Some(ref glow) = effects.inner_glow {
             if glow.enabled {
-                render_glow(engine, tex_handle, tw, th, glow, 1);
+                render_glow(engine, tex_handle, tw, th, glow, 1, *layer_x, *layer_y);
             }
         }
         if let Some(ref stroke) = effects.stroke {
             if stroke.enabled {
-                render_stroke(engine, tex_handle, tw, th, stroke);
+                render_stroke(engine, tex_handle, tw, th, stroke, *layer_x, *layer_y);
             }
         }
     }
@@ -189,7 +189,7 @@ fn blend_effect_onto_composite(engine: &mut EngineInner) {
 }
 
 /// Render outer or inner glow.
-fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, glow: &GlowDesc, mode: i32) {
+fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, glow: &GlowDesc, mode: i32, layer_x: f32, layer_y: f32) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
     if let Some(layer_tex) = engine.texture_pool.get(tex_handle).cloned() {
@@ -203,6 +203,9 @@ fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th:
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_spread") { engine.gl.uniform1f(Some(&loc), glow.spread); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), glow.opacity); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_mode") { engine.gl.uniform1i(Some(&loc), mode); }
 
         engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
@@ -216,7 +219,7 @@ fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th:
 }
 
 /// Render drop shadow.
-fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, shadow: &ShadowDesc) {
+fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, shadow: &ShadowDesc, layer_x: f32, layer_y: f32) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
     if let Some(layer_tex) = engine.texture_pool.get(tex_handle).cloned() {
@@ -230,6 +233,9 @@ fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blur") { engine.gl.uniform1f(Some(&loc), shadow.blur); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), shadow.opacity); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
 
         engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
         engine.gl.viewport(0, 0, doc_w, doc_h);
@@ -262,21 +268,38 @@ fn render_color_overlay(engine: &mut EngineInner, tex_handle: TextureHandle, ove
     }
 }
 
-/// Render stroke effect using the glow shader with hard cutoff.
-fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, stroke: &StrokeDesc) {
-    let mode = match stroke.position {
+/// Render stroke effect using proper hard-edge distance check.
+fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, stroke: &StrokeDesc, layer_x: f32, layer_y: f32) {
+    let doc_w = engine.doc_width as i32;
+    let doc_h = engine.doc_height as i32;
+    let position = match stroke.position {
         lopsy_core::layer::StrokePosition::Inside => 1,
-        _ => 0,
+        lopsy_core::layer::StrokePosition::Outside => 0,
+        lopsy_core::layer::StrokePosition::Center => 2,
     };
-    // Reuse the glow shader with max spread for hard edges
-    let glow = GlowDesc {
-        enabled: true,
-        color: stroke.color,
-        size: stroke.width,
-        spread: 2.0, // max = hard cutoff
-        opacity: stroke.opacity,
-    };
-    render_glow(engine, tex_handle, tw, th, &glow, mode);
+    if let Some(layer_tex) = engine.texture_pool.get(tex_handle).cloned() {
+        engine.gl.use_program(Some(&engine.shaders.stroke_edt.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        let prog = &engine.shaders.stroke_edt.program;
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_strokeColor") { engine.gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_width") { engine.gl.uniform1f(Some(&loc), stroke.width); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_position") { engine.gl.uniform1i(Some(&loc), position); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), stroke.opacity); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+
+        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
+        engine.gl.viewport(0, 0, doc_w, doc_h);
+        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        engine.draw_fullscreen_quad();
+
+        blend_effect_onto_composite(engine);
+    }
 }
 
 /// Composite for export — render to FBO, readPixels
@@ -302,8 +325,8 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
         let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((*layer_w as u32, *layer_h as u32));
 
         // Behind effects
-        if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 0); } }
-        if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, tex_handle, tw, th, shadow); } }
+        if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 0, *layer_x, *layer_y); } }
+        if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, tex_handle, tw, th, shadow, *layer_x, *layer_y); } }
 
         // Color overlay
         let use_overlay = effects.color_overlay.as_ref().map_or(false, |o| o.enabled);
@@ -320,8 +343,8 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
         }
 
         // On-top effects
-        if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 1); } }
-        if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, tex_handle, tw, th, stroke); } }
+        if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 1, *layer_x, *layer_y); } }
+        if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, tex_handle, tw, th, stroke, *layer_x, *layer_y); } }
     }
 
     // Read pixels
