@@ -15,6 +15,7 @@ out vec4 fragColor;
 void main() {
     vec2 docPos = v_uv * u_docSize;
     vec2 layerUV = (docPos - u_srcOffset) / u_srcSize;
+    ivec2 texSize = textureSize(u_srcTex, 0);
 
     // Early out if far from layer bounds
     vec2 marginUV = (u_width + 1.0) * u_texelSize;
@@ -24,32 +25,34 @@ void main() {
         return;
     }
 
-    // Current pixel alpha
+    // Use texelFetch for exact pixel-level edge detection (no interpolation)
+    ivec2 pixelCoord = ivec2(layerUV * vec2(texSize));
     float srcA = 0.0;
-    if (layerUV.x >= 0.0 && layerUV.x <= 1.0 && layerUV.y >= 0.0 && layerUV.y <= 1.0) {
-        srcA = texture(u_srcTex, layerUV).a;
+    if (pixelCoord.x >= 0 && pixelCoord.x < texSize.x &&
+        pixelCoord.y >= 0 && pixelCoord.y < texSize.y) {
+        srcA = texelFetch(u_srcTex, pixelCoord, 0).a;
     }
     bool isOpaque = srcA >= 0.5;
 
-    // Search neighborhood for nearest edge
     float halfW = u_position == 2 ? u_width * 0.5 : u_width;
-    int radius = int(ceil(halfW));
-    float minDistSq = halfW * halfW + 1.0; // start beyond threshold
+    int radius = min(int(ceil(halfW)), 16); // Cap at 16 to avoid GPU timeout
+    float thresholdSq = halfW * halfW;
+    float minDistSq = thresholdSq + 1.0;
 
     for (int y = -radius; y <= radius; y++) {
         for (int x = -radius; x <= radius; x++) {
             float dSq = float(x * x + y * y);
-            if (dSq > halfW * halfW) continue;
+            if (dSq > thresholdSq) continue;
             if (dSq >= minDistSq) continue;
 
-            vec2 sampleUV = layerUV + vec2(float(x), float(y)) * u_texelSize;
+            ivec2 sCoord = pixelCoord + ivec2(x, y);
             float sampleA = 0.0;
-            if (sampleUV.x >= 0.0 && sampleUV.x <= 1.0 && sampleUV.y >= 0.0 && sampleUV.y <= 1.0) {
-                sampleA = texture(u_srcTex, sampleUV).a;
+            if (sCoord.x >= 0 && sCoord.x < texSize.x &&
+                sCoord.y >= 0 && sCoord.y < texSize.y) {
+                sampleA = texelFetch(u_srcTex, sCoord, 0).a;
             }
             bool sampleOpaque = sampleA >= 0.5;
 
-            // Found an edge pixel (neighbor differs from current)
             if (sampleOpaque != isOpaque) {
                 minDistSq = dSq;
             }
@@ -57,15 +60,12 @@ void main() {
     }
 
     bool isStroke = false;
-    if (minDistSq <= halfW * halfW) {
+    if (minDistSq <= thresholdSq) {
         if (u_position == 0) {
-            // Outside: stroke on transparent pixels near opaque
             isStroke = !isOpaque;
         } else if (u_position == 1) {
-            // Inside: stroke on opaque pixels near transparent
             isStroke = isOpaque;
         } else {
-            // Center: stroke on both sides of edge
             isStroke = true;
         }
     }
