@@ -26,6 +26,7 @@ import { contextOptions } from '../engine/color-space';
 import { hasEnabledEffects } from '../layers/layer-model';
 import { sparseToImageData } from '../engine/canvas-ops';
 import { hasActiveAdjustments, applyAdjustmentsToImageData } from '../filters/image-adjustments';
+import { readLayerAsImageData, clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
 export { renderLayerContent } from './rendering/render-layers';
 
@@ -126,6 +127,10 @@ function renderFrameCpu(
     if (!layer.visible) continue;
     let data = pixelData.get(layer.id);
     const sparseEntry = !data ? sparseData.get(layer.id) : undefined;
+    // Fall back to GPU readback when no JS data (GPU is source of truth)
+    if (!data && !sparseEntry) {
+      data = readLayerAsImageData(layer.id) ?? undefined;
+    }
     if (!data && !sparseEntry) continue;
 
     // Reset composite state for each layer — prevents bleed from effects code
@@ -315,6 +320,9 @@ function renderFrame(
   container: HTMLDivElement,
   antPhaseRef: { current: number },
 ): void {
+  // Clear per-frame GPU readback cache so stale data isn't reused
+  clearFrameCache();
+
   const layers = useEditorStore.getState().document.layers;
 
   if (anyLayerHasEffects(layers)) {

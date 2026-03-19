@@ -206,6 +206,143 @@ pub fn rasterize_layer_effects(engine: &mut Engine, layer_id: &str) -> Vec<u8> {
     layer_manager::read_pixels(&engine.inner, layer_id).unwrap_or_default()
 }
 
+#[wasm_bindgen(js_name = "readLayerPixelsCompressed")]
+pub fn read_layer_pixels_compressed(engine: &Engine, layer_id: &str) -> Vec<u8> {
+    // Get content bounds
+    let pixels = match layer_manager::read_pixels(&engine.inner, layer_id) {
+        Ok(p) => p,
+        Err(_) => return Vec::new(),
+    };
+    let tex = match engine.inner.layer_textures.get(layer_id) {
+        Some(&t) => t,
+        None => return Vec::new(),
+    };
+    let (w, h) = engine.inner.texture_pool.get_size(tex).unwrap_or((0, 0));
+    if w == 0 || h == 0 {
+        return Vec::new();
+    }
+
+    let (cropped, rect) = lopsy_core::pixel_buffer::crop_to_content_bounds(&pixels, w, h);
+    if cropped.is_empty() {
+        return Vec::new();
+    }
+
+    // RLE compress the cropped pixel data
+    let compressed = lopsy_core::compress::rle_compress(&cropped);
+
+    // Build result: 16-byte header (4 x i32 LE) + compressed data
+    let mut result = Vec::with_capacity(16 + compressed.len());
+    result.extend_from_slice(&(rect.x).to_le_bytes());
+    result.extend_from_slice(&(rect.y).to_le_bytes());
+    result.extend_from_slice(&(rect.width as i32).to_le_bytes());
+    result.extend_from_slice(&(rect.height as i32).to_le_bytes());
+    result.extend_from_slice(&compressed);
+    result
+}
+
+#[wasm_bindgen(js_name = "uploadLayerPixelsCompressed")]
+pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compressed: &[u8]) -> Result<(), JsError> {
+    if compressed.len() < 16 {
+        return Err(JsError::new("Compressed data too short (need at least 16-byte header)"));
+    }
+
+    // Read 16-byte header
+    let x = i32::from_le_bytes([compressed[0], compressed[1], compressed[2], compressed[3]]);
+    let y = i32::from_le_bytes([compressed[4], compressed[5], compressed[6], compressed[7]]);
+    let w = i32::from_le_bytes([compressed[8], compressed[9], compressed[10], compressed[11]]);
+    let h = i32::from_le_bytes([compressed[12], compressed[13], compressed[14], compressed[15]]);
+
+    if w <= 0 || h <= 0 {
+        return Err(JsError::new("Invalid dimensions in compressed header"));
+    }
+
+    let expected_len = (w as usize) * (h as usize) * 4;
+    let decompressed = lopsy_core::compress::rle_decompress(&compressed[16..], expected_len);
+
+    // Upload via existing layer_manager::upload_pixels
+    layer_manager::upload_pixels(
+        &mut engine.inner,
+        layer_id,
+        &decompressed,
+        w as u32,
+        h as u32,
+        x,
+        y,
+    ).map_err(|e| JsError::new(&e))?;
+
+    // Update layer position/size in the layer stack
+    if let Some(desc) = engine.inner.layer_stack.iter_mut().find(|l| l.id == layer_id) {
+        desc.x = x;
+        desc.y = y;
+        desc.width = w as u32;
+        desc.height = h as u32;
+    }
+
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "readLayerThumbnail")]
+pub fn read_layer_thumbnail(engine: &Engine, layer_id: &str, max_size: u32) -> Vec<u8> {
+    let pixels = match layer_manager::read_pixels(&engine.inner, layer_id) {
+        Ok(p) => p,
+        Err(_) => return Vec::new(),
+    };
+    let tex = match engine.inner.layer_textures.get(layer_id) {
+        Some(&t) => t,
+        None => return Vec::new(),
+    };
+    let (w, h) = engine.inner.texture_pool.get_size(tex).unwrap_or((0, 0));
+    if w == 0 || h == 0 {
+        return Vec::new();
+    }
+
+    if w <= max_size && h <= max_size {
+        return pixels;
+    }
+
+    // Compute thumbnail dimensions maintaining aspect ratio
+    let scale = (max_size as f64) / (w.max(h) as f64);
+    let tw = ((w as f64 * scale).round() as u32).max(1);
+    let th = ((h as f64 * scale).round() as u32).max(1);
+
+    // Bilinear downscale
+    let mut thumb = vec![0u8; (tw * th * 4) as usize];
+    for ty in 0..th {
+        for tx in 0..tw {
+            let sx = (tx as f64 + 0.5) * (w as f64) / (tw as f64) - 0.5;
+            let sy = (ty as f64 + 0.5) * (h as f64) / (th as f64) - 0.5;
+
+            let x0 = (sx.floor() as i32).max(0) as u32;
+            let y0 = (sy.floor() as i32).max(0) as u32;
+            let x1 = (x0 + 1).min(w - 1);
+            let y1 = (y0 + 1).min(h - 1);
+
+            let fx = sx - sx.floor();
+            let fy = sy - sy.floor();
+
+            let dst = (ty * tw + tx) as usize * 4;
+            for c in 0..4 {
+                let c00 = pixels[(y0 * w + x0) as usize * 4 + c] as f64;
+                let c10 = pixels[(y0 * w + x1) as usize * 4 + c] as f64;
+                let c01 = pixels[(y1 * w + x0) as usize * 4 + c] as f64;
+                let c11 = pixels[(y1 * w + x1) as usize * 4 + c] as f64;
+                let val = c00 * (1.0 - fx) * (1.0 - fy)
+                    + c10 * fx * (1.0 - fy)
+                    + c01 * (1.0 - fx) * fy
+                    + c11 * fx * fy;
+                thumb[dst + c] = val.round().min(255.0).max(0.0) as u8;
+            }
+        }
+    }
+
+    // Prepend 8-byte header with thumbnail dimensions so JS knows the size
+    let mut result = Vec::with_capacity(8 + thumb.len());
+    result.extend_from_slice(&tw.to_le_bytes());
+    result.extend_from_slice(&th.to_le_bytes());
+    result.extend_from_slice(&thumb);
+    result
+}
+
 // ============================================================
 // Brush / Paint Operations
 // ============================================================

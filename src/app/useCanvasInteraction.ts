@@ -5,8 +5,7 @@ import { PixelBuffer } from '../engine/pixel-data';
 import { invalidateBitmapCache, createPaintingCanvas, destroyPaintingCanvas } from '../engine/bitmap-cache';
 import { extractMaskFromSurface } from '../engine/mask-utils';
 import { getEngine } from '../engine-wasm/engine-state';
-import { beginStroke, endStroke, readLayerPixels, uploadLayerPixels } from '../engine-wasm/wasm-bridge';
-import { createImageData } from '../engine/color-space';
+import { beginStroke, endStroke, uploadLayerPixels } from '../engine-wasm/wasm-bridge';
 
 import { clearActiveMaskEditBuffer } from './interactions/mask-buffer';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
@@ -89,6 +88,20 @@ export function useCanvasInteraction(
       if (!rect) return;
 
       const canvasPos = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
+
+      const engine = getEngine();
+      const isPaintTool = PAINT_TOOLS.has(activeTool);
+      const maskEditMode = useUIStore.getState().maskEditMode;
+
+      // Fall back to CPU when:
+      // - mask edit mode (paints on mask surface)
+      // - active selection (GPU brush doesn't clip to selection mask yet)
+      const hasSelection = useEditorStore.getState().selection.active;
+      const useGpuStroke = engine && isPaintTool && !maskEditMode && !hasSelection;
+
+      // Check if GPU already has the texture (no JS data means GPU is source of truth)
+      const hadJsData = editorState.layerPixelData.has(activeLayerId) || editorState.sparseLayerData.has(activeLayerId);
+
       // Expand cropped layer back to full canvas size for editing
       const imageData = editorState.expandLayerForEditing(activeLayerId);
       // Re-read activeLayer after expand (position may have changed)
@@ -96,20 +109,13 @@ export function useCanvasInteraction(
       const layerPos: Point = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
       const pixelBuffer = PixelBuffer.wrapImageData(imageData);
 
-      const engine = getEngine();
-      const isPaintTool = PAINT_TOOLS.has(activeTool);
-      const maskEditMode = useUIStore.getState().maskEditMode;
-
-      // Fall back to CPU when:
-      // - pencil (needs hard pixel blocks, not antialiased circles)
-      // - mask edit mode (paints on mask surface)
-      // - active selection (GPU brush doesn't clip to selection mask yet)
-      const hasSelection = useEditorStore.getState().selection.active;
-      const useGpuStroke = engine && isPaintTool && activeTool !== 'pencil' && !maskEditMode && !hasSelection;
       if (useGpuStroke) {
-        // GPU stroke: sync expanded layer data to engine before starting stroke
-        const rawBytes = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
-        uploadLayerPixels(engine, activeLayerId, rawBytes, imageData.width, imageData.height, expandedLayer.x, expandedLayer.y);
+        // Only upload if JS had data (sparse/dense) that needed syncing.
+        // When !hadJsData, the GPU texture is already source of truth.
+        if (hadJsData) {
+          const rawBytes = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
+          uploadLayerPixels(engine, activeLayerId, rawBytes, imageData.width, imageData.height, expandedLayer.x, expandedLayer.y);
+        }
         beginStroke(engine, activeLayerId);
       } else {
         // CPU fallback: use bitmap cache painting canvas
@@ -207,23 +213,19 @@ export function useCanvasInteraction(
     if (PAINT_TOOLS.has(state.tool) && state.layerId && !state.maskMode) {
       const engine = getEngine();
       if (engine && state._usedGpuStroke) {
-        // GPU path: composite stroke onto layer, read back for undo/crop
+        // GPU path: composite stroke onto layer. GPU texture is source of truth —
+        // no readback to JS needed. Undo uses GPU compressed snapshots.
         endStroke(engine, state.layerId);
-        try {
-          const pixels = readLayerPixels(engine, state.layerId);
-          const layer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
-          if (layer && pixels.length > 0) {
-            const w = 'width' in layer ? (layer.width ?? 0) : 0;
-            const h = 'height' in layer ? (layer.height ?? 0) : 0;
-            if (w > 0 && h > 0) {
-              const imageData = createImageData(w, h);
-              imageData.data.set(pixels);
-              useEditorStore.getState().updateLayerPixelData(state.layerId, imageData);
-            }
-          }
-        } catch {
-          // readLayerPixels may fail if layer was removed mid-stroke
-        }
+        // Clear stale JS pixel data so resolvePixelData reads from GPU
+        const editorState = useEditorStore.getState();
+        const pixelData = new Map(editorState.layerPixelData);
+        pixelData.delete(state.layerId);
+        const sparseMap = new Map(editorState.sparseLayerData);
+        sparseMap.delete(state.layerId);
+        const dirtyIds = new Set(editorState.dirtyLayerIds);
+        dirtyIds.add(state.layerId);
+        editorState.notifyRender();
+        useEditorStore.setState({ layerPixelData: pixelData, sparseLayerData: sparseMap, dirtyLayerIds: dirtyIds });
       } else {
         // CPU fallback
         destroyPaintingCanvas(state.layerId);

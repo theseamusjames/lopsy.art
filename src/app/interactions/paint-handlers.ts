@@ -16,6 +16,7 @@ import {
   applyBrushDabBatch as gpuBrushDabBatch,
   applyEraserDab as gpuEraserDab,
   applyEraserDabBatch as gpuEraserDabBatch,
+  drawPencilLine as gpuDrawPencilLine,
 } from '../../engine-wasm/wasm-bridge';
 
 type PaintTool = 'brush' | 'pencil' | 'eraser';
@@ -150,9 +151,16 @@ export function handlePaintDown(
     const color = useUIStore.getState().foregroundColor;
     useUIStore.getState().addRecentColor(color);
     const size = toolSettings.pencilSize;
-    // Pencil always uses CPU — hard pixel blocks, no antialiasing
-    drawPencilLine(paintSurface, lineFrom, layerPos, color, size);
-    markLayerGpuDirty(activeLayerId);
+
+    if (engine) {
+      // GPU pencil: use WASM drawPencilLine (hard pixel blocks on GPU)
+      gpuDrawPencilLine(engine, activeLayerId,
+        lineFrom.x, lineFrom.y, layerPos.x, layerPos.y,
+        color.r / 255, color.g / 255, color.b / 255, color.a, size);
+    } else {
+      drawPencilLine(paintSurface, lineFrom, layerPos, color, size);
+      markLayerGpuDirty(activeLayerId);
+    }
   } else {
     const size = toolSettings.eraserSize;
     const hardness = 0.8;
@@ -248,8 +256,12 @@ export function handlePaintMove(
     case 'pencil': {
       const color = useUIStore.getState().foregroundColor;
       const size = toolSettings.pencilSize;
-      // Pencil always uses CPU — hard pixel blocks
-      if (state.pixelBuffer) {
+
+      if (engine) {
+        gpuDrawPencilLine(engine, state.layerId,
+          state.lastPoint.x, state.lastPoint.y, layerLocalPos.x, layerLocalPos.y,
+          color.r / 255, color.g / 255, color.b / 255, color.a, size);
+      } else if (state.pixelBuffer) {
         const pencilSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
         drawPencilLine(pencilSurface, state.lastPoint, layerLocalPos, color, size);
         if (state.layerId) markLayerGpuDirty(state.layerId);

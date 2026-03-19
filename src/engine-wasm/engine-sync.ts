@@ -297,7 +297,9 @@ export function syncLayers(
       tracked.layerVersions.set(layer.id, descJson);
     }
 
-    // Upload pixel data if changed or marked dirty (including GPU paint dirty)
+    // Upload pixel data if changed or marked dirty (including GPU paint dirty).
+    // When no JS data exists AND no sparse data, the GPU texture is source of truth
+    // (e.g. after a GPU paint stroke or undo restore) — skip upload.
     const data = pixelData.get(layer.id);
     const sparseEntry = sparseData.get(layer.id);
     const isDirty = dirtyLayerIds.has(layer.id) || gpuDirty.has(layer.id);
@@ -324,12 +326,16 @@ export function syncLayers(
       );
       tracked.sparseVersions.set(layer.id, sparseEntry);
       tracked.pixelDataVersions.set(layer.id, undefined);
-    } else if (!data && !sparseEntry && (tracked.pixelDataVersions.get(layer.id) !== undefined || tracked.sparseVersions.get(layer.id) !== undefined)) {
-      // Layer lost all pixel data (e.g., undo to empty state) — clear GPU texture
-      // by uploading a 1x1 transparent pixel
-      uploadLayerPixels(engine, layer.id, new Uint8Array(4), 1, 1, 0, 0);
-      tracked.pixelDataVersions.set(layer.id, undefined);
-      tracked.sparseVersions.set(layer.id, undefined);
+    } else if (!data && !sparseEntry) {
+      // No JS data — GPU texture is source of truth (GPU paint or undo restore).
+      // Only clear the GPU texture if we previously had JS data AND the layer is dirty
+      // (meaning JS data was explicitly removed, not just never set).
+      if (isDirty && (tracked.pixelDataVersions.get(layer.id) !== undefined || tracked.sparseVersions.get(layer.id) !== undefined)) {
+        // JS data was cleared but layer is dirty — GPU already has the correct data
+        // from uploadCompressed or GPU stroke. Just update tracking.
+        tracked.pixelDataVersions.set(layer.id, undefined);
+        tracked.sparseVersions.set(layer.id, undefined);
+      }
     }
 
     // Upload mask

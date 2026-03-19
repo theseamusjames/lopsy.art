@@ -1,5 +1,7 @@
-import { cloneImageData, cropToContentBounds } from '../../engine/canvas-ops';
-import type { CropInfo, HistorySnapshot, SliceCreator, SparseLayerEntry } from './types';
+import type { HistorySnapshot, SliceCreator } from './types';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { getLayerTextureDimensions, uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
+import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -11,111 +13,89 @@ export interface HistorySlice {
   markClean: () => void;
 }
 
+// Sentinel value for layers that had no GPU texture at snapshot time.
+// On restore, these layers get their texture cleared to transparent.
+const EMPTY_LAYER_SENTINEL = new Uint8Array(0);
+
 /**
- * Snapshot pixel data for undo. Dirty layers are cropped to content bounds.
- * Non-dirty layers share references with the previous snapshot (zero-copy).
- * Sparse layers are stored directly (no expansion).
+ * Snapshot GPU textures as compressed blobs.
+ * Non-dirty layers share blob references from the previous snapshot (zero-copy).
+ * Layers with no GPU texture get an empty sentinel so undo can clear them.
  */
-function snapshotPixelData(
-  current: Map<string, ImageData>,
-  sparseMap: Map<string, SparseLayerEntry>,
+function snapshotGpuLayers(
+  layerOrder: readonly string[],
   dirtyIds: Set<string>,
   previous: HistorySnapshot | undefined,
-): { pixelData: Map<string, ImageData>; cropInfo: Map<string, CropInfo>; sparseData: Map<string, SparseLayerEntry> } {
-  const pixelData = new Map<string, ImageData>();
-  const cropInfo = new Map<string, CropInfo>();
-  const sparseData = new Map<string, SparseLayerEntry>();
+): Map<string, Uint8Array> {
+  const engine = getEngine();
+  const gpuSnapshots = new Map<string, Uint8Array>();
 
-  for (const [id, data] of current) {
-    if (dirtyIds.has(id) || !previous?.layerPixelData.has(id)) {
-      const crop = cropToContentBounds(data);
-      if (!crop) continue;
-      pixelData.set(id, crop.data);
-      if (crop.x !== 0 || crop.y !== 0 || crop.data.width !== data.width || crop.data.height !== data.height) {
-        cropInfo.set(id, { x: crop.x, y: crop.y, fullWidth: data.width, fullHeight: data.height });
-      }
+  for (const layerId of layerOrder) {
+    // Reuse previous snapshot blob for non-dirty layers
+    if (!dirtyIds.has(layerId) && previous?.gpuSnapshots.has(layerId)) {
+      gpuSnapshots.set(layerId, previous.gpuSnapshots.get(layerId)!);
+      continue;
+    }
+
+    if (!engine) {
+      gpuSnapshots.set(layerId, EMPTY_LAYER_SENTINEL);
+      continue;
+    }
+
+    // Check if the layer has a GPU texture
+    const dims = getLayerTextureDimensions(engine, layerId);
+    if (!dims || dims[0] === 0 || dims[1] === 0) {
+      gpuSnapshots.set(layerId, EMPTY_LAYER_SENTINEL);
+      continue;
+    }
+
+    const compressed = readLayerCompressed(layerId);
+    if (compressed) {
+      gpuSnapshots.set(layerId, compressed);
     } else {
-      pixelData.set(id, previous.layerPixelData.get(id)!);
-      const prevCrop = previous.layerCropInfo.get(id);
-      if (prevCrop) cropInfo.set(id, prevCrop);
+      gpuSnapshots.set(layerId, EMPTY_LAYER_SENTINEL);
     }
   }
 
-  for (const [id, entry] of sparseMap) {
-    if (pixelData.has(id)) continue;
-    if (!dirtyIds.has(id) && previous?.sparseLayerData.has(id)) {
-      sparseData.set(id, previous.sparseLayerData.get(id)!);
-    } else {
-      sparseData.set(id, entry);
-    }
-  }
-
-  return { pixelData, cropInfo, sparseData };
+  return gpuSnapshots;
 }
 
 /**
- * Restore from a snapshot. For metadata-only snapshots, only the document
- * is restored — pixel data is left unchanged (it wasn't modified).
- * For pixel snapshots, dense layers are cloned, sparse returned as-is,
- * and layer positions adjusted using cropInfo.
+ * Restore GPU textures from a snapshot's compressed blobs.
+ * Empty sentinels clear the layer's texture to transparent.
  */
-function restoreFromSnapshot(
-  snapshot: HistorySnapshot,
-  currentPixelData: Map<string, ImageData>,
-  currentSparseData: Map<string, SparseLayerEntry>,
-): { pixelData: Map<string, ImageData>; sparseData: Map<string, SparseLayerEntry>; document: HistorySnapshot['document'] } {
-  // Metadata-only: keep current pixel data, just restore document
-  if (snapshot.metadataOnly) {
-    return {
-      pixelData: currentPixelData,
-      sparseData: currentSparseData,
-      document: snapshot.document,
-    };
-  }
+function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
+  if (snapshot.metadataOnly) return;
 
-  const pixelData = new Map<string, ImageData>();
-  for (const [id, data] of snapshot.layerPixelData) {
-    pixelData.set(id, cloneImageData(data));
-  }
-  const sparseData = new Map<string, SparseLayerEntry>(snapshot.sparseLayerData);
-
-  // Apply cropInfo to layer positions — the snapshot's document may have
-  // position (0,0) from expansion, but the data is cropped.
-  let doc = snapshot.document;
-  if (snapshot.layerCropInfo.size > 0) {
-    const adjustedLayers = doc.layers.map((layer) => {
-      const info = snapshot.layerCropInfo.get(layer.id);
-      if (!info) return layer;
-      const data = pixelData.get(layer.id);
-      if (!data) return layer;
-      if (layer.x === 0 && layer.y === 0 && info.fullWidth > 0 &&
-          (data.width < info.fullWidth || data.height < info.fullHeight)) {
-        return { ...layer, x: info.x, y: info.y, width: data.width, height: data.height } as typeof layer;
+  const engine = getEngine();
+  for (const [layerId, blob] of snapshot.gpuSnapshots) {
+    if (blob.length === 0) {
+      // Empty sentinel — clear GPU texture to transparent 1x1
+      if (engine) {
+        uploadLayerPixels(engine, layerId, new Uint8Array(4), 1, 1, 0, 0);
       }
-      return layer;
-    });
-    doc = { ...doc, layers: adjustedLayers };
+    } else {
+      uploadCompressed(layerId, blob);
+    }
   }
-
-  return { pixelData, sparseData, document: doc };
 }
 
 /**
  * Snapshot the current live state for the undo/redo opposite stack.
- * Metadata-only snapshots skip pixel data entirely.
  */
 function snapshotCurrentState(
   state: {
     document: HistorySnapshot['document'];
-    layerPixelData: Map<string, ImageData>;
-    sparseLayerData: Map<string, SparseLayerEntry>;
+    dirtyLayerIds: Set<string>;
   },
   label: string,
   metadataOnly: boolean,
+  prevSnapshot: HistorySnapshot | undefined,
 ): HistorySnapshot {
   if (metadataOnly) {
     return {
       document: state.document,
+      gpuSnapshots: new Map(),
       layerPixelData: new Map(),
       layerCropInfo: new Map(),
       sparseLayerData: new Map(),
@@ -124,18 +104,19 @@ function snapshotCurrentState(
     };
   }
 
-  const pixelData = new Map<string, ImageData>();
-  const cropInfo = new Map<string, CropInfo>();
-  for (const [id, data] of state.layerPixelData) {
-    const crop = cropToContentBounds(data);
-    if (!crop) continue;
-    pixelData.set(id, crop.data);
-    if (crop.x !== 0 || crop.y !== 0 || crop.data.width !== data.width || crop.data.height !== data.height) {
-      cropInfo.set(id, { x: crop.x, y: crop.y, fullWidth: data.width, fullHeight: data.height });
-    }
-  }
-  const sparseData = new Map<string, SparseLayerEntry>(state.sparseLayerData);
-  return { document: state.document, layerPixelData: pixelData, layerCropInfo: cropInfo, sparseLayerData: sparseData, label, metadataOnly: false };
+  // For the opposite stack, all layers are "dirty" since we need a full snapshot
+  const allDirty = new Set(state.document.layerOrder);
+  const gpuSnapshots = snapshotGpuLayers(state.document.layerOrder, allDirty, prevSnapshot);
+
+  return {
+    document: state.document,
+    gpuSnapshots,
+    layerPixelData: new Map(),
+    layerCropInfo: new Map(),
+    sparseLayerData: new Map(),
+    label,
+    metadataOnly: false,
+  };
 }
 
 export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
@@ -148,15 +129,20 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     if (state.undoStack.length === 0) return;
     const previous = state.undoStack[state.undoStack.length - 1];
     if (!previous) return;
-    // Save current state to redo — match the snapshot type (metadata-only or full)
-    const currentSnapshot = snapshotCurrentState(state, previous.label, previous.metadataOnly);
-    const restored = restoreFromSnapshot(previous, state.layerPixelData, state.sparseLayerData);
+
+    // Save current state to redo — match the snapshot type
+    const currentSnapshot = snapshotCurrentState(state, previous.label, previous.metadataOnly, undefined);
+
+    // Restore GPU textures from the snapshot
+    restoreGpuFromSnapshot(previous);
+
     set({
       undoStack: state.undoStack.slice(0, -1),
       redoStack: [...state.redoStack, currentSnapshot],
-      document: restored.document,
-      layerPixelData: restored.pixelData,
-      sparseLayerData: restored.sparseData,
+      document: previous.document,
+      // Clear JS pixel data — GPU is source of truth
+      layerPixelData: new Map(),
+      sparseLayerData: new Map(),
       dirtyLayerIds: new Set(previous.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
@@ -167,14 +153,19 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     if (state.redoStack.length === 0) return;
     const next = state.redoStack[state.redoStack.length - 1];
     if (!next) return;
-    const currentSnapshot = snapshotCurrentState(state, next.label, next.metadataOnly);
-    const restored = restoreFromSnapshot(next, state.layerPixelData, state.sparseLayerData);
+
+    const currentSnapshot = snapshotCurrentState(state, next.label, next.metadataOnly, undefined);
+
+    // Restore GPU textures from the snapshot
+    restoreGpuFromSnapshot(next);
+
     set({
       redoStack: state.redoStack.slice(0, -1),
       undoStack: [...state.undoStack, currentSnapshot],
-      document: restored.document,
-      layerPixelData: restored.pixelData,
-      sparseLayerData: restored.sparseData,
+      document: next.document,
+      // Clear JS pixel data — GPU is source of truth
+      layerPixelData: new Map(),
+      sparseLayerData: new Map(),
       dirtyLayerIds: new Set(next.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
@@ -182,21 +173,17 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
 
   pushHistory: (label = 'Edit') => {
     const state = get();
-    // snapshotPixelData shares references for non-dirty layers (zero-copy).
-    // When no layers are dirty (metadata-only changes like effects/opacity),
-    // ALL layers share references — no new pixel data is allocated.
     const prevSnapshot = state.undoStack[state.undoStack.length - 1];
-    const { pixelData, cropInfo, sparseData } = snapshotPixelData(state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds, prevSnapshot);
-    // Always include pixel data — reference sharing makes non-dirty layers free.
-    // metadataOnly is only set explicitly by callers that know no pixels will change.
-    const metadataOnly = false;
+    const gpuSnapshots = snapshotGpuLayers(state.document.layerOrder, state.dirtyLayerIds, prevSnapshot);
+
     const snapshot: HistorySnapshot = {
       document: state.document,
-      layerPixelData: pixelData,
-      layerCropInfo: cropInfo,
-      sparseLayerData: sparseData,
+      gpuSnapshots,
+      layerPixelData: new Map(),
+      layerCropInfo: new Map(),
+      sparseLayerData: new Map(),
       label,
-      metadataOnly,
+      metadataOnly: false,
     };
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],

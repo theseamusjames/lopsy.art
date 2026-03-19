@@ -9,3 +9,4 @@ pub mod pixel_buffer;
 pub mod filters;
 pub mod export;
 pub mod flood_fill;
+pub mod compress;

@@ -7,6 +7,7 @@
 
 import type { Engine } from './wasm-bridge';
 import { initWasm, createEngine } from './wasm-bridge';
+import { setEngine as setGpuPixelEngine } from './gpu-pixel-access';
 
 let engine: Engine | null = null;
 let engineCanvas: HTMLCanvasElement | null = null;
@@ -23,6 +24,7 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   await initWasm();
   engine = createEngine(canvas);
   engineCanvas = canvas;
+  setGpuPixelEngine(engine);
   return engine;
 }
 
