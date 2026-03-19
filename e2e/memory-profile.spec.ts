@@ -54,13 +54,32 @@ async function snapshot(page: Page, label: string) {
     };
     const state = store.getState();
 
-    // Estimate undo stack memory
-    const undoStack = (state as unknown as { undoStack: Array<{ layerPixelData?: Map<string, ImageData>; sparseLayerData?: Map<string, unknown> }> }).undoStack ?? [];
+    // Estimate undo stack memory — includes compressed GPU snapshots
+    const undoStack = (state as unknown as { undoStack: Array<{ layerPixelData?: Map<string, ImageData>; gpuSnapshots?: Map<string, Uint8Array>; sparseLayerData?: Map<string, unknown>; metadataOnly?: boolean; label?: string }> }).undoStack ?? [];
+    const redoStack = (state as unknown as { redoStack: Array<{ gpuSnapshots?: Map<string, Uint8Array>; metadataOnly?: boolean }> }).redoStack ?? [];
     let undoBytes = 0;
+    const undoDetails: Array<{ label: string; metadataOnly: boolean; gpuBytes: number; denseBytes: number }> = [];
     for (const entry of undoStack) {
+      let gpuBytes = 0;
+      let denseBytes = 0;
+      if (entry.gpuSnapshots) {
+        for (const blob of entry.gpuSnapshots.values()) {
+          gpuBytes += blob.byteLength;
+        }
+      }
       if (entry.layerPixelData) {
         for (const data of entry.layerPixelData.values()) {
-          undoBytes += data.data.byteLength;
+          denseBytes += data.data.byteLength;
+        }
+      }
+      undoBytes += gpuBytes + denseBytes;
+      undoDetails.push({ label: entry.label ?? '?', metadataOnly: !!entry.metadataOnly, gpuBytes, denseBytes });
+    }
+    let redoBytes = 0;
+    for (const entry of redoStack) {
+      if (entry.gpuSnapshots) {
+        for (const blob of entry.gpuSnapshots.values()) {
+          redoBytes += blob.byteLength;
         }
       }
     }
@@ -81,7 +100,7 @@ async function snapshot(page: Page, label: string) {
       };
     });
 
-    return { layers, undoEntries: undoStack.length, undoBytes };
+    return { layers, undoEntries: undoStack.length, undoBytes, undoDetails, redoEntries: redoStack.length, redoBytes };
   });
 
   await cdp.detach();
@@ -96,6 +115,12 @@ async function snapshot(page: Page, label: string) {
     console.log(`  WASM memory:       ${formatMB(wasmMem)}`);
   }
   console.log(`  Undo stack:        ${storeInfo.undoEntries} entries, ${formatMB(storeInfo.undoBytes)}`);
+  console.log(`  Redo stack:        ${storeInfo.redoEntries} entries, ${formatMB(storeInfo.redoBytes)}`);
+  if (storeInfo.undoDetails.length > 0) {
+    for (const d of storeInfo.undoDetails) {
+      console.log(`    [${d.label}] gpu=${formatMB(d.gpuBytes)} dense=${formatMB(d.denseBytes)} metadataOnly=${d.metadataOnly}`);
+    }
+  }
   console.log(`  Layers:`);
   for (const l of storeInfo.layers) {
     const storage = l.hasDense
@@ -229,7 +254,13 @@ test('memory profile: sparse layers should be tiny', async ({ page }) => {
   expect(layer3?.hasDense).toBe(false);
   expect(bg?.hasDense).toBe(true);
 
-  // JS heap growth should be under 1.5x one layer
-  const heapGrowth = s4.perfUsed - s1.perfUsed;
-  expect(heapGrowth).toBeLessThan(expectedLayerSize * 1.5);
+  // CDP heap (actual JS objects, post-GC) should grow < 5 MB.
+  // The performance.memory API includes WASM linear memory + GPU backing stores
+  // which are outside our control (~60MB overhead for a WebGL 2 engine).
+  const cdpGrowth = s4.heapUsed - s1.heapUsed;
+  console.log(`\nCDP heap growth: ${formatMB(cdpGrowth)} (should be < 5 MB)`);
+  console.log(`Undo stack total: ${formatMB(s4.storeInfo.undoBytes)} (compressed GPU snapshots)`);
+  expect(cdpGrowth).toBeLessThan(5 * 1024 * 1024);
+  // Undo stack should be well-compressed (< 2MB for 2 entries with mostly-empty layers)
+  expect(s4.storeInfo.undoBytes).toBeLessThan(2 * 1024 * 1024);
 });
