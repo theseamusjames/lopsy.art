@@ -3211,4 +3211,210 @@ test.describe('WASM/WebGL Rendering', () => {
     }
   });
 
+  test('60 - comprehensive multi-step undo with effects across layers', async ({ page }) => {
+    // User scenario: pencil spots, multiple layers, effects, undo chain
+    await createDocument(page, 400, 300, true);
+    await fitToView(page);
+
+    // Step 1: Draw 3 red spots with 100px pencil on Layer 1
+    const spot1 = { x: 50, y: 50 };
+    const spot2 = { x: 200, y: 50 };
+    const spot3 = { x: 125, y: 200 };
+    await page.evaluate(({ s1, s2, s3 }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, d: ImageData) => void;
+          pushHistory: (l?: string) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      state.pushHistory('Spot 1');
+      const data = state.getOrCreateLayerPixelData(id);
+      // Draw 3 spots as filled circles (simulating 100px pencil)
+      for (const spot of [s1, s2, s3]) {
+        const r = 50;
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (dx * dx + dy * dy > r * r) continue;
+            const px = spot.x + dx;
+            const py = spot.y + dy;
+            if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
+            const idx = (py * data.width + px) * 4;
+            data.data[idx] = 255;
+            data.data[idx + 1] = 0;
+            data.data[idx + 2] = 0;
+            data.data[idx + 3] = 255;
+          }
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    }, { s1: spot1, s2: spot2, s3: spot3 });
+    await page.waitForTimeout(300);
+
+    // Step 2: Add new layer
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      };
+      store.getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+
+    // Step 3: Draw 2 blue spots on Layer 2
+    const spot4 = { x: 300, y: 150 };
+    const spot5 = { x: 100, y: 250 };
+    await page.evaluate(({ s4, s5 }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, d: ImageData) => void;
+          pushHistory: (l?: string) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      state.pushHistory('Blue spots');
+      const data = state.getOrCreateLayerPixelData(id);
+      for (const spot of [s4, s5]) {
+        const r = 50;
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (dx * dx + dy * dy > r * r) continue;
+            const px = spot.x + dx;
+            const py = spot.y + dy;
+            if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
+            const idx = (py * data.width + px) * 4;
+            data.data[idx] = 0;
+            data.data[idx + 1] = 0;
+            data.data[idx + 2] = 255;
+            data.data[idx + 3] = 255;
+          }
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    }, { s4: spot4, s5: spot5 });
+    await page.waitForTimeout(300);
+
+    // Step 4: Add drop shadow to Layer 2
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, e: Record<string, unknown>) => void;
+          pushHistory: (l?: string) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      state.pushHistory('Effects L2');
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 1 }, offsetX: 5, offsetY: 5, blur: 3, spread: 0 },
+      });
+    });
+    await page.waitForTimeout(300);
+
+    // Step 5: Switch to Layer 1 and add effects
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { layers: Array<{ id: string; name: string; effects: Record<string, unknown> }> };
+          setActiveLayer: (id: string) => void;
+          updateLayerEffects: (id: string, e: Record<string, unknown>) => void;
+          pushHistory: (l?: string) => void;
+        };
+      };
+      const state = store.getState();
+      const layer1 = state.document.layers[0];
+      if (!layer1) return;
+      state.setActiveLayer(layer1.id);
+      state.pushHistory('Effects L1');
+      store.getState().updateLayerEffects(layer1.id, {
+        ...layer1.effects,
+        stroke: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, width: 3, position: 'outside' },
+      });
+    });
+    await page.waitForTimeout(300);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '60-before-undo.png') });
+
+    // Step 6: Undo back 5 times:
+    // undo 1: remove L1 effects
+    // undo 2: remove L2 effects
+    // undo 3: remove blue spots
+    // undo 4: remove Layer 2 (addLayer pushed history)
+    // undo 5: restore to just the 3 red spots
+    for (let i = 0; i < 5; i++) {
+      await page.evaluate(() => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { undo: () => void };
+        };
+        store.getState().undo();
+      });
+      await page.waitForTimeout(200);
+    }
+    await page.waitForTimeout(500);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '60-after-undo.png') });
+
+    // Verify: should be back to 3 red spots on 1 layer, no effects
+    const afterUndo = await page.evaluate(({ s1, s2, s3 }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { layers: Array<{ id: string; name: string; effects: { dropShadow: { enabled: boolean }; stroke: { enabled: boolean } } }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const layers = state.document.layers;
+
+      function px(data: ImageData | undefined, x: number, y: number) {
+        if (!data || x < 0 || x >= data.width || y < 0 || y >= data.height) return [0, 0, 0, 0];
+        const i = (y * data.width + x) * 4;
+        return [data.data[i], data.data[i + 1], data.data[i + 2], data.data[i + 3]];
+      }
+
+      // Get Layer 1 data
+      const layer1 = layers[0];
+      if (!layer1) return { error: 'no layer 1' };
+      const data = state.resolvePixelData(layer1.id);
+      const hasEffects = layer1.effects.dropShadow.enabled || layer1.effects.stroke.enabled;
+
+      return {
+        layerCount: layers.length,
+        hasEffects,
+        spot1: px(data, s1.x, s1.y),
+        spot2: px(data, s2.x, s2.y),
+        spot3: px(data, s3.x, s3.y),
+        // Between spots should be transparent
+        between: px(data, 125, 125),
+        dataWidth: data?.width ?? 0,
+        dataHeight: data?.height ?? 0,
+      };
+    }, { s1: spot1, s2: spot2, s3: spot3 });
+
+    console.log('Multi-step undo result:', JSON.stringify(afterUndo, null, 2));
+
+    // Assertions — should be back to just 1 layer with 3 red spots, no effects
+    expect(afterUndo.layerCount).toBeLessThanOrEqual(2); // Background + Layer 1
+    expect(afterUndo.hasEffects).toBe(false);
+
+    // Red spots should be in the correct positions
+    expect(afterUndo.spot1?.[0]).toBeGreaterThan(200); // Red at spot1
+    expect(afterUndo.spot1?.[3]).toBe(255); // Fully opaque
+    expect(afterUndo.spot2?.[0]).toBeGreaterThan(200); // Red at spot2
+    expect(afterUndo.spot2?.[3]).toBe(255);
+    expect(afterUndo.spot3?.[0]).toBeGreaterThan(200); // Red at spot3
+    expect(afterUndo.spot3?.[3]).toBe(255);
+
+    // Between spots should be transparent (spots don't overlap at 125,125)
+    expect(afterUndo.between?.[3]).toBe(0);
+  });
+
 });
