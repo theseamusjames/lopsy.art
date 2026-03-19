@@ -9,7 +9,6 @@
  */
 
 import { contextOptions } from './color-space';
-import { markLayerGpuDirty } from '../engine-wasm/gpu-dirty';
 
 const cache = new Map<string, ImageBitmap>();
 const pending = new Set<string>();
@@ -46,8 +45,6 @@ export function markPaintDirty(layerId: string, x: number, y: number, w: number,
   } else {
     dirtyRects.set(layerId, { x, y, x2: x + w, y2: y + h });
   }
-  // Also mark for GPU texture re-upload (WASM engine)
-  markLayerGpuDirty(layerId);
 }
 
 /**

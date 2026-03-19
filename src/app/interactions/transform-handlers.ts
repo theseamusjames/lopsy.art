@@ -11,7 +11,6 @@ import { getSelectionMaskValue } from '../../selection/selection';
 import { createImageDataFromArray, contextOptions } from '../../engine/color-space';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
-import { markLayerGpuDirty } from '../../engine-wasm/gpu-dirty';
 import type { InteractionState, InteractionContext } from './interaction-types';
 import type { Point } from '../../types';
 
@@ -260,8 +259,6 @@ export function handleTransformMove(
         }
       }
 
-      // Mark GPU dirty so the sync re-uploads the modified buffer (no store churn)
-      markLayerGpuDirty(state.layerId);
     }
   }
 

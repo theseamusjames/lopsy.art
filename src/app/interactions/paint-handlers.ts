@@ -10,7 +10,6 @@ import { wrapWithSelectionMask } from './selection-mask-wrap';
 import type { InteractionContext, InteractionState } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { markLayerGpuDirty } from '../../engine-wasm/gpu-dirty';
 import {
   applyBrushDab as gpuBrushDab,
   applyBrushDabBatch as gpuBrushDabBatch,
@@ -145,7 +144,6 @@ export function handlePaintDown(
       } else {
         applyBrushDab(paintSurface, layerPos, stamp, size, color, opacity, 1);
       }
-      markLayerGpuDirty(activeLayerId);
     }
   } else if (tool === 'pencil') {
     const color = useUIStore.getState().foregroundColor;
@@ -159,7 +157,6 @@ export function handlePaintDown(
         color.r / 255, color.g / 255, color.b / 255, color.a, size);
     } else {
       drawPencilLine(paintSurface, lineFrom, layerPos, color, size);
-      markLayerGpuDirty(activeLayerId);
     }
   } else {
     const size = toolSettings.eraserSize;
@@ -185,7 +182,6 @@ export function handlePaintDown(
       } else {
         applyEraserDab(paintSurface, layerPos, stamp, size, opacity);
       }
-      markLayerGpuDirty(activeLayerId);
     }
   }
 
@@ -246,7 +242,6 @@ export function handlePaintMove(
         for (const pt of points) {
           applyBrushDab(brushSurface, pt, stamp, size, color, opacity, 1);
         }
-        if (state.layerId) markLayerGpuDirty(state.layerId);
       }
       state.lastPoint = layerLocalPos;
       useEditorStore.getState().notifyRender();
@@ -264,7 +259,6 @@ export function handlePaintMove(
       } else if (state.pixelBuffer) {
         const pencilSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
         drawPencilLine(pencilSurface, state.lastPoint, layerLocalPos, color, size);
-        if (state.layerId) markLayerGpuDirty(state.layerId);
       }
       state.lastPoint = layerLocalPos;
       useEditorStore.getState().notifyRender();
@@ -288,7 +282,6 @@ export function handlePaintMove(
         for (const pt of points) {
           applyEraserDab(eraserSurface, pt, stamp, size, opacity);
         }
-        if (state.layerId) markLayerGpuDirty(state.layerId);
       }
       state.lastPoint = layerLocalPos;
       useEditorStore.getState().notifyRender();

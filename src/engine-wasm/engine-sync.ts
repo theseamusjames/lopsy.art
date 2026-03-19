@@ -48,7 +48,6 @@ import {
 } from './wasm-bridge';
 import type { PathAnchor } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
-import { consumeGpuDirtyLayers } from './gpu-dirty';
 
 // ---------------------------------------------------------------------------
 // Blend mode mapping: TypeScript union → Rust serde enum variant
@@ -273,7 +272,6 @@ export function syncLayers(
   dirtyLayerIds: Set<string>,
 ): void {
   const currentIds = new Set(layers.map((l) => l.id));
-  const gpuDirty = consumeGpuDirtyLayers();
 
   // Remove layers no longer present
   for (const id of tracked.layerIds) {
@@ -302,7 +300,7 @@ export function syncLayers(
     // (e.g. after a GPU paint stroke or undo restore) — skip upload.
     const data = pixelData.get(layer.id);
     const sparseEntry = sparseData.get(layer.id);
-    const isDirty = dirtyLayerIds.has(layer.id) || gpuDirty.has(layer.id);
+    const isDirty = dirtyLayerIds.has(layer.id);
     const pixelChanged = tracked.pixelDataVersions.get(layer.id) !== data;
     const sparseChanged = tracked.sparseVersions.get(layer.id) !== sparseEntry;
 
