@@ -200,7 +200,7 @@ export function handleTransformMove(
   // GPU dirty — skipping the expensive cropLayerToContent + store update.
   // The full updateLayerPixelData is deferred to mouseup (finalize).
   if (state.transformCanvas && state.baseCanvas && state.layerId) {
-    const layerData = useEditorStore.getState().layerPixelData.get(state.layerId);
+    const layerData = useEditorStore.getState().expandLayerForEditing(state.layerId);
     if (!layerData) { editorState.notifyRender(); return; }
 
     const w = layerData.width;

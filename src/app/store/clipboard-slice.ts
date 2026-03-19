@@ -98,9 +98,6 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     const newLayer = { ...createRasterLayer({ name: 'Pasted Layer', width: clip.imageData.width, height: clip.imageData.height }), x: clip.offsetX, y: clip.offsetY };
 
-    const pixelData = new Map(state.layerPixelData);
-    pixelData.set(newLayer.id, cloneImageData(clip.imageData));
-
     const orderIdx = state.document.activeLayerId
       ? state.document.layerOrder.indexOf(state.document.activeLayerId) + 1
       : state.document.layerOrder.length;
@@ -114,9 +111,10 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
         layerOrder: newOrder,
         activeLayerId: newLayer.id,
       },
-      layerPixelData: pixelData,
       renderVersion: state.renderVersion + 1,
     });
+    // Upload to GPU via updateLayerPixelData (also sets JS cache)
+    get().updateLayerPixelData(newLayer.id, cloneImageData(clip.imageData));
   },
 
   pasteImageData: (imageData: ImageData) => {
@@ -125,9 +123,6 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     const newLayer = createRasterLayer({ name: 'Pasted Layer', width: imageData.width, height: imageData.height });
 
-    const pixelData = new Map(state.layerPixelData);
-    pixelData.set(newLayer.id, imageData);
-
     const orderIdx = state.document.activeLayerId
       ? state.document.layerOrder.indexOf(state.document.activeLayerId) + 1
       : state.document.layerOrder.length;
@@ -141,8 +136,9 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
         layerOrder: newOrder,
         activeLayerId: newLayer.id,
       },
-      layerPixelData: pixelData,
       renderVersion: state.renderVersion + 1,
     });
+    // Upload to GPU via updateLayerPixelData (also sets JS cache)
+    get().updateLayerPixelData(newLayer.id, imageData);
   },
 });

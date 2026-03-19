@@ -1,5 +1,8 @@
 import { useEditorStore } from '../../editor-store';
 import { PixelBuffer } from '../../../engine/pixel-data';
+import { invalidateBitmapCache } from '../../../engine/bitmap-cache';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { uploadLayerPixels } from '../../../engine-wasm/wasm-bridge';
 import type { Layer } from '../../../types';
 import type { MenuDef } from './types';
 
@@ -83,8 +86,20 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
       layers: newLayers,
     },
     layerPixelData: pixelData,
+    sparseLayerData: new Map(),
     renderVersion: state.renderVersion + 1,
   });
+
+  // Upload rotated pixel data to GPU
+  const engine = getEngine();
+  if (engine) {
+    for (const [layerId, data] of pixelData) {
+      const layer = newLayers.find((l) => l.id === layerId);
+      invalidateBitmapCache(layerId);
+      const rawBytes = new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength);
+      uploadLayerPixels(engine, layerId, rawBytes, data.width, data.height, layer?.x ?? 0, layer?.y ?? 0);
+    }
+  }
 }
 
 export type ImageDialogId = 'canvas-size' | 'image-size';
