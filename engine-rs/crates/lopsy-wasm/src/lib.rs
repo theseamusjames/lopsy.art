@@ -396,9 +396,53 @@ pub fn draw_pencil_line(
     x0: f64, y0: f64, x1: f64, y1: f64,
     r: f32, g: f32, b: f32, a: f32, size: f32,
 ) {
-    // Pencil line: interpolate points at 1px spacing, apply dabs at size 1
+    // Pencil renders hard square pixel blocks — NOT circular brush dabs.
+    // Interpolate at 1px spacing, write square blocks via texSubImage2D.
     let points = lopsy_core::brush::interpolate_points(x0, y0, x1, y1, 1.0);
-    brush_gpu::apply_dab_batch(&mut engine.inner, layer_id, &points, size, 1.0, r, g, b, a, 1.0, 1.0);
+    let half = (size / 2.0).floor() as i32;
+    let block_size = size.ceil() as i32;
+    let r8 = (r * 255.0 + 0.5) as u8;
+    let g8 = (g * 255.0 + 0.5) as u8;
+    let b8 = (b * 255.0 + 0.5) as u8;
+    let a8 = (a * 255.0 + 0.5) as u8;
+
+    let eng = &mut engine.inner;
+    if !eng.stroke_textures.contains_key(layer_id) {
+        let _ = brush_gpu::begin_stroke(eng, layer_id);
+    }
+    if let Some(&stroke_handle) = eng.stroke_textures.get(layer_id) {
+        if let Some(stroke_tex) = eng.texture_pool.get(stroke_handle) {
+            let gl = &eng.gl;
+            let (tex_w, tex_h) = eng.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
+            gl.bind_texture(web_sys::WebGl2RenderingContext::TEXTURE_2D, Some(stroke_tex));
+            for i in (0..points.len()).step_by(2) {
+                let cx = points[i] as i32;
+                let cy = points[i + 1] as i32;
+                let bx = (cx - half).max(0);
+                let by = (cy - half).max(0);
+                let bw = (block_size).min(tex_w as i32 - bx);
+                let bh = (block_size).min(tex_h as i32 - by);
+                if bw <= 0 || bh <= 0 { continue; }
+                let count = (bw * bh) as usize;
+                let mut rgba = vec![0u8; count * 4];
+                for j in 0..count {
+                    rgba[j * 4] = r8;
+                    rgba[j * 4 + 1] = g8;
+                    rgba[j * 4 + 2] = b8;
+                    rgba[j * 4 + 3] = a8;
+                }
+                let _ = gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
+                    web_sys::WebGl2RenderingContext::TEXTURE_2D,
+                    0, bx, by, bw, bh,
+                    web_sys::WebGl2RenderingContext::RGBA,
+                    web_sys::WebGl2RenderingContext::UNSIGNED_BYTE,
+                    Some(&rgba),
+                );
+            }
+            gl.bind_texture(web_sys::WebGl2RenderingContext::TEXTURE_2D, None);
+        }
+    }
+    eng.needs_recomposite = true;
 }
 
 #[wasm_bindgen(js_name = "endStroke")]
