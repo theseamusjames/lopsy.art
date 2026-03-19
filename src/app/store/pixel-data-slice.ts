@@ -70,6 +70,7 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     const crop = cropToContentBounds(data);
     if (!crop) {
       // Fully empty — remove pixel data entirely
+      invalidateBitmapCache(layerId);
       const pixelData = new Map(state.layerPixelData);
       pixelData.delete(layerId);
       const sparseMap = new Map(state.sparseLayerData);
@@ -91,7 +92,10 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     // Try to sparsify the cropped data
     const sparse = toSparsePixelData(crop.data);
     if (sparse) {
-      // Sparse storage — remove ImageData, store sparse
+      // Sparse storage — remove ImageData, store sparse.
+      // Invalidate bitmap so an in-flight async build from the pre-sparse
+      // full-canvas data doesn't store a huge bitmap that never gets cleaned up.
+      invalidateBitmapCache(layerId);
       const pixelData = new Map(state.layerPixelData);
       pixelData.delete(layerId);
       const sparseMap = new Map(state.sparseLayerData);

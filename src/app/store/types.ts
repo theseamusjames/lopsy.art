@@ -27,7 +27,11 @@ export interface HistorySnapshot {
   document: DocumentState;
   layerPixelData: Map<string, ImageData>;
   layerCropInfo: Map<string, CropInfo>;
+  sparseLayerData: Map<string, SparseLayerEntry>;
   label: string;
+  /** When true, only document metadata changed (effects, opacity, etc.) —
+   *  pixel data maps are empty and should not replace current pixel state. */
+  metadataOnly: boolean;
 }
 
 export interface ClipboardData {

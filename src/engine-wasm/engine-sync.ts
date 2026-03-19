@@ -324,6 +324,12 @@ export function syncLayers(
       );
       tracked.sparseVersions.set(layer.id, sparseEntry);
       tracked.pixelDataVersions.set(layer.id, undefined);
+    } else if (!data && !sparseEntry && (tracked.pixelDataVersions.get(layer.id) !== undefined || tracked.sparseVersions.get(layer.id) !== undefined)) {
+      // Layer lost all pixel data (e.g., undo to empty state) — clear GPU texture
+      // by uploading a 1x1 transparent pixel
+      uploadLayerPixels(engine, layer.id, new Uint8Array(4), 1, 1, 0, 0);
+      tracked.pixelDataVersions.set(layer.id, undefined);
+      tracked.sparseVersions.set(layer.id, undefined);
     }
 
     // Upload mask

@@ -36,9 +36,9 @@ useEditorStore.subscribe((state) => {
       updateBitmapCache(id, data);
     }
   }
-  // Clean up removed layers — but preserve bitmaps for sparsified layers
+  // Clean up removed layers (including sparsified — their bitmap is stale)
   for (const id of prevPixelData.keys()) {
-    if (!next.has(id) && !state.sparseLayerData.has(id)) {
+    if (!next.has(id)) {
       removeBitmapCache(id);
     }
   }

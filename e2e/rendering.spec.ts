@@ -2712,4 +2712,343 @@ test.describe('WASM/WebGL Rendering', () => {
     }
   });
 
+  test('55 - effects do not turn transparent pixels white', async ({ page }) => {
+    // Regression: layer effects were making transparent areas white,
+    // covering layers below even though they should be see-through
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Bottom layer: solid blue fill
+    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 255, a: 255 });
+
+    // Top layer: small red square in center (rest is transparent)
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      };
+      store.getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+    await paintRect(page, 80, 80, 40, 40, { r: 255, g: 0, b: 0, a: 255 });
+
+    // Enable ALL effects on the top layer
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 0.7 }, offsetX: 5, offsetY: 5, blur: 4, spread: 0 },
+        stroke: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, width: 2, position: 'outside' },
+        innerGlow: { enabled: true, color: { r: 0, g: 255, b: 0, a: 1 }, size: 5, spread: 1, opacity: 0.6 },
+      });
+    });
+    await page.waitForTimeout(500);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '55-effects-no-white.png') });
+
+    // Check the overlay canvas for white pixels in the blue area
+    // The blue layer should be visible through the transparent parts of the top layer
+    const result = await page.evaluate(() => {
+      const overlay = document.querySelectorAll('canvas')[1] as HTMLCanvasElement;
+      if (!overlay) return { blue: 0, white: 0, red: 0 };
+      const ctx = overlay.getContext('2d');
+      if (!ctx) return { blue: 0, white: 0, red: 0 };
+      const imgData = ctx.getImageData(0, 0, overlay.width, overlay.height);
+      let blueCount = 0;
+      let whiteCount = 0;
+      let redCount = 0;
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        const r = imgData.data[i]!;
+        const g = imgData.data[i + 1]!;
+        const b = imgData.data[i + 2]!;
+        const a = imgData.data[i + 3]!;
+        if (a < 10) continue; // skip transparent
+        if (r === 60 && g === 60 && b === 60) continue; // workspace gray
+        if (b > 200 && r < 30 && g < 30) blueCount++;
+        if (r > 240 && g > 240 && b > 240) whiteCount++;
+        if (r > 200 && g < 30 && b < 30) redCount++;
+      }
+      return { blue: blueCount, white: whiteCount, red: redCount };
+    });
+
+    console.log('White pixel test:', result);
+    // Blue must be visible (the bottom layer showing through transparent areas)
+    expect(result.blue).toBeGreaterThan(100);
+    // There should be NO white pixels where the blue layer should show through
+    // (some white from checkerboard might appear if blue doesn't cover everything,
+    // but since blue fills the entire 200x200 document, there should be 0 white)
+    expect(result.white).toBe(0);
+  });
+
+  test('56 - inner glow does not turn transparent pixels white (user repro)', async ({ page }) => {
+    // Exact user scenario:
+    // 1. New doc
+    // 2. Fill background layer with black
+    // 3. New layer
+    // 4. Draw red square in center
+    // 5. Apply inner glow
+    // Bug: transparent areas of Layer 2 become white, hiding the black background
+    await createDocument(page, 200, 200);
+    await fitToView(page);
+
+    // Fill background with black
+    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 0, a: 255 });
+
+    // Add new layer
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      };
+      store.getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+
+    // Draw red square in center (simulating a circle shape)
+    await paintRect(page, 60, 60, 80, 80, { r: 255, g: 0, b: 0, a: 255 });
+    await page.waitForTimeout(300);
+
+    // Apply inner glow
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        innerGlow: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, size: 10, spread: 2, opacity: 0.8 },
+      });
+    });
+    await page.waitForTimeout(500);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '56-inner-glow-no-white.png') });
+
+    // Check: black background must be visible, no white
+    const result = await page.evaluate(() => {
+      const overlay = document.querySelectorAll('canvas')[1] as HTMLCanvasElement;
+      if (!overlay) return { black: 0, white: 0, red: 0 };
+      const ctx = overlay.getContext('2d');
+      if (!ctx) return { black: 0, white: 0, red: 0 };
+      const imgData = ctx.getImageData(0, 0, overlay.width, overlay.height);
+      let blackCount = 0;
+      let whiteCount = 0;
+      let redCount = 0;
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        const r = imgData.data[i]!;
+        const g = imgData.data[i + 1]!;
+        const b = imgData.data[i + 2]!;
+        const a = imgData.data[i + 3]!;
+        if (a < 10) continue;
+        if (r < 15 && g < 15 && b < 15) blackCount++;
+        if (r > 240 && g > 240 && b > 240) whiteCount++;
+        if (r > 200 && g < 50 && b < 50) redCount++;
+      }
+      return { black: blackCount, white: whiteCount, red: redCount };
+    });
+
+    console.log('Inner glow white test:', result);
+    expect(result.black).toBeGreaterThan(100);
+    expect(result.white).toBe(0);
+    expect(result.red).toBeGreaterThan(100);
+  });
+
+  test('57 - manual UI flow: fill, new layer, paint, inner glow', async ({ page }) => {
+    // Uses actual mouse interaction to reproduce the user's exact scenario
+    await createDocument(page, 300, 300);
+    await fitToView(page);
+
+    // Step 1: Select bucket fill tool and fill background with black
+    await page.evaluate(() => {
+      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { setActiveTool: (t: string) => void; setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+      };
+      uiStore.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
+      uiStore.getState().setActiveTool('fill');
+    });
+    await page.waitForTimeout(100);
+
+    // Click center of canvas to fill
+    const container = page.locator('[data-testid="canvas-container"]');
+    const box = await container.boundingBox();
+    if (box) {
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    }
+    await page.waitForTimeout(500);
+
+    // Verify background is black
+    const bgCheck = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return 'no data';
+      const mid = (150 * data.width + 150) * 4;
+      return [data.data[mid], data.data[mid + 1], data.data[mid + 2], data.data[mid + 3]];
+    });
+    console.log('BG after fill:', bgCheck);
+
+    // Step 2: Add new layer
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      };
+      store.getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+
+    // Step 3: Paint red square on new layer (using programmatic for reliability)
+    await paintRect(page, 100, 100, 100, 100, { r: 255, g: 0, b: 0, a: 255 });
+    await page.waitForTimeout(300);
+
+    // Step 4: Enable inner glow on the new layer
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        innerGlow: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, size: 15, spread: 3, opacity: 0.8 },
+      });
+    });
+    await page.waitForTimeout(500);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '57-manual-inner-glow.png') });
+
+    // Check for white pixels
+    const result = await page.evaluate(() => {
+      const overlay = document.querySelectorAll('canvas')[1] as HTMLCanvasElement;
+      if (!overlay) return { black: 0, white: 0, red: 0 };
+      const ctx = overlay.getContext('2d');
+      if (!ctx) return { black: 0, white: 0, red: 0 };
+      const imgData = ctx.getImageData(0, 0, overlay.width, overlay.height);
+      let blackCount = 0;
+      let whiteCount = 0;
+      let redCount = 0;
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        const r = imgData.data[i]!;
+        const g = imgData.data[i + 1]!;
+        const b = imgData.data[i + 2]!;
+        const a = imgData.data[i + 3]!;
+        if (a < 10) continue;
+        if (r < 15 && g < 15 && b < 15) blackCount++;
+        if (r > 240 && g > 240 && b > 240) whiteCount++;
+        if (r > 200 && g < 50 && b < 50) redCount++;
+      }
+      return { black: blackCount, white: whiteCount, red: redCount };
+    });
+
+    console.log('Manual flow result:', result);
+    expect(result.black).toBeGreaterThan(100);
+    expect(result.white).toBe(0);
+    expect(result.red).toBeGreaterThan(100);
+  });
+
+  test('58 - pencil undo clears mark instead of moving to 0,0', async ({ page }) => {
+    // Regression: after undo, the GPU texture wasn't cleared for layers
+    // that lost all pixel data, so the stale pencil mark persisted at (0,0)
+    await createDocument(page, 400, 300, true);
+    await fitToView(page);
+
+    // Paint a dot at center of the layer
+    await paintRect(page, 180, 130, 40, 40, { r: 255, g: 0, b: 0, a: 255 });
+    await page.waitForTimeout(300);
+
+    // Verify red is visible
+    const before = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          layerPixelData: Map<string, ImageData>;
+          sparseLayerData: Map<string, unknown>;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      return {
+        hasDense: state.layerPixelData.has(id),
+        hasSparse: state.sparseLayerData.has(id),
+        layerPos: `${state.document.layers.find(l => l.id === id)?.x},${state.document.layers.find(l => l.id === id)?.y}`,
+      };
+    });
+    console.log('Before undo:', before);
+
+    // Undo
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { undo: () => void };
+      };
+      store.getState().undo();
+    });
+    await page.waitForTimeout(500);
+
+    // After undo: layer should have no data, no visible mark
+    const after = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          layerPixelData: Map<string, ImageData>;
+          sparseLayerData: Map<string, unknown>;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      return {
+        hasDense: state.layerPixelData.has(id),
+        hasSparse: state.sparseLayerData.has(id),
+        layerPos: `${state.document.layers.find(l => l.id === id)?.x},${state.document.layers.find(l => l.id === id)?.y}`,
+      };
+    });
+    console.log('After undo:', after);
+    expect(after.hasDense).toBe(false);
+    expect(after.hasSparse).toBe(false);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '58-pencil-undo.png') });
+
+    // Verify no red pixels on canvas (GPU texture should be cleared)
+    const canvasCheck = await page.evaluate(() => {
+      // Check WebGL canvas for red pixels
+      const canvas = document.querySelector('canvas:not([class])') as HTMLCanvasElement;
+      if (!canvas) return { red: 0, total: 0 };
+      const gl = canvas.getContext('webgl2');
+      if (!gl) return { red: 0, total: 0 };
+      const w = canvas.width;
+      const h = canvas.height;
+      const pixels = new Uint8Array(w * h * 4);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      let red = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i]! > 200 && pixels[i + 1]! < 50 && pixels[i + 2]! < 50 && pixels[i + 3]! > 200) {
+          red++;
+        }
+      }
+      return { red, total: w * h };
+    });
+    console.log('Canvas after undo:', canvasCheck);
+    expect(canvasCheck.red).toBe(0);
+  });
+
 });

@@ -24,7 +24,6 @@ import { renderLayerContent } from './rendering/render-layers';
 import { CanvasAllocator, applyColorOverlay, renderOuterGlow, renderDropShadow, renderInnerGlow, renderStroke } from '../engine/effects-renderer';
 import { contextOptions } from '../engine/color-space';
 import { hasEnabledEffects } from '../layers/layer-model';
-import { getCachedBitmap, getPaintingCanvas } from '../engine/bitmap-cache';
 import { sparseToImageData } from '../engine/canvas-ops';
 import { hasActiveAdjustments, applyAdjustmentsToImageData } from '../filters/image-adjustments';
 
@@ -133,35 +132,16 @@ function renderFrameCpu(
     ctx.globalAlpha = layer.opacity;
     ctx.globalCompositeOperation = 'source-over';
 
-    const hasMask = layer.mask?.enabled && !maskEditMode;
-    const isMaskOverlay = maskEditMode && layer.mask && layer.id === activeLayerId;
-    const hasEffects = hasEnabledEffects(layer.effects);
-
-    // Fast path: layers without effects/masks can use bitmap cache directly
-    if (!hasEffects && !hasMask && !isMaskOverlay) {
-      const bitmap = getCachedBitmap(layer.id);
-      if (bitmap) {
-        ctx.drawImage(bitmap, layer.x, layer.y);
-        continue;
-      }
-    }
-
     if (!data && sparseEntry) {
       data = sparseToImageData(sparseEntry.sparse);
     }
     if (!data) continue;
 
-    // For layers with effects: ALWAYS use putImageData to ensure tempCanvas
-    // content matches `data` exactly. The bitmap cache can be stale (wrong
-    // size, from before crop, async rebuild not complete).
-    const paintCanvas = hasEffects ? null : getPaintingCanvas(layer.id, data);
-    const { canvas: tempCanvas, ctx: tempCtx } = paintCanvas
-      ? { canvas: paintCanvas, ctx: paintCanvas.getContext('2d', contextOptions)! }
-      : cpuAllocator.acquire(data.width, data.height);
-
-    if (!paintCanvas) {
-      tempCtx.putImageData(data, 0, 0);
-    }
+    // CPU fallback never uses bitmap cache — it has async race conditions
+    // where a stale (pre-invalidation) bitmap build completes and overwrites
+    // the cache with old data. Always use putImageData for correctness.
+    const { canvas: tempCanvas, ctx: tempCtx } = cpuAllocator.acquire(data.width, data.height);
+    tempCtx.putImageData(data, 0, 0);
 
     if (layer.effects.colorOverlay.enabled) {
       const overlaid = tempCtx.getImageData(0, 0, data.width, data.height);
