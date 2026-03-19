@@ -25,6 +25,13 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   engine = createEngine(canvas);
   engineCanvas = canvas;
   setGpuPixelEngine(engine);
+
+  // Expose for e2e testing (memory profiling needs to query GPU texture dimensions)
+  const w = window as unknown as Record<string, unknown>;
+  w.__engineState = { getEngine };
+  // Dynamically import wasm-bridge to expose getLayerTextureDimensions
+  import('./wasm-bridge').then((mod) => { w.__wasmBridge = mod; });
+
   return engine;
 }
 

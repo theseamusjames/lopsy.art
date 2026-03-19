@@ -3,7 +3,9 @@ use lopsy_core::layer::LayerDesc;
 use crate::engine::EngineInner;
 
 pub fn add_layer(engine: &mut EngineInner, desc: LayerDesc) -> Result<(), String> {
-    let tex = engine.texture_pool.acquire(&engine.gl, desc.width, desc.height)?;
+    // Start with 1x1 transparent texture — upload_pixels resizes on first data upload.
+    // Saves ~30 MB per empty layer on a 4000x2000 document.
+    let tex = engine.texture_pool.acquire(&engine.gl, 1, 1)?;
     engine.layer_textures.insert(desc.id.clone(), tex);
     engine.layer_stack.push(desc);
     engine.needs_recomposite = true;

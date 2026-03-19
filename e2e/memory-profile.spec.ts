@@ -100,13 +100,27 @@ async function snapshot(page: Page, label: string) {
       };
     });
 
-    // Estimate GPU memory: layer textures + system FBOs
-    // Layer textures: use the layer's stored dimensions (matching the GPU texture)
+    // Query actual GPU texture dimensions via WASM bridge
     let gpuLayerBytes = 0;
     const gpuTextures: Array<{ name: string; w: number; h: number; bytes: number }> = [];
+    const wasmBridge = (window as unknown as Record<string, { getLayerTextureDimensions?: (e: unknown, id: string) => Uint32Array | null }>).__wasmBridge;
+    const engineMod = (window as unknown as Record<string, { getEngine?: () => unknown }>).__engineState;
+    const eng = engineMod?.getEngine?.();
     for (const l of state.document.layers) {
-      const w = l.width ?? 0;
-      const h = l.height ?? 0;
+      let w = 0;
+      let h = 0;
+      if (eng && wasmBridge?.getLayerTextureDimensions) {
+        const dims = wasmBridge.getLayerTextureDimensions(eng, l.id);
+        if (dims && dims.length >= 2) {
+          w = dims[0] ?? 0;
+          h = dims[1] ?? 0;
+        }
+      }
+      // Fallback to layer descriptor if bridge unavailable
+      if (w === 0 && h === 0) {
+        w = l.width ?? 0;
+        h = l.height ?? 0;
+      }
       if (w > 0 && h > 0) {
         const bytes = w * h * 4;
         gpuLayerBytes += bytes;

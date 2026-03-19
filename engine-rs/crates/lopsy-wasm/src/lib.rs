@@ -1227,7 +1227,24 @@ pub fn apply_fill_to_layer(
         Some(&h) => h,
         None => return,
     };
-    let (w, h) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let (mut w, mut h) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+
+    // Resize layer texture to fill dimensions if needed (lazy 1x1 allocation)
+    if w < width || h < height {
+        engine.inner.texture_pool.release(tex_handle);
+        match engine.inner.texture_pool.acquire(gl, width, height) {
+            Ok(new_tex) => {
+                engine.inner.layer_textures.insert(layer_id.to_string(), new_tex);
+                w = width;
+                h = height;
+            }
+            Err(_) => return,
+        }
+    }
+    let tex_handle = match engine.inner.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
     let layer_tex = match engine.inner.texture_pool.get(tex_handle) {
         Some(t) => t.clone(),
         None => return,
@@ -1311,7 +1328,43 @@ pub fn apply_fill_to_layer(
 
 #[wasm_bindgen(js_name = "readLayerPixelsForFill")]
 pub fn read_layer_pixels_for_fill(engine: &Engine, layer_id: &str) -> Result<Vec<u8>, JsError> {
-    read_layer_pixels(engine, layer_id)
+    // Read layer texture and expand to document dimensions for flood fill.
+    // The texture may be smaller than the document (lazy allocation),
+    // so we place it at the layer's offset within a transparent doc-size buffer.
+    let eng = &engine.inner;
+    let doc_w = eng.doc_width as usize;
+    let doc_h = eng.doc_height as usize;
+
+    let tex_handle = eng.layer_textures.get(layer_id)
+        .ok_or_else(|| JsError::new(&format!("Layer {layer_id} not found")))?;
+    let (tw, th) = eng.texture_pool.get_size(*tex_handle).unwrap_or((0, 0));
+
+    // If texture matches doc size, read directly
+    if tw as usize == doc_w && th as usize == doc_h {
+        return layer_manager::read_pixels(eng, layer_id).map_err(|e| JsError::new(&e));
+    }
+
+    // Read small texture and expand into doc-size buffer
+    let layer = eng.layer_stack.iter().find(|l| l.id == layer_id);
+    let lx = layer.map_or(0, |l| l.x as usize);
+    let ly = layer.map_or(0, |l| l.y as usize);
+
+    let small = layer_manager::read_pixels(eng, layer_id).map_err(|e| JsError::new(&e))?;
+    let mut result = vec![0u8; doc_w * doc_h * 4];
+
+    for sy in 0..th as usize {
+        let dy = ly + sy;
+        if dy >= doc_h { break; }
+        for sx in 0..tw as usize {
+            let dx = lx + sx;
+            if dx >= doc_w { break; }
+            let si = (sy * tw as usize + sx) * 4;
+            let di = (dy * doc_w + dx) * 4;
+            result[di..di + 4].copy_from_slice(&small[si..si + 4]);
+        }
+    }
+
+    Ok(result)
 }
 
 // ============================================================
