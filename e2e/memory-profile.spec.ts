@@ -100,7 +100,30 @@ async function snapshot(page: Page, label: string) {
       };
     });
 
-    return { layers, undoEntries: undoStack.length, undoBytes, undoDetails, redoEntries: redoStack.length, redoBytes };
+    // Estimate GPU memory: layer textures + system FBOs
+    // Layer textures: use the layer's stored dimensions (matching the GPU texture)
+    let gpuLayerBytes = 0;
+    const gpuTextures: Array<{ name: string; w: number; h: number; bytes: number }> = [];
+    for (const l of state.document.layers) {
+      const w = l.width ?? 0;
+      const h = l.height ?? 0;
+      if (w > 0 && h > 0) {
+        const bytes = w * h * 4;
+        gpuLayerBytes += bytes;
+        gpuTextures.push({ name: l.name, w, h, bytes });
+      }
+    }
+    // System textures: composite FBO + 2 scratch FBOs (all at doc size)
+    const docW = state.document.width ?? 0;
+    const docH = state.document.height ?? 0;
+    const systemTexBytes = docW * docH * 4 * 3;
+    const gpuTextureBytes = gpuLayerBytes + systemTexBytes;
+
+    return {
+      layers, undoEntries: undoStack.length, undoBytes, undoDetails,
+      redoEntries: redoStack.length, redoBytes,
+      gpuTextureBytes, gpuTextures, systemTexBytes,
+    };
   });
 
   await cdp.detach();
@@ -121,6 +144,11 @@ async function snapshot(page: Page, label: string) {
       console.log(`    [${d.label}] gpu=${formatMB(d.gpuBytes)} dense=${formatMB(d.denseBytes)} metadataOnly=${d.metadataOnly}`);
     }
   }
+  console.log(`  GPU textures:      ${formatMB(storeInfo.gpuTextureBytes)}`);
+  console.log(`    System FBOs:     ${formatMB(storeInfo.systemTexBytes)} (composite + 2 scratch)`);
+  for (const t of storeInfo.gpuTextures) {
+    console.log(`    ${t.name.padEnd(15)} ${t.w}x${t.h} = ${formatMB(t.bytes)}`);
+  }
   console.log(`  Layers:`);
   for (const l of storeInfo.layers) {
     const storage = l.hasDense
@@ -136,6 +164,7 @@ async function snapshot(page: Page, label: string) {
     perfUsed: perfMemory?.usedJSHeapSize ?? heap.usedSize,
     perfTotal: perfMemory?.totalJSHeapSize ?? heap.totalSize,
     wasmMem: wasmMem ?? 0,
+    gpuTextureBytes: storeInfo.gpuTextureBytes,
     storeInfo,
   };
 }
@@ -241,6 +270,9 @@ test('memory profile: sparse layers should be tiny', async ({ page }) => {
   console.log(`JS heap growth (CDP):  ${formatMB(s4.heapUsed - s1.heapUsed)}`);
   console.log(`JS heap growth (perf): ${formatMB(s4.perfUsed - s1.perfUsed)}`);
   console.log(`Total JS heap (perf):  ${formatMB(s4.perfTotal)}`);
+  console.log(`GPU texture memory:    ${formatMB(s4.gpuTextureBytes)}`);
+  console.log(`GPU growth from S1:    ${formatMB(s4.gpuTextureBytes - s1.gpuTextureBytes)}`);
+  console.log(`\nTotal estimated memory: ${formatMB(s4.perfUsed + s4.gpuTextureBytes)} (JS heap + GPU textures)`);
 
   // Assertions
   const layer1 = s4.storeInfo.layers.find(l => l.name !== 'Background' && l.name !== 'Layer 3');
