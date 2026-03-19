@@ -346,7 +346,7 @@ export function App() {
           <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />
           <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </div>
-        <div className={styles.sidebarArea}>
+        {(visiblePanels.size > 0 || showEffectsDrawer) && <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div className={styles.effectsDrawer} ref={effectsDrawerRef}>
               <LayerEffectsPanel />
@@ -422,7 +422,7 @@ export function App() {
             </div>
           </div>
           <PanelToolbar />
-        </div>
+        </div>}
       </div>
       <StatusBar />
     </div>
