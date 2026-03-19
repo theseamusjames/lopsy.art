@@ -7,6 +7,8 @@ uniform float u_size;
 uniform float u_spread;
 uniform float u_opacity;
 uniform vec2 u_texelSize;
+// u_mode: 0 = outer glow (subtract source alpha), 1 = inner glow (multiply by source alpha, invert)
+uniform int u_mode;
 out vec4 fragColor;
 void main() {
     float alpha = 0.0;
@@ -23,9 +25,13 @@ void main() {
         }
     }
     alpha = alpha / max(total, 1.0);
-    vec4 glow = vec4(u_glowColor.rgb, alpha * u_glowColor.a * u_opacity);
-    vec4 src = texture(u_srcTex, v_uv);
-    float outA = src.a + glow.a * (1.0 - src.a);
-    vec3 outRGB = (src.rgb * src.a + glow.rgb * glow.a * (1.0 - src.a)) / max(outA, 0.001);
-    fragColor = vec4(outRGB, outA);
+    float srcA = texture(u_srcTex, v_uv).a;
+    if (u_mode == 0) {
+        // Outer glow: only outside the shape
+        alpha = alpha * (1.0 - srcA);
+    } else {
+        // Inner glow: only inside the shape, at edges
+        alpha = srcA * (1.0 - min(alpha / max(srcA, 0.001), 1.0));
+    }
+    fragColor = vec4(u_glowColor.rgb, alpha * u_glowColor.a * u_opacity);
 }

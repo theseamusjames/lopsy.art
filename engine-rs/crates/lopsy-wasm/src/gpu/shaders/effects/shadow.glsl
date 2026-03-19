@@ -20,9 +20,6 @@ void main() {
         }
     }
     alpha = alpha / max(total, 1.0);
-    vec4 shadow = vec4(u_shadowColor.rgb, alpha * u_shadowColor.a * u_opacity);
-    vec4 src = texture(u_srcTex, v_uv);
-    float outA = src.a + shadow.a * (1.0 - src.a);
-    vec3 outRGB = (src.rgb * src.a + shadow.rgb * shadow.a * (1.0 - src.a)) / max(outA, 0.001);
-    fragColor = vec4(outRGB, outA);
+    // Output shadow only (no source compositing — compositor handles order)
+    fragColor = vec4(u_shadowColor.rgb, alpha * u_shadowColor.a * u_opacity);
 }
