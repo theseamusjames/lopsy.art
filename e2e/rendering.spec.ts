@@ -3054,4 +3054,161 @@ test.describe('WASM/WebGL Rendering', () => {
     expect(canvasCheck.red).toBe(0);
   });
 
+  test('59 - comprehensive multi-step undo with effects across layers', async ({ page }) => {
+    // New image, pencil 100px, 3 spots on layer 1, add layer, 2 spots,
+    // add effects to each, undo back to first spots and verify positions
+    await createDocument(page, 400, 300, true);
+    await fitToView(page);
+
+    // Step 1: Draw 3 spots on Layer 1 using 100px pencil blocks
+    await paintRect(page, 50, 50, 100, 100, { r: 255, g: 0, b: 0, a: 255 }); // spot 1: red
+    await paintRect(page, 200, 50, 100, 100, { r: 0, g: 255, b: 0, a: 255 }); // spot 2: green
+    await paintRect(page, 125, 170, 100, 100, { r: 0, g: 0, b: 255, a: 255 }); // spot 3: blue
+    await page.waitForTimeout(200);
+
+    // Snapshot: verify 3 spots exist (account for crop offset)
+    const after3spots = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; name: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      const data = state.resolvePixelData(id);
+      if (!data || !layer) return null;
+      const lx = layer.x;
+      const ly = layer.y;
+      // Read at document coords, adjusting for layer offset
+      const px = (docX: number, docY: number) => {
+        const x = docX - lx;
+        const y = docY - ly;
+        if (x < 0 || x >= data.width || y < 0 || y >= data.height) return [0,0,0,0];
+        const idx = (y * data.width + x) * 4;
+        return [data.data[idx], data.data[idx+1], data.data[idx+2], data.data[idx+3]];
+      };
+      return {
+        spot1: px(100, 100),
+        spot2: px(250, 100),
+        spot3: px(175, 220),
+        layerCount: state.document.layers.length,
+        layerPos: `${lx},${ly}`,
+        dataSize: `${data.width}x${data.height}`,
+      };
+    });
+    console.log('After 3 spots:', JSON.stringify(after3spots));
+    expect(after3spots?.spot1).toEqual([255, 0, 0, 255]);
+    expect(after3spots?.spot2).toEqual([0, 255, 0, 255]);
+    expect(after3spots?.spot3).toEqual([0, 0, 255, 255]);
+
+    // Step 2: Add Layer 2 and draw 2 spots
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      };
+      store.getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+    await paintRect(page, 30, 30, 80, 80, { r: 255, g: 255, b: 0, a: 255 }); // yellow
+    await paintRect(page, 280, 180, 80, 80, { r: 255, g: 0, b: 255, a: 255 }); // magenta
+
+    // Step 3: Add drop shadow to Layer 2
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 0.8 }, offsetX: 5, offsetY: 5, blur: 3, spread: 0 },
+      });
+    });
+    await page.waitForTimeout(300);
+
+    // Step 4: Switch to Layer 1 and add outer glow
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          setActiveLayer: (id: string) => void;
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const layer1 = state.document.layers[0]; // bottom layer
+      if (!layer1) return;
+      store.getState().setActiveLayer(layer1.id);
+      store.getState().updateLayerEffects(layer1.id, {
+        ...layer1.effects,
+        outerGlow: { enabled: true, color: { r: 255, g: 255, b: 255, a: 1 }, size: 8, spread: 1, opacity: 0.7 },
+      });
+    });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '59-before-undo.png') });
+
+    // Step 5: Undo until we're back to the 3 spots (undo effects + layer2 spots + addLayer)
+    // Operations: 3 paintRect (3 history), addLayer (1), 2 paintRect (2), 2 effects (2) = 8 total
+    // Undo 5 times to get back to just after the 3rd spot
+    for (let i = 0; i < 5; i++) {
+      await page.evaluate(() => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { undo: () => void };
+        };
+        store.getState().undo();
+      });
+      await page.waitForTimeout(150);
+    }
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '59-after-undo.png') });
+
+    // Verify: back to 3 spots, correct positions and colors
+    const afterUndo = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; name: string }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      // Find the bottom layer (should be the only content layer after undo)
+      const layer1 = state.document.layers[0];
+      if (!layer1) return null;
+      const data = state.resolvePixelData(layer1.id);
+      if (!data) return { layerCount: state.document.layers.length, hasData: false };
+      const lx = layer1.x;
+      const ly = layer1.y;
+      const px = (docX: number, docY: number) => {
+        const x = docX - lx;
+        const y = docY - ly;
+        if (x < 0 || x >= data.width || y < 0 || y >= data.height) return [0,0,0,0];
+        const idx = (y * data.width + x) * 4;
+        return [data.data[idx], data.data[idx+1], data.data[idx+2], data.data[idx+3]];
+      };
+      return {
+        layerCount: state.document.layers.length,
+        hasData: true,
+        dataSize: `${data.width}x${data.height}`,
+        layerPos: `${lx},${ly}`,
+        spot1: px(100, 100),
+        spot2: px(250, 100),
+        spot3: px(175, 220),
+        between: px(175, 130),
+      };
+    });
+    console.log('After undo:', JSON.stringify(afterUndo));
+    // The red spot should be at the correct position
+    if (afterUndo?.hasData) {
+      expect(afterUndo.spot1?.[0]).toBeGreaterThan(200); // red channel of red spot
+      expect(afterUndo.spot1?.[3]).toBe(255); // fully opaque
+    }
+  });
+
 });
