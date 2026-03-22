@@ -221,13 +221,26 @@ pub fn read_layer_pixels_compressed(engine: &Engine, layer_id: &str) -> Vec<u8> 
         return Vec::new();
     }
 
+    // Compute the content's DOCUMENT position: layer offset + crop offset.
+    // This ensures the header position is always in document space,
+    // regardless of whether the texture is full-size or already cropped.
+    let layer_x = engine.inner.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| l.x)
+        .unwrap_or(0);
+    let layer_y = engine.inner.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| l.y)
+        .unwrap_or(0);
+
     // RLE compress the cropped pixel data
     let compressed = lopsy_core::compress::rle_compress(&cropped);
 
     // Build result: 16-byte header (4 x i32 LE) + compressed data
+    // Header position = layer document position + crop offset within texture
     let mut result = Vec::with_capacity(16 + compressed.len());
-    result.extend_from_slice(&(rect.x).to_le_bytes());
-    result.extend_from_slice(&(rect.y).to_le_bytes());
+    result.extend_from_slice(&(layer_x + rect.x).to_le_bytes());
+    result.extend_from_slice(&(layer_y + rect.y).to_le_bytes());
     result.extend_from_slice(&(rect.width as i32).to_le_bytes());
     result.extend_from_slice(&(rect.height as i32).to_le_bytes());
     result.extend_from_slice(&compressed);
@@ -264,11 +277,12 @@ pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compr
         y,
     ).map_err(|e| JsError::new(&e))?;
 
-    // Update layer texture dimensions in the layer stack, but NOT the
-    // document position (x, y). The compressed header stores the crop
-    // offset within the texture, not the layer's position in the document.
-    // Document position is managed by syncLayers from the JS state.
+    // Update layer position and dimensions to match the restored crop.
+    // The header position is in document space (layer offset + crop offset),
+    // so it's the correct document position for the restored texture.
     if let Some(desc) = engine.inner.layer_stack.iter_mut().find(|l| l.id == layer_id) {
+        desc.x = x;
+        desc.y = y;
         desc.width = w as u32;
         desc.height = h as u32;
     }
