@@ -266,25 +266,44 @@ pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compr
     let expected_len = (w as usize) * (h as usize) * 4;
     let decompressed = lopsy_core::compress::rle_decompress(&compressed[16..], expected_len);
 
-    // Upload via existing layer_manager::upload_pixels
+    // Expand the cropped data back to a full document-sized texture.
+    // The header (x, y) is the content's document position. We place the
+    // cropped pixels at that offset within a cleared document-size buffer.
+    // This ensures the GPU texture matches the JS document's expectations
+    // (which may say the layer is full-size at position 0,0).
+    let doc_w = engine.inner.doc_width;
+    let doc_h = engine.inner.doc_height;
+    let full_size = (doc_w as usize) * (doc_h as usize) * 4;
+    let mut full_data = vec![0u8; full_size];
+
+    for row in 0..h {
+        let src_start = (row as usize) * (w as usize) * 4;
+        let src_end = src_start + (w as usize) * 4;
+        let dst_y = (y + row) as usize;
+        let dst_x = x as usize;
+        if dst_y >= doc_h as usize { continue; }
+        let dst_start = (dst_y * doc_w as usize + dst_x) * 4;
+        let dst_end = dst_start + (w as usize) * 4;
+        if dst_end <= full_size && src_end <= decompressed.len() {
+            full_data[dst_start..dst_end].copy_from_slice(&decompressed[src_start..src_end]);
+        }
+    }
+
     layer_manager::upload_pixels(
         &mut engine.inner,
         layer_id,
-        &decompressed,
-        w as u32,
-        h as u32,
-        x,
-        y,
+        &full_data,
+        doc_w,
+        doc_h,
+        0, 0,
     ).map_err(|e| JsError::new(&e))?;
 
-    // Update layer position and dimensions to match the restored crop.
-    // The header position is in document space (layer offset + crop offset),
-    // so it's the correct document position for the restored texture.
+    // Layer is now full document size at (0, 0) — matches JS document state
     if let Some(desc) = engine.inner.layer_stack.iter_mut().find(|l| l.id == layer_id) {
-        desc.x = x;
-        desc.y = y;
-        desc.width = w as u32;
-        desc.height = h as u32;
+        desc.x = 0;
+        desc.y = 0;
+        desc.width = doc_w;
+        desc.height = doc_h;
     }
 
     Ok(())
