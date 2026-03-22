@@ -2,6 +2,7 @@ import type { HistorySnapshot, SliceCreator } from './types';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { getLayerTextureDimensions, uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
+import { resetTrackedState } from '../../engine-wasm/engine-sync';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -133,8 +134,10 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     // Save current state to redo — match the snapshot type
     const currentSnapshot = snapshotCurrentState(state, previous.label, previous.metadataOnly, undefined);
 
-    // Restore GPU textures from the snapshot
+    // Restore GPU textures from the snapshot, then reset sync tracking
+    // so syncLayers re-pushes all layer positions/dimensions to the engine.
     restoreGpuFromSnapshot(previous);
+    resetTrackedState();
 
     set({
       undoStack: state.undoStack.slice(0, -1),
@@ -156,8 +159,9 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
 
     const currentSnapshot = snapshotCurrentState(state, next.label, next.metadataOnly, undefined);
 
-    // Restore GPU textures from the snapshot
+    // Restore GPU textures from the snapshot, then reset sync tracking
     restoreGpuFromSnapshot(next);
+    resetTrackedState();
 
     set({
       redoStack: state.redoStack.slice(0, -1),

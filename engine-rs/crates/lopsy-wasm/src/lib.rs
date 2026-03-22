@@ -264,10 +264,11 @@ pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compr
         y,
     ).map_err(|e| JsError::new(&e))?;
 
-    // Update layer position/size in the layer stack
+    // Update layer texture dimensions in the layer stack, but NOT the
+    // document position (x, y). The compressed header stores the crop
+    // offset within the texture, not the layer's position in the document.
+    // Document position is managed by syncLayers from the JS state.
     if let Some(desc) = engine.inner.layer_stack.iter_mut().find(|l| l.id == layer_id) {
-        desc.x = x;
-        desc.y = y;
         desc.width = w as u32;
         desc.height = h as u32;
     }
