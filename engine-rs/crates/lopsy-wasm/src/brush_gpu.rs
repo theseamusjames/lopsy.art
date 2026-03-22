@@ -2,28 +2,7 @@ use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
 
 pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
-    // If the layer has a lazy 1x1 texture, expand it to document size
-    // so the stroke texture covers the full painting area.
-    if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
-        let (lw, lh) = engine.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
-        if lw <= 1 && lh <= 1 {
-            let doc_w = engine.doc_width;
-            let doc_h = engine.doc_height;
-            let new_tex = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
-            let old = engine.layer_textures.insert(layer_id.to_string(), new_tex);
-            if let Some(old_tex) = old {
-                engine.texture_pool.release(old_tex);
-            }
-            // Update layer_stack dimensions to match the new full-size texture
-            if let Some(layer) = engine.layer_stack.iter_mut().find(|l| l.id == layer_id) {
-                layer.x = 0;
-                layer.y = 0;
-                layer.width = doc_w;
-                layer.height = doc_h;
-            }
-            engine.mark_layer_dirty(layer_id);
-        }
-    }
+    engine.ensure_layer_full_size(layer_id)?;
 
     // Create a stroke texture matching the layer size
     if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {

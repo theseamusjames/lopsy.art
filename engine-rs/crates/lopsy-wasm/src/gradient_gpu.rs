@@ -24,6 +24,8 @@ pub fn render_linear_gradient(
         Err(_) => return,
     };
 
+    let _ = engine.ensure_layer_full_size(layer_id);
+
     let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,
@@ -77,6 +79,8 @@ pub fn render_radial_gradient(
         Ok(s) => s,
         Err(_) => return,
     };
+
+    let _ = engine.ensure_layer_full_size(layer_id);
 
     let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {

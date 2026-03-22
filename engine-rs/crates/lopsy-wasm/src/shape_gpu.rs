@@ -20,6 +20,8 @@ pub fn render_shape(
     stroke_width: f32,
     corner_radius: f32,
 ) {
+    let _ = engine.ensure_layer_full_size(layer_id);
+
     let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,

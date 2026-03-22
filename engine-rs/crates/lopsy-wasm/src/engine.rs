@@ -177,6 +177,33 @@ impl EngineInner {
         self.needs_recomposite = true;
     }
 
+    /// Expand a lazy 1x1 layer texture to full document size.
+    /// Called before any GPU operation that writes to the layer texture
+    /// (gradient, shape, brush stroke). No-op if already full size.
+    pub fn ensure_layer_full_size(&mut self, layer_id: &str) -> Result<(), String> {
+        let layer_tex = match self.layer_textures.get(layer_id) {
+            Some(&t) => t,
+            None => return Ok(()),
+        };
+        let (lw, lh) = self.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
+        if lw >= self.doc_width && lh >= self.doc_height {
+            return Ok(());
+        }
+        let new_tex = self.texture_pool.acquire(&self.gl, self.doc_width, self.doc_height)?;
+        let old = self.layer_textures.insert(layer_id.to_string(), new_tex);
+        if let Some(old_tex) = old {
+            self.texture_pool.release(old_tex);
+        }
+        if let Some(layer) = self.layer_stack.iter_mut().find(|l| l.id == layer_id) {
+            layer.x = 0;
+            layer.y = 0;
+            layer.width = self.doc_width;
+            layer.height = self.doc_height;
+        }
+        self.mark_layer_dirty(layer_id);
+        Ok(())
+    }
+
     pub fn mark_all_dirty(&mut self) {
         for layer in &self.layer_stack {
             self.dirty_layers.insert(layer.id.clone());

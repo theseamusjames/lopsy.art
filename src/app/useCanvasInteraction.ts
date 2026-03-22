@@ -47,6 +47,9 @@ const INITIAL_STATE: InteractionState = {
 };
 
 const PAINT_TOOLS: ReadonlySet<ToolId> = new Set(['brush', 'pencil', 'eraser', 'dodge', 'stamp']);
+// Tools that render entirely on the GPU and don't need JS-side pixel data.
+// These skip expandLayerForEditing to avoid the 16-bit → 8-bit round-trip.
+const GPU_TOOLS: ReadonlySet<ToolId> = new Set(['brush', 'pencil', 'eraser', 'dodge', 'stamp', 'gradient', 'shape']);
 
 export function useCanvasInteraction(
   screenToCanvas: (screenX: number, screenY: number) => Point,
@@ -96,19 +99,25 @@ export function useCanvasInteraction(
       // Fall back to CPU when:
       // - mask edit mode (paints on mask surface)
       // - active selection (GPU brush doesn't clip to selection mask yet)
+      // - tool doesn't have a GPU path
       const hasSelection = useEditorStore.getState().selection.active;
-      const useGpuStroke = engine && isPaintTool && !maskEditMode && !hasSelection;
+      const isGpuTool = GPU_TOOLS.has(activeTool);
+      const useGpu = engine && isGpuTool && !maskEditMode && !hasSelection;
+      const useGpuStroke = useGpu && isPaintTool;
 
       let pixelBuffer: PixelBuffer;
       let paintSurface: PixelBuffer;
       let expandedLayer = activeLayer;
       let layerPos: Point = { x: canvasPos.x - activeLayer.x, y: canvasPos.y - activeLayer.y };
 
-      if (useGpuStroke) {
+      if (useGpu) {
         // GPU path: no JS pixel data needed. The engine handles the
         // layer texture directly — no expand, no upload, no round-trip.
-        beginStroke(engine, activeLayerId);
-        // Create a minimal dummy buffer for the context (paint handlers
+        // This preserves 16-bit float precision throughout.
+        if (isPaintTool) {
+          beginStroke(engine, activeLayerId);
+        }
+        // Create a minimal dummy buffer for the context (tool handlers
         // ignore it when the GPU engine is available).
         const dummyData = new ImageData(1, 1);
         pixelBuffer = PixelBuffer.wrapImageData(dummyData);
