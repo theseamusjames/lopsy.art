@@ -26,31 +26,18 @@ void main() {
         return;
     }
 
-    // Use texelFetch for exact sampling
-    ivec2 pixelCoord = ivec2(layerUV * vec2(texSize));
+    ivec2 pixelCoord = ivec2(floor(layerUV * vec2(texSize)));
 
-    float alpha = 0.0;
-    float total = 0.0;
-    int radius = min(int(ceil(u_size)), 20); // Cap to avoid GPU timeout
+    // Spread is 0-100 from the UI. Normalize to [0, 2] for the exponent.
+    // 0 = softest (quadratic falloff), 100 = hardest (flat weight).
+    // Values < 2 (from old tests using raw 0-2 range) still work fine.
+    float normalizedSpread = clamp(u_spread * 0.02, 0.0, 2.0);
 
-    for (int y = -radius; y <= radius; y++) {
-        for (int x = -radius; x <= radius; x++) {
-            float d = length(vec2(float(x), float(y)));
-            if (d > u_size) continue;
-            float w = 1.0 - d / u_size;
-            w = pow(w, 2.0 - u_spread);
+    int maxRadius = int(ceil(u_size));
 
-            ivec2 sCoord = pixelCoord + ivec2(x, y);
-            float sampleA = 0.0;
-            if (sCoord.x >= 0 && sCoord.x < texSize.x &&
-                sCoord.y >= 0 && sCoord.y < texSize.y) {
-                sampleA = texelFetch(u_srcTex, sCoord, 0).a;
-            }
-            alpha += sampleA * w;
-            total += w;
-        }
-    }
-    alpha = alpha / max(total, 1.0);
+    // Adaptive step: finer grid now that pow() is eliminated for the common case.
+    // step=1 up to size 20, step=2 up to 40, etc. Max grid ~41x41 = 1681 samples.
+    int step = max(1, maxRadius / 20);
 
     float srcA = 0.0;
     if (pixelCoord.x >= 0 && pixelCoord.x < texSize.x &&
@@ -58,12 +45,59 @@ void main() {
         srcA = texelFetch(u_srcTex, pixelCoord, 0).a;
     }
 
+    float alpha = 0.0;
+    float total = 0.0;
+
+    // Center the grid on 0 so the pixel's own value is always sampled.
+    int halfSteps = (maxRadius + step - 1) / step; // ceiling division
+    float sizeSq = u_size * u_size;
+    float invSize = 1.0 / max(u_size, 0.001);
+    // Pre-compute the exponent. For spread=0 (most common), exponent=2.0.
+    float exponent = 2.0 - normalizedSpread;
+    // Use fast path (multiply) for integer exponents to avoid pow() per sample.
+    bool useFastQuadratic = abs(exponent - 2.0) < 0.01;
+    bool useFastLinear = abs(exponent - 1.0) < 0.01;
+
+    for (int iy = -halfSteps; iy <= halfSteps; iy++) {
+        for (int ix = -halfSteps; ix <= halfSteps; ix++) {
+            int x = ix * step;
+            int y = iy * step;
+            // Use integer distance squared — avoids sqrt() per sample
+            float dSq = float(x * x + y * y);
+            if (dSq > sizeSq) continue;
+            float d = sqrt(dSq);
+            float w = 1.0 - d * invSize;
+            // Fast path for common exponents avoids expensive pow()
+            if (useFastQuadratic) { w = w * w; }
+            else if (useFastLinear) { /* w = w; no-op */ }
+            else { w = pow(max(w, 0.0), exponent); }
+
+            ivec2 sCoord = pixelCoord + ivec2(x, y);
+            float sampleA = 0.0;
+            if (sCoord.x >= 0 && sCoord.x < texSize.x &&
+                sCoord.y >= 0 && sCoord.y < texSize.y) {
+                sampleA = texelFetch(u_srcTex, sCoord, 0).a;
+            }
+
+            if (u_mode == 1) {
+                // Inner glow: blur the inverted alpha (1 outside, 0 inside).
+                // Result is high near edges, low deep inside — a smooth
+                // distance-field-like falloff that works at all blur radii.
+                alpha += (1.0 - sampleA) * w;
+            } else {
+                alpha += sampleA * w;
+            }
+            total += w;
+        }
+    }
+    alpha = alpha / max(total, 1.0);
+
     if (u_mode == 0) {
         // Outer glow: only outside the shape
         alpha = alpha * (1.0 - srcA);
     } else {
-        // Inner glow: only inside the shape, at edges
-        alpha = srcA * (1.0 - min(alpha / max(srcA, 0.001), 1.0));
+        // Inner glow: mask the blurred inverted-alpha to the shape interior
+        alpha = srcA * alpha;
     }
     fragColor = vec4(u_glowColor.rgb, alpha * u_glowColor.a * u_opacity);
 }

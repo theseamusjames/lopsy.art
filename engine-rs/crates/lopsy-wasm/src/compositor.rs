@@ -13,6 +13,11 @@ pub fn composite(engine: &mut EngineInner) {
     let doc_h = engine.doc_height;
     let bg = engine.bg_color;
 
+    // Reset GL state — brush/shape/selection tools may have left blending enabled.
+    // If BLEND is on, the blit passes in blend_onto_composite would blend
+    // instead of overwrite, corrupting alpha.
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+
     // 1. Bind composite FBO and clear with background color
     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
@@ -58,29 +63,17 @@ pub fn composite(engine: &mut EngineInner) {
             }
         }
 
-        // --- Color overlay: modify layer before blending ---
-        let use_overlay_scratch = effects.color_overlay.as_ref().map_or(false, |o| o.enabled);
-        if let Some(ref overlay) = effects.color_overlay {
-            if overlay.enabled {
-                render_color_overlay(engine, tex_handle, overlay);
-            }
-        }
-
-        // --- Blend layer onto composite ---
-        let blend_tex = if use_overlay_scratch {
-            engine.texture_pool.get(engine.scratch_texture_a).cloned()
-        } else {
-            engine.texture_pool.get(tex_handle).cloned()
-        };
-        if let Some(ref src_tex) = blend_tex {
-            blend_onto_composite(engine, src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false);
+        // --- Color overlay + blend layer onto composite ---
+        let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
+        if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
+            blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc);
         }
 
         // --- Active stroke texture ---
         if let Some(&stroke_handle) = engine.stroke_textures.get(layer_id) {
             if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
                 let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
-                blend_onto_composite(engine, &stroke_tex, *opacity, 0, *layer_x, *layer_y, sw, sh, true);
+                blend_onto_composite(engine, &stroke_tex, *opacity, 0, *layer_x, *layer_y, sw, sh, true, None);
             }
         }
 
@@ -117,6 +110,7 @@ pub fn composite(engine: &mut EngineInner) {
     if let Some(loc) = engine.gl.get_uniform_location(prog, "u_zoom") { engine.gl.uniform1f(Some(&loc), vp_zoom as f32); }
     if let Some(loc) = engine.gl.get_uniform_location(prog, "u_pan") { engine.gl.uniform2f(Some(&loc), vp_pan_x as f32, vp_pan_y as f32); }
     if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_bgAlpha") { engine.gl.uniform1f(Some(&loc), bg[3]); }
 
     engine.draw_fullscreen_quad();
 
@@ -139,6 +133,7 @@ fn blend_onto_composite(
     tw: u32,
     th: u32,
     premultiplied: bool,
+    overlay: Option<&ColorOverlayDesc>,
 ) {
     let doc_w = engine.doc_width as f32;
     let doc_h = engine.doc_height as f32;
@@ -160,8 +155,24 @@ fn blend_onto_composite(
     if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
     if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), if premultiplied { 1 } else { 0 }); }
 
+    // Color overlay — applied inline in the blend shader
+    if let Some(ov) = overlay {
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_overlayColor") { engine.gl.uniform3f(Some(&loc), ov.color[0], ov.color[1], ov.color[2]); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_overlayOpacity") { engine.gl.uniform1f(Some(&loc), ov.opacity); }
+    } else {
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
+    }
+
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     engine.draw_fullscreen_quad();
+
+    // Break the feedback loop: composite_texture is still bound to TEXTURE1
+    // from the blend shader above. Since composite_fbo is backed by composite_texture,
+    // rendering to it while the same texture is bound causes undefined behavior on
+    // real GPUs (software renderers in headless tests tolerate it).
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
     engine.gl.use_program(Some(&engine.shaders.blit.program));
@@ -173,19 +184,54 @@ fn blend_onto_composite(
     engine.draw_fullscreen_quad();
 }
 
-/// Blend an effect result (in scratch_a) onto the composite using GL blending.
+/// Blend an effect result (in scratch_a) onto the composite using the blend shader.
+/// Uses the same shader-based compositing as layer blending — no GL blend state needed.
 fn blend_effect_onto_composite(engine: &mut EngineInner) {
-    if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a).cloned() {
-        engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
-        engine.gl.enable(WebGl2RenderingContext::BLEND);
-        engine.gl.blend_func(WebGl2RenderingContext::SRC_ALPHA, WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA);
-        engine.gl.use_program(Some(&engine.shaders.blit.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_tex));
-        if let Some(loc) = engine.gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        engine.draw_fullscreen_quad();
-        engine.gl.disable(WebGl2RenderingContext::BLEND);
+    let effect_tex = match engine.texture_pool.get(engine.scratch_texture_a) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+    let comp_tex = match engine.texture_pool.get(engine.composite_texture) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+    let doc_w = engine.doc_width as f32;
+    let doc_h = engine.doc_height as f32;
+
+    // Use the blend shader: src=effect, dst=composite → render into scratch_b
+    let prog = &engine.shaders.blend.program;
+    engine.gl.use_program(Some(prog));
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&effect_tex));
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
+    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
+    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
+    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
+    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
+    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
+    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
+
+    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    engine.draw_fullscreen_quad();
+
+    // Break feedback loop: unbind composite_texture from TEXTURE1 before
+    // rendering to composite_fbo (which is backed by composite_texture).
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+
+    // Copy scratch_b → composite
+    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+    engine.gl.use_program(Some(&engine.shaders.blit.program));
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b) {
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex));
     }
+    if let Some(loc) = engine.gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+    engine.draw_fullscreen_quad();
 }
 
 /// Render outer or inner glow.
@@ -231,6 +277,7 @@ fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_shadowColor") { engine.gl.uniform4f(Some(&loc), shadow.color[0], shadow.color[1], shadow.color[2], shadow.color[3]); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_offset") { engine.gl.uniform2f(Some(&loc), shadow.offset_x, shadow.offset_y); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blur") { engine.gl.uniform1f(Some(&loc), shadow.blur); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_spread") { engine.gl.uniform1f(Some(&loc), shadow.spread); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), shadow.opacity); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
@@ -247,7 +294,10 @@ fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
     }
 }
 
-/// Render color overlay into scratch_a.
+/// Render color overlay into scratch_b.
+/// Uses scratch_b (not scratch_a) because blend_onto_composite reads the
+/// overlay result as its source while using scratch_a as the intermediate
+/// render target — using scratch_a for both would be a feedback loop.
 fn render_color_overlay(engine: &mut EngineInner, tex_handle: TextureHandle, overlay: &ColorOverlayDesc) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
@@ -260,7 +310,7 @@ fn render_color_overlay(engine: &mut EngineInner, tex_handle: TextureHandle, ove
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_overlayColor") { engine.gl.uniform4f(Some(&loc), overlay.color[0], overlay.color[1], overlay.color[2], overlay.color[3]); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), overlay.opacity); }
 
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
+        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
         engine.gl.viewport(0, 0, doc_w, doc_h);
         engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
         engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
@@ -328,18 +378,10 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
         if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 0, *layer_x, *layer_y); } }
         if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, tex_handle, tw, th, shadow, *layer_x, *layer_y); } }
 
-        // Color overlay
-        let use_overlay = effects.color_overlay.as_ref().map_or(false, |o| o.enabled);
-        if let Some(ref overlay) = effects.color_overlay { if overlay.enabled { render_color_overlay(engine, tex_handle, overlay); } }
-
-        // Blend layer
-        let blend_tex = if use_overlay {
-            engine.texture_pool.get(engine.scratch_texture_a).cloned()
-        } else {
-            engine.texture_pool.get(tex_handle).cloned()
-        };
-        if let Some(ref src_tex) = blend_tex {
-            blend_onto_composite(engine, src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false);
+        // Color overlay + blend layer
+        let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
+        if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
+            blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc);
         }
 
         // On-top effects
@@ -348,15 +390,54 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
     }
 
     // Read pixels
-    let mut pixels = vec![0u8; (doc_w * doc_h * 4) as usize];
-    engine.gl.read_pixels_with_opt_u8_array(
-        0, 0, doc_w as i32, doc_h as i32,
-        WebGl2RenderingContext::RGBA,
-        WebGl2RenderingContext::UNSIGNED_BYTE,
-        Some(&mut pixels),
-    ).map_err(|e| format!("readPixels failed: {:?}", e))?;
+    let pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, doc_w, doc_h)?;
 
     engine.fbo_pool.unbind(&engine.gl);
+    Ok(pixels)
+}
+
+/// Composite a single layer with its effects onto a transparent canvas.
+/// Returns (pixels, offsetX, offsetY, width, height) for the rasterized result.
+pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Result<Vec<u8>, String> {
+    let doc_w = engine.doc_width;
+    let doc_h = engine.doc_height;
+
+    // Render to composite FBO with transparent background
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+
+    // Find the layer
+    let layer_info = engine.layer_stack.iter().find(|l| l.id == layer_id).map(|layer| {
+        (layer.id.clone(), layer.opacity, layer.blend_mode as i32, layer.x as f32, layer.y as f32, layer.width as f32, layer.height as f32, layer.effects.clone())
+    });
+
+    if let Some((lid, opacity, _blend_mode, layer_x, layer_y, layer_w, layer_h, effects)) = layer_info {
+        let tex_handle = match engine.layer_textures.get(&lid) { Some(&h) => h, None => return Err("Layer texture not found".to_string()) };
+        let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((layer_w as u32, layer_h as u32));
+
+        // Behind effects
+        if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 0, layer_x, layer_y); } }
+        if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, tex_handle, tw, th, shadow, layer_x, layer_y); } }
+
+        // Layer content with color overlay (use Normal blend, not the layer's blend mode)
+        let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
+        if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
+            blend_onto_composite(engine, &src_tex, opacity, 0, layer_x, layer_y, tw, th, false, overlay_desc);
+        }
+
+        // On-top effects
+        if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 1, layer_x, layer_y); } }
+        if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, tex_handle, tw, th, stroke, layer_x, layer_y); } }
+    }
+
+    // Read pixels
+    let pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, doc_w, doc_h)?;
+
+    engine.fbo_pool.unbind(&engine.gl);
+    engine.needs_recomposite = true;
     Ok(pixels)
 }
 

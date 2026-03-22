@@ -7,14 +7,8 @@ uniform vec2 u_resolution;
 uniform float u_zoom;
 uniform vec2 u_pan;
 uniform vec2 u_docSize;
+uniform float u_bgAlpha;
 out vec4 fragColor;
-
-// sRGB OETF
-vec3 linearToSrgb(vec3 c) {
-    vec3 lo = c * 12.92;
-    vec3 hi = 1.055 * pow(c, vec3(1.0/2.4)) - 0.055;
-    return mix(lo, hi, step(vec3(0.0031308), c));
-}
 
 void main() {
     // Convert screen UV to canvas coordinates.
@@ -39,8 +33,12 @@ void main() {
 
     vec4 color = texture(u_compositeTex, docUV);
 
-    // Checkerboard for transparent areas
-    if (color.a < 1.0) {
+    // Checkerboard for transparent areas — only on transparent documents.
+    // For opaque documents (bgAlpha >= 1.0), the composite alpha is always 1.0;
+    // any deviation is a GPU precision artifact from RGBA16F rendering,
+    // not real transparency.
+    bool isTransparentDoc = u_bgAlpha < 0.999;
+    if (isTransparentDoc && color.a < 1.0 - 1.0/256.0) {
         vec2 checker = floor(canvasPos / 8.0);
         float check = mod(checker.x + checker.y, 2.0);
         vec3 bg = mix(vec3(0.8), vec3(0.9), check);

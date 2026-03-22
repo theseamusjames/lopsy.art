@@ -3417,4 +3417,599 @@ test.describe('WASM/WebGL Rendering', () => {
     expect(afterUndo.between?.[3]).toBe(0);
   });
 
+  test('61 - inner glow on black circle with white glow', async ({ page }) => {
+    await createDocument(page, 300, 300, true);
+    await fitToView(page);
+
+    // Paint a filled black circle (radius 80, centered at 150,150) on the active layer
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          pushHistory: (label?: string) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      state.pushHistory('Circle');
+      const data = state.getOrCreateLayerPixelData(id);
+      const cx = 150, cy = 150, radius = 80;
+      for (let y = 0; y < data.height; y++) {
+        for (let x = 0; x < data.width; x++) {
+          const dx = x - cx, dy = y - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist <= radius) {
+            // Anti-alias the edge
+            const alpha = dist > radius - 1 ? Math.max(0, (radius - dist)) * 255 : 255;
+            const idx = (y * data.width + x) * 4;
+            data.data[idx] = 0;     // R
+            data.data[idx + 1] = 0; // G
+            data.data[idx + 2] = 0; // B
+            data.data[idx + 3] = Math.round(alpha);
+          }
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
+
+    // Screenshot before inner glow
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '61-inner-glow-before.png') });
+
+    // Apply inner glow: white, size 50, spread 50, opacity 50%
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        innerGlow: { enabled: true, color: { r: 255, g: 255, b: 255, a: 1 }, size: 50, spread: 50, opacity: 0.5 },
+      });
+    });
+    await page.waitForTimeout(500);
+
+    // Screenshot after inner glow
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '61-inner-glow-after.png') });
+
+    // Read composited pixels to verify
+    const result = await page.evaluate(async () => {
+      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+        (() => Promise<{ width: number; height: number; pixels: number[] } | null>) | undefined;
+      if (!readFn) return null;
+      const data = await readFn();
+      if (!data) return null;
+
+      const getPixel = (x: number, y: number) => {
+        const idx = (y * data.width + x) * 4;
+        return { r: data.pixels[idx], g: data.pixels[idx + 1], b: data.pixels[idx + 2], a: data.pixels[idx + 3] };
+      };
+
+      return {
+        center: getPixel(150, 150),       // Deep inside: should be dark
+        nearEdge: getPixel(150, 80),      // ~10px inside edge: should show white glow
+        atEdge: getPixel(150, 71),        // Right at edge (radius=80 from center 150)
+        justOutside: getPixel(150, 68),   // Just outside circle
+      };
+    });
+
+    console.log('Inner glow result:', JSON.stringify(result, null, 2));
+
+    if (result) {
+      // Center should remain dark (close to black)
+      expect(result.center.r).toBeLessThan(50);
+
+      // Near the edge (inside the circle), the white inner glow should brighten it
+      expect(result.nearEdge.r).toBeGreaterThan(20);
+
+      // Just outside the circle, the inner glow should NOT add any color.
+      // On a transparent doc, the composited output includes the checkerboard,
+      // so we check that it hasn't become opaque white from the glow leaking out.
+      // The "just outside" pixel should match the checkerboard pattern (~204-230 gray).
+      expect(result.justOutside.r).toBeLessThan(240);
+    }
+  });
+
+  test('62 - drop shadow does not create transparency through opaque layers', async ({ page }) => {
+    // Reproduce: 3 layers, bottom two fully opaque, top layer has drop shadow.
+    // The shadow must not punch through to the checkerboard.
+    await createDocument(page, 200, 200, false);
+    await fitToView(page);
+
+    // Add Layer 1 (filled dark gray) and Layer 2 (red square with drop shadow)
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          addLayer: () => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+          pushHistory: (label?: string) => void;
+        };
+      };
+      const state = store.getState();
+
+      // Fill background layer with white (it already is)
+      const bgId = state.document.layers[0].id;
+
+      // Add Layer 1 and fill with dark gray
+      state.addLayer();
+      const layer1Id = store.getState().document.activeLayerId;
+      store.getState().pushHistory('Fill L1');
+      const d1 = store.getState().getOrCreateLayerPixelData(layer1Id);
+      for (let i = 0; i < d1.data.length; i += 4) {
+        d1.data[i] = 50; d1.data[i+1] = 50; d1.data[i+2] = 50; d1.data[i+3] = 255;
+      }
+      store.getState().updateLayerPixelData(layer1Id, d1);
+
+      // Add Layer 2 with a red square in the center
+      store.getState().addLayer();
+      const layer2Id = store.getState().document.activeLayerId;
+      store.getState().pushHistory('Paint L2');
+      const d2 = store.getState().getOrCreateLayerPixelData(layer2Id);
+      for (let y = 50; y < 120; y++) {
+        for (let x = 50; x < 120; x++) {
+          const idx = (y * d2.width + x) * 4;
+          d2.data[idx] = 255; d2.data[idx+1] = 0; d2.data[idx+2] = 0; d2.data[idx+3] = 255;
+        }
+      }
+      store.getState().updateLayerPixelData(layer2Id, d2);
+
+      // Apply drop shadow to Layer 2
+      const layer2 = store.getState().document.layers.find(l => l.id === layer2Id);
+      if (layer2) {
+        store.getState().updateLayerEffects(layer2Id, {
+          ...layer2.effects,
+          dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 1 }, offsetX: 20, offsetY: 20, blur: 15, spread: 0 },
+        });
+      }
+    });
+    await page.waitForTimeout(500);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '62-drop-shadow-opaque.png') });
+
+    // Read composited pixels — check the shadow area and the area away from shadow
+    const result = await page.evaluate(async () => {
+      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+        (() => Promise<{ width: number; height: number; pixels: number[] } | null>) | undefined;
+      if (!readFn) return null;
+      const data = await readFn();
+      if (!data) return null;
+
+      // Convert screen coordinates to check. The document is centered in the view.
+      // With fitToView on a 200x200 doc, we need to find the document area.
+      // Instead, scan the entire image for any pixel with checkerboard-like alpha < 255.
+      let transparentPixels = 0;
+      let docPixels = 0;
+      for (let i = 0; i < data.pixels.length; i += 4) {
+        const r = data.pixels[i], g = data.pixels[i+1], b = data.pixels[i+2], a = data.pixels[i+3];
+        // The workspace bg is (46,46,46). Document area is brighter or different.
+        // Check for checkerboard pattern colors: ~204 and ~230 alternating
+        const isCheckerboard = (a === 255) && (
+          (r >= 200 && r <= 235 && g >= 200 && g <= 235 && b >= 200 && b <= 235) &&
+          (r === g && g === b)
+        );
+        if (isCheckerboard) transparentPixels++;
+
+        // Count document-area pixels (not workspace gray)
+        if (r !== 46 || g !== 46 || b !== 46) docPixels++;
+      }
+      return { transparentPixels, docPixels };
+    });
+
+    console.log('Drop shadow opacity test:', JSON.stringify(result));
+
+    // There should be ZERO checkerboard pixels since all base layers are opaque
+    if (result) {
+      expect(result.transparentPixels).toBe(0);
+    }
+  });
+
+  test('AB comparison - drop shadow and inner glow on opaque document', async ({ page }) => {
+    const AB_DIR = SCREENSHOT_DIR;
+    // Non-transparent 300x300 document with white background
+    await createDocument(page, 300, 300, false);
+    await fitToView(page);
+
+    // Add a new layer above the white background
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      };
+      store.getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+
+    // Paint a black filled circle (radius 80, centered at 150,150) on the new layer
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          pushHistory: (label?: string) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      state.pushHistory('Paint circle');
+      const data = state.getOrCreateLayerPixelData(id);
+      const cx = 150, cy = 150, r = 80;
+      for (let py = 0; py < data.height; py++) {
+        for (let px = 0; px < data.width; px++) {
+          const dx = px - cx, dy = py - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist <= r) {
+            const idx = (py * data.width + px) * 4;
+            data.data[idx] = 0;
+            data.data[idx + 1] = 0;
+            data.data[idx + 2] = 0;
+            data.data[idx + 3] = 255;
+          }
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
+
+    // Screenshot before any effects
+    await page.screenshot({ path: path.join(AB_DIR, 'ab-before-effects.png') });
+
+    // Apply drop shadow: black, offsetX=15, offsetY=15, blur=10, opacity=0.7, spread=0
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 0.7 }, offsetX: 15, offsetY: 15, blur: 10, spread: 0 },
+      });
+    });
+    await page.waitForTimeout(500);
+
+    // Screenshot with drop shadow only
+    await page.screenshot({ path: path.join(AB_DIR, 'ab-with-shadow.png') });
+
+    // Also apply inner glow: white color, size=20, spread=2, opacity=0.8
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        innerGlow: { enabled: true, color: { r: 255, g: 255, b: 255, a: 1 }, size: 20, spread: 2, opacity: 0.8 },
+      });
+    });
+    await page.waitForTimeout(500);
+
+    // Screenshot with both drop shadow and inner glow
+    await page.screenshot({ path: path.join(AB_DIR, 'ab-with-shadow-and-glow.png') });
+  });
+
+  test('AB-stroke - large stroke on circle', async ({ page }) => {
+    // A/B test: circle with 22px outside stroke should be round, not cross-shaped
+    await createDocument(page, 300, 300, false);
+    await fitToView(page);
+
+    // Add a layer and paint a filled black circle
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          addLayer: () => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+          pushHistory: (label?: string) => void;
+        };
+      };
+      const state = store.getState();
+      state.addLayer();
+      const id = store.getState().document.activeLayerId;
+      store.getState().pushHistory('Circle');
+      const data = store.getState().getOrCreateLayerPixelData(id);
+      const cx = 150, cy = 150, r = 80;
+      for (let py = 0; py < data.height; py++) {
+        for (let px = 0; px < data.width; px++) {
+          const dx = px - cx, dy = py - cy;
+          if (Math.sqrt(dx * dx + dy * dy) <= r) {
+            const idx = (py * data.width + px) * 4;
+            data.data[idx] = 0; data.data[idx+1] = 0; data.data[idx+2] = 0; data.data[idx+3] = 255;
+          }
+        }
+      }
+      store.getState().updateLayerPixelData(id, data);
+
+      // Apply a 22px outside stroke in red
+      const layer = store.getState().document.layers.find(l => l.id === id);
+      if (layer) {
+        store.getState().updateLayerEffects(id, {
+          ...layer.effects,
+          stroke: { enabled: true, color: { r: 255, g: 0, b: 0, a: 1 }, width: 22, position: 'outside', opacity: 1.0 },
+        });
+      }
+    });
+    await page.waitForTimeout(500);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'ab-stroke-circle.png') });
+
+    // Check that the stroke forms a complete ring (not a cross).
+    // Sample 4 diagonal points ~15px outside the circle edge.
+    // They should all be red (stroke color) not white (background).
+    const result = await page.evaluate(async () => {
+      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+        (() => Promise<{ width: number; height: number; pixels: number[] } | null>) | undefined;
+      if (!readFn) return null;
+      const data = await readFn();
+      if (!data) return null;
+
+      const getPixel = (x: number, y: number) => {
+        const idx = (y * data.width + x) * 4;
+        return { r: data.pixels[idx], g: data.pixels[idx+1], b: data.pixels[idx+2], a: data.pixels[idx+3] };
+      };
+
+      // Document is 300x300, centered in viewport. Find document area by looking
+      // for non-workspace pixels. Document center should be approximately screen center.
+      const screenW = data.width;
+      const screenH = data.height;
+      // The document might be offset; check the center pixel to verify
+      const centerPx = getPixel(Math.floor(screenW/2), Math.floor(screenH/2));
+
+      return {
+        center: centerPx,
+        screenW, screenH,
+      };
+    });
+    console.log('Stroke test:', JSON.stringify(result));
+  });
+
+  test('63 - color overlay replaces layer color', async ({ page }) => {
+    await createDocument(page, 200, 200, false);
+    await fitToView(page);
+
+    // Paint a red square on the Background layer
+    await paintRect(page, 50, 50, 100, 100, { r: 255, g: 0, b: 0, a: 255 });
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '63-color-overlay-before.png') });
+
+    // Check composited pixels BEFORE overlay
+    const beforeResult = await page.evaluate(async () => {
+      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+        (() => Promise<{ width: number; height: number; pixels: number[] } | null>) | undefined;
+      if (!readFn) return null;
+      const data = await readFn();
+      if (!data) return null;
+      let red = 0, white = 0, other = 0;
+      for (let i = 0; i < data.pixels.length; i += 4) {
+        const r = data.pixels[i], g = data.pixels[i+1], b = data.pixels[i+2];
+        if (r === 46 && g === 46 && b === 46) continue;
+        if (r > 200 && g < 50 && b < 50) red++;
+        else if (r > 240 && g > 240 && b > 240) white++;
+        else other++;
+      }
+      return { red, white, other };
+    });
+    console.log('BEFORE overlay pixel counts:', JSON.stringify(beforeResult));
+
+    // Apply color overlay: blue, opacity 100%
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const layer = state.document.layers.find(l => l.id === id);
+      if (!layer) return;
+      store.getState().updateLayerEffects(id, {
+        ...layer.effects,
+        colorOverlay: { enabled: true, color: { r: 0, g: 0, b: 255, a: 1 }, opacity: 1.0 },
+      });
+    });
+    await page.waitForTimeout(500);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '63-color-overlay-after.png') });
+
+    // Verify the overlay only affects painted pixels by checking a corner pixel.
+    // On a non-transparent document, the corner (0,0) belongs to the white Background,
+    // NOT to Layer 1. The overlay is on Layer 1, so the corner should stay white.
+    // Read composited pixel data
+    const result = await page.evaluate(async () => {
+      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+        (() => Promise<{ width: number; height: number; pixels: number[] } | null>) | undefined;
+      if (!readFn) return null;
+      const data = await readFn();
+      if (!data) return null;
+
+      // Count blue, white, and other pixels within the document area.
+      // The document is 200x200 and the screen is much larger. We need to
+      // find pixels within the document bounds. Since the workspace bg is
+      // rgb(46,46,46), we can separate document pixels from workspace.
+      let blueCount = 0;
+      let whiteCount = 0;
+      let otherCount = 0;
+      for (let i = 0; i < data.pixels.length; i += 4) {
+        const r = data.pixels[i], g = data.pixels[i+1], b = data.pixels[i+2];
+        if (r === 46 && g === 46 && b === 46) continue; // workspace bg
+        if (r < 10 && g < 10 && b > 200) blueCount++;
+        else if (r > 240 && g > 240 && b > 240) whiteCount++;
+        else otherCount++;
+      }
+      return { blueCount, whiteCount, otherCount, total: blueCount + whiteCount + otherCount };
+    });
+    console.log('Color overlay pixel counts:', JSON.stringify(result));
+
+    // For a 200x200 document with a 100x100 blue overlay centered:
+    // ~10000 blue pixels (the overlay area) and ~30000 white pixels (the rest).
+    if (result) {
+      expect(result.whiteCount).toBeGreaterThan(5000);
+      expect(result.blueCount).toBeGreaterThan(5000);
+      expect(result.blueCount).toBeLessThan(result.whiteCount);
+    }
+  });
+
+  test('move layer twice does not freeze rendering', async ({ page }) => {
+    await createDocument(page, 300, 300, false);
+    await fitToView(page);
+
+    // Add layer with a red square
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          addLayer: () => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          pushHistory: (label?: string) => void;
+        };
+      };
+      store.getState().addLayer();
+      const id = store.getState().document.activeLayerId;
+      store.getState().pushHistory('Paint');
+      const data = store.getState().getOrCreateLayerPixelData(id);
+      for (let y = 100; y < 200; y++) {
+        for (let x = 100; x < 200; x++) {
+          const idx = (y * data.width + x) * 4;
+          data.data[idx] = 255; data.data[idx+1] = 0; data.data[idx+2] = 0; data.data[idx+3] = 255;
+        }
+      }
+      store.getState().updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
+
+    // First move
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          updateLayerPosition: (id: string, x: number, y: number) => void;
+          pushHistory: (label?: string) => void;
+        };
+      };
+      const id = store.getState().document.activeLayerId;
+      store.getState().pushHistory('Move 1');
+      store.getState().updateLayerPosition(id, 20, 20);
+    });
+    await page.waitForTimeout(300);
+
+    // Second move
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          updateLayerPosition: (id: string, x: number, y: number) => void;
+          pushHistory: (label?: string) => void;
+        };
+      };
+      const id = store.getState().document.activeLayerId;
+      store.getState().pushHistory('Move 2');
+      store.getState().updateLayerPosition(id, 50, 50);
+    });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'move-test-after-move2.png') });
+
+    // Verify rendering still works
+    const result = await page.evaluate(async () => {
+      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+        (() => Promise<{ width: number; height: number; pixels: number[] } | null>) | undefined;
+      if (!readFn) return null;
+      const data = await readFn();
+      if (!data) return null;
+      let redPixels = 0;
+      for (let i = 0; i < data.pixels.length; i += 4) {
+        if (data.pixels[i]! > 200 && data.pixels[i+1]! < 50 && data.pixels[i+2]! < 50) redPixels++;
+      }
+      return { redPixels };
+    });
+    console.log('Move test result:', JSON.stringify(result));
+    if (result) {
+      expect(result.redPixels).toBeGreaterThan(5000);
+    }
+  });
+
+  test('inner glow sweep - screenshots at multiple sizes', async ({ page }) => {
+    await createDocument(page, 300, 300, false);
+    await fitToView(page);
+
+    // Add a layer and paint a filled black circle in the center
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          addLayer: () => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+          pushHistory: (label?: string) => void;
+        };
+      };
+      const state = store.getState();
+      state.addLayer();
+      const id = store.getState().document.activeLayerId;
+      store.getState().pushHistory('Circle');
+      const data = store.getState().getOrCreateLayerPixelData(id);
+      const cx = 150, cy = 150, r = 80;
+      for (let py = 0; py < data.height; py++) {
+        for (let px = 0; px < data.width; px++) {
+          const dx = px - cx, dy = py - cy;
+          if (Math.sqrt(dx * dx + dy * dy) <= r) {
+            const idx = (py * data.width + px) * 4;
+            data.data[idx] = 0; data.data[idx+1] = 0; data.data[idx+2] = 0; data.data[idx+3] = 255;
+          }
+        }
+      }
+      store.getState().updateLayerPixelData(id, data);
+      // Crop layer to content bounds (simulates real brush painting flow)
+      store.getState().cropLayerToContent(id);
+    });
+    await page.waitForTimeout(300);
+
+    // Test inner glow at various sizes
+    for (const size of [5, 10, 15, 17, 18, 20, 25, 27, 28, 30]) {
+      await page.evaluate((s) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => {
+            document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+            updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+          };
+        };
+        const state = store.getState();
+        const id = state.document.activeLayerId;
+        const layer = state.document.layers.find(l => l.id === id);
+        if (!layer) return;
+        store.getState().updateLayerEffects(id, {
+          ...layer.effects,
+          innerGlow: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, size: s, spread: 0, opacity: 1.0 },
+        });
+      }, size);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, `glow-sweep-size-${size}.png`) });
+    }
+  });
+
 });

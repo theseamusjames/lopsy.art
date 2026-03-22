@@ -61,17 +61,10 @@ pub fn upload_pixels(
     }
 
     if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
-        if let Some(texture) = engine.texture_pool.get(tex_handle) {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
-            engine.gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
-                WebGl2RenderingContext::TEXTURE_2D,
-                0, 0, 0,
-                width as i32, height as i32,
-                WebGl2RenderingContext::RGBA,
-                WebGl2RenderingContext::UNSIGNED_BYTE,
-                Some(data),
-            ).map_err(|e| format!("tex_sub_image_2d failed: {:?}", e))?;
-        }
+        engine.texture_pool.upload_rgba(
+            &engine.gl, tex_handle,
+            0, 0, width, height, data,
+        )?;
     }
 
     engine.mark_layer_dirty(layer_id);
@@ -100,18 +93,10 @@ pub fn read_pixels(
         0,
     );
 
-    let mut pixels = vec![0u8; (w * h * 4) as usize];
-    engine.gl.read_pixels_with_opt_u8_array(
-        0, 0, w as i32, h as i32,
-        WebGl2RenderingContext::RGBA,
-        WebGl2RenderingContext::UNSIGNED_BYTE,
-        Some(&mut pixels),
-    ).map_err(|e| format!("readPixels failed: {:?}", e))?;
+    let pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h)?;
 
     engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
     engine.gl.delete_framebuffer(Some(&fbo));
 
-    // readPixels starts from GL row 0 (bottom), which is ImageData row 0
-    // because we upload without UNPACK_FLIP_Y_WEBGL. No flip needed.
     Ok(pixels)
 }

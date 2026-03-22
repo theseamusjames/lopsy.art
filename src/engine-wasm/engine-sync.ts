@@ -114,7 +114,7 @@ function layerToDescJson(layer: Layer): string {
       offset_y: eff.dropShadow.offsetY,
       blur: eff.dropShadow.blur,
       spread: eff.dropShadow.spread,
-      opacity: c.a,
+      opacity: eff.dropShadow.opacity ?? c.a,
     };
   }
   if (eff.stroke.enabled) {

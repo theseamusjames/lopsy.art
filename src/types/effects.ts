@@ -27,6 +27,7 @@ export interface ShadowEffect {
   readonly offsetY: number;
   readonly blur: number;
   readonly spread: number;
+  readonly opacity: number; // 0-1
 }
 
 export interface GlowEffect {

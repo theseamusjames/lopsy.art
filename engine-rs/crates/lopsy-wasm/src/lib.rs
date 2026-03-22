@@ -149,17 +149,9 @@ pub fn upload_layer_mask(
         rgba[i * 4 + 3] = 255;
     }
     if let Ok(tex) = engine.inner.texture_pool.acquire(gl, width, height) {
-        if let Some(texture) = engine.inner.texture_pool.get(tex) {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
-            let _ = gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
-                WebGl2RenderingContext::TEXTURE_2D,
-                0, 0, 0,
-                width as i32, height as i32,
-                WebGl2RenderingContext::RGBA,
-                WebGl2RenderingContext::UNSIGNED_BYTE,
-                Some(&rgba),
-            );
-        }
+        let _ = engine.inner.texture_pool.upload_rgba(
+            gl, tex, 0, 0, width, height, &rgba,
+        );
         // Release old mask if present
         if let Some(old) = engine.inner.layer_masks.insert(layer_id.to_string(), tex) {
             engine.inner.texture_pool.release(old);
@@ -202,8 +194,10 @@ pub fn get_layer_content_bounds(engine: &Engine, layer_id: &str) -> Vec<i32> {
 
 #[wasm_bindgen(js_name = "rasterizeLayerEffects")]
 pub fn rasterize_layer_effects(engine: &mut Engine, layer_id: &str) -> Vec<u8> {
-    // Read layer pixels directly (effects rendering is TODO)
-    layer_manager::read_pixels(&engine.inner, layer_id).unwrap_or_default()
+    // Composite the single layer with effects using the GPU pipeline,
+    // then return the document-sized pixel buffer. This ensures the
+    // rasterized output exactly matches the live GPU rendering.
+    compositor::composite_single_layer(&mut engine.inner, layer_id).unwrap_or_default()
 }
 
 #[wasm_bindgen(js_name = "readLayerPixelsCompressed")]
@@ -411,36 +405,28 @@ pub fn draw_pencil_line(
         let _ = brush_gpu::begin_stroke(eng, layer_id);
     }
     if let Some(&stroke_handle) = eng.stroke_textures.get(layer_id) {
-        if let Some(stroke_tex) = eng.texture_pool.get(stroke_handle) {
-            let gl = &eng.gl;
-            let (tex_w, tex_h) = eng.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
-            gl.bind_texture(web_sys::WebGl2RenderingContext::TEXTURE_2D, Some(stroke_tex));
-            for i in (0..points.len()).step_by(2) {
-                let cx = points[i] as i32;
-                let cy = points[i + 1] as i32;
-                let bx = (cx - half).max(0);
-                let by = (cy - half).max(0);
-                let bw = (block_size).min(tex_w as i32 - bx);
-                let bh = (block_size).min(tex_h as i32 - by);
-                if bw <= 0 || bh <= 0 { continue; }
-                let count = (bw * bh) as usize;
-                let mut rgba = vec![0u8; count * 4];
-                for j in 0..count {
-                    rgba[j * 4] = r8;
-                    rgba[j * 4 + 1] = g8;
-                    rgba[j * 4 + 2] = b8;
-                    rgba[j * 4 + 3] = a8;
-                }
-                let _ = gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
-                    web_sys::WebGl2RenderingContext::TEXTURE_2D,
-                    0, bx, by, bw, bh,
-                    web_sys::WebGl2RenderingContext::RGBA,
-                    web_sys::WebGl2RenderingContext::UNSIGNED_BYTE,
-                    Some(&rgba),
-                );
+        let (tex_w, tex_h) = eng.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
+        for i in (0..points.len()).step_by(2) {
+            let cx = points[i] as i32;
+            let cy = points[i + 1] as i32;
+            let bx = (cx - half).max(0);
+            let by = (cy - half).max(0);
+            let bw = (block_size).min(tex_w as i32 - bx);
+            let bh = (block_size).min(tex_h as i32 - by);
+            if bw <= 0 || bh <= 0 { continue; }
+            let count = (bw * bh) as usize;
+            let mut rgba = vec![0u8; count * 4];
+            for j in 0..count {
+                rgba[j * 4] = r8;
+                rgba[j * 4 + 1] = g8;
+                rgba[j * 4 + 2] = b8;
+                rgba[j * 4 + 3] = a8;
             }
-            gl.bind_texture(web_sys::WebGl2RenderingContext::TEXTURE_2D, None);
+            let _ = eng.texture_pool.upload_rgba(
+                &eng.gl, stroke_handle, bx, by, bw as u32, bh as u32, &rgba,
+            );
         }
+        eng.gl.bind_texture(web_sys::WebGl2RenderingContext::TEXTURE_2D, None);
     }
     eng.needs_recomposite = true;
 }
@@ -561,14 +547,9 @@ pub fn sample_color(engine: &Engine, x: f64, y: f64, sample_size: u32) -> Vec<u8
     // Read from composite FBO
     engine.inner.fbo_pool.bind(gl, engine.inner.composite_fbo);
 
-    let mut pixels = vec![0u8; (sample_size * sample_size * 4) as usize];
-    let _ = gl.read_pixels_with_opt_u8_array(
-        ix - half, iy - half,
-        sample_size as i32, sample_size as i32,
-        WebGl2RenderingContext::RGBA,
-        WebGl2RenderingContext::UNSIGNED_BYTE,
-        Some(&mut pixels),
-    );
+    let pixels = engine.inner.texture_pool.read_rgba(
+        gl, ix - half, iy - half, sample_size, sample_size,
+    ).unwrap_or_else(|_| vec![0u8; (sample_size * sample_size * 4) as usize]);
 
     engine.inner.fbo_pool.unbind(gl);
 
@@ -1263,17 +1244,9 @@ pub fn apply_fill_to_layer(
         mask_rgba[i * 4 + 2] = 0;
         mask_rgba[i * 4 + 3] = 255;
     }
-    if let Some(tex) = engine.inner.texture_pool.get(mask_tex) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex));
-        let _ = gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
-            WebGl2RenderingContext::TEXTURE_2D,
-            0, 0, 0,
-            width as i32, height as i32,
-            WebGl2RenderingContext::RGBA,
-            WebGl2RenderingContext::UNSIGNED_BYTE,
-            Some(&mask_rgba),
-        );
-    }
+    let _ = engine.inner.texture_pool.upload_rgba(
+        gl, mask_tex, 0, 0, width, height, &mask_rgba,
+    );
 
     // Use flood_fill_apply shader
     let prog = &engine.inner.shaders.flood_fill_apply.program;
@@ -1508,8 +1481,14 @@ pub fn upload_layer_from_image_bitmap(
     }
 
     if let Some(&tex_handle) = engine.inner.layer_textures.get(layer_id) {
-        if let Some(texture) = engine.inner.texture_pool.get(tex_handle) {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
+        if engine.inner.texture_pool.use_float() {
+            // RGBA16F textures can't accept ImageBitmap directly.
+            // Upload to a temp RGBA8 texture, then blit to the float texture.
+            let temp_tex = match gl.create_texture() {
+                Some(t) => t,
+                None => { engine.inner.mark_layer_dirty(layer_id); return; }
+            };
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&temp_tex));
             let _ = gl.tex_image_2d_with_u32_and_u32_and_image_bitmap(
                 WebGl2RenderingContext::TEXTURE_2D,
                 0,
@@ -1518,6 +1497,47 @@ pub fn upload_layer_from_image_bitmap(
                 WebGl2RenderingContext::UNSIGNED_BYTE,
                 &bitmap,
             );
+            gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MIN_FILTER, WebGl2RenderingContext::LINEAR as i32);
+            gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MAG_FILTER, WebGl2RenderingContext::LINEAR as i32);
+
+            // Blit from temp to float texture via the blit shader
+            if let Some(dest_tex) = engine.inner.texture_pool.get(tex_handle) {
+                let fbo = gl.create_framebuffer();
+                gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, fbo.as_ref());
+                gl.framebuffer_texture_2d(
+                    WebGl2RenderingContext::FRAMEBUFFER,
+                    WebGl2RenderingContext::COLOR_ATTACHMENT0,
+                    WebGl2RenderingContext::TEXTURE_2D,
+                    Some(dest_tex),
+                    0,
+                );
+                gl.viewport(0, 0, width as i32, height as i32);
+
+                gl.use_program(Some(&engine.inner.shaders.blit.program));
+                gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&temp_tex));
+                if let Some(loc) = gl.get_uniform_location(&engine.inner.shaders.blit.program, "u_tex") {
+                    gl.uniform1i(Some(&loc), 0);
+                }
+                engine.inner.draw_fullscreen_quad();
+
+                gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+                gl.delete_framebuffer(fbo.as_ref());
+            }
+
+            gl.delete_texture(Some(&temp_tex));
+        } else {
+            if let Some(texture) = engine.inner.texture_pool.get(tex_handle) {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
+                let _ = gl.tex_image_2d_with_u32_and_u32_and_image_bitmap(
+                    WebGl2RenderingContext::TEXTURE_2D,
+                    0,
+                    WebGl2RenderingContext::RGBA as i32,
+                    WebGl2RenderingContext::RGBA,
+                    WebGl2RenderingContext::UNSIGNED_BYTE,
+                    &bitmap,
+                );
+            }
         }
     }
 

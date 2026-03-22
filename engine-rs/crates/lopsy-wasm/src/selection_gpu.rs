@@ -1,4 +1,3 @@
-use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
 
 pub fn set_selection_mask(
@@ -31,17 +30,9 @@ pub fn set_selection_mask(
         rgba[i * 4 + 3] = 255;
     }
 
-    if let Some(texture) = engine.texture_pool.get(tex_handle) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
-        let _ = gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
-            WebGl2RenderingContext::TEXTURE_2D,
-            0, 0, 0,
-            width as i32, height as i32,
-            WebGl2RenderingContext::RGBA,
-            WebGl2RenderingContext::UNSIGNED_BYTE,
-            Some(&rgba),
-        );
-    }
+    let _ = engine.texture_pool.upload_rgba(
+        gl, tex_handle, 0, 0, width, height, &rgba,
+    );
 
     engine.selection_mask_texture = Some(tex_handle);
     engine.needs_recomposite = true;

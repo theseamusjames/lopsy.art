@@ -149,6 +149,22 @@ export function useCanvasRendering(
 
     let cancelled = false;
 
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      console.error('[Lopsy] WebGL context lost');
+      engineReadyRef.current = false;
+    };
+    const handleContextRestored = () => {
+      console.warn('[Lopsy] WebGL context restored — reinitializing');
+      initEngine(canvas).then((engine) => {
+        engineReadyRef.current = true;
+        dirtyRef.current = true;
+        markAllLayersDirty(engine);
+      });
+    };
+    canvas.addEventListener('webglcontextlost', handleContextLost);
+    canvas.addEventListener('webglcontextrestored', handleContextRestored);
+
     initEngine(canvas).then((engine) => {
       if (cancelled) {
         destroyEngine();
@@ -163,6 +179,8 @@ export function useCanvasRendering(
     return () => {
       cancelled = true;
       engineReadyRef.current = false;
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
+      canvas.removeEventListener('webglcontextrestored', handleContextRestored);
       destroyEngine();
       resetTrackedState();
     };
@@ -205,7 +223,11 @@ export function useCanvasRendering(
         const overlay = overlayCanvasRef.current;
         const container = containerRef.current;
         if (overlay && container) {
-          renderFrame(overlay, container, antPhaseRef);
+          try {
+            renderFrame(overlay, container, antPhaseRef);
+          } catch (e) {
+            console.error('[Lopsy] Render error (recovering):', e);
+          }
         }
       }
 

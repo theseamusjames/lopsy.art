@@ -2,6 +2,20 @@ use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
 
 pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
+    // If the layer has a lazy 1x1 texture, expand it to document size
+    // so the stroke texture covers the full painting area.
+    if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
+        let (lw, lh) = engine.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
+        if lw <= 1 && lh <= 1 {
+            let new_tex = engine.texture_pool.acquire(&engine.gl, engine.doc_width, engine.doc_height)?;
+            let old = engine.layer_textures.insert(layer_id.to_string(), new_tex);
+            if let Some(old_tex) = old {
+                engine.texture_pool.release(old_tex);
+            }
+            engine.mark_layer_dirty(layer_id);
+        }
+    }
+
     // Create a stroke texture matching the layer size
     if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
         let (w, h) = engine.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
@@ -160,17 +174,9 @@ pub fn apply_eraser_dab_batch(
         Ok(h) => h,
         Err(_) => return,
     };
-    if let Some(tex) = engine.texture_pool.get(stamp_tex) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex));
-        let _ = gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
-            WebGl2RenderingContext::TEXTURE_2D,
-            0, 0, 0,
-            stamp_size as i32, stamp_size as i32,
-            WebGl2RenderingContext::RGBA,
-            WebGl2RenderingContext::UNSIGNED_BYTE,
-            Some(&stamp_rgba),
-        );
-    }
+    let _ = engine.texture_pool.upload_rgba(
+        gl, stamp_tex, 0, 0, stamp_size, stamp_size, &stamp_rgba,
+    );
 
     // For each dab: render eraser pass (layer -> scratch with erased alpha -> copy back)
     let prog = &engine.shaders.eraser_dab.program;

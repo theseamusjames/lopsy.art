@@ -55,17 +55,9 @@ pub fn apply_clone_stamp_dab_batch(
         Ok(h) => h,
         Err(_) => return,
     };
-    if let Some(tex) = engine.texture_pool.get(stamp_tex) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex));
-        let _ = gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
-            WebGl2RenderingContext::TEXTURE_2D,
-            0, 0, 0,
-            stamp_size as i32, stamp_size as i32,
-            WebGl2RenderingContext::RGBA,
-            WebGl2RenderingContext::UNSIGNED_BYTE,
-            Some(&stamp_tex_data),
-        );
-    }
+    let _ = engine.texture_pool.upload_rgba(
+        gl, stamp_tex, 0, 0, stamp_size, stamp_size, &stamp_tex_data,
+    );
 
     let prog = &engine.shaders.clone_stamp.program;
     gl.use_program(Some(prog));

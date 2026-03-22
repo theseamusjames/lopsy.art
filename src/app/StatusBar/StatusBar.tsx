@@ -14,7 +14,12 @@ export function StatusBar() {
 
   return (
     <div className={styles.bar}>
-      <span className={styles.item}>{Math.round(zoom * 100)}%</span>
+      <span
+        className={styles.item}
+        onDoubleClick={() => useEditorStore.getState().setZoom(1)}
+      >
+        {Math.round(zoom * 100)}%
+      </span>
       <span className={styles.divider} />
       <span className={styles.item}>
         X: <span className={styles.number}>{cursorX}</span> Y:{' '}

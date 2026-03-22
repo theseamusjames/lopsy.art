@@ -10,6 +10,9 @@ uniform vec2 u_srcOffset;  // layer position in document pixels
 uniform vec2 u_srcSize;    // layer texture size in pixels
 uniform vec2 u_docSize;    // document size in pixels
 uniform int u_srcPremultiplied; // 1 if source is premultiplied alpha
+uniform int u_overlayEnabled;   // 1 if color overlay is active
+uniform vec3 u_overlayColor;    // overlay color (RGB)
+uniform float u_overlayOpacity; // overlay mix factor
 out vec4 fragColor;
 
 // RGB <-> HSL helpers
@@ -142,6 +145,11 @@ void main() {
     // Un-premultiply if source is premultiplied (e.g. stroke texture)
     if (u_srcPremultiplied == 1 && src.a > 0.001) {
         src.rgb /= src.a;
+    }
+
+    // Apply color overlay inline — avoids the scratch buffer feedback loop
+    if (u_overlayEnabled == 1) {
+        src.rgb = mix(src.rgb, u_overlayColor, u_overlayOpacity);
     }
 
     float sa = src.a * u_opacity;

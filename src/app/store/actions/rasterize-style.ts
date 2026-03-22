@@ -1,8 +1,9 @@
 import type { DocumentState, Layer } from '../../../types';
 import type { EditorState } from '../types';
-import { rasterizeEffectsToImageData } from '../../../engine/effects-renderer';
 import { hasEnabledEffects, DEFAULT_EFFECTS } from '../../../layers/layer-model';
 import { createImageData } from '../../../engine/color-space';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { rasterizeLayerEffects } from '../../../engine-wasm/wasm-bridge';
 
 export function computeRasterizeStyle(
   doc: DocumentState,
@@ -13,11 +14,19 @@ export function computeRasterizeStyle(
   const layer = doc.layers.find((l) => l.id === activeId);
   if (!layer || !hasEnabledEffects(layer.effects)) return undefined;
 
-  const data = layerPixelData.get(activeId) ?? createImageData(doc.width, doc.height);
-  const result = rasterizeEffectsToImageData(layer, data);
+  const engine = getEngine();
+  if (!engine) return undefined;
+
+  // Use the GPU compositor to render the layer with effects —
+  // this produces output identical to the live rendering.
+  const pixels = rasterizeLayerEffects(engine, activeId);
+  if (!pixels || pixels.length === 0) return undefined;
+
+  const result = createImageData(doc.width, doc.height);
+  result.data.set(new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength));
 
   const pixelData = new Map(layerPixelData);
-  pixelData.set(activeId, result.imageData);
+  pixelData.set(activeId, result);
 
   return {
     document: {
@@ -26,10 +35,10 @@ export function computeRasterizeStyle(
         l.id === activeId
           ? {
               ...l,
-              x: l.x + result.offsetX,
-              y: l.y + result.offsetY,
+              x: 0,
+              y: 0,
               effects: DEFAULT_EFFECTS,
-              ...(l.type === 'raster' ? { width: result.imageData.width, height: result.imageData.height } : {}),
+              ...(l.type === 'raster' ? { width: doc.width, height: doc.height } : {}),
             } as Layer
           : l,
       ),

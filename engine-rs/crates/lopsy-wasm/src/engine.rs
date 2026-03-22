@@ -59,7 +59,7 @@ pub struct EngineInner {
 impl EngineInner {
     pub fn new(gpu_ctx: GpuContext, shaders: ShaderPrograms) -> Result<Self, String> {
         let gl = gpu_ctx.gl.clone();
-        let mut texture_pool = TexturePool::new();
+        let mut texture_pool = TexturePool::new(gpu_ctx.has_half_float);
         let mut fbo_pool = FramebufferPool::new();
 
         // Default document size — will be resized
@@ -69,6 +69,11 @@ impl EngineInner {
         let composite_texture = texture_pool.acquire(&gl, doc_w, doc_h)?;
         let scratch_texture_a = texture_pool.acquire(&gl, doc_w, doc_h)?;
         let scratch_texture_b = texture_pool.acquire(&gl, doc_w, doc_h)?;
+
+        // System textures use NEAREST — they are always sampled 1:1 at exact texel centers
+        texture_pool.set_nearest_filter(&gl, composite_texture);
+        texture_pool.set_nearest_filter(&gl, scratch_texture_a);
+        texture_pool.set_nearest_filter(&gl, scratch_texture_b);
 
         let composite_fbo = fbo_pool.create(&gl)?;
         let scratch_fbo_a = fbo_pool.create(&gl)?;
@@ -134,6 +139,11 @@ impl EngineInner {
         self.composite_texture = self.texture_pool.acquire(&self.gl, width, height)?;
         self.scratch_texture_a = self.texture_pool.acquire(&self.gl, width, height)?;
         self.scratch_texture_b = self.texture_pool.acquire(&self.gl, width, height)?;
+
+        // System textures use NEAREST — always sampled 1:1
+        self.texture_pool.set_nearest_filter(&self.gl, self.composite_texture);
+        self.texture_pool.set_nearest_filter(&self.gl, self.scratch_texture_a);
+        self.texture_pool.set_nearest_filter(&self.gl, self.scratch_texture_b);
 
         self.fbo_pool.attach_texture(
             &self.gl, self.composite_fbo,

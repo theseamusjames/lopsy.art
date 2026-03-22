@@ -46,6 +46,17 @@ export function DropShadowForm({ shadow, onChange }: DropShadowFormProps) {
           <Slider value={shadow.spread} min={0} max={100} onChange={(v) => onChange({ ...shadow, spread: v })} />
         </div>
       </div>
+      <div className={styles.row}>
+        <span className={styles.fieldLabel}>Opacity</span>
+        <div className={styles.sliderWrap}>
+          <Slider
+            value={Math.round((shadow.opacity ?? 0.75) * 100)}
+            min={0}
+            max={100}
+            onChange={(v) => onChange({ ...shadow, opacity: v / 100 })}
+          />
+        </div>
+      </div>
     </>
   );
 }
