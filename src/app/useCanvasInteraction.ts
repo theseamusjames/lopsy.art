@@ -99,30 +99,30 @@ export function useCanvasInteraction(
       const hasSelection = useEditorStore.getState().selection.active;
       const useGpuStroke = engine && isPaintTool && !maskEditMode && !hasSelection;
 
-      // Check if GPU already has the texture (no JS data means GPU is source of truth)
-      const hadJsData = editorState.layerPixelData.has(activeLayerId) || editorState.sparseLayerData.has(activeLayerId);
-
-      // Expand cropped layer back to full canvas size for editing
-      const imageData = editorState.expandLayerForEditing(activeLayerId);
-      // Re-read activeLayer after expand (position may have changed)
-      const expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
-      const layerPos: Point = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
-      const pixelBuffer = PixelBuffer.wrapImageData(imageData);
+      let pixelBuffer: PixelBuffer;
+      let paintSurface: PixelBuffer;
+      let expandedLayer = activeLayer;
+      let layerPos: Point = { x: canvasPos.x - activeLayer.x, y: canvasPos.y - activeLayer.y };
 
       if (useGpuStroke) {
-        // Only upload if JS had data (sparse/dense) that needed syncing.
-        // When !hadJsData, the GPU texture is already source of truth.
-        if (hadJsData) {
-          const rawBytes = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
-          uploadLayerPixels(engine, activeLayerId, rawBytes, imageData.width, imageData.height, expandedLayer.x, expandedLayer.y);
-        }
+        // GPU path: no JS pixel data needed. The engine handles the
+        // layer texture directly — no expand, no upload, no round-trip.
         beginStroke(engine, activeLayerId);
+        // Create a minimal dummy buffer for the context (paint handlers
+        // ignore it when the GPU engine is available).
+        const dummyData = new ImageData(1, 1);
+        pixelBuffer = PixelBuffer.wrapImageData(dummyData);
+        paintSurface = pixelBuffer;
       } else {
-        // CPU fallback: use bitmap cache painting canvas
+        // CPU fallback: expand layer to full canvas for pixel manipulation
+        const imageData = editorState.expandLayerForEditing(activeLayerId);
+        expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
+        layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
+        pixelBuffer = PixelBuffer.wrapImageData(imageData);
         invalidateBitmapCache(activeLayerId);
         createPaintingCanvas(activeLayerId, imageData);
+        paintSurface = wrapWithSelectionMask(pixelBuffer, expandedLayer.x, expandedLayer.y);
       }
-      const paintSurface = wrapWithSelectionMask(pixelBuffer, expandedLayer.x, expandedLayer.y);
       const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer, pixelBuffer, paintSurface);
 
       // Transform handle interaction (pre-tool dispatch)
