@@ -233,17 +233,14 @@ pub fn read_layer_pixels_compressed(engine: &Engine, layer_id: &str) -> Vec<u8> 
         .map(|l| l.y)
         .unwrap_or(0);
 
-    // RLE compress the cropped pixel data
-    let compressed = lopsy_core::compress::rle_compress(&cropped);
-
-    // Build result: 16-byte header (4 x i32 LE) + compressed data
+    // Build result: 16-byte header (4 x i32 LE) + raw cropped pixel data
     // Header position = layer document position + crop offset within texture
-    let mut result = Vec::with_capacity(16 + compressed.len());
+    let mut result = Vec::with_capacity(16 + cropped.len());
     result.extend_from_slice(&(layer_x + rect.x).to_le_bytes());
     result.extend_from_slice(&(layer_y + rect.y).to_le_bytes());
     result.extend_from_slice(&(rect.width as i32).to_le_bytes());
     result.extend_from_slice(&(rect.height as i32).to_le_bytes());
-    result.extend_from_slice(&compressed);
+    result.extend_from_slice(&cropped);
     result
 }
 
@@ -263,14 +260,12 @@ pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compr
         return Err(JsError::new("Invalid dimensions in compressed header"));
     }
 
+    let pixel_data = &compressed[16..];
     let expected_len = (w as usize) * (h as usize) * 4;
-    let decompressed = lopsy_core::compress::rle_decompress(&compressed[16..], expected_len);
 
     // Expand the cropped data back to a full document-sized texture.
     // The header (x, y) is the content's document position. We place the
     // cropped pixels at that offset within a cleared document-size buffer.
-    // This ensures the GPU texture matches the JS document's expectations
-    // (which may say the layer is full-size at position 0,0).
     let doc_w = engine.inner.doc_width;
     let doc_h = engine.inner.doc_height;
     let full_size = (doc_w as usize) * (doc_h as usize) * 4;
@@ -284,8 +279,8 @@ pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compr
         if dst_y >= doc_h as usize { continue; }
         let dst_start = (dst_y * doc_w as usize + dst_x) * 4;
         let dst_end = dst_start + (w as usize) * 4;
-        if dst_end <= full_size && src_end <= decompressed.len() {
-            full_data[dst_start..dst_end].copy_from_slice(&decompressed[src_start..src_end]);
+        if dst_end <= full_size && src_end <= expected_len && src_end <= pixel_data.len() {
+            full_data[dst_start..dst_end].copy_from_slice(&pixel_data[src_start..src_end]);
         }
     }
 

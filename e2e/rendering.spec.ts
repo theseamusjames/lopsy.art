@@ -3952,6 +3952,89 @@ test.describe('WASM/WebGL Rendering', () => {
     }
   });
 
+  test('gradient survives adding new layer and painting', async ({ page }) => {
+    await createDocument(page, 300, 300, true);
+    await fitToView(page);
+
+    // Fill the Background layer with red (left half) and blue (right half)
+    await paintRect(page, 0, 0, 150, 300, { r: 255, g: 0, b: 0, a: 255 });
+    await paintRect(page, 150, 0, 150, 300, { r: 0, g: 0, b: 255, a: 255 });
+    await page.waitForTimeout(300);
+
+    // Verify gradient is visible
+    const beforeResult = await page.evaluate(async () => {
+      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+        (() => Promise<{ width: number; height: number; pixels: number[] } | null>) | undefined;
+      if (!readFn) return null;
+      const data = await readFn();
+      if (!data) return null;
+      let redPixels = 0, bluePixels = 0;
+      for (let i = 0; i < data.pixels.length; i += 4) {
+        if (data.pixels[i]! > 200 && data.pixels[i+2]! < 50) redPixels++;
+        if (data.pixels[i]! < 50 && data.pixels[i+2]! > 200) bluePixels++;
+      }
+      return { redPixels, bluePixels };
+    });
+    console.log('Before adding layer:', JSON.stringify(beforeResult));
+
+    // Add a new layer and paint a circle on it
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          addLayer: () => void;
+          pushHistory: (label?: string) => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
+      };
+      store.getState().addLayer();
+      const id = store.getState().document.activeLayerId;
+      store.getState().pushHistory('Circle');
+      const data = store.getState().getOrCreateLayerPixelData(id);
+      const cx = 150, cy = 150, r = 60;
+      for (let py = 0; py < data.height; py++) {
+        for (let px = 0; px < data.width; px++) {
+          if (Math.sqrt((px-cx)**2 + (py-cy)**2) <= r) {
+            const idx = (py * data.width + px) * 4;
+            data.data[idx] = 0; data.data[idx+1] = 0; data.data[idx+2] = 0; data.data[idx+3] = 255;
+          }
+        }
+      }
+      store.getState().updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'gradient-survives-new-layer.png') });
+
+    // Verify BOTH layers are visible: gradient (red+blue pixels) AND circle (black on top)
+    const afterResult = await page.evaluate(async () => {
+      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+        (() => Promise<{ width: number; height: number; pixels: number[] } | null>) | undefined;
+      if (!readFn) return null;
+      const data = await readFn();
+      if (!data) return null;
+      let redPixels = 0, bluePixels = 0, blackPixels = 0;
+      for (let i = 0; i < data.pixels.length; i += 4) {
+        const r = data.pixels[i]!, g = data.pixels[i+1]!, b = data.pixels[i+2]!;
+        if (r === 46 && g === 46 && b === 46) continue; // workspace
+        if (r > 200 && b < 50) redPixels++;
+        if (r < 50 && b > 200) bluePixels++;
+        if (r < 10 && g < 10 && b < 10) blackPixels++;
+      }
+      return { redPixels, bluePixels, blackPixels };
+    });
+    console.log('After adding layer + circle:', JSON.stringify(afterResult));
+
+    if (afterResult) {
+      // Gradient should still show around the circle
+      expect(afterResult.redPixels).toBeGreaterThan(1000);
+      expect(afterResult.bluePixels).toBeGreaterThan(1000);
+      // Circle should be visible
+      expect(afterResult.blackPixels).toBeGreaterThan(5000);
+    }
+  });
+
   test('inner glow sweep - screenshots at multiple sizes', async ({ page }) => {
     await createDocument(page, 300, 300, false);
     await fitToView(page);
