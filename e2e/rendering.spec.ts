@@ -3952,86 +3952,155 @@ test.describe('WASM/WebGL Rendering', () => {
     }
   });
 
-  test('gradient survives adding new layer and painting', async ({ page }) => {
-    await createDocument(page, 300, 300, true);
+  test('shape tool does not clear other layers', async ({ page }) => {
+    await createDocument(page, 300, 300, false);
     await fitToView(page);
 
-    // Fill the Background layer with red (left half) and blue (right half)
-    await paintRect(page, 0, 0, 150, 300, { r: 255, g: 0, b: 0, a: 255 });
-    await paintRect(page, 150, 0, 150, 300, { r: 0, g: 0, b: 255, a: 255 });
-    await page.waitForTimeout(300);
-
-    // Verify gradient is visible
-    const beforeResult = await page.evaluate(async () => {
-      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
-        (() => Promise<{ width: number; height: number; pixels: number[] } | null>) | undefined;
-      if (!readFn) return null;
-      const data = await readFn();
-      if (!data) return null;
-      let redPixels = 0, bluePixels = 0;
-      for (let i = 0; i < data.pixels.length; i += 4) {
-        if (data.pixels[i]! > 200 && data.pixels[i+2]! < 50) redPixels++;
-        if (data.pixels[i]! < 50 && data.pixels[i+2]! > 200) bluePixels++;
-      }
-      return { redPixels, bluePixels };
-    });
-    console.log('Before adding layer:', JSON.stringify(beforeResult));
-
-    // Add a new layer and paint a circle on it
+    // Layer 1 (Background): fill entirely with red via paintRect
+    // THEN simulate the GPU-only state by clearing JS pixel data
+    // (mimics how the gradient tool works - data only on GPU)
+    await paintRect(page, 0, 0, 300, 300, { r: 255, g: 0, b: 0, a: 255 });
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
+          layerPixelData: Map<string, unknown>;
+          sparseLayerData: Map<string, unknown>;
+          dirtyLayerIds: Set<string>;
+        };
+        setState: (s: Record<string, unknown>) => void;
+      };
+      // Clear JS data — simulate GPU-only state (like after gradient tool)
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const pix = new Map(state.layerPixelData);
+      pix.delete(id);
+      const sparse = new Map(state.sparseLayerData);
+      sparse.delete(id);
+      const dirty = new Set(state.dirtyLayerIds);
+      dirty.add(id);
+      store.setState({ layerPixelData: pix, sparseLayerData: sparse, dirtyLayerIds: dirty });
+    });
+    await page.waitForTimeout(200);
+
+    // Add Layer 2 and fill with green stripe, then clear JS data (GPU-only)
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
           addLayer: () => void;
-          pushHistory: (label?: string) => void;
+          document: { activeLayerId: string };
+          pushHistory: (l?: string) => void;
           getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
+          layerPixelData: Map<string, unknown>;
+          sparseLayerData: Map<string, unknown>;
+          dirtyLayerIds: Set<string>;
         };
+        setState: (s: Record<string, unknown>) => void;
       };
       store.getState().addLayer();
       const id = store.getState().document.activeLayerId;
-      store.getState().pushHistory('Circle');
+      store.getState().pushHistory('Green stripe');
       const data = store.getState().getOrCreateLayerPixelData(id);
-      const cx = 150, cy = 150, r = 60;
-      for (let py = 0; py < data.height; py++) {
-        for (let px = 0; px < data.width; px++) {
-          if (Math.sqrt((px-cx)**2 + (py-cy)**2) <= r) {
-            const idx = (py * data.width + px) * 4;
-            data.data[idx] = 0; data.data[idx+1] = 0; data.data[idx+2] = 0; data.data[idx+3] = 255;
-          }
+      for (let y = 100; y < 200; y++) {
+        for (let x = 0; x < data.width; x++) {
+          const idx = (y * data.width + x) * 4;
+          data.data[idx] = 0; data.data[idx+1] = 255; data.data[idx+2] = 0; data.data[idx+3] = 255;
         }
       }
       store.getState().updateLayerPixelData(id, data);
     });
     await page.waitForTimeout(300);
 
-    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'gradient-survives-new-layer.png') });
+    // Screenshot BEFORE clearing JS data
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'shape-step0-before-clear.png') });
 
-    // Verify BOTH layers are visible: gradient (red+blue pixels) AND circle (black on top)
-    const afterResult = await page.evaluate(async () => {
+    // Clear JS data for green layer — simulate GPU-only state
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          layerPixelData: Map<string, unknown>;
+          sparseLayerData: Map<string, unknown>;
+          dirtyLayerIds: Set<string>;
+        };
+        setState: (s: Record<string, unknown>) => void;
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const pix = new Map(state.layerPixelData);
+      pix.delete(id);
+      const sparse = new Map(state.sparseLayerData);
+      sparse.delete(id);
+      const dirty = new Set(state.dirtyLayerIds);
+      dirty.add(id);
+      store.setState({ layerPixelData: pix, sparseLayerData: sparse, dirtyLayerIds: dirty });
+    });
+    await page.waitForTimeout(300);
+
+    // Screenshot AFTER clearing JS data
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'shape-step1-after-clear.png') });
+
+    // Wait for another render cycle
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'shape-step2-after-sync.png') });
+
+    // Add Layer 3 and use the actual shape tool to draw a circle
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      };
+      store.getState().addLayer();
+    });
+    await page.waitForTimeout(200);
+
+    // Select shape tool
+    await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { setActiveTool: (t: string) => void };
+      };
+      ui.getState().setActiveTool('shape');
+    });
+    await page.waitForTimeout(100);
+
+    // Draw shape by dragging on canvas
+    const canvas = page.locator('canvas').first();
+    const box = await canvas.boundingBox();
+    if (box) {
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await page.mouse.move(cx - 60, cy - 60);
+      await page.mouse.down();
+      await page.mouse.move(cx + 60, cy + 60, { steps: 5 });
+      await page.mouse.up();
+    }
+    await page.waitForTimeout(500);
+
+    // Screenshot after shape
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'shape-after.png') });
+
+    // Verify all layers are visible
+    const result = await page.evaluate(async () => {
       const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
         (() => Promise<{ width: number; height: number; pixels: number[] } | null>) | undefined;
       if (!readFn) return null;
       const data = await readFn();
       if (!data) return null;
-      let redPixels = 0, bluePixels = 0, blackPixels = 0;
+      let red = 0, green = 0, blue = 0;
       for (let i = 0; i < data.pixels.length; i += 4) {
         const r = data.pixels[i]!, g = data.pixels[i+1]!, b = data.pixels[i+2]!;
-        if (r === 46 && g === 46 && b === 46) continue; // workspace
-        if (r > 200 && b < 50) redPixels++;
-        if (r < 50 && b > 200) bluePixels++;
-        if (r < 10 && g < 10 && b < 10) blackPixels++;
+        if (r === 46 && g === 46 && b === 46) continue;
+        if (r > 200 && g < 50 && b < 50) red++;
+        if (r < 50 && g > 200 && b < 50) green++;
+        if (r < 50 && g < 50 && b > 200) blue++;
       }
-      return { redPixels, bluePixels, blackPixels };
+      return { red, green, blue };
     });
-    console.log('After adding layer + circle:', JSON.stringify(afterResult));
+    console.log('Shape tool layer test:', JSON.stringify(result));
 
-    if (afterResult) {
-      // Gradient should still show around the circle
-      expect(afterResult.redPixels).toBeGreaterThan(1000);
-      expect(afterResult.bluePixels).toBeGreaterThan(1000);
-      // Circle should be visible
-      expect(afterResult.blackPixels).toBeGreaterThan(5000);
+    if (result) {
+      expect(result.red).toBeGreaterThan(1000);    // Background red still visible
+      expect(result.green).toBeGreaterThan(1000);   // Green stripe still visible
     }
   });
 

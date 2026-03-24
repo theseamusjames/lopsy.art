@@ -3,11 +3,19 @@ use lopsy_core::layer::LayerDesc;
 use crate::engine::EngineInner;
 
 pub fn add_layer(engine: &mut EngineInner, desc: LayerDesc) -> Result<(), String> {
-    // Start with 1x1 transparent texture — upload_pixels resizes on first data upload.
-    // Saves ~30 MB per empty layer on a 4000x2000 document.
-    let tex = engine.texture_pool.acquire(&engine.gl, 1, 1)?;
-    engine.layer_textures.insert(desc.id.clone(), tex);
-    engine.layer_stack.push(desc);
+    // Only create a texture if the layer doesn't already have one.
+    // uploadLayerPixels may have already been called for this layer
+    // (e.g. cropLayerToContent runs before syncLayers adds the layer).
+    if !engine.layer_textures.contains_key(&desc.id) {
+        let tex = engine.texture_pool.acquire(&engine.gl, 1, 1)?;
+        engine.layer_textures.insert(desc.id.clone(), tex);
+    }
+    // Only add to layer_stack if not already present
+    if !engine.layer_stack.iter().any(|l| l.id == desc.id) {
+        engine.layer_stack.push(desc);
+    } else {
+        update_layer(engine, desc);
+    }
     engine.needs_recomposite = true;
     Ok(())
 }
