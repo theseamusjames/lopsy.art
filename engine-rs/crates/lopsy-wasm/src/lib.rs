@@ -262,43 +262,29 @@ pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compr
 
     let pixel_data = &compressed[16..];
     let expected_len = (w as usize) * (h as usize) * 4;
-
-    // Expand the cropped data back to a full document-sized texture.
-    // The header (x, y) is the content's document position. We place the
-    // cropped pixels at that offset within a cleared document-size buffer.
-    let doc_w = engine.inner.doc_width;
-    let doc_h = engine.inner.doc_height;
-    let full_size = (doc_w as usize) * (doc_h as usize) * 4;
-    let mut full_data = vec![0u8; full_size];
-
-    for row in 0..h {
-        let src_start = (row as usize) * (w as usize) * 4;
-        let src_end = src_start + (w as usize) * 4;
-        let dst_y = (y + row) as usize;
-        let dst_x = x as usize;
-        if dst_y >= doc_h as usize { continue; }
-        let dst_start = (dst_y * doc_w as usize + dst_x) * 4;
-        let dst_end = dst_start + (w as usize) * 4;
-        if dst_end <= full_size && src_end <= expected_len && src_end <= pixel_data.len() {
-            full_data[dst_start..dst_end].copy_from_slice(&pixel_data[src_start..src_end]);
-        }
+    if pixel_data.len() < expected_len {
+        return Err(JsError::new("Snapshot pixel data shorter than header dimensions"));
     }
 
+    // Upload the cropped pixels directly as a cropped texture at the header
+    // position. This avoids expanding to full document size and prevents the
+    // double-offset bug: if we expanded to full-size at (0,0), then syncLayers
+    // would apply the layer's document position as an additional offset.
     layer_manager::upload_pixels(
         &mut engine.inner,
         layer_id,
-        &full_data,
-        doc_w,
-        doc_h,
-        0, 0,
+        &pixel_data[..expected_len],
+        w as u32,
+        h as u32,
+        x, y,
     ).map_err(|e| JsError::new(&e))?;
 
-    // Layer is now full document size at (0, 0) — matches JS document state
+    // Set the engine layer to match the snapshot's position and size
     if let Some(desc) = engine.inner.layer_stack.iter_mut().find(|l| l.id == layer_id) {
-        desc.x = 0;
-        desc.y = 0;
-        desc.width = doc_w;
-        desc.height = doc_h;
+        desc.x = x;
+        desc.y = y;
+        desc.width = w as u32;
+        desc.height = h as u32;
     }
 
     Ok(())
