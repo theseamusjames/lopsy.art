@@ -1,4 +1,4 @@
-import type { HistorySnapshot, SliceCreator } from './types';
+import type { HistorySnapshot, SliceCreator, SparseLayerEntry } from './types';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { getLayerTextureDimensions, uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
@@ -19,14 +19,18 @@ export interface HistorySlice {
 const EMPTY_LAYER_SENTINEL = new Uint8Array(0);
 
 /**
- * Snapshot GPU textures as compressed blobs.
+ * Snapshot layer pixel data as cropped blobs.
+ * Reads from JS pixel data or sparse data first (most current),
+ * falls back to GPU readback for GPU-only layers (brush/gradient/shape).
  * Non-dirty layers share blob references from the previous snapshot (zero-copy).
- * Layers with no GPU texture get an empty sentinel so undo can clear them.
  */
 function snapshotGpuLayers(
   layerOrder: readonly string[],
   dirtyIds: Set<string>,
   previous: HistorySnapshot | undefined,
+  pixelData?: Map<string, ImageData>,
+  sparseData?: Map<string, SparseLayerEntry>,
+  layers?: readonly { id: string; x: number; y: number }[],
 ): Map<string, Uint8Array> {
   const engine = getEngine();
   const gpuSnapshots = new Map<string, Uint8Array>();
@@ -38,12 +42,27 @@ function snapshotGpuLayers(
       continue;
     }
 
+    // Try JS pixel data first — it may be more current than the GPU
+    // (syncLayers uploads to GPU asynchronously in the rAF loop)
+    const jsData = pixelData?.get(layerId);
+    if (jsData) {
+      const blob = snapshotFromImageData(jsData, layerId, layers);
+      if (blob) { gpuSnapshots.set(layerId, blob); continue; }
+    }
+
+    // Try sparse data
+    const sparse = sparseData?.get(layerId);
+    if (sparse) {
+      const blob = snapshotFromSparse(sparse);
+      if (blob) { gpuSnapshots.set(layerId, blob); continue; }
+    }
+
+    // Fall back to GPU readback (for GPU-only layers)
     if (!engine) {
       gpuSnapshots.set(layerId, EMPTY_LAYER_SENTINEL);
       continue;
     }
 
-    // Check if the layer has a GPU texture
     const dims = getLayerTextureDimensions(engine, layerId);
     if (!dims || dims[0] === 0 || dims[1] === 0) {
       gpuSnapshots.set(layerId, EMPTY_LAYER_SENTINEL);
@@ -59,6 +78,88 @@ function snapshotGpuLayers(
   }
 
   return gpuSnapshots;
+}
+
+/** Build a snapshot blob from JS ImageData (crop to content, add header). */
+function snapshotFromImageData(
+  data: ImageData,
+  layerId: string,
+  layers?: readonly { id: string; x: number; y: number }[],
+): Uint8Array | null {
+  const layer = layers?.find(l => l.id === layerId);
+  const offsetX = layer?.x ?? 0;
+  const offsetY = layer?.y ?? 0;
+
+  // Find content bounds
+  let minX = data.width, minY = data.height, maxX = -1, maxY = -1;
+  for (let y = 0; y < data.height; y++) {
+    for (let x = 0; x < data.width; x++) {
+      if (data.data[(y * data.width + x) * 4 + 3]! > 0) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) return null; // empty
+
+  const cropW = maxX - minX + 1;
+  const cropH = maxY - minY + 1;
+  const cropped = new Uint8Array(cropW * cropH * 4);
+  for (let y = 0; y < cropH; y++) {
+    const srcStart = ((minY + y) * data.width + minX) * 4;
+    const dstStart = y * cropW * 4;
+    cropped.set(data.data.subarray(srcStart, srcStart + cropW * 4), dstStart);
+  }
+
+  // Build blob: 16-byte header + pixel data
+  const header = new ArrayBuffer(16);
+  const view = new DataView(header);
+  view.setInt32(0, offsetX + minX, true);
+  view.setInt32(4, offsetY + minY, true);
+  view.setInt32(8, cropW, true);
+  view.setInt32(12, cropH, true);
+
+  const result = new Uint8Array(16 + cropped.length);
+  result.set(new Uint8Array(header), 0);
+  result.set(cropped, 16);
+  return result;
+}
+
+/** Build a snapshot blob from sparse layer data. */
+function snapshotFromSparse(entry: SparseLayerEntry): Uint8Array | null {
+  const { sparse, offsetX, offsetY } = entry;
+  const w = sparse.width;
+  const h = sparse.height;
+  if (w === 0 || h === 0) return null;
+
+  // Reconstruct dense pixel data from sparse indices + rgba
+  const pixels = new Uint8Array(w * h * 4);
+  const indices = sparse.indices;
+  const rgba = sparse.rgba;
+  for (let i = 0; i < indices.length; i++) {
+    const idx = indices[i]!;
+    const px = idx * 4;
+    const sx = i * 4;
+    pixels[px] = rgba[sx]!;
+    pixels[px + 1] = rgba[sx + 1]!;
+    pixels[px + 2] = rgba[sx + 2]!;
+    pixels[px + 3] = rgba[sx + 3]!;
+  }
+
+  // Build blob: 16-byte header + pixel data
+  const header = new ArrayBuffer(16);
+  const view = new DataView(header);
+  view.setInt32(0, offsetX, true);
+  view.setInt32(4, offsetY, true);
+  view.setInt32(8, w, true);
+  view.setInt32(12, h, true);
+
+  const result = new Uint8Array(16 + pixels.length);
+  result.set(new Uint8Array(header), 0);
+  result.set(pixels, 16);
+  return result;
 }
 
 /**
@@ -88,6 +189,8 @@ function snapshotCurrentState(
   state: {
     document: HistorySnapshot['document'];
     dirtyLayerIds: Set<string>;
+    layerPixelData: Map<string, ImageData>;
+    sparseLayerData: Map<string, SparseLayerEntry>;
   },
   label: string,
   metadataOnly: boolean,
@@ -107,7 +210,10 @@ function snapshotCurrentState(
 
   // For the opposite stack, all layers are "dirty" since we need a full snapshot
   const allDirty = new Set(state.document.layerOrder);
-  const gpuSnapshots = snapshotGpuLayers(state.document.layerOrder, allDirty, prevSnapshot);
+  const gpuSnapshots = snapshotGpuLayers(
+    state.document.layerOrder, allDirty, prevSnapshot,
+    state.layerPixelData, state.sparseLayerData, state.document.layers,
+  );
 
   return {
     document: state.document,
@@ -178,7 +284,10 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   pushHistory: (label = 'Edit') => {
     const state = get();
     const prevSnapshot = state.undoStack[state.undoStack.length - 1];
-    const gpuSnapshots = snapshotGpuLayers(state.document.layerOrder, state.dirtyLayerIds, prevSnapshot);
+    const gpuSnapshots = snapshotGpuLayers(
+      state.document.layerOrder, state.dirtyLayerIds, prevSnapshot,
+      state.layerPixelData, state.sparseLayerData, state.document.layers,
+    );
 
     const snapshot: HistorySnapshot = {
       document: state.document,

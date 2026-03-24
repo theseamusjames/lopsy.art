@@ -4104,6 +4104,194 @@ test.describe('WASM/WebGL Rendering', () => {
     }
   });
 
+  test('undo/redo with layer moves preserves position', async ({ page }) => {
+    await createDocument(page, 400, 400, false);
+    await fitToView(page);
+
+    const store = () => `(window as unknown as Record<string, unknown>).__editorStore`;
+    const getState = (extra = '') => `(${store()} as { getState: () => Record<string, unknown> }).getState()${extra}`;
+
+    // Step 1: Add layer and paint red circle at center (200, 200)
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          addLayer: () => void;
+          document: { activeLayerId: string };
+          pushHistory: (l?: string) => void;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          updateLayerPosition: (id: string, x: number, y: number) => void;
+          undo: () => void;
+          redo: () => void;
+        };
+      };
+      const s = store.getState();
+
+      // Create circle layer
+      s.addLayer();
+      const circleId = store.getState().document.activeLayerId;
+      store.getState().pushHistory('Paint circle');
+      const data = store.getState().getOrCreateLayerPixelData(circleId);
+      for (let py = 0; py < data.height; py++) {
+        for (let px = 0; px < data.width; px++) {
+          if (Math.sqrt((px-200)**2 + (py-200)**2) <= 60) {
+            const idx = (py * data.width + px) * 4;
+            data.data[idx] = 255; data.data[idx+1] = 0; data.data[idx+2] = 0; data.data[idx+3] = 255;
+          }
+        }
+      }
+      store.getState().updateLayerPixelData(circleId, data);
+
+      // Steps 2-6: Add more layers with content (build up history)
+      for (let i = 0; i < 5; i++) {
+        store.getState().addLayer();
+        const id = store.getState().document.activeLayerId;
+        store.getState().pushHistory(`Fill ${i}`);
+        const d = store.getState().getOrCreateLayerPixelData(id);
+        // Small colored square in different positions
+        const ox = 50 + i * 60, oy = 50 + i * 60;
+        for (let py = oy; py < oy + 30; py++) {
+          for (let px = ox; px < ox + 30; px++) {
+            if (px < d.width && py < d.height) {
+              const idx = (py * d.width + px) * 4;
+              d.data[idx] = 0; d.data[idx+1] = 100 + i * 30; d.data[idx+2] = 255; d.data[idx+3] = 255;
+            }
+          }
+        }
+        store.getState().updateLayerPixelData(id, d);
+      }
+
+      // Now at step 7. Select the circle layer and move it.
+      store.getState().pushHistory('Move 1');
+      store.getState().updateLayerPosition(circleId, 50, 50);
+
+      store.getState().pushHistory('Move 2');
+      store.getState().updateLayerPosition(circleId, 80, 30);
+
+      // Steps 10-14: More edits on other layers
+      for (let i = 0; i < 5; i++) {
+        store.getState().addLayer();
+        const id = store.getState().document.activeLayerId;
+        store.getState().pushHistory(`Extra ${i}`);
+        const d = store.getState().getOrCreateLayerPixelData(id);
+        for (let py = 300; py < 330; py++) {
+          for (let px = 300 - i * 20; px < 330 - i * 20; px++) {
+            if (px >= 0 && px < d.width && py < d.height) {
+              const idx = (py * d.width + px) * 4;
+              d.data[idx] = 0; d.data[idx+1] = 255; d.data[idx+2] = 0; d.data[idx+3] = 255;
+            }
+          }
+        }
+        store.getState().updateLayerPixelData(id, d);
+      }
+    });
+    await page.waitForTimeout(500);
+
+    // Screenshot at step ~15 (circle is at 80, 30)
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'undo-move-step15.png') });
+
+    // Get circle layer ID and its position before moves
+    // After painting + crop, circle is at crop bounds (NOT 0,0)
+    const circleInfo = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } };
+      };
+      // The circle layer was moved to (80, 30). Find it.
+      const layers = store.getState().document.layers;
+      const moved = layers.find(l => l.x === 80 && l.y === 30);
+      return { id: moved?.id ?? '', movedX: moved?.x ?? 0, movedY: moved?.y ?? 0 };
+    });
+    const circleId = circleInfo.id;
+    console.log('Circle at step 15:', JSON.stringify(circleInfo));
+
+    // Undo until circle is no longer at (80, 30) — i.e. before the moves
+    // After painting+crop, the circle should be at the crop position (~140, ~140)
+    const undoLog = await page.evaluate((cid) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          undo: () => void;
+          document: { layers: Array<{ id: string; x: number; y: number }> };
+          undoStack: Array<{ label: string; gpuSnapshots: Map<string, Uint8Array> }>;
+        };
+      };
+      const log: string[] = [];
+      for (let i = 0; i < 30; i++) {
+        const layer = store.getState().document.layers.find(l => l.id === cid);
+        const stackLen = store.getState().undoStack.length;
+        const topLabel = stackLen > 0 ? store.getState().undoStack[stackLen - 1]?.label : 'none';
+        // Check if the top snapshot has circle data
+        const topSnap = stackLen > 0 ? store.getState().undoStack[stackLen - 1] : null;
+        const circleBlob = topSnap?.gpuSnapshots?.get(cid);
+        const blobLen = circleBlob ? circleBlob.length : 0;
+        log.push(`step ${i}: layer=(${layer?.x},${layer?.y}) stack=${stackLen} top="${topLabel}" blob=${blobLen}`);
+        if (!layer) break;
+        if (layer.x !== 80 && layer.x !== 50) break;
+        if (stackLen === 0) break;
+        store.getState().undo();
+      }
+      return log;
+    }, circleId);
+    console.log('Undo log:\n' + undoLog.join('\n'));
+    await page.waitForTimeout(500);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'undo-move-original.png') });
+
+    const posAtOriginal = await page.evaluate((cid) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } };
+      };
+      const layer = store.getState().document.layers.find(l => l.id === cid);
+      return layer ? { x: layer.x, y: layer.y } : null;
+    }, circleId);
+    console.log('Pre-move position:', JSON.stringify(posAtOriginal));
+
+    // Redo twice
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { redo: () => void };
+      };
+      store.getState().redo();
+      store.getState().redo();
+    });
+    await page.waitForTimeout(500);
+
+    const posAfterRedo = await page.evaluate((cid) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } };
+      };
+      const layer = store.getState().document.layers.find(l => l.id === cid);
+      return layer ? { x: layer.x, y: layer.y } : null;
+    }, circleId);
+    console.log('After redo x2:', JSON.stringify(posAfterRedo));
+
+    // Undo twice — should be back to original position
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { undo: () => void };
+      };
+      store.getState().undo();
+      store.getState().undo();
+    });
+    await page.waitForTimeout(500);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'undo-move-back-to-original.png') });
+
+    const posBackToOriginal = await page.evaluate((cid) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } };
+      };
+      const layer = store.getState().document.layers.find(l => l.id === cid);
+      return layer ? { x: layer.x, y: layer.y } : null;
+    }, circleId);
+    console.log('Back to original:', JSON.stringify(posBackToOriginal));
+
+    // Circle should be back at original position
+    if (posAtOriginal && posBackToOriginal) {
+      expect(posBackToOriginal.x).toBe(posAtOriginal.x);
+      expect(posBackToOriginal.y).toBe(posAtOriginal.y);
+    }
+  });
+
   test('inner glow sweep - screenshots at multiple sizes', async ({ page }) => {
     await createDocument(page, 300, 300, false);
     await fitToView(page);
