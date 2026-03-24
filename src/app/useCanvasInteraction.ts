@@ -5,7 +5,7 @@ import { PixelBuffer } from '../engine/pixel-data';
 import { invalidateBitmapCache, createPaintingCanvas, destroyPaintingCanvas } from '../engine/bitmap-cache';
 import { extractMaskFromSurface } from '../engine/mask-utils';
 import { getEngine } from '../engine-wasm/engine-state';
-import { beginStroke, endStroke, uploadLayerPixels } from '../engine-wasm/wasm-bridge';
+import { beginStroke, endStroke, uploadLayerPixels, hasFloat, dropFloat } from '../engine-wasm/wasm-bridge';
 
 import { clearActiveMaskEditBuffer } from './interactions/mask-buffer';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
@@ -277,6 +277,11 @@ export function useCanvasInteraction(
   const clearPersistentTransform = useCallback(() => {
     persistentTransformRef.current = null;
     floatingSelectionRef.current = null;
+    // Release GPU float textures if any
+    const eng = getEngine();
+    if (eng && hasFloat(eng)) {
+      dropFloat(eng);
+    }
   }, []);
 
   const nudgeMove = useCallback((dx: number, dy: number) => {

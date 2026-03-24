@@ -1,79 +1,36 @@
 import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
-import { PixelBuffer } from '../../../engine/pixel-data';
-import { getSelectionMaskValue } from '../../../selection/selection';
-import type { Layer } from '../../../types/layers';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { fillWithColor } from '../../../engine-wasm/wasm-bridge';
 import type { MenuDef } from './types';
 
 export function fillSelection(): void {
   const state = useEditorStore.getState();
   const activeId = state.document.activeLayerId;
   if (!activeId) return;
-  const layer = state.document.layers.find((l) => l.id === activeId);
-  if (!layer) return;
+
+  const engine = getEngine();
+  if (!engine) return;
 
   state.pushHistory();
-  const imageData = state.getOrCreateLayerPixelData(activeId);
-  let buf = PixelBuffer.fromImageData(imageData);
   const color = useUIStore.getState().foregroundColor;
-  const sel = state.selection;
 
-  if (sel.active && sel.mask) {
-    const { width: docW, height: docH } = state.document;
-    const needsExpand =
-      layer.x !== 0 || layer.y !== 0 ||
-      buf.width < docW || buf.height < docH;
+  // GPU fill: uses the engine's selection mask if active
+  fillWithColor(engine, activeId, color.r / 255, color.g / 255, color.b / 255, color.a);
 
-    if (needsExpand) {
-      buf = expandLayerToCanvas(buf, layer.x, layer.y, docW, docH);
-      useEditorStore.setState({
-        document: {
-          ...state.document,
-          layers: state.document.layers.map((l) =>
-            l.id === activeId
-              ? { ...l, x: 0, y: 0, width: docW, height: docH } as Layer
-              : l,
-          ),
-        },
-        renderVersion: state.renderVersion + 1,
-      });
-    }
-
-    for (let y = 0; y < sel.maskHeight; y++) {
-      for (let x = 0; x < sel.maskWidth; x++) {
-        if (getSelectionMaskValue(sel, x, y) > 0) {
-          buf.setPixel(x, y, color);
-        }
-      }
-    }
-  } else {
-    buf.fill(color);
-  }
-  state.updateLayerPixelData(activeId, buf.toImageData());
-}
-
-function expandLayerToCanvas(
-  buf: PixelBuffer,
-  layerX: number,
-  layerY: number,
-  canvasWidth: number,
-  canvasHeight: number,
-): PixelBuffer {
-  const expanded = new PixelBuffer(canvasWidth, canvasHeight);
-  const src = buf.rawData;
-  const dst = expanded.rawData;
-  for (let y = 0; y < buf.height; y++) {
-    const dy = y + layerY;
-    if (dy < 0 || dy >= canvasHeight) continue;
-    const srcRow = y * buf.width * 4;
-    const dstStart = (dy * canvasWidth + Math.max(0, layerX)) * 4;
-    const srcStart = srcRow + Math.max(0, -layerX) * 4;
-    const copyWidth = Math.min(buf.width, canvasWidth - layerX) - Math.max(0, -layerX);
-    if (copyWidth > 0) {
-      dst.set(src.subarray(srcStart, srcStart + copyWidth * 4), dstStart);
-    }
-  }
-  return expanded;
+  // Clear stale JS pixel data
+  const pixelDataMap = new Map(state.layerPixelData);
+  pixelDataMap.delete(activeId);
+  const sparseMap = new Map(state.sparseLayerData);
+  sparseMap.delete(activeId);
+  const dirtyIds = new Set(state.dirtyLayerIds);
+  dirtyIds.add(activeId);
+  useEditorStore.setState({
+    layerPixelData: pixelDataMap,
+    sparseLayerData: sparseMap,
+    dirtyLayerIds: dirtyIds,
+  });
+  state.notifyRender();
 }
 
 export const editMenu: MenuDef = {

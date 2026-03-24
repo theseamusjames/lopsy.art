@@ -38,9 +38,11 @@ export interface HistorySnapshot {
 }
 
 export interface ClipboardData {
-  imageData: ImageData;
+  width: number;
+  height: number;
   offsetX: number;
   offsetY: number;
+  gpuResident: true;
 }
 
 export interface EditorState {

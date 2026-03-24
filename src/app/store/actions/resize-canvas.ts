@@ -1,11 +1,11 @@
 import type { DocumentState, Layer } from '../../../types';
 import type { EditorState } from '../types';
-import { resizeCanvasPixelData } from '../../../engine/canvas-ops';
-import { createImageData } from '../../../engine/color-space';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { resizeCanvasTexture } from '../../../engine-wasm/wasm-bridge';
 
 export function computeResizeCanvas(
   doc: DocumentState,
-  layerPixelData: Map<string, ImageData>,
+  _layerPixelData: Map<string, ImageData>,
   renderVersion: number,
   newWidth: number,
   newHeight: number,
@@ -17,7 +17,7 @@ export function computeResizeCanvas(
   const offsetX = Math.round((newWidth - oldW) * anchorX);
   const offsetY = Math.round((newHeight - oldH) * anchorY);
 
-  const pixelData = new Map<string, ImageData>();
+  const engine = getEngine();
   const newLayers: Layer[] = [];
 
   for (const layer of doc.layers) {
@@ -25,11 +25,16 @@ export function computeResizeCanvas(
       newLayers.push(layer);
       continue;
     }
-    const oldData = layerPixelData.get(layer.id);
-    const newData = oldData
-      ? resizeCanvasPixelData(oldData, layer.x, layer.y, newWidth, newHeight, offsetX, offsetY)
-      : createImageData(newWidth, newHeight);
-    pixelData.set(layer.id, newData);
+
+    // GPU-side canvas resize: reposition pixels within new canvas
+    if (engine) {
+      resizeCanvasTexture(
+        engine, layer.id,
+        layer.x, layer.y, oldW, oldH,
+        newWidth, newHeight, offsetX, offsetY,
+      );
+    }
+
     newLayers.push({ ...layer, x: 0, y: 0, width: newWidth, height: newHeight } as Layer);
   }
 
@@ -40,7 +45,7 @@ export function computeResizeCanvas(
       height: newHeight,
       layers: newLayers,
     },
-    layerPixelData: pixelData,
+    layerPixelData: new Map(),
     renderVersion: renderVersion + 1,
   };
 }

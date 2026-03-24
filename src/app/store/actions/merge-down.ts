@@ -1,9 +1,8 @@
 import type { DocumentState } from '../../../types';
 import type { EditorState } from '../types';
-import { compositeOver } from '../../../engine/compositing';
-import { rasterizeEffectsToImageData } from '../../../engine/effects-renderer';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { mergeLayers, rasterizeLayerEffects, uploadLayerPixels } from '../../../engine-wasm/wasm-bridge';
 import { hasEnabledEffects } from '../../../layers/layer-model';
-import { createImageData } from '../../../engine/color-space';
 
 export function computeMergeDown(
   doc: DocumentState,
@@ -20,32 +19,24 @@ export function computeMergeDown(
   const bottomLayer = doc.layers.find((l) => l.id === belowId);
   if (!topLayer || !bottomLayer) return undefined;
 
-  let topData = layerPixelData.get(activeId) ?? createImageData(doc.width, doc.height);
-  const bottomData = layerPixelData.get(belowId) ?? createImageData(doc.width, doc.height);
+  const engine = getEngine();
+  if (engine) {
+    // If top layer has effects, rasterize them first
+    if (hasEnabledEffects(topLayer.effects)) {
+      const rasterized = rasterizeLayerEffects(engine, activeId);
+      if (rasterized && rasterized.length > 0) {
+        uploadLayerPixels(engine, activeId, rasterized, doc.width, doc.height, 0, 0);
+      }
+    }
 
-  let topX = topLayer.x;
-  let topY = topLayer.y;
-
-  if (hasEnabledEffects(topLayer.effects)) {
-    const rasterized = rasterizeEffectsToImageData(topLayer, topData);
-    topData = rasterized.imageData;
-    topX += rasterized.offsetX;
-    topY += rasterized.offsetY;
+    // GPU-side merge: composite top onto bottom
+    mergeLayers(engine, activeId, belowId);
   }
 
-  const result = createImageData(bottomData.width, bottomData.height);
-  result.data.set(bottomData.data);
-  compositeOver(
-    topData.data, bottomData.data,
-    topData.width, topData.height,
-    bottomData.width, bottomData.height,
-    topX - bottomLayer.x, topY - bottomLayer.y,
-    topLayer.opacity, result.data,
-  );
-
+  // Clear stale JS pixel data
   const pixelData = new Map(layerPixelData);
-  pixelData.set(belowId, result);
   pixelData.delete(activeId);
+  pixelData.delete(belowId);
 
   return {
     document: {

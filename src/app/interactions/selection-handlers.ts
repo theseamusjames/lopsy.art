@@ -9,8 +9,8 @@ import {
   createEllipseSelection as tsCreateEllipseSelection,
   selectionBounds as tsSelectionBounds,
 } from '../../selection/selection';
-import { floodFill } from '../../tools/fill/fill';
-import { OffsetSurface } from '../../engine/pixel-data';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { floodFill as wasmFloodFill, readLayerPixelsForFill as wasmReadLayerPixelsForFill } from '../../engine-wasm/wasm-bridge';
 import { createPolygonMask as tsCreatePolygonMask } from '../../tools/lasso/lasso';
 import { createTransformState } from '../../tools/transform/transform';
 import { snapPositionToGrid } from '../../tools/move/move';
@@ -96,7 +96,7 @@ export function handleSelectionDown(
   ctx: InteractionContext,
   tool: 'marquee-rect' | 'marquee-ellipse' | 'wand' | 'lasso',
 ): InteractionState | undefined {
-  const { canvasPos, activeLayerId, activeLayer, pixelBuffer } = ctx;
+  const { canvasPos, activeLayerId } = ctx;
 
   if (tool === 'marquee-rect' || tool === 'marquee-ellipse') {
     useUIStore.getState().setTransform(null);
@@ -117,19 +117,23 @@ export function handleSelectionDown(
   }
 
   if (tool === 'wand') {
+    const engine = getEngine();
+    if (!engine) return undefined;
     const toolSettings = useToolSettingsStore.getState();
     const wandTolerance = toolSettings.wandTolerance;
     const wandContiguous = toolSettings.wandContiguous;
     const editorState = useEditorStore.getState();
     const { width: docW, height: docH } = editorState.document;
-    const canvasSurface = new OffsetSurface(pixelBuffer, docW, docH, activeLayer.x, activeLayer.y);
-    const wandPixels = floodFill(canvasSurface, canvasPos.x, canvasPos.y, { r: 0, g: 0, b: 0, a: 0 }, wandTolerance, wandContiguous);
-    const wandMask = new Uint8ClampedArray(docW * docH);
-    for (const pt of wandPixels) {
-      if (pt.x >= 0 && pt.x < docW && pt.y >= 0 && pt.y < docH) {
-        wandMask[pt.y * docW + pt.x] = 255;
-      }
-    }
+    // Read layer pixels from GPU for flood fill region detection
+    const pixelData = wasmReadLayerPixelsForFill(engine, activeLayerId);
+    const cx = Math.round(canvasPos.x);
+    const cy = Math.round(canvasPos.y);
+    const wandMaskRaw = wasmFloodFill(
+      pixelData, docW, docH,
+      cx, cy, 0, 0, 0, 0,
+      wandTolerance, wandContiguous,
+    );
+    const wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
     const wandBounds = selectionBounds(wandMask, docW, docH);
     if (wandBounds) {
       editorState.setSelection(wandBounds, wandMask, docW, docH);

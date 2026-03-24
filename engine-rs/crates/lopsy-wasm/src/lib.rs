@@ -200,6 +200,167 @@ pub fn rasterize_layer_effects(engine: &mut Engine, layer_id: &str) -> Vec<u8> {
     compositor::composite_single_layer(&mut engine.inner, layer_id).unwrap_or_default()
 }
 
+// ============================================================
+// GPU-only Layer Operations (Phase 2-4 of GPU migration)
+// ============================================================
+
+#[wasm_bindgen(js_name = "duplicateLayerTexture")]
+pub fn duplicate_layer_texture(engine: &mut Engine, src_id: &str, dst_id: &str) -> Result<(), JsError> {
+    layer_manager::duplicate_texture(&mut engine.inner, src_id, dst_id)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "mergeLayers")]
+pub fn merge_layers(engine: &mut Engine, top_id: &str, bottom_id: &str) -> Result<(), JsError> {
+    layer_manager::merge_layers(&mut engine.inner, top_id, bottom_id)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "flipLayer")]
+pub fn flip_layer(engine: &mut Engine, layer_id: &str, horizontal: bool) -> Result<(), JsError> {
+    layer_manager::flip_texture(&mut engine.inner, layer_id, horizontal)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "rotateLayer90")]
+pub fn rotate_layer_90(engine: &mut Engine, layer_id: &str, clockwise: bool) -> Result<(), JsError> {
+    layer_manager::rotate_texture_90(&mut engine.inner, layer_id, clockwise)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "scaleLayerTexture")]
+pub fn scale_layer_texture(engine: &mut Engine, layer_id: &str, new_w: u32, new_h: u32) -> Result<(), JsError> {
+    layer_manager::scale_texture(&mut engine.inner, layer_id, new_w, new_h)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "resizeCanvasTexture")]
+pub fn resize_canvas_texture(
+    engine: &mut Engine, layer_id: &str,
+    old_layer_x: i32, old_layer_y: i32, old_w: u32, old_h: u32,
+    new_w: u32, new_h: u32, offset_x: i32, offset_y: i32,
+) -> Result<(), JsError> {
+    layer_manager::resize_canvas_texture(
+        &mut engine.inner, layer_id,
+        old_layer_x, old_layer_y, old_w, old_h,
+        new_w, new_h, offset_x, offset_y,
+    ).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "cropLayerTexture")]
+pub fn crop_layer_texture(
+    engine: &mut Engine, layer_id: &str,
+    layer_x: i32, layer_y: i32,
+    crop_x: i32, crop_y: i32, crop_w: u32, crop_h: u32,
+) -> Result<(), JsError> {
+    layer_manager::crop_texture(
+        &mut engine.inner, layer_id,
+        layer_x, layer_y, crop_x, crop_y, crop_w, crop_h,
+    ).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "clipboardCopy")]
+pub fn clipboard_copy(
+    engine: &mut Engine,
+    layer_id: &str,
+    has_selection: bool,
+    bounds_x: i32,
+    bounds_y: i32,
+    bounds_w: u32,
+    bounds_h: u32,
+) -> Result<Vec<i32>, JsError> {
+    let (w, h, ox, oy) = layer_manager::clipboard_copy(
+        &mut engine.inner, layer_id, has_selection, bounds_x, bounds_y, bounds_w, bounds_h,
+    ).map_err(|e| JsError::new(&e))?;
+    Ok(vec![w as i32, h as i32, ox, oy])
+}
+
+#[wasm_bindgen(js_name = "clipboardCut")]
+pub fn clipboard_cut(
+    engine: &mut Engine,
+    layer_id: &str,
+    has_selection: bool,
+    bounds_x: i32,
+    bounds_y: i32,
+    bounds_w: u32,
+    bounds_h: u32,
+) -> Result<Vec<i32>, JsError> {
+    // Copy first
+    let (w, h, ox, oy) = layer_manager::clipboard_copy(
+        &mut engine.inner, layer_id, has_selection, bounds_x, bounds_y, bounds_w, bounds_h,
+    ).map_err(|e| JsError::new(&e))?;
+    // Then clear selected pixels
+    layer_manager::clipboard_clear_selected(&mut engine.inner, layer_id, has_selection)
+        .map_err(|e| JsError::new(&e))?;
+    Ok(vec![w as i32, h as i32, ox, oy])
+}
+
+#[wasm_bindgen(js_name = "clipboardPaste")]
+pub fn clipboard_paste(
+    engine: &mut Engine,
+    dst_layer_id: &str,
+) -> Result<(), JsError> {
+    layer_manager::clipboard_paste(&mut engine.inner, dst_layer_id)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "clipboardGetInfo")]
+pub fn clipboard_get_info(engine: &Engine) -> Vec<i32> {
+    if engine.inner.clipboard_texture.is_some() {
+        vec![
+            engine.inner.clipboard_width as i32,
+            engine.inner.clipboard_height as i32,
+            engine.inner.clipboard_offset_x,
+            engine.inner.clipboard_offset_y,
+        ]
+    } else {
+        Vec::new()
+    }
+}
+
+// ============================================================
+// Floating Selection (Phase 5)
+// ============================================================
+
+#[wasm_bindgen(js_name = "floatSelection")]
+pub fn float_selection(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
+    layer_manager::float_selection(&mut engine.inner, layer_id)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "compositeFloat")]
+pub fn composite_float(engine: &mut Engine, dx: i32, dy: i32) -> Result<(), JsError> {
+    layer_manager::composite_float(&mut engine.inner, dx, dy)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "dropFloat")]
+pub fn drop_float(engine: &mut Engine) {
+    layer_manager::drop_float(&mut engine.inner);
+}
+
+#[wasm_bindgen(js_name = "hasFloat")]
+pub fn has_float(engine: &Engine) -> bool {
+    engine.inner.float_texture.is_some()
+}
+
+#[wasm_bindgen(js_name = "fillWithColor")]
+pub fn fill_with_color(
+    engine: &mut Engine,
+    layer_id: &str,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) -> Result<(), JsError> {
+    layer_manager::fill_with_color(&mut engine.inner, layer_id, r, g, b, a)
+        .map_err(|e| JsError::new(&e))
+}
+
+// ============================================================
+// Compressed Layer I/O
+// ============================================================
+
 #[wasm_bindgen(js_name = "readLayerPixelsCompressed")]
 pub fn read_layer_pixels_compressed(engine: &Engine, layer_id: &str) -> Vec<u8> {
     // Get content bounds
@@ -266,10 +427,11 @@ pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compr
         return Err(JsError::new("Snapshot pixel data shorter than header dimensions"));
     }
 
-    // Upload the cropped pixels directly as a cropped texture at the header
-    // position. This avoids expanding to full document size and prevents the
-    // double-offset bug: if we expanded to full-size at (0,0), then syncLayers
-    // would apply the layer's document position as an additional offset.
+    // Upload the cropped pixels as a texture. The x,y from the header are the
+    // crop offsets (where the content lives within the document). We pass them
+    // to upload_pixels so the texture is sized and positioned correctly, but
+    // we do NOT update the layer_stack desc here — syncLayers will push the
+    // authoritative document positions from the JS store on the next frame.
     layer_manager::upload_pixels(
         &mut engine.inner,
         layer_id,
@@ -278,14 +440,6 @@ pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compr
         h as u32,
         x, y,
     ).map_err(|e| JsError::new(&e))?;
-
-    // Set the engine layer to match the snapshot's position and size
-    if let Some(desc) = engine.inner.layer_stack.iter_mut().find(|l| l.id == layer_id) {
-        desc.x = x;
-        desc.y = y;
-        desc.width = w as u32;
-        desc.height = h as u32;
-    }
 
     Ok(())
 }

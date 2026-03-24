@@ -1,9 +1,9 @@
-import type { PixelBuffer } from '../../../engine/pixel-data';
+import type { Engine } from '../../../engine-wasm/wasm-bridge';
 import type { FilterParam } from '../../../components/FilterDialog/FilterDialog';
 
 export interface FilterDefinition {
   id: string;
   title: string;
   params: FilterParam[];
-  apply: (buf: PixelBuffer, values: Record<string, number>) => PixelBuffer | Promise<PixelBuffer>;
+  applyGpu: (engine: Engine, layerId: string, values: Record<string, number>) => void;
 }

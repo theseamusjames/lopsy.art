@@ -1,11 +1,11 @@
 import type { DocumentState, Layer } from '../../../types';
 import type { EditorState } from '../types';
-import { scalePixelData } from '../../../engine/canvas-ops';
-import { createImageData } from '../../../engine/color-space';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { scaleLayerTexture } from '../../../engine-wasm/wasm-bridge';
 
 export function computeResizeImage(
   doc: DocumentState,
-  layerPixelData: Map<string, ImageData>,
+  _layerPixelData: Map<string, ImageData>,
   renderVersion: number,
   newWidth: number,
   newHeight: number,
@@ -15,7 +15,7 @@ export function computeResizeImage(
   const scaleX = newWidth / oldW;
   const scaleY = newHeight / oldH;
 
-  const pixelData = new Map<string, ImageData>();
+  const engine = getEngine();
   const newLayers: Layer[] = [];
 
   for (const layer of doc.layers) {
@@ -23,14 +23,12 @@ export function computeResizeImage(
       newLayers.push(layer);
       continue;
     }
-    const oldData = layerPixelData.get(layer.id);
-    if (oldData) {
-      const scaled = scalePixelData(oldData, newWidth, newHeight);
-      if (!scaled) continue;
-      pixelData.set(layer.id, scaled);
-    } else {
-      pixelData.set(layer.id, createImageData(newWidth, newHeight));
+
+    // GPU-side scale
+    if (engine) {
+      scaleLayerTexture(engine, layer.id, newWidth, newHeight);
     }
+
     newLayers.push({
       ...layer,
       x: Math.round(layer.x * scaleX),
@@ -47,7 +45,7 @@ export function computeResizeImage(
       height: newHeight,
       layers: newLayers,
     },
-    layerPixelData: pixelData,
+    layerPixelData: new Map(),
     renderVersion: renderVersion + 1,
   };
 }

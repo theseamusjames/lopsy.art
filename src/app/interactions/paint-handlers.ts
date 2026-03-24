@@ -4,9 +4,7 @@ import { useToolSettingsStore } from '../tool-settings-store';
 import { createMaskSurface } from '../../engine/mask-utils';
 import { generateBrushStamp, interpolatePoints, applyBrushDab } from '../../tools/brush/brush';
 import { drawPencilLine } from '../../tools/pencil/pencil';
-import { applyEraserDab } from '../../tools/eraser/eraser';
 import { setActiveMaskEditBuffer } from './mask-buffer';
-import { wrapWithSelectionMask } from './selection-mask-wrap';
 import type { InteractionContext, InteractionState } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -24,10 +22,9 @@ export function handlePaintDown(
   ctx: InteractionContext,
   tool: PaintTool,
 ): InteractionState | undefined {
-  const { pixelBuffer, paintSurface, layerPos, activeLayer, activeLayerId, shiftKey, lastPaintPointRef } = ctx;
+  const { layerPos, activeLayer, activeLayerId, shiftKey, lastPaintPointRef } = ctx;
   const toolSettings = useToolSettingsStore.getState();
 
-  // Shift+click: draw a line from the last paint point to here
   const shiftLine = shiftKey
     && lastPaintPointRef.current
     && lastPaintPointRef.current.layerId === activeLayerId;
@@ -98,14 +95,12 @@ export function handlePaintDown(
 
   editorState.pushHistory();
 
-  // Use GPU brush only when there's no selection (GPU doesn't clip to selection mask)
-  const hasSelection = useEditorStore.getState().selection.active;
-  const engine = hasSelection ? null : getEngine();
+  const engine = getEngine();
 
   const state: InteractionState = {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer,
+    pixelBuffer: null,
     originalPixelBuffer: null,
     layerId: activeLayerId,
     tool,
@@ -114,6 +109,8 @@ export function handlePaintDown(
     layerStartY: activeLayer.y,
     ...DEFAULT_TRANSFORM_FIELDS,
   };
+
+  if (!engine) return state;
 
   if (tool === 'brush') {
     const size = toolSettings.brushSize;
@@ -125,63 +122,31 @@ export function handlePaintDown(
     const g = color.g / 255;
     const b = color.b / 255;
 
-    if (engine) {
-      if (shiftLine) {
-        const spacing = Math.max(1, size * 0.25);
-        const pts = lopsy_core_interpolate(lineFrom, layerPos, spacing);
-        gpuBrushDabBatch(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, 1);
-      } else {
-        gpuBrushDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, r, g, b, color.a, opacity, 1);
-      }
+    if (shiftLine) {
+      const spacing = Math.max(1, size * 0.25);
+      const pts = lopsy_core_interpolate(lineFrom, layerPos, spacing);
+      gpuBrushDabBatch(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, 1);
     } else {
-      const stamp = generateBrushStamp(size, hardness);
-      if (shiftLine) {
-        const spacing = Math.max(1, size * 0.25);
-        const pts = interpolatePoints(lineFrom, layerPos, spacing);
-        for (const pt of pts) {
-          applyBrushDab(paintSurface, pt, stamp, size, color, opacity, 1);
-        }
-      } else {
-        applyBrushDab(paintSurface, layerPos, stamp, size, color, opacity, 1);
-      }
+      gpuBrushDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, r, g, b, color.a, opacity, 1);
     }
   } else if (tool === 'pencil') {
     const color = useUIStore.getState().foregroundColor;
     useUIStore.getState().addRecentColor(color);
     const size = toolSettings.pencilSize;
-
-    if (engine) {
-      // GPU pencil: use WASM drawPencilLine (hard pixel blocks on GPU)
-      gpuDrawPencilLine(engine, activeLayerId,
-        lineFrom.x, lineFrom.y, layerPos.x, layerPos.y,
-        color.r / 255, color.g / 255, color.b / 255, color.a, size);
-    } else {
-      drawPencilLine(paintSurface, lineFrom, layerPos, color, size);
-    }
+    gpuDrawPencilLine(engine, activeLayerId,
+      lineFrom.x, lineFrom.y, layerPos.x, layerPos.y,
+      color.r / 255, color.g / 255, color.b / 255, color.a, size);
   } else {
     const size = toolSettings.eraserSize;
     const hardness = 0.8;
     const opacity = toolSettings.eraserOpacity / 100;
 
-    if (engine) {
-      if (shiftLine) {
-        const spacing = Math.max(1, size * 0.25);
-        const pts = lopsy_core_interpolate(lineFrom, layerPos, spacing);
-        gpuEraserDabBatch(engine, activeLayerId, pts, size, hardness, opacity);
-      } else {
-        gpuEraserDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, opacity);
-      }
+    if (shiftLine) {
+      const spacing = Math.max(1, size * 0.25);
+      const pts = lopsy_core_interpolate(lineFrom, layerPos, spacing);
+      gpuEraserDabBatch(engine, activeLayerId, pts, size, hardness, opacity);
     } else {
-      const stamp = generateBrushStamp(size, hardness);
-      if (shiftLine) {
-        const spacing = Math.max(1, size * 0.25);
-        const pts = interpolatePoints(lineFrom, layerPos, spacing);
-        for (const pt of pts) {
-          applyEraserDab(paintSurface, pt, stamp, size, opacity);
-        }
-      } else {
-        applyEraserDab(paintSurface, layerPos, stamp, size, opacity);
-      }
+      gpuEraserDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, opacity);
     }
   }
 
@@ -213,7 +178,6 @@ export function handlePaintMove(
 
   const toolSettings = useToolSettingsStore.getState();
   const layerLocalPos = ctx.layerPos;
-  const engine = state._usedGpuStroke ? getEngine() : null;
 
   // Mask edit mode stays on CPU
   if (state.maskMode) {
@@ -222,27 +186,19 @@ export function handlePaintMove(
     return;
   }
 
+  const engine = getEngine();
+  if (!engine) return;
+
   switch (state.tool) {
     case 'brush': {
       const size = toolSettings.brushSize;
       const hardness = toolSettings.brushHardness / 100;
       const opacity = toolSettings.brushOpacity / 100;
       const color = useUIStore.getState().foregroundColor;
-
-      if (engine) {
-        const spacing = Math.max(1, size * 0.25);
-        const pts = lopsy_core_interpolate(state.lastPoint, layerLocalPos, spacing);
-        gpuBrushDabBatch(engine, state.layerId, pts, size, hardness,
-          color.r / 255, color.g / 255, color.b / 255, color.a, opacity, 1);
-      } else if (state.pixelBuffer) {
-        const brushSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
-        const spacing = Math.max(1, size * 0.25);
-        const stamp = generateBrushStamp(size, hardness);
-        const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
-        for (const pt of points) {
-          applyBrushDab(brushSurface, pt, stamp, size, color, opacity, 1);
-        }
-      }
+      const spacing = Math.max(1, size * 0.25);
+      const pts = lopsy_core_interpolate(state.lastPoint, layerLocalPos, spacing);
+      gpuBrushDabBatch(engine, state.layerId, pts, size, hardness,
+        color.r / 255, color.g / 255, color.b / 255, color.a, opacity, 1);
       state.lastPoint = layerLocalPos;
       useEditorStore.getState().notifyRender();
       break;
@@ -251,15 +207,9 @@ export function handlePaintMove(
     case 'pencil': {
       const color = useUIStore.getState().foregroundColor;
       const size = toolSettings.pencilSize;
-
-      if (engine) {
-        gpuDrawPencilLine(engine, state.layerId,
-          state.lastPoint.x, state.lastPoint.y, layerLocalPos.x, layerLocalPos.y,
-          color.r / 255, color.g / 255, color.b / 255, color.a, size);
-      } else if (state.pixelBuffer) {
-        const pencilSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
-        drawPencilLine(pencilSurface, state.lastPoint, layerLocalPos, color, size);
-      }
+      gpuDrawPencilLine(engine, state.layerId,
+        state.lastPoint.x, state.lastPoint.y, layerLocalPos.x, layerLocalPos.y,
+        color.r / 255, color.g / 255, color.b / 255, color.a, size);
       state.lastPoint = layerLocalPos;
       useEditorStore.getState().notifyRender();
       break;
@@ -269,20 +219,9 @@ export function handlePaintMove(
       const size = toolSettings.eraserSize;
       const hardness = 0.8;
       const opacity = toolSettings.eraserOpacity / 100;
-
-      if (engine) {
-        const spacing = Math.max(1, size * 0.25);
-        const pts = lopsy_core_interpolate(state.lastPoint, layerLocalPos, spacing);
-        gpuEraserDabBatch(engine, state.layerId, pts, size, hardness, opacity);
-      } else if (state.pixelBuffer) {
-        const eraserSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
-        const spacing = Math.max(1, size * 0.25);
-        const stamp = generateBrushStamp(size, hardness);
-        const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
-        for (const pt of points) {
-          applyEraserDab(eraserSurface, pt, stamp, size, opacity);
-        }
-      }
+      const spacing = Math.max(1, size * 0.25);
+      const pts = lopsy_core_interpolate(state.lastPoint, layerLocalPos, spacing);
+      gpuEraserDabBatch(engine, state.layerId, pts, size, hardness, opacity);
       state.lastPoint = layerLocalPos;
       useEditorStore.getState().notifyRender();
       break;
@@ -293,7 +232,7 @@ export function handlePaintMove(
   }
 }
 
-/** CPU-only mask painting (unchanged from original). */
+/** CPU-only mask painting (small internal surface). */
 function handleMaskPaintMove(
   state: InteractionState,
   layerLocalPos: { x: number; y: number },

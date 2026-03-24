@@ -1,4 +1,4 @@
-import { filterRunner } from '../../../filters/filter-runner';
+import { filterUnsharpMask } from '../../../engine-wasm/wasm-bridge';
 import type { FilterDefinition } from './types';
 
 export const unsharpMask: FilterDefinition = {
@@ -9,6 +9,6 @@ export const unsharpMask: FilterDefinition = {
     { key: 'amount', label: 'Amount', min: 0.1, max: 5, step: 0.1, defaultValue: 1 },
     { key: 'threshold', label: 'Threshold', min: 0, max: 255, step: 1, defaultValue: 0 },
   ],
-  apply: (buf, values) =>
-    filterRunner.unsharpMask(buf, values['radius'] ?? 3, values['amount'] ?? 1, values['threshold'] ?? 0),
+  applyGpu: (engine, layerId, values) =>
+    filterUnsharpMask(engine, layerId, values['radius'] ?? 3, values['amount'] ?? 1, values['threshold'] ?? 0),
 };

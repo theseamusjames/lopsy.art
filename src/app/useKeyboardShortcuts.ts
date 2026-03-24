@@ -2,8 +2,8 @@ import { useEffect, type RefObject } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { strokeCurrentPath } from './useCanvasInteraction';
-import { getSelectionMaskValue } from '../selection/selection';
-import { createImageData } from '../engine/color-space';
+import { getEngine } from '../engine-wasm/engine-state';
+import { clipboardCut } from '../engine-wasm/wasm-bridge';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
@@ -100,26 +100,25 @@ function handleDeleteKey(): void {
   if (!activeId) return;
 
   if (sel.active && sel.mask) {
+    const engine = getEngine();
+    if (!engine) return;
     editor.pushHistory();
-    const layerData = editor.getOrCreateLayerPixelData(activeId);
-    const layer = editor.document.layers.find((l) => l.id === activeId);
-    if (!layer) return;
-    const result = createImageData(layerData.width, layerData.height);
-    result.data.set(layerData.data);
-    for (let y = 0; y < sel.maskHeight; y++) {
-      for (let x = 0; x < sel.maskWidth; x++) {
-        if (getSelectionMaskValue(sel, x, y) < 128) continue;
-        const srcX = x - layer.x;
-        const srcY = y - layer.y;
-        if (srcX < 0 || srcX >= result.width || srcY < 0 || srcY >= result.height) continue;
-        const idx = (srcY * result.width + srcX) * 4;
-        result.data[idx] = 0;
-        result.data[idx + 1] = 0;
-        result.data[idx + 2] = 0;
-        result.data[idx + 3] = 0;
-      }
-    }
-    editor.updateLayerPixelData(activeId, result);
+    const bx = sel.bounds ? Math.round(sel.bounds.x) : 0;
+    const by = sel.bounds ? Math.round(sel.bounds.y) : 0;
+    const bw = sel.bounds ? Math.round(sel.bounds.width) : 0;
+    const bh = sel.bounds ? Math.round(sel.bounds.height) : 0;
+    // GPU-side clear: uses clipboardCut which copies then clears.
+    // We discard the clipboard result — we just want the clear.
+    clipboardCut(engine, activeId, true, bx, by, bw, bh);
+    // Clear stale JS pixel data
+    const pixelDataMap = new Map(editor.layerPixelData);
+    pixelDataMap.delete(activeId);
+    const sparseMap = new Map(editor.sparseLayerData);
+    sparseMap.delete(activeId);
+    const dirtyIds = new Set(editor.dirtyLayerIds);
+    dirtyIds.add(activeId);
+    useEditorStore.setState({ layerPixelData: pixelDataMap, sparseLayerData: sparseMap, dirtyLayerIds: dirtyIds });
+    editor.notifyRender();
   } else {
     editor.removeLayer(activeId);
   }

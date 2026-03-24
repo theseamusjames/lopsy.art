@@ -9,7 +9,6 @@ function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData> } {
   const layer = createRasterLayer({ name: 'Background', width: 4, height: 4 });
   const pixelData = new Map<string, ImageData>();
   const imgData = new ImageData(4, 4);
-  // Red pixel at (0,0)
   imgData.data[0] = 255;
   imgData.data[3] = 255;
   pixelData.set(layer.id, imgData);
@@ -36,17 +35,9 @@ describe('computeResizeCanvas', () => {
     expect(result.document!.height).toBe(6);
   });
 
-  it('applies anchor offset to pixel data', () => {
+  it('clears JS pixel data (GPU is source of truth)', () => {
     const { doc, pixelData } = makeDoc();
-    // anchorX=0.5 centers horizontally: offset = (8-4)*0.5 = 2
     const result = computeResizeCanvas(doc, pixelData, 0, 8, 4, 0.5, 0);
-    const layerId = doc.layers[0]!.id;
-    const resized = result.layerPixelData!.get(layerId)!;
-    // Original (0,0) pixel should now be at (2,0)
-    const di = (0 * 8 + 2) * 4;
-    expect(resized.data[di]).toBe(255);
-    expect(resized.data[di + 3]).toBe(255);
-    // Original position (0,0) in new canvas should be empty
-    expect(resized.data[0]).toBe(0);
+    expect(result.layerPixelData!.size).toBe(0);
   });
 });

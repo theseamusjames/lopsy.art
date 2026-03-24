@@ -37,10 +37,23 @@ pub fn render_linear_gradient(
         None => return,
     };
 
-    let prog = &engine.shaders.gradient_linear.program;
-    gl.use_program(Some(prog));
+    let layer_desc = engine.layer_stack.iter().find(|l| l.id == layer_id);
+    let layer_x = layer_desc.map(|l| l.x as f32).unwrap_or(0.0);
+    let layer_y = layer_desc.map(|l| l.y as f32).unwrap_or(0.0);
 
-    // Render to temp FBO attached to layer texture
+    // Copy existing layer content to scratch_a for reading
+    engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
+    gl.viewport(0, 0, w as i32, h as i32);
+    gl.disable(WebGl2RenderingContext::BLEND);
+    gl.use_program(Some(&engine.shaders.blit.program));
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+    if let Some(loc) = gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+    engine.draw_fullscreen_quad();
+
+    // Render gradient with selection mask into the layer texture
     let temp_fbo = gl.create_framebuffer();
     gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, temp_fbo.as_ref());
     gl.framebuffer_texture_2d(
@@ -51,6 +64,41 @@ pub fn render_linear_gradient(
         0,
     );
     gl.viewport(0, 0, w as i32, h as i32);
+
+    let prog = &engine.shaders.gradient_linear.program;
+    gl.use_program(Some(prog));
+
+    // Bind existing content (from scratch_a)
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex));
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_existingTex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+
+    // Bind selection mask
+    let has_mask = engine.selection_mask_texture.is_some();
+    if has_mask {
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        if let Some(mask_handle) = engine.selection_mask_texture {
+            if let Some(mask_tex) = engine.texture_pool.get(mask_handle) {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
+            }
+        }
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_maskTex") {
+        gl.uniform1i(Some(&loc), 1);
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_hasMask") {
+        gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
+        gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_layerOffset") {
+        gl.uniform2f(Some(&loc), layer_x, layer_y);
+    }
 
     set_gradient_uniforms(gl, prog, &stops, w, h);
     if let Some(loc) = gl.get_uniform_location(prog, "u_start") {
@@ -93,9 +141,23 @@ pub fn render_radial_gradient(
         None => return,
     };
 
-    let prog = &engine.shaders.gradient_radial.program;
-    gl.use_program(Some(prog));
+    let layer_desc = engine.layer_stack.iter().find(|l| l.id == layer_id);
+    let layer_x = layer_desc.map(|l| l.x as f32).unwrap_or(0.0);
+    let layer_y = layer_desc.map(|l| l.y as f32).unwrap_or(0.0);
 
+    // Copy existing layer content to scratch_a
+    engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
+    gl.viewport(0, 0, w as i32, h as i32);
+    gl.disable(WebGl2RenderingContext::BLEND);
+    gl.use_program(Some(&engine.shaders.blit.program));
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+    if let Some(loc) = gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+    engine.draw_fullscreen_quad();
+
+    // Render gradient with selection mask
     let temp_fbo = gl.create_framebuffer();
     gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, temp_fbo.as_ref());
     gl.framebuffer_texture_2d(
@@ -106,6 +168,39 @@ pub fn render_radial_gradient(
         0,
     );
     gl.viewport(0, 0, w as i32, h as i32);
+
+    let prog = &engine.shaders.gradient_radial.program;
+    gl.use_program(Some(prog));
+
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex));
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_existingTex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+
+    let has_mask = engine.selection_mask_texture.is_some();
+    if has_mask {
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        if let Some(mask_handle) = engine.selection_mask_texture {
+            if let Some(mask_tex) = engine.texture_pool.get(mask_handle) {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
+            }
+        }
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_maskTex") {
+        gl.uniform1i(Some(&loc), 1);
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_hasMask") {
+        gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
+        gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_layerOffset") {
+        gl.uniform2f(Some(&loc), layer_x, layer_y);
+    }
 
     set_gradient_uniforms(gl, prog, &stops, w, h);
     if let Some(loc) = gl.get_uniform_location(prog, "u_center") {

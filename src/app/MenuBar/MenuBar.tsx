@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useEditorStore } from '../editor-store';
-import { addNoise, fillWithNoise } from '../../filters/noise';
 import { FilterDialog } from '../../components/FilterDialog/FilterDialog';
 import { NoiseDialog, FillNoiseDialog } from '../../components/FilterDialog/NoiseDialog';
 import {
   type FilterDialogId,
-  getActiveLayerBuffer,
-  applyFilterResult,
   getFilterDialogConfig,
   applyGenericFilter,
+  applyAddNoise,
+  applyFillWithNoise,
 } from './filter-actions';
 import { getMenus, type MenuItem, type ImageDialogId, type HelpDialogId } from './menus';
 import { CanvasSizeModal } from '../../components/CanvasSizeModal/CanvasSizeModal';
@@ -66,27 +64,17 @@ export function MenuBar() {
 
   const handleGenericFilterApply = useCallback((values: Record<string, number>) => {
     if (!activeDialog) return;
-    void applyGenericFilter(activeDialog, values);
+    applyGenericFilter(activeDialog, values);
     setActiveDialog(null);
   }, [activeDialog]);
 
   const handleNoiseApply = useCallback((settings: { amount: number; type: 'gaussian' | 'uniform'; monochromatic: boolean }) => {
-    const layerData = getActiveLayerBuffer();
-    if (!layerData) return;
-    const { buf, activeId } = layerData;
-    useEditorStore.getState().pushHistory();
-    const result = addNoise(buf, settings.amount, settings.type, settings.monochromatic);
-    applyFilterResult(activeId, result);
+    applyAddNoise(settings.amount, settings.monochromatic);
     setActiveDialog(null);
   }, []);
 
   const handleFillNoiseApply = useCallback((settings: { type: 'gaussian' | 'uniform'; monochromatic: boolean }) => {
-    const layerData = getActiveLayerBuffer();
-    if (!layerData) return;
-    const { buf, activeId } = layerData;
-    useEditorStore.getState().pushHistory();
-    const result = fillWithNoise(buf, settings.type, settings.monochromatic);
-    applyFilterResult(activeId, result);
+    applyFillWithNoise(settings.monochromatic);
     setActiveDialog(null);
   }, []);
 
