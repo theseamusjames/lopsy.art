@@ -25,15 +25,24 @@ export interface SparseLayerEntry {
 
 export interface HistorySnapshot {
   document: DocumentState;
+  /** Compressed GPU pixel snapshots per layer (RLE-encoded RGBA blobs). */
+  gpuSnapshots: Map<string, Uint8Array>;
+  /** Legacy CPU pixel data — kept for backward compat during transition. */
   layerPixelData: Map<string, ImageData>;
   layerCropInfo: Map<string, CropInfo>;
+  sparseLayerData: Map<string, SparseLayerEntry>;
   label: string;
+  /** When true, only document metadata changed (effects, opacity, etc.) —
+   *  pixel data maps are empty and should not replace current pixel state. */
+  metadataOnly: boolean;
 }
 
 export interface ClipboardData {
-  imageData: ImageData;
+  width: number;
+  height: number;
   offsetX: number;
   offsetY: number;
+  gpuResident: true;
 }
 
 export interface EditorState {

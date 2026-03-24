@@ -1,11 +1,11 @@
 import type { DocumentState, Layer, Rect } from '../../../types';
 import type { EditorState } from '../types';
-import { cropLayerPixelData } from '../../../engine/canvas-ops';
-import { createImageData } from '../../../engine/color-space';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { cropLayerTexture } from '../../../engine-wasm/wasm-bridge';
 
 export function computeCropCanvas(
   doc: DocumentState,
-  layerPixelData: Map<string, ImageData>,
+  _layerPixelData: Map<string, ImageData>,
   renderVersion: number,
   rect: Rect,
 ): Partial<EditorState> | undefined {
@@ -21,7 +21,7 @@ export function computeCropCanvas(
   const ch = y2 - y1;
   if (cw <= 0 || ch <= 0) return undefined;
 
-  const pixelData = new Map<string, ImageData>();
+  const engine = getEngine();
   const newLayers: Layer[] = [];
 
   for (const layer of doc.layers) {
@@ -29,11 +29,12 @@ export function computeCropCanvas(
       newLayers.push(layer);
       continue;
     }
-    const oldData = layerPixelData.get(layer.id);
-    const newData = oldData
-      ? cropLayerPixelData(oldData, layer.x, layer.y, cx, cy, cw, ch)
-      : createImageData(cw, ch);
-    pixelData.set(layer.id, newData);
+
+    // GPU-side crop
+    if (engine) {
+      cropLayerTexture(engine, layer.id, layer.x, layer.y, cx, cy, cw, ch);
+    }
+
     newLayers.push({ ...layer, x: 0, y: 0, width: cw, height: ch } as Layer);
   }
 
@@ -44,7 +45,7 @@ export function computeCropCanvas(
       height: ch,
       layers: newLayers,
     },
-    layerPixelData: pixelData,
+    layerPixelData: new Map(),
     renderVersion: renderVersion + 1,
   };
 }

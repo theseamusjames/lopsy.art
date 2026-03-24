@@ -1,4 +1,4 @@
-import { filterRunner } from '../../../filters/filter-runner';
+import { filterHueSaturation } from '../../../engine-wasm/wasm-bridge';
 import type { FilterDefinition } from './types';
 
 export const hueSaturation: FilterDefinition = {
@@ -9,6 +9,6 @@ export const hueSaturation: FilterDefinition = {
     { key: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1, defaultValue: 0 },
     { key: 'lightness', label: 'Lightness', min: -100, max: 100, step: 1, defaultValue: 0 },
   ],
-  apply: (buf, values) =>
-    filterRunner.hueSaturation(buf, values['hue'] ?? 0, values['saturation'] ?? 0, values['lightness'] ?? 0),
+  applyGpu: (engine, layerId, values) =>
+    filterHueSaturation(engine, layerId, values['hue'] ?? 0, values['saturation'] ?? 0, values['lightness'] ?? 0),
 };

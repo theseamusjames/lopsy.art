@@ -11,7 +11,6 @@ function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData> } {
   const pixelData = new Map<string, ImageData>();
   const bottomData = new ImageData(4, 4);
   const topData = new ImageData(4, 4);
-  // Fill top layer pixel 0 with opaque red
   topData.data[0] = 255;
   topData.data[3] = 255;
   pixelData.set(bottom.id, bottomData);
@@ -48,13 +47,11 @@ describe('computeMergeDown', () => {
     expect(result.layerPixelData!.has(topId)).toBe(false);
   });
 
-  it('result pixel data contains composited content', () => {
+  it('clears stale JS pixel data for merged layer', () => {
     const { doc, pixelData } = makeDoc();
     const bottomId = doc.layerOrder[0]!;
     const result = computeMergeDown(doc, pixelData)!;
-    const mergedData = result.layerPixelData!.get(bottomId)!;
-    // Top layer had opaque red at pixel 0 — composited onto empty bottom
-    expect(mergedData.data[0]).toBe(255);
-    expect(mergedData.data[3]).toBe(255);
+    // GPU is source of truth — JS pixel data is cleared
+    expect(result.layerPixelData!.has(bottomId)).toBe(false);
   });
 });

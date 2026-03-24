@@ -8,6 +8,10 @@ import {
   fromSparsePixelData,
   sparseToImageData,
 } from '../../engine/canvas-ops';
+import { invalidateBitmapCache } from '../../engine/bitmap-cache';
+import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 
 export interface PixelDataSlice {
   layerPixelData: Map<string, ImageData>;
@@ -19,7 +23,7 @@ export interface PixelDataSlice {
   notifyRender: () => void;
   cropLayerToContent: (layerId: string) => void;
   expandLayerForEditing: (layerId: string) => ImageData;
-  /** Read-only: returns ImageData from either dense or sparse storage.
+  /** Read-only: returns ImageData from GPU, JS cache, or sparse storage.
    *  Returns at the layer's stored dimensions (not full canvas). */
   resolvePixelData: (layerId: string) => ImageData | undefined;
 }
@@ -33,7 +37,7 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
   getOrCreateLayerPixelData: (layerId: string) => {
     // Always returns a full-canvas-size ImageData, expanding cropped/sparse layers.
     // All callers are write operations (filters, paste, fill, etc.) that need
-    // the full canvas area. Read-only code uses layerPixelData.get() directly.
+    // the full canvas area. Read-only code uses resolvePixelData().
     return get().expandLayerForEditing(layerId);
   },
 
@@ -46,6 +50,19 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     // Clear any sparse entry — we have live ImageData now
     const sparseMap = new Map(state.sparseLayerData);
     sparseMap.delete(layerId);
+    // Invalidate stale bitmap — the data may have been modified in-place
+    invalidateBitmapCache(layerId);
+
+    // Upload to GPU so the engine stays in sync
+    const engine = getEngine();
+    if (engine) {
+      const layer = state.document.layers.find((l) => l.id === layerId);
+      const lx = layer?.x ?? 0;
+      const ly = layer?.y ?? 0;
+      const rawBytes = new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength);
+      uploadLayerPixels(engine, layerId, rawBytes, data.width, data.height, lx, ly);
+    }
+
     set({ layerPixelData: pixelData, sparseLayerData: sparseMap, dirtyLayerIds, renderVersion: state.renderVersion + 1 });
     // Auto-crop/sparsify after every write to keep memory tight
     get().cropLayerToContent(layerId);
@@ -66,6 +83,7 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     const crop = cropToContentBounds(data);
     if (!crop) {
       // Fully empty — remove pixel data entirely
+      invalidateBitmapCache(layerId);
       const pixelData = new Map(state.layerPixelData);
       pixelData.delete(layerId);
       const sparseMap = new Map(state.sparseLayerData);
@@ -87,7 +105,7 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     // Try to sparsify the cropped data
     const sparse = toSparsePixelData(crop.data);
     if (sparse) {
-      // Sparse storage — remove ImageData, store sparse
+      invalidateBitmapCache(layerId);
       const pixelData = new Map(state.layerPixelData);
       pixelData.delete(layerId);
       const sparseMap = new Map(state.sparseLayerData);
@@ -113,8 +131,7 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
       return;
     }
 
-    // Dense content — keep as cropped ImageData (existing behavior)
-    // Already at content bounds (or content fills >80%)
+    // Dense content — keep as cropped ImageData
     if (crop.x === 0 && crop.y === 0 && crop.data.width === data.width && crop.data.height === data.height) return;
 
     const pixelData = new Map(state.layerPixelData);
@@ -138,7 +155,6 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     const state = get();
     const layer = state.document.layers.find((l) => l.id === layerId);
     if (!layer || layer.type !== 'raster') {
-      // Non-raster: fall back to creating at doc dimensions
       const existing = state.layerPixelData.get(layerId);
       if (existing) return existing;
       const imageData = createImageData(state.document.width, state.document.height);
@@ -179,6 +195,27 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
       return existing;
     }
 
+    // If no JS data but GPU has data, read from GPU
+    if (!existing) {
+      const gpuData = readLayerAsImageData(layerId);
+      if (gpuData) {
+        // GPU data is at layer dimensions — expand to full canvas
+        const expanded = expandFromCrop(gpuData, layer.x, layer.y, docW, docH);
+        const pixelData = new Map(state.layerPixelData);
+        pixelData.set(layerId, expanded);
+        set({
+          document: {
+            ...state.document,
+            layers: state.document.layers.map((l) =>
+              l.id === layerId ? { ...l, x: 0, y: 0, width: docW, height: docH } as Layer : l,
+            ),
+          },
+          layerPixelData: pixelData,
+        });
+        return expanded;
+      }
+    }
+
     // Expand cropped data to full canvas size
     const expanded = existing
       ? expandFromCrop(existing, layer.x, layer.y, docW, docH)
@@ -200,10 +237,14 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
 
   resolvePixelData: (layerId: string) => {
     const state = get();
+    // Check JS cache first
     const data = state.layerPixelData.get(layerId);
     if (data) return data;
     const sparseEntry = state.sparseLayerData.get(layerId);
     if (sparseEntry) return sparseToImageData(sparseEntry.sparse);
+    // Fall back to GPU readback
+    const gpuData = readLayerAsImageData(layerId);
+    if (gpuData) return gpuData;
     return undefined;
   },
 });

@@ -4,6 +4,15 @@ import { App } from './app/App';
 import { useEditorStore } from './app/editor-store';
 import { useUIStore } from './app/ui-store';
 import { useToolSettingsStore } from './app/tool-settings-store';
+import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
+import { render as renderWasm } from './engine-wasm/wasm-bridge';
+import {
+  syncDocumentSize,
+  syncBackgroundColor,
+  syncViewport,
+  syncLayers,
+  syncSelection,
+} from './engine-wasm/engine-sync';
 import './styles/tokens.css';
 import './styles/reset.css';
 
@@ -12,6 +21,37 @@ if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__editorStore = useEditorStore;
   (window as unknown as Record<string, unknown>).__uiStore = useUIStore;
   (window as unknown as Record<string, unknown>).__toolSettingsStore = useToolSettingsStore;
+  // Read composited pixels from the WebGL canvas by triggering a render
+  // inside requestAnimationFrame and reading before buffer swap.
+  // Returns screen-sized pixels (includes workspace background).
+  (window as unknown as Record<string, unknown>).__readCompositedPixels = () => {
+    return new Promise<{ width: number; height: number; pixels: number[] } | null>((resolve) => {
+      requestAnimationFrame(() => {
+        const engine = getEngine();
+        const canvas = getEngineCanvas();
+        if (!engine || !canvas) { resolve(null); return; }
+        const state = useEditorStore.getState();
+        const doc = state.document;
+        const bg = doc.backgroundColor;
+        const container = canvas.parentElement;
+        const screenW = container ? container.clientWidth : canvas.width;
+        const screenH = container ? container.clientHeight : canvas.height;
+        syncDocumentSize(engine, doc.width, doc.height);
+        syncBackgroundColor(engine, bg.r, bg.g, bg.b, bg.a);
+        syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH);
+        syncLayers(engine, doc.layers, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
+        syncSelection(engine, state.selection);
+        renderWasm(engine);
+        const gl = canvas.getContext('webgl2');
+        if (!gl) { resolve(null); return; }
+        const w = canvas.width;
+        const h = canvas.height;
+        const pixels = new Uint8Array(w * h * 4);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        resolve({ width: w, height: h, pixels: Array.from(pixels) });
+      });
+    });
+  };
 }
 
 // Prevent browser zoom so Ctrl+wheel and pinch gestures only affect the canvas

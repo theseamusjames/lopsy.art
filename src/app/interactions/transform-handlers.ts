@@ -184,33 +184,41 @@ export function handleTransformMove(
   const editorState = useEditorStore.getState();
   const origMask = state.originalSelectionMask;
   let transformedMask: Uint8ClampedArray | null = null;
-  let transformedMaskWidth = 0;
   if (origMask) {
     const { mask, bounds } = applyTransformToMask(
       origMask, state.originalSelectionMaskWidth, state.originalSelectionMaskHeight, newTransform,
     );
     transformedMask = mask;
-    transformedMaskWidth = state.originalSelectionMaskWidth;
     if (bounds) {
       editorState.setSelection(bounds, mask, state.originalSelectionMaskWidth, state.originalSelectionMaskHeight);
     }
   }
 
-  // Apply full cumulative transform to the original (persistent) pixels
+  // Apply full cumulative transform to the original (persistent) pixels.
+  // During drag we write directly to the existing ImageData buffer and mark
+  // GPU dirty — skipping the expensive cropLayerToContent + store update.
+  // The full updateLayerPixelData is deferred to mouseup (finalize).
   if (state.transformCanvas && state.baseCanvas && state.layerId) {
-    const w = state.baseCanvas.width;
-    const h = state.baseCanvas.height;
+    const layerData = useEditorStore.getState().expandLayerForEditing(state.layerId);
+    if (!layerData) { editorState.notifyRender(); return; }
+
+    const w = layerData.width;
+    const h = layerData.height;
 
     const origBounds = newTransform.originalBounds;
     const origCx = origBounds.x + origBounds.width / 2;
     const origCy = origBounds.y + origBounds.height / 2;
 
-    // Render rotated content onto a separate canvas
-    const rotatedCanvas = document.createElement('canvas');
-    rotatedCanvas.width = w;
-    rotatedCanvas.height = h;
-    const rotCtx = rotatedCanvas.getContext('2d', contextOptions);
+    // Reuse a single scratch canvas (stored on the interaction state)
+    if (!state._scratchCanvas || state._scratchCanvas.width !== w || state._scratchCanvas.height !== h) {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      state._scratchCanvas = c;
+    }
+    const rotCtx = state._scratchCanvas.getContext('2d', contextOptions);
     if (rotCtx) {
+      rotCtx.clearRect(0, 0, w, h);
       rotCtx.save();
       rotCtx.translate(origCx + newTransform.translateX, origCy + newTransform.translateY);
       rotCtx.rotate(newTransform.rotation);
@@ -220,41 +228,37 @@ export function handleTransformMove(
       rotCtx.restore();
 
       // Composite: base + rotated pixels clipped to selection mask
-      const baseData = state.baseCanvas.getContext('2d', contextOptions)!.getImageData(0, 0, w, h);
+      // Write directly into existing layerData to avoid allocation
+      const baseCtx = state.baseCanvas.getContext('2d', contextOptions)!;
+      const baseData = baseCtx.getImageData(0, 0, w, h);
       const rotData = rotCtx.getImageData(0, 0, w, h);
-      const resultData = createImageDataFromArray(new Uint8ClampedArray(baseData.data), w, h);
+      const out = layerData.data;
 
-      for (let py = 0; py < h; py++) {
-        for (let px = 0; px < w; px++) {
-          const idx = (py * w + px) * 4;
-          const ra = rotData.data[idx + 3] ?? 0;
-          if (ra <= 0) continue;
-          // Clip to selection mask so rotated content doesn't bleed outside
-          if (transformedMask) {
-            const maskVal = transformedMask[py * transformedMaskWidth + px] ?? 0;
-            if (maskVal <= 0) continue;
-          }
-          // Alpha-composite rotated over base
-          const ba = resultData.data[idx + 3] ?? 0;
-          const raNorm = ra / 255;
-          const baNorm = ba / 255;
-          const outA = raNorm + baNorm * (1 - raNorm);
-          if (outA > 0) {
-            resultData.data[idx] = Math.round(
-              ((rotData.data[idx] ?? 0) * raNorm + (resultData.data[idx] ?? 0) * baNorm * (1 - raNorm)) / outA,
-            );
-            resultData.data[idx + 1] = Math.round(
-              ((rotData.data[idx + 1] ?? 0) * raNorm + (resultData.data[idx + 1] ?? 0) * baNorm * (1 - raNorm)) / outA,
-            );
-            resultData.data[idx + 2] = Math.round(
-              ((rotData.data[idx + 2] ?? 0) * raNorm + (resultData.data[idx + 2] ?? 0) * baNorm * (1 - raNorm)) / outA,
-            );
-            resultData.data[idx + 3] = Math.round(outA * 255);
-          }
+      // Copy base first
+      out.set(baseData.data);
+
+      // Composite rotated pixels on top
+      for (let i = 0; i < w * h; i++) {
+        const idx = i * 4;
+        const ra = rotData.data[idx + 3]!;
+        if (ra <= 0) continue;
+        if (transformedMask) {
+          const maskVal = transformedMask[i] ?? 0;
+          if (maskVal <= 0) continue;
+        }
+        const ba = out[idx + 3]!;
+        const raNorm = ra / 255;
+        const baNorm = ba / 255;
+        const outA = raNorm + baNorm * (1 - raNorm);
+        if (outA > 0) {
+          const invOutA = 1 / outA;
+          out[idx] = (rotData.data[idx]! * raNorm + out[idx]! * baNorm * (1 - raNorm)) * invOutA + 0.5 | 0;
+          out[idx + 1] = (rotData.data[idx + 1]! * raNorm + out[idx + 1]! * baNorm * (1 - raNorm)) * invOutA + 0.5 | 0;
+          out[idx + 2] = (rotData.data[idx + 2]! * raNorm + out[idx + 2]! * baNorm * (1 - raNorm)) * invOutA + 0.5 | 0;
+          out[idx + 3] = outA * 255 + 0.5 | 0;
         }
       }
 
-      useEditorStore.getState().updateLayerPixelData(state.layerId, resultData);
     }
   }
 

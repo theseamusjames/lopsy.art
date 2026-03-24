@@ -35,40 +35,18 @@ describe('computeFlattenImage', () => {
     expect(result).toBeUndefined();
   });
 
-  it('creates single layer with all visible layers composited', () => {
+  it('creates single layer from multiple layers', () => {
     const { doc, pixelData } = makeDoc(2);
-    // Put opaque blue pixel in layer 2
-    const layer2Data = pixelData.get(doc.layers[1]!.id)!;
-    layer2Data.data[2] = 255;
-    layer2Data.data[3] = 255;
-
     const result = computeFlattenImage(doc, pixelData)!;
     expect(result.document!.layers).toHaveLength(1);
     expect(result.document!.layerOrder).toHaveLength(1);
-    const flatId = result.document!.layers[0]!.id;
-    const flatData = result.layerPixelData!.get(flatId)!;
-    // Background is white, blue composited on top
-    expect(flatData.data[3]).toBe(255);
+    expect(result.document!.layers[0]!.name).toBe('Background');
   });
 
-  it('skips invisible layers', () => {
+  it('clears JS pixel data (GPU is source of truth)', () => {
     const { doc, pixelData } = makeDoc(2);
-    // Make layer 2 invisible and put red in it
-    const layer2 = doc.layers[1]!;
-    const hiddenDoc = {
-      ...doc,
-      layers: [doc.layers[0]!, { ...layer2, visible: false }],
-    };
-    const layer2Data = pixelData.get(layer2.id)!;
-    layer2Data.data[0] = 255;
-    layer2Data.data[3] = 255;
-
-    const result = computeFlattenImage(hiddenDoc, pixelData)!;
-    const flatId = result.document!.layers[0]!.id;
-    const flatData = result.layerPixelData!.get(flatId)!;
-    // Pixel 0 should be white bg, not red from hidden layer
-    expect(flatData.data[0]).toBe(255);
-    expect(flatData.data[1]).toBe(255);
-    expect(flatData.data[2]).toBe(255);
+    const result = computeFlattenImage(doc, pixelData)!;
+    // No JS pixel data — compositing happens on GPU
+    expect(result.layerPixelData!.size).toBe(0);
   });
 });

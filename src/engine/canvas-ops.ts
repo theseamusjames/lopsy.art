@@ -103,10 +103,18 @@ export function expandFromCrop(
   const full = createImageData(fullWidth, fullHeight);
   const cw = cropped.width;
   const ch = cropped.height;
-  for (let y = 0; y < ch; y++) {
-    const srcOffset = y * cw * 4;
-    const dstOffset = ((offsetY + y) * fullWidth + offsetX) * 4;
-    full.data.set(cropped.data.subarray(srcOffset, srcOffset + cw * 4), dstOffset);
+  // Clamp the copy region to the valid area of the destination buffer.
+  // The layer may be partially or fully outside the document bounds after a move.
+  const yStart = Math.max(0, -offsetY);
+  const yEnd = Math.min(ch, fullHeight - offsetY);
+  const xStart = Math.max(0, -offsetX);
+  const xEnd = Math.min(cw, fullWidth - offsetX);
+  const copyW = xEnd - xStart;
+  if (copyW <= 0) return full;
+  for (let y = yStart; y < yEnd; y++) {
+    const srcOffset = (y * cw + xStart) * 4;
+    const dstOffset = ((offsetY + y) * fullWidth + offsetX + xStart) * 4;
+    full.data.set(cropped.data.subarray(srcOffset, srcOffset + copyW * 4), dstOffset);
   }
   return full;
 }

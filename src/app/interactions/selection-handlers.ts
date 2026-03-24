@@ -4,18 +4,99 @@ import type { Point } from '../../types';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
-import { createRectSelection, createEllipseSelection, selectionBounds } from '../../selection/selection';
-import { floodFill } from '../../tools/fill/fill';
-import { OffsetSurface } from '../../engine/pixel-data';
-import { createPolygonMask } from '../../tools/lasso/lasso';
+import {
+  createRectSelection as tsCreateRectSelection,
+  createEllipseSelection as tsCreateEllipseSelection,
+  selectionBounds as tsSelectionBounds,
+} from '../../selection/selection';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { floodFill as wasmFloodFill, readLayerPixelsForFill as wasmReadLayerPixelsForFill } from '../../engine-wasm/wasm-bridge';
+import { createPolygonMask as tsCreatePolygonMask } from '../../tools/lasso/lasso';
 import { createTransformState } from '../../tools/transform/transform';
 import { snapPositionToGrid } from '../../tools/move/move';
+import {
+  createRectSelection as wasmCreateRectSelection,
+  createEllipseSelection as wasmCreateEllipseSelection,
+  selectionBounds as wasmSelectionBounds,
+  createPolygonMask as wasmCreatePolygonMask,
+} from '../../engine-wasm/wasm-bridge';
+
+/** Create a rect selection mask via WASM, falling back to TS. */
+function createRectSelection(
+  rect: { x: number; y: number; width: number; height: number },
+  canvasWidth: number,
+  canvasHeight: number,
+): Uint8ClampedArray {
+  try {
+    const result = wasmCreateRectSelection(
+      canvasWidth, canvasHeight,
+      Math.floor(rect.x), Math.floor(rect.y),
+      Math.ceil(rect.width), Math.ceil(rect.height),
+    );
+    return new Uint8ClampedArray(result);
+  } catch {
+    return tsCreateRectSelection(rect, canvasWidth, canvasHeight);
+  }
+}
+
+/** Create an ellipse selection mask via WASM, falling back to TS. */
+function createEllipseSelection(
+  rect: { x: number; y: number; width: number; height: number },
+  canvasWidth: number,
+  canvasHeight: number,
+): Uint8ClampedArray {
+  try {
+    const result = wasmCreateEllipseSelection(
+      canvasWidth, canvasHeight,
+      Math.floor(rect.x), Math.floor(rect.y),
+      Math.ceil(rect.width), Math.ceil(rect.height),
+    );
+    return new Uint8ClampedArray(result);
+  } catch {
+    return tsCreateEllipseSelection(rect, canvasWidth, canvasHeight);
+  }
+}
+
+/** Compute selection bounds via WASM, falling back to TS. */
+function selectionBounds(
+  mask: Uint8ClampedArray,
+  width: number,
+  height: number,
+): { x: number; y: number; width: number; height: number } | null {
+  try {
+    const u8Mask = new Uint8Array(mask.buffer, mask.byteOffset, mask.byteLength);
+    const result = wasmSelectionBounds(u8Mask, width, height);
+    if (result.length < 4) return null;
+    return { x: result[0]!, y: result[1]!, width: result[2]!, height: result[3]! };
+  } catch {
+    return tsSelectionBounds(mask, width, height);
+  }
+}
+
+/** Create a polygon mask via WASM, falling back to TS. */
+function createPolygonMask(
+  points: Point[],
+  width: number,
+  height: number,
+): Uint8ClampedArray {
+  try {
+    const flat = new Float64Array(points.length * 2);
+    for (let i = 0; i < points.length; i++) {
+      flat[i * 2] = points[i]!.x;
+      flat[i * 2 + 1] = points[i]!.y;
+    }
+    const result = wasmCreatePolygonMask(flat, width, height);
+    return new Uint8ClampedArray(result);
+  } catch {
+    return tsCreatePolygonMask(points, width, height);
+  }
+}
 
 export function handleSelectionDown(
   ctx: InteractionContext,
   tool: 'marquee-rect' | 'marquee-ellipse' | 'wand' | 'lasso',
 ): InteractionState | undefined {
-  const { canvasPos, activeLayerId, activeLayer, pixelBuffer } = ctx;
+  const { canvasPos, activeLayerId } = ctx;
 
   if (tool === 'marquee-rect' || tool === 'marquee-ellipse') {
     useUIStore.getState().setTransform(null);
@@ -36,19 +117,23 @@ export function handleSelectionDown(
   }
 
   if (tool === 'wand') {
+    const engine = getEngine();
+    if (!engine) return undefined;
     const toolSettings = useToolSettingsStore.getState();
     const wandTolerance = toolSettings.wandTolerance;
     const wandContiguous = toolSettings.wandContiguous;
     const editorState = useEditorStore.getState();
     const { width: docW, height: docH } = editorState.document;
-    const canvasSurface = new OffsetSurface(pixelBuffer, docW, docH, activeLayer.x, activeLayer.y);
-    const wandPixels = floodFill(canvasSurface, canvasPos.x, canvasPos.y, { r: 0, g: 0, b: 0, a: 0 }, wandTolerance, wandContiguous);
-    const wandMask = new Uint8ClampedArray(docW * docH);
-    for (const pt of wandPixels) {
-      if (pt.x >= 0 && pt.x < docW && pt.y >= 0 && pt.y < docH) {
-        wandMask[pt.y * docW + pt.x] = 255;
-      }
-    }
+    // Read layer pixels from GPU for flood fill region detection
+    const pixelData = wasmReadLayerPixelsForFill(engine, activeLayerId);
+    const cx = Math.round(canvasPos.x);
+    const cy = Math.round(canvasPos.y);
+    const wandMaskRaw = wasmFloodFill(
+      pixelData, docW, docH,
+      cx, cy, 0, 0, 0, 0,
+      wandTolerance, wandContiguous,
+    );
+    const wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
     const wandBounds = selectionBounds(wandMask, docW, docH);
     if (wandBounds) {
       editorState.setSelection(wandBounds, wandMask, docW, docH);

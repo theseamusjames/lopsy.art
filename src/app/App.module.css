@@ -73,6 +73,11 @@
   height: 100%;
 }
 
+.overlayCanvas {
+  pointer-events: none;
+  z-index: 1;
+}
+
 .sidebarArea {
   position: relative;
   flex-shrink: 0;

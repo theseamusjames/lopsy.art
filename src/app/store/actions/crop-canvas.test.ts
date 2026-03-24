@@ -9,7 +9,6 @@ function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData> } {
   const layer = createRasterLayer({ name: 'Background', width: 10, height: 10 });
   const pixelData = new Map<string, ImageData>();
   const imgData = new ImageData(10, 10);
-  // Fill pixel at (2,3) with red
   const idx = (3 * 10 + 2) * 4;
   imgData.data[idx] = 255;
   imgData.data[idx + 3] = 255;
@@ -37,16 +36,10 @@ describe('computeCropCanvas', () => {
     expect(result.document!.height).toBe(5);
   });
 
-  it('crops layer pixel data correctly', () => {
+  it('clears JS pixel data (GPU is source of truth)', () => {
     const { doc, pixelData } = makeDoc();
-    // Crop to region that includes pixel (2,3)
     const result = computeCropCanvas(doc, pixelData, 0, { x: 1, y: 2, width: 4, height: 4 })!;
-    const layerId = doc.layers[0]!.id;
-    const cropped = result.layerPixelData!.get(layerId)!;
-    // Pixel (2,3) in original -> (1,1) in cropped (offset by crop x=1, y=2)
-    const ci = (1 * 4 + 1) * 4;
-    expect(cropped.data[ci]).toBe(255);
-    expect(cropped.data[ci + 3]).toBe(255);
+    expect(result.layerPixelData!.size).toBe(0);
   });
 
   it('returns undefined for zero-size crop', () => {

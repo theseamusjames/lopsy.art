@@ -7,11 +7,12 @@ import styles from './LayerPanel.module.css';
 export function LayerThumbnail({ layer }: { layer: Layer }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Subscribe to this layer's data references only — NOT renderVersion.
-  // These selectors only trigger re-render when the specific layer's data changes
-  // (stroke end, undo, etc.), not on every mouse move during painting.
+  // Subscribe to this layer's data references and dirtyLayerIds.
+  // dirtyLayerIds tracks GPU-only changes (stroke end, undo) where JS
+  // pixel data is cleared but the GPU texture has new content.
   const layerData = useEditorStore((s) => s.layerPixelData.get(layer.id));
   const sparseEntry = useEditorStore((s) => s.sparseLayerData.get(layer.id));
+  const isDirty = useEditorStore((s) => s.dirtyLayerIds.has(layer.id));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -41,7 +42,7 @@ export function LayerThumbnail({ layer }: { layer: Layer }) {
     const w = pixelData.width * scale;
     const h = pixelData.height * scale;
     ctx.drawImage(tempCanvas, (thumbSize - w) / 2, (thumbSize - h) / 2, w, h);
-  }, [layer.id, layerData, sparseEntry]);
+  }, [layer.id, layerData, sparseEntry, isDirty]);
 
   return <canvas ref={canvasRef} className={styles.thumbnailCanvas} />;
 }

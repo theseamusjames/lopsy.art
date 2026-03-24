@@ -19,7 +19,7 @@ import { useCanvasInteraction } from './useCanvasInteraction';
 import { useToolSettingsStore } from './tool-settings-store';
 import { drawShape } from '../tools/shape/shape';
 import { PixelBuffer } from '../engine/pixel-data';
-import { contextOptions } from '../engine/color-space';
+// color-space contextOptions no longer needed here — sRGB used for image loading
 import { seedBitmapFromBlob } from '../engine/bitmap-cache';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { useCanvasRendering } from './useCanvasRendering';
@@ -29,16 +29,18 @@ import styles from './App.module.css';
 
 // Isolated component for canvas rendering — prevents renderVersion and
 // cursorPosition changes from re-rendering the entire App tree.
-function CanvasRenderer({ canvasRef, containerRef }: {
+function CanvasRenderer({ canvasRef, containerRef, overlayCanvasRef }: {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   containerRef: React.RefObject<HTMLDivElement | null>;
+  overlayCanvasRef: React.RefObject<HTMLCanvasElement | null>;
 }) {
-  useCanvasRendering(canvasRef, containerRef);
+  useCanvasRendering(canvasRef, containerRef, overlayCanvasRef);
   return null;
 }
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sidebarBottomRef = useRef<HTMLDivElement>(null);
   const effectsDrawerRef = useRef<HTMLDivElement>(null);
@@ -88,7 +90,10 @@ export function App() {
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
-      const ctx = canvas.getContext('2d', contextOptions);
+      // Use sRGB context for loading — the internal pipeline (WASM engine)
+      // works in sRGB space. Using P3 here would produce P3 values that
+      // the engine misinterprets as sRGB, causing color shifts on export.
+      const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
       if (ctx) {
         ctx.drawImage(img, 0, 0);
         const imageData = ctx.getImageData(0, 0, img.width, img.height);
@@ -338,9 +343,10 @@ export function App() {
           onWheel={handleWheel}
         >
           <canvas ref={canvasRef} />
-          <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} />
+          <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />
+          <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </div>
-        <div className={styles.sidebarArea}>
+        {(visiblePanels.size > 0 || showEffectsDrawer) && <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div className={styles.effectsDrawer} ref={effectsDrawerRef}>
               <LayerEffectsPanel />
@@ -416,7 +422,7 @@ export function App() {
             </div>
           </div>
           <PanelToolbar />
-        </div>
+        </div>}
       </div>
       <StatusBar />
     </div>

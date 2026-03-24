@@ -22,6 +22,8 @@ export interface InteractionState {
   originalSelectionMaskHeight: number;
   transformCanvas: HTMLCanvasElement | null;
   baseCanvas: HTMLCanvasElement | null;
+  _scratchCanvas?: HTMLCanvasElement;
+  _usedGpuStroke?: boolean;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
 }
@@ -41,12 +43,11 @@ export const DEFAULT_TRANSFORM_FIELDS = {
 };
 
 export interface FloatingSelection {
-  floated: PixelBuffer;
-  base: PixelBuffer;
   offsetX: number;
   offsetY: number;
   originalMask: Uint8ClampedArray;
   originalBounds: Rect;
+  gpuResident: true;
 }
 
 export interface PersistentTransform {

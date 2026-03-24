@@ -1,7 +1,11 @@
-import type { LayerEffects, Rect } from '../../types';
+import type { LayerEffects, Layer, Rect } from '../../types';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer } from '../../layers/layer-model';
 import { sparseToImageData } from '../../engine/canvas-ops';
+import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
+import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import type { SliceCreator, SparseLayerEntry } from './types';
 
 import { computeCreateDocument } from './actions/create-document';
@@ -29,21 +33,51 @@ import {
   computeUpdateMaskData,
 } from './actions/layer-property-updates';
 
-/** Merge dense + sparse pixel data into a single map for compute functions.
+/** Merge dense + sparse + GPU pixel data into a single map for compute functions.
+ *  Falls back to GPU readback for layers that have no JS data.
  *  IMPORTANT: callers must clear sparseLayerData after set() to avoid
  *  sparse entries duplicating data that is now in layerPixelData. */
 function resolveAllPixelData(
   dense: Map<string, ImageData>,
   sparse: Map<string, SparseLayerEntry>,
+  layerIds?: readonly string[],
 ): Map<string, ImageData> {
-  if (sparse.size === 0) return dense;
   const merged = new Map(dense);
   for (const [id, entry] of sparse) {
     if (!merged.has(id)) {
       merged.set(id, sparseToImageData(entry.sparse));
     }
   }
+  // Fall back to GPU readback for layers with no JS data
+  if (layerIds) {
+    for (const id of layerIds) {
+      if (!merged.has(id)) {
+        const gpuData = readLayerAsImageData(id);
+        if (gpuData) {
+          merged.set(id, gpuData);
+        }
+      }
+    }
+  }
   return merged;
+}
+
+/** Upload all pixel data entries to the GPU engine.
+ *  Called after compute functions that produce a new layerPixelData map. */
+function syncPixelDataToGpu(
+  pixelData: Map<string, ImageData>,
+  layers: readonly Layer[],
+): void {
+  const engine = getEngine();
+  if (!engine) return;
+  for (const [layerId, data] of pixelData) {
+    invalidateBitmapCache(layerId);
+    const layer = layers.find((l) => l.id === layerId);
+    const lx = layer?.x ?? 0;
+    const ly = layer?.y ?? 0;
+    const rawBytes = new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength);
+    uploadLayerPixels(engine, layerId, rawBytes, data.width, data.height, lx, ly);
+  }
 }
 
 function createInitialDocument() {
@@ -92,11 +126,19 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   documentReady: false,
 
   createDocument: (width, height, transparentBg) => {
-    set(computeCreateDocument(width, height, transparentBg));
+    const result = computeCreateDocument(width, height, transparentBg);
+    set(result);
+    if (result.layerPixelData && result.document) {
+      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
+    }
   },
 
   openImageAsDocument: (imageData, name) => {
-    set(computeOpenImage(imageData, name));
+    const result = computeOpenImage(imageData, name);
+    set(result);
+    if (result.layerPixelData && result.document) {
+      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
+    }
   },
 
   addLayer: () => {
@@ -142,7 +184,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   alignLayer: (edge) => {
     const s = get();
     const sparseIds = [...s.sparseLayerData.keys()];
-    const result = computeAlignLayer(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData), s.selection, s.renderVersion, edge);
+    const result = computeAlignLayer(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData, s.document.layerOrder), s.selection, s.renderVersion, edge);
     if (!result) return;
     s.pushHistory('Align Layer');
     set({ ...result, sparseLayerData: new Map() });
@@ -152,38 +194,50 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   duplicateLayer: () => {
     const s = get();
     const sparseIds = [...s.sparseLayerData.keys()];
-    const result = computeDuplicateLayer(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData));
+    const result = computeDuplicateLayer(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData, s.document.layerOrder));
     if (!result) return;
     s.pushHistory('Duplicate Layer');
     set({ ...result, sparseLayerData: new Map() });
+    if (result.layerPixelData && result.document) {
+      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
+    }
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
   mergeDown: () => {
     const s = get();
     const sparseIds = [...s.sparseLayerData.keys()];
-    const result = computeMergeDown(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData));
+    const result = computeMergeDown(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData, s.document.layerOrder));
     if (!result) return;
     s.pushHistory('Merge Down');
     set({ ...result, sparseLayerData: new Map() });
+    if (result.layerPixelData && result.document) {
+      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
+    }
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
   flattenImage: () => {
     const s = get();
-    const result = computeFlattenImage(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData));
+    const result = computeFlattenImage(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData, s.document.layerOrder));
     if (!result) return;
     s.pushHistory('Flatten Image');
     set({ ...result, sparseLayerData: new Map() });
+    if (result.layerPixelData && result.document) {
+      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
+    }
   },
 
   rasterizeLayerStyle: () => {
     const s = get();
     const sparseIds = [...s.sparseLayerData.keys()];
-    const result = computeRasterizeStyle(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData));
+    const result = computeRasterizeStyle(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData, s.document.layerOrder));
     if (!result) return;
     s.pushHistory('Rasterize Layer Style');
     set({ ...result, sparseLayerData: new Map() });
+    if (result.layerPixelData && result.document) {
+      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
+    }
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
@@ -223,19 +277,32 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   cropCanvas: (rect) => {
     const s = get();
     s.pushHistory('Crop Canvas');
-    const result = computeCropCanvas(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData), s.renderVersion, rect);
-    if (result) set({ ...result, sparseLayerData: new Map() });
+    const result = computeCropCanvas(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData, s.document.layerOrder), s.renderVersion, rect);
+    if (result) {
+      set({ ...result, sparseLayerData: new Map() });
+      if (result.layerPixelData && result.document) {
+        syncPixelDataToGpu(result.layerPixelData, result.document.layers);
+      }
+    }
   },
 
   resizeCanvas: (newWidth, newHeight, anchorX, anchorY) => {
     const s = get();
     s.pushHistory('Resize Canvas');
-    set({ ...computeResizeCanvas(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData), s.renderVersion, newWidth, newHeight, anchorX, anchorY), sparseLayerData: new Map() });
+    const result = computeResizeCanvas(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData, s.document.layerOrder), s.renderVersion, newWidth, newHeight, anchorX, anchorY);
+    set({ ...result, sparseLayerData: new Map() });
+    if (result.layerPixelData && result.document) {
+      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
+    }
   },
 
   resizeImage: (newWidth, newHeight) => {
     const s = get();
     s.pushHistory('Resize Image');
-    set({ ...computeResizeImage(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData), s.renderVersion, newWidth, newHeight), sparseLayerData: new Map() });
+    const result = computeResizeImage(s.document, resolveAllPixelData(s.layerPixelData, s.sparseLayerData, s.document.layerOrder), s.renderVersion, newWidth, newHeight);
+    set({ ...result, sparseLayerData: new Map() });
+    if (result.layerPixelData && result.document) {
+      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
+    }
   },
 });

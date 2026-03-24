@@ -5,19 +5,36 @@ import type { Point } from '../../types';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
-import { wrapWithSelectionMask } from './selection-mask-wrap';
 import { rasterizePathToLayer } from './path-stroke';
-import { floodFill, applyFill } from '../../tools/fill/fill';
-import { sampleColor } from '../../tools/eyedropper/eyedropper';
-import { applyDodgeBurn } from '../../tools/dodge/dodge';
-import { applyStampDab } from '../../tools/stamp/stamp';
 import { renderText } from '../../tools/text/text';
-import { drawShape } from '../../tools/shape/shape';
-import { interpolateGradient, computeLinearGradientT, computeRadialGradientT } from '../../tools/gradient/gradient';
-import { interpolatePoints } from '../../tools/brush/brush';
+import { getEngine } from '../../engine-wasm/engine-state';
+import {
+  floodFill as wasmFloodFill,
+  applyFillToLayer as wasmApplyFillToLayer,
+  readLayerPixelsForFill as wasmReadLayerPixelsForFill,
+  sampleColor as wasmSampleColor,
+  applyDodgeBurnDab as gpuDodgeBurnDab,
+  applyDodgeBurnDabBatch as gpuDodgeBurnDabBatch,
+  applyStampDab as gpuStampDab,
+  applyStampDabBatch as gpuStampDabBatch,
+  renderLinearGradient as gpuRenderLinearGradient,
+  renderRadialGradient as gpuRenderRadialGradient,
+  renderShape as gpuRenderShape,
+} from '../../engine-wasm/wasm-bridge';
+
+function clearJsPixelData(layerId: string): void {
+  const state = useEditorStore.getState();
+  const pixelDataMap = new Map(state.layerPixelData);
+  pixelDataMap.delete(layerId);
+  const sparseMap = new Map(state.sparseLayerData);
+  sparseMap.delete(layerId);
+  const dirtyIds = new Set(state.dirtyLayerIds);
+  dirtyIds.add(layerId);
+  useEditorStore.setState({ layerPixelData: pixelDataMap, sparseLayerData: sparseMap, dirtyLayerIds: dirtyIds });
+}
 
 export function handleFillDown(ctx: InteractionContext): void {
-  const { layerPos, activeLayerId, pixelBuffer, paintSurface } = ctx;
+  const { layerPos, activeLayerId } = ctx;
   const editorState = useEditorStore.getState();
   editorState.pushHistory();
   const color = useUIStore.getState().foregroundColor;
@@ -25,19 +42,50 @@ export function handleFillDown(ctx: InteractionContext): void {
   const toolSettings = useToolSettingsStore.getState();
   const tolerance = toolSettings.fillTolerance;
   const contiguous = toolSettings.fillContiguous;
-  const pixels = floodFill(pixelBuffer, layerPos.x, layerPos.y, color, tolerance, contiguous);
-  applyFill(paintSurface, pixels, color);
-  editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
+
+  const engine = getEngine();
+  if (!engine) return;
+
+  const pixelData = wasmReadLayerPixelsForFill(engine, activeLayerId);
+  const { width: docW, height: docH } = editorState.document;
+  const layer = editorState.document.layers.find((l) => l.id === activeLayerId);
+  const canvasX = Math.round(layerPos.x + (layer?.x ?? 0));
+  const canvasY = Math.round(layerPos.y + (layer?.y ?? 0));
+  const fillMask = wasmFloodFill(
+    pixelData, docW, docH,
+    canvasX, canvasY,
+    color.r, color.g, color.b, Math.round(color.a * 255),
+    tolerance, contiguous,
+  );
+  wasmApplyFillToLayer(
+    engine, activeLayerId,
+    color.r / 255, color.g / 255, color.b / 255, color.a,
+    fillMask, docW, docH,
+  );
+  clearJsPixelData(activeLayerId);
+  editorState.notifyRender();
+}
+
+function gpuSampleColorAt(canvasX: number, canvasY: number): { r: number; g: number; b: number; a: number } | null {
+  const engine = getEngine();
+  if (!engine) return null;
+  const rgba = wasmSampleColor(engine, canvasX, canvasY, 1);
+  if (rgba.length < 4) return null;
+  return { r: rgba[0]!, g: rgba[1]!, b: rgba[2]!, a: rgba[3]! / 255 };
 }
 
 export function handleEyedropperDown(ctx: InteractionContext): InteractionState {
-  const { layerPos, activeLayerId, activeLayer, pixelBuffer } = ctx;
-  const color = sampleColor(pixelBuffer, layerPos.x, layerPos.y, 'point');
-  useUIStore.getState().setForegroundColor(color);
+  const { canvasPos, activeLayerId, activeLayer } = ctx;
+
+  const gpuColor = gpuSampleColorAt(canvasPos.x, canvasPos.y);
+  if (gpuColor) {
+    useUIStore.getState().setForegroundColor(gpuColor);
+  }
+
   return {
     drawing: true,
-    lastPoint: layerPos,
-    pixelBuffer,
+    lastPoint: canvasPos,
+    pixelBuffer: null,
     originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'eyedropper',
@@ -49,13 +97,37 @@ export function handleEyedropperDown(ctx: InteractionContext): InteractionState 
 }
 
 export function handleEyedropperMove(state: InteractionState, layerLocalPos: Point): void {
-  if (!state.pixelBuffer) return;
-  const eyeColor = sampleColor(state.pixelBuffer, layerLocalPos.x, layerLocalPos.y, 'point');
-  useUIStore.getState().setForegroundColor(eyeColor);
+  const canvasX = layerLocalPos.x + state.layerStartX;
+  const canvasY = layerLocalPos.y + state.layerStartY;
+  const gpuColor = gpuSampleColorAt(canvasX, canvasY);
+  if (gpuColor) {
+    useUIStore.getState().setForegroundColor(gpuColor);
+  }
+}
+
+/** Map dodge/burn mode string to GPU enum (0 = dodge, 1 = burn). */
+function dodgeModeToU32(mode: 'dodge' | 'burn'): number {
+  return mode === 'dodge' ? 0 : 1;
+}
+
+/** Flatten two Points into a flat [x,y,...] array for the WASM batch API. */
+function interpolateFlat(from: Point, to: Point, spacing: number): Float64Array {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < spacing) return new Float64Array([to.x, to.y]);
+  const steps = Math.floor(dist / spacing);
+  const arr = new Float64Array(steps * 2);
+  for (let i = 0; i < steps; i++) {
+    const t = (i + 1) * spacing / dist;
+    arr[i * 2] = from.x + dx * t;
+    arr[i * 2 + 1] = from.y + dy * t;
+  }
+  return arr;
 }
 
 export function handleDodgeDown(ctx: InteractionContext): InteractionState {
-  const { layerPos, activeLayerId, activeLayer, pixelBuffer, paintSurface, shiftKey } = ctx;
+  const { layerPos, activeLayerId, activeLayer, shiftKey } = ctx;
   const editorState = useEditorStore.getState();
   editorState.pushHistory();
   const toolSettings = useToolSettingsStore.getState();
@@ -65,20 +137,24 @@ export function handleDodgeDown(ctx: InteractionContext): InteractionState {
   const dodgeShiftLine = shiftKey
     && ctx.lastPaintPointRef.current
     && ctx.lastPaintPointRef.current.layerId === activeLayerId;
-  if (dodgeShiftLine) {
-    const spacing = Math.max(1, dodgeSize * 0.25);
-    const pts = interpolatePoints(ctx.lastPaintPointRef.current!.point, layerPos, spacing);
-    for (const pt of pts) {
-      applyDodgeBurn(paintSurface, pt, dodgeSize, dodgeMode, exposure);
+
+  const engine = getEngine();
+  if (engine) {
+    const modeU32 = dodgeModeToU32(dodgeMode);
+    if (dodgeShiftLine) {
+      const spacing = Math.max(1, dodgeSize * 0.25);
+      const pts = interpolateFlat(ctx.lastPaintPointRef.current!.point, layerPos, spacing);
+      gpuDodgeBurnDabBatch(engine, activeLayerId, pts, dodgeSize, modeU32, exposure);
+    } else {
+      gpuDodgeBurnDab(engine, activeLayerId, layerPos.x, layerPos.y, dodgeSize, modeU32, exposure);
     }
-  } else {
-    applyDodgeBurn(paintSurface, layerPos, dodgeSize, dodgeMode, exposure);
+    editorState.notifyRender();
   }
-  editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
+
   return {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer,
+    pixelBuffer: null,
     originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'dodge',
@@ -90,23 +166,24 @@ export function handleDodgeDown(ctx: InteractionContext): InteractionState {
 }
 
 export function handleDodgeMove(state: InteractionState, layerLocalPos: Point): void {
-  if (!state.pixelBuffer || !state.lastPoint) return;
+  if (!state.lastPoint) return;
   const toolSettings = useToolSettingsStore.getState();
   const dodgeMode = toolSettings.dodgeMode;
   const exposure = toolSettings.dodgeExposure / 100;
   const dodgeSize = toolSettings.brushSize;
   const dodgeSpacing = Math.max(1, dodgeSize * 0.25);
-  const dodgeSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
-  const dodgePoints = interpolatePoints(state.lastPoint, layerLocalPos, dodgeSpacing);
-  for (const pt of dodgePoints) {
-    applyDodgeBurn(dodgeSurface, pt, dodgeSize, dodgeMode, exposure);
+
+  const engine = getEngine();
+  if (engine && state.layerId) {
+    const pts = interpolateFlat(state.lastPoint, layerLocalPos, dodgeSpacing);
+    gpuDodgeBurnDabBatch(engine, state.layerId, pts, dodgeSize, dodgeModeToU32(dodgeMode), exposure);
   }
   state.lastPoint = layerLocalPos;
   useEditorStore.getState().notifyRender();
 }
 
 export function handleStampDown(ctx: InteractionContext): InteractionState | undefined {
-  const { layerPos, activeLayerId, activeLayer, pixelBuffer, paintSurface, altKey, shiftKey } = ctx;
+  const { layerPos, activeLayerId, activeLayer, altKey, shiftKey } = ctx;
 
   if (altKey) {
     ctx.stampSourceRef.current = layerPos;
@@ -125,11 +202,28 @@ export function handleStampDown(ctx: InteractionContext): InteractionState | und
     };
   }
 
-  const state: InteractionState = {
+  const toolSettings = useToolSettingsStore.getState();
+  const engine = getEngine();
+
+  if (engine) {
+    const stampShiftLine = shiftKey
+      && ctx.lastPaintPointRef.current
+      && ctx.lastPaintPointRef.current.layerId === activeLayerId;
+    if (stampShiftLine) {
+      const spacing = Math.max(1, toolSettings.stampSize * 0.25);
+      const pts = interpolateFlat(ctx.lastPaintPointRef.current!.point, layerPos, spacing);
+      gpuStampDabBatch(engine, activeLayerId, pts, ctx.stampOffsetRef.current.x, ctx.stampOffsetRef.current.y, toolSettings.stampSize);
+    } else {
+      gpuStampDab(engine, activeLayerId, layerPos.x, layerPos.y, ctx.stampOffsetRef.current.x, ctx.stampOffsetRef.current.y, toolSettings.stampSize);
+    }
+    editorState.notifyRender();
+  }
+
+  return {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer,
-    originalPixelBuffer: pixelBuffer.clone(),
+    pixelBuffer: null,
+    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'stamp',
     startPoint: layerPos,
@@ -137,22 +231,6 @@ export function handleStampDown(ctx: InteractionContext): InteractionState | und
     layerStartY: activeLayer.y,
     ...DEFAULT_TRANSFORM_FIELDS,
   };
-
-  const toolSettings = useToolSettingsStore.getState();
-  const stampShiftLine = shiftKey
-    && ctx.lastPaintPointRef.current
-    && ctx.lastPaintPointRef.current.layerId === activeLayerId;
-  if (stampShiftLine) {
-    const spacing = Math.max(1, toolSettings.stampSize * 0.25);
-    const pts = interpolatePoints(ctx.lastPaintPointRef.current!.point, layerPos, spacing);
-    for (const pt of pts) {
-      applyStampDab(paintSurface, pixelBuffer, pt, ctx.stampOffsetRef.current, toolSettings.stampSize);
-    }
-  } else {
-    applyStampDab(paintSurface, pixelBuffer, layerPos, ctx.stampOffsetRef.current, toolSettings.stampSize);
-  }
-  editorState.updateLayerPixelData(activeLayerId, pixelBuffer.toImageData());
-  return state;
 }
 
 export function handleStampMove(
@@ -160,13 +238,15 @@ export function handleStampMove(
   layerLocalPos: Point,
   stampOffsetRef: MutableRefObject<Point | null>,
 ): void {
-  if (!state.pixelBuffer || !state.originalPixelBuffer || !state.lastPoint || !stampOffsetRef.current) return;
-  const stampSurface = wrapWithSelectionMask(state.pixelBuffer, state.layerStartX, state.layerStartY);
+  if (!state.lastPoint || !stampOffsetRef.current) return;
+
   const toolSettings = useToolSettingsStore.getState();
   const stampSpacing = Math.max(1, toolSettings.stampSize * 0.25);
-  const stampPoints = interpolatePoints(state.lastPoint, layerLocalPos, stampSpacing);
-  for (const pt of stampPoints) {
-    applyStampDab(stampSurface, state.originalPixelBuffer, pt, stampOffsetRef.current, toolSettings.stampSize);
+
+  const engine = getEngine();
+  if (engine && state.layerId) {
+    const pts = interpolateFlat(state.lastPoint, layerLocalPos, stampSpacing);
+    gpuStampDabBatch(engine, state.layerId, pts, stampOffsetRef.current.x, stampOffsetRef.current.y, toolSettings.stampSize);
   }
   state.lastPoint = layerLocalPos;
   useEditorStore.getState().notifyRender();
@@ -284,7 +364,7 @@ export function handleShapeGradientDown(
   ctx: InteractionContext,
   tool: 'shape' | 'gradient',
 ): InteractionState {
-  const { layerPos, activeLayerId, activeLayer, pixelBuffer } = ctx;
+  const { layerPos, activeLayerId, activeLayer } = ctx;
   const editorState = useEditorStore.getState();
   editorState.pushHistory();
   if (tool === 'shape') {
@@ -298,8 +378,8 @@ export function handleShapeGradientDown(
   return {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer,
-    originalPixelBuffer: pixelBuffer.clone(),
+    pixelBuffer: null,
+    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool,
     startPoint: layerPos,
@@ -312,11 +392,10 @@ export function handleShapeGradientDown(
 const CLICK_THRESHOLD = 4;
 
 export function handleShapeUp(state: InteractionState, layerLocalPos: Point): void {
-  if (!state.startPoint || !state.pixelBuffer || !state.originalPixelBuffer) return;
+  if (!state.startPoint) return;
   const dx = layerLocalPos.x - state.startPoint.x;
   const dy = layerLocalPos.y - state.startPoint.y;
   if (Math.sqrt(dx * dx + dy * dy) < CLICK_THRESHOLD) {
-    // Undo the history push from mousedown since nothing was drawn
     useEditorStore.getState().undo();
     useUIStore.getState().setPendingShapeClick({
       center: state.startPoint,
@@ -344,70 +423,76 @@ function constrainToAspectRatio(center: Point, edge: Point): Point {
   };
 }
 
+/** Map shape mode to GPU enum (0 = ellipse, 1 = polygon). */
+function shapeModeToU32(mode: 'ellipse' | 'polygon'): number {
+  return mode === 'ellipse' ? 0 : 1;
+}
+
 export function handleShapeMove(state: InteractionState, layerLocalPos: Point): void {
-  if (!state.pixelBuffer || !state.originalPixelBuffer || !state.startPoint) return;
-  const restored = state.originalPixelBuffer.clone();
-  const shapeSurface = wrapWithSelectionMask(restored, state.layerStartX, state.layerStartY);
+  if (!state.startPoint || !state.layerId) return;
+
   const toolSettings = useToolSettingsStore.getState();
   const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos);
-  drawShape(shapeSurface, state.startPoint, constrainedEdge, {
-    mode: toolSettings.shapeMode,
-    fillColor: toolSettings.shapeFillColor,
-    strokeColor: toolSettings.shapeStrokeColor,
-    strokeWidth: toolSettings.shapeStrokeWidth,
-    sides: toolSettings.shapePolygonSides,
-  });
-  state.pixelBuffer = restored;
-  useEditorStore.getState().updateLayerPixelData(state.layerId!, restored.toImageData());
+  const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
+  const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
+  if (rx < 1 && ry < 1) return;
+
+  const engine = getEngine();
+  if (!engine) return;
+
+  const fillColor = toolSettings.shapeFillColor;
+  const strokeColor = toolSettings.shapeStrokeColor;
+  gpuRenderShape(
+    engine, state.layerId,
+    shapeModeToU32(toolSettings.shapeMode),
+    state.startPoint.x + state.layerStartX,
+    state.startPoint.y + state.layerStartY,
+    rx * 2, ry * 2,
+    fillColor ? fillColor.r / 255 : 0, fillColor ? fillColor.g / 255 : 0,
+    fillColor ? fillColor.b / 255 : 0, fillColor ? fillColor.a : 0,
+    strokeColor ? strokeColor.r / 255 : 0, strokeColor ? strokeColor.g / 255 : 0,
+    strokeColor ? strokeColor.b / 255 : 0, strokeColor ? strokeColor.a : 0,
+    toolSettings.shapeStrokeWidth, toolSettings.shapePolygonSides, 0,
+  );
+  clearJsPixelData(state.layerId);
+  useEditorStore.getState().notifyRender();
 }
 
 export function handleGradientMove(state: InteractionState, layerLocalPos: Point): void {
-  if (!state.pixelBuffer || !state.originalPixelBuffer || !state.startPoint) return;
-  const restored = state.originalPixelBuffer.clone();
-  const gradSurface = wrapWithSelectionMask(restored, state.layerStartX, state.layerStartY);
+  if (!state.startPoint || !state.layerId) return;
+
   const fg = useUIStore.getState().foregroundColor;
   const bg = useUIStore.getState().backgroundColor;
   const toolSettings = useToolSettingsStore.getState();
   const gradType = toolSettings.gradientType;
-  const stops = [
-    { position: 0, color: fg },
-    { position: 1, color: bg },
-  ] as const;
 
-  for (let y = 0; y < restored.height; y++) {
-    for (let x = 0; x < restored.width; x++) {
-      let t: number;
-      if (gradType === 'linear') {
-        t = computeLinearGradientT(
-          x, y,
-          state.startPoint.x, state.startPoint.y,
-          layerLocalPos.x, layerLocalPos.y,
-        );
-      } else {
-        const dx = layerLocalPos.x - state.startPoint.x;
-        const dy = layerLocalPos.y - state.startPoint.y;
-        const radius = Math.sqrt(dx * dx + dy * dy);
-        t = computeRadialGradientT(x, y, state.startPoint.x, state.startPoint.y, radius);
-      }
-      const gradColor = interpolateGradient(stops, t);
-      const existing = restored.getPixel(x, y);
-      const ga = gradColor.a;
-      const ea = existing.a;
-      const outA = ga + ea * (1 - ga);
-      if (outA > 0) {
-        gradSurface.setPixel(x, y, {
-          r: Math.round((gradColor.r * ga + existing.r * ea * (1 - ga)) / outA),
-          g: Math.round((gradColor.g * ga + existing.g * ea * (1 - ga)) / outA),
-          b: Math.round((gradColor.b * ga + existing.b * ea * (1 - ga)) / outA),
-          a: outA,
-        });
-      }
-    }
+  const engine = getEngine();
+  if (!engine) return;
+
+  const stopsJson = JSON.stringify([
+    { position: 0, r: fg.r / 255, g: fg.g / 255, b: fg.b / 255, a: fg.a },
+    { position: 1, r: bg.r / 255, g: bg.g / 255, b: bg.b / 255, a: bg.a },
+  ]);
+
+  const startX = state.startPoint.x + state.layerStartX;
+  const startY = state.startPoint.y + state.layerStartY;
+  const endX = layerLocalPos.x + state.layerStartX;
+  const endY = layerLocalPos.y + state.layerStartY;
+
+  if (gradType === 'linear') {
+    gpuRenderLinearGradient(engine, state.layerId, startX, startY, endX, endY, stopsJson);
+  } else {
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const radius = Math.sqrt(dx * dx + dy * dy);
+    gpuRenderRadialGradient(engine, state.layerId, startX, startY, radius, stopsJson);
   }
-  state.pixelBuffer = restored;
-  useEditorStore.getState().updateLayerPixelData(state.layerId!, restored.toImageData());
+
+  clearJsPixelData(state.layerId);
+  useEditorStore.getState().notifyRender();
+
   useUIStore.getState().setGradientPreview({
-    start: { x: state.startPoint.x + state.layerStartX, y: state.startPoint.y + state.layerStartY },
-    end: { x: layerLocalPos.x + state.layerStartX, y: layerLocalPos.y + state.layerStartY },
+    start: { x: startX, y: startY },
+    end: { x: endX, y: endY },
   });
 }

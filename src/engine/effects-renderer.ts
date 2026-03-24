@@ -118,27 +118,38 @@ export function renderStroke(
   const w = data.width;
   const h = data.height;
 
-  const alpha = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) {
-    alpha[i] = (srcData[i * 4 + 3] ?? 0) >= 128 ? 1 : 0;
+  // Compute EDT on a padded grid so content touching the crop boundary
+  // still has transparent pixels around it for proper edge detection.
+  // Without this, cropped layers produce straight-line clipping at edges
+  // where the content fills to the boundary.
+  const pw = w + pad * 2;
+  const ph = h + pad * 2;
+  const alpha = new Uint8Array(pw * ph); // zero-initialized = transparent padding
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const srcIdx = (y * w + x) * 4;
+      alpha[(y + pad) * pw + (x + pad)] = (srcData[srcIdx + 3] ?? 0) >= 128 ? 1 : 0;
+    }
   }
 
-  const distSqInside = new Float64Array(w * h);
-  const distSqOutside = new Float64Array(w * h);
+  const gridSize = pw * ph;
+  const distSqInside = new Float64Array(gridSize);
+  const distSqOutside = new Float64Array(gridSize);
   const EDT_INF = 1e20;
 
-  for (let i = 0; i < w * h; i++) {
+  for (let i = 0; i < gridSize; i++) {
     distSqInside[i] = alpha[i] ? EDT_INF : 0;
     distSqOutside[i] = alpha[i] ? 0 : EDT_INF;
   }
 
-  edt2d(distSqInside, w, h);
-  edt2d(distSqOutside, w, h);
+  edt2d(distSqInside, pw, ph);
+  edt2d(distSqOutside, pw, ph);
 
   const swSq = sw * sw;
 
-  const outW = w + pad * 2;
-  const outH = h + pad * 2;
+  // Output canvas matches the padded grid size
+  const outW = pw;
+  const outH = ph;
   const { canvas: strokeCanvas, ctx: strokeCtx } = alloc.acquire(outW, outH);
   const strokeImg = strokeCtx.createImageData(outW, outH);
   const sd = strokeImg.data;
@@ -147,9 +158,9 @@ export function renderStroke(
   const cb = stroke.color.b;
   const ca = Math.round(stroke.color.a * 255);
 
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const idx = y * w + x;
+  for (let y = 0; y < ph; y++) {
+    for (let x = 0; x < pw; x++) {
+      const idx = y * pw + x;
       let isStroke = false;
 
       if (stroke.position === 'outside') {
@@ -164,7 +175,7 @@ export function renderStroke(
       }
 
       if (isStroke) {
-        const oi = ((y + pad) * outW + (x + pad)) * 4;
+        const oi = (y * outW + x) * 4;
         sd[oi] = cr;
         sd[oi + 1] = cg;
         sd[oi + 2] = cb;

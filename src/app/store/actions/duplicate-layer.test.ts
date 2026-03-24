@@ -34,16 +34,12 @@ describe('computeDuplicateLayer', () => {
     expect(result).toBeUndefined();
   });
 
-  it('creates a new layer with cloned pixel data', () => {
+  it('creates a new layer in the document', () => {
     const { doc, pixelData } = makeDoc();
     const result = computeDuplicateLayer(doc, pixelData)!;
     const newLayerId = result.document!.activeLayerId!;
     expect(newLayerId).not.toBe(doc.activeLayerId);
-    const cloned = result.layerPixelData!.get(newLayerId)!;
-    expect(cloned.data[0]).toBe(200);
-    expect(cloned.data[1]).toBe(100);
-    // Verify it's a clone, not the same reference
-    expect(cloned).not.toBe(pixelData.get(doc.activeLayerId!));
+    expect(result.document!.layers).toHaveLength(2);
   });
 
   it('inserts after the original in layerOrder', () => {
