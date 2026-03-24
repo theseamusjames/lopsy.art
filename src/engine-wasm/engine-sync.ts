@@ -6,6 +6,7 @@
  */
 
 import type { Engine } from './wasm-bridge';
+import { getEngine } from './engine-state';
 import type { Layer, BlendMode } from '../types';
 import type { SparseLayerEntry } from '../app/store/types';
 import type { ImageAdjustments } from '../filters/image-adjustments';
@@ -472,4 +473,21 @@ export function renderEngine(engine: Engine): void {
 
 export function markAllLayersDirty(engine: Engine): void {
   markAllDirty(engine);
+}
+
+/**
+ * Flush any pending JS pixel data to the GPU immediately.
+ * Called before undo snapshots to ensure the GPU (single source of truth)
+ * has current data. Without this, pushHistory would read stale GPU textures
+ * if JS pixel data hadn't been synced yet via the rAF loop.
+ */
+export function flushLayerSync(state: {
+  document: { layers: readonly Layer[]; layerOrder: readonly string[] };
+  layerPixelData: Map<string, ImageData>;
+  sparseLayerData: Map<string, SparseLayerEntry>;
+  dirtyLayerIds: Set<string>;
+}): void {
+  const engine = getEngine();
+  if (!engine) return;
+  syncLayers(engine, state.document.layers, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
 }
