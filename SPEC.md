@@ -48,8 +48,15 @@ Lopsy is a browser-based image editor at lopsy.art. It runs entirely client-side
 ### Layer Properties
 - Name, visibility (eye icon), lock (prevent edits).
 - Opacity: 0–100%.
-- Blend mode: Normal, Multiply, Screen, Overlay, Darken, Lighten, Color Dodge, Color Burn, Hard Light, Soft Light, Difference, Exclusion, Hue, Saturation, Color, Luminosity.
+- Blend mode: Normal, Multiply, Screen, Overlay, Darken, Lighten, Color Dodge, Color Burn, Hard Light, Soft Light, Difference, Exclusion, Hue, Saturation, Color, Luminosity. All blend modes are implemented in a single `blend.glsl` shader selected via uniform.
 - Clip to layer below (clipping mask).
+- **Layer effects** (rendered as GPU shader passes per layer during compositing):
+  - **Drop Shadow**: color, offset X/Y, blur, spread, opacity.
+  - **Outer Glow**: color, size, spread, opacity.
+  - **Inner Glow**: color, size, spread, opacity.
+  - **Color Overlay**: color, opacity.
+  - **Stroke**: color, width, position (outside/inside/center), opacity. Uses EDT (Euclidean Distance Transform) shader.
+- Effects are stored in the Zustand layer model and synced to the engine via `layerToDescJson()`. The compositor renders behind-effects (shadow, outer glow) before the layer and above-effects (inner glow, stroke) after.
 
 ### Layer Panel
 - Drag to reorder. Drag into groups.
@@ -60,8 +67,10 @@ Lopsy is a browser-based image editor at lopsy.art. It runs entirely client-side
 
 ### Layer Masks
 - Each layer can have a grayscale mask (white = visible, black = hidden, gray = partial).
+- Mask data is stored as a `Uint8ClampedArray` in the Zustand layer model and uploaded to the GPU as an RGBA texture via `uploadLayerMask()`.
+- During compositing, the blend shader samples the mask texture and multiplies the layer's alpha by the mask value. Masking only affects rendering when mask edit mode is not active.
+- In mask edit mode, the compositor renders a translucent blue overlay showing mask coverage so the user can see what's underneath while painting.
 - Paint on the mask with any brush/tool.
-- Toggle mask view (show mask as red overlay or solo).
 - Disable/enable mask without deleting it.
 - Vector masks using paths (future consideration).
 
@@ -93,7 +102,8 @@ Lopsy is a browser-based image editor at lopsy.art. It runs entirely client-side
 - Expand / contract selection by N pixels.
 - Selection from layer transparency (Cmd-click layer thumbnail).
 - Save / load selections as channels.
-- Marching ants animation on active selection.
+- Marching ants animation on active selection (rendered by `marching_ants.glsl` overlay shader).
+- The selection mask is uploaded to a GPU texture via `setSelectionMask()`. All painting tools (brush, eraser, pencil, gradient, fill) sample this texture in their shaders to constrain operations to the selected region.
 
 ---
 
@@ -106,17 +116,19 @@ Lopsy is a browser-based image editor at lopsy.art. It runs entirely client-side
 - Hold `Shift` after first click to draw a straight line to next click.
 
 ### Brush
-- Anti-aliased, soft-edged brush.
+- Anti-aliased, soft-edged brush. Each dab is rendered as a GPU draw call into a per-layer stroke texture via the `brush_dab.glsl` shader. On stroke end, the stroke texture is composited onto the layer texture.
 - Size: 1–1000 px. Hardness: 0–100%.
 - Opacity: 1–100%. Flow: 1–100%.
 - Brush presets (round, textured, scatter).
 - Pressure sensitivity support (for pen tablets / Apple Pencil).
 - Spacing setting (distance between dabs as % of brush size).
+- Selection mask constraining: the dab shader samples `u_selectionMask` and discards pixels outside the active selection.
 - Hold `Shift` to draw straight line between clicks.
 
 ### Eraser
-- Works like brush but removes pixels (makes transparent) or paints with background color.
+- Works like brush but removes pixels (makes transparent) or paints with background color. Rendered via `eraser_dab.glsl` shader on the GPU.
 - Same size/hardness/opacity settings as brush.
+- Selection mask constraining: eraser dabs respect the active selection mask, preventing erase outside the selection.
 - Eraser presets matching brush presets.
 
 ### Fill (Paint Bucket)
@@ -134,7 +146,7 @@ Lopsy is a browser-based image editor at lopsy.art. It runs entirely client-side
 
 ### Stamp (Clone Stamp)
 - `Alt`-click to set source point.
-- Paint to clone pixels from source location.
+- Paint to clone pixels from source location. Each dab is rendered as a GPU draw call via `clone_stamp.glsl` with per-dab center/size/sourceOffset uniforms and circular falloff.
 - Aligned mode (source moves with brush) vs. fixed mode (source resets each stroke).
 - Size, hardness, opacity, flow settings (like brush).
 - Sample from current layer, current & below, or all layers.
@@ -288,6 +300,7 @@ Lopsy is a browser-based image editor at lopsy.art. It runs entirely client-side
 - Emboss, find edges, oil paint.
 
 ### Filter Application
+- All filters execute as GPU shader passes via the WASM engine (`applyFilterGpu`). No CPU-side pixel processing.
 - All filters apply to the current layer (or selection if active).
 - Live preview toggle.
 - Filters on adjustment layers are non-destructive (future).
@@ -296,7 +309,7 @@ Lopsy is a browser-based image editor at lopsy.art. It runs entirely client-side
 
 ## 11. Image Adjustments
 
-All adjustments can be applied destructively (to the layer directly) or as adjustment layers (non-destructive, editable).
+All adjustments can be applied destructively (to the layer directly) or as adjustment layers (non-destructive, editable). Non-destructive image-level adjustments (exposure, contrast, highlights, shadows, whites, blacks, vignette) are applied as a post-compositing GPU shader pass — the compositor runs `apply_image_adjustments()` on the composite texture before the final blit to screen. These are per-frame values stored in the Zustand UI store and synced to the engine.
 
 ### Brightness / Contrast
 - Brightness slider: -100 to +100.
@@ -344,6 +357,10 @@ All adjustments can be applied destructively (to the layer directly) or as adjus
 ### Undo / Redo
 - `Cmd + Z` to undo. `Cmd + Shift + Z` to redo.
 - Deep undo stack (50+ steps, configurable).
+- Each snapshot captures the full Zustand document state (layer tree, positions, effects, blend modes) plus compressed GPU texture blobs for every layer.
+- GPU snapshots use a 24-byte header format: `[crop_x, crop_y, crop_w, crop_h, full_w, full_h]` + raw RGBA pixels, cropped to content bounds. On restore, the full-size texture is reconstructed with content placed at the correct offset.
+- `pushHistory()` flushes any pending JS pixel data to the GPU before snapshotting, ensuring the GPU is the single source of truth.
+- After restore, `resetTrackedState()` forces the sync layer to re-push all layer descriptors (positions, effects, blend modes) to the engine.
 
 ### History Panel
 - Visual list of all actions taken.
@@ -442,25 +459,59 @@ Single letter to select tool (e.g., `V` move, `B` brush, `E` eraser, `G` gradien
 
 ## 16. Performance Considerations
 
-- **Rendering**: WebGL (via GPU) for canvas compositing. Fall back to Canvas 2D where WebGL isn't supported.
-- **Large canvases**: tile-based rendering — only render tiles visible in the viewport.
+- **Rendering**: all pixel operations run on the GPU via WebGL2, driven by a Rust/WASM engine. No Canvas 2D fallback — WebGL2 is required.
+- **GPU-resident pixel data**: layer textures live exclusively in GPU memory. JS never reads or writes pixel buffers in the render path. Data only crosses the boundary for undo snapshots (compressed readback) and export.
 - **Offscreen layers**: skip compositing for layers that don't intersect the viewport.
-- **Brush rendering**: stamp-based approach with interpolation between input points. GPU-accelerated where possible.
-- **Web Workers**: offload filter computations, image decode/encode, and heavy processing to workers to keep UI responsive.
-- **Memory management**: lazy-load layer pixel data. Compress or page out inactive layers to IndexedDB if memory pressure is high.
+- **Brush rendering**: stamp-based approach with interpolation between input points. Each dab is a GPU draw call into the layer's stroke texture — no CPU pixel manipulation.
+- **Web Workers**: offload image encode/decode to workers. Filters and compositing run on the GPU, not in workers.
+- **Memory management**: GPU texture pool with allocation/release tracking. Undo snapshots crop to content bounds to minimize memory. Sparse pixel storage for layers with few opaque pixels.
+- **FP16 / Wide Gamut**: when `EXT_color_buffer_float` is available, textures use `RGBA16F` for HDR headroom. `drawingBufferColorSpace` is set to `display-p3` on capable displays.
 - **Target**: 60fps pan/zoom, 60fps brush strokes on a 4000x4000 canvas with 20 layers on a mid-range laptop.
 
 ---
 
 ## 17. Technology
 
+### JS / React Layer
 - **Language**: TypeScript exclusively — no `.js` or `.jsx` files. Strict mode enabled (`"strict": true`). All source files are `.ts` or `.tsx`.
-- **Framework**: React (UI), WebGL 2 (rendering), Canvas 2D (fallback).
-- **State management**: Zustand or similar lightweight store for UI state. Custom layer/document model for the editor core.
+- **Framework**: React (UI shell, panels, tool options). The React layer is a thin wrapper — it manages UI state and dispatches actions, but never touches pixel data.
+- **State management**: Zustand for both UI state (tool selection, panel visibility) and document model (layers, history, selection). Each frame, a sync layer diffs Zustand state against tracked engine state and pushes only deltas to the WASM engine.
 - **Build**: Vite.
 - **File handling**: File System Access API where supported, fallback to download links.
 - **Persistence**: IndexedDB for project auto-save. Custom binary project format for save/load.
 - **No server required**: everything runs in the browser. No backend dependencies for core editing.
+
+### Rust / WASM Rendering Engine
+- **Language**: Rust, compiled to WASM via `wasm-pack`.
+- **Crates**: `lopsy-core` (pure Rust utilities — blend math, color, geometry, compression) and `lopsy-wasm` (WebGL2 engine with `#[wasm_bindgen]` API surface).
+- **Rendering**: WebGL2 exclusively. All compositing, brush rendering, filters, effects, gradients, and selection operations are GLSL shaders dispatched by the Rust engine. The compositor runs a fullscreen-quad pipeline each frame.
+- **GPU textures**: the engine owns all layer textures, stroke textures, selection masks, and layer masks. Texture allocation goes through a pool (`TexturePool`) supporting both `RGBA8` and `RGBA16F` formats.
+- **WASM bridge**: `src/engine-wasm/wasm-bridge.ts` provides typed wrappers around every `#[wasm_bindgen]` export. `engine-sync.ts` calls these wrappers to push state changes to the engine before each render.
+
+### JS / Rust Boundary — Hard Rule
+
+**JS must never read, write, or allocate pixel data directly.** All pixel operations go through the WASM engine:
+
+| Operation | Correct (GPU via WASM) | Wrong (JS-side pixels) |
+|---|---|---|
+| Brush/eraser stroke | `beginStroke` → `addDab` → `endStroke` | Manipulating `ImageData` in JS |
+| Fill | `floodFillGpu` | CPU flood fill writing to `ImageData` |
+| Filter (blur, invert, etc.) | `applyFilterGpu` | Reading pixels, processing in JS, writing back |
+| Gradient | `renderGradient` | Generating gradient pixels in JS |
+| Layer compositing | `composite()` (runs per-frame) | Blending layers in a JS canvas |
+| Clone stamp | `applyCloneDab` per dab | Copying pixel regions in JS |
+| Selection mask | `setSelectionMask` uploads to GPU | Keeping mask only in JS |
+| Undo snapshot | `readLayerCompressed` → store blob | Storing `ImageData` in JS |
+| Undo restore | `uploadLayerPixelsCompressed` | Writing `ImageData` back to canvas |
+| Export | `compositeForExport` returns RGBA | Compositing layers in JS then encoding |
+
+The only acceptable JS↔GPU data transfers are:
+1. **Undo snapshots**: `readLayerCompressed()` reads a cropped, compressed blob from GPU. `uploadLayerPixelsCompressed()` restores it.
+2. **Export**: `compositeForExport()` reads the final composite as RGBA bytes.
+3. **Content bounds**: `readLayerAsImageData()` for operations that need to scan pixel content (e.g., align-to-content).
+4. **Initial upload**: `uploadLayerPixels()` for importing images or pasting clipboard data.
+
+Any new feature that needs pixel data must add a WASM function and/or GLSL shader — not JS pixel loops.
 
 ---
 
@@ -531,7 +582,7 @@ The text tool needs a broad, curated library of fonts users can apply to text la
 
 ### Architecture
 
-Lopsy is a fully static, client-side application. No backend, no server-side rendering, no API. The entire build output is HTML + JS + CSS + static assets.
+Lopsy is a fully static, client-side application. No backend, no server-side rendering, no API. The entire build output is HTML + JS + CSS + WASM + static assets.
 
 ### Hosting: Cloudflare Pages
 
@@ -550,10 +601,11 @@ Lopsy is a fully static, client-side application. No backend, no server-side ren
 ### Build & CI Pipeline
 
 - **GitHub Actions**:
-  1. On every PR: lint, type-check, unit tests (Vitest), build, E2E tests (Playwright against the build preview).
+  1. On every PR: build WASM (`wasm-pack build`), lint, type-check, unit tests (Vitest), Vite build, E2E tests (Playwright against the build preview).
   2. On merge to `main`: Cloudflare Pages auto-deploys production.
   3. Storybook build and deploy on merge to `main`.
-- Build output is small (target < 500KB gzipped for initial load, excluding user-loaded images).
+- WASM build output (`src/engine-wasm/pkg/`) is committed to the repo so Cloudflare Pages can build without Rust toolchain.
+- Build output is small (target < 500KB gzipped for initial JS load + ~200KB WASM, excluding user-loaded images).
 
 ### Caching & Performance
 
@@ -654,35 +706,39 @@ E2E tests run in a real browser via Playwright. They validate complete user work
 - Browser reload with auto-save: reopen and verify project state is restored.
 
 ### Testing Technology
-- **Unit tests**: Vitest. Mock canvas/WebGL contexts where needed. Use `OffscreenCanvas` or headless canvas polyfills for pixel-level assertions.
-- **E2E tests**: Playwright (Chromium, Firefox, WebKit).
+- **Unit tests**: Vitest. Test pure logic modules (tool math, geometry, color conversion). No pixel-level assertions in unit tests — that's an E2E concern since it requires the WASM engine.
+- **E2E tests**: Playwright (Chromium). Tests run against the full app with the WASM engine loaded. Pixel assertions use helper functions that read from the GPU via `readLayerAsImageData()` or composite sampling via `sampleColor()`. Use `getCompositePixelAt()` for post-compositing assertions (what the user sees) and `getPixelAt()` for per-layer JS-side data (when available).
 - **Visual regression**: Screenshot comparison for rendering tests where pixel-exact output matters (filters, blend modes, brush rendering). Playwright's built-in screenshot diffing or a tool like `pixelmatch`.
 - **CI**: Run unit tests on every PR. Run E2E suite on every PR against a preview deploy. Visual regression runs nightly or on release branches.
+- **WASM rebuild**: E2E tests require a current WASM build in `src/engine-wasm/pkg/`. If Rust code changes, rebuild with `wasm-pack build` before running tests.
 
 ---
 
 ## 21. Scope & Phasing
 
-### Phase 1 — Foundation
-- Canvas rendering (WebGL), pan, zoom.
-- Layer system: raster layers, ordering, visibility, opacity, blend modes.
-- Basic tools: move, brush, eraser, pencil, fill.
+### Phase 1 — Foundation ✅
+- Rust/WASM WebGL2 rendering engine with GPU-first architecture.
+- Canvas rendering, pan, zoom, pixel grid at high zoom.
+- Layer system: raster layers, ordering, visibility, opacity, blend modes (all 16).
+- Basic tools: move (with align buttons), brush, eraser, pencil, fill.
 - Color picker, foreground/background colors, eyedropper.
-- Undo/redo.
+- Undo/redo with GPU texture snapshots (cropped, compressed).
 - Import (open image file), export (PNG, JPEG).
 
-### Phase 2 — Core Tools
+### Phase 2 — Core Tools ✅
 - Selection tools: rectangular/elliptical marquee, lasso, polygonal lasso, magic wand.
-- Selection operations (add, subtract, feather, invert).
+- Selection operations (add, subtract, feather, invert). GPU selection mask constrains all painting tools.
 - Shape tool, text tool.
-- Gradient tool, clone stamp.
+- Gradient tool (linear, radial — GPU rendered), clone stamp (per-dab GPU rendering).
 - Free transform, crop.
-- Layer masks.
+- Layer masks (GPU compositing with mask sampling, edit overlay).
+- Layer effects: drop shadow, outer glow, inner glow, color overlay, stroke (EDT).
 - Rulers, guides, grid, snap.
 
-### Phase 3 — Adjustments & Filters
-- Adjustment layers: brightness/contrast, hue/saturation, levels, color balance.
-- Filters: gaussian blur, unsharp mask, noise.
+### Phase 3 — Adjustments & Filters (in progress)
+- Image adjustments as post-compositing GPU pass: exposure, contrast, highlights, shadows, whites, blacks, vignette.
+- GPU filters: gaussian blur, box blur, sharpen, invert, hue/saturation, noise, posterize, threshold.
+- FP16/RGBA16F textures and display-p3 wide gamut support.
 - History panel with snapshots.
 - Artboards.
 
