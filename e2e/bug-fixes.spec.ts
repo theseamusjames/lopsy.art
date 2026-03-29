@@ -1269,7 +1269,9 @@ test.describe('Masterpiece: Full Feature Integration', () => {
     if (exportResult) {
       const pngBuffer = Buffer.from(exportResult);
       const fs = await import('fs');
-      const outputPath = path.resolve(__dirname, '../test-results/screenshots/claudes_masterpiece.png');
+      const artifactsDir = path.resolve(__dirname, '../test-results/artifacts');
+      fs.mkdirSync(artifactsDir, { recursive: true });
+      const outputPath = path.join(artifactsDir, 'claudes_masterpiece.png');
       fs.writeFileSync(outputPath, pngBuffer);
 
       // Verify the file was written and has content
