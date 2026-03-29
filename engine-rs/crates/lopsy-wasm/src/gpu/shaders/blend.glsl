@@ -13,6 +13,10 @@ uniform int u_srcPremultiplied; // 1 if source is premultiplied alpha
 uniform int u_overlayEnabled;   // 1 if color overlay is active
 uniform vec3 u_overlayColor;    // overlay color (RGB)
 uniform float u_overlayOpacity; // overlay mix factor
+uniform sampler2D u_maskTex;    // layer mask texture
+uniform int u_hasMask;          // 1 if layer mask is active
+uniform vec2 u_maskSize;        // mask texture size in pixels
+uniform int u_maskOverlay;      // 1 = render mask as blue overlay (edit mode)
 out vec4 fragColor;
 
 // RGB <-> HSL helpers
@@ -142,6 +146,18 @@ void main() {
 
     vec4 src = texture(u_srcTex, layerUV);
 
+    // Mask overlay mode: render mask as translucent blue, skip normal blend
+    if (u_maskOverlay == 1) {
+        float maskVal = src.r; // mask stored as grayscale in R channel
+        float overlayA = (1.0 - maskVal) * 0.5;
+        if (overlayA < 0.001) { fragColor = dst; return; }
+        vec3 blue = vec3(0.0, 0.39, 1.0);
+        float outA = overlayA + dst.a * (1.0 - overlayA);
+        vec3 outRGB = (overlayA * blue + dst.a * (1.0 - overlayA) * dst.rgb) / outA;
+        fragColor = vec4(outRGB, outA);
+        return;
+    }
+
     // Un-premultiply if source is premultiplied (e.g. stroke texture)
     if (u_srcPremultiplied == 1 && src.a > 0.001) {
         src.rgb /= src.a;
@@ -150,6 +166,17 @@ void main() {
     // Apply color overlay inline — avoids the scratch buffer feedback loop
     if (u_overlayEnabled == 1) {
         src.rgb = mix(src.rgb, u_overlayColor, u_overlayOpacity);
+    }
+
+    // Apply layer mask: multiply source alpha by mask value
+    if (u_hasMask == 1) {
+        vec2 maskUV = (docPos - u_srcOffset) / u_maskSize;
+        if (maskUV.x >= 0.0 && maskUV.x <= 1.0 && maskUV.y >= 0.0 && maskUV.y <= 1.0) {
+            float maskVal = texture(u_maskTex, maskUV).r;
+            src.a *= maskVal;
+        } else {
+            src.a = 0.0;
+        }
     }
 
     float sa = src.a * u_opacity;

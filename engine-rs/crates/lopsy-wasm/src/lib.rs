@@ -382,63 +382,71 @@ pub fn read_layer_pixels_compressed(engine: &Engine, layer_id: &str) -> Vec<u8> 
         return Vec::new();
     }
 
-    // Compute the content's DOCUMENT position: layer offset + crop offset.
-    // This ensures the header position is always in document space,
-    // regardless of whether the texture is full-size or already cropped.
-    let layer_x = engine.inner.layer_stack.iter()
-        .find(|l| l.id == layer_id)
-        .map(|l| l.x)
-        .unwrap_or(0);
-    let layer_y = engine.inner.layer_stack.iter()
-        .find(|l| l.id == layer_id)
-        .map(|l| l.y)
-        .unwrap_or(0);
-
-    // Build result: 16-byte header (4 x i32 LE) + raw cropped pixel data
-    // Header position = layer document position + crop offset within texture
-    let mut result = Vec::with_capacity(16 + cropped.len());
-    result.extend_from_slice(&(layer_x + rect.x).to_le_bytes());
-    result.extend_from_slice(&(layer_y + rect.y).to_le_bytes());
-    result.extend_from_slice(&(rect.width as i32).to_le_bytes());
-    result.extend_from_slice(&(rect.height as i32).to_le_bytes());
+    // Build result: 24-byte header (6 x i32 LE) + raw cropped pixel data
+    // Header stores LOCAL crop offsets within the texture and the full texture size.
+    // On restore, we recreate the full-size texture and place the cropped content
+    // at the correct offset so that the layer position from the document state
+    // (set by syncLayers) renders everything correctly.
+    let mut result = Vec::with_capacity(24 + cropped.len());
+    result.extend_from_slice(&rect.x.to_le_bytes());        // crop_x (local to texture)
+    result.extend_from_slice(&rect.y.to_le_bytes());        // crop_y (local to texture)
+    result.extend_from_slice(&(rect.width as i32).to_le_bytes());  // crop_w
+    result.extend_from_slice(&(rect.height as i32).to_le_bytes()); // crop_h
+    result.extend_from_slice(&(w as i32).to_le_bytes());    // full texture width
+    result.extend_from_slice(&(h as i32).to_le_bytes());    // full texture height
     result.extend_from_slice(&cropped);
     result
 }
 
 #[wasm_bindgen(js_name = "uploadLayerPixelsCompressed")]
 pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compressed: &[u8]) -> Result<(), JsError> {
-    if compressed.len() < 16 {
-        return Err(JsError::new("Compressed data too short (need at least 16-byte header)"));
+    if compressed.len() < 24 {
+        return Err(JsError::new("Compressed data too short (need at least 24-byte header)"));
     }
 
-    // Read 16-byte header
-    let x = i32::from_le_bytes([compressed[0], compressed[1], compressed[2], compressed[3]]);
-    let y = i32::from_le_bytes([compressed[4], compressed[5], compressed[6], compressed[7]]);
-    let w = i32::from_le_bytes([compressed[8], compressed[9], compressed[10], compressed[11]]);
-    let h = i32::from_le_bytes([compressed[12], compressed[13], compressed[14], compressed[15]]);
+    // Read 24-byte header: crop_x, crop_y, crop_w, crop_h, full_w, full_h
+    let crop_x = i32::from_le_bytes([compressed[0], compressed[1], compressed[2], compressed[3]]);
+    let crop_y = i32::from_le_bytes([compressed[4], compressed[5], compressed[6], compressed[7]]);
+    let crop_w = i32::from_le_bytes([compressed[8], compressed[9], compressed[10], compressed[11]]);
+    let crop_h = i32::from_le_bytes([compressed[12], compressed[13], compressed[14], compressed[15]]);
+    let full_w = i32::from_le_bytes([compressed[16], compressed[17], compressed[18], compressed[19]]);
+    let full_h = i32::from_le_bytes([compressed[20], compressed[21], compressed[22], compressed[23]]);
 
-    if w <= 0 || h <= 0 {
+    if crop_w <= 0 || crop_h <= 0 || full_w <= 0 || full_h <= 0 {
         return Err(JsError::new("Invalid dimensions in compressed header"));
     }
 
-    let pixel_data = &compressed[16..];
-    let expected_len = (w as usize) * (h as usize) * 4;
+    let pixel_data = &compressed[24..];
+    let expected_len = (crop_w as usize) * (crop_h as usize) * 4;
     if pixel_data.len() < expected_len {
         return Err(JsError::new("Snapshot pixel data shorter than header dimensions"));
     }
 
-    // Upload the cropped pixels as a texture. The x,y from the header are the
-    // crop offsets (where the content lives within the document). We pass them
-    // to upload_pixels so the texture is sized and positioned correctly, but
-    // we do NOT update the layer_stack desc here — syncLayers will push the
-    // authoritative document positions from the JS store on the next frame.
+    // Reconstruct the full-size texture with the cropped content at its original
+    // offset. This ensures the layer position from the document state (set by
+    // syncLayers) renders content at the correct location.
+    let fw = full_w as usize;
+    let fh = full_h as usize;
+    let mut full_pixels = vec![0u8; fw * fh * 4];
+    let cw = crop_w as usize;
+    let cx = crop_x as usize;
+    let cy = crop_y as usize;
+    let ch = crop_h as usize;
+    for row in 0..ch {
+        let src_start = row * cw * 4;
+        let dst_start = ((cy + row) * fw + cx) * 4;
+        let len = cw * 4;
+        full_pixels[dst_start..dst_start + len]
+            .copy_from_slice(&pixel_data[src_start..src_start + len]);
+    }
+
     layer_manager::upload_pixels(
         &mut engine.inner,
         layer_id,
-        &pixel_data[..expected_len],
-        w as u32,
-        h as u32,
-        x, y,
+        &full_pixels,
+        full_w as u32,
+        full_h as u32,
+        0, 0,
     ).map_err(|e| JsError::new(&e))?;
 
     Ok(())
@@ -573,6 +581,35 @@ pub fn draw_pencil_line(
     if !eng.stroke_textures.contains_key(layer_id) {
         let _ = brush_gpu::begin_stroke(eng, layer_id);
     }
+
+    // Read selection mask from GPU if present
+    let selection_mask: Option<(Vec<u8>, u32, u32)> = eng.selection_mask_texture.and_then(|mask_handle| {
+        let (mw, mh) = eng.texture_pool.get_size(mask_handle)?;
+        if let Some(mask_tex) = eng.texture_pool.get(mask_handle) {
+            let fbo = eng.gl.create_framebuffer()?;
+            eng.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+            eng.gl.framebuffer_texture_2d(
+                WebGl2RenderingContext::FRAMEBUFFER,
+                WebGl2RenderingContext::COLOR_ATTACHMENT0,
+                WebGl2RenderingContext::TEXTURE_2D,
+                Some(mask_tex),
+                0,
+            );
+            let data = eng.texture_pool.read_rgba(&eng.gl, 0, 0, mw, mh).ok();
+            eng.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+            eng.gl.delete_framebuffer(Some(&fbo));
+            data.map(|d| (d, mw, mh))
+        } else {
+            None
+        }
+    });
+
+    // Get layer offset for selection coordinate mapping
+    let (layer_ox, layer_oy) = eng.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| (l.x, l.y))
+        .unwrap_or((0, 0));
+
     if let Some(&stroke_handle) = eng.stroke_textures.get(layer_id) {
         let (tex_w, tex_h) = eng.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
         for i in (0..points.len()).step_by(2) {
@@ -586,10 +623,26 @@ pub fn draw_pencil_line(
             let count = (bw * bh) as usize;
             let mut rgba = vec![0u8; count * 4];
             for j in 0..count {
+                let px = bx + (j as i32 % bw);
+                let py = by + (j as i32 / bw);
+
+                // Check selection mask
+                let mut pixel_a = a8;
+                if let Some((ref mask_data, mw, mh)) = selection_mask {
+                    let doc_x = px + layer_ox as i32;
+                    let doc_y = py + layer_oy as i32;
+                    if doc_x >= 0 && doc_x < mw as i32 && doc_y >= 0 && doc_y < mh as i32 {
+                        let mask_val = mask_data[(doc_y as u32 * mw + doc_x as u32) as usize * 4];
+                        pixel_a = ((pixel_a as u32 * mask_val as u32) / 255) as u8;
+                    } else {
+                        pixel_a = 0;
+                    }
+                }
+
                 rgba[j * 4] = r8;
                 rgba[j * 4 + 1] = g8;
                 rgba[j * 4 + 2] = b8;
-                rgba[j * 4 + 3] = a8;
+                rgba[j * 4 + 3] = pixel_a;
             }
             let _ = eng.texture_pool.upload_rgba(
                 &eng.gl, stroke_handle, bx, by, bw as u32, bh as u32, &rgba,
@@ -848,6 +901,22 @@ pub fn clear_image_adjustments(engine: &mut Engine) {
     engine.inner.image_whites = 0.0;
     engine.inner.image_blacks = 0.0;
     engine.inner.image_vignette = 0.0;
+    engine.inner.needs_recomposite = true;
+}
+
+// ============================================================
+// Mask Edit Mode
+// ============================================================
+
+#[wasm_bindgen(js_name = "setMaskEditLayer")]
+pub fn set_mask_edit_layer(engine: &mut Engine, layer_id: &str) {
+    engine.inner.mask_edit_layer_id = Some(layer_id.to_string());
+    engine.inner.needs_recomposite = true;
+}
+
+#[wasm_bindgen(js_name = "clearMaskEditLayer")]
+pub fn clear_mask_edit_layer(engine: &mut Engine) {
+    engine.inner.mask_edit_layer_id = None;
     engine.inner.needs_recomposite = true;
 }
 

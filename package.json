@@ -5,8 +5,8 @@
   "type": "module",
   "description": "A browser-based image editor",
   "scripts": {
-    "wasm:build": "cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --out-dir ../../src/engine-wasm/pkg",
-    "wasm:build:dev": "cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --dev --out-dir ../../src/engine-wasm/pkg",
+    "wasm:build": "cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --out-dir ../../../src/engine-wasm/pkg",
+    "wasm:build:dev": "cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --dev --out-dir ../../../src/engine-wasm/pkg",
     "wasm:test": "cd engine-rs && cargo test",
     "dev": "vite",
     "build": "npm run wasm:build && tsc --noEmit && vite build",
