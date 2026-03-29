@@ -8,6 +8,7 @@
 import type { Engine } from './wasm-bridge';
 import { initWasm, createEngine } from './wasm-bridge';
 import { setEngine as setGpuPixelEngine } from './gpu-pixel-access';
+import { canvasColorSpace } from '../engine/color-space';
 
 let engine: Engine | null = null;
 let engineCanvas: HTMLCanvasElement | null = null;
@@ -24,6 +25,18 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   await initWasm();
   engine = createEngine(canvas);
   engineCanvas = canvas;
+
+  // Enable wide-gamut / EDR output if the display supports it.
+  // The WASM engine already uses RGBA16F textures; setting the drawing buffer
+  // color space to display-p3 tells the compositor to preserve values > 1.0.
+  try {
+    const gl = canvas.getContext('webgl2');
+    if (gl && canvasColorSpace === 'display-p3') {
+      (gl as unknown as Record<string, string>).drawingBufferColorSpace = 'display-p3';
+    }
+  } catch {
+    // drawingBufferColorSpace not supported — fall back silently
+  }
   setGpuPixelEngine(engine);
 
   // Expose for e2e testing (memory profiling needs to query GPU texture dimensions)

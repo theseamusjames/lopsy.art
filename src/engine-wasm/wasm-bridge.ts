@@ -130,6 +130,8 @@ import init, {
   scaleLayerTexture,
   resizeCanvasTexture,
   cropLayerTexture,
+  setMaskEditLayer,
+  clearMaskEditLayer,
 } from './pkg/lopsy_wasm';
 
 export type { Engine };
@@ -269,4 +271,6 @@ export {
   scaleLayerTexture,
   resizeCanvasTexture,
   cropLayerTexture,
+  setMaskEditLayer,
+  clearMaskEditLayer,
 };

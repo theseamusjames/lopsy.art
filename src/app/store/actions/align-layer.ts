@@ -1,6 +1,7 @@
 import type { DocumentState, Layer, Rect } from '../../../types';
 import type { EditorState, SelectionData } from '../types';
 import { computeAlign, getContentBounds, type AlignEdge } from '../../../tools/move/move';
+import { readLayerAsImageData } from '../../../engine-wasm/gpu-pixel-access';
 
 export function computeAlignLayer(
   doc: DocumentState,
@@ -13,7 +14,8 @@ export function computeAlignLayer(
   if (!activeId) return undefined;
   const layer = doc.layers.find((l) => l.id === activeId);
   if (!layer) return undefined;
-  const pixelData = layerPixelData.get(activeId);
+  // Try JS pixel data first, fall back to GPU readback
+  const pixelData = layerPixelData.get(activeId) ?? readLayerAsImageData(activeId);
   if (!pixelData) return undefined;
 
   let bounds: Rect | null;

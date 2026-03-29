@@ -46,6 +46,8 @@ import {
   setBrushCursor,
   clearBrushCursor,
   setTransformOverlay,
+  setMaskEditLayer,
+  clearMaskEditLayer,
 } from './wasm-bridge';
 import type { PathAnchor } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
@@ -405,6 +407,14 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
   setImageWhites(engine, adjustments.whites);
   setImageBlacks(engine, adjustments.blacks);
   setImageVignette(engine, adjustments.vignette);
+}
+
+export function syncMaskEditMode(engine: Engine, maskEditMode: boolean, activeLayerId: string | null): void {
+  if (maskEditMode && activeLayerId) {
+    setMaskEditLayer(engine, activeLayerId);
+  } else {
+    clearMaskEditLayer(engine);
+  }
 }
 
 export function syncOverlays(

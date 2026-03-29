@@ -104,6 +104,34 @@ pub fn apply_dab_batch(
         gl.uniform1f(Some(&loc), size);
     }
 
+    // Bind selection mask if present
+    let has_selection = engine.selection_mask_texture.is_some();
+    if has_selection {
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(mask_handle) = engine.selection_mask_texture {
+            if let Some(mask_tex) = engine.texture_pool.get(mask_handle) {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
+            }
+        }
+        if let Some(loc) = gl.get_uniform_location(prog, "u_selectionMask") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_hasSelection") {
+        gl.uniform1i(Some(&loc), if has_selection { 1 } else { 0 });
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
+        gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+    }
+    // Get layer offset for selection mask coordinate mapping
+    let (layer_ox, layer_oy) = engine.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| (l.x as f32, l.y as f32))
+        .unwrap_or((0.0, 0.0));
+    if let Some(loc) = gl.get_uniform_location(prog, "u_layerOffset") {
+        gl.uniform2f(Some(&loc), layer_ox, layer_oy);
+    }
+
     // Render each dab as a separate draw call
     for chunk in points.chunks(2) {
         if chunk.len() < 2 { break; }
@@ -200,6 +228,33 @@ pub fn apply_eraser_dab_batch(
         }
         if let Some(loc) = gl.get_uniform_location(prog, "u_size") {
             gl.uniform1f(Some(&loc), size);
+        }
+
+        // Bind selection mask
+        let has_sel = engine.selection_mask_texture.is_some();
+        if has_sel {
+            gl.active_texture(WebGl2RenderingContext::TEXTURE2);
+            if let Some(mask_handle) = engine.selection_mask_texture {
+                if let Some(mask_tex) = engine.texture_pool.get(mask_handle) {
+                    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
+                }
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_selectionMask") {
+                gl.uniform1i(Some(&loc), 2);
+            }
+        }
+        if let Some(loc) = gl.get_uniform_location(prog, "u_hasSelection") {
+            gl.uniform1i(Some(&loc), if has_sel { 1 } else { 0 });
+        }
+        if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
+            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+        }
+        let (erase_layer_ox, erase_layer_oy) = engine.layer_stack.iter()
+            .find(|l| l.id == layer_id)
+            .map(|l| (l.x as f32, l.y as f32))
+            .unwrap_or((0.0, 0.0));
+        if let Some(loc) = gl.get_uniform_location(prog, "u_layerOffset") {
+            gl.uniform2f(Some(&loc), erase_layer_ox, erase_layer_oy);
         }
 
         engine.draw_fullscreen_quad();

@@ -46,6 +46,7 @@ void main() {
         color.a = 1.0;
     }
 
-    // Pixel data is already sRGB from ImageData — pass through directly
+    // Pass through — RGBA16F values > 1.0 are preserved for EDR when the
+    // canvas drawingBufferColorSpace is set to 'display-p3'.
     fragColor = color;
 }

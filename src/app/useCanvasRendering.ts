@@ -13,6 +13,7 @@ import {
   syncGrid,
   syncRulers,
   syncAdjustments,
+  syncMaskEditMode,
   renderEngine,
   resetTrackedState,
   markAllLayersDirty,
@@ -22,6 +23,8 @@ import { renderSelectionAnts, renderTransformHandles } from './rendering/render-
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
+import { getActiveMaskEditBuffer } from './interactions/mask-buffer';
+import { uploadLayerMask } from '../engine-wasm/wasm-bridge';
 
 export { renderLayerContent } from './rendering/render-layers';
 
@@ -79,6 +82,20 @@ function renderFrameGpu(
   syncGrid(engine, showGrid, gridSize);
   syncRulers(engine, showRulers);
   syncAdjustments(engine, adjustments, adjustmentsEnabled);
+  syncMaskEditMode(engine, uiState.maskEditMode, doc.activeLayerId);
+
+  // Upload in-progress mask edit buffer to GPU so the overlay updates live
+  if (uiState.maskEditMode) {
+    const maskBuf = getActiveMaskEditBuffer();
+    if (maskBuf) {
+      const raw = maskBuf.buf.rawData;
+      const maskGray = new Uint8Array(maskBuf.maskWidth * maskBuf.maskHeight);
+      for (let i = 0; i < maskGray.length; i++) {
+        maskGray[i] = raw[i * 4] ?? 0;
+      }
+      uploadLayerMask(engine, maskBuf.layerId, maskGray, maskBuf.maskWidth, maskBuf.maskHeight);
+    }
+  }
 
   renderEngine(engine);
 
