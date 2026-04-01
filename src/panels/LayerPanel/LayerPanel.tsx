@@ -138,8 +138,10 @@ export function LayerPanel({
                 className={`${styles.effectsBtn} ${showEffectsDrawer && layer.id === activeLayerId ? styles.effectsBtnActive : ''}`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSelectLayer(layer.id);
-                  if (!showEffectsDrawer) {
+                  if (showEffectsDrawer && layer.id === activeLayerId) {
+                    setShowEffectsDrawer(false);
+                  } else {
+                    onSelectLayer(layer.id);
                     setShowEffectsDrawer(true);
                   }
                 }}

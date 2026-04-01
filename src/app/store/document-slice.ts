@@ -1,4 +1,4 @@
-import type { LayerEffects, Layer, Rect } from '../../types';
+import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer } from '../../layers/layer-model';
 import { sparseToImageData } from '../../engine/canvas-ops';
@@ -7,6 +7,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import type { SliceCreator, SparseLayerEntry } from './types';
+import { useUIStore } from '../ui-store';
 
 import { computeCreateDocument } from './actions/create-document';
 import { computeOpenImage } from './actions/open-image';
@@ -27,6 +28,7 @@ import {
   computeSetActiveLayer,
   computeToggleVisibility,
   computeUpdateOpacity,
+  computeUpdateBlendMode,
   computeUpdatePosition,
   computeUpdateEffects,
   computeToggleMask,
@@ -104,6 +106,7 @@ export interface DocumentSlice {
   setActiveLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
   updateLayerOpacity: (id: string, opacity: number) => void;
+  updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
   updateLayerPosition: (id: string, x: number, y: number) => void;
   alignLayer: (edge: AlignEdge) => void;
@@ -131,6 +134,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
+    useUIStore.getState().clearGuides();
   },
 
   openImageAsDocument: (imageData, name) => {
@@ -139,6 +143,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
+    useUIStore.getState().clearGuides();
   },
 
   addLayer: () => {
@@ -168,6 +173,10 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   updateLayerOpacity: (id, opacity) => {
     set(computeUpdateOpacity(get().document, id, opacity));
+  },
+
+  updateLayerBlendMode: (id, blendMode) => {
+    set(computeUpdateBlendMode(get().document, id, blendMode));
   },
 
   moveLayer: (fromIndex, toIndex) => {

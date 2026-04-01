@@ -11,6 +11,19 @@ export interface PathAnchor {
   handleOut: Point | null;
 }
 
+export interface Guide {
+  id: string;
+  orientation: 'horizontal' | 'vertical';
+  position: number;
+}
+
+export interface RulerHover {
+  orientation: 'horizontal' | 'vertical';
+  position: number;
+  screenX: number;
+  screenY: number;
+}
+
 const MAX_RECENT_COLORS = 20;
 
 function colorsEqual(a: Color, b: Color): boolean {
@@ -73,6 +86,16 @@ interface UIState {
   adjustmentsEnabled: boolean;
   setAdjustments: (adj: ImageAdjustments) => void;
   setAdjustmentsEnabled: (enabled: boolean) => void;
+  guides: Guide[];
+  selectedGuideId: string | null;
+  hoveredGuideId: string | null;
+  rulerHover: RulerHover | null;
+  addGuide: (orientation: 'horizontal' | 'vertical', position: number) => void;
+  removeGuide: (id: string) => void;
+  selectGuide: (id: string | null) => void;
+  setHoveredGuide: (id: string | null) => void;
+  setRulerHover: (hover: RulerHover | null) => void;
+  clearGuides: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -175,4 +198,21 @@ export const useUIStore = create<UIState>((set) => ({
   setCropRect: (rect) => set({ cropRect: rect }),
   setTransform: (transform) => set({ transform }),
   setActiveTransformHandle: (handle) => set({ activeTransformHandle: handle }),
+  guides: [],
+  selectedGuideId: null,
+  hoveredGuideId: null,
+  rulerHover: null,
+  addGuide: (orientation, position) =>
+    set((state) => ({
+      guides: [...state.guides, { id: crypto.randomUUID(), orientation, position }],
+    })),
+  removeGuide: (id) =>
+    set((state) => ({
+      guides: state.guides.filter((g) => g.id !== id),
+      selectedGuideId: state.selectedGuideId === id ? null : state.selectedGuideId,
+    })),
+  selectGuide: (id) => set({ selectedGuideId: id }),
+  setHoveredGuide: (id) => set({ hoveredGuideId: id }),
+  setRulerHover: (hover) => set({ rulerHover: hover }),
+  clearGuides: () => set({ guides: [], selectedGuideId: null }),
 }));

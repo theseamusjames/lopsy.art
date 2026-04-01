@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { DocumentState, LayerEffects, Rect, ViewportState } from '../../types';
+import type { BlendMode, DocumentState, LayerEffects, Rect, ViewportState } from '../../types';
 import type { AlignEdge } from '../../tools/move/move';
 
 export interface SelectionData {
@@ -69,6 +69,7 @@ export interface EditorState {
   setActiveLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
   updateLayerOpacity: (id: string, opacity: number) => void;
+  updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
   updateLayerPosition: (id: string, x: number, y: number) => void;
   alignLayer: (edge: AlignEdge) => void;

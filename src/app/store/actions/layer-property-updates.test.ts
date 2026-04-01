@@ -5,6 +5,7 @@ import {
   computeSetActiveLayer,
   computeToggleVisibility,
   computeUpdateOpacity,
+  computeUpdateBlendMode,
   computeUpdatePosition,
   computeUpdateEffects,
   computeToggleMask,
@@ -80,6 +81,16 @@ describe('computeUpdateOpacity', () => {
     const result = computeUpdateOpacity(doc, layerId, 0.5);
     const layer = result.document!.layers.find((l) => l.id === layerId)!;
     expect(layer.opacity).toBe(0.5);
+  });
+});
+
+describe('computeUpdateBlendMode', () => {
+  it('sets blend mode', () => {
+    const doc = makeDoc();
+    const layerId = doc.layers[0]!.id;
+    const result = computeUpdateBlendMode(doc, layerId, 'multiply');
+    const layer = result.document!.layers.find((l) => l.id === layerId)!;
+    expect(layer.blendMode).toBe('multiply');
   });
 });
 
