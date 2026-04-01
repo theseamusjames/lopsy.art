@@ -74,6 +74,13 @@ export function App() {
   const pendingShapeClick = useUIStore((s) => s.pendingShapeClick);
   const setPendingShapeClick = useUIStore((s) => s.setPendingShapeClick);
 
+  const showRulers = useUIStore((s) => s.showRulers);
+  const showGuides = useUIStore((s) => s.showGuides);
+  const guides = useUIStore((s) => s.guides);
+  const addGuide = useUIStore((s) => s.addGuide);
+  const setHoveredGuide = useUIStore((s) => s.setHoveredGuide);
+  const setRulerHover = useUIStore((s) => s.setRulerHover);
+
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -218,6 +225,20 @@ export function App() {
     });
   }, []);
 
+  const RULER_SIZE = 20;
+
+  // Find a guide whose position matches the cursor's document-space coordinate
+  const findGuideAtCursor = useCallback(
+    (docX: number, docY: number): string | null => {
+      for (const guide of guides) {
+        if (guide.orientation === 'vertical' && guide.position === docX) return guide.id;
+        if (guide.orientation === 'horizontal' && guide.position === docY) return guide.id;
+      }
+      return null;
+    },
+    [guides],
+  );
+
   // Mouse handlers
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
@@ -229,6 +250,37 @@ export function App() {
       const canvasPos = screenToCanvas(screenX, screenY);
       flushCursorPosition(canvasPos);
 
+      // Ruler hover for guide placement
+      // Guide hover detection — always runs so playhead updates
+      if (showGuides && !isPanning) {
+        setHoveredGuide(findGuideAtCursor(canvasPos.x, canvasPos.y));
+      }
+
+      if (showRulers && showGuides && !isPanning) {
+        const isOnHorizontalRuler = screenY < RULER_SIZE && screenX > RULER_SIZE;
+        const isOnVerticalRuler = screenX < RULER_SIZE && screenY > RULER_SIZE;
+
+        if (isOnHorizontalRuler) {
+          setRulerHover({
+            orientation: 'vertical',
+            position: canvasPos.x,
+            screenX,
+            screenY,
+          });
+          return;
+        } else if (isOnVerticalRuler) {
+          setRulerHover({
+            orientation: 'horizontal',
+            position: canvasPos.y,
+            screenX,
+            screenY,
+          });
+          return;
+        } else {
+          setRulerHover(null);
+        }
+      }
+
       if (isPanning) {
         const dx = e.clientX - panStartRef.current.x;
         const dy = e.clientY - panStartRef.current.y;
@@ -238,7 +290,7 @@ export function App() {
         handleToolMove(e);
       }
     },
-    [isPanning, screenToCanvas, setPan, handleToolMove, updateHoveredHandle, flushCursorPosition],
+    [isPanning, screenToCanvas, setPan, handleToolMove, updateHoveredHandle, flushCursorPosition, showRulers, showGuides, setRulerHover, setHoveredGuide, findGuideAtCursor],
   );
 
   const handleMouseDown = useCallback(
@@ -252,17 +304,49 @@ export function App() {
           panY: viewport.panY,
         };
         e.preventDefault();
-      } else {
-        handleToolDown(e);
+        return;
       }
+
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect && showRulers && showGuides && e.button === 0) {
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+        const isOnHorizontalRuler = screenY < RULER_SIZE && screenX > RULER_SIZE;
+        const isOnVerticalRuler = screenX < RULER_SIZE && screenY > RULER_SIZE;
+
+        const canvasPos = screenToCanvas(screenX, screenY);
+
+        // Clicking on the ruler at an existing guide's position removes it
+        if (isOnHorizontalRuler || isOnVerticalRuler) {
+          const guideId = findGuideAtCursor(canvasPos.x, canvasPos.y);
+          if (guideId) {
+            useUIStore.getState().removeGuide(guideId);
+          } else if (isOnHorizontalRuler) {
+            addGuide('vertical', canvasPos.x);
+          } else {
+            addGuide('horizontal', canvasPos.y);
+          }
+          setRulerHover(null);
+          return;
+        }
+      }
+
+      handleToolDown(e);
     },
-    [isSpaceDown, viewport.panX, viewport.panY, handleToolDown],
+    [isSpaceDown, viewport.panX, viewport.panY, handleToolDown, showRulers, showGuides, screenToCanvas, addGuide, setRulerHover, findGuideAtCursor],
   );
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     setIsPanning(false);
     handleToolUp(e);
   }, [handleToolUp]);
+
+  const handleMouseLeave = useCallback((e: React.MouseEvent) => {
+    setIsPanning(false);
+    handleToolUp(e);
+    setRulerHover(null);
+    setHoveredGuide(null);
+  }, [handleToolUp, setRulerHover, setHoveredGuide]);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
@@ -295,7 +379,7 @@ export function App() {
     if (!parentRect) return;
     const top = bottomRect.top - parentRect.top;
     drawer.style.top = `${top}px`;
-    drawer.style.bottom = '0';
+    drawer.style.height = `${bottom.offsetHeight}px`;
   }, [showEffectsDrawer, colorPanelCollapsed]);
 
   const showModal = !documentReady || showNewDocumentModal;
@@ -339,90 +423,92 @@ export function App() {
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
           onWheel={handleWheel}
         >
           <canvas ref={canvasRef} />
           <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />
           <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </div>
-        {(visiblePanels.size > 0 || showEffectsDrawer) && <div className={styles.sidebarArea}>
+        <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div className={styles.effectsDrawer} ref={effectsDrawerRef}>
               <LayerEffectsPanel />
             </div>
           )}
-          <div className={styles.sidebar}>
-            <div className={styles.sidebarScroll}>
-              {visiblePanels.has('info') && (
-                <PanelContainer
-                  title="Info"
-                  collapsed={infoPanelCollapsed}
-                  onToggle={() => setInfoPanelCollapsed(!infoPanelCollapsed)}
-                >
-                  <InfoPanel collapsed={infoPanelCollapsed} />
-                </PanelContainer>
-              )}
-              {visiblePanels.has('color') && (
-                <PanelContainer
-                  title="Color"
-                  collapsed={colorPanelCollapsed}
-                  onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
-                >
-                  <ColorPanel
-                    foregroundColor={foregroundColor}
-                    backgroundColor={backgroundColor}
-                    recentColors={recentColors}
-                    onForegroundChange={setForegroundColor}
-                    onBackgroundChange={setBackgroundColor}
-                    onSwap={swapColors}
+          {visiblePanels.size > 0 && (
+            <div className={styles.sidebar}>
+              <div className={styles.sidebarScroll}>
+                {visiblePanels.has('info') && (
+                  <PanelContainer
+                    title="Info"
+                    collapsed={infoPanelCollapsed}
+                    onToggle={() => setInfoPanelCollapsed(!infoPanelCollapsed)}
+                  >
+                    <InfoPanel collapsed={infoPanelCollapsed} />
+                  </PanelContainer>
+                )}
+                {visiblePanels.has('color') && (
+                  <PanelContainer
+                    title="Color"
                     collapsed={colorPanelCollapsed}
-                  />
-                </PanelContainer>
-              )}
-              {visiblePanels.has('history') && (
-                <PanelContainer
-                  title="History"
-                  collapsed={historyPanelCollapsed}
-                  onToggle={() => setHistoryPanelCollapsed(!historyPanelCollapsed)}
-                >
-                  <HistoryPanel collapsed={historyPanelCollapsed} />
-                </PanelContainer>
-              )}
-              {visiblePanels.has('adjustments') && (
-                <PanelContainer
-                  title="Adjustments"
-                  collapsed={adjustmentsPanelCollapsed}
-                  onToggle={() => setAdjustmentsPanelCollapsed(!adjustmentsPanelCollapsed)}
-                >
-                  {!adjustmentsPanelCollapsed && <AdjustmentsPanel />}
-                </PanelContainer>
-              )}
-            </div>
-            <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
-              {visiblePanels.has('layers') && (
-                <PanelContainer
-                  title="Layers"
-                  collapsed={layersPanelCollapsed}
-                  onToggle={() => setLayersPanelCollapsed(!layersPanelCollapsed)}
-                >
-                  <LayerPanel
-                    layers={[...layers]}
-                    activeLayerId={activeLayerId}
-                    onSelectLayer={handleSelectLayer}
-                    onToggleVisibility={toggleLayerVisibility}
-                    onAddLayer={addLayer}
-                    onRemoveLayer={removeLayer}
-                    onReorderLayer={moveLayer}
-                    onUpdateOpacity={updateLayerOpacity}
+                    onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
+                  >
+                    <ColorPanel
+                      foregroundColor={foregroundColor}
+                      backgroundColor={backgroundColor}
+                      recentColors={recentColors}
+                      onForegroundChange={setForegroundColor}
+                      onBackgroundChange={setBackgroundColor}
+                      onSwap={swapColors}
+                      collapsed={colorPanelCollapsed}
+                    />
+                  </PanelContainer>
+                )}
+                {visiblePanels.has('history') && (
+                  <PanelContainer
+                    title="History"
+                    collapsed={historyPanelCollapsed}
+                    onToggle={() => setHistoryPanelCollapsed(!historyPanelCollapsed)}
+                  >
+                    <HistoryPanel collapsed={historyPanelCollapsed} />
+                  </PanelContainer>
+                )}
+                {visiblePanels.has('adjustments') && (
+                  <PanelContainer
+                    title="Adjustments"
+                    collapsed={adjustmentsPanelCollapsed}
+                    onToggle={() => setAdjustmentsPanelCollapsed(!adjustmentsPanelCollapsed)}
+                  >
+                    {!adjustmentsPanelCollapsed && <AdjustmentsPanel />}
+                  </PanelContainer>
+                )}
+              </div>
+              <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
+                {visiblePanels.has('layers') && (
+                  <PanelContainer
+                    title="Layers"
                     collapsed={layersPanelCollapsed}
-                  />
-                </PanelContainer>
-              )}
+                    onToggle={() => setLayersPanelCollapsed(!layersPanelCollapsed)}
+                  >
+                    <LayerPanel
+                      layers={[...layers]}
+                      activeLayerId={activeLayerId}
+                      onSelectLayer={handleSelectLayer}
+                      onToggleVisibility={toggleLayerVisibility}
+                      onAddLayer={addLayer}
+                      onRemoveLayer={removeLayer}
+                      onReorderLayer={moveLayer}
+                      onUpdateOpacity={updateLayerOpacity}
+                      collapsed={layersPanelCollapsed}
+                    />
+                  </PanelContainer>
+                )}
+              </div>
             </div>
-          </div>
+          )}
           <PanelToolbar />
-        </div>}
+        </div>
       </div>
       <StatusBar />
     </div>

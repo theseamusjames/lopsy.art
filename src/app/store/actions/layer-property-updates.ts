@@ -1,4 +1,4 @@
-import type { DocumentState, Layer, LayerEffects } from '../../../types';
+import type { BlendMode, DocumentState, Layer, LayerEffects } from '../../../types';
 import type { EditorState } from '../types';
 
 export function computeSetActiveLayer(
@@ -34,6 +34,21 @@ export function computeUpdateOpacity(
       ...doc,
       layers: doc.layers.map((l) =>
         l.id === id ? ({ ...l, opacity } as Layer) : l,
+      ),
+    },
+  };
+}
+
+export function computeUpdateBlendMode(
+  doc: DocumentState,
+  id: string,
+  blendMode: BlendMode,
+): Partial<EditorState> {
+  return {
+    document: {
+      ...doc,
+      layers: doc.layers.map((l) =>
+        l.id === id ? ({ ...l, blendMode } as Layer) : l,
       ),
     },
   };

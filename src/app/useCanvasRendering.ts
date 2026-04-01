@@ -21,6 +21,7 @@ import {
 import { renderGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
+import { renderGuides, renderGuidePreview, renderGuideRulerOverlays } from './rendering/render-guides';
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 import { getActiveMaskEditBuffer } from './interactions/mask-buffer';
@@ -73,6 +74,11 @@ function renderFrameGpu(
   const cropRect = uiState.cropRect;
   const transform = uiState.transform;
   const gradientPreview = uiState.gradientPreview;
+  const showGuides = uiState.showGuides;
+  const guides = uiState.guides;
+  const selectedGuideId = uiState.selectedGuideId;
+  const hoveredGuideId = uiState.hoveredGuideId;
+  const rulerHover = uiState.rulerHover;
 
   syncDocumentSize(engine, doc.width, doc.height);
   syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
@@ -130,10 +136,20 @@ function renderFrameGpu(
       renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape);
     }
 
+    if (showGuides) {
+      renderGuides(overlayCtx, guides, selectedGuideId, doc.width, doc.height, viewport.zoom);
+      if (rulerHover && !hoveredGuideId) {
+        renderGuidePreview(overlayCtx, rulerHover, doc.width, doc.height, viewport.zoom);
+      }
+    }
+
     overlayCtx.restore();
 
     if (showRulers) {
       renderRulers(overlayCtx, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height, cursorPosition);
+      if (showGuides) {
+        renderGuideRulerOverlays(overlayCtx, guides, selectedGuideId, hoveredGuideId, rulerHover, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height);
+      }
     }
   }
 }
