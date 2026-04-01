@@ -11,7 +11,7 @@ import {
 import { renderLayerContent } from '../../rendering/render-layers';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
 import { hasActiveAdjustments, applyAdjustmentsToImageData } from '../../../filters/image-adjustments';
-import { contextOptions, canvasColorSpace } from '../../../engine/color-space';
+import { contextOptions, canvasColorSpace, createImageDataFromArray } from '../../../engine/color-space';
 import { getCachedBitmap, seedBitmapFromBlob } from '../../../engine/bitmap-cache';
 import { hasEnabledEffects } from '../../../layers/layer-model';
 import { getEngine } from '../../../engine-wasm/engine-state';
@@ -82,7 +82,7 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, form
   const rawPixels = compositeForExport(engine);
   const clamped = new Uint8ClampedArray(width * height * 4);
   clamped.set(rawPixels);
-  const imageData = new ImageData(clamped, width, height);
+  const imageData = createImageDataFromArray(clamped, width, height);
 
   // Apply post-composite image adjustments
   const uiState = useUIStore.getState();
@@ -90,24 +90,15 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, form
     applyAdjustmentsToImageData(imageData, uiState.adjustments);
   }
 
-  // GPU output is sRGB. Place onto an sRGB canvas first, then drawImage
-  // onto the export canvas — drawImage handles color space conversion
-  // automatically (sRGB → Display P3 if the export canvas is P3).
-  // Using putImageData directly would bypass color management and produce
-  // wrong colors when the export canvas is P3.
-  const srcCanvas = document.createElement('canvas');
-  srcCanvas.width = width;
-  srcCanvas.height = height;
-  const srcCtx = srcCanvas.getContext('2d', { colorSpace: 'srgb' });
-  if (!srcCtx) return;
-  srcCtx.putImageData(imageData, 0, 0);
-
+  // GPU output is in the working color space (P3 on capable displays).
+  // Create the export canvas in the same color space and putImageData
+  // directly — no intermediate conversion needed.
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d', contextOptions);
   if (!ctx) return;
-  ctx.drawImage(srcCanvas, 0, 0);
+  ctx.putImageData(imageData, 0, 0);
 
   finishCanvasExport(canvas, width, height, format);
 }
