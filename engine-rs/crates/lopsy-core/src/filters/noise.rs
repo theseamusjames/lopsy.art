@@ -1,10 +1,14 @@
-/// Simple hash function for deterministic noise
+/// Lowbias32 finalizer with multiplicative 2D mixing — no visible patterns
 fn hash(x: u32, y: u32, seed: u32) -> u32 {
-    let mut h = seed.wrapping_mul(374761393)
-        .wrapping_add(x.wrapping_mul(668265263))
-        .wrapping_add(y.wrapping_mul(2654435761));
-    h = (h ^ (h >> 13)).wrapping_mul(1274126177);
-    h ^ (h >> 16)
+    let mut h = x.wrapping_mul(0x68E31DA4)
+        ^ y.wrapping_mul(0xB5297A4D)
+        ^ seed.wrapping_mul(0x1B56C4E9);
+    h ^= h >> 16;
+    h = h.wrapping_mul(0x7FEB352D);
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x846CA68B);
+    h ^= h >> 16;
+    h
 }
 
 /// Add noise to existing pixel data
