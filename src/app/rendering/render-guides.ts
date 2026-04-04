@@ -1,14 +1,16 @@
 import type { Guide, RulerHover } from '../ui-store';
+import type { Color } from '../../types';
 
 const RULER_SIZE = 20;
-const GUIDE_COLOR = 'rgba(0, 180, 255, 0.7)';
-const GUIDE_ACTIVE_COLOR = 'rgba(0, 220, 255, 1)';
 const PLAYHEAD_HOVER_COLOR = 'rgba(255, 255, 255, 0.9)';
 const PLAYHEAD_SELECTED_COLOR = 'rgba(255, 255, 255, 1)';
-const PLAYHEAD_COLOR = 'rgba(0, 180, 255, 0.9)';
 const TOOLTIP_BG = 'rgba(0, 0, 0, 0.8)';
 const TOOLTIP_TEXT = '#ffffff';
 const PLAYHEAD_SIZE = 6;
+
+function colorToRgba(c: Color, alpha: number): string {
+  return `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
+}
 
 /**
  * Render guide lines on the canvas in document-space.
@@ -21,10 +23,14 @@ export function renderGuides(
   docWidth: number,
   docHeight: number,
   zoom: number,
+  guideColor: Color,
 ): void {
+  const baseColor = colorToRgba(guideColor, 0.7);
+  const activeColor = colorToRgba(guideColor, 1);
+
   for (const guide of guides) {
     const isSelected = guide.id === selectedGuideId;
-    ctx.strokeStyle = isSelected ? GUIDE_ACTIVE_COLOR : GUIDE_COLOR;
+    ctx.strokeStyle = isSelected ? activeColor : baseColor;
     ctx.lineWidth = 1 / zoom;
     ctx.setLineDash([]);
     ctx.beginPath();
@@ -49,8 +55,9 @@ export function renderGuidePreview(
   docWidth: number,
   docHeight: number,
   zoom: number,
+  guideColor: Color,
 ): void {
-  ctx.strokeStyle = PLAYHEAD_COLOR;
+  ctx.strokeStyle = colorToRgba(guideColor, 0.9);
   ctx.lineWidth = 1 / zoom;
   ctx.setLineDash([4 / zoom, 4 / zoom]);
   ctx.beginPath();
@@ -80,16 +87,18 @@ export function renderGuideRulerOverlays(
   viewport: { panX: number; panY: number; zoom: number },
   docWidth: number,
   docHeight: number,
+  guideColor: Color,
 ): void {
   const { panX, panY, zoom } = viewport;
   const originX = panX + canvasWidth / 2 - (docWidth / 2) * zoom;
   const originY = panY + canvasHeight / 2 - (docHeight / 2) * zoom;
+  const baseColor = colorToRgba(guideColor, 0.7);
 
   // Draw playhead triangles on rulers for placed guides
   for (const guide of guides) {
     const isSelected = guide.id === selectedGuideId;
     const isHovered = guide.id === hoveredGuideId;
-    ctx.fillStyle = isSelected ? PLAYHEAD_SELECTED_COLOR : isHovered ? PLAYHEAD_HOVER_COLOR : GUIDE_COLOR;
+    ctx.fillStyle = isSelected ? PLAYHEAD_SELECTED_COLOR : isHovered ? PLAYHEAD_HOVER_COLOR : baseColor;
 
     if (guide.orientation === 'vertical') {
       const screenX = originX + guide.position * zoom;
@@ -116,7 +125,7 @@ export function renderGuideRulerOverlays(
 
   // Draw hover playhead + tooltip (skip if hovering an existing guide)
   if (rulerHover && !hoveredGuideId) {
-    ctx.fillStyle = PLAYHEAD_COLOR;
+    ctx.fillStyle = colorToRgba(guideColor, 0.9);
 
     if (rulerHover.orientation === 'vertical') {
       const screenX = originX + rulerHover.position * zoom;
@@ -148,6 +157,28 @@ export function renderGuideRulerOverlays(
       }
     }
   }
+}
+
+/**
+ * Render a color swatch in the ruler corner (where horizontal and vertical rulers meet).
+ */
+export function renderGuideColorSwatch(
+  ctx: CanvasRenderingContext2D,
+  guideColor: Color,
+): void {
+  const padding = 3;
+  const size = RULER_SIZE - padding * 2;
+
+  ctx.fillStyle = colorToRgba(guideColor, 1);
+  ctx.beginPath();
+  ctx.roundRect(padding, padding, size, size, 2);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(padding, padding, size, size, 2);
+  ctx.stroke();
 }
 
 function drawTooltip(

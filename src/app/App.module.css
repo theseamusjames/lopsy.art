@@ -82,6 +82,18 @@
   z-index: 1;
 }
 
+.guideColorPicker {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: var(--z-popover, 100);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  box-shadow: var(--shadow-lg);
+}
+
 .sidebarArea {
   position: relative;
   flex-shrink: 0;

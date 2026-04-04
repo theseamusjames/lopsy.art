@@ -30,6 +30,7 @@ import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
 import { useContextMenu } from './useContextMenu';
+import { ColorPicker } from '../components/ColorPicker/ColorPicker';
 import { ContextMenu } from '../components/ContextMenu/ContextMenu';
 import { TextActionButtons } from '../components/TextActionButtons/TextActionButtons';
 import { commitTextEditing } from './interactions/misc-handlers';
@@ -89,7 +90,10 @@ export function App() {
   const addGuide = useUIStore((s) => s.addGuide);
   const setHoveredGuide = useUIStore((s) => s.setHoveredGuide);
   const setRulerHover = useUIStore((s) => s.setRulerHover);
+  const guideColor = useUIStore((s) => s.guideColor);
+  const setGuideColor = useUIStore((s) => s.setGuideColor);
 
+  const [showGuideColorPicker, setShowGuideColorPicker] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -340,6 +344,22 @@ export function App() {
       }
 
       const rect = containerRef.current?.getBoundingClientRect();
+      if (rect && showRulers && e.button === 0) {
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+
+        // Click on the ruler corner swatch to toggle guide color picker
+        if (showGuides && screenX < RULER_SIZE && screenY < RULER_SIZE) {
+          setShowGuideColorPicker((prev) => !prev);
+          return;
+        }
+      }
+
+      // Close guide color picker on any click outside the corner
+      if (showGuideColorPicker) {
+        setShowGuideColorPicker(false);
+      }
+
       if (rect && showRulers && showGuides && e.button === 0) {
         const screenX = e.clientX - rect.left;
         const screenY = e.clientY - rect.top;
@@ -365,7 +385,7 @@ export function App() {
 
       handleToolDown(e);
     },
-    [isSpaceDown, viewport.panX, viewport.panY, handleToolDown, showRulers, showGuides, screenToCanvas, addGuide, setRulerHover, findGuideAtCursor],
+    [isSpaceDown, viewport.panX, viewport.panY, handleToolDown, showRulers, showGuides, screenToCanvas, addGuide, setRulerHover, findGuideAtCursor, showGuideColorPicker],
   );
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
@@ -474,6 +494,18 @@ export function App() {
         >
           <canvas ref={canvasRef} />
           <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />
+          {showGuideColorPicker && showRulers && showGuides && (
+            <div
+              className={styles.guideColorPicker}
+              onMouseDown={(e) => e.stopPropagation()}
+              onMouseUp={(e) => e.stopPropagation()}
+            >
+              <ColorPicker
+                color={guideColor}
+                onChange={setGuideColor}
+              />
+            </div>
+          )}
           <TextActionButtons containerRef={containerRef} />
           <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </div>
