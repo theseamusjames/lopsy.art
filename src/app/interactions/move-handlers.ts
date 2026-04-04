@@ -82,6 +82,14 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     };
   }
 
+  // Crop the layer to content bounds before moving so that only opaque
+  // pixels are repositioned — transparent areas should stay behind.
+  editorState.expandLayerForEditing(activeLayerId);
+  editorState.cropLayerToContent(activeLayerId);
+  const croppedLayer = useEditorStore.getState().document.layers.find(
+    (l) => l.id === activeLayerId,
+  );
+
   return {
     drawing: true,
     lastPoint: canvasPos,
@@ -90,8 +98,8 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     layerId: activeLayerId,
     tool: 'move',
     startPoint: canvasPos,
-    layerStartX: activeLayer.x,
-    layerStartY: activeLayer.y,
+    layerStartX: croppedLayer?.x ?? activeLayer.x,
+    layerStartY: croppedLayer?.y ?? activeLayer.y,
     ...DEFAULT_TRANSFORM_FIELDS,
   };
 }

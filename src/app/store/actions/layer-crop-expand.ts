@@ -66,12 +66,21 @@ export function expandLayerToDocument(
     return { layers, pixelData };
   }
 
-  const expanded = expandFromCrop(data, layer.x, layer.y, docWidth, docHeight);
+  // Compute union of canvas area and content area so off-canvas content
+  // is preserved (non-destructive move).
+  const minX = Math.min(0, layer.x);
+  const minY = Math.min(0, layer.y);
+  const maxX = Math.max(docWidth, layer.x + data.width);
+  const maxY = Math.max(docHeight, layer.y + data.height);
+  const bufW = maxX - minX;
+  const bufH = maxY - minY;
+
+  const expanded = expandFromCrop(data, layer.x - minX, layer.y - minY, bufW, bufH);
   const newPixelData = new Map(pixelData);
   newPixelData.set(layerId, expanded);
   const newLayers = layers.map((l) =>
     l.id === layerId
-      ? { ...l, x: 0, y: 0, width: docWidth, height: docHeight } as Layer
+      ? { ...l, x: minX, y: minY, width: bufW, height: bufH } as Layer
       : l,
   );
   return { layers: newLayers, pixelData: newPixelData };
