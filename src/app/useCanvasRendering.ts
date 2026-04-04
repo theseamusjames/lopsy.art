@@ -26,7 +26,7 @@ import { renderTextDragOverlay, renderTextEditOverlay } from './rendering/render
 import { renderTextToCanvas } from '../tools/text/text';
 import type { TextStyle } from '../tools/text/text';
 import { uploadLayerPixels } from '../engine-wasm/wasm-bridge';
-import { renderGuides, renderGuidePreview, renderGuideRulerOverlays } from './rendering/render-guides';
+import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch } from './rendering/render-guides';
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 import { getActiveMaskEditBuffer } from './interactions/mask-buffer';
@@ -85,6 +85,7 @@ function renderFrameGpu(
   const selectedGuideId = uiState.selectedGuideId;
   const hoveredGuideId = uiState.hoveredGuideId;
   const rulerHover = uiState.rulerHover;
+  const guideColor = uiState.guideColor;
 
   // Live-update text layer pixels during editing so the GPU preview
   // matches the committed result exactly (same pipeline).
@@ -197,18 +198,19 @@ function renderFrameGpu(
     }
 
     if (showGuides) {
-      renderGuides(overlayCtx, guides, selectedGuideId, doc.width, doc.height, viewport.zoom);
+      renderGuides(overlayCtx, guides, selectedGuideId, doc.width, doc.height, viewport.zoom, guideColor);
       if (rulerHover && !hoveredGuideId) {
-        renderGuidePreview(overlayCtx, rulerHover, doc.width, doc.height, viewport.zoom);
+        renderGuidePreview(overlayCtx, rulerHover, doc.width, doc.height, viewport.zoom, guideColor);
       }
     }
 
     overlayCtx.restore();
 
     if (showRulers) {
-      renderRulers(overlayCtx, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height, cursorPosition);
+      renderRulers(overlayCtx, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height, cursorPosition, guideColor);
       if (showGuides) {
-        renderGuideRulerOverlays(overlayCtx, guides, selectedGuideId, hoveredGuideId, rulerHover, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height);
+        renderGuideRulerOverlays(overlayCtx, guides, selectedGuideId, hoveredGuideId, rulerHover, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height, guideColor);
+        renderGuideColorSwatch(overlayCtx, guideColor);
       }
     }
   }

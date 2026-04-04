@@ -1,10 +1,9 @@
-import type { Point } from '../../types';
+import type { Color, Point } from '../../types';
 
 const RULER_SIZE = 20;
 const RULER_BG = '#2a2a2a';
 const RULER_TEXT = '#888888';
 const RULER_TICK = '#555555';
-const RULER_INDICATOR = '#4a9eff';
 
 export function renderRulers(
   ctx: CanvasRenderingContext2D,
@@ -14,7 +13,11 @@ export function renderRulers(
   docWidth: number,
   docHeight: number,
   cursorPosition: Point,
+  guideColor?: Color,
 ): void {
+  const indicatorColor = guideColor
+    ? `rgb(${guideColor.r}, ${guideColor.g}, ${guideColor.b})`
+    : '#4a9eff';
   const { panX, panY, zoom } = viewport;
   const originX = panX + canvasWidth / 2 - (docWidth / 2) * zoom;
   const originY = panY + canvasHeight / 2 - (docHeight / 2) * zoom;
@@ -101,7 +104,7 @@ export function renderRulers(
   const cursorScreenX = originX + cursorPosition.x * zoom;
   const cursorScreenY = originY + cursorPosition.y * zoom;
 
-  ctx.strokeStyle = RULER_INDICATOR;
+  ctx.strokeStyle = indicatorColor;
   ctx.lineWidth = 1;
 
   // Horizontal indicator

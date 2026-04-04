@@ -56,6 +56,7 @@ interface UIState {
   showGuides: boolean;
   snapToGrid: boolean;
   gridSize: number;
+  guideColor: Color;
   sidebarCollapsed: boolean;
   pathAnchors: PathAnchor[];
   pathClosed: boolean;
@@ -86,6 +87,7 @@ interface UIState {
   toggleGuides: () => void;
   toggleSnapToGrid: () => void;
   setGridSize: (size: number) => void;
+  setGuideColor: (color: Color) => void;
   toggleSidebar: () => void;
   addPathAnchor: (anchor: PathAnchor) => void;
   updateLastPathAnchor: (anchor: PathAnchor) => void;
@@ -138,6 +140,7 @@ export const useUIStore = create<UIState>((set) => ({
   showGuides: true,
   snapToGrid: false,
   gridSize: 16,
+  guideColor: { r: 0, g: 180, b: 255, a: 1 },
   sidebarCollapsed: false,
   pathAnchors: [],
   pathClosed: false,
@@ -217,6 +220,7 @@ export const useUIStore = create<UIState>((set) => ({
   toggleGuides: () => set((state) => ({ showGuides: !state.showGuides })),
   toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),
   setGridSize: (size) => set({ gridSize: size }),
+  setGuideColor: (color) => set({ guideColor: color }),
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
   addPathAnchor: (anchor) => set((state) => ({ pathAnchors: [...state.pathAnchors, anchor] })),
   updateLastPathAnchor: (anchor) =>
