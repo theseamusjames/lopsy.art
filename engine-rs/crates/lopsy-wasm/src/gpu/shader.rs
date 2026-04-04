@@ -40,6 +40,12 @@ pub const THRESHOLD_FRAG: &str = include_str!("shaders/filters/threshold.glsl");
 pub const NOISE_FRAG: &str = include_str!("shaders/filters/noise.glsl");
 pub const SHARPEN_FRAG: &str = include_str!("shaders/filters/sharpen.glsl");
 pub const VIGNETTE_FRAG: &str = include_str!("shaders/filters/vignette.glsl");
+pub const MOTION_BLUR_FRAG: &str = include_str!("shaders/filters/motion_blur.glsl");
+pub const RADIAL_BLUR_FRAG: &str = include_str!("shaders/filters/radial_blur.glsl");
+pub const FIND_EDGES_FRAG: &str = include_str!("shaders/filters/find_edges.glsl");
+pub const CEL_SHADING_FRAG: &str = include_str!("shaders/filters/cel_shading.glsl");
+pub const CLOUDS_FRAG: &str = include_str!("shaders/filters/clouds.glsl");
+pub const SMOKE_FRAG: &str = include_str!("shaders/filters/smoke.glsl");
 
 // Brush
 pub const BRUSH_DAB_FRAG: &str = include_str!("shaders/brush/brush_dab.glsl");
@@ -151,6 +157,12 @@ pub struct ShaderPrograms {
     pub noise: ShaderProgram,
     pub sharpen: ShaderProgram,
     pub vignette: ShaderProgram,
+    pub motion_blur: ShaderProgram,
+    pub radial_blur: ShaderProgram,
+    pub find_edges: ShaderProgram,
+    pub cel_shading: ShaderProgram,
+    pub clouds: ShaderProgram,
+    pub smoke: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab: ShaderProgram,
     pub eraser_dab: ShaderProgram,
@@ -202,6 +214,12 @@ impl ShaderPrograms {
             noise: compile_program(gl, v, NOISE_FRAG)?,
             sharpen: compile_program(gl, v, SHARPEN_FRAG)?,
             vignette: compile_program(gl, v, VIGNETTE_FRAG)?,
+            motion_blur: compile_program(gl, v, MOTION_BLUR_FRAG)?,
+            radial_blur: compile_program(gl, v, RADIAL_BLUR_FRAG)?,
+            find_edges: compile_program(gl, v, FIND_EDGES_FRAG)?,
+            cel_shading: compile_program(gl, v, CEL_SHADING_FRAG)?,
+            clouds: compile_program(gl, v, CLOUDS_FRAG)?,
+            smoke: compile_program(gl, v, SMOKE_FRAG)?,
             // Brush — use standard fullscreen quad vert; dab positioning via fragment shader
             brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,
             eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,

@@ -5,6 +5,7 @@ import {
   filterDesaturate,
   filterAddNoise,
   filterFillWithNoise,
+  filterFindEdges,
 } from '../../engine-wasm/wasm-bridge';
 import { filterRegistry } from './filters';
 import type { FilterDefinition } from './filters';
@@ -18,7 +19,13 @@ export type FilterDialogId =
   | 'brightness-contrast'
   | 'hue-saturation'
   | 'posterize'
-  | 'threshold';
+  | 'threshold'
+  | 'motion-blur'
+  | 'radial-blur'
+  | 'find-edges'
+  | 'cel-shading'
+  | 'clouds'
+  | 'smoke';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;
@@ -103,6 +110,19 @@ export function applyFillWithNoise(monochrome: boolean): void {
 
   useEditorStore.getState().pushHistory();
   filterFillWithNoise(engine, activeId, monochrome);
+  clearJsPixelData(activeId);
+  useEditorStore.getState().notifyRender();
+}
+
+export function applyFindEdges(): void {
+  const activeId = getActiveLayerId();
+  if (!activeId) return;
+
+  const engine = getEngine();
+  if (!engine) return;
+
+  useEditorStore.getState().pushHistory();
+  filterFindEdges(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
