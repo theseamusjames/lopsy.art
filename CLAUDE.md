@@ -245,8 +245,18 @@ npm run wasm:build
 ## Git
 
 - Branch names: `theseamusjames/<short-description>`.
-- Commit messages: imperative mood, concise. ("Add brush tool", not "Added brush tool").
 - One logical change per commit.
+- **Semantic commit messages** using the [Conventional Commits](https://www.conventionalcommits.org/) format:
+  - `feat: add brush pressure sensitivity` — new feature or capability.
+  - `fix: correct undo positioning for cropped layers` — bug fix.
+  - `refactor: extract blend mode dispatch to separate module` — code change that doesn't add features or fix bugs.
+  - `perf: pre-allocate dab buffer in brush hot path` — performance improvement.
+  - `test: add unit tests for flood fill edge cases` — adding or updating tests.
+  - `docs: update AGENTS.md with pixel data policy` — documentation only.
+  - `chore: update wasm-pack to 0.14` — build, CI, dependency updates.
+  - `style: fix CSS token usage in layers panel` — formatting, styling, no logic change.
+- Use a scope when it adds clarity: `feat(brush): add scatter control`, `fix(compositor): correct mask sampling order`.
+- Keep the subject line under 72 characters. Use the body for details if needed.
 
 ## Dependencies
 
