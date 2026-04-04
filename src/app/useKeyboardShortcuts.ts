@@ -7,6 +7,7 @@ import { clipboardCut } from '../engine-wasm/wasm-bridge';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
+import { pasteOrOpenBlob } from './paste-or-open';
 
 interface KeyboardShortcutDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -84,11 +85,48 @@ export function useKeyboardShortcuts({
       }
     };
 
+    // Unified paste handler — handles image data, file copies, and internal clipboard.
+    // Fired by the browser's native paste event (Cmd+V keydown does NOT preventDefault,
+    // so the paste event always fires).
+    const handlePaste = (e: ClipboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      const files = e.clipboardData?.files;
+      if (files && files.length > 0) {
+        const file = files[0];
+        if (file && file.type.startsWith('image/')) {
+          e.preventDefault();
+          const name = file.name.replace(/\.[^.]+$/, '') || 'Copied File';
+          pasteOrOpenBlob(file, name);
+          return;
+        }
+      }
+
+      // Try the async clipboard API for image data (e.g. copied pixels from another app)
+      e.preventDefault();
+      navigator.clipboard.read().then(async (items) => {
+        for (const item of items) {
+          const imageType = item.types.find((t) => t.startsWith('image/'));
+          if (imageType) {
+            const blob = await item.getType(imageType);
+            await pasteOrOpenBlob(blob, 'Copied File');
+            return;
+          }
+        }
+        // No external image — fall back to internal clipboard
+        useEditorStore.getState().paste();
+      }).catch(() => {
+        useEditorStore.getState().paste();
+      });
+    };
+
     window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('paste', handlePaste);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('paste', handlePaste);
     };
   }, [setZoom, setPan, viewport.zoom, docWidth, docHeight, canvasRef, setIsSpaceDown, setIsPanning, clearPersistentTransform, nudgeMove]);
 }

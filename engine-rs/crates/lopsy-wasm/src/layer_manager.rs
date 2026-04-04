@@ -66,10 +66,44 @@ pub fn upload_pixels(
             let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
             engine.layer_textures.insert(layer_id.to_string(), new_tex);
         }
+    } else {
+        let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
+        engine.layer_textures.insert(layer_id.to_string(), new_tex);
     }
 
     if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
         engine.texture_pool.upload_rgba(
+            &engine.gl, tex_handle,
+            0, 0, width, height, data,
+        )?;
+    }
+
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
+/// Upload f32 RGBA pixel data, preserving high-bit-depth precision.
+pub fn upload_pixels_f32(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    data: &[f32],
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
+        let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
+        if tw != width || th != height {
+            engine.texture_pool.release(tex_handle);
+            let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
+            engine.layer_textures.insert(layer_id.to_string(), new_tex);
+        }
+    } else {
+        let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
+        engine.layer_textures.insert(layer_id.to_string(), new_tex);
+    }
+
+    if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
+        engine.texture_pool.upload_rgba_f32(
             &engine.gl, tex_handle,
             0, 0, width, height, data,
         )?;

@@ -1,8 +1,6 @@
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { selectAll, invertSelectionAction } from '../MenuBar/menus/select-menu';
-import { contextOptions } from '../../engine/color-space';
-import { seedBitmapFromBlob } from '../../engine/bitmap-cache';
 
 export function handleEditShortcut(
   e: KeyboardEvent,
@@ -19,32 +17,9 @@ export function handleEditShortcut(
     return true;
   }
   if (e.key === 'v') {
-    e.preventDefault();
-    navigator.clipboard.read().then(async (items) => {
-      for (const item of items) {
-        const imageType = item.types.find((t) => t.startsWith('image/'));
-        if (imageType) {
-          const blob = await item.getType(imageType);
-          const bitmap = await createImageBitmap(blob);
-          const canvas = document.createElement('canvas');
-          canvas.width = bitmap.width;
-          canvas.height = bitmap.height;
-          const ctx = canvas.getContext('2d', contextOptions);
-          if (ctx) {
-            ctx.drawImage(bitmap, 0, 0);
-            const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
-            useEditorStore.getState().pasteImageData(imageData);
-            const layerId = useEditorStore.getState().document.activeLayerId;
-            if (layerId) seedBitmapFromBlob(layerId, blob);
-          }
-          bitmap.close();
-          return;
-        }
-      }
-      useEditorStore.getState().paste();
-    }).catch(() => {
-      useEditorStore.getState().paste();
-    });
+    // Don't preventDefault — let the browser fire the 'paste' event so
+    // clipboardData.files is populated for file pastes from Finder/Explorer.
+    // The paste event handler in useKeyboardShortcuts handles all paste logic.
     return true;
   }
   if (e.key === 'e') {

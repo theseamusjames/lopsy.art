@@ -23,8 +23,7 @@ import { useCanvasInteraction } from './useCanvasInteraction';
 import { useToolSettingsStore } from './tool-settings-store';
 import { drawShape } from '../tools/shape/shape';
 import { PixelBuffer } from '../engine/pixel-data';
-// color-space contextOptions no longer needed here — sRGB used for image loading
-import { seedBitmapFromBlob } from '../engine/bitmap-cache';
+import { pasteOrOpenBlob } from './paste-or-open';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
@@ -73,7 +72,6 @@ export function App() {
 
   const documentReady = useEditorStore((s) => s.documentReady);
   const createDocument = useEditorStore((s) => s.createDocument);
-  const openImageAsDocument = useEditorStore((s) => s.openImageAsDocument);
   const showNewDocumentModal = useUIStore((s) => s.showNewDocumentModal);
   const setShowNewDocumentModal = useUIStore((s) => s.setShowNewDocumentModal);
 
@@ -97,29 +95,27 @@ export function App() {
   }, [createDocument, setShowNewDocumentModal]);
 
   const handleOpenFile = useCallback((file: File) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      // Use sRGB context for loading — the internal pipeline (WASM engine)
-      // works in sRGB space. Using P3 here would produce P3 values that
-      // the engine misinterprets as sRGB, causing color shifts on export.
-      const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
-      if (ctx) {
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, img.width, img.height);
-        const name = file.name.replace(/\.[^.]+$/, '');
-        openImageAsDocument(imageData, name);
-        const layerId = useEditorStore.getState().document.activeLayerId;
-        if (layerId) seedBitmapFromBlob(layerId, file);
-      }
-      URL.revokeObjectURL(url);
-    };
-    img.src = url;
-    setShowNewDocumentModal(false);
-  }, [openImageAsDocument, setShowNewDocumentModal]);
+    const name = file.name.replace(/\.[^.]+$/, '');
+    pasteOrOpenBlob(file, name).then(() => {
+      setShowNewDocumentModal(false);
+    });
+  }, [setShowNewDocumentModal]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+
+    const name = file.name.replace(/\.[^.]+$/, '');
+    pasteOrOpenBlob(file, name).then(() => {
+      setShowNewDocumentModal(false);
+    });
+  }, [setShowNewDocumentModal]);
 
   const handleShapeSizeConfirm = useCallback((width: number, height: number) => {
     const pending = useUIStore.getState().pendingShapeClick;
@@ -398,7 +394,7 @@ export function App() {
 
   if (!documentReady) {
     return (
-      <div className={styles.app}>
+      <div className={styles.app} onDragOver={handleDragOver} onDrop={handleDrop}>
         <NewDocumentModal
           onCreateDocument={handleCreateDocument}
           onOpenFile={handleOpenFile}
@@ -440,6 +436,8 @@ export function App() {
           onMouseLeave={handleMouseLeave}
           onWheel={handleWheel}
           onContextMenu={handleContextMenu}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
         >
           <canvas ref={canvasRef} />
           <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />

@@ -10,3 +10,4 @@ pub mod filters;
 pub mod export;
 pub mod flood_fill;
 pub mod compress;
+pub mod decode;
