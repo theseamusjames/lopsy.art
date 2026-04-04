@@ -79,4 +79,17 @@ export default defineConfig({
       localsConvention: 'camelCaseOnly',
     },
   },
+  build: {
+    chunkSizeWarningLimit: 750,
+    rollupOptions: {
+      onwarn(warning, defaultHandler) {
+        // Suppress eval warning from wasm-pack generated code
+        if (warning.code === 'EVAL' && warning.id?.includes('lopsy_wasm')) return;
+        // wasm-bridge is dynamically imported by engine-state for lazy init
+        // but statically imported everywhere else — this is intentional
+        if (warning.message?.includes('wasm-bridge.ts is dynamically imported')) return;
+        defaultHandler(warning);
+      },
+    },
+  },
 });

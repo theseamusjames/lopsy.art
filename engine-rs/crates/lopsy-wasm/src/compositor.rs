@@ -388,30 +388,6 @@ fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
     }
 }
 
-/// Render color overlay into scratch_b.
-/// Uses scratch_b (not scratch_a) because blend_onto_composite reads the
-/// overlay result as its source while using scratch_a as the intermediate
-/// render target — using scratch_a for both would be a feedback loop.
-fn render_color_overlay(engine: &mut EngineInner, tex_handle: TextureHandle, overlay: &ColorOverlayDesc) {
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
-    if let Some(layer_tex) = engine.texture_pool.get(tex_handle).cloned() {
-        engine.gl.use_program(Some(&engine.shaders.color_overlay.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        let prog = &engine.shaders.color_overlay.program;
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_overlayColor") { engine.gl.uniform4f(Some(&loc), overlay.color[0], overlay.color[1], overlay.color[2], overlay.color[3]); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), overlay.opacity); }
-
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-        engine.draw_fullscreen_quad();
-    }
-}
-
 /// Render stroke effect using proper hard-edge distance check.
 fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, stroke: &StrokeDesc, layer_x: f32, layer_y: f32) {
     let doc_w = engine.doc_width as i32;

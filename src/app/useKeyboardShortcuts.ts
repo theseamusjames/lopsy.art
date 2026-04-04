@@ -11,6 +11,26 @@ import { pasteOrOpenBlob } from './paste-or-open';
 import { processTextKey } from '../tools/text/text-input';
 import { commitTextEditing } from './interactions/misc-handlers';
 
+// Fallback timer for browsers where the paste event may not fire on non-editable
+// elements (e.g. Firefox with canvas focus). The keydown handler schedules a
+// deferred internal paste; if the paste event fires, it cancels the timer.
+let fallbackPasteTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function scheduleFallbackPaste(): void {
+  cancelFallbackPaste();
+  fallbackPasteTimer = setTimeout(() => {
+    fallbackPasteTimer = null;
+    useEditorStore.getState().paste();
+  }, 200);
+}
+
+function cancelFallbackPaste(): void {
+  if (fallbackPasteTimer !== null) {
+    clearTimeout(fallbackPasteTimer);
+    fallbackPasteTimer = null;
+  }
+}
+
 interface KeyboardShortcutDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
   setIsSpaceDown: (v: boolean) => void;
@@ -129,6 +149,9 @@ export function useKeyboardShortcuts({
     const handlePaste = (e: ClipboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
+      // Cancel the fallback timer — the paste event fired as expected.
+      cancelFallbackPaste();
+
       const files = e.clipboardData?.files;
       if (files && files.length > 0) {
         const file = files[0];
@@ -140,22 +163,45 @@ export function useKeyboardShortcuts({
         }
       }
 
-      // Try the async clipboard API for image data (e.g. copied pixels from another app)
-      e.preventDefault();
-      navigator.clipboard.read().then(async (items) => {
-        for (const item of items) {
-          const imageType = item.types.find((t) => t.startsWith('image/'));
-          if (imageType) {
-            const blob = await item.getType(imageType);
-            await pasteOrOpenBlob(blob, 'Copied File');
-            return;
+      // Check clipboardData.items for image data (synchronous, works across browsers
+      // including Firefox which may not support navigator.clipboard.read()).
+      const items = e.clipboardData?.items;
+      if (items) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i] as DataTransferItem | undefined;
+          if (item && item.type.startsWith('image/')) {
+            const blob = item.getAsFile();
+            if (blob) {
+              e.preventDefault();
+              pasteOrOpenBlob(blob, 'Copied File');
+              return;
+            }
           }
         }
-        // No external image — fall back to internal clipboard
+      }
+
+      // Try the async clipboard API for image data (e.g. copied pixels from another app).
+      // Not all browsers support this (Firefox added it in v127), so guard the call.
+      e.preventDefault();
+      if (typeof navigator.clipboard?.read === 'function') {
+        navigator.clipboard.read().then(async (clipboardItems) => {
+          for (const clipboardItem of clipboardItems) {
+            const imageType = clipboardItem.types.find((t: string) => t.startsWith('image/'));
+            if (imageType) {
+              const blob = await clipboardItem.getType(imageType);
+              await pasteOrOpenBlob(blob, 'Copied File');
+              return;
+            }
+          }
+          // No external image — fall back to internal clipboard
+          useEditorStore.getState().paste();
+        }).catch(() => {
+          useEditorStore.getState().paste();
+        });
+      } else {
+        // Browser doesn't support clipboard.read() — use internal clipboard
         useEditorStore.getState().paste();
-      }).catch(() => {
-        useEditorStore.getState().paste();
-      });
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);

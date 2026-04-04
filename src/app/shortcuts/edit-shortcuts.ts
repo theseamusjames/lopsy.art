@@ -1,6 +1,7 @@
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { selectAll, invertSelectionAction } from '../MenuBar/menus/select-menu';
+import { scheduleFallbackPaste } from '../useKeyboardShortcuts';
 
 export function handleEditShortcut(
   e: KeyboardEvent,
@@ -20,6 +21,11 @@ export function handleEditShortcut(
     // Don't preventDefault — let the browser fire the 'paste' event so
     // clipboardData.files is populated for file pastes from Finder/Explorer.
     // The paste event handler in useKeyboardShortcuts handles all paste logic.
+    //
+    // Schedule a fallback internal paste in case the paste event doesn't fire
+    // (Firefox may not fire paste on non-editable elements like canvas).
+    // The paste handler cancels this timer if it runs.
+    scheduleFallbackPaste();
     return true;
   }
   if (e.key === 'e') {
