@@ -49,16 +49,17 @@ pub fn set_layer_order(engine: &mut EngineInner, order: &[String]) {
     engine.needs_recomposite = true;
 }
 
-pub fn upload_pixels(
+/// Ensure a layer texture exists at the given size, then run a closure to upload data.
+fn with_layer_texture<F>(
     engine: &mut EngineInner,
     layer_id: &str,
-    data: &[u8],
     width: u32,
     height: u32,
-    _offset_x: i32,
-    _offset_y: i32,
-) -> Result<(), String> {
-    // Ensure texture exists and is correct size
+    upload: F,
+) -> Result<(), String>
+where
+    F: FnOnce(&mut EngineInner, crate::gpu::texture_pool::TextureHandle) -> Result<(), String>,
+{
     if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
         let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
         if tw != width || th != height {
@@ -72,14 +73,25 @@ pub fn upload_pixels(
     }
 
     if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
-        engine.texture_pool.upload_rgba(
-            &engine.gl, tex_handle,
-            0, 0, width, height, data,
-        )?;
+        upload(engine, tex_handle)?;
     }
 
     engine.mark_layer_dirty(layer_id);
     Ok(())
+}
+
+pub fn upload_pixels(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    data: &[u8],
+    width: u32,
+    height: u32,
+    _offset_x: i32,
+    _offset_y: i32,
+) -> Result<(), String> {
+    with_layer_texture(engine, layer_id, width, height, |eng, tex| {
+        eng.texture_pool.upload_rgba(&eng.gl, tex, 0, 0, width, height, data)
+    })
 }
 
 /// Upload f32 RGBA pixel data, preserving high-bit-depth precision.
@@ -90,27 +102,9 @@ pub fn upload_pixels_f32(
     width: u32,
     height: u32,
 ) -> Result<(), String> {
-    if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
-        let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
-        if tw != width || th != height {
-            engine.texture_pool.release(tex_handle);
-            let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
-            engine.layer_textures.insert(layer_id.to_string(), new_tex);
-        }
-    } else {
-        let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
-        engine.layer_textures.insert(layer_id.to_string(), new_tex);
-    }
-
-    if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
-        engine.texture_pool.upload_rgba_f32(
-            &engine.gl, tex_handle,
-            0, 0, width, height, data,
-        )?;
-    }
-
-    engine.mark_layer_dirty(layer_id);
-    Ok(())
+    with_layer_texture(engine, layer_id, width, height, |eng, tex| {
+        eng.texture_pool.upload_rgba_f32(&eng.gl, tex, 0, 0, width, height, data)
+    })
 }
 
 /// Upload layer pixels directly from an HtmlCanvasElement, avoiding the
@@ -122,27 +116,9 @@ pub fn upload_pixels_from_canvas(
     width: u32,
     height: u32,
 ) -> Result<(), String> {
-    // Ensure texture exists and is correct size
-    if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
-        let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
-        if tw != width || th != height {
-            engine.texture_pool.release(tex_handle);
-            let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
-            engine.layer_textures.insert(layer_id.to_string(), new_tex);
-        }
-    } else {
-        let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
-        engine.layer_textures.insert(layer_id.to_string(), new_tex);
-    }
-
-    if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
-        engine.texture_pool.upload_canvas(
-            &engine.gl, tex_handle, canvas, width, height,
-        )?;
-    }
-
-    engine.mark_layer_dirty(layer_id);
-    Ok(())
+    with_layer_texture(engine, layer_id, width, height, |eng, tex| {
+        eng.texture_pool.upload_canvas(&eng.gl, tex, canvas, width, height)
+    })
 }
 
 /// GPU-side texture copy: blit src layer's texture into dst layer's texture
