@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import styles from './NewDocumentModal.module.css';
 
 type Unit = 'px' | 'in';
@@ -10,6 +10,12 @@ interface Preset {
   height: number;
   unit: Unit;
   dpi: number;
+}
+
+interface ClipboardImageInfo {
+  width: number;
+  height: number;
+  blob: Blob;
 }
 
 const PRESETS: Preset[] = [
@@ -29,16 +35,54 @@ function toPixels(value: number, unit: Unit, dpi: number): number {
 interface NewDocumentModalProps {
   onCreateDocument: (width: number, height: number, background: BackgroundType) => void;
   onOpenFile: (file: File) => void;
+  onPasteClipboard?: (blob: Blob) => void;
   onCancel?: () => void;
 }
 
-export function NewDocumentModal({ onCreateDocument, onOpenFile, onCancel }: NewDocumentModalProps) {
+export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboard, onCancel }: NewDocumentModalProps) {
   const [width, setWidth] = useState('1920');
   const [height, setHeight] = useState('1080');
   const [unit, setUnit] = useState<Unit>('px');
   const [dpi, setDpi] = useState('72');
   const [background, setBackground] = useState<BackgroundType>('white');
-  const [activePreset, setActivePreset] = useState<number>(0);
+  const [activePreset, setActivePreset] = useState<number | 'clipboard' | null>(0);
+  const [clipboardImage, setClipboardImage] = useState<ClipboardImageInfo | null>(null);
+
+  // Probe clipboard for image data when the modal mounts
+  useEffect(() => {
+    let cancelled = false;
+    navigator.clipboard.read().then(async (items) => {
+      for (const item of items) {
+        const imageType = item.types.find((t) => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const bitmap = await createImageBitmap(blob);
+          if (!cancelled) {
+            setClipboardImage({ width: bitmap.width, height: bitmap.height, blob });
+            setActivePreset('clipboard');
+            setWidth(String(bitmap.width));
+            setHeight(String(bitmap.height));
+            setUnit('px');
+            setDpi('72');
+          }
+          bitmap.close();
+          return;
+        }
+      }
+    }).catch(() => {
+      // Clipboard read not available or denied — no template shown
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleClipboardPresetClick = useCallback(() => {
+    if (!clipboardImage) return;
+    setWidth(String(clipboardImage.width));
+    setHeight(String(clipboardImage.height));
+    setUnit('px');
+    setDpi('72');
+    setActivePreset('clipboard');
+  }, [clipboardImage]);
 
   const handlePresetClick = useCallback((index: number) => {
     const preset = PRESETS[index];
@@ -63,17 +107,21 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onCancel }: New
       setHeight(String(Math.round(hNum * currentDpi)));
     }
     setUnit(newUnit);
-    setActivePreset(-1);
+    setActivePreset(null);
   }, [unit, dpi, width, height]);
 
   const handleCreate = useCallback(() => {
+    if (activePreset === 'clipboard' && clipboardImage && onPasteClipboard) {
+      onPasteClipboard(clipboardImage.blob);
+      return;
+    }
     const wNum = parseFloat(width) || 1;
     const hNum = parseFloat(height) || 1;
     const dpiNum = parseInt(dpi, 10) || 72;
     const pxW = Math.max(1, Math.min(16384, toPixels(wNum, unit, dpiNum)));
     const pxH = Math.max(1, Math.min(16384, toPixels(hNum, unit, dpiNum)));
     onCreateDocument(pxW, pxH, background);
-  }, [width, height, unit, dpi, background, onCreateDocument]);
+  }, [width, height, unit, dpi, background, onCreateDocument, activePreset, clipboardImage, onPasteClipboard]);
 
   const handleOpenFile = useCallback(() => {
     const input = document.createElement('input');
@@ -119,6 +167,17 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onCancel }: New
                 </button>
               ))}
             </div>
+            {clipboardImage && (
+              <button
+                className={`${styles.presetButton} ${styles.clipboardPreset} ${activePreset === 'clipboard' ? styles.presetButtonActive : ''}`}
+                onClick={handleClipboardPresetClick}
+              >
+                <span className={styles.presetName}>From Clipboard</span>
+                <span className={styles.presetDims}>
+                  {clipboardImage.width} × {clipboardImage.height} px
+                </span>
+              </button>
+            )}
           </div>
 
           <hr className={styles.divider} />
@@ -133,7 +192,7 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onCancel }: New
                   min="1"
                   step={unit === 'in' ? '0.01' : '1'}
                   value={width}
-                  onChange={(e) => { setWidth(e.target.value); setActivePreset(-1); }}
+                  onChange={(e) => { setWidth(e.target.value); setActivePreset(null); }}
                 />
               </div>
               <div className={styles.field}>
@@ -144,7 +203,7 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onCancel }: New
                   min="1"
                   step={unit === 'in' ? '0.01' : '1'}
                   value={height}
-                  onChange={(e) => { setHeight(e.target.value); setActivePreset(-1); }}
+                  onChange={(e) => { setHeight(e.target.value); setActivePreset(null); }}
                 />
               </div>
               <div className={styles.field}>
@@ -170,7 +229,7 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onCancel }: New
                     min="1"
                     max="1200"
                     value={dpi}
-                    onChange={(e) => { setDpi(e.target.value); setActivePreset(-1); }}
+                    onChange={(e) => { setDpi(e.target.value); setActivePreset(null); }}
                   />
                 </div>
               </div>

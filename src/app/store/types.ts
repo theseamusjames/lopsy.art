@@ -105,6 +105,7 @@ export interface EditorState {
   cut: () => void;
   paste: () => void;
   pasteImageData: (imageData: ImageData) => void;
+  pasteGpuLayer: (layerId: string, width: number, height: number) => void;
 
   // Pixel data
   getOrCreateLayerPixelData: (layerId: string) => ImageData;

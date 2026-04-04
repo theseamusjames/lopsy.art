@@ -123,6 +123,41 @@ pub fn read_layer_pixels(engine: &Engine, layer_id: &str) -> Result<Vec<u8>, JsE
         .map_err(|e| JsError::new(&e))
 }
 
+/// Decode a PNG blob and upload pixels to a layer texture, preserving 16-bit precision.
+/// Returns [width, height] on success, or an empty Vec if the format is not supported
+/// (caller should fall back to the canvas 2D decode path).
+#[wasm_bindgen(js_name = "decodeAndUploadImage")]
+pub fn decode_and_upload_image(
+    engine: &mut Engine,
+    layer_id: &str,
+    data: &[u8],
+) -> Vec<u32> {
+    let decoded = match lopsy_core::decode::decode_png(data) {
+        Some(d) => d,
+        None => return Vec::new(),
+    };
+
+    let result = match decoded.pixels {
+        lopsy_core::decode::DecodedPixels::Rgba8(ref pixels) => {
+            layer_manager::upload_pixels(
+                &mut engine.inner, layer_id, pixels,
+                decoded.width, decoded.height, 0, 0,
+            )
+        }
+        lopsy_core::decode::DecodedPixels::RgbaF32(ref pixels) => {
+            layer_manager::upload_pixels_f32(
+                &mut engine.inner, layer_id, pixels,
+                decoded.width, decoded.height,
+            )
+        }
+    };
+
+    match result {
+        Ok(()) => vec![decoded.width, decoded.height],
+        Err(_) => Vec::new(),
+    }
+}
+
 #[wasm_bindgen(js_name = "uploadLayerSparsePixels")]
 pub fn upload_layer_sparse_pixels(
     engine: &mut Engine,

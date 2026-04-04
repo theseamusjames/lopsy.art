@@ -14,6 +14,8 @@ export interface ClipboardSlice {
   cut: () => void;
   paste: () => void;
   pasteImageData: (imageData: ImageData) => void;
+  /** Create a layer for pixels already uploaded to the GPU by decodeAndUploadImage. */
+  pasteGpuLayer: (layerId: string, width: number, height: number) => void;
 }
 
 export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => ({
@@ -151,5 +153,28 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
       const rawBytes = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
       uploadLayerPixels(engine, newLayer.id, rawBytes, imageData.width, imageData.height, 0, 0);
     }
+  },
+
+  pasteGpuLayer: (layerId: string, width: number, height: number) => {
+    const state = get();
+    state.pushHistory('Paste');
+
+    const newLayer = { ...createRasterLayer({ name: 'Pasted Layer', width, height }), id: layerId };
+
+    const orderIdx = state.document.activeLayerId
+      ? state.document.layerOrder.indexOf(state.document.activeLayerId) + 1
+      : state.document.layerOrder.length;
+    const newOrder = [...state.document.layerOrder];
+    newOrder.splice(orderIdx, 0, newLayer.id);
+
+    set({
+      document: {
+        ...state.document,
+        layers: [...state.document.layers, newLayer],
+        layerOrder: newOrder,
+        activeLayerId: newLayer.id,
+      },
+      renderVersion: state.renderVersion + 1,
+    });
   },
 });

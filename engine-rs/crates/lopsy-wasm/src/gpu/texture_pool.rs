@@ -226,6 +226,49 @@ impl TexturePool {
         Ok(())
     }
 
+    /// Upload f32 RGBA data directly, avoiding u8→f32 conversion for high-bit-depth sources.
+    /// When the pool uses RGBA8 textures, clamps and quantizes to u8.
+    pub fn upload_rgba_f32(
+        &self,
+        gl: &WebGl2RenderingContext,
+        handle: TextureHandle,
+        x: i32,
+        y: i32,
+        w: u32,
+        h: u32,
+        data: &[f32],
+    ) -> Result<(), String> {
+        let texture = self.get(handle).ok_or("Texture not found")?;
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
+
+        if self.use_float {
+            // Upload f32 data directly — no conversion needed
+            let view = unsafe { js_sys::Float32Array::view(data) };
+            gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_array_buffer_view_and_src_offset(
+                WebGl2RenderingContext::TEXTURE_2D,
+                0, x, y,
+                w as i32, h as i32,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::FLOAT,
+                &view,
+                0,
+            ).map_err(|e| format!("tex_sub_image_2d float failed: {:?}", e))?;
+        } else {
+            // Quantize f32 → u8 for RGBA8 textures
+            let u8_data: Vec<u8> = data.iter().map(|&v| (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8).collect();
+            gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
+                WebGl2RenderingContext::TEXTURE_2D,
+                0, x, y,
+                w as i32, h as i32,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::UNSIGNED_BYTE,
+                Some(&u8_data),
+            ).map_err(|e| format!("tex_sub_image_2d failed: {:?}", e))?;
+        }
+
+        Ok(())
+    }
+
     /// Upload pixels directly from an HtmlCanvasElement, avoiding the
     /// getImageData unpremultiply round-trip.
     pub fn upload_canvas(
