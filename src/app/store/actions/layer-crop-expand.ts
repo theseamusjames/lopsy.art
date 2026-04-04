@@ -1,8 +1,7 @@
 import type { Layer } from '../../../types';
 import {
-  getContentBounds,
   cropToContentBounds,
-  expandToDocumentSize,
+  expandFromCrop,
 } from '../../../engine/canvas-ops';
 import { createImageData } from '../../../engine/color-space';
 
@@ -27,14 +26,13 @@ export function cropLayerToContent(
     return { layers, pixelData };
   }
 
-  const bounds = getContentBounds(data);
-  if (bounds) {
-    const cropped = cropToContentBounds(data, bounds);
+  const cropped = cropToContentBounds(data);
+  if (cropped) {
     const newPixelData = new Map(pixelData);
-    newPixelData.set(layerId, cropped);
+    newPixelData.set(layerId, cropped.data);
     const newLayers = layers.map((l) =>
       l.id === layerId
-        ? { ...l, x: layer.x + bounds.minX, y: layer.y + bounds.minY, width: cropped.width, height: cropped.height } as Layer
+        ? { ...l, x: layer.x + cropped.x, y: layer.y + cropped.y, width: cropped.data.width, height: cropped.data.height } as Layer
         : l,
     );
     return { layers: newLayers, pixelData: newPixelData };
@@ -68,7 +66,7 @@ export function expandLayerToDocument(
     return { layers, pixelData };
   }
 
-  const expanded = expandToDocumentSize(data, layer.x, layer.y, docWidth, docHeight);
+  const expanded = expandFromCrop(data, layer.x, layer.y, docWidth, docHeight);
   const newPixelData = new Map(pixelData);
   newPixelData.set(layerId, expanded);
   const newLayers = layers.map((l) =>

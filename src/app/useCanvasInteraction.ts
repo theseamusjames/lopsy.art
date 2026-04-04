@@ -5,7 +5,7 @@ import { PixelBuffer } from '../engine/pixel-data';
 import { invalidateBitmapCache, createPaintingCanvas, destroyPaintingCanvas } from '../engine/bitmap-cache';
 import { extractMaskFromSurface } from '../engine/mask-utils';
 import { getEngine } from '../engine-wasm/engine-state';
-import { beginStroke, endStroke, uploadLayerPixels, hasFloat, dropFloat } from '../engine-wasm/wasm-bridge';
+import { beginStroke, endStroke, hasFloat, dropFloat } from '../engine-wasm/wasm-bridge';
 
 import { clearActiveMaskEditBuffer } from './interactions/mask-buffer';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
@@ -129,7 +129,7 @@ export function useCanvasInteraction(
       const useGpuStroke = useGpu && isPaintTool;
 
       let pixelBuffer: PixelBuffer;
-      let paintSurface: PixelBuffer;
+      let paintSurface: PixelBuffer | MaskedPixelBuffer;
       let expandedLayer = activeLayer;
       let layerPos: Point = { x: canvasPos.x - activeLayer.x, y: canvasPos.y - activeLayer.y };
       let strokeContinuation = false;

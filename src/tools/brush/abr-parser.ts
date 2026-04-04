@@ -263,7 +263,7 @@ function parseV6Sample(
   // Pattern: 4x int32 (top, left, bottom, right), uint16 depth (8|16), uint8 comp (0|1)
   const result = scanForBoundsInt32(view, dataStart, sampleEnd);
   if (result !== null) {
-    const { top, left, width, height, depth, compression, pixelDataOffset } = result;
+    const { width, height, depth, compression, pixelDataOffset } = result;
     const data = readPixelData(view, pixelDataOffset, width, height, depth, compression);
     if (data !== null) {
       const name = brushName.length > 1 ? cleanBrushName(brushName) : `Brush ${brushIndex + 1}`;
@@ -548,37 +548,6 @@ function decompressRLE16(
   }
 
   return data;
-}
-
-function estimatePixelDataSize(
-  view: DataView,
-  offset: number,
-  width: number,
-  height: number,
-  depth: number,
-  compression: number,
-): number {
-  if (compression === 0) {
-    const bytesPerPixel = depth === 16 ? 2 : 1;
-    return width * height * bytesPerPixel;
-  }
-
-  if (compression === 1) {
-    // RLE: row byte counts header + sum of row lengths
-    let pos = offset;
-    let total = height * 2;
-
-    if (pos + height * 2 > view.byteLength) return total;
-
-    for (let row = 0; row < height; row++) {
-      total += view.getUint16(pos);
-      pos += 2;
-    }
-
-    return total;
-  }
-
-  return 0;
 }
 
 function readUtf16BE(

@@ -187,7 +187,6 @@ describe('parseABR', () => {
       const pixelCount = width * height;
 
       // Sample data: uuid+null(6) + padding(2) + int32 bounds(16) + depth(2) + compression(1) + raw pixels
-      const uuidStr = 'test\0'; // 5 bytes + we manually set null
       const uuidLen = 5;
       const paddingLen = 3; // pad to align
       const sampleDataSize = uuidLen + paddingLen + 16 + 2 + 1 + pixelCount;
