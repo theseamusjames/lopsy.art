@@ -269,6 +269,54 @@ impl TexturePool {
         Ok(())
     }
 
+    /// Upload pixels directly from an HtmlCanvasElement, avoiding the
+    /// getImageData unpremultiply round-trip.
+    pub fn upload_canvas(
+        &self,
+        gl: &WebGl2RenderingContext,
+        handle: TextureHandle,
+        canvas: &web_sys::HtmlCanvasElement,
+        w: u32,
+        h: u32,
+    ) -> Result<(), String> {
+        let texture = self.get(handle).ok_or("Texture not found")?;
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
+
+        // UNPACK_PREMULTIPLY_ALPHA_WEBGL = false (default) so the browser
+        // hands us straight-alpha data matching what upload_rgba provides.
+        gl.pixel_storei(WebGl2RenderingContext::UNPACK_FLIP_Y_WEBGL, 0);
+
+        if self.use_float {
+            // For float textures: upload via texImage2D which converts u8→f16
+            gl.tex_image_2d_with_u32_and_u32_and_html_canvas_element(
+                WebGl2RenderingContext::TEXTURE_2D,
+                0,
+                WebGl2RenderingContext::RGBA16F as i32,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::FLOAT,
+                canvas,
+            ).map_err(|e| format!("tex_image_2d canvas float failed: {:?}", e))?;
+
+            // Resize entry if needed
+            if let Some(entry) = self.entries.get(handle.0) {
+                if entry.width != w || entry.height != h {
+                    // entry is immutable here; sizes are already correct
+                    // from the acquire/resize step in the caller
+                }
+            }
+        } else {
+            gl.tex_sub_image_2d_with_u32_and_u32_and_html_canvas_element(
+                WebGl2RenderingContext::TEXTURE_2D,
+                0, 0, 0,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::UNSIGNED_BYTE,
+                canvas,
+            ).map_err(|e| format!("tex_sub_image_2d canvas failed: {:?}", e))?;
+        }
+
+        Ok(())
+    }
+
     /// Read pixels from the currently-bound FBO as u8 RGBA.
     /// Handles float→u8 conversion when using RGBA16F textures.
     pub fn read_rgba(

@@ -42,7 +42,10 @@ export const contextOptions: CanvasRenderingContext2DSettings = { colorSpace: ca
 
 /** Create an ImageData in the active color space. */
 export function createImageData(width: number, height: number): ImageData {
-  return new ImageData(width, height, { colorSpace: canvasColorSpace });
+  if (canvasColorSpace === 'display-p3') {
+    return new ImageData(width, height, { colorSpace: 'display-p3' });
+  }
+  return new ImageData(width, height);
 }
 
 /** Create an ImageData from existing pixel data in the active color space. */
@@ -51,9 +54,10 @@ export function createImageDataFromArray(
   width: number,
   height?: number,
 ): ImageData {
-  // Cast needed because TypeScript's ImageData constructor signature
-  // expects ArrayBuffer, but Uint8ClampedArray may back ArrayBufferLike
-  return new ImageData(data as Uint8ClampedArray<ArrayBuffer>, width, height, { colorSpace: canvasColorSpace });
+  if (canvasColorSpace === 'display-p3') {
+    return new ImageData(data as Uint8ClampedArray<ArrayBuffer>, width, height, { colorSpace: 'display-p3' });
+  }
+  return new ImageData(data as Uint8ClampedArray<ArrayBuffer>, width, height);
 }
 
 /** Whether the session is using wide-gamut color. */

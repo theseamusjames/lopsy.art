@@ -22,6 +22,10 @@ import {
 import { renderGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
+import { renderTextDragOverlay, renderTextEditOverlay } from './rendering/render-text-overlay';
+import { renderTextToCanvas } from '../tools/text/text';
+import type { TextStyle } from '../tools/text/text';
+import { uploadLayerPixels } from '../engine-wasm/wasm-bridge';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays } from './rendering/render-guides';
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
@@ -82,6 +86,37 @@ function renderFrameGpu(
   const hoveredGuideId = uiState.hoveredGuideId;
   const rulerHover = uiState.rulerHover;
 
+  // Live-update text layer pixels during editing so the GPU preview
+  // matches the committed result exactly (same pipeline).
+  const textEditing = uiState.textEditing;
+  if (textEditing && textEditing.text.length > 0) {
+    const ts = toolState;
+    const textStyle: TextStyle = {
+      fontSize: ts.textFontSize,
+      fontFamily: ts.textFontFamily,
+      fontWeight: ts.textFontWeight,
+      fontStyle: ts.textFontStyle,
+      color: uiState.foregroundColor,
+      lineHeight: 1.4,
+      letterSpacing: 0,
+      textAlign: ts.textAlign,
+    };
+    const textCanvas = renderTextToCanvas(
+      doc.width, doc.height,
+      { x: 0, y: 0 },
+      textEditing.text,
+      textStyle,
+      textEditing.bounds.width,
+    );
+    const textCtx = textCanvas.getContext('2d');
+    if (textCtx) {
+      const imgData = textCtx.getImageData(0, 0, doc.width, doc.height);
+      const rawBytes = new Uint8Array(imgData.data.buffer, imgData.data.byteOffset, imgData.data.byteLength);
+      const layer = layers.find((l) => l.id === textEditing.layerId);
+      uploadLayerPixels(engine, textEditing.layerId, rawBytes, doc.width, doc.height, layer?.x ?? 0, layer?.y ?? 0);
+    }
+  }
+
   syncDocumentSize(engine, doc.width, doc.height);
   syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
   syncViewport(engine, viewport.zoom, viewport.panX, viewport.panY, screenW, screenH);
@@ -131,6 +166,25 @@ function renderFrameGpu(
     renderLassoPreview(overlayCtx, lassoPoints, viewport.zoom);
     renderCropPreview(overlayCtx, cropRect, doc.width, doc.height, viewport.zoom);
     renderGradientPreview(overlayCtx, gradientPreview, viewport.zoom);
+
+    // Text tool overlays
+    const textDrag = uiState.textDrag;
+    if (textDrag) {
+      renderTextDragOverlay(overlayCtx, textDrag, viewport.zoom);
+    }
+    if (textEditing) {
+      const ts = toolState;
+      renderTextEditOverlay(overlayCtx, textEditing, {
+        fontSize: ts.textFontSize,
+        fontFamily: ts.textFontFamily,
+        fontWeight: ts.textFontWeight,
+        fontStyle: ts.textFontStyle,
+        color: uiState.foregroundColor,
+        lineHeight: 1.4,
+        letterSpacing: 0,
+        textAlign: ts.textAlign,
+      }, viewport.zoom, antPhaseRef.current);
+    }
 
     const brushCursorInfo = getBrushCursorInfo(activeTool);
     if (brushCursorInfo !== null) {
@@ -244,15 +298,16 @@ export function useCanvasRendering(
     const loop = () => {
       if (!running) return;
 
-      // Check if selection ants need animating
+      // Check if selection ants or text cursor need animating
       const sel = useEditorStore.getState().selection;
+      const hasTextEditing = useUIStore.getState().textEditing !== null;
       if (sel.active && !selectionActive) {
         selectionActive = true;
         dirtyRef.current = true;
       } else if (!sel.active && selectionActive) {
         selectionActive = false;
       }
-      if (selectionActive) {
+      if (selectionActive || hasTextEditing) {
         antPhaseRef.current++;
         dirtyRef.current = true;
       }

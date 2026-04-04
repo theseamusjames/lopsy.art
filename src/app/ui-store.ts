@@ -5,6 +5,22 @@ import { useToolSettingsStore } from './tool-settings-store';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 
+export interface TextEditingState {
+  layerId: string;
+  bounds: { x: number; y: number; width: number | null; height: number | null };
+  text: string;
+  cursorPos: number;
+  isNew: boolean;
+  originalVisible: boolean;
+}
+
+export interface TextDragState {
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+}
+
 export interface PathAnchor {
   point: Point;
   handleIn: Point | null;
@@ -102,6 +118,14 @@ interface UIState {
   setHoveredGuide: (id: string | null) => void;
   setRulerHover: (hover: RulerHover | null) => void;
   clearGuides: () => void;
+  textEditing: TextEditingState | null;
+  textDrag: TextDragState | null;
+  startTextEditing: (state: TextEditingState) => void;
+  updateTextEditingText: (text: string, cursorPos: number) => void;
+  updateTextEditingBounds: (bounds: TextEditingState['bounds']) => void;
+  commitTextEditing: () => void;
+  cancelTextEditing: () => void;
+  setTextDrag: (drag: TextDragState | null) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -156,8 +180,14 @@ export const useUIStore = create<UIState>((set) => ({
     }),
 
   setActiveTool: (tool) => {
-    // Clear path when switching away from path tool
     const current = useUIStore.getState();
+    // When switching away from text tool during editing, the editing session
+    // is committed by the interaction handler (commitTextEditing) before
+    // the tool switch occurs. Clear any stale editing state as a safety net.
+    if (current.activeTool === 'text' && tool !== 'text' && current.textEditing) {
+      set({ textEditing: null });
+    }
+    // Clear path when switching away from path tool
     if (current.activeTool === 'path' && tool !== 'path') {
       set({ activeTool: tool, pathAnchors: [], pathClosed: false });
     } else {
@@ -227,4 +257,14 @@ export const useUIStore = create<UIState>((set) => ({
   setHoveredGuide: (id) => set({ hoveredGuideId: id }),
   setRulerHover: (hover) => set({ rulerHover: hover }),
   clearGuides: () => set({ guides: [], selectedGuideId: null }),
+  textEditing: null,
+  textDrag: null,
+  startTextEditing: (state) => set({ textEditing: state }),
+  updateTextEditingText: (text, cursorPos) =>
+    set((s) => s.textEditing ? { textEditing: { ...s.textEditing, text, cursorPos } } : {}),
+  updateTextEditingBounds: (bounds) =>
+    set((s) => s.textEditing ? { textEditing: { ...s.textEditing, bounds } } : {}),
+  commitTextEditing: () => set({ textEditing: null }),
+  cancelTextEditing: () => set({ textEditing: null }),
+  setTextDrag: (drag) => set({ textDrag: drag }),
 }));

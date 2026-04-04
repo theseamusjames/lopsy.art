@@ -105,6 +105,18 @@ pub fn upload_layer_pixels(
         .map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen(js_name = "uploadLayerPixelsFromCanvas")]
+pub fn upload_layer_pixels_from_canvas(
+    engine: &mut Engine,
+    layer_id: &str,
+    canvas: &HtmlCanvasElement,
+    width: u32,
+    height: u32,
+) -> Result<(), JsError> {
+    layer_manager::upload_pixels_from_canvas(&mut engine.inner, layer_id, canvas, width, height)
+        .map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "readLayerPixels")]
 pub fn read_layer_pixels(engine: &Engine, layer_id: &str) -> Result<Vec<u8>, JsError> {
     layer_manager::read_pixels(&engine.inner, layer_id)

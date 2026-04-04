@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { BlendMode, DocumentState, LayerEffects, Rect, ViewportState } from '../../types';
+import type { BlendMode, DocumentState, LayerEffects, Rect, TextLayer, ViewportState } from '../../types';
 import type { StoredPath } from '../../types/paths';
 import type { PathAnchor } from '../../tools/path/path';
 import type { AlignEdge } from '../../tools/move/move';
@@ -76,6 +76,8 @@ export interface EditorState {
 
   // Document mutations
   addLayer: () => void;
+  addTextLayer: (layer: TextLayer) => void;
+  updateTextLayerProperties: (id: string, props: Partial<Omit<TextLayer, 'id' | 'type'>>) => void;
   removeLayer: (id: string) => void;
   setActiveLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;

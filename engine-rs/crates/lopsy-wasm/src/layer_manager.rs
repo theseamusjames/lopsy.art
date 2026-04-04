@@ -113,6 +113,38 @@ pub fn upload_pixels_f32(
     Ok(())
 }
 
+/// Upload layer pixels directly from an HtmlCanvasElement, avoiding the
+/// getImageData unpremultiply round-trip that causes alpha precision loss.
+pub fn upload_pixels_from_canvas(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    canvas: &web_sys::HtmlCanvasElement,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    // Ensure texture exists and is correct size
+    if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
+        let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
+        if tw != width || th != height {
+            engine.texture_pool.release(tex_handle);
+            let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
+            engine.layer_textures.insert(layer_id.to_string(), new_tex);
+        }
+    } else {
+        let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
+        engine.layer_textures.insert(layer_id.to_string(), new_tex);
+    }
+
+    if let Some(&tex_handle) = engine.layer_textures.get(layer_id) {
+        engine.texture_pool.upload_canvas(
+            &engine.gl, tex_handle, canvas, width, height,
+        )?;
+    }
+
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
 /// GPU-side texture copy: blit src layer's texture into dst layer's texture
 /// using the blit shader. No JS round-trip.
 pub fn duplicate_texture(

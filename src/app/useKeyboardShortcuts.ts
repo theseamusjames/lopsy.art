@@ -8,6 +8,8 @@ import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './s
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob } from './paste-or-open';
+import { processTextKey } from '../tools/text/text-input';
+import { commitTextEditing } from './interactions/misc-handlers';
 
 interface KeyboardShortcutDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -33,6 +35,42 @@ export function useKeyboardShortcuts({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      // Text editing mode: route keyboard input to the text editor
+      const textEditing = useUIStore.getState().textEditing;
+      if (textEditing) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          const uiState = useUIStore.getState();
+          const editorState = useEditorStore.getState();
+          if (textEditing.isNew) {
+            editorState.removeLayer(textEditing.layerId);
+          }
+          uiState.cancelTextEditing();
+          editorState.notifyRender();
+          return;
+        }
+
+        // Shift+Enter commits text
+        if (e.key === 'Enter' && e.shiftKey) {
+          e.preventDefault();
+          commitTextEditing();
+          return;
+        }
+
+        const metaKey = e.metaKey || e.ctrlKey;
+        const result = processTextKey(
+          { text: textEditing.text, cursorPos: textEditing.cursorPos },
+          e.key,
+          metaKey,
+        );
+        if (result) {
+          e.preventDefault();
+          useUIStore.getState().updateTextEditingText(result.text, result.cursorPos);
+          useEditorStore.getState().notifyRender();
+        }
+        return;
+      }
 
       if (e.code === 'Space') {
         e.preventDefault();
