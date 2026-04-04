@@ -70,6 +70,7 @@ function renderFrameGpu(
   const adjustments = uiState.adjustments;
   const adjustmentsEnabled = uiState.adjustmentsEnabled;
   const pathAnchors = uiState.pathAnchors;
+  const pathClosed = uiState.pathClosed;
   const lassoPoints = uiState.lassoPoints;
   const cropRect = uiState.cropRect;
   const transform = uiState.transform;
@@ -121,7 +122,10 @@ function renderFrameGpu(
 
     renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhaseRef.current);
     renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
-    renderPathOverlay(overlayCtx, pathAnchors, layers, doc.activeLayerId, viewport.zoom);
+    const selectedPath = editorState.selectedPathId
+      ? editorState.paths.find((p) => p.id === editorState.selectedPathId)
+      : undefined;
+    renderPathOverlay(overlayCtx, pathAnchors, pathClosed, layers, doc.activeLayerId, viewport.zoom, selectedPath?.anchors, selectedPath?.closed);
     renderLassoPreview(overlayCtx, lassoPoints, viewport.zoom);
     renderCropPreview(overlayCtx, cropRect, doc.width, doc.height, viewport.zoom);
     renderGradientPreview(overlayCtx, gradientPreview, viewport.zoom);

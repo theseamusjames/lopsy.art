@@ -8,6 +8,12 @@ import type { TransformHandle } from '../tools/transform/transform';
 import type { ToolId, Point } from '../types';
 import styles from './App.module.css';
 
+function isPathEditMode(): boolean {
+  const ui = useUIStore.getState();
+  const editor = useEditorStore.getState();
+  return ui.activeTool === 'path' && editor.selectedPathId !== null;
+}
+
 type BrushTool = 'brush' | 'pencil' | 'eraser' | 'stamp' | 'dodge';
 
 const BRUSH_TOOLS: ReadonlySet<string> = new Set<BrushTool>([
@@ -89,6 +95,7 @@ export function useCanvasCursor(
   const hoveredHandle = useUIStore((s) => s.activeTransformHandle);
   const transform = useUIStore((s) => s.transform);
   const selectionActive = useEditorStore((s) => s.selection.active);
+  const selectedPathId = useEditorStore((s) => s.selectedPathId);
 
   // Compute cursor class
   useEffect(() => {
@@ -101,6 +108,8 @@ export function useCanvasCursor(
       cursorClass = styles.canvasGrab ?? '';
     } else if (hoveredHandle) {
       cursorClass = getCursorClassForHandle(hoveredHandle);
+    } else if (isPathEditMode()) {
+      cursorClass = styles.canvasDefault ?? '';
     } else {
       cursorClass = getCursorClassForTool(activeTool);
     }
@@ -117,13 +126,14 @@ export function useCanvasCursor(
       styles.canvasNsResize,
       styles.canvasNeswResize,
       styles.canvasEwResize,
+      styles.canvasDefault,
     ].filter(Boolean) as string[];
 
     container.classList.remove(...allCursorClasses);
     if (cursorClass) {
       container.classList.add(cursorClass);
     }
-  }, [containerRef, isPanning, isSpaceDown, activeTool, hoveredHandle, transform, selectionActive]);
+  }, [containerRef, isPanning, isSpaceDown, activeTool, hoveredHandle, transform, selectionActive, selectedPathId]);
 
   // Hit test transform handles on hover
   const updateHoveredHandle = useCallback(

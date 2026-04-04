@@ -86,6 +86,12 @@ interface UIState {
   adjustmentsEnabled: boolean;
   setAdjustments: (adj: ImageAdjustments) => void;
   setAdjustmentsEnabled: (enabled: boolean) => void;
+  strokeModalPathId: string | null;
+  setStrokeModalPathId: (id: string | null) => void;
+  editingAnchorIndex: number | null;
+  setEditingAnchorIndex: (index: number | null) => void;
+  convertingAnchorToSpline: boolean;
+  setConvertingAnchorToSpline: (converting: boolean) => void;
   guides: Guide[];
   selectedGuideId: string | null;
   hoveredGuideId: string | null;
@@ -198,6 +204,12 @@ export const useUIStore = create<UIState>((set) => ({
   setCropRect: (rect) => set({ cropRect: rect }),
   setTransform: (transform) => set({ transform }),
   setActiveTransformHandle: (handle) => set({ activeTransformHandle: handle }),
+  strokeModalPathId: null,
+  setStrokeModalPathId: (id) => set({ strokeModalPathId: id }),
+  editingAnchorIndex: null,
+  setEditingAnchorIndex: (index) => set({ editingAnchorIndex: index }),
+  convertingAnchorToSpline: false,
+  setConvertingAnchorToSpline: (converting) => set({ convertingAnchorToSpline: converting }),
   guides: [],
   selectedGuideId: null,
   hoveredGuideId: null,

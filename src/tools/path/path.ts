@@ -7,6 +7,80 @@ export interface PathAnchor {
   handleOut: Point | null;
 }
 
+function dist(a: Point, b: Point): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/** Returns the index of the anchor nearest to `pt` within `threshold`, or -1. */
+export function hitTestAnchor(
+  anchors: readonly PathAnchor[],
+  pt: Point,
+  threshold: number,
+): number {
+  let closest = -1;
+  let closestDist = threshold;
+  for (let i = 0; i < anchors.length; i++) {
+    const d = dist(pt, anchors[i]!.point);
+    if (d < closestDist) {
+      closestDist = d;
+      closest = i;
+    }
+  }
+  return closest;
+}
+
+function bezierPoint(p0: Point, p1: Point, p2: Point, p3: Point, t: number): Point {
+  const u = 1 - t;
+  return {
+    x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
+    y: u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y,
+  };
+}
+
+/**
+ * Returns the segment index (0-based) if `pt` is within `threshold` of any
+ * bezier segment, or -1. Segment i connects anchor[i] to anchor[i+1].
+ */
+export function hitTestSegment(
+  anchors: readonly PathAnchor[],
+  closed: boolean,
+  pt: Point,
+  threshold: number,
+): number {
+  const segCount = closed ? anchors.length : anchors.length - 1;
+  for (let i = 0; i < segCount; i++) {
+    const a = anchors[i]!;
+    const b = anchors[(i + 1) % anchors.length]!;
+    const cp1 = a.handleOut ?? a.point;
+    const cp2 = b.handleIn ?? b.point;
+    const steps = 20;
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const p = bezierPoint(a.point, cp1, cp2, b.point, t);
+      if (dist(pt, p) < threshold) return i;
+    }
+  }
+  return -1;
+}
+
+/** Split segment at index, inserting a new anchor at the midpoint. */
+export function splitSegmentAt(
+  anchors: readonly PathAnchor[],
+  segmentIndex: number,
+): PathAnchor[] {
+  const result = [...anchors];
+  const a = anchors[segmentIndex]!;
+  const b = anchors[(segmentIndex + 1) % anchors.length]!;
+  const cp1 = a.handleOut ?? a.point;
+  const cp2 = b.handleIn ?? b.point;
+  const mid = bezierPoint(a.point, cp1, cp2, b.point, 0.5);
+  const newAnchor: PathAnchor = { point: mid, handleIn: null, handleOut: null };
+  result.splice(segmentIndex + 1, 0, newAnchor);
+  return result;
+}
+
 export function rasterizePath(
   buf: PixelSurface,
   anchors: PathAnchor[],

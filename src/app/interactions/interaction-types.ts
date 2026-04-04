@@ -68,6 +68,7 @@ export interface InteractionContext {
   layerPos: Point;
   shiftKey: boolean;
   altKey: boolean;
+  metaKey: boolean;
   activeLayerId: string;
   activeLayer: Layer;
   pixelBuffer: PixelBuffer;
