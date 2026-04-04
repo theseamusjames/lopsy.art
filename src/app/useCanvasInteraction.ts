@@ -148,6 +148,36 @@ export function useCanvasInteraction(
             // Finalize any pending stroke from a previous mouseup
             finalizePendingStroke(pendingStrokeRef);
             beginStroke(engine, activeLayerId);
+
+            // beginStroke calls ensure_layer_full_size on the WASM side,
+            // which may expand a cropped layer texture to full document
+            // size and reset the layer position to (0,0). Sync the JS
+            // store to match so the two sides don't desync.
+            const docState = useEditorStore.getState().document;
+            const currentLayer = docState.layers.find((l) => l.id === activeLayerId);
+            if (currentLayer && (currentLayer.x !== 0 || currentLayer.y !== 0
+              || (currentLayer.type === 'raster' && (currentLayer.width !== docState.width || currentLayer.height !== docState.height)))) {
+              const updatedLayers = docState.layers.map((l) =>
+                l.id === activeLayerId
+                  ? { ...l, x: 0, y: 0, width: docState.width, height: docState.height } as Layer
+                  : l,
+              );
+              const pixelData = new Map(useEditorStore.getState().layerPixelData);
+              pixelData.delete(activeLayerId);
+              const sparseMap = new Map(useEditorStore.getState().sparseLayerData);
+              sparseMap.delete(activeLayerId);
+              const dirtyIds = new Set(useEditorStore.getState().dirtyLayerIds);
+              dirtyIds.add(activeLayerId);
+              useEditorStore.setState({
+                document: { ...docState, layers: updatedLayers },
+                layerPixelData: pixelData,
+                sparseLayerData: sparseMap,
+                dirtyLayerIds: dirtyIds,
+              });
+              // Re-read activeLayer so layerPos computation below uses updated position
+              expandedLayer = updatedLayers.find((l) => l.id === activeLayerId) ?? activeLayer;
+              layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
+            }
           }
         }
         // Create a minimal dummy buffer for the context (tool handlers
@@ -156,6 +186,10 @@ export function useCanvasInteraction(
         pixelBuffer = PixelBuffer.wrapImageData(dummyData);
         paintSurface = pixelBuffer;
       } else {
+        // Finalize any pending GPU stroke so the layer texture includes it
+        // before we read pixel data back for non-GPU tools (e.g. move).
+        finalizePendingStroke(pendingStrokeRef);
+
         // CPU fallback: expand layer to full canvas for pixel manipulation
         const imageData = editorState.expandLayerForEditing(activeLayerId);
         expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;

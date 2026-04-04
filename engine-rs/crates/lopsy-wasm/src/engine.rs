@@ -231,7 +231,66 @@ impl EngineInner {
         if lw >= self.doc_width && lh >= self.doc_height {
             return Ok(());
         }
+
+        // Get the layer's current position so we can place the old content
+        // correctly in the new full-size texture.
+        let (layer_x, layer_y) = self.layer_stack.iter()
+            .find(|l| l.id == layer_id)
+            .map(|l| (l.x, l.y))
+            .unwrap_or((0, 0));
+
+        // Read old texture pixels via CPU readback (handles float textures).
+        let old_tex_gl = self.texture_pool.get(layer_tex).cloned();
+        let old_pixels = if let Some(ref tex) = old_tex_gl {
+            let fbo = self.gl.create_framebuffer();
+            if let Some(ref fbo) = fbo {
+                self.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(fbo));
+                self.gl.framebuffer_texture_2d(
+                    WebGl2RenderingContext::FRAMEBUFFER,
+                    WebGl2RenderingContext::COLOR_ATTACHMENT0,
+                    WebGl2RenderingContext::TEXTURE_2D,
+                    Some(tex),
+                    0,
+                );
+                let result = self.texture_pool.read_rgba(&self.gl, 0, 0, lw, lh);
+                self.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+                self.gl.delete_framebuffer(Some(fbo));
+                result.ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let new_tex = self.texture_pool.acquire(&self.gl, self.doc_width, self.doc_height)?;
+
+        // Re-upload old content at the correct position in the new texture.
+        if let Some(pixels) = old_pixels {
+            let dst_x = layer_x.max(0);
+            let dst_y = layer_y.max(0);
+            let src_skip_x = (-layer_x).max(0) as u32;
+            let src_skip_y = (-layer_y).max(0) as u32;
+            let copy_w = (lw - src_skip_x).min(self.doc_width - dst_x as u32);
+            let copy_h = (lh - src_skip_y).min(self.doc_height - dst_y as u32);
+
+            if copy_w > 0 && copy_h > 0 {
+                let mut sub = vec![0u8; (copy_w * copy_h * 4) as usize];
+                for row in 0..copy_h {
+                    let src_off = ((src_skip_y + row) * lw + src_skip_x) as usize * 4;
+                    let dst_off = (row * copy_w) as usize * 4;
+                    let len = copy_w as usize * 4;
+                    if src_off + len <= pixels.len() && dst_off + len <= sub.len() {
+                        sub[dst_off..dst_off + len].copy_from_slice(&pixels[src_off..src_off + len]);
+                    }
+                }
+                let _ = self.texture_pool.upload_rgba(
+                    &self.gl, new_tex,
+                    dst_x, dst_y, copy_w, copy_h, &sub,
+                );
+            }
+        }
+
         let old = self.layer_textures.insert(layer_id.to_string(), new_tex);
         if let Some(old_tex) = old {
             self.texture_pool.release(old_tex);

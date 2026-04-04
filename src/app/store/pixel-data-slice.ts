@@ -167,10 +167,29 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     const docW = state.document.width;
     const docH = state.document.height;
 
+    // Helper: compute the union of the canvas area and the content area so
+    // that off-canvas content is preserved (non-destructive move).
+    const unionBounds = (cx: number, cy: number, cw: number, ch: number) => {
+      const minX = Math.min(0, cx);
+      const minY = Math.min(0, cy);
+      const maxX = Math.max(docW, cx + cw);
+      const maxY = Math.max(docH, cy + ch);
+      return { minX, minY, bufW: maxX - minX, bufH: maxY - minY };
+    };
+
     // Check for sparse data first
     const sparseEntry = state.sparseLayerData.get(layerId);
     if (sparseEntry) {
-      const expanded = fromSparsePixelData(sparseEntry.sparse, docW, docH, sparseEntry.offsetX, sparseEntry.offsetY);
+      // Use layer.x/y as the authoritative position — sparse offsets may
+      // be stale after an updateLayerPosition() call (move tool).
+      const { minX, minY, bufW, bufH } = unionBounds(
+        layer.x, layer.y,
+        sparseEntry.sparse.width, sparseEntry.sparse.height,
+      );
+      const expanded = fromSparsePixelData(
+        sparseEntry.sparse, bufW, bufH,
+        layer.x - minX, layer.y - minY,
+      );
       const pixelData = new Map(state.layerPixelData);
       pixelData.set(layerId, expanded);
       const sparseMap = new Map(state.sparseLayerData);
@@ -179,7 +198,7 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
         document: {
           ...state.document,
           layers: state.document.layers.map((l) =>
-            l.id === layerId ? { ...l, x: 0, y: 0, width: docW, height: docH } as Layer : l,
+            l.id === layerId ? { ...l, x: minX, y: minY, width: bufW, height: bufH } as Layer : l,
           ),
         },
         layerPixelData: pixelData,
@@ -190,8 +209,8 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
 
     const existing = state.layerPixelData.get(layerId);
 
-    // Already full canvas size at origin
-    if (existing && layer.x === 0 && layer.y === 0 && existing.width === docW && existing.height === docH) {
+    // Already covers the full canvas and all content is on-canvas
+    if (existing && layer.x === 0 && layer.y === 0 && existing.width >= docW && existing.height >= docH) {
       return existing;
     }
 
@@ -199,15 +218,15 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     if (!existing) {
       const gpuData = readLayerAsImageData(layerId);
       if (gpuData) {
-        // GPU data is at layer dimensions — expand to full canvas
-        const expanded = expandFromCrop(gpuData, layer.x, layer.y, docW, docH);
+        const { minX, minY, bufW, bufH } = unionBounds(layer.x, layer.y, gpuData.width, gpuData.height);
+        const expanded = expandFromCrop(gpuData, layer.x - minX, layer.y - minY, bufW, bufH);
         const pixelData = new Map(state.layerPixelData);
         pixelData.set(layerId, expanded);
         set({
           document: {
             ...state.document,
             layers: state.document.layers.map((l) =>
-              l.id === layerId ? { ...l, x: 0, y: 0, width: docW, height: docH } as Layer : l,
+              l.id === layerId ? { ...l, x: minX, y: minY, width: bufW, height: bufH } as Layer : l,
             ),
           },
           layerPixelData: pixelData,
@@ -216,13 +235,27 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
       }
     }
 
-    // Expand cropped data to full canvas size
-    const expanded = existing
-      ? expandFromCrop(existing, layer.x, layer.y, docW, docH)
-      : createImageData(docW, docH);
+    // Expand cropped data, preserving off-canvas content
+    if (existing) {
+      const { minX, minY, bufW, bufH } = unionBounds(layer.x, layer.y, existing.width, existing.height);
+      const expanded = expandFromCrop(existing, layer.x - minX, layer.y - minY, bufW, bufH);
+      const pixelData = new Map(state.layerPixelData);
+      pixelData.set(layerId, expanded);
+      set({
+        document: {
+          ...state.document,
+          layers: state.document.layers.map((l) =>
+            l.id === layerId ? { ...l, x: minX, y: minY, width: bufW, height: bufH } as Layer : l,
+          ),
+        },
+        layerPixelData: pixelData,
+      });
+      return expanded;
+    }
 
+    const empty = createImageData(docW, docH);
     const pixelData = new Map(state.layerPixelData);
-    pixelData.set(layerId, expanded);
+    pixelData.set(layerId, empty);
     set({
       document: {
         ...state.document,
@@ -232,7 +265,7 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
       },
       layerPixelData: pixelData,
     });
-    return expanded;
+    return empty;
   },
 
   resolvePixelData: (layerId: string) => {

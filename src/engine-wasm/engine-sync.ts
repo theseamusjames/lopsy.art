@@ -334,6 +334,8 @@ export function syncLayers(
     } else if (!data && sparseEntry && (sparseChanged || isDirty)) {
       const indices = new Uint32Array(sparseEntry.sparse.indices);
       const rgba = new Uint8Array(sparseEntry.sparse.rgba.buffer, sparseEntry.sparse.rgba.byteOffset, sparseEntry.sparse.rgba.byteLength);
+      // Use layer.x/y as authoritative position — sparse offsets may be
+      // stale after updateLayerPosition() (move tool).
       uploadLayerSparsePixels(
         engine,
         layer.id,
@@ -341,8 +343,8 @@ export function syncLayers(
         rgba,
         sparseEntry.sparse.width,
         sparseEntry.sparse.height,
-        sparseEntry.offsetX,
-        sparseEntry.offsetY,
+        layer.x,
+        layer.y,
       );
       tracked.sparseVersions.set(layer.id, sparseEntry);
       tracked.pixelDataVersions.set(layer.id, undefined);
