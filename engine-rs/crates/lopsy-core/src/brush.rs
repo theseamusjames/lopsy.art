@@ -82,6 +82,56 @@ pub fn compute_shift_click_line(
     [from_x, from_y, end_x, end_y]
 }
 
+/// Interpolate points along a line with perpendicular scatter offset.
+/// Returns flat [x0, y0, x1, y1, ...] pairs.
+/// `scatter` is 0-100 (percentage), `brush_size` scales the offset.
+/// `seed` provides deterministic randomness for testing.
+pub fn interpolate_points_with_scatter(
+    from_x: f64, from_y: f64,
+    to_x: f64, to_y: f64,
+    spacing: f64,
+    scatter: f64,
+    brush_size: f64,
+    seed: u64,
+) -> Vec<f64> {
+    let dx = to_x - from_x;
+    let dy = to_y - from_y;
+    let dist = (dx * dx + dy * dy).sqrt();
+
+    if dist < 1e-10 || spacing < 1e-10 {
+        return vec![from_x, from_y];
+    }
+
+    // Perpendicular direction (normalized)
+    let perp_x = -dy / dist;
+    let perp_y = dx / dist;
+
+    let steps = (dist / spacing).ceil() as usize;
+    let mut points = Vec::with_capacity((steps + 1) * 2);
+    let mut rng = seed;
+
+    for i in 0..=steps {
+        let t = i as f64 / steps as f64;
+        let base_x = from_x + dx * t;
+        let base_y = from_y + dy * t;
+
+        if scatter > 0.0 {
+            // Simple xorshift64 for deterministic pseudo-random
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            let rand_val = (rng as f64 / u64::MAX as f64) - 0.5; // -0.5 to 0.5
+            let offset = rand_val * (scatter / 100.0) * brush_size;
+            points.push(base_x + perp_x * offset);
+            points.push(base_y + perp_y * offset);
+        } else {
+            points.push(base_x);
+            points.push(base_y);
+        }
+    }
+    points
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,5 +190,49 @@ mod tests {
         let [_, _, ex, ey] = compute_shift_click_line(0.0, 0.0, 70.0, 72.0);
         // Should snap to 45 degrees
         assert!((ex - ey).abs() < 2.0);
+    }
+
+    #[test]
+    fn test_scatter_zero_matches_regular() {
+        let regular = interpolate_points(0.0, 0.0, 100.0, 0.0, 10.0);
+        let scattered = interpolate_points_with_scatter(0.0, 0.0, 100.0, 0.0, 10.0, 0.0, 20.0, 42);
+        assert_eq!(regular.len(), scattered.len());
+        for i in 0..regular.len() {
+            assert!((regular[i] - scattered[i]).abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn test_scatter_offsets_perpendicular() {
+        // Horizontal line: scatter should offset in Y direction
+        let pts = interpolate_points_with_scatter(0.0, 50.0, 100.0, 50.0, 10.0, 100.0, 20.0, 123);
+        assert!(pts.len() >= 4);
+        // At least one point should be off the y=50 line
+        let mut has_offset = false;
+        for i in (1..pts.len()).step_by(2) {
+            if (pts[i] - 50.0).abs() > 0.01 {
+                has_offset = true;
+                break;
+            }
+        }
+        assert!(has_offset, "Scatter should offset points perpendicular to stroke");
+    }
+
+    #[test]
+    fn test_scatter_respects_magnitude() {
+        // Low scatter should produce smaller offsets than high scatter
+        let low = interpolate_points_with_scatter(0.0, 0.0, 100.0, 0.0, 5.0, 10.0, 20.0, 42);
+        let high = interpolate_points_with_scatter(0.0, 0.0, 100.0, 0.0, 5.0, 100.0, 20.0, 42);
+
+        let max_offset_low = low.iter().skip(1).step_by(2).map(|y| y.abs()).fold(0.0f64, f64::max);
+        let max_offset_high = high.iter().skip(1).step_by(2).map(|y| y.abs()).fold(0.0f64, f64::max);
+        assert!(max_offset_high > max_offset_low, "Higher scatter should produce larger offsets");
+    }
+
+    #[test]
+    fn test_scatter_maintains_count() {
+        let regular = interpolate_points(0.0, 0.0, 50.0, 0.0, 5.0);
+        let scattered = interpolate_points_with_scatter(0.0, 0.0, 50.0, 0.0, 5.0, 50.0, 10.0, 99);
+        assert_eq!(regular.len(), scattered.len());
     }
 }

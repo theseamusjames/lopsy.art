@@ -4,6 +4,7 @@ import { App } from './app/App';
 import { useEditorStore } from './app/editor-store';
 import { useUIStore } from './app/ui-store';
 import { useToolSettingsStore } from './app/tool-settings-store';
+import { useBrushPresetStore } from './app/brush-preset-store';
 import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
 import { render as renderWasm } from './engine-wasm/wasm-bridge';
 import {
@@ -21,6 +22,7 @@ if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__editorStore = useEditorStore;
   (window as unknown as Record<string, unknown>).__uiStore = useUIStore;
   (window as unknown as Record<string, unknown>).__toolSettingsStore = useToolSettingsStore;
+  (window as unknown as Record<string, unknown>).__brushPresetStore = useBrushPresetStore;
   // Read composited pixels from the WebGL canvas by triggering a render
   // inside requestAnimationFrame and reading before buffer swap.
   // Returns screen-sized pixels (includes workspace background).

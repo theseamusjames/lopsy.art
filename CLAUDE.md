@@ -226,8 +226,8 @@ npm run storybook    # Start Storybook dev server
 npm run lint         # ESLint
 npm run typecheck    # tsc --noEmit
 
-# Rust/WASM engine
-cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --out-dir ../../src/engine-wasm/pkg
+# Rust/WASM engine — ALWAYS use npm run, never call wasm-pack directly
+npm run wasm:build
 ```
 
 ## Code Style

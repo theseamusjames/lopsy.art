@@ -48,9 +48,13 @@ import {
   setTransformOverlay,
   setMaskEditLayer,
   clearMaskEditLayer,
+  uploadBrushTip,
+  clearBrushTip,
+  setBrushTipState,
 } from './wasm-bridge';
 import type { PathAnchor } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
+import type { BrushTipData } from '../types/brush';
 
 // ---------------------------------------------------------------------------
 // Blend mode mapping: TypeScript union → Rust serde enum variant
@@ -195,6 +199,9 @@ interface TrackedState {
   showGrid: boolean;
   gridSize: number;
   showRulers: boolean;
+  brushTipData: BrushTipData | null;
+  brushAngle: number;
+  brushHasTip: boolean;
 }
 
 function createTrackedState(): TrackedState {
@@ -217,6 +224,9 @@ function createTrackedState(): TrackedState {
     showGrid: false,
     gridSize: 0,
     showRulers: false,
+    brushTipData: null,
+    brushAngle: 0,
+    brushHasTip: false,
   };
 }
 
@@ -474,6 +484,35 @@ export function syncOverlays(
     setBrushCursor(engine, brushCursor.x, brushCursor.y, brushCursor.radius);
   } else {
     clearBrushCursor(engine);
+  }
+}
+
+export function syncBrushTip(
+  engine: Engine,
+  activeBrushTip: BrushTipData | null,
+  brushAngle: number,
+): void {
+  const hasTip = activeBrushTip !== null;
+  const tipChanged = tracked.brushTipData !== activeBrushTip;
+
+  if (tipChanged) {
+    if (activeBrushTip) {
+      const bytes = new Uint8Array(
+        activeBrushTip.data.buffer,
+        activeBrushTip.data.byteOffset,
+        activeBrushTip.data.byteLength,
+      );
+      uploadBrushTip(engine, bytes, activeBrushTip.width, activeBrushTip.height);
+    } else {
+      clearBrushTip(engine);
+    }
+    tracked.brushTipData = activeBrushTip;
+  }
+
+  if (tracked.brushHasTip !== hasTip || tracked.brushAngle !== brushAngle) {
+    setBrushTipState(engine, hasTip, brushAngle);
+    tracked.brushHasTip = hasTip;
+    tracked.brushAngle = brushAngle;
   }
 }
 

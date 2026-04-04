@@ -23,6 +23,28 @@ export { strokeCurrentPath } from './interactions/path-stroke';
 import type { Point, ToolId, Layer } from '../types';
 import type { MaskedPixelBuffer } from '../engine/pixel-data';
 
+/** Finalize a deferred stroke from a previous mouseup. */
+function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } | null>): void {
+  const pending = ref.current;
+  if (!pending) return;
+  ref.current = null;
+
+  const engine = getEngine();
+  if (!engine) return;
+
+  endStroke(engine, pending.layerId);
+
+  const editorState = useEditorStore.getState();
+  const pixelData = new Map(editorState.layerPixelData);
+  pixelData.delete(pending.layerId);
+  const sparseMap = new Map(editorState.sparseLayerData);
+  sparseMap.delete(pending.layerId);
+  const dirtyIds = new Set(editorState.dirtyLayerIds);
+  dirtyIds.add(pending.layerId);
+  editorState.notifyRender();
+  useEditorStore.setState({ layerPixelData: pixelData, sparseLayerData: sparseMap, dirtyLayerIds: dirtyIds });
+}
+
 const INITIAL_STATE: InteractionState = {
   drawing: false,
   lastPoint: null,
@@ -61,6 +83,7 @@ export function useCanvasInteraction(
   const stampSourceRef = useRef<Point | null>(null);
   const stampOffsetRef = useRef<Point | null>(null);
   const lastPaintPointRef = useRef<LastPaintPoint | null>(null);
+  const pendingStrokeRef = useRef<{ layerId: string } | null>(null);
 
   const buildContext = useCallback(
     (e: React.MouseEvent, canvasPos: Point, layerPos: Point, activeLayerId: string, activeLayer: Layer, pixelBuffer: PixelBuffer, paintSurface: PixelBuffer | MaskedPixelBuffer): InteractionContext => ({
@@ -109,13 +132,23 @@ export function useCanvasInteraction(
       let paintSurface: PixelBuffer;
       let expandedLayer = activeLayer;
       let layerPos: Point = { x: canvasPos.x - activeLayer.x, y: canvasPos.y - activeLayer.y };
+      let strokeContinuation = false;
 
       if (useGpu) {
         // GPU path: no JS pixel data needed. The engine handles the
         // layer texture directly — no expand, no upload, no round-trip.
         // This preserves 16-bit float precision throughout.
         if (isPaintTool) {
-          beginStroke(engine, activeLayerId);
+          const isShift = e.shiftKey && lastPaintPointRef.current?.layerId === activeLayerId;
+          if (isShift && pendingStrokeRef.current?.layerId === activeLayerId) {
+            // Shift-click continuation: reuse the pending stroke texture so
+            // the shift-line doesn't double-composite over the previous stroke's endpoint.
+            strokeContinuation = true;
+          } else {
+            // Finalize any pending stroke from a previous mouseup
+            finalizePendingStroke(pendingStrokeRef);
+            beginStroke(engine, activeLayerId);
+          }
         }
         // Create a minimal dummy buffer for the context (tool handlers
         // ignore it when the GPU engine is available).
@@ -133,6 +166,9 @@ export function useCanvasInteraction(
         paintSurface = wrapWithSelectionMask(pixelBuffer, expandedLayer.x, expandedLayer.y);
       }
       const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer, pixelBuffer, paintSurface);
+      if (useGpu) {
+        ctx.isStrokeContinuation = strokeContinuation;
+      }
 
       // Transform handle interaction (pre-tool dispatch)
       const transformResult = handleTransformDown(ctx);
@@ -218,23 +254,13 @@ export function useCanvasInteraction(
 
     toolHandlers[state.tool]?.up?.(ctx, state);
 
-    // Finalize paint stroke
+    // Finalize paint stroke — deferred so shift-click can continue the stroke
     if (PAINT_TOOLS.has(state.tool) && state.layerId && !state.maskMode) {
       const engine = getEngine();
       if (engine && state._usedGpuStroke) {
-        // GPU path: composite stroke onto layer. GPU texture is source of truth —
-        // no readback to JS needed. Undo uses GPU compressed snapshots.
-        endStroke(engine, state.layerId);
-        // Clear stale JS pixel data so resolvePixelData reads from GPU
-        const editorState = useEditorStore.getState();
-        const pixelData = new Map(editorState.layerPixelData);
-        pixelData.delete(state.layerId);
-        const sparseMap = new Map(editorState.sparseLayerData);
-        sparseMap.delete(state.layerId);
-        const dirtyIds = new Set(editorState.dirtyLayerIds);
-        dirtyIds.add(state.layerId);
-        editorState.notifyRender();
-        useEditorStore.setState({ layerPixelData: pixelData, sparseLayerData: sparseMap, dirtyLayerIds: dirtyIds });
+        // Defer endStroke: if the next mousedown is a shift-click on the same
+        // layer, the stroke texture will be reused instead of double-compositing.
+        pendingStrokeRef.current = { layerId: state.layerId };
       } else {
         // CPU fallback
         destroyPaintingCanvas(state.layerId);

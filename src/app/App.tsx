@@ -13,6 +13,8 @@ import { OptionsBar } from './OptionsBar/OptionsBar';
 import { StatusBar } from './StatusBar/StatusBar';
 import { NewDocumentModal } from '../components/NewDocumentModal/NewDocumentModal';
 import { ShapeSizeModal } from '../components/ShapeSizeModal/ShapeSizeModal';
+import { BrushModal } from '../components/BrushModal/BrushModal';
+import { useBrushPresetStore } from './brush-preset-store';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useCanvasInteraction } from './useCanvasInteraction';
@@ -25,6 +27,8 @@ import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
+import { useContextMenu } from './useContextMenu';
+import { ContextMenu } from '../components/ContextMenu/ContextMenu';
 import styles from './App.module.css';
 
 // Isolated component for canvas rendering — prevents renderVersion and
@@ -193,6 +197,9 @@ export function App() {
 
   // Cursor management
   const { updateHoveredHandle } = useCanvasCursor(containerRef, isPanning, isSpaceDown);
+
+  // Context menu
+  const { contextMenu, handleContextMenu, handleClose: handleContextMenuClose } = useContextMenu();
 
   // Keyboard shortcuts (extracted to useKeyboardShortcuts)
   useKeyboardShortcuts({
@@ -382,6 +389,8 @@ export function App() {
     drawer.style.height = `${bottom.offsetHeight}px`;
   }, [showEffectsDrawer, colorPanelCollapsed]);
 
+  const showBrushModal = useBrushPresetStore((s) => s.showBrushModal);
+
   const showModal = !documentReady || showNewDocumentModal;
 
   if (!documentReady) {
@@ -403,6 +412,7 @@ export function App() {
           onCancel={() => setPendingShapeClick(null)}
         />
       )}
+      {showBrushModal && <BrushModal />}
       {showModal && (
         <NewDocumentModal
           onCreateDocument={handleCreateDocument}
@@ -425,11 +435,20 @@ export function App() {
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
           onWheel={handleWheel}
+          onContextMenu={handleContextMenu}
         >
           <canvas ref={canvasRef} />
           <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />
           <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </div>
+        {contextMenu.visible && (
+          <ContextMenu
+            items={contextMenu.items}
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onClose={handleContextMenuClose}
+          />
+        )}
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div className={styles.effectsDrawer} ref={effectsDrawerRef}>

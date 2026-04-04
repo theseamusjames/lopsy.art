@@ -42,6 +42,9 @@ pub fn apply_dab_batch(
     r: f32, g: f32, b: f32, a: f32,
     opacity: f32, flow: f32,
 ) {
+    // Track brush opacity for this stroke so end_stroke and the compositor can use it
+    engine.stroke_opacity.insert(layer_id.to_string(), opacity);
+
     let gl = &engine.gl;
 
     // Get stroke texture (or layer texture if no active stroke)
@@ -74,7 +77,8 @@ pub fn apply_dab_batch(
     }
     gl.viewport(0, 0, w as i32, h as i32);
 
-    // Enable blending for accumulative dabs
+    // Source-over blending for dab accumulation (flow controls buildup rate).
+    // After dab rendering, a clamp pass caps the stroke alpha to the brush opacity.
     gl.enable(WebGl2RenderingContext::BLEND);
     gl.blend_func(
         WebGl2RenderingContext::ONE,
@@ -132,6 +136,38 @@ pub fn apply_dab_batch(
         gl.uniform2f(Some(&loc), layer_ox, layer_oy);
     }
 
+    // Bind custom brush tip texture if present
+    let use_brush_tip = engine.brush_has_tip && engine.brush_tip_texture.is_some();
+    if use_brush_tip {
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        if let Some(tip_handle) = engine.brush_tip_texture {
+            if let Some(tip_tex) = engine.texture_pool.get(tip_handle) {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tip_tex));
+            }
+        }
+        if let Some(loc) = gl.get_uniform_location(prog, "u_brushTip") {
+            gl.uniform1i(Some(&loc), 1);
+        }
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_hasBrushTip") {
+        gl.uniform1i(Some(&loc), if use_brush_tip { 1 } else { 0 });
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_angle") {
+        gl.uniform1f(Some(&loc), if use_brush_tip { engine.brush_angle } else { 0.0 });
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_tipAspect") {
+        if use_brush_tip && engine.brush_tip_width > 0 && engine.brush_tip_height > 0 {
+            let max_dim = engine.brush_tip_width.max(engine.brush_tip_height) as f32;
+            gl.uniform2f(
+                Some(&loc),
+                engine.brush_tip_width as f32 / max_dim,
+                engine.brush_tip_height as f32 / max_dim,
+            );
+        } else {
+            gl.uniform2f(Some(&loc), 1.0, 1.0);
+        }
+    }
+
     // Render each dab as a separate draw call
     for chunk in points.chunks(2) {
         if chunk.len() < 2 { break; }
@@ -142,6 +178,48 @@ pub fn apply_dab_batch(
     }
 
     gl.disable(WebGl2RenderingContext::BLEND);
+
+    // --- Opacity clamp pass ---
+    // Clamp the stroke texture's alpha to the brush opacity ceiling.
+    // This ensures overlapping dabs within a stroke never exceed the opacity.
+    if opacity < 0.999 {
+        if let Some(stroke_gl_tex) = engine.texture_pool.get(tex_handle).cloned() {
+            // Pass 1: render stroke through opacity_clamp shader into scratch_a
+            engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
+            gl.viewport(0, 0, w as i32, h as i32);
+
+            let clamp_prog = &engine.shaders.opacity_clamp.program;
+            gl.use_program(Some(clamp_prog));
+            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&stroke_gl_tex));
+            if let Some(loc) = gl.get_uniform_location(clamp_prog, "u_tex") {
+                gl.uniform1i(Some(&loc), 0);
+            }
+            if let Some(loc) = gl.get_uniform_location(clamp_prog, "u_maxOpacity") {
+                gl.uniform1f(Some(&loc), opacity);
+            }
+            engine.draw_fullscreen_quad();
+
+            // Pass 2: blit scratch_a back to stroke texture
+            if let Some(fbo) = engine.stroke_fbo {
+                engine.fbo_pool.attach_texture(gl, fbo, &stroke_gl_tex);
+                engine.fbo_pool.bind(gl, fbo);
+            }
+            gl.viewport(0, 0, w as i32, h as i32);
+
+            let blit_prog = &engine.shaders.blit.program;
+            gl.use_program(Some(blit_prog));
+            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
+            }
+            if let Some(loc) = gl.get_uniform_location(blit_prog, "u_tex") {
+                gl.uniform1i(Some(&loc), 0);
+            }
+            engine.draw_fullscreen_quad();
+        }
+    }
+
     gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
 
     engine.mark_layer_dirty(layer_id);
@@ -290,6 +368,10 @@ pub fn apply_eraser_dab_batch(
 pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
     let gl = &engine.gl;
 
+    // Opacity is already baked into the stroke texture via the clamp pass,
+    // so composite at full strength.
+    let _stroke_opacity = engine.stroke_opacity.remove(layer_id).unwrap_or(1.0);
+
     if let Some(stroke_tex) = engine.stroke_textures.remove(layer_id) {
         // Composite stroke texture onto layer texture using normal compositing
         if let Some(&layer_tex_handle) = engine.layer_textures.get(layer_id) {
@@ -302,6 +384,8 @@ pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
                 let (w, h) = engine.texture_pool.get_size(layer_tex_handle).unwrap_or((1, 1));
 
                 // Use composite shader (source-over) to blend stroke onto layer
+                // Apply brush opacity here so individual dabs only used flow
+                gl.disable(WebGl2RenderingContext::BLEND);
                 engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
                 gl.viewport(0, 0, w as i32, h as i32);
 

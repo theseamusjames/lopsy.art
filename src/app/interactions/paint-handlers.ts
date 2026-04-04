@@ -2,7 +2,7 @@ import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { createMaskSurface } from '../../engine/mask-utils';
-import { generateBrushStamp, interpolatePoints, applyBrushDab } from '../../tools/brush/brush';
+import { generateBrushStamp, interpolatePoints, applyBrushDab, interpolatePointsWithScatter, resetScatterSpacingRemainder } from '../../tools/brush/brush';
 import { drawPencilLine } from '../../tools/pencil/pencil';
 import { setActiveMaskEditBuffer } from './mask-buffer';
 import type { InteractionContext, InteractionState } from './interaction-types';
@@ -93,7 +93,11 @@ export function handlePaintDown(
     return state;
   }
 
-  editorState.pushHistory();
+  if (!ctx.isStrokeContinuation) {
+    editorState.pushHistory();
+  }
+  resetSpacingRemainder();
+  resetScatterSpacingRemainder();
 
   const engine = getEngine();
 
@@ -116,16 +120,28 @@ export function handlePaintDown(
     const size = toolSettings.brushSize;
     const hardness = toolSettings.brushHardness / 100;
     const opacity = toolSettings.brushOpacity / 100;
+    const brushSpacing = toolSettings.brushSpacing;
+    const brushScatter = toolSettings.brushScatter;
     const color = useUIStore.getState().foregroundColor;
     useUIStore.getState().addRecentColor(color);
     const r = color.r / 255;
     const g = color.g / 255;
     const b = color.b / 255;
+    const spacing = Math.max(1, size * brushSpacing / 100);
 
     if (shiftLine) {
-      const spacing = Math.max(1, size * 0.25);
-      const pts = lopsy_core_interpolate(lineFrom, layerPos, spacing);
-      gpuBrushDabBatch(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, 1);
+      if (brushScatter > 0) {
+        const scatterPts = interpolatePointsWithScatter(lineFrom, layerPos, spacing, brushScatter, size);
+        const arr = new Float64Array(scatterPts.length * 2);
+        for (let i = 0; i < scatterPts.length; i++) {
+          arr[i * 2] = scatterPts[i]!.x;
+          arr[i * 2 + 1] = scatterPts[i]!.y;
+        }
+        gpuBrushDabBatch(engine, activeLayerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
+      } else {
+        const pts = lopsy_core_interpolate(lineFrom, layerPos, spacing);
+        gpuBrushDabBatch(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, 1);
+      }
     } else {
       gpuBrushDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, r, g, b, color.a, opacity, 1);
     }
@@ -154,20 +170,43 @@ export function handlePaintDown(
   return state;
 }
 
-/** Flatten two Points into a flat [x,y,...] array for the WASM batch API. */
+/**
+ * Tracks leftover distance from the last dab so spacing is respected
+ * across multiple mouse-move events.
+ */
+let spacingRemainder = 0;
+
+export function resetSpacingRemainder(): void {
+  spacingRemainder = 0;
+}
+
+/**
+ * Flatten two Points into a flat [x,y,...] array for the WASM batch API.
+ * Uses spacingRemainder so dabs are evenly spaced across move events.
+ * Returns an empty array when no dabs are due.
+ */
 function lopsy_core_interpolate(from: { x: number; y: number }, to: { x: number; y: number }, spacing: number): Float64Array {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < spacing) return new Float64Array([to.x, to.y]);
-  const steps = Math.floor(dist / spacing);
-  const arr = new Float64Array(steps * 2);
-  for (let i = 0; i < steps; i++) {
-    const t = (i + 1) * spacing / dist;
-    arr[i * 2] = from.x + dx * t;
-    arr[i * 2 + 1] = from.y + dy * t;
+  if (dist < 1e-6) return new Float64Array(0);
+
+  const startOffset = spacing - spacingRemainder;
+  if (startOffset > dist) {
+    // Not enough distance traveled yet — no dabs this move
+    spacingRemainder += dist;
+    return new Float64Array(0);
   }
-  return arr;
+
+  const points: number[] = [];
+  let d = startOffset;
+  while (d <= dist) {
+    const t = d / dist;
+    points.push(from.x + dx * t, from.y + dy * t);
+    d += spacing;
+  }
+  spacingRemainder = dist - (d - spacing);
+  return new Float64Array(points);
 }
 
 export function handlePaintMove(
@@ -194,9 +233,20 @@ export function handlePaintMove(
       const size = toolSettings.brushSize;
       const hardness = toolSettings.brushHardness / 100;
       const opacity = toolSettings.brushOpacity / 100;
+      const brushScatter = toolSettings.brushScatter;
       const color = useUIStore.getState().foregroundColor;
-      const spacing = Math.max(1, size * 0.25);
-      const pts = lopsy_core_interpolate(state.lastPoint, layerLocalPos, spacing);
+      const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
+      let pts: Float64Array;
+      if (brushScatter > 0) {
+        const scatterPts = interpolatePointsWithScatter(state.lastPoint, layerLocalPos, spacing, brushScatter, size);
+        pts = new Float64Array(scatterPts.length * 2);
+        for (let i = 0; i < scatterPts.length; i++) {
+          pts[i * 2] = scatterPts[i]!.x;
+          pts[i * 2 + 1] = scatterPts[i]!.y;
+        }
+      } else {
+        pts = lopsy_core_interpolate(state.lastPoint, layerLocalPos, spacing);
+      }
       gpuBrushDabBatch(engine, state.layerId, pts, size, hardness,
         color.r / 255, color.g / 255, color.b / 255, color.a, opacity, 1);
       state.lastPoint = layerLocalPos;

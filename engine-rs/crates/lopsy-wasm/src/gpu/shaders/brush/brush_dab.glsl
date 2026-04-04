@@ -12,6 +12,10 @@ uniform sampler2D u_selectionMask;
 uniform int u_hasSelection;
 uniform vec2 u_docSize;
 uniform vec2 u_layerOffset;
+uniform sampler2D u_brushTip;
+uniform int u_hasBrushTip;
+uniform float u_angle;
+uniform vec2 u_tipAspect; // (tipWidth/max, tipHeight/max) for non-square tips
 out vec4 fragColor;
 
 void main() {
@@ -19,7 +23,38 @@ void main() {
     float radius = u_size * 0.5;
     float dist = length(fragPos - u_center);
 
-    if (dist > radius) discard;
+    float a;
+
+    if (u_hasBrushTip == 1) {
+        // Custom brush tip texture mode
+        // Scale UV by aspect ratio so non-square tips aren't squished
+        vec2 uv = (fragPos - u_center) / u_size;
+        // Apply tip aspect ratio: u_tipAspect = (w/max, h/max)
+        uv /= u_tipAspect;
+        float ca = cos(u_angle);
+        float sa = sin(u_angle);
+        uv = mat2(ca, sa, -sa, ca) * uv;
+        uv = uv + 0.5;
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;
+
+        float stamp = texture(u_brushTip, uv).r;
+        // Flow only — opacity is enforced via a post-dab clamp pass
+        a = stamp * u_flow;
+    } else {
+        // Procedural circle mode
+        if (dist > radius) discard;
+
+        // Quadratic falloff matching lopsy_core::brush::generate_brush_stamp
+        float t = clamp(dist / radius, 0.0, 1.0);
+        float soft = 1.0 - t * t;
+        float stamp = u_hardness + (1.0 - u_hardness) * soft;
+
+        // Smooth antialiasing at circle edge (1px feather)
+        float edge = 1.0 - smoothstep(radius - 1.0, radius, dist);
+        stamp *= edge;
+
+        a = stamp * u_flow;
+    }
 
     // Selection mask constraint
     if (u_hasSelection == 1) {
@@ -28,24 +63,6 @@ void main() {
         if (selUV.x < 0.0 || selUV.x > 1.0 || selUV.y < 0.0 || selUV.y > 1.0) discard;
         float selMask = texture(u_selectionMask, selUV).r;
         if (selMask < 0.004) discard;
-    }
-
-    // Quadratic falloff matching lopsy_core::brush::generate_brush_stamp
-    float t = clamp(dist / radius, 0.0, 1.0);
-    float soft = 1.0 - t * t;
-    float stamp = u_hardness + (1.0 - u_hardness) * soft;
-
-    // Smooth antialiasing at circle edge (1px feather)
-    float edge = 1.0 - smoothstep(radius - 1.0, radius, dist);
-    stamp *= edge;
-
-    float a = stamp * u_opacity * u_flow;
-
-    // Modulate by selection mask for soft edges
-    if (u_hasSelection == 1) {
-        vec2 docPos = fragPos + u_layerOffset;
-        vec2 selUV = docPos / u_docSize;
-        float selMask = texture(u_selectionMask, selUV).r;
         a *= selMask;
     }
 

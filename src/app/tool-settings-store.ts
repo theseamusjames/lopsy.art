@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Color } from '../types';
+import type { BrushTipData } from '../types/brush';
 
 interface ToolSettings {
   brushSize: number;
@@ -30,8 +31,16 @@ interface ToolSettings {
   textFontFamily: string;
   textFontWeight: number;
   textFontStyle: 'normal' | 'italic';
+  brushSpacing: number;
+  brushScatter: number;
+  brushAngle: number;
+  activeBrushTip: BrushTipData | null;
 
   setBrushSize: (size: number) => void;
+  setBrushSpacing: (spacing: number) => void;
+  setBrushScatter: (scatter: number) => void;
+  setBrushAngle: (angle: number) => void;
+  setActiveBrushTip: (tip: BrushTipData | null) => void;
   setStampSize: (size: number) => void;
   setPathStrokeWidth: (width: number) => void;
   setDodgeExposure: (exposure: number) => void;
@@ -90,8 +99,16 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   textFontFamily: 'sans-serif',
   textFontWeight: 400,
   textFontStyle: 'normal' as const,
+  brushSpacing: 0,
+  brushScatter: 0,
+  brushAngle: 0,
+  activeBrushTip: null,
 
-  setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(200, size)) }),
+  setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(2000, size)) }),
+  setBrushSpacing: (spacing) => set({ brushSpacing: Math.max(0, Math.min(200, spacing)) }),
+  setBrushScatter: (scatter) => set({ brushScatter: Math.max(0, Math.min(100, scatter)) }),
+  setBrushAngle: (angle) => set({ brushAngle: ((angle % 360) + 360) % 360 }),
+  setActiveBrushTip: (tip) => set({ activeBrushTip: tip }),
   setBrushOpacity: (opacity) => set({ brushOpacity: Math.max(1, Math.min(100, opacity)) }),
   setBrushHardness: (hardness) => set({ brushHardness: Math.max(0, Math.min(100, hardness)) }),
   setPencilSize: (size) => set({ pencilSize: Math.max(1, Math.min(100, size)) }),

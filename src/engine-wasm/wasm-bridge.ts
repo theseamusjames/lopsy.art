@@ -132,6 +132,9 @@ import init, {
   cropLayerTexture,
   setMaskEditLayer,
   clearMaskEditLayer,
+  uploadBrushTip,
+  clearBrushTip,
+  setBrushTipState,
 } from './pkg/lopsy_wasm';
 
 export type { Engine };
@@ -273,4 +276,7 @@ export {
   cropLayerTexture,
   setMaskEditLayer,
   clearMaskEditLayer,
+  uploadBrushTip,
+  clearBrushTip,
+  setBrushTipState,
 };
