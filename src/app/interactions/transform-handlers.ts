@@ -4,6 +4,7 @@ import {
   isRotateHandle,
   computeScale,
   computeRotation,
+  computeSkew,
   applyTransformToMask,
 } from '../../tools/transform/transform';
 import type { TransformState } from '../../tools/transform/transform';
@@ -151,7 +152,14 @@ export function handleTransformMove(
 
   let newTransform: TransformState;
 
-  if (isScaleHandle(handle)) {
+  if (startState.mode === 'skew' && isScaleHandle(handle)) {
+    const result = computeSkew(handle, state.startPoint, canvasPos, startState);
+    newTransform = {
+      ...startState,
+      skewX: result.skewX,
+      skewY: result.skewY,
+    };
+  } else if (isScaleHandle(handle)) {
     const result = computeScale(
       handle,
       state.startPoint,
@@ -223,6 +231,9 @@ export function handleTransformMove(
       rotCtx.translate(origCx + newTransform.translateX, origCy + newTransform.translateY);
       rotCtx.rotate(newTransform.rotation);
       rotCtx.scale(newTransform.scaleX, newTransform.scaleY);
+      if (newTransform.skewX !== 0 || newTransform.skewY !== 0) {
+        rotCtx.transform(1, Math.tan(newTransform.skewY), Math.tan(newTransform.skewX), 1, 0, 0);
+      }
       rotCtx.translate(-origCx, -origCy);
       rotCtx.drawImage(state.transformCanvas, 0, 0);
       rotCtx.restore();

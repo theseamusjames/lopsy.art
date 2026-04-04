@@ -15,6 +15,8 @@ export function applyTransformToMask(
   const cy = bounds.y + bounds.height / 2;
   const cos = Math.cos(-state.rotation);
   const sin = Math.sin(-state.rotation);
+  const tanSkewX = Math.tan(-(state.skewX ?? 0));
+  const tanSkewY = Math.tan(-(state.skewY ?? 0));
 
   // Compute axis-aligned bounding box of the rotated rectangle
   const hw = bounds.width / 2;
@@ -36,11 +38,13 @@ export function applyTransformToMask(
 
   for (let y = minY; y < maxY; y++) {
     for (let x = minX; x < maxX; x++) {
-      // Un-rotate relative to center
+      // Un-rotate and un-skew relative to center
       const dx = x - cx;
       const dy = y - cy;
-      const ux = cx + dx * cos - dy * sin;
-      const uy = cy + dx * sin + dy * cos;
+      const rx = dx * cos - dy * sin;
+      const ry = dx * sin + dy * cos;
+      const ux = cx + rx - ry * tanSkewX;
+      const uy = cy + ry - rx * tanSkewY;
 
       // Map back to original bounds coordinates
       const origX = origBounds.x + ((ux - (cx - bounds.width / 2)) / bounds.width) * origBounds.width;

@@ -14,6 +14,8 @@ export type TransformHandle =
   | 'rotate-bottom-right'
   | 'rotate-bottom-left';
 
+export type TransformMode = 'free' | 'skew' | 'distort' | 'perspective';
+
 export interface TransformState {
   readonly originalBounds: Rect;
   readonly scaleX: number;
@@ -21,9 +23,12 @@ export interface TransformState {
   readonly rotation: number; // radians
   readonly translateX: number;
   readonly translateY: number;
+  readonly skewX: number; // radians
+  readonly skewY: number; // radians
+  readonly mode: TransformMode;
 }
 
-export function createTransformState(bounds: Rect): TransformState {
+export function createTransformState(bounds: Rect, mode: TransformMode = 'free'): TransformState {
   return {
     originalBounds: bounds,
     scaleX: 1,
@@ -31,6 +36,9 @@ export function createTransformState(bounds: Rect): TransformState {
     rotation: 0,
     translateX: 0,
     translateY: 0,
+    skewX: 0,
+    skewY: 0,
+    mode,
   };
 }
 
@@ -57,5 +65,7 @@ export {
 } from './transform-handles';
 
 export { computeScale, computeRotation } from './transform-compute';
+
+export { computeSkew } from './transform-skew';
 
 export { applyTransformToMask } from './transform-mask';
