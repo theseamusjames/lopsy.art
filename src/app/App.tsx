@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { WebGL2Warning, checkWebGL2Support } from '../components/WebGL2Warning/WebGL2Warning';
 import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
@@ -46,6 +47,8 @@ function CanvasRenderer({ canvasRef, containerRef, overlayCanvasRef }: {
 }
 
 export function App() {
+  const [hasWebGL2] = useState(() => checkWebGL2Support());
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -415,6 +418,10 @@ export function App() {
   const showBrushModal = useBrushPresetStore((s) => s.showBrushModal);
 
   const showModal = !documentReady || showNewDocumentModal;
+
+  if (!hasWebGL2) {
+    return <WebGL2Warning />;
+  }
 
   if (!documentReady) {
     return (
