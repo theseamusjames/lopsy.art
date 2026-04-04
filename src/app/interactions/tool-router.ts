@@ -9,7 +9,7 @@ import {
   handleFillDown, handleEyedropperDown, handleEyedropperMove,
   handleDodgeDown, handleDodgeMove,
   handleStampDown, handleStampMove,
-  handleTextDown,
+  handleTextDown, handleTextMove, handleTextUp,
   handleCropDown, handleCropMove, handleCropUp,
   handlePathDown, handlePathMove, handlePathUp,
   handleShapeGradientDown, handleShapeUp, handleShapeMove, handleGradientMove,
@@ -67,7 +67,9 @@ export const toolHandlers: Partial<Record<ToolId, ToolHandler>> = {
     move: (ctx, state) => handleStampMove(state, ctx.layerPos, ctx.stampOffsetRef),
   },
   text: {
-    down: (ctx) => { handleTextDown(ctx); return undefined; },
+    down: (ctx) => handleTextDown(ctx),
+    move: (ctx, state) => handleTextMove(state, ctx.canvasPos),
+    up: (ctx, state) => handleTextUp(state, ctx.canvasPos),
   },
   crop: {
     down: (ctx) => handleCropDown(ctx),

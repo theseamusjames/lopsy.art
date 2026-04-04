@@ -12,6 +12,7 @@ import { useUIStore } from '../ui-store';
 import { computeCreateDocument } from './actions/create-document';
 import { computeOpenImage } from './actions/open-image';
 import { computeAddLayer } from './actions/add-layer';
+import { computeAddTextLayer, computeUpdateTextLayerProperties } from './actions/add-text-layer';
 import { computeRemoveLayer } from './actions/remove-layer';
 import { computeMoveLayer } from './actions/move-layer';
 import { computeDuplicateLayer } from './actions/duplicate-layer';
@@ -102,6 +103,8 @@ export interface DocumentSlice {
   createDocument: (width: number, height: number, transparentBg: boolean) => void;
   openImageAsDocument: (imageData: ImageData, name: string) => void;
   addLayer: () => void;
+  addTextLayer: (layer: import('../../types').TextLayer) => void;
+  updateTextLayerProperties: (id: string, props: Partial<Omit<import('../../types').TextLayer, 'id' | 'type'>>) => void;
   removeLayer: (id: string) => void;
   setActiveLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
@@ -151,6 +154,19 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     s.pushHistory('Add Layer');
     const result = computeAddLayer(s.document);
     if (result) set(result);
+  },
+
+  addTextLayer: (layer) => {
+    const s = get();
+    s.pushHistory('Add Text Layer');
+    const result = computeAddTextLayer(s.document, layer);
+    if (result) set(result);
+  },
+
+  updateTextLayerProperties: (id, props) => {
+    const s = get();
+    const result = computeUpdateTextLayerProperties(s.document, id, props);
+    set({ ...result, renderVersion: s.renderVersion + 1 });
   },
 
   removeLayer: (id) => {

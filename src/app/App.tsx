@@ -31,6 +31,8 @@ import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
 import { useContextMenu } from './useContextMenu';
 import { ContextMenu } from '../components/ContextMenu/ContextMenu';
+import { TextActionButtons } from '../components/TextActionButtons/TextActionButtons';
+import { commitTextEditing } from './interactions/misc-handlers';
 import styles from './App.module.css';
 
 // Isolated component for canvas rendering — prevents renderVersion and
@@ -153,6 +155,22 @@ export function App() {
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // Commit text editing when active layer changes
+  useEffect(() => {
+    let prevActiveLayerId = useEditorStore.getState().document.activeLayerId;
+    const unsub = useEditorStore.subscribe((state) => {
+      const currentId = state.document.activeLayerId;
+      if (currentId !== prevActiveLayerId) {
+        const editing = useUIStore.getState().textEditing;
+        if (editing && editing.layerId !== currentId) {
+          commitTextEditing();
+        }
+        prevActiveLayerId = currentId;
+      }
+    });
+    return unsub;
   }, []);
 
   // Canvas rendering is in a separate component (CanvasRenderer) so that
@@ -443,6 +461,7 @@ export function App() {
         >
           <canvas ref={canvasRef} />
           <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />
+          <TextActionButtons containerRef={containerRef} />
           <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </div>
         {contextMenu.visible && (

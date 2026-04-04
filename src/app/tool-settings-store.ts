@@ -31,6 +31,7 @@ interface ToolSettings {
   textFontFamily: string;
   textFontWeight: number;
   textFontStyle: 'normal' | 'italic';
+  textAlign: 'left' | 'center' | 'right' | 'justify';
   brushSpacing: number;
   brushScatter: number;
   brushAngle: number;
@@ -52,6 +53,7 @@ interface ToolSettings {
   setTextFontFamily: (family: string) => void;
   setTextFontWeight: (weight: number) => void;
   setTextFontStyle: (style: 'normal' | 'italic') => void;
+  setTextAlign: (align: 'left' | 'center' | 'right' | 'justify') => void;
   setBrushOpacity: (opacity: number) => void;
   setBrushHardness: (hardness: number) => void;
   setPencilSize: (size: number) => void;
@@ -99,6 +101,7 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   textFontFamily: 'sans-serif',
   textFontWeight: 400,
   textFontStyle: 'normal' as const,
+  textAlign: 'left' as const,
   brushSpacing: 0,
   brushScatter: 0,
   brushAngle: 0,
@@ -136,4 +139,5 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   setTextFontFamily: (family) => set({ textFontFamily: family }),
   setTextFontWeight: (weight) => set({ textFontWeight: weight }),
   setTextFontStyle: (style) => set({ textFontStyle: style }),
+  setTextAlign: (align) => set({ textAlign: align }),
 }));
