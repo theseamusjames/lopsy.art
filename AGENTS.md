@@ -90,6 +90,20 @@ The WASM build requires [wasm-pack](https://rustwasm.github.io/wasm-pack/install
 
 ### Commit style
 
-- Imperative mood: "Add brush tool", not "Added brush tool".
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat: add brush pressure sensitivity
+fix: correct undo positioning for cropped layers
+refactor: extract blend mode dispatch to separate module
+perf: pre-allocate dab buffer in brush hot path
+test: add unit tests for flood fill edge cases
+docs: update AGENTS.md with pixel data policy
+chore: update wasm-pack to 0.14
+style: fix CSS token usage in layers panel
+```
+
+- Use a scope when it adds clarity: `feat(brush): add scatter control`.
+- Keep the subject line under 72 characters.
 - One logical change per commit.
 - Branch names: `<your-name>/<short-description>`.
