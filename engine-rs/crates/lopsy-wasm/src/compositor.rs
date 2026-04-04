@@ -88,6 +88,7 @@ pub fn composite(engine: &mut EngineInner) {
         }
 
         // --- Active stroke texture ---
+        // Brush opacity is already clamped into the stroke texture via the opacity clamp pass.
         if let Some(&stroke_handle) = engine.stroke_textures.get(layer_id) {
             if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
                 let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));

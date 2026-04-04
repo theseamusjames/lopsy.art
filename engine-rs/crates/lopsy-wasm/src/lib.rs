@@ -658,6 +658,45 @@ pub fn end_stroke(engine: &mut Engine, layer_id: &str) {
     brush_gpu::end_stroke(&mut engine.inner, layer_id);
 }
 
+#[wasm_bindgen(js_name = "uploadBrushTip")]
+pub fn upload_brush_tip(engine: &mut Engine, data: &[u8], width: u32, height: u32) -> Result<(), JsError> {
+    let mut rgba = vec![0u8; (width * height * 4) as usize];
+    for i in 0..(width * height) as usize {
+        let v = if i < data.len() { data[i] } else { 0 };
+        rgba[i * 4] = v;
+        rgba[i * 4 + 1] = v;
+        rgba[i * 4 + 2] = v;
+        rgba[i * 4 + 3] = 255;
+    }
+    if let Some(old) = engine.inner.brush_tip_texture.take() {
+        engine.inner.texture_pool.release(old);
+    }
+    let tex = engine.inner.texture_pool.acquire(&engine.inner.gl, width, height)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, width, height, &rgba)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.brush_tip_texture = Some(tex);
+    engine.inner.brush_tip_width = width;
+    engine.inner.brush_tip_height = height;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "clearBrushTip")]
+pub fn clear_brush_tip(engine: &mut Engine) {
+    if let Some(tex) = engine.inner.brush_tip_texture.take() {
+        engine.inner.texture_pool.release(tex);
+    }
+    engine.inner.brush_tip_width = 0;
+    engine.inner.brush_tip_height = 0;
+    engine.inner.brush_has_tip = false;
+}
+
+#[wasm_bindgen(js_name = "setBrushTipState")]
+pub fn set_brush_tip_state(engine: &mut Engine, has_tip: bool, angle: f32) {
+    engine.inner.brush_has_tip = has_tip;
+    engine.inner.brush_angle = angle;
+}
+
 #[wasm_bindgen(js_name = "generateBrushStamp")]
 pub fn generate_brush_stamp(size: u32, hardness: f32) -> Vec<f32> {
     lopsy_core::brush::generate_brush_stamp(size, hardness)

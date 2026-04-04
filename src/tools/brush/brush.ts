@@ -176,6 +176,64 @@ export function applyBrushDab(
   }
 }
 
+/**
+ * Tracks leftover distance for scatter interpolation (mirrors the
+ * remainder in paint-handlers' lopsy_core_interpolate).
+ */
+let scatterSpacingRemainder = 0;
+
+export function resetScatterSpacingRemainder(): void {
+  scatterSpacingRemainder = 0;
+}
+
+/**
+ * Interpolate points along a line with scatter (random perpendicular offset).
+ * Respects spacing remainder across mouse-move events so dabs are correctly
+ * spaced even when individual mouse deltas are smaller than the spacing.
+ */
+export function interpolatePointsWithScatter(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  spacing: number,
+  scatter: number,
+  brushSize: number,
+): { x: number; y: number }[] {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+
+  if (dist < 1e-6) return [];
+
+  const perpX = -dy / dist;
+  const perpY = dx / dist;
+
+  const startOffset = spacing - scatterSpacingRemainder;
+  if (startOffset > dist) {
+    scatterSpacingRemainder += dist;
+    return [];
+  }
+
+  const points: { x: number; y: number }[] = [];
+  let d = startOffset;
+  while (d <= dist) {
+    const t = d / dist;
+    let x = from.x + dx * t;
+    let y = from.y + dy * t;
+
+    if (scatter > 0) {
+      const offset = (Math.random() - 0.5) * scatter / 100 * brushSize;
+      x += perpX * offset;
+      y += perpY * offset;
+    }
+
+    points.push({ x, y });
+    d += spacing;
+  }
+  scatterSpacingRemainder = dist - (d - spacing);
+
+  return points;
+}
+
 export function computeShiftClickLine(from: Point, to: Point): { start: Point; end: Point } {
   return { start: from, end: to };
 }

@@ -32,7 +32,14 @@ pub struct EngineInner {
     pub needs_recomposite: bool,
     // Brush state
     pub stroke_textures: HashMap<String, TextureHandle>,
+    pub stroke_opacity: HashMap<String, f32>,
     pub stroke_fbo: Option<FramebufferHandle>,
+    // Custom brush tip
+    pub brush_tip_texture: Option<TextureHandle>,
+    pub brush_tip_width: u32,
+    pub brush_tip_height: u32,
+    pub brush_has_tip: bool,
+    pub brush_angle: f32,
     // Selection
     pub selection_mask_texture: Option<TextureHandle>,
     // Clipboard
@@ -121,7 +128,13 @@ impl EngineInner {
             dirty_layers: HashSet::new(),
             needs_recomposite: true,
             stroke_textures: HashMap::new(),
+            stroke_opacity: HashMap::new(),
             stroke_fbo: None,
+            brush_tip_texture: None,
+            brush_tip_width: 0,
+            brush_tip_height: 0,
+            brush_has_tip: false,
+            brush_angle: 0.0,
             selection_mask_texture: None,
             clipboard_texture: None,
             clipboard_width: 0,

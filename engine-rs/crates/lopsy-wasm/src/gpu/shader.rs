@@ -46,6 +46,7 @@ pub const BRUSH_DAB_FRAG: &str = include_str!("shaders/brush/brush_dab.glsl");
 pub const ERASER_DAB_FRAG: &str = include_str!("shaders/brush/eraser_dab.glsl");
 pub const DODGE_BURN_FRAG: &str = include_str!("shaders/brush/dodge_burn.glsl");
 pub const CLONE_STAMP_FRAG: &str = include_str!("shaders/brush/clone_stamp.glsl");
+pub const OPACITY_CLAMP_FRAG: &str = include_str!("shaders/brush/opacity_clamp.glsl");
 
 // Gradient
 pub const GRADIENT_LINEAR_FRAG: &str = include_str!("shaders/gradient/gradient_linear.glsl");
@@ -155,6 +156,7 @@ pub struct ShaderPrograms {
     pub eraser_dab: ShaderProgram,
     pub dodge_burn: ShaderProgram,
     pub clone_stamp: ShaderProgram,
+    pub opacity_clamp: ShaderProgram,
     // Gradient
     pub gradient_linear: ShaderProgram,
     pub gradient_radial: ShaderProgram,
@@ -205,6 +207,7 @@ impl ShaderPrograms {
             eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,
             dodge_burn: compile_program(gl, v, DODGE_BURN_FRAG)?,
             clone_stamp: compile_program(gl, v, CLONE_STAMP_FRAG)?,
+            opacity_clamp: compile_program(gl, v, OPACITY_CLAMP_FRAG)?,
             // Gradient
             gradient_linear: compile_program(gl, v, GRADIENT_LINEAR_FRAG)?,
             gradient_radial: compile_program(gl, v, GRADIENT_RADIAL_FRAG)?,

@@ -14,6 +14,7 @@ import {
   syncRulers,
   syncAdjustments,
   syncMaskEditMode,
+  syncBrushTip,
   renderEngine,
   resetTrackedState,
   markAllLayersDirty,
@@ -90,6 +91,7 @@ function renderFrameGpu(
   syncRulers(engine, showRulers);
   syncAdjustments(engine, adjustments, adjustmentsEnabled);
   syncMaskEditMode(engine, uiState.maskEditMode, doc.activeLayerId);
+  syncBrushTip(engine, toolState.activeBrushTip, toolState.brushAngle * Math.PI / 180);
 
   // Upload in-progress mask edit buffer to GPU so the overlay updates live
   if (uiState.maskEditMode) {

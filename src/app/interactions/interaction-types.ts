@@ -83,6 +83,8 @@ export interface InteractionContext {
   stampSourceRef: MutableRefObject<Point | null>;
   stampOffsetRef: MutableRefObject<Point | null>;
   lastPaintPointRef: MutableRefObject<LastPaintPoint | null>;
+  /** True when this mousedown continues a previous stroke via shift-click. */
+  isStrokeContinuation?: boolean;
 }
 
 export interface ToolHandler {
