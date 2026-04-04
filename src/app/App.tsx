@@ -117,6 +117,12 @@ export function App() {
     });
   }, [setShowNewDocumentModal]);
 
+  const handlePasteClipboard = useCallback((blob: Blob) => {
+    pasteOrOpenBlob(blob, 'Copied File').then(() => {
+      setShowNewDocumentModal(false);
+    });
+  }, [setShowNewDocumentModal]);
+
   const handleShapeSizeConfirm = useCallback((width: number, height: number) => {
     const pending = useUIStore.getState().pendingShapeClick;
     if (!pending) return;
@@ -398,6 +404,7 @@ export function App() {
         <NewDocumentModal
           onCreateDocument={handleCreateDocument}
           onOpenFile={handleOpenFile}
+          onPasteClipboard={handlePasteClipboard}
         />
       </div>
     );
@@ -416,6 +423,7 @@ export function App() {
         <NewDocumentModal
           onCreateDocument={handleCreateDocument}
           onOpenFile={handleOpenFile}
+          onPasteClipboard={handlePasteClipboard}
           onCancel={() => setShowNewDocumentModal(false)}
         />
       )}

@@ -79,6 +79,11 @@
   background: var(--color-accent-subtle);
 }
 
+.clipboardPreset {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
 .presetName {
   display: block;
   font-weight: 500;

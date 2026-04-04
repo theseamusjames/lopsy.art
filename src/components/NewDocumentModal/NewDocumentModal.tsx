@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import styles from './NewDocumentModal.module.css';
 
 type Unit = 'px' | 'in';
@@ -10,6 +10,12 @@ interface Preset {
   height: number;
   unit: Unit;
   dpi: number;
+}
+
+interface ClipboardImageInfo {
+  width: number;
+  height: number;
+  blob: Blob;
 }
 
 const PRESETS: Preset[] = [
@@ -29,16 +35,53 @@ function toPixels(value: number, unit: Unit, dpi: number): number {
 interface NewDocumentModalProps {
   onCreateDocument: (width: number, height: number, background: BackgroundType) => void;
   onOpenFile: (file: File) => void;
+  onPasteClipboard?: (blob: Blob) => void;
   onCancel?: () => void;
 }
 
-export function NewDocumentModal({ onCreateDocument, onOpenFile, onCancel }: NewDocumentModalProps) {
+export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboard, onCancel }: NewDocumentModalProps) {
   const [width, setWidth] = useState('1920');
   const [height, setHeight] = useState('1080');
   const [unit, setUnit] = useState<Unit>('px');
   const [dpi, setDpi] = useState('72');
   const [background, setBackground] = useState<BackgroundType>('white');
   const [activePreset, setActivePreset] = useState<number>(0);
+  const [clipboardImage, setClipboardImage] = useState<ClipboardImageInfo | null>(null);
+
+  // Probe clipboard for image data when the modal mounts
+  useEffect(() => {
+    let cancelled = false;
+    navigator.clipboard.read().then(async (items) => {
+      for (const item of items) {
+        const imageType = item.types.find((t) => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const bitmap = await createImageBitmap(blob);
+          if (!cancelled) {
+            setClipboardImage({ width: bitmap.width, height: bitmap.height, blob });
+          }
+          bitmap.close();
+          return;
+        }
+      }
+    }).catch(() => {
+      // Clipboard read not available or denied — no template shown
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleClipboardPresetClick = useCallback(() => {
+    if (!clipboardImage) return;
+    if (onPasteClipboard) {
+      onPasteClipboard(clipboardImage.blob);
+    } else {
+      setWidth(String(clipboardImage.width));
+      setHeight(String(clipboardImage.height));
+      setUnit('px');
+      setDpi('72');
+      setActivePreset(-1);
+    }
+  }, [clipboardImage, onPasteClipboard]);
 
   const handlePresetClick = useCallback((index: number) => {
     const preset = PRESETS[index];
@@ -106,6 +149,17 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onCancel }: New
           <div className={styles.presets}>
             <span className={styles.presetsLabel}>Presets</span>
             <div className={styles.presetGrid}>
+              {clipboardImage && (
+                <button
+                  className={`${styles.presetButton} ${styles.clipboardPreset}`}
+                  onClick={handleClipboardPresetClick}
+                >
+                  <span className={styles.presetName}>Copied File</span>
+                  <span className={styles.presetDims}>
+                    {clipboardImage.width} × {clipboardImage.height} px
+                  </span>
+                </button>
+              )}
               {PRESETS.map((preset, i) => (
                 <button
                   key={preset.name}
