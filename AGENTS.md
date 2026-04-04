@@ -34,12 +34,18 @@ Two crates:
 
 The WASM bridge exposes functions like `addLayer`, `updateLayer`, `uploadLayerPixels`, `setViewport`, etc. The compositor runs each frame: iterate layers, blend with effects, apply adjustments, blit to screen.
 
+### Pixel data stays on the GPU
+
+All pixel data lives in FP16 (RGBA16F) GPU textures managed by the Rust engine. TypeScript never creates, manipulates, or stores pixel buffers. Any operation that touches pixels — painting, filters, transforms, compositing — must happen in Rust/GLSL. The only time pixel data crosses into JS is for undo snapshots and export, via `gpu-pixel-access.ts`, and even then it's treated as an opaque blob.
+
+Do not introduce `ImageData`, `Uint8ClampedArray`, `Float32Array` pixel buffers, or any per-pixel loops in TypeScript. If your feature needs to read or write pixels, add the operation to the Rust engine and expose it through the WASM bridge.
+
 ### Data flow
 
 1. User input hits tool logic, which updates the Zustand store.
 2. `engine-sync.ts` diffs the store against tracked state and calls WASM functions for anything that changed.
 3. The Rust engine drives WebGL 2 to render the composited result to the canvas.
-4. When JS needs pixel data (undo snapshots, export), `gpu-pixel-access.ts` reads it back from GPU textures.
+4. When JS needs pixel data (undo snapshots, export), `gpu-pixel-access.ts` reads it back from GPU textures as opaque blobs.
 
 ## How to contribute
 
