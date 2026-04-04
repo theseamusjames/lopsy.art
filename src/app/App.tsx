@@ -7,6 +7,8 @@ import { PanelContainer } from '../panels/PanelContainer/PanelContainer';
 import { HistoryPanel } from '../panels/HistoryPanel/HistoryPanel';
 import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
 import { AdjustmentsPanel } from '../panels/AdjustmentsPanel/AdjustmentsPanel';
+import { PathsPanel } from '../panels/PathsPanel/PathsPanel';
+import { StrokePathModal } from '../components/StrokePathModal/StrokePathModal';
 import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
 import { MenuBar } from './MenuBar/MenuBar';
 import { OptionsBar } from './OptionsBar/OptionsBar';
@@ -367,6 +369,7 @@ export function App() {
   const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(false);
   const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
   const [adjustmentsPanelCollapsed, setAdjustmentsPanelCollapsed] = useState(false);
+  const [pathsPanelCollapsed, setPathsPanelCollapsed] = useState(false);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const visiblePanels = useUIStore((s) => s.visiblePanels);
 
@@ -410,6 +413,7 @@ export function App() {
           onCancel={() => setShowNewDocumentModal(false)}
         />
       )}
+      <StrokePathModal />
       <div className={styles.header}>
         <MenuBar />
         <OptionsBar />
@@ -472,6 +476,15 @@ export function App() {
                     onToggle={() => setHistoryPanelCollapsed(!historyPanelCollapsed)}
                   >
                     <HistoryPanel collapsed={historyPanelCollapsed} />
+                  </PanelContainer>
+                )}
+                {visiblePanels.has('paths') && (
+                  <PanelContainer
+                    title="Paths"
+                    collapsed={pathsPanelCollapsed}
+                    onToggle={() => setPathsPanelCollapsed(!pathsPanelCollapsed)}
+                  >
+                    <PathsPanel collapsed={pathsPanelCollapsed} />
                   </PanelContainer>
                 )}
                 {visiblePanels.has('adjustments') && (

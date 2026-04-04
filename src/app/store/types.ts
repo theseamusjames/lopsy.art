@@ -1,5 +1,7 @@
 import type { StateCreator } from 'zustand';
 import type { BlendMode, DocumentState, LayerEffects, Rect, ViewportState } from '../../types';
+import type { StoredPath } from '../../types/paths';
+import type { PathAnchor } from '../../tools/path/path';
 import type { AlignEdge } from '../../tools/move/move';
 
 export interface SelectionData {
@@ -58,6 +60,15 @@ export interface EditorState {
   documentReady: boolean;
   isDirty: boolean;
   clipboard: ClipboardData | null;
+
+  // Paths
+  paths: StoredPath[];
+  selectedPathId: string | null;
+  addPath: (anchors: readonly PathAnchor[], closed: boolean) => void;
+  removePath: (id: string) => void;
+  selectPath: (id: string | null) => void;
+  renamePath: (id: string, name: string) => void;
+  updatePathAnchors: (id: string, anchors: readonly PathAnchor[], closed: boolean) => void;
 
   // Document creation
   createDocument: (width: number, height: number, transparentBg: boolean) => void;

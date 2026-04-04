@@ -65,7 +65,7 @@ export function useCanvasInteraction(
   const buildContext = useCallback(
     (e: React.MouseEvent, canvasPos: Point, layerPos: Point, activeLayerId: string, activeLayer: Layer, pixelBuffer: PixelBuffer, paintSurface: PixelBuffer | MaskedPixelBuffer): InteractionContext => ({
       canvasPos, layerPos,
-      shiftKey: e.shiftKey, altKey: e.altKey,
+      shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey || e.ctrlKey,
       clientX: e.clientX, clientY: e.clientY,
       activeLayerId, activeLayer, pixelBuffer, paintSurface,
       screenToCanvas, containerRef,
@@ -175,7 +175,7 @@ export function useCanvasInteraction(
 
       const ctx: InteractionContext = {
         canvasPos, layerPos: layerLocalPos,
-        shiftKey: e.shiftKey, altKey: e.altKey,
+        shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey || e.ctrlKey,
         clientX: e.clientX, clientY: e.clientY,
         activeLayerId: state.layerId,
         activeLayer: useEditorStore.getState().document.layers.find((l) => l.id === state.layerId)!,
@@ -205,7 +205,7 @@ export function useCanvasInteraction(
 
     const ctx: InteractionContext = {
       canvasPos, layerPos: canvasPos,
-      shiftKey: e.shiftKey, altKey: e.altKey,
+      shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey || e.ctrlKey,
       clientX: e.clientX, clientY: e.clientY,
       activeLayerId: state.layerId ?? '',
       activeLayer: useEditorStore.getState().document.layers.find((l) => l.id === state.layerId)!,

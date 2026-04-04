@@ -1,38 +1,76 @@
 import type { Layer, Point, Rect } from '../../types';
-import type { PathAnchor } from '../ui-store';
+import type { PathAnchor } from '../../tools/path/path';
+
+interface PathOverlaySource {
+  anchors: readonly PathAnchor[];
+  closed: boolean;
+  offsetX: number;
+  offsetY: number;
+}
 
 export function renderPathOverlay(
   ctx: CanvasRenderingContext2D,
-  pathAnchors: PathAnchor[],
+  pathAnchors: readonly PathAnchor[],
+  pathClosed: boolean,
   layers: readonly Layer[],
   activeLayerId: string | null,
   zoom: number,
+  storedPathAnchors?: readonly PathAnchor[],
+  storedPathClosed?: boolean,
 ): void {
-  if (pathAnchors.length === 0) return;
+  let source: PathOverlaySource | null = null;
 
-  const activeLayer = layers.find((l) => l.id === activeLayerId);
-  const offsetX = activeLayer?.x ?? 0;
-  const offsetY = activeLayer?.y ?? 0;
+  if (pathAnchors.length > 0) {
+    // Ephemeral path (being drawn) — in layer-local coords
+    const activeLayer = layers.find((l) => l.id === activeLayerId);
+    source = {
+      anchors: pathAnchors,
+      closed: pathClosed,
+      offsetX: activeLayer?.x ?? 0,
+      offsetY: activeLayer?.y ?? 0,
+    };
+  } else if (storedPathAnchors && storedPathAnchors.length > 0) {
+    // Stored path — already in document coords
+    source = {
+      anchors: storedPathAnchors,
+      closed: storedPathClosed ?? false,
+      offsetX: 0,
+      offsetY: 0,
+    };
+  }
+
+  if (!source) return;
 
   ctx.save();
-  ctx.translate(offsetX, offsetY);
+  ctx.translate(source.offsetX, source.offsetY);
+
+  const anchorsToRender = source.anchors;
 
   // Draw path curve
   ctx.strokeStyle = '#00aaff';
   ctx.lineWidth = 1.5 / zoom;
   ctx.setLineDash([]);
   ctx.beginPath();
-  for (let i = 0; i < pathAnchors.length; i++) {
-    const anchor = pathAnchors[i];
+  for (let i = 0; i < anchorsToRender.length; i++) {
+    const anchor = anchorsToRender[i];
     if (!anchor) continue;
     if (i === 0) {
       ctx.moveTo(anchor.point.x, anchor.point.y);
     } else {
-      const prev = pathAnchors[i - 1];
+      const prev = anchorsToRender[i - 1];
       if (!prev) continue;
       const cp1 = prev.handleOut ?? prev.point;
       const cp2 = anchor.handleIn ?? anchor.point;
       ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, anchor.point.x, anchor.point.y);
+    }
+  }
+  if (source.closed && anchorsToRender.length >= 2) {
+    const last = anchorsToRender[anchorsToRender.length - 1];
+    const first = anchorsToRender[0];
+    if (last && first) {
+      const cp1 = last.handleOut ?? last.point;
+      const cp2 = first.handleIn ?? first.point;
+      ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, first.point.x, first.point.y);
     }
   }
   ctx.stroke();
@@ -40,7 +78,7 @@ export function renderPathOverlay(
   // Draw control handles
   ctx.strokeStyle = '#888888';
   ctx.lineWidth = 1 / zoom;
-  for (const anchor of pathAnchors) {
+  for (const anchor of anchorsToRender) {
     if (anchor.handleIn) {
       ctx.beginPath();
       ctx.moveTo(anchor.point.x, anchor.point.y);
@@ -67,8 +105,8 @@ export function renderPathOverlay(
 
   // Draw anchor points
   const anchorSize = 4 / zoom;
-  for (let i = 0; i < pathAnchors.length; i++) {
-    const anchor = pathAnchors[i];
+  for (let i = 0; i < anchorsToRender.length; i++) {
+    const anchor = anchorsToRender[i];
     if (!anchor) continue;
     ctx.fillStyle = i === 0 ? '#00aaff' : '#ffffff';
     ctx.strokeStyle = '#00aaff';
