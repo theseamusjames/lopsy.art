@@ -11,7 +11,7 @@ export function AboutModal({ onClose }: AboutModalProps) {
         <div className={styles.body}>
           <h2 className={styles.title}>Lopsy</h2>
           <p className={styles.description}>
-            A browser-based image editor.
+            A free browser-based image editor by Seamus James.
           </p>
           <div className={styles.links}>
             <a className={styles.link} href="https://lopsy.art" target="_blank" rel="noopener noreferrer">
