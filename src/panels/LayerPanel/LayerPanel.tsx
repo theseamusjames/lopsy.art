@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Eye, EyeOff, GripVertical, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, X } from 'lucide-react';
+import { Eye, EyeOff, GripVertical, Lock, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Unlock, X } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
@@ -34,10 +34,14 @@ export function LayerPanel({
 }: LayerPanelProps) {
   const addLayerMask = useEditorStore((s) => s.addLayerMask);
   const removeLayerMask = useEditorStore((s) => s.removeLayerMask);
+  const toggleLayerLock = useEditorStore((s) => s.toggleLayerLock);
+  const renameLayer = useEditorStore((s) => s.renameLayer);
   const maskEditMode = useUIStore((s) => s.maskEditMode);
   const setMaskEditMode = useUIStore((s) => s.setMaskEditMode);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
+  const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
 
   const handleThumbnailCmdClick = useCallback((e: React.MouseEvent, layerId: string) => {
     if (!(e.metaKey || e.ctrlKey)) return;
@@ -111,6 +115,7 @@ export function LayerPanel({
               className={[
                 styles.item,
                 layer.id === activeLayerId ? styles.active : '',
+                layer.locked ? styles.locked : '',
                 dragIndex === ri ? styles.dragging : '',
                 dragIndex !== null && dropGap === ri && dropGap !== dragIndex && dropGap !== dragIndex + 1
                   ? styles.dropTarget : '',
@@ -133,7 +138,39 @@ export function LayerPanel({
               >
                 <LayerThumbnail layer={layer} />
               </div>
-              <span className={styles.name}>{layer.name}</span>
+              {renamingLayerId === layer.id ? (
+                <input
+                  className={styles.nameInput}
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={() => {
+                    if (renameValue.trim()) {
+                      renameLayer(layer.id, renameValue.trim());
+                    }
+                    setRenamingLayerId(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      (e.target as HTMLInputElement).blur();
+                    } else if (e.key === 'Escape') {
+                      setRenamingLayerId(null);
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  autoFocus
+                />
+              ) : (
+                <span
+                  className={styles.name}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setRenamingLayerId(layer.id);
+                    setRenameValue(layer.name);
+                  }}
+                >
+                  {layer.name}
+                </span>
+              )}
               <button
                 className={`${styles.effectsBtn} ${showEffectsDrawer && layer.id === activeLayerId ? styles.effectsBtnActive : ''}`}
                 onClick={(e) => {
@@ -160,6 +197,17 @@ export function LayerPanel({
               >
                 {Math.round(layer.opacity * 100)}%
               </span>
+              <button
+                className={`${styles.lockBtn} ${layer.locked ? styles.lockBtnActive : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleLayerLock(layer.id);
+                }}
+                type="button"
+                aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
+              >
+                {layer.locked ? <Lock size={12} /> : <Unlock size={12} />}
+              </button>
               <button
                 className={styles.visibilityBtn}
                 onClick={(e) => {
