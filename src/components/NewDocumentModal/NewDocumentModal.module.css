@@ -80,8 +80,7 @@
 }
 
 .clipboardPreset {
-  border-color: var(--color-accent);
-  background: var(--color-accent-subtle);
+  width: calc((100% - 2 * var(--space-2)) / 3);
 }
 
 .presetName {
