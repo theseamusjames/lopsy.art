@@ -7,6 +7,5 @@ dist
 # Rust build artifacts
 engine-rs/target/
 
-# Playwright test artifacts (keep screenshots/ baselines, ignore the rest)
-test-results/*/
-test-results/.last-run.json
+# Playwright test artifacts
+test-results/
