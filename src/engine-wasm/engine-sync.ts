@@ -175,6 +175,10 @@ function layerToDescJson(layer: Layer): string {
 
   if (layer.type === 'group' && 'children' in layer) {
     desc.children = layer.children;
+    if ('adjustments' in layer) {
+      desc.group_adjustments = layer.adjustments;
+      desc.group_adjustments_enabled = layer.adjustmentsEnabled;
+    }
   }
 
   return JSON.stringify(desc);

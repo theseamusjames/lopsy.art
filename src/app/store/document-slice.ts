@@ -116,6 +116,8 @@ export interface DocumentSlice {
   addGroup: (name?: string) => void;
   toggleGroupCollapsed: (groupId: string) => void;
   moveLayerToGroup: (layerId: string, targetGroupId: string, insertIndex?: number) => void;
+  setGroupAdjustments: (groupId: string, adjustments: import('../../filters/image-adjustments').ImageAdjustments) => void;
+  setGroupAdjustmentsEnabled: (groupId: string, enabled: boolean) => void;
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
@@ -239,6 +241,24 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const doc = get().document;
     const newLayers = moveLayerToGroupUtil(doc.layers, layerId, targetGroupId, insertIndex);
     set({ document: { ...doc, layers: newLayers } });
+  },
+
+  setGroupAdjustments: (groupId, adjustments) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) =>
+      l.id === groupId && l.type === 'group' ? { ...l, adjustments } : l,
+    );
+    set({ document: { ...doc, layers } });
+  },
+
+  setGroupAdjustmentsEnabled: (groupId, enabled) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) =>
+      l.id === groupId && l.type === 'group'
+        ? { ...l, adjustmentsEnabled: enabled }
+        : l,
+    );
+    set({ document: { ...doc, layers } });
   },
 
   updateLayerOpacity: (id, opacity) => {

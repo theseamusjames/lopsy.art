@@ -84,10 +84,14 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, form
   clamped.set(rawPixels);
   const imageData = createImageDataFromArray(clamped, width, height);
 
-  // Apply post-composite image adjustments
-  const uiState = useUIStore.getState();
-  if (uiState.adjustmentsEnabled && hasActiveAdjustments(uiState.adjustments)) {
-    applyAdjustmentsToImageData(imageData, uiState.adjustments);
+  // Apply post-composite image adjustments from root group
+  const edState = useEditorStore.getState();
+  const rootGrpId = edState.document.rootGroupId;
+  const rootGrp = rootGrpId ? edState.document.layers.find((l) => l.id === rootGrpId && l.type === 'group') : null;
+  const adj = (rootGrp && 'adjustments' in rootGrp) ? rootGrp.adjustments : useUIStore.getState().adjustments;
+  const adjEnabled = (rootGrp && 'adjustmentsEnabled' in rootGrp) ? rootGrp.adjustmentsEnabled : useUIStore.getState().adjustmentsEnabled;
+  if (adjEnabled && hasActiveAdjustments(adj)) {
+    applyAdjustmentsToImageData(imageData, adj);
   }
 
   // GPU output is in the working color space (P3 on capable displays).
@@ -156,11 +160,15 @@ function exportViaCpu(format: 'png' | 'jpeg'): void {
   ctx.globalAlpha = 1;
   allocator.releaseAll();
 
-  // Apply post-composite image adjustments
-  const uiState = useUIStore.getState();
-  if (uiState.adjustmentsEnabled && hasActiveAdjustments(uiState.adjustments)) {
+  // Apply post-composite image adjustments from root group
+  const edState2 = useEditorStore.getState();
+  const rootGrpId2 = edState2.document.rootGroupId;
+  const rootGrp2 = rootGrpId2 ? edState2.document.layers.find((l) => l.id === rootGrpId2 && l.type === 'group') : null;
+  const adj2 = (rootGrp2 && 'adjustments' in rootGrp2) ? rootGrp2.adjustments : useUIStore.getState().adjustments;
+  const adjEnabled2 = (rootGrp2 && 'adjustmentsEnabled' in rootGrp2) ? rootGrp2.adjustmentsEnabled : useUIStore.getState().adjustmentsEnabled;
+  if (adjEnabled2 && hasActiveAdjustments(adj2)) {
     const imgData = ctx.getImageData(0, 0, width, height);
-    applyAdjustmentsToImageData(imgData, uiState.adjustments);
+    applyAdjustmentsToImageData(imgData, adj2);
     ctx.putImageData(imgData, 0, 0);
   }
 

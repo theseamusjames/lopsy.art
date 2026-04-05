@@ -72,8 +72,11 @@ function renderFrameGpu(
   const showGrid = uiState.showGrid;
   const showRulers = uiState.showRulers;
   const gridSize = uiState.gridSize;
-  const adjustments = uiState.adjustments;
-  const adjustmentsEnabled = uiState.adjustmentsEnabled;
+  // Read adjustments from the root group (per-group effects)
+  const rootGroupId = doc.rootGroupId;
+  const rootGroup = rootGroupId ? layers.find((l) => l.id === rootGroupId && l.type === 'group') : null;
+  const adjustments = (rootGroup && 'adjustments' in rootGroup) ? rootGroup.adjustments : uiState.adjustments;
+  const adjustmentsEnabled = (rootGroup && 'adjustmentsEnabled' in rootGroup) ? rootGroup.adjustmentsEnabled : uiState.adjustmentsEnabled;
   const pathAnchors = uiState.pathAnchors;
   const pathClosed = uiState.pathClosed;
   const lassoPoints = uiState.lassoPoints;
