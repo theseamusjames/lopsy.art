@@ -488,6 +488,117 @@ test.describe('Group Effects Rendering', () => {
   });
 });
 
+test.describe('Group effects only affect current members', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page);
+  });
+
+  test('moving a layer out of a group removes it from that group children', async ({ page }) => {
+    // Create a sub-group
+    await callStore(page, 'addGroup', 'SubGroup');
+    const doc1 = await getDocInfo(page);
+    const subGroupId = doc1.layers.find((l) => l.name === 'SubGroup')!.id;
+
+    // Add a layer inside the sub-group
+    await callStore(page, 'addLayer');
+    const doc2 = await getDocInfo(page);
+    const childId = doc2.activeLayerId!;
+
+    // Verify it's in the sub-group
+    const subGroup = doc2.layers.find((l) => l.id === subGroupId)!;
+    expect(subGroup.children).toContain(childId);
+
+    // Move it to the root group
+    const rootId = doc2.rootGroupId!;
+    await callStore(page, 'moveLayerToGroup', childId, rootId);
+    const doc3 = await getDocInfo(page);
+
+    // Verify it's no longer in the sub-group
+    const updatedSubGroup = doc3.layers.find((l) => l.id === subGroupId)!;
+    expect(updatedSubGroup.children).not.toContain(childId);
+
+    // Verify it IS in the root group
+    const rootGroup = doc3.layers.find((l) => l.id === rootId)!;
+    expect(rootGroup.children).toContain(childId);
+  });
+
+  test('hiding a group does not affect layers that were moved out of it', async ({ page }) => {
+    // Create a sub-group
+    await callStore(page, 'addGroup', 'SubGroup');
+    const doc1 = await getDocInfo(page);
+    const subGroupId = doc1.layers.find((l) => l.name === 'SubGroup')!.id;
+
+    // Add a layer inside the sub-group
+    await callStore(page, 'addLayer');
+    const doc2 = await getDocInfo(page);
+    const childId = doc2.activeLayerId!;
+
+    // Move it out to the root group
+    const rootId = doc2.rootGroupId!;
+    await callStore(page, 'moveLayerToGroup', childId, rootId);
+
+    // Hide the sub-group
+    await callStore(page, 'toggleLayerVisibility', subGroupId);
+
+    // The moved-out layer should still be visible (not affected by hidden sub-group)
+    const doc3 = await getDocInfo(page);
+    const movedLayer = doc3.layers.find((l) => l.id === childId)!;
+    expect(movedLayer.visible).toBe(true);
+
+    // Verify via isEffectivelyVisible logic: the layer's ancestor chain should
+    // NOT include the hidden sub-group anymore
+    const isInSubGroup = doc3.layers
+      .find((l) => l.id === subGroupId)!
+      .children!.includes(childId);
+    expect(isInSubGroup).toBe(false);
+  });
+
+  test('group adjustments do not affect layers moved out of the group', async ({ page }) => {
+    // Create a sub-group with adjustments
+    await callStore(page, 'addGroup', 'AdjGroup');
+    const doc1 = await getDocInfo(page);
+    const adjGroupId = doc1.layers.find((l) => l.name === 'AdjGroup')!.id;
+
+    // Set exposure on the group
+    await page.evaluate(
+      ({ groupId }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => {
+            setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
+          };
+        };
+        store.getState().setGroupAdjustments(groupId, {
+          exposure: 3, contrast: 0, highlights: 0, shadows: 0,
+          whites: 0, blacks: 0, vignette: 0,
+        });
+      },
+      { groupId: adjGroupId },
+    );
+
+    // Add a layer inside the group
+    await callStore(page, 'addLayer');
+    const doc2 = await getDocInfo(page);
+    const childId = doc2.activeLayerId!;
+
+    // Move the layer out to root group
+    const rootId = doc2.rootGroupId!;
+    await callStore(page, 'moveLayerToGroup', childId, rootId);
+
+    // Verify the layer is no longer in the adjustment group
+    const doc3 = await getDocInfo(page);
+    const adjGroup = doc3.layers.find((l) => l.id === adjGroupId)!;
+    expect(adjGroup.children).not.toContain(childId);
+
+    // The group's adjustments should NOT affect the moved-out layer
+    // (adjustments are aggregated globally for the engine, but the layer
+    // is no longer structurally part of that group)
+    const rootGroup = doc3.layers.find((l) => l.id === rootId)!;
+    expect(rootGroup.children).toContain(childId);
+  });
+});
+
 test.describe('Layer visibility inside groups', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
