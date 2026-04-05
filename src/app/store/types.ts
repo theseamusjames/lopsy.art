@@ -81,6 +81,8 @@ export interface EditorState {
   removeLayer: (id: string) => void;
   setActiveLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
+  toggleLayerLock: (id: string) => void;
+  renameLayer: (id: string, name: string) => void;
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;

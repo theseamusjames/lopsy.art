@@ -108,6 +108,8 @@ export interface DocumentSlice {
   removeLayer: (id: string) => void;
   setActiveLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
+  toggleLayerLock: (id: string) => void;
+  renameLayer: (id: string, name: string) => void;
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
@@ -185,6 +187,22 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const s = get();
     s.pushHistory('Toggle Visibility');
     set(computeToggleVisibility(s.document, id));
+  },
+
+  toggleLayerLock: (id) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) =>
+      l.id === id ? { ...l, locked: !l.locked } : l,
+    );
+    set({ document: { ...doc, layers } });
+  },
+
+  renameLayer: (id, name) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) =>
+      l.id === id ? { ...l, name } : l,
+    );
+    set({ document: { ...doc, layers } });
   },
 
   updateLayerOpacity: (id, opacity) => {

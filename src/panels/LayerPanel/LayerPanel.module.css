@@ -95,6 +95,45 @@
   white-space: nowrap;
 }
 
+.nameInput {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  padding: 0 var(--space-1);
+  outline: none;
+  min-width: 0;
+}
+
+.locked {
+  background: var(--color-bg-tertiary);
+}
+
+.lockBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.lockBtn:hover {
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
+}
+
+.lockBtnActive {
+  color: var(--color-accent);
+}
+
 .effectsBtn {
   display: flex;
   align-items: center;
