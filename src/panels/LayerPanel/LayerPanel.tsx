@@ -137,7 +137,7 @@ export function LayerPanel({
               ]
                 .filter(Boolean)
                 .join(' ')}
-              style={{ paddingLeft: `calc(${depth * 16}px + var(--space-2))` }}
+              style={{ paddingLeft: `calc(${depth * 8}px + var(--space-2))` }}
               onClick={() => onSelectLayer(layer.id)}
             >
               {!isRootGroup(layer.id) && (
