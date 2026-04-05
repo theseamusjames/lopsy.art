@@ -487,3 +487,44 @@ test.describe('Group Effects Rendering', () => {
     expect(aggregated.exposure).toBe(2);
   });
 });
+
+test.describe('Layer visibility inside groups', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page);
+  });
+
+  test('hiding a layer inside a group sets visible false in engine descriptor', async ({ page }) => {
+    // Get Layer 1 (inside the root group)
+    const doc = await getDocInfo(page);
+    const layer = doc.layers.find((l) => l.type === 'raster' && l.name !== 'Background');
+    expect(layer).toBeTruthy();
+    expect(layer!.visible).toBe(true);
+
+    // Toggle visibility off
+    await callStore(page, 'toggleLayerVisibility', layer!.id);
+    const doc2 = await getDocInfo(page);
+    const updated = doc2.layers.find((l) => l.id === layer!.id);
+    expect(updated!.visible).toBe(false);
+
+    // Toggle back on
+    await callStore(page, 'toggleLayerVisibility', layer!.id);
+    const doc3 = await getDocInfo(page);
+    expect(doc3.layers.find((l) => l.id === layer!.id)!.visible).toBe(true);
+  });
+
+  test('hiding a layer inside a sub-group sets visible false', async ({ page }) => {
+    // Create sub-group with a layer
+    await callStore(page, 'addGroup', 'SubGroup');
+    await callStore(page, 'addLayer');
+    const doc = await getDocInfo(page);
+    const childId = doc.activeLayerId!;
+    expect(doc.layers.find((l) => l.id === childId)!.visible).toBe(true);
+
+    // Hide it
+    await callStore(page, 'toggleLayerVisibility', childId);
+    const doc2 = await getDocInfo(page);
+    expect(doc2.layers.find((l) => l.id === childId)!.visible).toBe(false);
+  });
+});
