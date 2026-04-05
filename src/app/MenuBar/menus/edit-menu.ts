@@ -44,5 +44,7 @@ export const editMenu: MenuDef = {
     { label: 'Paste', shortcut: '\u2318V', action: () => useEditorStore.getState().paste() },
     { separator: true, label: '' },
     { label: 'Fill', shortcut: '\u21E7F5', action: () => fillSelection() },
+    { separator: true, label: '' },
+    { label: 'Clear Guides', action: () => useUIStore.getState().clearGuides() },
   ],
 };

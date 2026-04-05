@@ -94,6 +94,18 @@ export function App() {
   const setGuideColor = useUIStore((s) => s.setGuideColor);
 
   const [showGuideColorPicker, setShowGuideColorPicker] = useState(false);
+
+  useEffect(() => {
+    if (!showGuideColorPicker) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowGuideColorPicker(false);
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [showGuideColorPicker]);
+
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -263,12 +275,11 @@ export function App() {
 
   const RULER_SIZE = 20;
 
-  // Find a guide whose position matches the cursor's document-space coordinate
   const findGuideAtCursor = useCallback(
     (docX: number, docY: number): string | null => {
       for (const guide of guides) {
-        if (guide.orientation === 'vertical' && guide.position === docX) return guide.id;
-        if (guide.orientation === 'horizontal' && guide.position === docY) return guide.id;
+        if (guide.orientation === 'vertical' && Math.abs(guide.position - docX) <= 1) return guide.id;
+        if (guide.orientation === 'horizontal' && Math.abs(guide.position - docY) <= 1) return guide.id;
       }
       return null;
     },
@@ -493,18 +504,6 @@ export function App() {
         >
           <canvas ref={canvasRef} />
           <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />
-          {showGuideColorPicker && showRulers && showGuides && (
-            <div
-              className={styles.guideColorPicker}
-              onMouseDown={(e) => e.stopPropagation()}
-              onMouseUp={(e) => e.stopPropagation()}
-            >
-              <ColorPicker
-                color={guideColor}
-                onChange={setGuideColor}
-              />
-            </div>
-          )}
           <TextActionButtons containerRef={containerRef} />
           <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </div>
@@ -515,6 +514,17 @@ export function App() {
             y={contextMenu.y}
             onClose={handleContextMenuClose}
           />
+        )}
+        {showGuideColorPicker && showRulers && showGuides && (
+          <div
+            className={styles.guideColorPicker}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <ColorPicker
+              color={guideColor}
+              onChange={setGuideColor}
+            />
+          </div>
         )}
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
