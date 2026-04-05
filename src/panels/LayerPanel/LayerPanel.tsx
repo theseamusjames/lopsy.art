@@ -7,7 +7,7 @@ import type { Layer } from '../../types';
 import { LayerThumbnail } from './LayerThumbnail';
 import { MaskThumbnail } from './MaskThumbnail';
 import { selectLayerAlpha, convertMaskToMarquee } from './layer-selection';
-import { buildFlatDisplayList, isGroupLayer, canMoveToGroup } from '../../layers/group-utils';
+import { buildFlatDisplayList, isGroupLayer, canMoveToGroup, findParentGroup } from '../../layers/group-utils';
 import styles from './LayerPanel.module.css';
 
 interface LayerPanelProps {
@@ -139,6 +139,23 @@ export function LayerPanel({
 
       const { from, gap } = drag;
       if (gap === from || gap === from + 1) return;
+
+      // Determine the target parent group from the gap position.
+      // The layer above the gap tells us which group the dropped layer should join.
+      const neighborIdx = gap > 0 ? gap - 1 : 0;
+      const neighbor = displayList[neighborIdx];
+      if (neighbor) {
+        const neighborParent = findParentGroup(layers, neighbor.layer.id);
+        const draggedParent = findParentGroup(layers, draggedLayer.id);
+        // Re-parent if the target group differs from the current parent
+        if (neighborParent && draggedParent && neighborParent.id !== draggedParent.id) {
+          if (canMoveToGroup(layers, draggedLayer.id, neighborParent.id)) {
+            moveLayerToGroup(draggedLayer.id, neighborParent.id);
+            return;
+          }
+        }
+      }
+
       const fromArrayIdx = layers.length - 1 - from;
       const rawToArrayIdx = layers.length - gap;
       const toArrayIdx = rawToArrayIdx > fromArrayIdx ? rawToArrayIdx - 1 : rawToArrayIdx;
