@@ -1,6 +1,6 @@
 import type { DocumentState, TextLayer } from '../../../types';
 import type { EditorState } from '../types';
-import { getInsertionGroupId, addToGroup } from '../../../layers/group-utils';
+import { getInsertionGroupId, getInsertionOrderIndex, addToGroup } from '../../../layers/group-utils';
 
 export function computeAddTextLayer(
   doc: DocumentState,
@@ -11,11 +11,14 @@ export function computeAddTextLayer(
   if (groupId) {
     layers = addToGroup(layers, textLayer.id, groupId);
   }
+  const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId);
+  const layerOrder = [...doc.layerOrder];
+  layerOrder.splice(orderIdx, 0, textLayer.id);
   return {
     document: {
       ...doc,
       layers,
-      layerOrder: [...doc.layerOrder, textLayer.id],
+      layerOrder,
       activeLayerId: textLayer.id,
     },
   };

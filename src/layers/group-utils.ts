@@ -187,6 +187,22 @@ export function getInsertionGroupId(
 }
 
 /**
+ * Compute the layerOrder insertion index for a new layer.
+ * Inserts just above the active layer in layerOrder.
+ * If active layer is a group, inserts just before it (so the new layer
+ * appears inside the group visually, above the group's existing children).
+ */
+export function getInsertionOrderIndex(
+  layerOrder: readonly string[],
+  activeLayerId: string | null,
+): number {
+  if (!activeLayerId) return layerOrder.length;
+  const idx = layerOrder.indexOf(activeLayerId);
+  if (idx === -1) return layerOrder.length;
+  return idx + 1;
+}
+
+/**
  * Insert a new layer ID into a group's children array.
  * Returns updated layers array.
  */

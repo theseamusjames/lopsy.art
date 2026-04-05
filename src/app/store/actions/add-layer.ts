@@ -1,7 +1,7 @@
 import type { DocumentState } from '../../../types';
 import type { EditorState } from '../types';
 import { createRasterLayer } from '../../../layers/layer-model';
-import { getInsertionGroupId, addToGroup } from '../../../layers/group-utils';
+import { getInsertionGroupId, getInsertionOrderIndex, addToGroup } from '../../../layers/group-utils';
 
 export function computeAddLayer(
   doc: DocumentState,
@@ -18,11 +18,15 @@ export function computeAddLayer(
     layers = addToGroup(layers, newLayer.id, groupId);
   }
 
+  const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId);
+  const layerOrder = [...doc.layerOrder];
+  layerOrder.splice(orderIdx, 0, newLayer.id);
+
   return {
     document: {
       ...doc,
       layers,
-      layerOrder: [...doc.layerOrder, newLayer.id],
+      layerOrder,
       activeLayerId: newLayer.id,
     },
   };

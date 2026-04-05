@@ -1,7 +1,7 @@
 import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
-import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, addToGroup as addToGroupUtil } from '../../layers/group-utils';
+import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -217,11 +217,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const doc = get().document;
     const group = createGroupLayer({ name: name ?? 'Group' });
     let layers = [...doc.layers, group];
-    const layerOrder = [...doc.layerOrder, group.id];
     const targetGroupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
     if (targetGroupId) {
       layers = addToGroupUtil(layers, group.id, targetGroupId);
     }
+    const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId);
+    const layerOrder = [...doc.layerOrder];
+    layerOrder.splice(orderIdx, 0, group.id);
     set({
       document: { ...doc, layers, layerOrder, activeLayerId: group.id },
     });
