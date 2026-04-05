@@ -1,6 +1,7 @@
 import type { DocumentState } from '../../../types';
 import type { EditorState } from '../types';
 import { createRasterLayer } from '../../../layers/layer-model';
+import { findParentGroup, isGroupLayer } from '../../../layers/group-utils';
 
 export function computeAddLayer(
   doc: DocumentState,
@@ -10,12 +11,37 @@ export function computeAddLayer(
     width: doc.width,
     height: doc.height,
   });
-  // Pixel data is allocated lazily by getOrCreateLayerPixelData when
-  // a tool first writes to the layer — avoids 48MB per empty layer on 4K.
+
+  let layers = [...doc.layers, newLayer];
+
+  // Add the new layer to the active layer's parent group, or the root group
+  const activeId = doc.activeLayerId;
+  let targetGroupId: string | null = null;
+  if (activeId) {
+    const parent = findParentGroup(doc.layers, activeId);
+    if (parent) {
+      targetGroupId = parent.id;
+    } else if (activeId && isGroupLayer(doc.layers.find((l) => l.id === activeId)!)) {
+      targetGroupId = activeId;
+    }
+  }
+  if (!targetGroupId && doc.rootGroupId) {
+    targetGroupId = doc.rootGroupId;
+  }
+
+  if (targetGroupId) {
+    layers = layers.map((l) => {
+      if (l.id === targetGroupId && isGroupLayer(l)) {
+        return { ...l, children: [...l.children, newLayer.id] };
+      }
+      return l;
+    });
+  }
+
   return {
     document: {
       ...doc,
-      layers: [...doc.layers, newLayer],
+      layers,
       layerOrder: [...doc.layerOrder, newLayer.id],
       activeLayerId: newLayer.id,
     },

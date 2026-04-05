@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
-import { Eye, EyeOff, GripVertical, Lock, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Unlock, X } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, Eye, EyeOff, Folder, FolderPlus, GripVertical, Lock, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Unlock, X } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
@@ -7,6 +7,7 @@ import type { Layer } from '../../types';
 import { LayerThumbnail } from './LayerThumbnail';
 import { MaskThumbnail } from './MaskThumbnail';
 import { selectLayerAlpha, convertMaskToMarquee } from './layer-selection';
+import { buildFlatDisplayList, isGroupLayer } from '../../layers/group-utils';
 import styles from './LayerPanel.module.css';
 
 interface LayerPanelProps {
@@ -36,6 +37,10 @@ export function LayerPanel({
   const removeLayerMask = useEditorStore((s) => s.removeLayerMask);
   const toggleLayerLock = useEditorStore((s) => s.toggleLayerLock);
   const renameLayer = useEditorStore((s) => s.renameLayer);
+  const addGroup = useEditorStore((s) => s.addGroup);
+  const toggleGroupCollapsed = useEditorStore((s) => s.toggleGroupCollapsed);
+  const rootGroupId = useEditorStore((s) => s.document.rootGroupId);
+  const layerOrder = useEditorStore((s) => s.document.layerOrder);
   const maskEditMode = useUIStore((s) => s.maskEditMode);
   const setMaskEditMode = useUIStore((s) => s.setMaskEditMode);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
@@ -53,7 +58,11 @@ export function LayerPanel({
     convertMaskToMarquee(layerId);
   }, []);
 
-  const reversedLayers = [...layers].reverse();
+  const displayList = useMemo(
+    () => buildFlatDisplayList(layers, layerOrder),
+    [layers, layerOrder],
+  );
+
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropGap, setDropGap] = useState<number | null>(null);
   const [editingOpacityId, setEditingOpacityId] = useState<string | null>(null);
@@ -103,41 +112,64 @@ export function LayerPanel({
     document.addEventListener('pointerup', onUp);
   }, [layers.length, onReorderLayer]);
 
+  const isRootGroup = (layerId: string) => layerId === rootGroupId;
+
   return (
     <div className={styles.panel}>
       <div
         ref={listRef}
         className={collapsed ? styles.listCollapsed : styles.list}
       >
-        {reversedLayers.map((layer, ri) => (
+        {displayList.map(({ layer, depth }, ri) => (
           <div key={layer.id} className={styles.itemWrapper}>
             <div
               className={[
                 styles.item,
                 layer.id === activeLayerId ? styles.active : '',
                 layer.locked ? styles.locked : '',
+                isGroupLayer(layer) ? styles.groupRow : '',
+                isRootGroup(layer.id) ? styles.rootGroup : '',
                 dragIndex === ri ? styles.dragging : '',
                 dragIndex !== null && dropGap === ri && dropGap !== dragIndex && dropGap !== dragIndex + 1
                   ? styles.dropTarget : '',
-                dragIndex !== null && dropGap === reversedLayers.length && ri === reversedLayers.length - 1 && dropGap !== dragIndex + 1
+                dragIndex !== null && dropGap === displayList.length && ri === displayList.length - 1 && dropGap !== dragIndex + 1
                   ? styles.dropTargetEnd : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
+              style={{ paddingLeft: `calc(${depth * 16}px + var(--space-2))` }}
               onClick={() => onSelectLayer(layer.id)}
             >
-              <span
-                className={styles.dragHandle}
-                onPointerDown={(e) => handleGripDown(e, ri)}
-              >
-                <GripVertical size={12} />
-              </span>
-              <div
-                className={styles.thumbnail}
-                onClick={(e) => handleThumbnailCmdClick(e, layer.id)}
-              >
-                <LayerThumbnail layer={layer} />
-              </div>
+              {!isRootGroup(layer.id) && (
+                <span
+                  className={styles.dragHandle}
+                  onPointerDown={(e) => handleGripDown(e, ri)}
+                >
+                  <GripVertical size={12} />
+                </span>
+              )}
+              {isGroupLayer(layer) ? (
+                <button
+                  className={styles.collapseBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleGroupCollapsed(layer.id);
+                  }}
+                  type="button"
+                >
+                  {layer.collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                </button>
+              ) : (
+                <div
+                  className={styles.thumbnail}
+                  onClick={(e) => handleThumbnailCmdClick(e, layer.id)}
+                >
+                  <LayerThumbnail layer={layer} />
+                </div>
+              )}
+              {isGroupLayer(layer) && (
+                <Folder size={14} className={styles.folderIcon} />
+              )}
               {renamingLayerId === layer.id ? (
                 <input
                   className={styles.nameInput}
@@ -171,22 +203,24 @@ export function LayerPanel({
                   {layer.name}
                 </span>
               )}
-              <button
-                className={`${styles.effectsBtn} ${showEffectsDrawer && layer.id === activeLayerId ? styles.effectsBtnActive : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (showEffectsDrawer && layer.id === activeLayerId) {
-                    setShowEffectsDrawer(false);
-                  } else {
-                    onSelectLayer(layer.id);
-                    setShowEffectsDrawer(true);
-                  }
-                }}
-                type="button"
-                title="Layer effects"
-              >
-                <Sparkles size={12} />
-              </button>
+              {!isGroupLayer(layer) && (
+                <button
+                  className={`${styles.effectsBtn} ${showEffectsDrawer && layer.id === activeLayerId ? styles.effectsBtnActive : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (showEffectsDrawer && layer.id === activeLayerId) {
+                      setShowEffectsDrawer(false);
+                    } else {
+                      onSelectLayer(layer.id);
+                      setShowEffectsDrawer(true);
+                    }
+                  }}
+                  type="button"
+                  title="Layer effects"
+                >
+                  <Sparkles size={12} />
+                </button>
+              )}
               <span
                 className={styles.opacity}
                 onClick={(e) => {
@@ -285,12 +319,17 @@ export function LayerPanel({
           onClick={onAddLayer}
         />
         <IconButton
+          icon={<FolderPlus size={16} />}
+          label="New Group"
+          onClick={() => addGroup()}
+        />
+        <IconButton
           icon={<Trash2 size={16} />}
           label="Delete Layer"
           onClick={() => {
-            if (activeLayerId) onRemoveLayer(activeLayerId);
+            if (activeLayerId && !isRootGroup(activeLayerId)) onRemoveLayer(activeLayerId);
           }}
-          disabled={layers.length <= 1}
+          disabled={layers.length <= 1 || (activeLayerId !== null && isRootGroup(activeLayerId))}
         />
         {activeLayerId && (() => {
           const activeLayer = layers.find((l) => l.id === activeLayerId);

@@ -64,7 +64,7 @@ export function createTextLayer(params: {
   };
 }
 
-export function createGroupLayer(params: { name: string }): GroupLayer {
+export function createGroupLayer(params: { name: string; children?: string[] }): GroupLayer {
   return {
     id: crypto.randomUUID(),
     name: params.name,
@@ -78,7 +78,8 @@ export function createGroupLayer(params: { name: string }): GroupLayer {
     clipToBelow: false,
     effects: DEFAULT_EFFECTS,
     mask: null,
-    children: [],
+    children: params.children ?? [],
+    collapsed: false,
   };
 }
 

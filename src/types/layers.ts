@@ -54,6 +54,7 @@ export interface ShapeLayer extends LayerBase {
 export interface GroupLayer extends LayerBase {
   readonly type: 'group';
   readonly children: readonly string[]; // layer IDs
+  readonly collapsed: boolean;
 }
 
 export type Layer = RasterLayer | TextLayer | ShapeLayer | GroupLayer;
