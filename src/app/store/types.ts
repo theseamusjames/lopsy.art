@@ -83,6 +83,9 @@ export interface EditorState {
   toggleLayerVisibility: (id: string) => void;
   toggleLayerLock: (id: string) => void;
   renameLayer: (id: string, name: string) => void;
+  addGroup: (name?: string) => void;
+  toggleGroupCollapsed: (groupId: string) => void;
+  moveLayerToGroup: (layerId: string, targetGroupId: string, insertIndex?: number) => void;
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
