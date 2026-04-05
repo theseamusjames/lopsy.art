@@ -599,6 +599,126 @@ test.describe('Group effects only affect current members', () => {
   });
 });
 
+test.describe('Layer moved out of group is not affected by group visibility', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page);
+  });
+
+  test('reorder-based move out of group updates children and keeps layer visible', async ({ page }) => {
+    // Create a group and add a layer into it
+    await callStore(page, 'addGroup', 'Group');
+    const doc1 = await getDocInfo(page);
+    const groupId = doc1.layers.find((l) => l.name === 'Group')!.id;
+
+    // Add a layer inside the group (active = group, so new layer goes into it)
+    await callStore(page, 'addLayer');
+    const doc2 = await getDocInfo(page);
+    const layerId = doc2.activeLayerId!;
+    expect(doc2.layers.find((l) => l.id === groupId)!.children).toContain(layerId);
+
+    // Simulate a flat reorder that moves the layer out of the group's range
+    // by calling moveLayer directly (this is what the drag handler calls)
+    const fromIdx = doc2.layers.findIndex((l) => l.id === layerId);
+    // Move it to the end (next to Background, which is in Project)
+    await page.evaluate(
+      ({ fromIdx }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { moveLayer: (from: number, to: number) => void };
+        };
+        store.getState().moveLayer(fromIdx, 0);
+      },
+      { fromIdx },
+    );
+    const doc3 = await getDocInfo(page);
+
+    // The layer should have been re-parented out of the group
+    const updatedGroup = doc3.layers.find((l) => l.id === groupId)!;
+    expect(updatedGroup.children).not.toContain(layerId);
+
+    // Hide the group
+    await callStore(page, 'toggleLayerVisibility', groupId);
+    const doc4 = await getDocInfo(page);
+    expect(doc4.layers.find((l) => l.id === groupId)!.visible).toBe(false);
+
+    // Layer should still be visible
+    expect(doc4.layers.find((l) => l.id === layerId)!.visible).toBe(true);
+  });
+
+  test('layer moved from group to root via moveLayerToGroup is visible when group is hidden', async ({ page }) => {
+    // Create a group and add a layer into it
+    await callStore(page, 'addGroup', 'Group');
+    const doc1 = await getDocInfo(page);
+    const groupId = doc1.layers.find((l) => l.name === 'Group')!.id;
+    const rootId = doc1.rootGroupId!;
+
+    // Add a layer inside the group
+    await callStore(page, 'addLayer');
+    const doc2 = await getDocInfo(page);
+    const layerId = doc2.activeLayerId!;
+
+    // Verify it's in the group
+    expect(doc2.layers.find((l) => l.id === groupId)!.children).toContain(layerId);
+
+    // Move the layer out of the group to root
+    await callStore(page, 'moveLayerToGroup', layerId, rootId);
+    const doc3 = await getDocInfo(page);
+
+    // Verify it's OUT of the group
+    expect(doc3.layers.find((l) => l.id === groupId)!.children).not.toContain(layerId);
+    // Verify it's IN root
+    expect(doc3.layers.find((l) => l.id === rootId)!.children).toContain(layerId);
+
+    // Now hide the group
+    await callStore(page, 'toggleLayerVisibility', groupId);
+    const doc4 = await getDocInfo(page);
+    expect(doc4.layers.find((l) => l.id === groupId)!.visible).toBe(false);
+
+    // The layer should STILL be visible
+    const layer = doc4.layers.find((l) => l.id === layerId)!;
+    expect(layer.visible).toBe(true);
+
+    // Check layerOrder positions — layer should NOT be between group's
+    // children and group in the order
+    const order = doc4.layerOrder;
+    const layerPos = order.indexOf(layerId);
+    const groupPos = order.indexOf(groupId);
+    // Layer should be after the group in layerOrder (higher in stack)
+    // or before all group children
+    console.log('layerOrder:', order);
+    console.log('layerId pos:', layerPos, 'groupId pos:', groupPos);
+
+    // Verify the engine descriptor would have visible=true
+    // by checking isEffectivelyVisible logic
+    const effectiveVis = await page.evaluate(
+      ({ layerId, layers }) => {
+        // Replicate isEffectivelyVisible
+        function findParent(lid: string): { id: string; visible: boolean; children: string[] } | null {
+          for (const l of layers) {
+            if (l.type === 'group' && l.children && l.children.includes(lid)) {
+              return l as { id: string; visible: boolean; children: string[] };
+            }
+          }
+          return null;
+        }
+        const layer = layers.find((l: { id: string }) => l.id === layerId);
+        if (!layer || !layer.visible) return false;
+        let currentId = layerId;
+        for (;;) {
+          const parent = findParent(currentId);
+          if (!parent) break;
+          if (!parent.visible) return false;
+          currentId = parent.id;
+        }
+        return true;
+      },
+      { layerId, layers: doc4.layers },
+    );
+    expect(effectiveVis).toBe(true);
+  });
+});
+
 test.describe('Layer visibility inside groups', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');

@@ -141,12 +141,12 @@ export function LayerPanel({
       if (gap === from || gap === from + 1) return;
 
       // Determine the target parent group from the gap position.
-      // The layer above the gap tells us which group the dropped layer should join.
       const neighborIdx = gap > 0 ? gap - 1 : 0;
       const neighbor = displayList[neighborIdx];
+      const draggedParent = findParentGroup(layers, draggedLayer.id);
+
       if (neighbor) {
         const neighborParent = findParentGroup(layers, neighbor.layer.id);
-        const draggedParent = findParentGroup(layers, draggedLayer.id);
         // Re-parent if the target group differs from the current parent
         if (neighborParent && draggedParent && neighborParent.id !== draggedParent.id) {
           if (canMoveToGroup(layers, draggedLayer.id, neighborParent.id)) {
@@ -154,8 +154,18 @@ export function LayerPanel({
             return;
           }
         }
+        // Also re-parent if neighbor IS a group and dragged layer is inside it
+        // but being dragged outside (above the group row)
+        if (neighbor.layer.type === 'group' && draggedParent && draggedParent.id === neighbor.layer.id && gap <= neighborIdx) {
+          const grandParent = findParentGroup(layers, neighbor.layer.id);
+          if (grandParent && canMoveToGroup(layers, draggedLayer.id, grandParent.id)) {
+            moveLayerToGroup(draggedLayer.id, grandParent.id);
+            return;
+          }
+        }
       }
 
+      // For gap-based reorder within the same group, use flat reorder
       const fromArrayIdx = layers.length - 1 - from;
       const rawToArrayIdx = layers.length - gap;
       const toArrayIdx = rawToArrayIdx > fromArrayIdx ? rawToArrayIdx - 1 : rawToArrayIdx;
