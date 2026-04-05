@@ -87,7 +87,26 @@ const LAYER_TYPE_MAP: Record<string, string> = {
   'adjustment': 'Adjustment',
 };
 
-function layerToDescJson(layer: Layer): string {
+function isEffectivelyVisible(layer: Layer, allLayers: readonly Layer[]): boolean {
+  if (!layer.visible) return false;
+  // Walk up the group hierarchy — if any ancestor is hidden, this layer is hidden
+  let currentId = layer.id;
+  for (;;) {
+    let parentFound = false;
+    for (const l of allLayers) {
+      if (l.type === 'group' && 'children' in l && (l as import('../types').GroupLayer).children.includes(currentId)) {
+        if (!l.visible) return false;
+        currentId = l.id;
+        parentFound = true;
+        break;
+      }
+    }
+    if (!parentFound) break;
+  }
+  return true;
+}
+
+function layerToDescJson(layer: Layer, allLayers?: readonly Layer[]): string {
   const effects: Record<string, unknown> = {};
 
   const eff = layer.effects;
@@ -155,7 +174,7 @@ function layerToDescJson(layer: Layer): string {
     id: layer.id,
     name: layer.name,
     layer_type: LAYER_TYPE_MAP[layer.type] ?? 'Raster',
-    visible: layer.visible,
+    visible: allLayers ? isEffectivelyVisible(layer, allLayers) : layer.visible,
     locked: layer.locked,
     opacity: layer.opacity,
     blend_mode: BLEND_MODE_MAP[layer.blendMode] ?? 'Normal',
@@ -174,7 +193,7 @@ function layerToDescJson(layer: Layer): string {
   };
 
   if (layer.type === 'group' && 'children' in layer) {
-    desc.children = layer.children;
+    desc.children = (layer as import('../types').GroupLayer).children;
   }
 
   return JSON.stringify(desc);
@@ -293,6 +312,7 @@ export function syncViewport(
 export function syncLayers(
   engine: Engine,
   layers: readonly Layer[],
+  layerOrder: readonly string[],
   pixelData: Map<string, ImageData>,
   sparseData: Map<string, SparseLayerEntry>,
   dirtyLayerIds: Set<string>,
@@ -311,13 +331,13 @@ export function syncLayers(
 
   // Add or update layers
   for (const layer of layers) {
-    const descJson = layerToDescJson(layer);
+    const descJson = layerToDescJson(layer, layers);
 
     if (!tracked.layerIds.has(layer.id)) {
-      addLayer(engine, descJson);
+      try { addLayer(engine, descJson); } catch (e) { console.error('[syncLayers] addLayer failed:', layer.id, e); }
       tracked.layerVersions.set(layer.id, descJson);
     } else if (tracked.layerVersions.get(layer.id) !== descJson) {
-      updateLayer(engine, descJson);
+      try { updateLayer(engine, descJson); } catch (e) { console.error('[syncLayers] updateLayer failed:', layer.id, e); }
       tracked.layerVersions.set(layer.id, descJson);
     }
 
@@ -380,7 +400,7 @@ export function syncLayers(
   tracked.layerIds = currentIds;
 
   // Sync layer order
-  const orderJson = JSON.stringify(layers.map((l) => l.id));
+  const orderJson = JSON.stringify(layerOrder);
   if (tracked.layerOrder !== orderJson) {
     setLayerOrder(engine, orderJson);
     tracked.layerOrder = orderJson;
@@ -553,5 +573,5 @@ export function flushLayerSync(state: {
 }): void {
   const engine = getEngine();
   if (!engine) return;
-  syncLayers(engine, state.document.layers, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
+  syncLayers(engine, state.document.layers, state.document.layerOrder, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
 }

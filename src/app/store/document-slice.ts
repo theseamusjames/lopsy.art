@@ -1,7 +1,7 @@
 import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
-import { moveLayerToGroup as moveLayerToGroupUtil } from '../../layers/group-utils';
+import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -116,6 +116,8 @@ export interface DocumentSlice {
   addGroup: (name?: string) => void;
   toggleGroupCollapsed: (groupId: string) => void;
   moveLayerToGroup: (layerId: string, targetGroupId: string, insertIndex?: number) => void;
+  setGroupAdjustments: (groupId: string, adjustments: import('../../filters/image-adjustments').ImageAdjustments) => void;
+  setGroupAdjustmentsEnabled: (groupId: string, enabled: boolean) => void;
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
@@ -214,19 +216,16 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   addGroup: (name) => {
     const doc = get().document;
     const group = createGroupLayer({ name: name ?? 'Group' });
-    const layers = [...doc.layers, group];
-    const layerOrder = [...doc.layerOrder, group.id];
-    // Add to root group if it exists
-    const rootId = doc.rootGroupId;
-    const finalLayers = rootId
-      ? layers.map((l) =>
-          l.id === rootId && l.type === 'group'
-            ? { ...l, children: [...l.children, group.id] }
-            : l,
-        )
-      : layers;
+    let layers = [...doc.layers, group];
+    const targetGroupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
+    if (targetGroupId) {
+      layers = addToGroupUtil(layers, group.id, targetGroupId);
+    }
+    const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId);
+    const layerOrder = [...doc.layerOrder];
+    layerOrder.splice(orderIdx, 0, group.id);
     set({
-      document: { ...doc, layers: finalLayers, layerOrder, activeLayerId: group.id },
+      document: { ...doc, layers, layerOrder, activeLayerId: group.id },
     });
   },
 
@@ -243,7 +242,34 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   moveLayerToGroup: (layerId, targetGroupId, insertIndex) => {
     const doc = get().document;
     const newLayers = moveLayerToGroupUtil(doc.layers, layerId, targetGroupId, insertIndex);
-    set({ document: { ...doc, layers: newLayers } });
+    // Reposition in layerOrder: place just before the target group
+    // so the layer renders within the group's range
+    const newOrder = doc.layerOrder.filter((id) => id !== layerId);
+    const groupIdx = newOrder.indexOf(targetGroupId);
+    if (groupIdx !== -1) {
+      newOrder.splice(groupIdx, 0, layerId);
+    } else {
+      newOrder.push(layerId);
+    }
+    set({ document: { ...doc, layers: newLayers, layerOrder: newOrder } });
+  },
+
+  setGroupAdjustments: (groupId, adjustments) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) =>
+      l.id === groupId && l.type === 'group' ? { ...l, adjustments } : l,
+    );
+    set({ document: { ...doc, layers } });
+  },
+
+  setGroupAdjustmentsEnabled: (groupId, enabled) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) =>
+      l.id === groupId && l.type === 'group'
+        ? { ...l, adjustmentsEnabled: enabled }
+        : l,
+    );
+    set({ document: { ...doc, layers } });
   },
 
   updateLayerOpacity: (id, opacity) => {

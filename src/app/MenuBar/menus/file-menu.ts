@@ -10,7 +10,7 @@ import {
 } from '../../../engine/effects-renderer';
 import { renderLayerContent } from '../../rendering/render-layers';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
-import { hasActiveAdjustments, applyAdjustmentsToImageData } from '../../../filters/image-adjustments';
+import { hasActiveAdjustments, applyAdjustmentsToImageData, aggregateGroupAdjustments } from '../../../filters/image-adjustments';
 import { contextOptions, canvasColorSpace, createImageDataFromArray } from '../../../engine/color-space';
 import { getCachedBitmap, seedBitmapFromBlob } from '../../../engine/bitmap-cache';
 import { hasEnabledEffects } from '../../../layers/layer-model';
@@ -84,10 +84,11 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, form
   clamped.set(rawPixels);
   const imageData = createImageDataFromArray(clamped, width, height);
 
-  // Apply post-composite image adjustments
-  const uiState = useUIStore.getState();
-  if (uiState.adjustmentsEnabled && hasActiveAdjustments(uiState.adjustments)) {
-    applyAdjustmentsToImageData(imageData, uiState.adjustments);
+  // Apply post-composite image adjustments aggregated from all groups
+  const edState = useEditorStore.getState();
+  const adj = aggregateGroupAdjustments(edState.document.layers);
+  if (adj && hasActiveAdjustments(adj)) {
+    applyAdjustmentsToImageData(imageData, adj);
   }
 
   // GPU output is in the working color space (P3 on capable displays).
@@ -156,11 +157,12 @@ function exportViaCpu(format: 'png' | 'jpeg'): void {
   ctx.globalAlpha = 1;
   allocator.releaseAll();
 
-  // Apply post-composite image adjustments
-  const uiState = useUIStore.getState();
-  if (uiState.adjustmentsEnabled && hasActiveAdjustments(uiState.adjustments)) {
+  // Apply post-composite image adjustments aggregated from all groups
+  const edState2 = useEditorStore.getState();
+  const adj2 = aggregateGroupAdjustments(edState2.document.layers);
+  if (adj2 && hasActiveAdjustments(adj2)) {
     const imgData = ctx.getImageData(0, 0, width, height);
-    applyAdjustmentsToImageData(imgData, uiState.adjustments);
+    applyAdjustmentsToImageData(imgData, adj2);
     ctx.putImageData(imgData, 0, 0);
   }
 

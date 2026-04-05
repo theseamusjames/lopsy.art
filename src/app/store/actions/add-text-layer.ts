@@ -1,15 +1,24 @@
 import type { DocumentState, TextLayer } from '../../../types';
 import type { EditorState } from '../types';
+import { getInsertionGroupId, getInsertionOrderIndex, addToGroup } from '../../../layers/group-utils';
 
 export function computeAddTextLayer(
   doc: DocumentState,
   textLayer: TextLayer,
 ): Partial<EditorState> {
+  let layers = [...doc.layers, textLayer];
+  const groupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
+  if (groupId) {
+    layers = addToGroup(layers, textLayer.id, groupId);
+  }
+  const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId);
+  const layerOrder = [...doc.layerOrder];
+  layerOrder.splice(orderIdx, 0, textLayer.id);
   return {
     document: {
       ...doc,
-      layers: [...doc.layers, textLayer],
-      layerOrder: [...doc.layerOrder, textLayer.id],
+      layers,
+      layerOrder,
       activeLayerId: textLayer.id,
     },
   };

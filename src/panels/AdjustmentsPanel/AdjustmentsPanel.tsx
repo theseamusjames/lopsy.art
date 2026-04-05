@@ -1,8 +1,11 @@
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, X } from 'lucide-react';
 import { Slider } from '../../components/Slider/Slider';
+import { IconButton } from '../../components/IconButton/IconButton';
+import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
 import type { ImageAdjustments } from '../../filters/image-adjustments';
+import type { GroupLayer } from '../../types';
 import styles from './AdjustmentsPanel.module.css';
 
 interface AdjustmentSliderDef {
@@ -23,22 +26,58 @@ const SLIDERS: AdjustmentSliderDef[] = [
   { key: 'vignette', label: 'Vignette', min: 0, max: 100, step: 1 },
 ];
 
-export function AdjustmentsPanel() {
-  const adjustments = useUIStore((s) => s.adjustments);
-  const adjustmentsEnabled = useUIStore((s) => s.adjustmentsEnabled);
-  const setAdjustments = useUIStore((s) => s.setAdjustments);
-  const setAdjustmentsEnabled = useUIStore((s) => s.setAdjustmentsEnabled);
+function useActiveGroup(): GroupLayer | null {
+  return useEditorStore((s) => {
+    const activeId = s.document.activeLayerId;
+    if (activeId) {
+      const active = s.document.layers.find((l) => l.id === activeId);
+      if (active?.type === 'group') return active as GroupLayer;
+    }
+    const rootId = s.document.rootGroupId;
+    if (rootId) {
+      const root = s.document.layers.find((l) => l.id === rootId);
+      if (root?.type === 'group') return root as GroupLayer;
+    }
+    return null;
+  });
+}
+
+interface AdjustmentsPanelProps {
+  showHeader?: boolean;
+}
+
+export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
+  const group = useActiveGroup();
+  const setGroupAdjustments = useEditorStore((s) => s.setGroupAdjustments);
+  const setGroupAdjustmentsEnabled = useEditorStore((s) => s.setGroupAdjustmentsEnabled);
+  const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
+
+  if (!group) return null;
+
+  const adjustments = group.adjustments ?? DEFAULT_ADJUSTMENTS;
+  const adjustmentsEnabled = group.adjustmentsEnabled ?? true;
 
   const handleChange = (key: keyof ImageAdjustments, value: number) => {
-    setAdjustments({ ...adjustments, [key]: value });
+    setGroupAdjustments(group.id, { ...adjustments, [key]: value });
   };
 
   const handleReset = () => {
-    setAdjustments({ ...DEFAULT_ADJUSTMENTS });
+    setGroupAdjustments(group.id, { ...DEFAULT_ADJUSTMENTS });
   };
 
   return (
     <div className={styles.panel}>
+      {showHeader && (
+        <div className={styles.header}>
+          <span className={styles.headerTitle}>Group Effects</span>
+          <IconButton
+            icon={<X size={14} />}
+            label="Close"
+            onClick={() => setShowEffectsDrawer(false)}
+          />
+        </div>
+      )}
+      <div className={styles.groupLabel}>{group.name}</div>
       {SLIDERS.map((s) => (
         <Slider
           key={s.key}
@@ -59,7 +98,7 @@ export function AdjustmentsPanel() {
         <button
           type="button"
           className={`${styles.iconBtn} ${!adjustmentsEnabled ? styles.iconBtnOff : ''}`}
-          onClick={() => setAdjustmentsEnabled(!adjustmentsEnabled)}
+          onClick={() => setGroupAdjustmentsEnabled(group.id, !adjustmentsEnabled)}
         >
           {adjustmentsEnabled ? <Eye size={14} /> : <EyeOff size={14} />}
         </button>

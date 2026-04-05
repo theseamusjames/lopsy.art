@@ -7,7 +7,7 @@ import type { Layer } from '../../types';
 import { LayerThumbnail } from './LayerThumbnail';
 import { MaskThumbnail } from './MaskThumbnail';
 import { selectLayerAlpha, convertMaskToMarquee } from './layer-selection';
-import { buildFlatDisplayList, isGroupLayer } from '../../layers/group-utils';
+import { buildFlatDisplayList, isGroupLayer, canMoveToGroup, findParentGroup } from '../../layers/group-utils';
 import styles from './LayerPanel.module.css';
 
 interface LayerPanelProps {
@@ -39,6 +39,7 @@ export function LayerPanel({
   const renameLayer = useEditorStore((s) => s.renameLayer);
   const addGroup = useEditorStore((s) => s.addGroup);
   const toggleGroupCollapsed = useEditorStore((s) => s.toggleGroupCollapsed);
+  const moveLayerToGroup = useEditorStore((s) => s.moveLayerToGroup);
   const rootGroupId = useEditorStore((s) => s.document.rootGroupId);
   const layerOrder = useEditorStore((s) => s.document.layerOrder);
   const maskEditMode = useUIStore((s) => s.maskEditMode);
@@ -65,31 +66,59 @@ export function LayerPanel({
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropGap, setDropGap] = useState<number | null>(null);
+  const [dropIntoGroup, setDropIntoGroup] = useState<string | null>(null);
   const [editingOpacityId, setEditingOpacityId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ from: number; gap: number } | null>(null);
+  const dragRef = useRef<{ from: number; gap: number; intoGroup: string | null } | null>(null);
 
   const handleGripDown = useCallback((e: React.PointerEvent, ri: number) => {
     e.preventDefault();
     e.stopPropagation();
-    dragRef.current = { from: ri, gap: ri };
+    dragRef.current = { from: ri, gap: ri, intoGroup: null };
     setDragIndex(ri);
     setDropGap(ri);
+    setDropIntoGroup(null);
+
+    const draggedLayer = displayList[ri]?.layer;
 
     const onMove = (ev: PointerEvent) => {
       const list = listRef.current;
       if (!list || !dragRef.current) return;
       const items = list.querySelectorAll(`.${styles.itemWrapper}`);
       let gap = items.length;
+      let intoGroup: string | null = null;
+
       for (let i = 0; i < items.length; i++) {
         const rect = items[i]!.getBoundingClientRect();
-        if (ev.clientY < rect.top + rect.height / 2) {
+        const relY = ev.clientY - rect.top;
+        const h = rect.height;
+
+        if (relY < 0) {
           gap = i;
           break;
         }
+
+        if (relY < h) {
+          const entry = displayList[i];
+          // If hovering the center 50% of a group row, offer "drop into"
+          if (entry && isGroupLayer(entry.layer) && relY > h * 0.25 && relY < h * 0.75) {
+            if (draggedLayer && canMoveToGroup(layers, draggedLayer.id, entry.layer.id)) {
+              intoGroup = entry.layer.id;
+              gap = -1; // no gap indicator
+            }
+          } else if (relY < h / 2) {
+            gap = i;
+          } else {
+            gap = i + 1;
+          }
+          break;
+        }
       }
+
       dragRef.current.gap = gap;
-      setDropGap(gap);
+      dragRef.current.intoGroup = intoGroup;
+      setDropGap(intoGroup ? null : gap);
+      setDropIntoGroup(intoGroup);
     };
 
     const onUp = () => {
@@ -99,9 +128,43 @@ export function LayerPanel({
       dragRef.current = null;
       setDragIndex(null);
       setDropGap(null);
-      if (!drag) return;
+      setDropIntoGroup(null);
+      if (!drag || !draggedLayer) return;
+
+      // Drop into group
+      if (drag.intoGroup) {
+        moveLayerToGroup(draggedLayer.id, drag.intoGroup);
+        return;
+      }
+
       const { from, gap } = drag;
       if (gap === from || gap === from + 1) return;
+
+      // Determine the target parent group from the gap position.
+      const neighborIdx = gap > 0 ? gap - 1 : 0;
+      const neighbor = displayList[neighborIdx];
+      const draggedParent = findParentGroup(layers, draggedLayer.id);
+
+      if (neighbor) {
+        // Find the group the neighbor belongs to
+        let targetParentId: string | null = null;
+        const neighborParent = findParentGroup(layers, neighbor.layer.id);
+        if (neighborParent) {
+          targetParentId = neighborParent.id;
+        } else if (isGroupLayer(neighbor.layer)) {
+          // Neighbor is the root group (no parent) — target is the root itself
+          targetParentId = neighbor.layer.id;
+        }
+
+        if (targetParentId && draggedParent && targetParentId !== draggedParent.id) {
+          if (canMoveToGroup(layers, draggedLayer.id, targetParentId)) {
+            moveLayerToGroup(draggedLayer.id, targetParentId);
+            return;
+          }
+        }
+      }
+
+      // For gap-based reorder within the same group, use flat reorder
       const fromArrayIdx = layers.length - 1 - from;
       const rawToArrayIdx = layers.length - gap;
       const toArrayIdx = rawToArrayIdx > fromArrayIdx ? rawToArrayIdx - 1 : rawToArrayIdx;
@@ -110,7 +173,7 @@ export function LayerPanel({
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
-  }, [layers.length, onReorderLayer]);
+  }, [layers, displayList, onReorderLayer, moveLayerToGroup]);
 
   const isRootGroup = (layerId: string) => layerId === rootGroupId;
 
@@ -130,14 +193,15 @@ export function LayerPanel({
                 isGroupLayer(layer) ? styles.groupRow : '',
                 isRootGroup(layer.id) ? styles.rootGroup : '',
                 dragIndex === ri ? styles.dragging : '',
-                dragIndex !== null && dropGap === ri && dropGap !== dragIndex && dropGap !== dragIndex + 1
+                dropGap !== null && dropGap === ri && dropGap !== dragIndex && dropGap !== (dragIndex ?? -1) + 1
                   ? styles.dropTarget : '',
-                dragIndex !== null && dropGap === displayList.length && ri === displayList.length - 1 && dropGap !== dragIndex + 1
+                dropGap !== null && dropGap === displayList.length && ri === displayList.length - 1 && dropGap !== (dragIndex ?? -1) + 1
                   ? styles.dropTargetEnd : '',
+                dropIntoGroup === layer.id ? styles.dropIntoGroup : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
-              style={{ paddingLeft: `calc(${depth * 16}px + var(--space-2))` }}
+              style={{ paddingLeft: `calc(${depth * 8}px + var(--space-2))` }}
               onClick={() => onSelectLayer(layer.id)}
             >
               {!isRootGroup(layer.id) && (
@@ -203,24 +267,22 @@ export function LayerPanel({
                   {layer.name}
                 </span>
               )}
-              {!isGroupLayer(layer) && (
-                <button
-                  className={`${styles.effectsBtn} ${showEffectsDrawer && layer.id === activeLayerId ? styles.effectsBtnActive : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (showEffectsDrawer && layer.id === activeLayerId) {
-                      setShowEffectsDrawer(false);
-                    } else {
-                      onSelectLayer(layer.id);
-                      setShowEffectsDrawer(true);
-                    }
-                  }}
-                  type="button"
-                  title="Layer effects"
-                >
-                  <Sparkles size={12} />
-                </button>
-              )}
+              <button
+                className={`${styles.effectsBtn} ${showEffectsDrawer && layer.id === activeLayerId ? styles.effectsBtnActive : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (showEffectsDrawer && layer.id === activeLayerId) {
+                    setShowEffectsDrawer(false);
+                  } else {
+                    onSelectLayer(layer.id);
+                    setShowEffectsDrawer(true);
+                  }
+                }}
+                type="button"
+                title={isGroupLayer(layer) ? 'Group effects' : 'Layer effects'}
+              >
+                <Sparkles size={12} />
+              </button>
               <span
                 className={styles.opacity}
                 onClick={(e) => {

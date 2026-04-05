@@ -3,6 +3,7 @@ import type { EditorState } from '../types';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { mergeLayers, rasterizeLayerEffects, uploadLayerPixels } from '../../../engine-wasm/wasm-bridge';
 import { hasEnabledEffects } from '../../../layers/layer-model';
+import { removeFromParentGroup } from '../../../layers/group-utils';
 
 export function computeMergeDown(
   doc: DocumentState,
@@ -38,10 +39,14 @@ export function computeMergeDown(
   pixelData.delete(activeId);
   pixelData.delete(belowId);
 
+  // Remove merged layer from its parent group's children
+  let layers = removeFromParentGroup(doc.layers, activeId);
+  layers = layers.filter((l) => l.id !== activeId);
+
   return {
     document: {
       ...doc,
-      layers: doc.layers.filter((l) => l.id !== activeId),
+      layers,
       layerOrder: doc.layerOrder.filter((id) => id !== activeId),
       activeLayerId: belowId,
     },

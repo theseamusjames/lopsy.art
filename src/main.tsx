@@ -41,7 +41,7 @@ if (import.meta.env.DEV) {
         syncDocumentSize(engine, doc.width, doc.height);
         syncBackgroundColor(engine, bg.r, bg.g, bg.b, bg.a);
         syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH);
-        syncLayers(engine, doc.layers, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
+        syncLayers(engine, doc.layers, doc.layerOrder, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
         syncSelection(engine, state.selection);
         renderWasm(engine);
         const gl = canvas.getContext('webgl2');
