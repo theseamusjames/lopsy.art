@@ -275,12 +275,11 @@ export function App() {
 
   const RULER_SIZE = 20;
 
-  // Find a guide whose position matches the cursor's document-space coordinate
   const findGuideAtCursor = useCallback(
     (docX: number, docY: number): string | null => {
       for (const guide of guides) {
-        if (guide.orientation === 'vertical' && guide.position === docX) return guide.id;
-        if (guide.orientation === 'horizontal' && guide.position === docY) return guide.id;
+        if (guide.orientation === 'vertical' && Math.abs(guide.position - docX) <= 1) return guide.id;
+        if (guide.orientation === 'horizontal' && Math.abs(guide.position - docY) <= 1) return guide.id;
       }
       return null;
     },
