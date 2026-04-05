@@ -1,14 +1,20 @@
 import type { DocumentState, TextLayer } from '../../../types';
 import type { EditorState } from '../types';
+import { getInsertionGroupId, addToGroup } from '../../../layers/group-utils';
 
 export function computeAddTextLayer(
   doc: DocumentState,
   textLayer: TextLayer,
 ): Partial<EditorState> {
+  let layers = [...doc.layers, textLayer];
+  const groupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
+  if (groupId) {
+    layers = addToGroup(layers, textLayer.id, groupId);
+  }
   return {
     document: {
       ...doc,
-      layers: [...doc.layers, textLayer],
+      layers,
       layerOrder: [...doc.layerOrder, textLayer.id],
       activeLayerId: textLayer.id,
     },

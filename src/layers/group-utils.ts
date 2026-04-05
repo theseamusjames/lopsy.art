@@ -162,3 +162,43 @@ export function removeFromParentGroup(
     return l;
   });
 }
+
+/**
+ * Determine the target group ID for inserting a new layer.
+ * If the active layer is a group, insert into it.
+ * If the active layer has a parent group, use that parent.
+ * Otherwise fall back to the root group.
+ * Always returns a group ID — never null (layers must live inside a group).
+ */
+export function getInsertionGroupId(
+  layers: readonly Layer[],
+  activeLayerId: string | null,
+  rootGroupId: string | null | undefined,
+): string | null {
+  if (activeLayerId) {
+    const activeLayer = layers.find((l) => l.id === activeLayerId);
+    if (activeLayer && isGroupLayer(activeLayer)) {
+      return activeLayer.id;
+    }
+    const parent = findParentGroup(layers, activeLayerId);
+    if (parent) return parent.id;
+  }
+  return rootGroupId ?? null;
+}
+
+/**
+ * Insert a new layer ID into a group's children array.
+ * Returns updated layers array.
+ */
+export function addToGroup(
+  layers: readonly Layer[],
+  layerId: string,
+  groupId: string,
+): Layer[] {
+  return layers.map((l) => {
+    if (l.id === groupId && isGroupLayer(l)) {
+      return { ...l, children: [...l.children, layerId] };
+    }
+    return l;
+  });
+}

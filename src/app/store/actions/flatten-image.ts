@@ -1,6 +1,7 @@
 import type { DocumentState } from '../../../types';
 import type { EditorState } from '../types';
-import { createRasterLayer } from '../../../layers/layer-model';
+import type { Layer } from '../../../types';
+import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { compositeForExport, uploadLayerPixels, addLayer } from '../../../engine-wasm/wasm-bridge';
 
@@ -46,12 +47,15 @@ export function computeFlattenImage(
 
   const pixelData = new Map<string, ImageData>();
 
+  const rootGroup = createGroupLayer({ name: 'Project', children: [flatLayer.id] });
+
   return {
     document: {
       ...doc,
-      layers: [flatLayer],
-      layerOrder: [flatLayer.id],
+      layers: [flatLayer, rootGroup] as Layer[],
+      layerOrder: [flatLayer.id, rootGroup.id],
       activeLayerId: flatLayer.id,
+      rootGroupId: rootGroup.id,
     },
     layerPixelData: pixelData,
   };

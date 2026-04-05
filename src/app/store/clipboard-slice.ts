@@ -1,4 +1,5 @@
 import { createRasterLayer } from '../../layers/layer-model';
+import { getInsertionGroupId, addToGroup } from '../../layers/group-utils';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   clipboardCopy,
@@ -114,10 +115,14 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     // Blit clipboard texture to the new layer
     clipboardPaste(engine, newLayer.id);
 
+    const groupId = getInsertionGroupId(state.document.layers, state.document.activeLayerId, state.document.rootGroupId);
+    let layers = [...state.document.layers, newLayer];
+    if (groupId) layers = addToGroup(layers, newLayer.id, groupId);
+
     set({
       document: {
         ...state.document,
-        layers: [...state.document.layers, newLayer],
+        layers,
         layerOrder: newOrder,
         activeLayerId: newLayer.id,
       },
@@ -137,10 +142,14 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     const newOrder = [...state.document.layerOrder];
     newOrder.splice(orderIdx, 0, newLayer.id);
 
+    const groupId2 = getInsertionGroupId(state.document.layers, state.document.activeLayerId, state.document.rootGroupId);
+    let layers2 = [...state.document.layers, newLayer];
+    if (groupId2) layers2 = addToGroup(layers2, newLayer.id, groupId2);
+
     set({
       document: {
         ...state.document,
-        layers: [...state.document.layers, newLayer],
+        layers: layers2,
         layerOrder: newOrder,
         activeLayerId: newLayer.id,
       },
@@ -167,10 +176,14 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     const newOrder = [...state.document.layerOrder];
     newOrder.splice(orderIdx, 0, newLayer.id);
 
+    const groupId3 = getInsertionGroupId(state.document.layers, state.document.activeLayerId, state.document.rootGroupId);
+    let layers3 = [...state.document.layers, newLayer];
+    if (groupId3) layers3 = addToGroup(layers3, newLayer.id, groupId3);
+
     set({
       document: {
         ...state.document,
-        layers: [...state.document.layers, newLayer],
+        layers: layers3,
         layerOrder: newOrder,
         activeLayerId: newLayer.id,
       },

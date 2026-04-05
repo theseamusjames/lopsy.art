@@ -1,5 +1,6 @@
 import type { BlendMode, DocumentState, Layer, LayerEffects } from '../../../types';
 import type { EditorState } from '../types';
+import { isGroupLayer, getDescendantIds } from '../../../layers/group-utils';
 
 export function computeSetActiveLayer(
   doc: DocumentState,
@@ -61,6 +62,25 @@ export function computeUpdatePosition(
   x: number,
   y: number,
 ): Partial<EditorState> {
+  const layer = doc.layers.find((l) => l.id === id);
+
+  // When moving a group, apply the delta to all descendants
+  if (layer && isGroupLayer(layer)) {
+    const dx = x - layer.x;
+    const dy = y - layer.y;
+    const descendantIds = new Set(getDescendantIds(doc.layers, id));
+    descendantIds.add(id);
+    return {
+      document: {
+        ...doc,
+        layers: doc.layers.map((l) =>
+          descendantIds.has(l.id) ? ({ ...l, x: l.x + dx, y: l.y + dy } as Layer) : l,
+        ),
+      },
+      renderVersion: renderVersion + 1,
+    };
+  }
+
   return {
     document: {
       ...doc,
