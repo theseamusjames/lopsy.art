@@ -334,10 +334,11 @@ export function syncLayers(
     const descJson = layerToDescJson(layer, layers);
 
     if (!tracked.layerIds.has(layer.id)) {
-      addLayer(engine, descJson);
+      try { addLayer(engine, descJson); } catch (e) { console.error('[syncLayers] addLayer FAILED for', layer.id, layer.name, ':', e); }
       tracked.layerVersions.set(layer.id, descJson);
     } else if (tracked.layerVersions.get(layer.id) !== descJson) {
-      updateLayer(engine, descJson);
+      console.log('[syncLayers] updateLayer', layer.name, 'visible=', JSON.parse(descJson).visible);
+      try { updateLayer(engine, descJson); } catch (e) { console.error('[syncLayers] updateLayer FAILED for', layer.id, layer.name, ':', e); }
       tracked.layerVersions.set(layer.id, descJson);
     }
 
