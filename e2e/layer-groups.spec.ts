@@ -1,0 +1,348 @@
+import { test, expect, type Page } from '@playwright/test';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function waitForStore(page: Page) {
+  await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
+}
+
+async function createDocument(page: Page, width = 400, height = 300) {
+  await page.evaluate(
+    ({ w, h }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { createDocument: (w: number, h: number, t: boolean) => void };
+      };
+      store.getState().createDocument(w, h, false);
+    },
+    { w: width, h: height },
+  );
+  await page.waitForTimeout(200);
+}
+
+interface LayerInfo {
+  id: string;
+  name: string;
+  type: string;
+  visible: boolean;
+  locked: boolean;
+  children?: string[];
+  collapsed?: boolean;
+}
+
+interface DocInfo {
+  layers: LayerInfo[];
+  layerOrder: string[];
+  activeLayerId: string | null;
+  rootGroupId: string | null;
+}
+
+async function getDocInfo(page: Page): Promise<DocInfo> {
+  return page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: Record<string, unknown> };
+    };
+    const doc = store.getState().document;
+    const layers = (doc.layers as Array<Record<string, unknown>>).map((l) => ({
+      id: l.id as string,
+      name: l.name as string,
+      type: l.type as string,
+      visible: l.visible as boolean,
+      locked: l.locked as boolean,
+      children: (l.children as string[] | undefined) ?? undefined,
+      collapsed: (l.collapsed as boolean | undefined) ?? undefined,
+    }));
+    return {
+      layers,
+      layerOrder: doc.layerOrder as string[],
+      activeLayerId: doc.activeLayerId as string | null,
+      rootGroupId: (doc.rootGroupId as string | null) ?? null,
+    };
+  });
+}
+
+async function callStore(page: Page, method: string, ...args: unknown[]) {
+  await page.evaluate(
+    ({ method, args }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => Record<string, (...a: unknown[]) => unknown>;
+      };
+      store.getState()[method]!(...args);
+    },
+    { method, args },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+test.describe('Layer Groups', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page);
+  });
+
+  test('new document has a root Project group', async ({ page }) => {
+    const doc = await getDocInfo(page);
+    expect(doc.rootGroupId).toBeTruthy();
+    const rootGroup = doc.layers.find((l) => l.id === doc.rootGroupId);
+    expect(rootGroup).toBeTruthy();
+    expect(rootGroup!.name).toBe('Project');
+    expect(rootGroup!.type).toBe('group');
+    // All non-group layers should be children of the root group
+    const nonGroupLayers = doc.layers.filter((l) => l.type !== 'group');
+    for (const layer of nonGroupLayers) {
+      expect(rootGroup!.children).toContain(layer.id);
+    }
+  });
+
+  test('addLayer places new layer inside root group', async ({ page }) => {
+    await callStore(page, 'addLayer');
+    const doc = await getDocInfo(page);
+    const rootGroup = doc.layers.find((l) => l.id === doc.rootGroupId);
+    const newLayer = doc.layers.find((l) => l.id === doc.activeLayerId);
+    expect(newLayer).toBeTruthy();
+    expect(rootGroup!.children).toContain(newLayer!.id);
+  });
+
+  test('addGroup creates a group inside root group', async ({ page }) => {
+    await callStore(page, 'addGroup', 'Test Group');
+    const doc = await getDocInfo(page);
+    const rootGroup = doc.layers.find((l) => l.id === doc.rootGroupId);
+    const newGroup = doc.layers.find((l) => l.name === 'Test Group');
+    expect(newGroup).toBeTruthy();
+    expect(newGroup!.type).toBe('group');
+    expect(rootGroup!.children).toContain(newGroup!.id);
+  });
+
+  test('nested group: addGroup inside a group creates nested hierarchy', async ({ page }) => {
+    await callStore(page, 'addGroup', 'Outer');
+    const doc1 = await getDocInfo(page);
+    const outerGroup = doc1.layers.find((l) => l.name === 'Outer')!;
+    // Active is now the outer group — adding another group goes inside it
+    await callStore(page, 'addGroup', 'Inner');
+    const doc2 = await getDocInfo(page);
+    const innerGroup = doc2.layers.find((l) => l.name === 'Inner')!;
+    const updatedOuter = doc2.layers.find((l) => l.id === outerGroup.id)!;
+    expect(updatedOuter.children).toContain(innerGroup.id);
+  });
+
+  test('root group cannot be deleted', async ({ page }) => {
+    const before = await getDocInfo(page);
+    const rootId = before.rootGroupId!;
+    await callStore(page, 'removeLayer', rootId);
+    const after = await getDocInfo(page);
+    // Root group should still exist
+    expect(after.layers.find((l) => l.id === rootId)).toBeTruthy();
+  });
+
+  test('deleting a group removes all its descendants', async ({ page }) => {
+    await callStore(page, 'addGroup', 'ToDelete');
+    const doc1 = await getDocInfo(page);
+    const groupId = doc1.layers.find((l) => l.name === 'ToDelete')!.id;
+    // Add a layer inside the group
+    await callStore(page, 'addLayer');
+    const doc2 = await getDocInfo(page);
+    const childId = doc2.activeLayerId!;
+    expect(doc2.layers.find((l) => l.id === groupId)!.children).toContain(childId);
+    // Delete the group
+    await callStore(page, 'setActiveLayer', groupId);
+    await callStore(page, 'removeLayer', groupId);
+    const doc3 = await getDocInfo(page);
+    expect(doc3.layers.find((l) => l.id === groupId)).toBeUndefined();
+    expect(doc3.layers.find((l) => l.id === childId)).toBeUndefined();
+  });
+
+  test('moveLayerToGroup moves layer into target group', async ({ page }) => {
+    const doc1 = await getDocInfo(page);
+    const layerId = doc1.layers.find((l) => l.type === 'raster')!.id;
+    await callStore(page, 'addGroup', 'Target');
+    const doc2 = await getDocInfo(page);
+    const targetId = doc2.layers.find((l) => l.name === 'Target')!.id;
+    await callStore(page, 'moveLayerToGroup', layerId, targetId);
+    const doc3 = await getDocInfo(page);
+    const target = doc3.layers.find((l) => l.id === targetId)!;
+    expect(target.children).toContain(layerId);
+    // Layer should also be repositioned in layerOrder (before the group)
+    const layerIdx = doc3.layerOrder.indexOf(layerId);
+    const groupIdx = doc3.layerOrder.indexOf(targetId);
+    expect(layerIdx).toBeLessThan(groupIdx);
+  });
+
+  test('toggleGroupCollapsed hides/shows children in display list', async ({ page }) => {
+    await callStore(page, 'addGroup', 'Collapsible');
+    const doc1 = await getDocInfo(page);
+    const groupId = doc1.layers.find((l) => l.name === 'Collapsible')!.id;
+    // Add a layer inside the group
+    await callStore(page, 'addLayer');
+    // Collapse the group
+    await callStore(page, 'toggleGroupCollapsed', groupId);
+    const doc2 = await getDocInfo(page);
+    const group = doc2.layers.find((l) => l.id === groupId)!;
+    expect(group.collapsed).toBe(true);
+    // Expand again
+    await callStore(page, 'toggleGroupCollapsed', groupId);
+    const doc3 = await getDocInfo(page);
+    const group2 = doc3.layers.find((l) => l.id === groupId)!;
+    expect(group2.collapsed).toBe(false);
+  });
+
+  test('layer lock prevents editing', async ({ page }) => {
+    const doc = await getDocInfo(page);
+    const layerId = doc.layers.find((l) => l.type === 'raster')!.id;
+    await callStore(page, 'toggleLayerLock', layerId);
+    const doc2 = await getDocInfo(page);
+    expect(doc2.layers.find((l) => l.id === layerId)!.locked).toBe(true);
+    // Unlock
+    await callStore(page, 'toggleLayerLock', layerId);
+    const doc3 = await getDocInfo(page);
+    expect(doc3.layers.find((l) => l.id === layerId)!.locked).toBe(false);
+  });
+
+  test('renameLayer changes layer name', async ({ page }) => {
+    const doc = await getDocInfo(page);
+    const layerId = doc.layers.find((l) => l.type === 'raster')!.id;
+    await callStore(page, 'renameLayer', layerId, 'New Name');
+    const doc2 = await getDocInfo(page);
+    expect(doc2.layers.find((l) => l.id === layerId)!.name).toBe('New Name');
+  });
+
+  test('group visibility hides children from engine', async ({ page }) => {
+    const doc = await getDocInfo(page);
+    const rootId = doc.rootGroupId!;
+    // Hide root group
+    await callStore(page, 'toggleLayerVisibility', rootId);
+    const doc2 = await getDocInfo(page);
+    expect(doc2.layers.find((l) => l.id === rootId)!.visible).toBe(false);
+    // Show it again
+    await callStore(page, 'toggleLayerVisibility', rootId);
+    const doc3 = await getDocInfo(page);
+    expect(doc3.layers.find((l) => l.id === rootId)!.visible).toBe(true);
+  });
+
+  test('duplicateLayer on a group duplicates all children', async ({ page }) => {
+    await callStore(page, 'addGroup', 'DupMe');
+    const doc1 = await getDocInfo(page);
+    const groupId = doc1.layers.find((l) => l.name === 'DupMe')!.id;
+    // Add a layer inside the group
+    await callStore(page, 'addLayer');
+    const doc2 = await getDocInfo(page);
+    const childCount = doc2.layers.find((l) => l.id === groupId)!.children!.length;
+    // Select the group and duplicate
+    await callStore(page, 'setActiveLayer', groupId);
+    await callStore(page, 'duplicateLayer');
+    const doc3 = await getDocInfo(page);
+    const dupGroup = doc3.layers.find((l) => l.name === 'DupMe copy');
+    expect(dupGroup).toBeTruthy();
+    expect(dupGroup!.children!.length).toBe(childCount);
+    // Children should be new IDs (not the same as originals)
+    const originalChildren = doc2.layers.find((l) => l.id === groupId)!.children!;
+    for (const childId of dupGroup!.children!) {
+      expect(originalChildren).not.toContain(childId);
+    }
+  });
+
+  test('flatten image rebuilds root group', async ({ page }) => {
+    // Add some layers first
+    await callStore(page, 'addLayer');
+    await callStore(page, 'addLayer');
+    await callStore(page, 'flattenImage');
+    const doc = await getDocInfo(page);
+    expect(doc.rootGroupId).toBeTruthy();
+    const rootGroup = doc.layers.find((l) => l.id === doc.rootGroupId);
+    expect(rootGroup).toBeTruthy();
+    expect(rootGroup!.name).toBe('Project');
+    // Should have one raster layer inside the root group
+    const rasterLayers = doc.layers.filter((l) => l.type === 'raster');
+    expect(rasterLayers.length).toBe(1);
+    expect(rootGroup!.children).toContain(rasterLayers[0]!.id);
+  });
+
+  test('group adjustments can be set and retrieved', async ({ page }) => {
+    const doc = await getDocInfo(page);
+    const rootId = doc.rootGroupId!;
+    await page.evaluate(
+      ({ rootId }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => {
+            setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
+          };
+        };
+        store.getState().setGroupAdjustments(rootId, {
+          exposure: 1.5,
+          contrast: 20,
+          highlights: 0,
+          shadows: 0,
+          whites: 0,
+          blacks: 0,
+          vignette: 0,
+        });
+      },
+      { rootId },
+    );
+    const adj = await page.evaluate(
+      ({ rootId }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { document: { layers: Array<Record<string, unknown>> } };
+        };
+        const group = store.getState().document.layers.find((l) => l.id === rootId);
+        return group?.adjustments as Record<string, number> | undefined;
+      },
+      { rootId },
+    );
+    expect(adj?.exposure).toBe(1.5);
+    expect(adj?.contrast).toBe(20);
+  });
+
+  test('move tool on group moves all descendants', async ({ page }) => {
+    await callStore(page, 'addGroup', 'MoveGroup');
+    const doc1 = await getDocInfo(page);
+    const groupId = doc1.layers.find((l) => l.name === 'MoveGroup')!.id;
+    // Add layers inside the group
+    await callStore(page, 'addLayer');
+    const doc2 = await getDocInfo(page);
+    const childId = doc2.activeLayerId!;
+    // Move child to a known position first
+    await callStore(page, 'setActiveLayer', childId);
+    await page.evaluate(
+      ({ id }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { updateLayerPosition: (id: string, x: number, y: number) => void };
+        };
+        store.getState().updateLayerPosition(id, 10, 20);
+      },
+      { id: childId },
+    );
+    // Now move the group
+    await callStore(page, 'setActiveLayer', groupId);
+    await page.evaluate(
+      ({ id }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { updateLayerPosition: (id: string, x: number, y: number) => void };
+        };
+        store.getState().updateLayerPosition(id, 50, 50);
+      },
+      { id: groupId },
+    );
+    // Child should have moved by the same delta (50, 50)
+    const doc3 = await getDocInfo(page);
+    const child = doc3.layers.find((l) => l.id === childId)!;
+    expect(child).toBeTruthy();
+    // The group started at (0,0) and moved to (50,50), delta = (50,50)
+    // Child was at (10,20), should now be at (60,70)
+    const childLayer = await page.evaluate(
+      ({ id }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } };
+        };
+        return store.getState().document.layers.find((l) => l.id === id);
+      },
+      { id: childId },
+    );
+    expect(childLayer!.x).toBe(60);
+    expect(childLayer!.y).toBe(70);
+  });
+});

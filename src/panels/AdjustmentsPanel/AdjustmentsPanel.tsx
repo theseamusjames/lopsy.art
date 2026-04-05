@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { Eye, EyeOff, X } from 'lucide-react';
 import { Slider } from '../../components/Slider/Slider';
 import { IconButton } from '../../components/IconButton/IconButton';
@@ -6,7 +5,7 @@ import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
 import type { ImageAdjustments } from '../../filters/image-adjustments';
-import type { BlendMode, GroupLayer } from '../../types';
+import type { GroupLayer } from '../../types';
 import styles from './AdjustmentsPanel.module.css';
 
 interface AdjustmentSliderDef {
@@ -25,35 +24,6 @@ const SLIDERS: AdjustmentSliderDef[] = [
   { key: 'whites', label: 'Whites', min: -100, max: 100, step: 1 },
   { key: 'blacks', label: 'Blacks', min: -100, max: 100, step: 1 },
   { key: 'vignette', label: 'Vignette', min: 0, max: 100, step: 1 },
-];
-
-const BLEND_MODES: { group: string; modes: { value: BlendMode; label: string }[] }[] = [
-  { group: 'Normal', modes: [{ value: 'normal', label: 'Normal' }] },
-  { group: 'Darken', modes: [
-    { value: 'darken', label: 'Darken' },
-    { value: 'multiply', label: 'Multiply' },
-    { value: 'color-burn', label: 'Color Burn' },
-  ]},
-  { group: 'Lighten', modes: [
-    { value: 'lighten', label: 'Lighten' },
-    { value: 'screen', label: 'Screen' },
-    { value: 'color-dodge', label: 'Color Dodge' },
-  ]},
-  { group: 'Contrast', modes: [
-    { value: 'overlay', label: 'Overlay' },
-    { value: 'soft-light', label: 'Soft Light' },
-    { value: 'hard-light', label: 'Hard Light' },
-  ]},
-  { group: 'Comparative', modes: [
-    { value: 'difference', label: 'Difference' },
-    { value: 'exclusion', label: 'Exclusion' },
-  ]},
-  { group: 'Composite', modes: [
-    { value: 'hue', label: 'Hue' },
-    { value: 'saturation', label: 'Saturation' },
-    { value: 'color', label: 'Color' },
-    { value: 'luminosity', label: 'Luminosity' },
-  ]},
 ];
 
 function useActiveGroup(): GroupLayer | null {
@@ -80,17 +50,7 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
   const group = useActiveGroup();
   const setGroupAdjustments = useEditorStore((s) => s.setGroupAdjustments);
   const setGroupAdjustmentsEnabled = useEditorStore((s) => s.setGroupAdjustmentsEnabled);
-  const updateLayerBlendMode = useEditorStore((s) => s.updateLayerBlendMode);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
-
-  const handleBlendModeChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      if (!group) return;
-      useEditorStore.getState().pushHistory('Change Blend Mode');
-      updateLayerBlendMode(group.id, e.target.value as BlendMode);
-    },
-    [group, updateLayerBlendMode],
-  );
 
   if (!group) return null;
 
@@ -118,22 +78,6 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
         </div>
       )}
       <div className={styles.groupLabel}>{group.name}</div>
-      <div className={styles.blendRow}>
-        <span className={styles.fieldLabel}>Blend</span>
-        <select
-          className={styles.blendSelect}
-          value={group.blendMode}
-          onChange={handleBlendModeChange}
-        >
-          {BLEND_MODES.map((g) => (
-            <optgroup key={g.group} label={g.group}>
-              {g.modes.map((m) => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </div>
       {SLIDERS.map((s) => (
         <Slider
           key={s.key}

@@ -87,6 +87,8 @@ pub struct LayerDesc {
     #[serde(default)]
     pub effects: EffectsDesc,
     pub mask: Option<MaskDesc>,
+    #[serde(default)]
+    pub children: Vec<String>,
 }
 
 #[cfg(test)]
