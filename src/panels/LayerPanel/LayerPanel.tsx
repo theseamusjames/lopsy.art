@@ -203,8 +203,7 @@ export function LayerPanel({
                   {layer.name}
                 </span>
               )}
-              {!isGroupLayer(layer) && (
-                <button
+              <button
                   className={`${styles.effectsBtn} ${showEffectsDrawer && layer.id === activeLayerId ? styles.effectsBtnActive : ''}`}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -220,7 +219,6 @@ export function LayerPanel({
                 >
                   <Sparkles size={12} />
                 </button>
-              )}
               <span
                 className={styles.opacity}
                 onClick={(e) => {

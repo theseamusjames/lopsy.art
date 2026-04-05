@@ -1,7 +1,9 @@
 import { useCallback } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, X } from 'lucide-react';
 import { Slider } from '../../components/Slider/Slider';
+import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
+import { useUIStore } from '../../app/ui-store';
 import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
 import type { ImageAdjustments } from '../../filters/image-adjustments';
 import type { BlendMode, GroupLayer } from '../../types';
@@ -70,11 +72,16 @@ function useActiveGroup(): GroupLayer | null {
   });
 }
 
-export function AdjustmentsPanel() {
+interface AdjustmentsPanelProps {
+  showHeader?: boolean;
+}
+
+export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
   const group = useActiveGroup();
   const setGroupAdjustments = useEditorStore((s) => s.setGroupAdjustments);
   const setGroupAdjustmentsEnabled = useEditorStore((s) => s.setGroupAdjustmentsEnabled);
   const updateLayerBlendMode = useEditorStore((s) => s.updateLayerBlendMode);
+  const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
 
   const handleBlendModeChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -100,6 +107,16 @@ export function AdjustmentsPanel() {
 
   return (
     <div className={styles.panel}>
+      {showHeader && (
+        <div className={styles.header}>
+          <span className={styles.headerTitle}>Group Effects</span>
+          <IconButton
+            icon={<X size={14} />}
+            label="Close"
+            onClick={() => setShowEffectsDrawer(false)}
+          />
+        </div>
+      )}
       <div className={styles.groupLabel}>{group.name}</div>
       <div className={styles.blendRow}>
         <span className={styles.fieldLabel}>Blend</span>

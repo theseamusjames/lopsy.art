@@ -418,7 +418,6 @@ export function App() {
   const [historyPanelCollapsed, setHistoryPanelCollapsed] = useState(false);
   const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(false);
   const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
-  const [adjustmentsPanelCollapsed, setAdjustmentsPanelCollapsed] = useState(false);
   const [pathsPanelCollapsed, setPathsPanelCollapsed] = useState(false);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const visiblePanels = useUIStore((s) => s.visiblePanels);
@@ -520,7 +519,10 @@ export function App() {
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div className={styles.effectsDrawer} ref={effectsDrawerRef}>
-              <LayerEffectsPanel />
+              {activeLayerId && layers.find((l) => l.id === activeLayerId)?.type === 'group'
+                ? <AdjustmentsPanel showHeader />
+                : <LayerEffectsPanel />
+              }
             </div>
           )}
           {visiblePanels.size > 0 && (
@@ -568,15 +570,6 @@ export function App() {
                     onToggle={() => setPathsPanelCollapsed(!pathsPanelCollapsed)}
                   >
                     <PathsPanel collapsed={pathsPanelCollapsed} />
-                  </PanelContainer>
-                )}
-                {visiblePanels.has('adjustments') && (
-                  <PanelContainer
-                    title="Adjustments"
-                    collapsed={adjustmentsPanelCollapsed}
-                    onToggle={() => setAdjustmentsPanelCollapsed(!adjustmentsPanelCollapsed)}
-                  >
-                    {!adjustmentsPanelCollapsed && <AdjustmentsPanel />}
                   </PanelContainer>
                 )}
               </div>
