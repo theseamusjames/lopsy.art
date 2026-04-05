@@ -193,11 +193,7 @@ function layerToDescJson(layer: Layer, allLayers?: readonly Layer[]): string {
   };
 
   if (layer.type === 'group' && 'children' in layer) {
-    desc.children = layer.children;
-    if ('adjustments' in layer) {
-      desc.group_adjustments = layer.adjustments;
-      desc.group_adjustments_enabled = layer.adjustmentsEnabled;
-    }
+    desc.children = (layer as import('../types').GroupLayer).children;
   }
 
   return JSON.stringify(desc);

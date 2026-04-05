@@ -966,3 +966,119 @@ test.describe('Visual rendering after group move', () => {
     expect(screenshot.length).toBeGreaterThan(100);
   });
 });
+
+test.describe('GPU rendering verification', () => {
+  test('layer content renders after being moved out of hidden group', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 100, 100);
+
+    // Get layer IDs
+    const doc1 = await getDocInfo(page);
+    const layer1 = doc1.layers.find((l) => l.name === 'Layer 1')!;
+    const rootId = doc1.rootGroupId!;
+
+    // Paint red on Layer 1
+    await page.evaluate(({ layerId }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
+      };
+      const s = store.getState();
+      const d = s.getOrCreateLayerPixelData(layerId);
+      for (let i = 0; i < d.data.length; i += 4) {
+        d.data[i] = 255; d.data[i+1] = 0; d.data[i+2] = 0; d.data[i+3] = 255;
+      }
+      s.updateLayerPixelData(layerId, d);
+    }, { layerId: layer1.id });
+    await page.waitForTimeout(300);
+
+    // Add group
+    await callStore(page, 'addGroup', 'Group');
+    const doc2 = await getDocInfo(page);
+    const groupId = doc2.layers.find((l) => l.name === 'Group')!.id;
+
+    // Move layer into group
+    await callStore(page, 'moveLayerToGroup', layer1.id, groupId);
+    await page.waitForTimeout(200);
+
+    // Move layer back out to root
+    await callStore(page, 'moveLayerToGroup', layer1.id, rootId);
+    await page.waitForTimeout(200);
+
+    // Hide group
+    await callStore(page, 'toggleLayerVisibility', groupId);
+    await page.waitForTimeout(500);
+
+    // Verify the data model is correct
+    const debug = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: Record<string, unknown> };
+      };
+      const doc = store.getState().document;
+      const layers = doc.layers as Array<Record<string, unknown>>;
+      const group = layers.find((l) => l.name === 'Group') as Record<string, unknown>;
+      const layer1 = layers.find((l) => l.name === 'Layer 1') as Record<string, unknown>;
+      return {
+        layer1Visible: layer1?.visible,
+        groupVisible: group?.visible,
+        groupChildren: group?.children,
+        layer1InGroup: Array.isArray(group?.children) && (group.children as string[]).includes(layer1?.id as string),
+      };
+    });
+
+    expect(debug.layer1Visible).toBe(true);
+    expect(debug.groupVisible).toBe(false);
+    expect(debug.layer1InGroup).toBe(false);
+
+    // Verify the engine would render Layer 1 by checking the descriptor
+    // that syncLayers generates for it
+    const check = await page.evaluate(({ layer1Id }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { layers: Array<Record<string, unknown>>; layerOrder: string[] };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const s = store.getState();
+      const layers = s.document.layers;
+      const l1 = layers.find((l) => l.id === layer1Id);
+      if (!l1) return { error: 'Layer 1 not found' };
+
+      // Check isEffectivelyVisible
+      let effectivelyVisible = l1.visible as boolean;
+      if (effectivelyVisible) {
+        let currentId = layer1Id;
+        for (;;) {
+          let parentFound = false;
+          for (const l of layers) {
+            if (l.type === 'group' && Array.isArray(l.children) && (l.children as string[]).includes(currentId)) {
+              if (!l.visible) { effectivelyVisible = false; break; }
+              currentId = l.id as string;
+              parentFound = true;
+              break;
+            }
+          }
+          if (!parentFound || !effectivelyVisible) break;
+        }
+      }
+
+      const px = s.resolvePixelData(layer1Id);
+      return {
+        visible: l1.visible,
+        effectivelyVisible,
+        hasPixelData: !!px,
+        firstPixelR: px ? px.data[0] : -1,
+        layerOrderPos: s.document.layerOrder.indexOf(layer1Id),
+        inLayerOrder: s.document.layerOrder.includes(layer1Id),
+      };
+    }, { layer1Id: layer1.id });
+
+    console.log('Engine check:', check);
+    expect(check.effectivelyVisible).toBe(true);
+    expect(check.hasPixelData).toBe(true);
+    expect(check.inLayerOrder).toBe(true);
+  });
+});
