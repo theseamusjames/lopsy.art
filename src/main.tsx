@@ -70,8 +70,9 @@ if (import.meta.env.DEV) {
         syncDocumentSize(engine, doc.width, doc.height);
         syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
         syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH);
-        syncLayers(engine, doc.layers, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
+        syncLayers(engine, doc.layers, doc.layerOrder, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
         const id = layerId ?? doc.activeLayerId;
+        if (!id) { resolve({ width: 0, height: 0, pixels: [] }); return; }
         const dims = getLayerTextureDimensions(engine, id);
         const w = dims?.[0] ?? 0;
         const h = dims?.[1] ?? 0;

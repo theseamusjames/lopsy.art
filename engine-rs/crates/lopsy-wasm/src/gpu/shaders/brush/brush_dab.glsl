@@ -38,8 +38,7 @@ void main() {
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;
 
         float stamp = texture(u_brushTip, uv).r;
-        // Flow only — opacity is enforced via a post-dab clamp pass
-        a = stamp * u_flow;
+        a = stamp * u_flow * u_opacity;
     } else {
         // Procedural circle mode
         if (dist > radius) discard;
@@ -53,7 +52,7 @@ void main() {
         float edge = 1.0 - smoothstep(radius - 1.0, radius, dist);
         stamp *= edge;
 
-        a = stamp * u_flow;
+        a = stamp * u_flow * u_opacity;
     }
 
     // Selection mask constraint
