@@ -1,4 +1,4 @@
-import { applyInvert, applyDesaturate } from '../filter-actions';
+import { applyInvert, applyDesaturate, applyFindEdges } from '../filter-actions';
 import type { FilterDialogId } from '../filter-actions';
 import type { MenuDef } from './types';
 
@@ -8,10 +8,18 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
     items: [
       { label: 'Gaussian Blur...', action: () => showFilterDialog('gaussian-blur') },
       { label: 'Box Blur...', action: () => showFilterDialog('box-blur') },
+      { label: 'Motion Blur...', action: () => showFilterDialog('motion-blur') },
+      { label: 'Radial Blur...', action: () => showFilterDialog('radial-blur') },
       { label: 'Unsharp Mask...', action: () => showFilterDialog('unsharp-mask') },
+      { separator: true, label: '' },
+      { label: 'Find Edges', action: () => applyFindEdges() },
+      { label: 'Cel Shading...', action: () => showFilterDialog('cel-shading') },
       { separator: true, label: '' },
       { label: 'Add Noise...', action: () => showFilterDialog('add-noise') },
       { label: 'Fill with Noise...', action: () => showFilterDialog('fill-noise') },
+      { separator: true, label: '' },
+      { label: 'Clouds...', action: () => showFilterDialog('clouds') },
+      { label: 'Smoke...', action: () => showFilterDialog('smoke') },
       { separator: true, label: '' },
       { label: 'Brightness/Contrast...', action: () => showFilterDialog('brightness-contrast') },
       { label: 'Hue/Saturation...', action: () => showFilterDialog('hue-saturation') },

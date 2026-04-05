@@ -1332,6 +1332,122 @@ pub fn filter_fill_with_noise(engine: &mut Engine, layer_id: &str, monochrome: b
 }
 
 // ============================================================
+// New Effects (Motion Blur, Radial Blur, Find Edges, Cel Shading, Clouds, Smoke)
+// ============================================================
+
+#[wasm_bindgen(js_name = "filterMotionBlur")]
+pub fn filter_motion_blur(engine: &mut Engine, layer_id: &str, angle: f32, distance: u32) {
+    if distance == 0 { return; }
+    let prog = &engine.inner.shaders.motion_blur.program;
+    let prog_clone = prog.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog_clone,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_angle") {
+                gl.uniform1f(Some(&loc), angle);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_distance") {
+                gl.uniform1i(Some(&loc), distance as i32);
+            }
+        },
+    );
+}
+
+#[wasm_bindgen(js_name = "filterRadialBlur")]
+pub fn filter_radial_blur(engine: &mut Engine, layer_id: &str, amount: u32) {
+    if amount == 0 { return; }
+    let prog = &engine.inner.shaders.radial_blur.program;
+    let prog_clone = prog.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog_clone,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_center") {
+                gl.uniform2f(Some(&loc), 0.5, 0.5);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_amount") {
+                gl.uniform1i(Some(&loc), amount as i32);
+            }
+        },
+    );
+}
+
+#[wasm_bindgen(js_name = "filterFindEdges")]
+pub fn filter_find_edges(engine: &mut Engine, layer_id: &str) {
+    let prog = &engine.inner.shaders.find_edges.program;
+    let prog_clone = prog.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog_clone,
+        |_gl, _prog| {},
+    );
+}
+
+#[wasm_bindgen(js_name = "filterCelShading")]
+pub fn filter_cel_shading(engine: &mut Engine, layer_id: &str, levels: u32, edge_strength: f32) {
+    let prog = &engine.inner.shaders.cel_shading.program;
+    let prog_clone = prog.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog_clone,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_levels") {
+                gl.uniform1i(Some(&loc), levels as i32);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_edgeStrength") {
+                gl.uniform1f(Some(&loc), edge_strength);
+            }
+        },
+    );
+}
+
+#[wasm_bindgen(js_name = "filterClouds")]
+pub fn filter_clouds(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32) {
+    let prog = &engine.inner.shaders.clouds.program;
+    let prog_clone = prog.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog_clone,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_scale") {
+                gl.uniform1f(Some(&loc), scale);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_seed") {
+                gl.uniform1f(Some(&loc), seed);
+            }
+        },
+    );
+}
+
+#[wasm_bindgen(js_name = "filterSmoke")]
+pub fn filter_smoke(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32, turbulence: f32) {
+    let prog = &engine.inner.shaders.smoke.program;
+    let prog_clone = prog.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog_clone,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_scale") {
+                gl.uniform1f(Some(&loc), scale);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_seed") {
+                gl.uniform1f(Some(&loc), seed);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_turbulence") {
+                gl.uniform1f(Some(&loc), turbulence);
+            }
+        },
+    );
+}
+
+// ============================================================
 // Selection
 // ============================================================
 
