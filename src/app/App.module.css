@@ -83,10 +83,10 @@
 }
 
 .guideColorPicker {
-  position: absolute;
-  top: 24px;
-  left: 24px;
-  z-index: var(--z-popover, 100);
+  position: fixed;
+  top: 80px;
+  left: 60px;
+  z-index: var(--z-popover);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
