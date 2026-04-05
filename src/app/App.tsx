@@ -493,18 +493,6 @@ export function App() {
         >
           <canvas ref={canvasRef} />
           <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />
-          {showGuideColorPicker && showRulers && showGuides && (
-            <div
-              className={styles.guideColorPicker}
-              onMouseDown={(e) => e.stopPropagation()}
-              onMouseUp={(e) => e.stopPropagation()}
-            >
-              <ColorPicker
-                color={guideColor}
-                onChange={setGuideColor}
-              />
-            </div>
-          )}
           <TextActionButtons containerRef={containerRef} />
           <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </div>
@@ -515,6 +503,18 @@ export function App() {
             y={contextMenu.y}
             onClose={handleContextMenuClose}
           />
+        )}
+        {showGuideColorPicker && showRulers && showGuides && (
+          <div
+            className={styles.guideColorPicker}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+          >
+            <ColorPicker
+              color={guideColor}
+              onChange={setGuideColor}
+            />
+          </div>
         )}
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
