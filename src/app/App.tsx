@@ -94,6 +94,18 @@ export function App() {
   const setGuideColor = useUIStore((s) => s.setGuideColor);
 
   const [showGuideColorPicker, setShowGuideColorPicker] = useState(false);
+
+  useEffect(() => {
+    if (!showGuideColorPicker) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowGuideColorPicker(false);
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [showGuideColorPicker]);
+
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -508,7 +520,6 @@ export function App() {
           <div
             className={styles.guideColorPicker}
             onMouseDown={(e) => e.stopPropagation()}
-            onMouseUp={(e) => e.stopPropagation()}
           >
             <ColorPicker
               color={guideColor}
