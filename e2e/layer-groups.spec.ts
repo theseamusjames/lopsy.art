@@ -346,3 +346,144 @@ test.describe('Layer Groups', () => {
     expect(childLayer!.y).toBe(70);
   });
 });
+
+test.describe('Group Effects Rendering', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page);
+  });
+
+  test('group adjustments affect the rendered output', async ({ page }) => {
+    // Paint white pixels on the background layer
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { layers: Array<{ id: string; type: string }>, rootGroupId: string };
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
+        };
+      };
+      const state = store.getState();
+      const bgLayer = state.document.layers.find((l) => l.type === 'raster');
+      if (!bgLayer) return;
+      const data = state.getOrCreateLayerPixelData(bgLayer.id);
+      for (let i = 0; i < data.data.length; i += 4) {
+        data.data[i] = 200;
+        data.data[i + 1] = 200;
+        data.data[i + 2] = 200;
+        data.data[i + 3] = 255;
+      }
+      state.updateLayerPixelData(bgLayer.id, data);
+    });
+    await page.waitForTimeout(200);
+
+    // Set contrast adjustment on root group
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { rootGroupId: string };
+          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
+        };
+      };
+      const state = store.getState();
+      state.setGroupAdjustments(state.document.rootGroupId, {
+        exposure: 0, contrast: 50, highlights: 0, shadows: 0,
+        whites: 0, blacks: 0, vignette: 0,
+      });
+    });
+    await page.waitForTimeout(300);
+
+    // Verify the adjustments are stored
+    const adj = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: Array<Record<string, unknown>>, rootGroupId: string } };
+      };
+      const state = store.getState();
+      const root = state.document.layers.find((l) => l.id === state.document.rootGroupId);
+      return root?.adjustments as Record<string, number>;
+    });
+    expect(adj.contrast).toBe(50);
+  });
+
+  test('sub-group adjustments affect rendering (not just root group)', async ({ page }) => {
+    // Create a sub-group inside the project
+    await callStore(page, 'addGroup', 'Group');
+    const doc1 = await getDocInfo(page);
+    const subGroupId = doc1.layers.find((l) => l.name === 'Group')!.id;
+
+    // Add a layer inside the sub-group and paint red on it
+    await callStore(page, 'addLayer');
+    const doc2 = await getDocInfo(page);
+    const layerId = doc2.activeLayerId!;
+    await page.evaluate(
+      ({ layerId }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => {
+            getOrCreateLayerPixelData: (id: string) => ImageData;
+            updateLayerPixelData: (id: string, data: ImageData) => void;
+          };
+        };
+        const state = store.getState();
+        const data = state.getOrCreateLayerPixelData(layerId);
+        for (let i = 0; i < data.data.length; i += 4) {
+          data.data[i] = 255;
+          data.data[i + 1] = 0;
+          data.data[i + 2] = 0;
+          data.data[i + 3] = 255;
+        }
+        state.updateLayerPixelData(layerId, data);
+      },
+      { layerId },
+    );
+
+    // Set exposure on the SUB-GROUP (not root)
+    await page.evaluate(
+      ({ subGroupId }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => {
+            setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
+          };
+        };
+        store.getState().setGroupAdjustments(subGroupId, {
+          exposure: 2, contrast: 0, highlights: 0, shadows: 0,
+          whites: 0, blacks: 0, vignette: 0,
+        });
+      },
+      { subGroupId },
+    );
+    await page.waitForTimeout(300);
+
+    // Verify the sub-group adjustments are stored
+    const adj = await page.evaluate(
+      ({ subGroupId }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { document: { layers: Array<Record<string, unknown>> } };
+        };
+        const group = store.getState().document.layers.find((l) => l.id === subGroupId);
+        return group?.adjustments as Record<string, number>;
+      },
+      { subGroupId },
+    );
+    expect(adj.exposure).toBe(2);
+
+    // Verify the aggregated adjustments include the sub-group's exposure
+    const aggregated = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: Array<Record<string, unknown>> } };
+      };
+      const layers = store.getState().document.layers;
+      const agg = { exposure: 0, contrast: 0 };
+      for (const l of layers) {
+        if (l.type === 'group' && l.adjustmentsEnabled !== false && l.visible && l.adjustments) {
+          const a = l.adjustments as Record<string, number>;
+          agg.exposure += a.exposure ?? 0;
+          agg.contrast += a.contrast ?? 0;
+        }
+      }
+      return agg;
+    });
+    expect(aggregated.exposure).toBe(2);
+  });
+});

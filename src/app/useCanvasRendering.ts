@@ -72,11 +72,30 @@ function renderFrameGpu(
   const showGrid = uiState.showGrid;
   const showRulers = uiState.showRulers;
   const gridSize = uiState.gridSize;
-  // Read adjustments from the root group (per-group effects)
-  const rootGroupId = doc.rootGroupId;
-  const rootGroup = rootGroupId ? layers.find((l) => l.id === rootGroupId && l.type === 'group') : null;
-  const adjustments = (rootGroup && 'adjustments' in rootGroup) ? rootGroup.adjustments : uiState.adjustments;
-  const adjustmentsEnabled = (rootGroup && 'adjustmentsEnabled' in rootGroup) ? rootGroup.adjustmentsEnabled : uiState.adjustmentsEnabled;
+  // Aggregate adjustments from all visible groups
+  const adjustments = (() => {
+    const agg = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0 };
+    let found = false;
+    for (const l of layers) {
+      if (l.type === 'group' && 'adjustments' in l && 'adjustmentsEnabled' in l) {
+        const g = l as import('../types').GroupLayer;
+        if (g.adjustmentsEnabled && g.visible) {
+          agg.exposure += g.adjustments.exposure;
+          agg.contrast += g.adjustments.contrast;
+          agg.highlights += g.adjustments.highlights;
+          agg.shadows += g.adjustments.shadows;
+          agg.whites += g.adjustments.whites;
+          agg.blacks += g.adjustments.blacks;
+          agg.vignette += g.adjustments.vignette;
+          found = true;
+        }
+      }
+    }
+    return found ? agg : uiState.adjustments;
+  })();
+  const adjustmentsEnabled = layers.some(
+    (l) => l.type === 'group' && 'adjustmentsEnabled' in l && (l as import('../types').GroupLayer).adjustmentsEnabled,
+  ) || uiState.adjustmentsEnabled;
   const pathAnchors = uiState.pathAnchors;
   const pathClosed = uiState.pathClosed;
   const lassoPoints = uiState.lassoPoints;
