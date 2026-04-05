@@ -242,7 +242,16 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   moveLayerToGroup: (layerId, targetGroupId, insertIndex) => {
     const doc = get().document;
     const newLayers = moveLayerToGroupUtil(doc.layers, layerId, targetGroupId, insertIndex);
-    set({ document: { ...doc, layers: newLayers } });
+    // Reposition in layerOrder: place just before the target group
+    // so the layer renders within the group's range
+    const newOrder = doc.layerOrder.filter((id) => id !== layerId);
+    const groupIdx = newOrder.indexOf(targetGroupId);
+    if (groupIdx !== -1) {
+      newOrder.splice(groupIdx, 0, layerId);
+    } else {
+      newOrder.push(layerId);
+    }
+    set({ document: { ...doc, layers: newLayers, layerOrder: newOrder } });
   },
 
   setGroupAdjustments: (groupId, adjustments) => {
