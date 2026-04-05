@@ -200,7 +200,7 @@ async function getLayerPosition(page: Page, layerId?: string): Promise<{ x: numb
 // ---------------------------------------------------------------------------
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('http://localhost:5173');
+  await page.goto('/');
   await waitForStore(page);
 });
 

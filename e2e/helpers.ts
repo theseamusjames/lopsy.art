@@ -104,23 +104,36 @@ export async function getPixelAt(
   layerId?: string,
 ): Promise<{ r: number; g: number; b: number; a: number }> {
   return page.evaluate(
-    ({ x, y, lid }) => {
+    async ({ x, y, lid }) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          document: { activeLayerId: string };
-          layerPixelData: Map<string, ImageData>;
+          document: {
+            activeLayerId: string;
+            layers: Array<{ id: string; x: number; y: number }>;
+          };
         };
       };
       const state = store.getState();
       const id = lid ?? state.document.activeLayerId;
-      const data = state.layerPixelData.get(id);
-      if (!data) return { r: 0, g: 0, b: 0, a: 0 };
-      const idx = (y * data.width + x) * 4;
+      const layer = state.document.layers.find((l) => l.id === id);
+      const lx = layer?.x ?? 0;
+      const ly = layer?.y ?? 0;
+      const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
+        (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
+      const result = await readFn(id);
+      if (!result || result.width === 0) return { r: 0, g: 0, b: 0, a: 0 };
+      // Convert document coords to layer-local coords
+      const localX = x - lx;
+      const localY = y - ly;
+      if (localX < 0 || localX >= result.width || localY < 0 || localY >= result.height) {
+        return { r: 0, g: 0, b: 0, a: 0 };
+      }
+      const idx = (localY * result.width + localX) * 4;
       return {
-        r: data.data[idx] ?? 0,
-        g: data.data[idx + 1] ?? 0,
-        b: data.data[idx + 2] ?? 0,
-        a: data.data[idx + 3] ?? 0,
+        r: result.pixels[idx] ?? 0,
+        g: result.pixels[idx + 1] ?? 0,
+        b: result.pixels[idx + 2] ?? 0,
+        a: result.pixels[idx + 3] ?? 0,
       };
     },
     { x, y, lid: layerId ?? null },
@@ -144,8 +157,8 @@ export async function paintRect(
     ({ x, y, w, h, color, lid }) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
+          document: { activeLayerId: string; width: number; height: number; layers: Array<{ id: string; width: number; height: number }> };
+          layerPixelData: Map<string, ImageData>;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: (label?: string) => void;
         };
@@ -153,7 +166,11 @@ export async function paintRect(
       const state = store.getState();
       const id = lid ?? state.document.activeLayerId;
       state.pushHistory('Paint');
-      const data = state.getOrCreateLayerPixelData(id);
+      const existing = state.layerPixelData.get(id);
+      const layer = state.document.layers.find((l) => l.id === id);
+      const lw = existing?.width ?? layer?.width ?? state.document.width;
+      const lh = existing?.height ?? layer?.height ?? state.document.height;
+      const data = existing ?? new ImageData(lw, lh);
       for (let py = y; py < y + h; py++) {
         for (let px = x; px < x + w; px++) {
           if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
@@ -182,8 +199,8 @@ export async function paintCircle(
     ({ cx, cy, radius, color, lid }) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
+          document: { activeLayerId: string; width: number; height: number; layers: Array<{ id: string; width: number; height: number }> };
+          layerPixelData: Map<string, ImageData>;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: (label?: string) => void;
         };
@@ -191,7 +208,11 @@ export async function paintCircle(
       const state = store.getState();
       const id = lid ?? state.document.activeLayerId;
       state.pushHistory('Paint Circle');
-      const data = state.getOrCreateLayerPixelData(id);
+      const existing = state.layerPixelData.get(id);
+      const layer = state.document.layers.find((l) => l.id === id);
+      const lw = existing?.width ?? layer?.width ?? state.document.width;
+      const lh = existing?.height ?? layer?.height ?? state.document.height;
+      const data = existing ?? new ImageData(lw, lh);
       for (let y = 0; y < data.height; y++) {
         for (let x = 0; x < data.width; x++) {
           const dx = x - cx;
