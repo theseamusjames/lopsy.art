@@ -27,15 +27,15 @@ test.describe('History - Basic Undo/Redo', () => {
   test('undo restores previous state after adding a layer', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const s0 = await getEditorState(page);
-    expect(s0.document.layers).toHaveLength(1);
+    expect(s0.document.layers).toHaveLength(2);
 
     await addLayer(page);
     const s1 = await getEditorState(page);
-    expect(s1.document.layers).toHaveLength(2);
+    expect(s1.document.layers).toHaveLength(3);
 
     await undo(page);
     const s2 = await getEditorState(page);
-    expect(s2.document.layers).toHaveLength(1);
+    expect(s2.document.layers).toHaveLength(2);
   });
 
   test('redo restores undone state', async ({ page }) => {
@@ -43,13 +43,13 @@ test.describe('History - Basic Undo/Redo', () => {
 
     await addLayer(page);
     const s1 = await getEditorState(page);
-    expect(s1.document.layers).toHaveLength(2);
+    expect(s1.document.layers).toHaveLength(3);
 
     await undo(page);
-    expect((await getEditorState(page)).document.layers).toHaveLength(1);
+    expect((await getEditorState(page)).document.layers).toHaveLength(2);
 
     await redo(page);
-    expect((await getEditorState(page)).document.layers).toHaveLength(2);
+    expect((await getEditorState(page)).document.layers).toHaveLength(3);
   });
 
   test('new edit after undo clears redo stack', async ({ page }) => {
@@ -57,16 +57,16 @@ test.describe('History - Basic Undo/Redo', () => {
 
     await addLayer(page);
     await addLayer(page);
-    expect((await getEditorState(page)).document.layers).toHaveLength(3);
+    expect((await getEditorState(page)).document.layers).toHaveLength(4);
 
     await undo(page);
-    expect((await getEditorState(page)).document.layers).toHaveLength(2);
+    expect((await getEditorState(page)).document.layers).toHaveLength(3);
     expect((await getEditorState(page)).redoStackLength).toBe(1);
 
     // New edit should clear redo
     await addLayer(page);
     const s = await getEditorState(page);
-    expect(s.document.layers).toHaveLength(3);
+    expect(s.document.layers).toHaveLength(4);
     expect(s.redoStackLength).toBe(0);
   });
 });
@@ -101,20 +101,20 @@ test.describe('History - Multi-Step Operations', () => {
     });
 
     const merged = await getEditorState(page);
-    expect(merged.document.layers).toHaveLength(1);
+    expect(merged.document.layers).toHaveLength(2);
 
     // Undo merge -> should have 2 layers
     await undo(page);
-    expect((await getEditorState(page)).document.layers).toHaveLength(2);
+    expect((await getEditorState(page)).document.layers).toHaveLength(3);
 
     // Undo paint on top -> top layer should be empty
     await undo(page);
     const topPixel = await getPixelAt(page, 30, 30, topId);
     expect(topPixel.a).toBe(0);
 
-    // Undo add layer -> back to 1 layer
+    // Undo add layer -> back to 1 raster layer + group
     await undo(page);
-    expect((await getEditorState(page)).document.layers).toHaveLength(1);
+    expect((await getEditorState(page)).document.layers).toHaveLength(2);
 
     // Undo paint on bg -> bg should be empty
     await undo(page);
@@ -139,7 +139,7 @@ test.describe('History - Multi-Step Operations', () => {
     await undo(page); // undo paint bg
 
     const empty = await getEditorState(page);
-    expect(empty.document.layers).toHaveLength(1);
+    expect(empty.document.layers).toHaveLength(2);
     expect(empty.redoStackLength).toBe(3);
 
     // Redo everything
@@ -148,7 +148,7 @@ test.describe('History - Multi-Step Operations', () => {
     expect(bgPixel.r).toBe(255);
 
     await redo(page); // redo add layer
-    expect((await getEditorState(page)).document.layers).toHaveLength(2);
+    expect((await getEditorState(page)).document.layers).toHaveLength(3);
 
     await redo(page); // redo paint top
     const topPixel = await getPixelAt(page, 60, 60, topId);
@@ -399,12 +399,12 @@ test.describe('History - Complex Sequences', () => {
     await addLayer(page);
     const s2 = await getEditorState(page);
 
-    // Current state: 3 layers, bg invisible, layer2 at 0.75 opacity
-    expect(s2.document.layers).toHaveLength(3);
+    // Current state: 3 raster layers + group, bg invisible, layer2 at 0.75 opacity
+    expect(s2.document.layers).toHaveLength(4);
 
     // Undo add layer 3
     await undo(page);
-    expect((await getEditorState(page)).document.layers).toHaveLength(2);
+    expect((await getEditorState(page)).document.layers).toHaveLength(3);
 
     // Undo opacity change
     await undo(page);
@@ -425,7 +425,7 @@ test.describe('History - Complex Sequences', () => {
 
     // Undo add layer 2
     await undo(page);
-    expect((await getEditorState(page)).document.layers).toHaveLength(1);
+    expect((await getEditorState(page)).document.layers).toHaveLength(2);
 
     // Undo paint on bg
     await undo(page);
@@ -447,12 +447,12 @@ test.describe('History - Complex Sequences', () => {
     // Step 3: Add another layer
     await addLayer(page);
 
-    expect((await getEditorState(page)).document.layers).toHaveLength(3);
+    expect((await getEditorState(page)).document.layers).toHaveLength(4);
 
-    // Undo twice (back to 1 layer + red paint)
+    // Undo twice (back to 1 raster layer + group + red paint)
     await undo(page);
     await undo(page);
-    expect((await getEditorState(page)).document.layers).toHaveLength(1);
+    expect((await getEditorState(page)).document.layers).toHaveLength(2);
     expect((await getEditorState(page)).redoStackLength).toBe(2);
 
     // Paint blue (diverges from original history)
@@ -513,12 +513,12 @@ test.describe('History - Complex Sequences', () => {
       store.getState().mergeDown();
     });
 
-    expect((await getEditorState(page)).document.layers).toHaveLength(1);
+    expect((await getEditorState(page)).document.layers).toHaveLength(2);
 
-    // Undo merge -> 2 layers, top should still have drop shadow
+    // Undo merge -> 2 raster layers + group, top should still have drop shadow
     await undo(page);
     const afterUndoMerge = await getEditorState(page);
-    expect(afterUndoMerge.document.layers).toHaveLength(2);
+    expect(afterUndoMerge.document.layers).toHaveLength(3);
     const topLayer = afterUndoMerge.document.layers.find((l) => l.id === topId);
     expect(topLayer!.effects.dropShadow.enabled).toBe(true);
 
@@ -546,7 +546,7 @@ test.describe('History - Complex Sequences', () => {
     });
 
     const afterDup = await getEditorState(page);
-    expect(afterDup.document.layers).toHaveLength(2);
+    expect(afterDup.document.layers).toHaveLength(3);
     const dupId = afterDup.document.activeLayerId;
 
     // Verify duplicate has same pixel data
@@ -564,15 +564,15 @@ test.describe('History - Complex Sequences', () => {
       dupId,
     );
 
-    expect((await getEditorState(page)).document.layers).toHaveLength(1);
+    expect((await getEditorState(page)).document.layers).toHaveLength(2);
 
     // Undo delete -> should restore duplicate
     await undo(page);
-    expect((await getEditorState(page)).document.layers).toHaveLength(2);
+    expect((await getEditorState(page)).document.layers).toHaveLength(3);
 
-    // Undo duplicate -> back to 1
+    // Undo duplicate -> back to 1 raster + group
     await undo(page);
-    expect((await getEditorState(page)).document.layers).toHaveLength(1);
+    expect((await getEditorState(page)).document.layers).toHaveLength(2);
 
     // Original bg should still have its content
     const bgPixel = await getPixelAt(page, 50, 50, bgId);
@@ -626,7 +626,7 @@ test.describe('History - Complex Sequences', () => {
     const topId = s2.document.activeLayerId;
     await paintRect(page, 0, 0, 100, 100, { r: 0, g: 0, b: 255, a: 64 }, topId);
 
-    expect((await getEditorState(page)).document.layers).toHaveLength(3);
+    expect((await getEditorState(page)).document.layers).toHaveLength(4);
 
     // Flatten
     await page.evaluate(() => {
@@ -636,12 +636,12 @@ test.describe('History - Complex Sequences', () => {
       store.getState().flattenImage();
     });
 
-    expect((await getEditorState(page)).document.layers).toHaveLength(1);
+    expect((await getEditorState(page)).document.layers).toHaveLength(2);
 
-    // Undo flatten -> should restore all 3 layers
+    // Undo flatten -> should restore all 3 raster layers + group
     await undo(page);
     const restored = await getEditorState(page);
-    expect(restored.document.layers).toHaveLength(3);
+    expect(restored.document.layers).toHaveLength(4);
   });
 
   test('undo does nothing with empty undo stack', async ({ page }) => {
@@ -652,7 +652,7 @@ test.describe('History - Complex Sequences', () => {
     await undo(page);
 
     const after = await getEditorState(page);
-    expect(after.document.layers).toHaveLength(1);
+    expect(after.document.layers).toHaveLength(2);
     expect(after.undoStackLength).toBe(0);
   });
 
@@ -662,7 +662,7 @@ test.describe('History - Complex Sequences', () => {
     await redo(page);
 
     const after = await getEditorState(page);
-    expect(after.document.layers).toHaveLength(1);
+    expect(after.document.layers).toHaveLength(2);
     expect(after.redoStackLength).toBe(0);
   });
 });

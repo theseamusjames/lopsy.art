@@ -334,12 +334,13 @@ test.describe('Paste', () => {
 
     await page.keyboard.press(`${mod}+KeyC`);
     await page.keyboard.press(`${mod}+KeyV`);
-    await waitForLayerCount(page, 2);
+    await waitForLayerCount(page, 3);
 
     const state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(2);
-    expect(state.document.layers[1]!.name).toBe('Pasted Layer');
-    expect(state.document.activeLayerId).toBe(state.document.layers[1]!.id);
+    expect(state.document.layers).toHaveLength(3);
+    const pastedLayer = state.document.layers.find((l) => l.name === 'Pasted Layer');
+    expect(pastedLayer).toBeDefined();
+    expect(state.document.activeLayerId).toBe(pastedLayer!.id);
   });
 
   test('paste preserves pixel data from copy', async ({ page }) => {
@@ -355,12 +356,14 @@ test.describe('Paste', () => {
     await setSelection(page, 10, 10, 30, 30);
     await page.keyboard.press(`${mod}+KeyC`);
     await page.keyboard.press(`${mod}+KeyV`);
-    await waitForLayerCount(page, 2);
+    await waitForLayerCount(page, 3);
 
     // Verify a new layer was created with the pasted content
     const state2 = await getEditorState(page);
-    expect(state2.document.layers).toHaveLength(2);
-    expect(state2.document.activeLayerId).toBe(state2.document.layers[1]!.id);
+    expect(state2.document.layers).toHaveLength(3);
+    const pastedLayer2 = state2.document.layers.find((l) => l.name === 'Pasted Layer');
+    expect(pastedLayer2).toBeDefined();
+    expect(state2.document.activeLayerId).toBe(pastedLayer2!.id);
 
     // Verify the composited canvas still shows the green content
     await page.waitForTimeout(200);
@@ -387,7 +390,7 @@ test.describe('Paste', () => {
     await setSelection(page, 100, 100, 20, 20);
     await page.keyboard.press(`${mod}+KeyC`);
     await page.keyboard.press(`${mod}+KeyV`);
-    await waitForLayerCount(page, 2);
+    await waitForLayerCount(page, 3);
 
     const state = await getEditorState(page);
     const pastedLayer = state.document.layers.find((l) => l.name === 'Pasted Layer');
@@ -412,16 +415,16 @@ test.describe('Paste', () => {
 
     const before = await getEditorState(page);
     await page.keyboard.press(`${mod}+KeyV`);
-    await waitForLayerCount(page, 2);
+    await waitForLayerCount(page, 3);
     const after = await getEditorState(page);
 
     expect(after.undoStack).toBeGreaterThan(before.undoStack);
-    expect(after.document.layers).toHaveLength(2);
+    expect(after.document.layers).toHaveLength(3);
 
     // Undo removes the pasted layer
     await page.keyboard.press(`${mod}+KeyZ`);
     const undone = await getEditorState(page);
-    expect(undone.document.layers).toHaveLength(1);
+    expect(undone.document.layers).toHaveLength(2);
   });
 
   test('paste multiple times creates multiple layers', async ({ page }) => {
@@ -430,12 +433,12 @@ test.describe('Paste', () => {
     await page.keyboard.press(`${mod}+KeyC`);
 
     await page.keyboard.press(`${mod}+KeyV`);
-    await waitForLayerCount(page, 2);
-    await page.keyboard.press(`${mod}+KeyV`);
     await waitForLayerCount(page, 3);
+    await page.keyboard.press(`${mod}+KeyV`);
+    await waitForLayerCount(page, 4);
 
     const state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(3);
+    expect(state.document.layers).toHaveLength(4);
   });
 });
 
@@ -459,10 +462,10 @@ test.describe('Cut and Paste round-trip', () => {
 
     // Paste
     await page.keyboard.press(`${mod}+KeyV`);
-    await waitForLayerCount(page, 2);
+    await waitForLayerCount(page, 3);
 
     const afterPaste = await getEditorState(page);
-    expect(afterPaste.document.layers).toHaveLength(2);
+    expect(afterPaste.document.layers).toHaveLength(3);
 
     // Verify the composited canvas shows content after paste
     await page.waitForTimeout(200);

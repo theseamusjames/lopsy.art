@@ -280,10 +280,10 @@ test.describe('Document Creation', () => {
   test('verify default layer exists after creation', async ({ page }) => {
     await createDocument(page, 400, 300, false);
     const state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(2);
+    expect(state.document.layers).toHaveLength(3);
     expect(state.document.layers[0]!.name).toBe('Background');
     expect(state.document.layers[1]!.name).toBe('Layer 1');
-    expect(state.document.layerOrder).toHaveLength(2);
+    expect(state.document.layerOrder).toHaveLength(3);
     expect(state.document.activeLayerId).toBe(state.document.layers[1]!.id);
   });
 });
@@ -1030,8 +1030,8 @@ test.describe('Layer Operations', () => {
     });
 
     const state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(3);
-    expect(state.document.layerOrder).toHaveLength(3);
+    expect(state.document.layers).toHaveLength(4);
+    expect(state.document.layerOrder).toHaveLength(4);
   });
 
   test('delete layer removes it', async ({ page }) => {
@@ -1044,8 +1044,8 @@ test.describe('Layer Operations', () => {
     });
 
     let state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(3);
-    const thirdLayerId = state.document.layers[2]!.id;
+    expect(state.document.layers).toHaveLength(4);
+    const thirdLayerId = state.document.layers[3]!.id;
 
     await page.evaluate(
       (id) => {
@@ -1058,7 +1058,7 @@ test.describe('Layer Operations', () => {
     );
 
     state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(2);
+    expect(state.document.layers).toHaveLength(3);
   });
 
   test('toggle visibility hides layer', async ({ page }) => {
@@ -1090,7 +1090,7 @@ test.describe('Layer Operations', () => {
     });
 
     const state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(3);
+    expect(state.document.layers).toHaveLength(4);
 
     // The duplicated layer should have the same pixel data
     const newLayerId = state.document.activeLayerId;
@@ -1978,7 +1978,7 @@ test.describe('Comprehensive Scenarios', () => {
     await drawStroke(page, { x: 50, y: 100 }, { x: 150, y: 100 });
 
     let state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(2);
+    expect(state.document.layers).toHaveLength(3);
 
     // Merge down
     await page.evaluate(() => {
@@ -1989,7 +1989,7 @@ test.describe('Comprehensive Scenarios', () => {
     });
 
     state = await getEditorState(page);
-    expect(state.document.layers).toHaveLength(1);
+    expect(state.document.layers).toHaveLength(2);
 
     // The merged layer should have pixels
     const opaque = await countOpaquePixels(page);

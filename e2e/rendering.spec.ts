@@ -897,7 +897,7 @@ test.describe('WASM/WebGL Rendering', () => {
 
     console.log('Multi-step undo result:', result);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '22-multi-step-after-undo.png') });
-    expect(result.layerCount).toBe(1); // Back to 1 layer
+    expect(result.layerCount).toBe(2); // Back to 1 raster layer + root group
     expect(result.r).toBe(255); // Red still there
   });
 
@@ -992,7 +992,7 @@ test.describe('WASM/WebGL Rendering', () => {
     });
 
     console.log('Merge down result:', JSON.stringify(result));
-    expect(result.layerCount).toBe(1);
+    expect(result.layerCount).toBe(2);
     // Top half: blue
     expect(result.topPixel?.[2]).toBeGreaterThan(200);
     // Bottom half: red
@@ -1052,7 +1052,7 @@ test.describe('WASM/WebGL Rendering', () => {
     });
 
     console.log('Flatten result:', JSON.stringify(result));
-    expect(result.layerCount).toBe(1);
+    expect(result.layerCount).toBe(2);
     expect(result.centerPixel?.[3]).toBeGreaterThan(0);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '25-flatten-image.png') });
   });
@@ -2164,8 +2164,8 @@ test.describe('WASM/WebGL Rendering', () => {
     });
 
     console.log('Delete layer result:', result);
-    expect(result.before).toBe(2);
-    expect(result.after).toBe(1);
+    expect(result.before).toBe(3);
+    expect(result.after).toBe(2);
     expect(result.deletedStillExists).toBe(false);
     expect(result.newActiveId).toBeTruthy();
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '43-delete-layer.png') });
@@ -3385,8 +3385,8 @@ test.describe('WASM/WebGL Rendering', () => {
 
     console.log('Multi-step undo result:', JSON.stringify(afterUndo, null, 2));
 
-    // Assertions — should be back to just 1 layer with 3 red spots, no effects
-    expect(afterUndo.layerCount).toBeLessThanOrEqual(2); // Background + Layer 1
+    // Assertions — should be back to just 1 raster layer + root group with 3 red spots, no effects
+    expect(afterUndo.layerCount).toBeLessThanOrEqual(3); // Background + root group (+ possible Layer 1)
     expect(afterUndo.hasEffects).toBe(false);
 
     // Red spots should be in the correct positions

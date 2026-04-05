@@ -204,7 +204,7 @@ test.describe('Merge Down', () => {
     await page.keyboard.press(`${mod}+KeyE`);
 
     const after = await getEditorState(page);
-    expect(after.document.layers).toHaveLength(1);
+    expect(after.document.layers).toHaveLength(2);
     expect(after.document.activeLayerId).toBe(bgId);
 
     // Verify the composited canvas shows merged content
@@ -240,19 +240,19 @@ test.describe('Merge Down', () => {
     await paintRect(page, 50, 50, 50, 50, { r: 0, g: 255, b: 0, a: 255 }, topId);
 
     // Verify pre-merge state
-    expect(state1.document.layers).toHaveLength(2);
+    expect(state1.document.layers).toHaveLength(3);
 
     // Merge down
     await page.keyboard.press(`${mod}+KeyE`);
     const merged = await getEditorState(page);
-    expect(merged.document.layers).toHaveLength(1);
+    expect(merged.document.layers).toHaveLength(2);
 
     // Undo
     await page.keyboard.press(`${mod}+KeyZ`);
 
     const undone = await getEditorState(page);
-    expect(undone.document.layers).toHaveLength(2);
-    expect(undone.document.layerOrder).toHaveLength(2);
+    expect(undone.document.layers).toHaveLength(3);
+    expect(undone.document.layerOrder).toHaveLength(3);
 
     // Verify the background layer has its original red content
     const bgPixel = await getPixelAt(page, 10, 10, bgId);
@@ -295,12 +295,12 @@ test.describe('Merge Down', () => {
     await page.keyboard.press(`${mod}+KeyZ`);
 
     const undone = await getEditorState(page);
-    expect(undone.document.layers).toHaveLength(2);
+    expect(undone.document.layers).toHaveLength(3);
 
     await page.keyboard.press(`${mod}+Shift+KeyZ`);
 
     const redone = await getEditorState(page);
-    expect(redone.document.layers).toHaveLength(1);
+    expect(redone.document.layers).toHaveLength(2);
     expect(redone.document.activeLayerId).toBe(bgId);
   });
 
@@ -323,13 +323,13 @@ test.describe('Merge Down', () => {
     const topId = s2.document.activeLayerId;
     await paintRect(page, 0, 0, 100, 100, { r: 0, g: 0, b: 255, a: 255 }, topId);
 
-    expect(s2.document.layers).toHaveLength(3);
+    expect(s2.document.layers).toHaveLength(4);
 
     // Merge top into mid
     await page.keyboard.press(`${mod}+KeyE`);
 
     const after = await getEditorState(page);
-    expect(after.document.layers).toHaveLength(2);
+    expect(after.document.layers).toHaveLength(3);
     expect(after.document.activeLayerId).toBe(midId);
 
     // Background should still be separate with red
@@ -365,7 +365,7 @@ test.describe('Merge Down', () => {
 
     // Verify merged result — check layer count and composited canvas
     const afterMerge = await getEditorState(page);
-    expect(afterMerge.document.layers).toHaveLength(1);
+    expect(afterMerge.document.layers).toHaveLength(2);
     await page.waitForTimeout(200);
 
     const afterMergeSnap = await page.evaluate(() => {
@@ -387,7 +387,7 @@ test.describe('Merge Down', () => {
 
     // Should restore both layers
     const afterUndo = await getEditorState(page);
-    expect(afterUndo.document.layers).toHaveLength(2);
+    expect(afterUndo.document.layers).toHaveLength(3);
 
     // Verify composited canvas is similar to before merge
     const afterUndoSnap = await page.evaluate(() => {
@@ -407,12 +407,12 @@ test.describe('Merge Down', () => {
   test('merge down does nothing when only one layer exists', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const before = await getEditorState(page);
-    expect(before.document.layers).toHaveLength(1);
+    expect(before.document.layers).toHaveLength(2);
 
     await page.keyboard.press(`${mod}+KeyE`);
 
     const after = await getEditorState(page);
-    expect(after.document.layers).toHaveLength(1);
+    expect(after.document.layers).toHaveLength(2);
     expect(after.undoStack).toBe(before.undoStack);
   });
 
@@ -429,6 +429,6 @@ test.describe('Merge Down', () => {
     await page.keyboard.press(`${mod}+KeyE`);
 
     const after = await getEditorState(page);
-    expect(after.document.layers).toHaveLength(2);
+    expect(after.document.layers).toHaveLength(3);
   });
 });

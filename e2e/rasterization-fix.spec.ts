@@ -457,7 +457,7 @@ test.describe('Merge Down with Effects', () => {
     await page.keyboard.press(`${mod}+KeyE`);
 
     const after = await getEditorState(page);
-    expect(after.document.layers).toHaveLength(1);
+    expect(after.document.layers).toHaveLength(2);
 
     // Verify the composited canvas shows merged content
     await page.waitForTimeout(200);
@@ -492,7 +492,7 @@ test.describe('Merge Down with Effects', () => {
     await page.keyboard.press(`${mod}+KeyE`);
 
     const after = await getEditorState(page);
-    expect(after.document.layers).toHaveLength(1);
+    expect(after.document.layers).toHaveLength(2);
 
     // Verify the composited canvas shows merged content
     await page.waitForTimeout(200);

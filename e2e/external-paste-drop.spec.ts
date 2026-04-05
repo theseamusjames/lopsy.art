@@ -219,7 +219,7 @@ test.describe('External paste', () => {
 
     // Paste a solid red 200x200 PNG
     await pasteColorPng(page, 200, 200, { r: 255, g: 0, b: 0, a: 255 }, 'Copied File');
-    await waitForLayerCount(page, 2);
+    await waitForLayerCount(page, 3);
 
     // Wait for render
     await page.waitForTimeout(300);
@@ -306,7 +306,7 @@ test.describe('Drag and drop', () => {
 
     await dropImageFile(page, 200, 200, { r: 0, g: 255, b: 0, a: 255 }, 'green.png');
 
-    await waitForLayerCount(page, 2);
+    await waitForLayerCount(page, 3);
     await page.waitForTimeout(300);
 
     const result = await readCompositedPixels(page);
@@ -340,7 +340,7 @@ test.describe('Dimension preservation', () => {
 
     // Paste a small image — layer should match source dimensions, not canvas
     await pasteColorPng(page, 64, 32, { r: 128, g: 128, b: 128, a: 255 }, 'Copied File');
-    await waitForLayerCount(page, 3); // bg + layer 1 + pasted
+    await waitForLayerCount(page, 4); // bg + layer 1 + group + pasted
 
     const state = await getEditorState(page);
     const pasted = state.document.layers.find((l) => l.name === 'Pasted Layer');
@@ -354,7 +354,7 @@ test.describe('Dimension preservation', () => {
 
     // Paste a larger image — layer size should match the source, not the canvas
     await pasteColorPng(page, 1024, 768, { r: 200, g: 100, b: 50, a: 255 }, 'Copied File');
-    await waitForLayerCount(page, 3);
+    await waitForLayerCount(page, 4);
 
     const state = await getEditorState(page);
     const pasted = state.document.layers.find((l) => l.name === 'Pasted Layer');
