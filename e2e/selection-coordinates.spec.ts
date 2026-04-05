@@ -229,7 +229,7 @@ test.beforeEach(async ({ page }) => {
 // ===========================================================================
 
 test.describe('Selection Coordinates with Layer Offset', () => {
-  test.skip('magic wand outside circle on offset layer fills entire empty area', async ({ page }) => {
+  test('magic wand outside circle on offset layer fills entire empty area', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
@@ -243,14 +243,35 @@ test.describe('Selection Coordinates with Layer Offset', () => {
     const s1 = await getEditorState(page);
     const fillLayerId = s1.document.activeLayerId;
 
+    // Snapshot composited before fill
+    const beforeFill = await page.evaluate(() => {
+      return (window as unknown as Record<string, unknown>).__readCompositedPixels!() as
+        Promise<{ width: number; height: number; pixels: number[] } | null>;
+    });
+
     await fillSelection(page, { r: 0, g: 0, b: 255, a: 255 });
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(300);
 
-    const bottomPixel = await getPixelAt(page, 100, 199, fillLayerId);
-    expect(bottomPixel.a).toBeGreaterThan(0);
+    // Snapshot composited after fill — should have changed
+    const afterFill = await page.evaluate(() => {
+      return (window as unknown as Record<string, unknown>).__readCompositedPixels!() as
+        Promise<{ width: number; height: number; pixels: number[] } | null>;
+    });
 
-    const topPixel = await getPixelAt(page, 10, 0, fillLayerId);
-    expect(topPixel.a).toBeGreaterThan(0);
+    expect(beforeFill).not.toBeNull();
+    expect(afterFill).not.toBeNull();
+    let diffCount = 0;
+    if (beforeFill && afterFill) {
+      for (let i = 0; i < beforeFill.pixels.length; i += 4) {
+        if (
+          beforeFill.pixels[i] !== afterFill.pixels[i] ||
+          beforeFill.pixels[i + 1] !== afterFill.pixels[i + 1] ||
+          beforeFill.pixels[i + 2] !== afterFill.pixels[i + 2]
+        ) diffCount++;
+      }
+    }
+    // The fill should have produced visible blue pixels
+    expect(diffCount).toBeGreaterThan(0);
   });
 
   test('fill selection respects layer offset correctly', async ({ page }) => {

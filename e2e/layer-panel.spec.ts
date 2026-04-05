@@ -240,35 +240,20 @@ test.describe('Layer Effects Button', () => {
     expect(uiAfter.showEffectsDrawer).toBe(true);
   });
 
-  test.skip('clicking effects button selects that layer', async ({ page }) => {
-    await addLayer(page);
-
+  test('clicking effects button selects that layer', async ({ page }) => {
+    // With default doc (Background + Layer 1 + Project group),
+    // active layer is Layer 1. Select Background via its effects button.
     const state = await getEditorState(page);
     const backgroundLayerId = state.document.layers[0]!.id;
-
-    // Active layer is the newly added layer, not Background
     expect(state.document.activeLayerId).not.toBe(backgroundLayerId);
 
-    // Select the Background layer via store, then verify effects button works
-    await page.evaluate((bgId) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(bgId);
-    }, backgroundLayerId);
-
-    // Click effects button on the now-active layer
-    await page.locator('button[title="Layer effects"]').first().click();
+    // The effects buttons are rendered per raster layer (not group).
+    // In reversed order: Layer 1 (first), Background (last).
+    const buttons = page.locator('button[title="Layer effects"]');
+    await buttons.last().click();
 
     const updated = await getEditorState(page);
-    // Effects drawer should have opened
-    const ui = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { showEffectsDrawer: boolean };
-      };
-      return store.getState().showEffectsDrawer;
-    });
-    expect(ui).toBe(true);
+    expect(updated.document.activeLayerId).toBe(backgroundLayerId);
   });
 
   test('clicking effects button when drawer is open just selects layer', async ({ page }) => {

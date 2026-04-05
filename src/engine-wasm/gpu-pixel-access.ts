@@ -32,7 +32,14 @@ export function readLayerAsImageData(layerId: string): ImageData | null {
   const cached = frameCache.get(layerId);
   if (cached !== undefined) return cached;
 
-  const dims = getLayerTextureDimensions(currentEngine, layerId);
+  let dims: Int32Array | undefined;
+  try {
+    dims = getLayerTextureDimensions(currentEngine, layerId);
+  } catch {
+    // Group layers and other non-raster layers have no GPU texture
+    frameCache.set(layerId, null);
+    return null;
+  }
   const width = dims?.[0] ?? 0;
   const height = dims?.[1] ?? 0;
   if (width === 0 || height === 0) {
