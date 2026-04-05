@@ -143,7 +143,7 @@ function renderFrameGpu(
   syncDocumentSize(engine, doc.width, doc.height);
   syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
   syncViewport(engine, viewport.zoom, viewport.panX, viewport.panY, screenW, screenH);
-  syncLayers(engine, layers, pixelData, sparseData, dirtyLayerIds);
+  syncLayers(engine, layers, doc.layerOrder, pixelData, sparseData, dirtyLayerIds);
   syncSelection(engine, selection);
   syncGrid(engine, showGrid, gridSize);
   syncRulers(engine, showRulers);

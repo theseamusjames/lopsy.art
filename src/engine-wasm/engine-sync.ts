@@ -316,6 +316,7 @@ export function syncViewport(
 export function syncLayers(
   engine: Engine,
   layers: readonly Layer[],
+  layerOrder: readonly string[],
   pixelData: Map<string, ImageData>,
   sparseData: Map<string, SparseLayerEntry>,
   dirtyLayerIds: Set<string>,
@@ -403,7 +404,7 @@ export function syncLayers(
   tracked.layerIds = currentIds;
 
   // Sync layer order
-  const orderJson = JSON.stringify(layers.map((l) => l.id));
+  const orderJson = JSON.stringify(layerOrder);
   if (tracked.layerOrder !== orderJson) {
     setLayerOrder(engine, orderJson);
     tracked.layerOrder = orderJson;
@@ -576,5 +577,5 @@ export function flushLayerSync(state: {
 }): void {
   const engine = getEngine();
   if (!engine) return;
-  syncLayers(engine, state.document.layers, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
+  syncLayers(engine, state.document.layers, state.document.layerOrder, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
 }
