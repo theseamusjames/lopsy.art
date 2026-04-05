@@ -1,5 +1,6 @@
+import type { Layer } from '../../../types';
 import type { EditorState, SelectionData } from '../types';
-import { createRasterLayer } from '../../../layers/layer-model';
+import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
 import { createImageData } from '../../../engine/color-space';
 
 export function computeCreateDocument(
@@ -23,7 +24,8 @@ export function computeCreateDocument(
   }
   pixelData.set(bgLayer.id, imgData);
 
-  const layers = [bgLayer];
+  const childIds = [bgLayer.id];
+  const layers: Layer[] = [bgLayer];
   const layerOrder = [bgLayer.id];
   let activeLayerId = bgLayer.id;
 
@@ -31,8 +33,13 @@ export function computeCreateDocument(
     const drawLayer = createRasterLayer({ name: 'Layer 1', width, height });
     layers.push(drawLayer);
     layerOrder.push(drawLayer.id);
+    childIds.push(drawLayer.id);
     activeLayerId = drawLayer.id;
   }
+
+  const rootGroup = createGroupLayer({ name: 'Project', children: childIds });
+  layers.push(rootGroup);
+  layerOrder.push(rootGroup.id);
 
   const selection: SelectionData = { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 };
   return {
@@ -45,6 +52,7 @@ export function computeCreateDocument(
       layerOrder,
       activeLayerId,
       backgroundColor: bgColor,
+      rootGroupId: rootGroup.id,
     },
     layerPixelData: pixelData,
     sparseLayerData: new Map(),

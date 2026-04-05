@@ -1,6 +1,7 @@
 import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
 import type { AlignEdge } from '../../tools/move/move';
-import { createRasterLayer } from '../../layers/layer-model';
+import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
+import { moveLayerToGroup as moveLayerToGroupUtil } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -85,15 +86,17 @@ function syncPixelDataToGpu(
 
 function createInitialDocument() {
   const bg = createRasterLayer({ name: 'Background', width: 800, height: 600 });
+  const rootGroup = createGroupLayer({ name: 'Project', children: [bg.id] });
   return {
     id: crypto.randomUUID(),
     name: 'Untitled' as const,
     width: 800,
     height: 600,
-    layers: [bg],
-    layerOrder: [bg.id],
-    activeLayerId: bg.id,
+    layers: [bg, rootGroup] as readonly Layer[],
+    layerOrder: [bg.id, rootGroup.id] as readonly string[],
+    activeLayerId: bg.id as string | null,
     backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    rootGroupId: rootGroup.id as string | null,
   };
 }
 
@@ -110,6 +113,9 @@ export interface DocumentSlice {
   toggleLayerVisibility: (id: string) => void;
   toggleLayerLock: (id: string) => void;
   renameLayer: (id: string, name: string) => void;
+  addGroup: (name?: string) => void;
+  toggleGroupCollapsed: (groupId: string) => void;
+  moveLayerToGroup: (layerId: string, targetGroupId: string, insertIndex?: number) => void;
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
@@ -203,6 +209,41 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       l.id === id ? { ...l, name } : l,
     );
     set({ document: { ...doc, layers } });
+  },
+
+  addGroup: (name) => {
+    const doc = get().document;
+    const group = createGroupLayer({ name: name ?? 'Group' });
+    const layers = [...doc.layers, group];
+    const layerOrder = [...doc.layerOrder, group.id];
+    // Add to root group if it exists
+    const rootId = doc.rootGroupId;
+    const finalLayers = rootId
+      ? layers.map((l) =>
+          l.id === rootId && l.type === 'group'
+            ? { ...l, children: [...l.children, group.id] }
+            : l,
+        )
+      : layers;
+    set({
+      document: { ...doc, layers: finalLayers, layerOrder, activeLayerId: group.id },
+    });
+  },
+
+  toggleGroupCollapsed: (groupId) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) =>
+      l.id === groupId && l.type === 'group'
+        ? { ...l, collapsed: !('collapsed' in l && l.collapsed) }
+        : l,
+    );
+    set({ document: { ...doc, layers } });
+  },
+
+  moveLayerToGroup: (layerId, targetGroupId, insertIndex) => {
+    const doc = get().document;
+    const newLayers = moveLayerToGroupUtil(doc.layers, layerId, targetGroupId, insertIndex);
+    set({ document: { ...doc, layers: newLayers } });
   },
 
   updateLayerOpacity: (id, opacity) => {

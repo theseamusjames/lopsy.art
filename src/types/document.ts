@@ -11,6 +11,7 @@ export interface DocumentState {
   readonly layerOrder: readonly string[]; // bottom to top
   readonly activeLayerId: string | null;
   readonly backgroundColor: Color;
+  readonly rootGroupId?: string | null;
 }
 
 export interface ViewportState {

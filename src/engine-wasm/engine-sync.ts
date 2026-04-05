@@ -173,6 +173,10 @@ function layerToDescJson(layer: Layer): string {
     } : null,
   };
 
+  if (layer.type === 'group' && 'children' in layer) {
+    desc.children = layer.children;
+  }
+
   return JSON.stringify(desc);
 }
 
