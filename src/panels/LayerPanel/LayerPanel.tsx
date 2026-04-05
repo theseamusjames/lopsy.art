@@ -146,20 +146,19 @@ export function LayerPanel({
       const draggedParent = findParentGroup(layers, draggedLayer.id);
 
       if (neighbor) {
+        // Find the group the neighbor belongs to
+        let targetParentId: string | null = null;
         const neighborParent = findParentGroup(layers, neighbor.layer.id);
-        // Re-parent if the target group differs from the current parent
-        if (neighborParent && draggedParent && neighborParent.id !== draggedParent.id) {
-          if (canMoveToGroup(layers, draggedLayer.id, neighborParent.id)) {
-            moveLayerToGroup(draggedLayer.id, neighborParent.id);
-            return;
-          }
+        if (neighborParent) {
+          targetParentId = neighborParent.id;
+        } else if (isGroupLayer(neighbor.layer)) {
+          // Neighbor is the root group (no parent) — target is the root itself
+          targetParentId = neighbor.layer.id;
         }
-        // Also re-parent if neighbor IS a group and dragged layer is inside it
-        // but being dragged outside (above the group row)
-        if (neighbor.layer.type === 'group' && draggedParent && draggedParent.id === neighbor.layer.id && gap <= neighborIdx) {
-          const grandParent = findParentGroup(layers, neighbor.layer.id);
-          if (grandParent && canMoveToGroup(layers, draggedLayer.id, grandParent.id)) {
-            moveLayerToGroup(draggedLayer.id, grandParent.id);
+
+        if (targetParentId && draggedParent && targetParentId !== draggedParent.id) {
+          if (canMoveToGroup(layers, draggedLayer.id, targetParentId)) {
+            moveLayerToGroup(draggedLayer.id, targetParentId);
             return;
           }
         }

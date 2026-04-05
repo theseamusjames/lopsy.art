@@ -334,15 +334,10 @@ export function syncLayers(
     const descJson = layerToDescJson(layer, layers);
 
     if (!tracked.layerIds.has(layer.id)) {
-      try { addLayer(engine, descJson); } catch (e) { console.error('[syncLayers] addLayer FAILED for', layer.id, layer.name, ':', e); }
+      try { addLayer(engine, descJson); } catch (e) { console.error('[syncLayers] addLayer failed:', layer.id, e); }
       tracked.layerVersions.set(layer.id, descJson);
     } else if (tracked.layerVersions.get(layer.id) !== descJson) {
-      const parsed = JSON.parse(descJson);
-      if (layer.name === 'Layer 1' || layer.name === 'Group') {
-        const parentIds = layers.filter((l) => l.type === 'group' && 'children' in l && (l as import('../types').GroupLayer).children.includes(layer.id)).map((l) => l.name);
-        console.log('[syncLayers] updateLayer', layer.name, 'visible=', parsed.visible, 'own_visible=', layer.visible, 'parents=', parentIds);
-      }
-      try { updateLayer(engine, descJson); } catch (e) { console.error('[syncLayers] updateLayer FAILED for', layer.id, layer.name, ':', e); }
+      try { updateLayer(engine, descJson); } catch (e) { console.error('[syncLayers] updateLayer failed:', layer.id, e); }
       tracked.layerVersions.set(layer.id, descJson);
     }
 

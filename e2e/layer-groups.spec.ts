@@ -969,14 +969,6 @@ test.describe('Visual rendering after group move', () => {
 
 test.describe('GPU rendering verification', () => {
   test('layer content renders after being moved out of hidden group', async ({ page }) => {
-    // Capture browser console
-    const consoleLogs: string[] = [];
-    page.on('console', (msg) => {
-      const text = msg.text();
-      if (text.includes('syncLayers')) consoleLogs.push(text);
-    });
-    page.on('pageerror', (err) => consoleLogs.push('PAGE ERROR: ' + err.message));
-
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 100, 100);
@@ -1085,7 +1077,6 @@ test.describe('GPU rendering verification', () => {
     }, { layer1Id: layer1.id });
 
     console.log('Engine check:', check);
-    console.log('Console logs from browser:', consoleLogs);
     expect(check.effectivelyVisible).toBe(true);
     expect(check.hasPixelData).toBe(true);
     expect(check.inLayerOrder).toBe(true);
