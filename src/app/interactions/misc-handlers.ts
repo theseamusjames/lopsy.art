@@ -62,6 +62,17 @@ export function handleFillDown(ctx: InteractionContext): void {
     color.r, color.g, color.b, Math.round(color.a * 255),
     tolerance, contiguous,
   );
+
+  const { selection } = editorState;
+  if (selection.active && selection.mask) {
+    const selMask = selection.mask;
+    for (let i = 0; i < fillMask.length && i < selMask.length; i++) {
+      if (selMask[i] === 0) {
+        fillMask[i] = 0;
+      }
+    }
+  }
+
   wasmApplyFillToLayer(
     engine, activeLayerId,
     color.r / 255, color.g / 255, color.b / 255, color.a,
