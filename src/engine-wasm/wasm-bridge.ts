@@ -151,12 +151,13 @@ import init, {
 
 export type { Engine };
 
-let isInitialized = false;
+let initPromise: Promise<void> | null = null;
 
 export async function initWasm(): Promise<void> {
-  if (isInitialized) return;
-  await init();
-  isInitialized = true;
+  if (!initPromise) {
+    initPromise = init().then(() => {});
+  }
+  await initPromise;
 }
 
 // Re-export everything with the same names
