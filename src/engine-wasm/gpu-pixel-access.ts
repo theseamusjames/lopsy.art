@@ -32,7 +32,7 @@ export function readLayerAsImageData(layerId: string): ImageData | null {
   const cached = frameCache.get(layerId);
   if (cached !== undefined) return cached;
 
-  let dims: Int32Array | undefined;
+  let dims: Uint32Array | undefined;
   try {
     dims = getLayerTextureDimensions(currentEngine, layerId);
   } catch {
