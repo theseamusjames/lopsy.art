@@ -3,7 +3,8 @@ import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { strokeCurrentPath } from './useCanvasInteraction';
 import { getEngine } from '../engine-wasm/engine-state';
-import { clipboardCut } from '../engine-wasm/wasm-bridge';
+import { clipboardCut, hasFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
+import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
@@ -224,11 +225,28 @@ function handleDeleteKey(): void {
   if (sel.active && sel.mask) {
     const engine = getEngine();
     if (!engine) return;
+
+    // Commit any active transform/move float and rebuild the selection
+    // mask from actual pixel alpha before clearing.
+    if (hasFloat(engine)) {
+      selectLayerAlpha(activeId);
+      // Force-sync mask to GPU
+      const selAfter = useEditorStore.getState().selection;
+      if (selAfter.active && selAfter.mask) {
+        const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
+        setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
+      }
+    }
+
+    // Re-read selection after potential mask rebuild
+    const selNow = useEditorStore.getState().selection;
+    if (!selNow.active || !selNow.mask) return;
+
     editor.pushHistory();
-    const bx = sel.bounds ? Math.round(sel.bounds.x) : 0;
-    const by = sel.bounds ? Math.round(sel.bounds.y) : 0;
-    const bw = sel.bounds ? Math.round(sel.bounds.width) : 0;
-    const bh = sel.bounds ? Math.round(sel.bounds.height) : 0;
+    const bx = selNow.bounds ? Math.round(selNow.bounds.x) : 0;
+    const by = selNow.bounds ? Math.round(selNow.bounds.y) : 0;
+    const bw = selNow.bounds ? Math.round(selNow.bounds.width) : 0;
+    const bh = selNow.bounds ? Math.round(selNow.bounds.height) : 0;
     // GPU-side clear: uses clipboardCut which copies then clears.
     // We discard the clipboard result — we just want the clear.
     clipboardCut(engine, activeId, true, bx, by, bw, bh);

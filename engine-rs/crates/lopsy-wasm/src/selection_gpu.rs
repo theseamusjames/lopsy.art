@@ -34,6 +34,9 @@ pub fn set_selection_mask(
         gl, tex_handle, 0, 0, width, height, &rgba,
     );
 
+    // Use NEAREST filtering to avoid interpolation at mask boundaries
+    engine.texture_pool.set_nearest_filter(gl, tex_handle);
+
     engine.selection_mask_texture = Some(tex_handle);
     engine.needs_recomposite = true;
 }

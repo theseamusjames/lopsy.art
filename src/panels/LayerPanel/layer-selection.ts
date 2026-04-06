@@ -2,8 +2,30 @@ import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { selectionBounds } from '../../selection/selection';
 import { createTransformState } from '../../tools/transform/transform';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
 
 export function selectLayerAlpha(layerId: string): void {
+  // Commit any active GPU float so the layer texture has the final pixels
+  const engine = getEngine();
+  if (engine && hasFloat(engine)) {
+    dropFloat(engine);
+  }
+
+  // Clear stale JS pixel data so resolvePixelData reads from committed GPU texture
+  const preState = useEditorStore.getState();
+  const pixelDataMap = new Map(preState.layerPixelData);
+  pixelDataMap.delete(layerId);
+  const sparseMap = new Map(preState.sparseLayerData);
+  sparseMap.delete(layerId);
+  const dirtyIds = new Set(preState.dirtyLayerIds);
+  dirtyIds.add(layerId);
+  useEditorStore.setState({
+    layerPixelData: pixelDataMap,
+    sparseLayerData: sparseMap,
+    dirtyLayerIds: dirtyIds,
+  });
+
   const editorState = useEditorStore.getState();
   const layer = editorState.document.layers.find((l) => l.id === layerId);
   if (!layer) return;

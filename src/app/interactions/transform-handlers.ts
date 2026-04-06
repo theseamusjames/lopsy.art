@@ -4,13 +4,24 @@ import {
   isRotateHandle,
   computeScale,
   computeRotation,
-  applyTransformToMask,
+  computeSkew,
+  computeDistort,
+  computePerspective,
+  getCornerPositions,
+  computeInverseAffineMatrix,
 } from '../../tools/transform/transform';
 import type { TransformState } from '../../tools/transform/transform';
-import { getSelectionMaskValue } from '../../selection/selection';
-import { createImageDataFromArray, contextOptions } from '../../engine/color-space';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
+import { getEngine } from '../../engine-wasm/engine-state';
+import {
+  floatSelection,
+  hasFloat,
+  setSelectionMask,
+  compositeFloatAffine,
+  compositeFloatPerspective,
+} from '../../engine-wasm/wasm-bridge';
+import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import type { InteractionState, InteractionContext } from './interaction-types';
 import type { Point } from '../../types';
 
@@ -20,7 +31,7 @@ import type { Point } from '../../types';
  * caller can fall through to the tool switch).
  */
 export function handleTransformDown(ctx: InteractionContext): InteractionState | null {
-  const { canvasPos, activeLayerId, activeLayer, floatingSelectionRef, persistentTransformRef } = ctx;
+  const { canvasPos, activeLayerId, floatingSelectionRef, persistentTransformRef } = ctx;
 
   const uiState = useUIStore.getState();
   const currentTransform = uiState.transform;
@@ -41,67 +52,61 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     ? computeRotation(canvasPos, currentTransform) - currentTransform.rotation
     : 0;
 
-  const sel = editorState.selection;
   editorState.pushHistory();
 
-  // Clear floating selection when entering transform mode.
-  // The persistent transform canvases should already be built
-  // from the move mouseup (with correctly separated content).
+  // Clear floating selection ref when entering transform mode.
   floatingSelectionRef.current = null;
 
-  // On first grab: cut pixels into persistent offscreen canvases.
-  // On subsequent grabs: reuse them so we always transform from the
-  // original unmodified pixels (no re-extraction degradation).
-  if (!persistentTransformRef.current && sel.active && sel.mask) {
-    const imageData = editorState.getOrCreateLayerPixelData(activeLayerId);
-    const w = imageData.width;
-    const h = imageData.height;
+  const engine = getEngine();
 
-    const txCanvas = document.createElement('canvas');
-    txCanvas.width = w;
-    txCanvas.height = h;
-    const txCtx = txCanvas.getContext('2d', contextOptions);
-
-    const bCanvas = document.createElement('canvas');
-    bCanvas.width = w;
-    bCanvas.height = h;
-    const bCtx = bCanvas.getContext('2d', contextOptions);
-
-    if (txCtx && bCtx) {
-      const floatedData = createImageDataFromArray(new Uint8ClampedArray(imageData.data), w, h);
-      const baseData = createImageDataFromArray(new Uint8ClampedArray(imageData.data), w, h);
-
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const idx = (y * w + x) * 4;
-          if (getSelectionMaskValue(sel, x + activeLayer.x, y + activeLayer.y) > 0) {
-            baseData.data[idx] = 0;
-            baseData.data[idx + 1] = 0;
-            baseData.data[idx + 2] = 0;
-            baseData.data[idx + 3] = 0;
-          } else {
-            floatedData.data[idx] = 0;
-            floatedData.data[idx + 1] = 0;
-            floatedData.data[idx + 2] = 0;
-            floatedData.data[idx + 3] = 0;
-          }
-        }
-      }
-      txCtx.putImageData(floatedData, 0, 0);
-      bCtx.putImageData(baseData, 0, 0);
-
-      persistentTransformRef.current = {
-        transformCanvas: txCanvas,
-        baseCanvas: bCanvas,
-        originalMask: new Uint8ClampedArray(sel.mask),
-        maskWidth: sel.maskWidth,
-        maskHeight: sel.maskHeight,
-      };
+  // If there's a GPU float from a previous move (no persistentTransformRef),
+  // commit it first so we start the transform from committed content.
+  if (engine && hasFloat(engine) && !persistentTransformRef.current) {
+    selectLayerAlpha(activeLayerId);
+    // Force-sync mask to GPU
+    const selAfter = useEditorStore.getState().selection;
+    if (selAfter.active && selAfter.mask) {
+      const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
+      setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
     }
   }
 
-  const persistent = persistentTransformRef.current;
+  // If the float was dropped (e.g., by selectLayerAlpha or cmd+click),
+  // clear stale persistentTransformRef so we re-float.
+  if (engine && !hasFloat(engine)) {
+    persistentTransformRef.current = null;
+  }
 
+  // Re-read selection after potential commit
+  const sel = useEditorStore.getState().selection;
+
+  if (!persistentTransformRef.current && sel.active && sel.mask) {
+    if (engine && !hasFloat(engine)) {
+      floatSelection(engine, activeLayerId);
+
+      // Clear stale JS pixel data
+      const state = useEditorStore.getState();
+      const pixelDataMap = new Map(state.layerPixelData);
+      pixelDataMap.delete(activeLayerId);
+      const sparseMap = new Map(state.sparseLayerData);
+      sparseMap.delete(activeLayerId);
+      const dirtyIds = new Set(state.dirtyLayerIds);
+      dirtyIds.add(activeLayerId);
+      useEditorStore.setState({
+        layerPixelData: pixelDataMap,
+        sparseLayerData: sparseMap,
+        dirtyLayerIds: dirtyIds,
+      });
+    }
+
+    persistentTransformRef.current = {
+      originalMask: new Uint8ClampedArray(sel.mask),
+      maskWidth: sel.maskWidth,
+      maskHeight: sel.maskHeight,
+    };
+  }
+
+  const persistent = persistentTransformRef.current;
   const activeTool = uiState.activeTool;
 
   const newState: InteractionState = {
@@ -121,8 +126,6 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     originalSelectionMask: persistent?.originalMask ?? null,
     originalSelectionMaskWidth: persistent?.maskWidth ?? 0,
     originalSelectionMaskHeight: persistent?.maskHeight ?? 0,
-    transformCanvas: persistent?.transformCanvas ?? null,
-    baseCanvas: persistent?.baseCanvas ?? null,
     moveOriginalMask: null,
     moveOriginalBounds: null,
   };
@@ -133,9 +136,9 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
 }
 
 /**
- * Handle transform drag (scale / rotate) during mousemove.
- * Computes the new transform, updates the UI store, transforms the
- * selection mask, and composites the transformed pixels onto the base.
+ * Handle transform drag (scale / rotate / skew / distort / perspective)
+ * during mousemove. Computes the new transform, updates the UI store,
+ * transforms the selection mask, and renders the transform via the GPU engine.
  */
 export function handleTransformMove(
   state: InteractionState,
@@ -151,11 +154,31 @@ export function handleTransformMove(
 
   let newTransform: TransformState;
 
-  if (isScaleHandle(handle)) {
+  if (startState.mode === 'distort' && isScaleHandle(handle)) {
+    const result = computeDistort(handle, state.startPoint, canvasPos, startState);
+    newTransform = { ...startState, corners: result.corners };
+  } else if (startState.mode === 'perspective' && isScaleHandle(handle)) {
+    const result = computePerspective(handle, state.startPoint, canvasPos, startState);
+    newTransform = { ...startState, corners: result.corners };
+  } else if (startState.mode === 'skew' && isScaleHandle(handle)) {
+    const result = computeSkew(handle, state.startPoint, canvasPos, startState);
+    newTransform = {
+      ...startState,
+      skewX: result.skewX,
+      skewY: result.skewY,
+      translateX: result.translateX,
+      translateY: result.translateY,
+    };
+  } else if (isScaleHandle(handle)) {
+    const uiSnap = useUIStore.getState();
+    const snapEnabled = uiSnap.showGrid && uiSnap.snapToGrid;
+    const snappedInput = snapEnabled
+      ? { x: Math.round(canvasPos.x / uiSnap.gridSize) * uiSnap.gridSize, y: Math.round(canvasPos.y / uiSnap.gridSize) * uiSnap.gridSize }
+      : canvasPos;
     const result = computeScale(
       handle,
       state.startPoint,
-      canvasPos,
+      snappedInput,
       startState,
       shiftKey,
     );
@@ -169,7 +192,9 @@ export function handleTransformMove(
   } else {
     const currentAngle = computeRotation(canvasPos, startState);
     const newRotation = currentAngle - state.transformStartAngle;
-    const snappedRotation = shiftKey
+    const uiState = useUIStore.getState();
+    const shouldSnap = shiftKey || (uiState.showGrid && uiState.snapToGrid);
+    const snappedRotation = shouldSnap
       ? Math.round(newRotation / (Math.PI / 12)) * (Math.PI / 12)
       : newRotation;
     newTransform = {
@@ -180,85 +205,30 @@ export function handleTransformMove(
 
   useUIStore.getState().setTransform(newTransform);
 
-  // Update selection mask using the original mask (not the already-transformed one)
+  // Don't update the selection mask during drag — the transform handles
+  // show the correct bounding box, and the mask gets rebuilt from pixel
+  // alpha on commit (via selectLayerAlpha). Updating the mask during drag
+  // causes it to diverge from the GPU-rendered content.
+
+  // Render transform via GPU engine
   const editorState = useEditorStore.getState();
-  const origMask = state.originalSelectionMask;
-  let transformedMask: Uint8ClampedArray | null = null;
-  if (origMask) {
-    const { mask, bounds } = applyTransformToMask(
-      origMask, state.originalSelectionMaskWidth, state.originalSelectionMaskHeight, newTransform,
-    );
-    transformedMask = mask;
-    if (bounds) {
-      editorState.setSelection(bounds, mask, state.originalSelectionMaskWidth, state.originalSelectionMaskHeight);
-    }
-  }
+  const engine = getEngine();
+  if (engine && hasFloat(engine)) {
+    const isCornerMode = newTransform.mode === 'distort' || newTransform.mode === 'perspective';
 
-  // Apply full cumulative transform to the original (persistent) pixels.
-  // During drag we write directly to the existing ImageData buffer and mark
-  // GPU dirty — skipping the expensive cropLayerToContent + store update.
-  // The full updateLayerPixelData is deferred to mouseup (finalize).
-  if (state.transformCanvas && state.baseCanvas && state.layerId) {
-    const layerData = useEditorStore.getState().expandLayerForEditing(state.layerId);
-    if (!layerData) { editorState.notifyRender(); return; }
-
-    const w = layerData.width;
-    const h = layerData.height;
-
-    const origBounds = newTransform.originalBounds;
-    const origCx = origBounds.x + origBounds.width / 2;
-    const origCy = origBounds.y + origBounds.height / 2;
-
-    // Reuse a single scratch canvas (stored on the interaction state)
-    if (!state._scratchCanvas || state._scratchCanvas.width !== w || state._scratchCanvas.height !== h) {
-      const c = document.createElement('canvas');
-      c.width = w;
-      c.height = h;
-      state._scratchCanvas = c;
-    }
-    const rotCtx = state._scratchCanvas.getContext('2d', contextOptions);
-    if (rotCtx) {
-      rotCtx.clearRect(0, 0, w, h);
-      rotCtx.save();
-      rotCtx.translate(origCx + newTransform.translateX, origCy + newTransform.translateY);
-      rotCtx.rotate(newTransform.rotation);
-      rotCtx.scale(newTransform.scaleX, newTransform.scaleY);
-      rotCtx.translate(-origCx, -origCy);
-      rotCtx.drawImage(state.transformCanvas, 0, 0);
-      rotCtx.restore();
-
-      // Composite: base + rotated pixels clipped to selection mask
-      // Write directly into existing layerData to avoid allocation
-      const baseCtx = state.baseCanvas.getContext('2d', contextOptions)!;
-      const baseData = baseCtx.getImageData(0, 0, w, h);
-      const rotData = rotCtx.getImageData(0, 0, w, h);
-      const out = layerData.data;
-
-      // Copy base first
-      out.set(baseData.data);
-
-      // Composite rotated pixels on top
-      for (let i = 0; i < w * h; i++) {
-        const idx = i * 4;
-        const ra = rotData.data[idx + 3]!;
-        if (ra <= 0) continue;
-        if (transformedMask) {
-          const maskVal = transformedMask[i] ?? 0;
-          if (maskVal <= 0) continue;
-        }
-        const ba = out[idx + 3]!;
-        const raNorm = ra / 255;
-        const baNorm = ba / 255;
-        const outA = raNorm + baNorm * (1 - raNorm);
-        if (outA > 0) {
-          const invOutA = 1 / outA;
-          out[idx] = (rotData.data[idx]! * raNorm + out[idx]! * baNorm * (1 - raNorm)) * invOutA + 0.5 | 0;
-          out[idx + 1] = (rotData.data[idx + 1]! * raNorm + out[idx + 1]! * baNorm * (1 - raNorm)) * invOutA + 0.5 | 0;
-          out[idx + 2] = (rotData.data[idx + 2]! * raNorm + out[idx + 2]! * baNorm * (1 - raNorm)) * invOutA + 0.5 | 0;
-          out[idx + 3] = outA * 255 + 0.5 | 0;
-        }
-      }
-
+    if (isCornerMode) {
+      const [tl, tr, br, bl] = getCornerPositions(newTransform);
+      const corners = new Float32Array([tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y]);
+      const ob = newTransform.originalBounds;
+      compositeFloatPerspective(engine, corners, ob.x, ob.y, ob.width, ob.height);
+    } else {
+      const ob = newTransform.originalBounds;
+      const srcCx = ob.x + ob.width / 2;
+      const srcCy = ob.y + ob.height / 2;
+      const dstCx = srcCx + newTransform.translateX;
+      const dstCy = srcCy + newTransform.translateY;
+      const invMatrix = computeInverseAffineMatrix(newTransform);
+      compositeFloatAffine(engine, invMatrix, srcCx, srcCy, dstCx, dstCy);
     }
   }
 

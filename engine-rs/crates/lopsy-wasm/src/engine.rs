@@ -56,6 +56,12 @@ pub struct EngineInner {
     pub float_height: u32,
     pub float_layer_x: i32,
     pub float_layer_y: i32,
+    // Float transform state (GPU-side affine/perspective)
+    pub float_transform_mode: u8, // 0=none, 1=affine, 2=perspective
+    pub float_transform_inv_matrix: [f32; 9],
+    pub float_transform_center: [f32; 2],
+    pub float_transform_corners: [f32; 8],
+    pub float_transform_orig_rect: [f32; 4],
     // Overlays
     pub grid_visible: bool,
     pub grid_size: f32,
@@ -148,6 +154,11 @@ impl EngineInner {
             float_height: 0,
             float_layer_x: 0,
             float_layer_y: 0,
+            float_transform_mode: 0,
+            float_transform_inv_matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+            float_transform_center: [0.0, 0.0],
+            float_transform_corners: [0.0; 8],
+            float_transform_orig_rect: [0.0; 4],
             grid_visible: false,
             grid_size: 1.0,
             rulers_visible: false,

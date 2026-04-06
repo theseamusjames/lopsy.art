@@ -22,6 +22,8 @@ pub const CLIPBOARD_CLEAR_FRAG: &str = include_str!("shaders/clipboard_clear.gls
 pub const SELECTION_FILL_FRAG: &str = include_str!("shaders/selection_fill.glsl");
 pub const ROTATE90_FRAG: &str = include_str!("shaders/rotate90.glsl");
 pub const BLIT_REGION_FRAG: &str = include_str!("shaders/blit_region.glsl");
+pub const TRANSFORM_AFFINE_FRAG: &str = include_str!("shaders/transform_affine.glsl");
+pub const TRANSFORM_PERSPECTIVE_FRAG: &str = include_str!("shaders/transform_perspective.glsl");
 
 // Effects
 pub const GLOW_FRAG: &str = include_str!("shaders/effects/glow.glsl");
@@ -141,6 +143,8 @@ pub struct ShaderPrograms {
     pub selection_fill: ShaderProgram,
     pub rotate90: ShaderProgram,
     pub blit_region: ShaderProgram,
+    pub transform_affine: ShaderProgram,
+    pub transform_perspective: ShaderProgram,
     // Effects
     pub glow: ShaderProgram,
     pub shadow: ShaderProgram,
@@ -198,6 +202,8 @@ impl ShaderPrograms {
             selection_fill: compile_program(gl, v, SELECTION_FILL_FRAG)?,
             rotate90: compile_program(gl, v, ROTATE90_FRAG)?,
             blit_region: compile_program(gl, v, BLIT_REGION_FRAG)?,
+            transform_affine: compile_program(gl, v, TRANSFORM_AFFINE_FRAG)?,
+            transform_perspective: compile_program(gl, v, TRANSFORM_PERSPECTIVE_FRAG)?,
             // Effects
             glow: compile_program(gl, v, GLOW_FRAG)?,
             shadow: compile_program(gl, v, SHADOW_FRAG)?,

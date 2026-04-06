@@ -17,7 +17,7 @@ void main() {
         vec2 docPos = u_layerOffset + v_uv * u_layerSize;
         vec2 maskUV = docPos / u_docSize;
         float maskVal = texture(u_maskTex, maskUV).r;
-        if (maskVal >= 0.5) {
+        if (maskVal > 0.0) {
             color = vec4(0.0);
         }
     } else {

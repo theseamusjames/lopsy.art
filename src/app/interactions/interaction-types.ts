@@ -20,9 +20,6 @@ export interface InteractionState {
   originalSelectionMask: Uint8ClampedArray | null;
   originalSelectionMaskWidth: number;
   originalSelectionMaskHeight: number;
-  transformCanvas: HTMLCanvasElement | null;
-  baseCanvas: HTMLCanvasElement | null;
-  _scratchCanvas?: HTMLCanvasElement;
   _usedGpuStroke?: boolean;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
@@ -36,8 +33,6 @@ export const DEFAULT_TRANSFORM_FIELDS = {
   originalSelectionMask: null as Uint8ClampedArray | null,
   originalSelectionMaskWidth: 0,
   originalSelectionMaskHeight: 0,
-  transformCanvas: null as HTMLCanvasElement | null,
-  baseCanvas: null as HTMLCanvasElement | null,
   moveOriginalMask: null as Uint8ClampedArray | null,
   moveOriginalBounds: null as Rect | null,
 };
@@ -51,8 +46,6 @@ export interface FloatingSelection {
 }
 
 export interface PersistentTransform {
-  transformCanvas: HTMLCanvasElement;
-  baseCanvas: HTMLCanvasElement;
   originalMask: Uint8ClampedArray;
   maskWidth: number;
   maskHeight: number;
