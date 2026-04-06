@@ -48,11 +48,13 @@ export function ShapeOptions() {
   const shapeStrokeColor = useToolSettingsStore((s) => s.shapeStrokeColor);
   const shapeStrokeWidth = useToolSettingsStore((s) => s.shapeStrokeWidth);
   const shapePolygonSides = useToolSettingsStore((s) => s.shapePolygonSides);
+  const shapeCornerRadius = useToolSettingsStore((s) => s.shapeCornerRadius);
   const setShapeMode = useToolSettingsStore((s) => s.setShapeMode);
   const setShapeFillColor = useToolSettingsStore((s) => s.setShapeFillColor);
   const setShapeStrokeColor = useToolSettingsStore((s) => s.setShapeStrokeColor);
   const setShapeStrokeWidth = useToolSettingsStore((s) => s.setShapeStrokeWidth);
   const setShapePolygonSides = useToolSettingsStore((s) => s.setShapePolygonSides);
+  const setShapeCornerRadius = useToolSettingsStore((s) => s.setShapeCornerRadius);
 
   const [openPopover, setOpenPopover] = useState<PopoverTarget>(null);
   const fillRef = useRef<HTMLDivElement>(null);
@@ -96,6 +98,10 @@ export function ShapeOptions() {
             onChange={(e) => setShapePolygonSides(Number(e.target.value))}
           />
         </>
+      )}
+
+      {shapeMode !== 'ellipse' && (
+        <Slider label="Corner Radius" value={shapeCornerRadius} min={0} max={200} onChange={setShapeCornerRadius} />
       )}
 
       <AspectRatioControl />
