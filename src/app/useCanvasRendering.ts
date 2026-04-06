@@ -157,7 +157,12 @@ function renderFrameGpu(
       renderGrid(overlayCtx, doc.width, doc.height, gridSize, viewport.zoom);
     }
 
-    renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhaseRef.current);
+    // Hide marching ants during active transform — the transform handles
+    // show the bounding box, and the selection mask may not match the
+    // GPU-rendered content during drag. Ants reappear on commit.
+    if (!transform) {
+      renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhaseRef.current);
+    }
     renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
     const selectedPath = editorState.selectedPathId
       ? editorState.paths.find((p) => p.id === editorState.selectedPathId)

@@ -28,8 +28,7 @@ void main() {
     if (u_hasMask == 1) {
         vec2 maskUV = docPos / u_docSize;
         float maskVal = texture(u_maskTex, maskUV).r;
-        // Hard threshold at 0.5 (128/255) to match JS behavior
-        if (maskVal < 0.5) {
+        if (maskVal <= 0.0) {
             color = vec4(0.0);
         }
     }

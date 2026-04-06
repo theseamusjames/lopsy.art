@@ -204,6 +204,126 @@ export function rotate90CCW(
   }
 }
 
+export function flipMaskHorizontal(
+  mask: Uint8ClampedArray,
+  maskWidth: number,
+  maskHeight: number,
+  bounds: { x: number; y: number; width: number; height: number },
+): void {
+  for (let row = bounds.y; row < bounds.y + bounds.height; row++) {
+    if (row < 0 || row >= maskHeight) continue;
+    for (let col = 0; col < Math.floor(bounds.width / 2); col++) {
+      const leftCol = bounds.x + col;
+      const rightCol = bounds.x + bounds.width - 1 - col;
+      if (leftCol < 0 || leftCol >= maskWidth || rightCol < 0 || rightCol >= maskWidth) continue;
+      const leftIdx = row * maskWidth + leftCol;
+      const rightIdx = row * maskWidth + rightCol;
+      const tmp = mask[leftIdx]!;
+      mask[leftIdx] = mask[rightIdx]!;
+      mask[rightIdx] = tmp;
+    }
+  }
+}
+
+export function flipMaskVertical(
+  mask: Uint8ClampedArray,
+  maskWidth: number,
+  maskHeight: number,
+  bounds: { x: number; y: number; width: number; height: number },
+): void {
+  for (let row = 0; row < Math.floor(bounds.height / 2); row++) {
+    const topRow = bounds.y + row;
+    const bottomRow = bounds.y + bounds.height - 1 - row;
+    if (topRow < 0 || topRow >= maskHeight || bottomRow < 0 || bottomRow >= maskHeight) continue;
+    for (let col = bounds.x; col < bounds.x + bounds.width; col++) {
+      if (col < 0 || col >= maskWidth) continue;
+      const topIdx = topRow * maskWidth + col;
+      const bottomIdx = bottomRow * maskWidth + col;
+      const tmp = mask[topIdx]!;
+      mask[topIdx] = mask[bottomIdx]!;
+      mask[bottomIdx] = tmp;
+    }
+  }
+}
+
+export function rotateMask90CW(
+  mask: Uint8ClampedArray,
+  maskWidth: number,
+  maskHeight: number,
+  bounds: { x: number; y: number; width: number; height: number },
+): void {
+  const bw = bounds.width;
+  const bh = bounds.height;
+  const size = Math.max(bw, bh);
+
+  const temp = new Uint8ClampedArray(size * size);
+  for (let row = 0; row < bh; row++) {
+    for (let col = 0; col < bw; col++) {
+      const srcRow = bounds.y + row;
+      const srcCol = bounds.x + col;
+      if (srcRow < 0 || srcRow >= maskHeight || srcCol < 0 || srcCol >= maskWidth) continue;
+      temp[row * size + col] = mask[srcRow * maskWidth + srcCol]!;
+    }
+  }
+
+  for (let row = bounds.y; row < bounds.y + size && row < maskHeight; row++) {
+    for (let col = bounds.x; col < bounds.x + size && col < maskWidth; col++) {
+      if (row < 0 || col < 0) continue;
+      mask[row * maskWidth + col] = 0;
+    }
+  }
+
+  for (let row = 0; row < bh; row++) {
+    for (let col = 0; col < bw; col++) {
+      const newCol = bh - 1 - row;
+      const newRow = col;
+      const dstRow = bounds.y + newRow;
+      const dstCol = bounds.x + newCol;
+      if (dstRow < 0 || dstRow >= maskHeight || dstCol < 0 || dstCol >= maskWidth) continue;
+      mask[dstRow * maskWidth + dstCol] = temp[row * size + col]!;
+    }
+  }
+}
+
+export function rotateMask90CCW(
+  mask: Uint8ClampedArray,
+  maskWidth: number,
+  maskHeight: number,
+  bounds: { x: number; y: number; width: number; height: number },
+): void {
+  const bw = bounds.width;
+  const bh = bounds.height;
+  const size = Math.max(bw, bh);
+
+  const temp = new Uint8ClampedArray(size * size);
+  for (let row = 0; row < bh; row++) {
+    for (let col = 0; col < bw; col++) {
+      const srcRow = bounds.y + row;
+      const srcCol = bounds.x + col;
+      if (srcRow < 0 || srcRow >= maskHeight || srcCol < 0 || srcCol >= maskWidth) continue;
+      temp[row * size + col] = mask[srcRow * maskWidth + srcCol]!;
+    }
+  }
+
+  for (let row = bounds.y; row < bounds.y + size && row < maskHeight; row++) {
+    for (let col = bounds.x; col < bounds.x + size && col < maskWidth; col++) {
+      if (row < 0 || col < 0) continue;
+      mask[row * maskWidth + col] = 0;
+    }
+  }
+
+  for (let row = 0; row < bh; row++) {
+    for (let col = 0; col < bw; col++) {
+      const newCol = row;
+      const newRow = bw - 1 - col;
+      const dstRow = bounds.y + newRow;
+      const dstCol = bounds.x + newCol;
+      if (dstRow < 0 || dstRow >= maskHeight || dstCol < 0 || dstCol >= maskWidth) continue;
+      mask[dstRow * maskWidth + dstCol] = temp[row * size + col]!;
+    }
+  }
+}
+
 function getMaskValue(
   mask: Uint8ClampedArray,
   maskWidth: number,

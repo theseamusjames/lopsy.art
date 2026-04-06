@@ -391,6 +391,45 @@ pub fn has_float(engine: &Engine) -> bool {
     engine.inner.float_texture.is_some()
 }
 
+#[wasm_bindgen(js_name = "flipFloat")]
+pub fn flip_float(engine: &mut Engine, horizontal: bool) -> Result<(), JsError> {
+    layer_manager::flip_float(&mut engine.inner, horizontal)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "rotateFloat90")]
+pub fn rotate_float_90(engine: &mut Engine, clockwise: bool) -> Result<(), JsError> {
+    layer_manager::rotate_float_90(&mut engine.inner, clockwise)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "compositeFloatAffine")]
+pub fn composite_float_affine(
+    engine: &mut Engine,
+    inv_matrix: &[f32],
+    src_center_x: f32,
+    src_center_y: f32,
+    dst_center_x: f32,
+    dst_center_y: f32,
+) -> Result<(), JsError> {
+    layer_manager::composite_float_affine(
+        &mut engine.inner, inv_matrix, src_center_x, src_center_y, dst_center_x, dst_center_y,
+    ).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "compositeFloatPerspective")]
+pub fn composite_float_perspective(
+    engine: &mut Engine,
+    corners: &[f32],
+    orig_x: f32,
+    orig_y: f32,
+    orig_w: f32,
+    orig_h: f32,
+) -> Result<(), JsError> {
+    layer_manager::composite_float_perspective(&mut engine.inner, corners, orig_x, orig_y, orig_w, orig_h)
+        .map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "fillWithColor")]
 pub fn fill_with_color(
     engine: &mut Engine,

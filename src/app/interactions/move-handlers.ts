@@ -9,7 +9,9 @@ import {
   floatSelection,
   compositeFloat,
   hasFloat,
+  setSelectionMask,
 } from '../../engine-wasm/wasm-bridge';
+import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import type {
   InteractionState,
   InteractionContext,
@@ -34,9 +36,38 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   if (sel.active && sel.mask) {
     const engine = getEngine();
 
+    // If a transform float is active (persistentTransformRef set), commit it
+    // first so the layer texture has the transformed content and we can
+    // re-select from the actual pixel alpha before floating for the move.
+    // selectLayerAlpha handles: dropFloat + clear JS data + rebuild mask.
+    if (persistentTransformRef.current) {
+      persistentTransformRef.current = null;
+      floatingSelectionRef.current = null;
+      selectLayerAlpha(activeLayerId);
+
+      // Force-sync the new selection mask to GPU immediately so the
+      // subsequent floatSelection uses the correct mask (not the stale one
+      // from before the transform was committed).
+      const selAfter = useEditorStore.getState().selection;
+      if (engine && selAfter.active && selAfter.mask) {
+        const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
+        setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
+      }
+    }
+
+    // If the GPU float was dropped (e.g., by cmd+click re-select),
+    // clear the stale JS refs so we re-float with the current selection.
+    if (floatingSelectionRef.current && engine && !hasFloat(engine)) {
+      floatingSelectionRef.current = null;
+      persistentTransformRef.current = null;
+    }
+
+    // Re-read selection after potential mask rebuild
+    const selNow = useEditorStore.getState().selection;
+
     if (floatingSelectionRef.current) {
       // Reuse existing float — GPU already has the textures
-    } else if (engine) {
+    } else if (engine && selNow.active && selNow.mask) {
       // First move: float the selection on the GPU
       floatSelection(engine, activeLayerId);
 
@@ -57,13 +88,13 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       floatingSelectionRef.current = {
         offsetX: 0,
         offsetY: 0,
-        originalMask: new Uint8ClampedArray(sel.mask),
-        originalBounds: { ...sel.bounds! },
+        originalMask: new Uint8ClampedArray(selNow.mask),
+        originalBounds: { ...selNow.bounds! },
         gpuResident: true,
       };
     }
 
-    // Clear transform canvases — they'll be rebuilt at move mouseup
+    // Clear persistentTransformRef — transform is committed
     persistentTransformRef.current = null;
     const floatRef = floatingSelectionRef.current!;
     return {

@@ -62,8 +62,6 @@ const INITIAL_STATE: InteractionState = {
   originalSelectionMask: null,
   originalSelectionMaskWidth: 0,
   originalSelectionMaskHeight: 0,
-  transformCanvas: null,
-  baseCanvas: null,
   moveOriginalMask: null,
   moveOriginalBounds: null,
 };
@@ -311,7 +309,9 @@ export function useCanvasInteraction(
       lastPaintPointRef.current = { point: state.lastPoint, layerId: state.layerId };
     }
 
-    // Clear active transform handle
+    // Finalize transform handle drag: keep the GPU float alive so subsequent
+    // grabs can re-transform from the original pixels without degradation.
+    // The float is only dropped when the user commits (clearPersistentTransform).
     if (state.transformHandle) {
       useUIStore.getState().setActiveTransformHandle(null);
     }
@@ -337,10 +337,29 @@ export function useCanvasInteraction(
   const clearPersistentTransform = useCallback(() => {
     persistentTransformRef.current = null;
     floatingSelectionRef.current = null;
-    // Release GPU float textures if any
+
+    // Drop GPU float — the layer texture already has the committed result
     const eng = getEngine();
     if (eng && hasFloat(eng)) {
       dropFloat(eng);
+    }
+
+    // Clear stale JS pixel data so next access reads from the committed GPU texture
+    const editorState = useEditorStore.getState();
+    const activeId = editorState.document.activeLayerId;
+    if (activeId) {
+      const pixelDataMap = new Map(editorState.layerPixelData);
+      pixelDataMap.delete(activeId);
+      const sparseMap = new Map(editorState.sparseLayerData);
+      sparseMap.delete(activeId);
+      const dirtyIds = new Set(editorState.dirtyLayerIds);
+      dirtyIds.add(activeId);
+      useEditorStore.setState({
+        layerPixelData: pixelDataMap,
+        sparseLayerData: sparseMap,
+        dirtyLayerIds: dirtyIds,
+      });
+      editorState.notifyRender();
     }
   }, []);
 

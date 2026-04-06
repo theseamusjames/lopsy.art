@@ -2,82 +2,53 @@ import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { FlipHorizontal2, FlipVertical2, RotateCw, RotateCcw } from 'lucide-react';
-import { flipHorizontal, flipVertical, rotate90CW, rotate90CCW } from '../../../tools/transform/transform-actions';
 import type { TransformMode } from '../../../tools/transform/transform';
+import { createTransformState } from '../../../tools/transform/transform';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import {
+  floatSelection,
+  compositeFloatAffine,
+  dropFloat,
+  hasFloat,
+} from '../../../engine-wasm/wasm-bridge';
+import { selectLayerAlpha } from '../../../panels/LayerPanel/layer-selection';
 import styles from './TransformControls.module.css';
 
-function applyPixelTransform(
-  fn: (
-    data: Uint8ClampedArray,
-    width: number,
-    height: number,
-    selectionMask: Uint8ClampedArray | null,
-    maskWidth: number,
-    maskHeight: number,
-    bounds: { x: number; y: number; width: number; height: number },
-    layerX: number,
-    layerY: number,
-  ) => void,
-): void {
+/**
+ * Apply an instant GPU transform (flip/rotate) to the selected content:
+ * 1. Float the selection on GPU
+ * 2. Render with the given inverse matrix
+ * 3. Drop float (commits to layer texture)
+ * 4. Re-select from committed alpha (rebuilds mask cleanly)
+ */
+function applyGpuTransform(invMatrix: Float32Array): void {
+  const engine = getEngine();
+  if (!engine) return;
+
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
   if (!sel.active || !sel.bounds || !sel.mask) return;
 
   const activeLayerId = editorState.document.activeLayerId;
   if (!activeLayerId) return;
-  const activeLayer = editorState.document.layers.find((l) => l.id === activeLayerId);
-  if (!activeLayer) return;
 
   editorState.pushHistory();
-  const imageData = editorState.expandLayerForEditing(activeLayerId);
-  fn(
-    imageData.data,
-    imageData.width,
-    imageData.height,
-    sel.mask,
-    sel.maskWidth,
-    sel.maskHeight,
-    sel.bounds,
-    activeLayer.x,
-    activeLayer.y,
-  );
-  editorState.updateLayerPixelData(activeLayerId, imageData);
-  editorState.cropLayerToContent(activeLayerId);
-  editorState.notifyRender();
-}
 
-function applyRotateTransform(
-  fn: (
-    data: Uint8ClampedArray,
-    width: number,
-    height: number,
-    bounds: { x: number; y: number; width: number; height: number },
-    layerX: number,
-    layerY: number,
-  ) => void,
-): void {
-  const editorState = useEditorStore.getState();
-  const sel = editorState.selection;
-  if (!sel.active || !sel.bounds) return;
+  // Float if needed
+  if (!hasFloat(engine)) {
+    floatSelection(engine, activeLayerId);
+  }
 
-  const activeLayerId = editorState.document.activeLayerId;
-  if (!activeLayerId) return;
-  const activeLayer = editorState.document.layers.find((l) => l.id === activeLayerId);
-  if (!activeLayer) return;
+  // Apply transform centered on selection bounds
+  const cx = sel.bounds.x + sel.bounds.width / 2;
+  const cy = sel.bounds.y + sel.bounds.height / 2;
+  compositeFloatAffine(engine, invMatrix, cx, cy, cx, cy);
 
-  editorState.pushHistory();
-  const imageData = editorState.expandLayerForEditing(activeLayerId);
-  fn(
-    imageData.data,
-    imageData.width,
-    imageData.height,
-    sel.bounds,
-    activeLayer.x,
-    activeLayer.y,
-  );
-  editorState.updateLayerPixelData(activeLayerId, imageData);
-  editorState.cropLayerToContent(activeLayerId);
-  editorState.notifyRender();
+  // Drop float — layer texture now has the committed result
+  dropFloat(engine);
+
+  // Re-select from committed pixel alpha (handles JS data clearing + mask rebuild)
+  selectLayerAlpha(activeLayerId);
 }
 
 const MODES: { id: TransformMode; label: string }[] = [
@@ -97,8 +68,19 @@ export function TransformControls() {
   const currentMode = transform?.mode ?? 'free';
 
   const handleModeChange = (mode: TransformMode) => {
-    if (transform) {
-      setTransform({ ...transform, mode });
+    if (!transform) return;
+    // Commit any active transform before switching modes
+    const engine = getEngine();
+    if (engine && hasFloat(engine)) {
+      const activeLayerId = useEditorStore.getState().document.activeLayerId;
+      if (activeLayerId) {
+        selectLayerAlpha(activeLayerId);
+      }
+    }
+    // Create fresh transform state with the new mode
+    const sel = useEditorStore.getState().selection;
+    if (sel.active && sel.bounds) {
+      setTransform(createTransformState(sel.bounds, mode));
     }
   };
 
@@ -108,22 +90,22 @@ export function TransformControls() {
         <IconButton
           icon={<FlipHorizontal2 size={16} />}
           label="Flip Horizontal"
-          onClick={() => applyPixelTransform(flipHorizontal)}
+          onClick={() => applyGpuTransform(new Float32Array([-1, 0, 0, 0, 1, 0, 0, 0, 1]))}
         />
         <IconButton
           icon={<FlipVertical2 size={16} />}
           label="Flip Vertical"
-          onClick={() => applyPixelTransform(flipVertical)}
+          onClick={() => applyGpuTransform(new Float32Array([1, 0, 0, 0, -1, 0, 0, 0, 1]))}
         />
         <IconButton
           icon={<RotateCw size={16} />}
           label="Rotate 90° CW"
-          onClick={() => applyRotateTransform(rotate90CW)}
+          onClick={() => applyGpuTransform(new Float32Array([0, -1, 0, 1, 0, 0, 0, 0, 1]))}
         />
         <IconButton
           icon={<RotateCcw size={16} />}
           label="Rotate 90° CCW"
-          onClick={() => applyRotateTransform(rotate90CCW)}
+          onClick={() => applyGpuTransform(new Float32Array([0, 1, 0, -1, 0, 0, 0, 0, 1]))}
         />
       </div>
       {transform && (
