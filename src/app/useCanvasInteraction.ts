@@ -9,6 +9,7 @@ import { beginStroke, endStroke, hasFloat, dropFloat } from '../engine-wasm/wasm
 
 import { clearActiveMaskEditBuffer } from './interactions/mask-buffer';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
+import { clearJsPixelData } from './store/clear-js-pixel-data';
 import type {
   InteractionState, InteractionContext,
   FloatingSelection, PersistentTransform, LastPaintPoint,
@@ -34,15 +35,8 @@ function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } |
 
   endStroke(engine, pending.layerId);
 
-  const editorState = useEditorStore.getState();
-  const pixelData = new Map(editorState.layerPixelData);
-  pixelData.delete(pending.layerId);
-  const sparseMap = new Map(editorState.sparseLayerData);
-  sparseMap.delete(pending.layerId);
-  const dirtyIds = new Set(editorState.dirtyLayerIds);
-  dirtyIds.add(pending.layerId);
-  editorState.notifyRender();
-  useEditorStore.setState({ layerPixelData: pixelData, sparseLayerData: sparseMap, dirtyLayerIds: dirtyIds });
+  clearJsPixelData(pending.layerId);
+  useEditorStore.getState().notifyRender();
 }
 
 const INITIAL_STATE: InteractionState = {
@@ -344,21 +338,10 @@ export function useCanvasInteraction(
       dropFloat(eng);
     }
 
-    // Clear stale JS pixel data so next access reads from the committed GPU texture
     const editorState = useEditorStore.getState();
     const activeId = editorState.document.activeLayerId;
     if (activeId) {
-      const pixelDataMap = new Map(editorState.layerPixelData);
-      pixelDataMap.delete(activeId);
-      const sparseMap = new Map(editorState.sparseLayerData);
-      sparseMap.delete(activeId);
-      const dirtyIds = new Set(editorState.dirtyLayerIds);
-      dirtyIds.add(activeId);
-      useEditorStore.setState({
-        layerPixelData: pixelDataMap,
-        sparseLayerData: sparseMap,
-        dirtyLayerIds: dirtyIds,
-      });
+      clearJsPixelData(activeId);
       editorState.notifyRender();
     }
   }, []);

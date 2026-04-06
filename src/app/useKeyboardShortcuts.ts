@@ -1,6 +1,7 @@
 import { useEffect, type RefObject } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
+import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { strokeCurrentPath } from './useCanvasInteraction';
 import { getEngine } from '../engine-wasm/engine-state';
 import { clipboardCut, hasFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
@@ -250,14 +251,7 @@ function handleDeleteKey(): void {
     // GPU-side clear: uses clipboardCut which copies then clears.
     // We discard the clipboard result — we just want the clear.
     clipboardCut(engine, activeId, true, bx, by, bw, bh);
-    // Clear stale JS pixel data
-    const pixelDataMap = new Map(editor.layerPixelData);
-    pixelDataMap.delete(activeId);
-    const sparseMap = new Map(editor.sparseLayerData);
-    sparseMap.delete(activeId);
-    const dirtyIds = new Set(editor.dirtyLayerIds);
-    dirtyIds.add(activeId);
-    useEditorStore.setState({ layerPixelData: pixelDataMap, sparseLayerData: sparseMap, dirtyLayerIds: dirtyIds });
+    clearJsPixelData(activeId);
     editor.notifyRender();
   } else {
     editor.removeLayer(activeId);

@@ -13,6 +13,7 @@ import {
 import type { TransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
+import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   floatSelection,
@@ -84,19 +85,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     if (engine && !hasFloat(engine)) {
       floatSelection(engine, activeLayerId);
 
-      // Clear stale JS pixel data
-      const state = useEditorStore.getState();
-      const pixelDataMap = new Map(state.layerPixelData);
-      pixelDataMap.delete(activeLayerId);
-      const sparseMap = new Map(state.sparseLayerData);
-      sparseMap.delete(activeLayerId);
-      const dirtyIds = new Set(state.dirtyLayerIds);
-      dirtyIds.add(activeLayerId);
-      useEditorStore.setState({
-        layerPixelData: pixelDataMap,
-        sparseLayerData: sparseMap,
-        dirtyLayerIds: dirtyIds,
-      });
+      clearJsPixelData(activeLayerId);
     }
 
     persistentTransformRef.current = {
