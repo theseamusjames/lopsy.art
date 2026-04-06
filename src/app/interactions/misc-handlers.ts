@@ -14,6 +14,7 @@ import type { TextStyle } from '../../tools/text/text';
 import { createTextLayer } from '../../layers/layer-model';
 import { hitTestTextLayer } from '../../tools/text/text-hit-test';
 import type { TextEditingState } from '../ui-store';
+import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   floodFill as wasmFloodFill,
@@ -28,17 +29,6 @@ import {
   renderRadialGradient as gpuRenderRadialGradient,
   renderShape as gpuRenderShape,
 } from '../../engine-wasm/wasm-bridge';
-
-function clearJsPixelData(layerId: string): void {
-  const state = useEditorStore.getState();
-  const pixelDataMap = new Map(state.layerPixelData);
-  pixelDataMap.delete(layerId);
-  const sparseMap = new Map(state.sparseLayerData);
-  sparseMap.delete(layerId);
-  const dirtyIds = new Set(state.dirtyLayerIds);
-  dirtyIds.add(layerId);
-  useEditorStore.setState({ layerPixelData: pixelDataMap, sparseLayerData: sparseMap, dirtyLayerIds: dirtyIds });
-}
 
 export function handleFillDown(ctx: InteractionContext): void {
   const { layerPos, activeLayerId } = ctx;

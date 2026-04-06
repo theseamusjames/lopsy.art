@@ -1,5 +1,6 @@
 import { createRasterLayer } from '../../layers/layer-model';
 import { getInsertionGroupId, addToGroup } from '../../layers/group-utils';
+import { clearJsPixelData } from './clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   clipboardCopy,
@@ -67,14 +68,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     state.pushHistory('Cut');
     const result = clipboardCut(engine, activeId, hasSelection, bx, by, bw, bh);
     if (result.length >= 4) {
-      // Clear stale JS pixel data for the source layer
-      const pixelDataMap = new Map(state.layerPixelData);
-      pixelDataMap.delete(activeId);
-      const sparseMap = new Map(state.sparseLayerData);
-      sparseMap.delete(activeId);
-      const dirtyIds = new Set(state.dirtyLayerIds);
-      dirtyIds.add(activeId);
-
+      clearJsPixelData(activeId);
       set({
         clipboard: {
           width: result[0]!,
@@ -83,9 +77,6 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
           offsetY: result[3]!,
           gpuResident: true,
         },
-        layerPixelData: pixelDataMap,
-        sparseLayerData: sparseMap,
-        dirtyLayerIds: dirtyIds,
         renderVersion: state.renderVersion + 1,
       });
     }

@@ -4,6 +4,7 @@ import { snapPositionToGrid } from '../../tools/move/move';
 import { createTransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
+import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   floatSelection,
@@ -71,19 +72,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       // First move: float the selection on the GPU
       floatSelection(engine, activeLayerId);
 
-      // Clear stale JS pixel data
-      const state = useEditorStore.getState();
-      const pixelDataMap = new Map(state.layerPixelData);
-      pixelDataMap.delete(activeLayerId);
-      const sparseMap = new Map(state.sparseLayerData);
-      sparseMap.delete(activeLayerId);
-      const dirtyIds = new Set(state.dirtyLayerIds);
-      dirtyIds.add(activeLayerId);
-      useEditorStore.setState({
-        layerPixelData: pixelDataMap,
-        sparseLayerData: sparseMap,
-        dirtyLayerIds: dirtyIds,
-      });
+      clearJsPixelData(activeLayerId);
 
       floatingSelectionRef.current = {
         offsetX: 0,
@@ -245,19 +234,7 @@ export function handleNudgeMove(
     if (!floatingSelectionRef.current) {
       floatSelection(engine, activeId);
 
-      // Clear stale JS pixel data
-      const state = useEditorStore.getState();
-      const pixelDataMap = new Map(state.layerPixelData);
-      pixelDataMap.delete(activeId);
-      const sparseMap = new Map(state.sparseLayerData);
-      sparseMap.delete(activeId);
-      const dirtyIds = new Set(state.dirtyLayerIds);
-      dirtyIds.add(activeId);
-      useEditorStore.setState({
-        layerPixelData: pixelDataMap,
-        sparseLayerData: sparseMap,
-        dirtyLayerIds: dirtyIds,
-      });
+      clearJsPixelData(activeId);
 
       floatingSelectionRef.current = {
         offsetX: 0,

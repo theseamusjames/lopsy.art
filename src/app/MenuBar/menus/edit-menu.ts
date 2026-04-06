@@ -1,5 +1,6 @@
 import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
+import { clearJsPixelData } from '../../store/clear-js-pixel-data';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { fillWithColor } from '../../../engine-wasm/wasm-bridge';
 import type { MenuDef } from './types';
@@ -18,18 +19,7 @@ export function fillSelection(): void {
   // GPU fill: uses the engine's selection mask if active
   fillWithColor(engine, activeId, color.r / 255, color.g / 255, color.b / 255, color.a);
 
-  // Clear stale JS pixel data
-  const pixelDataMap = new Map(state.layerPixelData);
-  pixelDataMap.delete(activeId);
-  const sparseMap = new Map(state.sparseLayerData);
-  sparseMap.delete(activeId);
-  const dirtyIds = new Set(state.dirtyLayerIds);
-  dirtyIds.add(activeId);
-  useEditorStore.setState({
-    layerPixelData: pixelDataMap,
-    sparseLayerData: sparseMap,
-    dirtyLayerIds: dirtyIds,
-  });
+  clearJsPixelData(activeId);
   state.notifyRender();
 }
 
