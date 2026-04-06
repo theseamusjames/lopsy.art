@@ -415,8 +415,8 @@ export function App() {
     (e: React.WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        const delta = -e.deltaY * 0.01;
-        const newZoom = Math.max(0.01, Math.min(64, viewport.zoom * (1 + delta)));
+        const factor = Math.pow(1.002, -e.deltaY);
+        const newZoom = Math.max(0.01, Math.min(64, viewport.zoom * factor));
         setZoom(newZoom);
       } else {
         setPan(viewport.panX - e.deltaX, viewport.panY - e.deltaY);
