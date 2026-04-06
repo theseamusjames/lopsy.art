@@ -1,20 +1,10 @@
 import { useUIStore } from '../../ui-store';
 import { useEditorStore } from '../../editor-store';
-import {
-  CanvasAllocator,
-  applyColorOverlay,
-  renderOuterGlow,
-  renderInnerGlow,
-  renderDropShadow,
-  renderStroke,
-} from '../../../engine/effects-renderer';
-import { renderLayerContent } from '../../rendering/render-layers';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
 import { encodeBMP } from '../../../utils/bmp-encoder';
 import { hasActiveAdjustments, applyAdjustmentsToImageData, aggregateGroupAdjustments } from '../../../filters/image-adjustments';
 import { contextOptions, canvasColorSpace, createImageDataFromArray } from '../../../engine/color-space';
-import { getCachedBitmap, seedBitmapFromBlob } from '../../../engine/bitmap-cache';
-import { hasEnabledEffects } from '../../../layers/layer-model';
+import { seedBitmapFromBlob } from '../../../engine/bitmap-cache';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { compositeForExport, getCompositeSize } from '../../../engine-wasm/wasm-bridge';
 import type { MenuDef } from './types';
@@ -62,18 +52,11 @@ export function openFileFromDisk(): void {
 
 export type ExportFormat = 'png' | 'jpeg' | 'webp' | 'bmp';
 
-/**
- * Export using the WASM engine's GPU compositor.
- * Falls back to the CPU compositing path if the engine is unavailable.
- */
+/** Export using the WASM engine's GPU compositor. */
 export function exportCanvas(format: ExportFormat): void {
   const engine = getEngine();
-
-  if (engine) {
-    exportViaEngine(engine, format);
-  } else {
-    exportViaCpu(format);
-  }
+  if (!engine) return;
+  exportViaEngine(engine, format);
 }
 
 function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, format: ExportFormat): void {
@@ -103,71 +86,6 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, form
   const ctx = canvas.getContext('2d', contextOptions);
   if (!ctx) return;
   ctx.putImageData(imageData, 0, 0);
-
-  finishCanvasExport(canvas, width, height, format);
-}
-
-function exportViaCpu(format: ExportFormat): void {
-  const state = useEditorStore.getState();
-  const { width, height, backgroundColor } = state.document;
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d', contextOptions);
-  if (!ctx) return;
-
-  // Fill background
-  ctx.fillStyle = `rgba(${backgroundColor.r},${backgroundColor.g},${backgroundColor.b},${backgroundColor.a})`;
-  ctx.fillRect(0, 0, width, height);
-
-  // Composite all visible layers
-  const allocator = new CanvasAllocator();
-  for (const layerId of state.document.layerOrder) {
-    const layer = state.document.layers.find((l) => l.id === layerId);
-    if (!layer || !layer.visible) continue;
-    const data = state.resolvePixelData(layerId);
-    if (!data) continue;
-
-    ctx.globalAlpha = layer.opacity;
-
-    // Use cached bitmap for layers without effects for color-correct export
-    const bitmap = getCachedBitmap(layerId);
-    const hasMask = layer.mask?.enabled;
-    if (bitmap && !hasEnabledEffects(layer.effects) && !hasMask) {
-      ctx.drawImage(bitmap, layer.x, layer.y);
-      continue;
-    }
-
-    const { canvas: tempCanvas, ctx: tempCtx } = allocator.acquire(data.width, data.height);
-    if (bitmap && !layer.effects.colorOverlay.enabled) {
-      tempCtx.drawImage(bitmap, 0, 0);
-    } else {
-      tempCtx.putImageData(data, 0, 0);
-    }
-
-    if (layer.effects.colorOverlay.enabled) {
-      const overlaid = tempCtx.getImageData(0, 0, data.width, data.height);
-      applyColorOverlay(overlaid, layer);
-      tempCtx.putImageData(overlaid, 0, 0);
-    }
-
-    renderOuterGlow(ctx, tempCanvas, layer, data, allocator);
-    renderDropShadow(ctx, tempCanvas, layer, data, allocator);
-    renderLayerContent(ctx, tempCanvas, layer, data, false, null, allocator);
-    renderInnerGlow(ctx, tempCanvas, layer, data, allocator);
-    renderStroke(ctx, tempCanvas, layer, data, allocator);
-  }
-  ctx.globalAlpha = 1;
-  allocator.releaseAll();
-
-  // Apply post-composite image adjustments aggregated from all groups
-  const edState2 = useEditorStore.getState();
-  const adj2 = aggregateGroupAdjustments(edState2.document.layers);
-  if (adj2 && hasActiveAdjustments(adj2)) {
-    const imgData = ctx.getImageData(0, 0, width, height);
-    applyAdjustmentsToImageData(imgData, adj2);
-    ctx.putImageData(imgData, 0, 0);
-  }
 
   finishCanvasExport(canvas, width, height, format);
 }

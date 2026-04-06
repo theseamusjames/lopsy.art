@@ -32,7 +32,6 @@ import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 import { getActiveMaskEditBuffer } from './interactions/mask-buffer';
 import { uploadLayerMask } from '../engine-wasm/wasm-bridge';
 
-export { renderLayerContent } from './rendering/render-layers';
 
 
 /**
