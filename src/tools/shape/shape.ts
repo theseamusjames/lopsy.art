@@ -113,7 +113,7 @@ function computePolygonVertices(center: Point, rx: number, ry: number, sides: nu
   const n = Math.max(3, Math.round(sides));
   const vertices: Point[] = [];
   for (let i = 0; i < n; i++) {
-    const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+    const angle = (2 * Math.PI * i) / n - Math.PI / 2 + (n % 2 === 0 ? Math.PI / n : 0);
     vertices.push({
       x: center.x + rx * Math.cos(angle),
       y: center.y + ry * Math.sin(angle),
