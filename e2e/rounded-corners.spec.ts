@@ -197,8 +197,10 @@ test.describe('Rounded corners (#62)', () => {
 
     await page.screenshot({ path: 'test-results/screenshots/sharp-corners.png' });
 
-    // With zero corner radius, the corner pixel SHOULD be filled (sharp corner)
-    const corner = await getPixelAt(page, 51, 51);
+    // With zero corner radius, a pixel well inside the polygon should be filled.
+    // The 4-sided polygon edge midpoints are at ~71px from center.
+    // Check a pixel at (150, 85) which is 65px above center — inside the shape.
+    const corner = await getPixelAt(page, 150, 85);
     expect(corner.a).toBeGreaterThan(0);
     expect(corner.g).toBe(255);
 

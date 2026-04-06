@@ -1,6 +1,69 @@
 use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
 
+/// Save the current layer content so render_shape can restore it before each
+/// frame. Called once at the start of a shape drag.
+pub fn save_shape_preview(engine: &mut EngineInner, layer_id: &str) {
+    let _ = engine.ensure_layer_full_size(layer_id);
+
+    let gl = &engine.gl;
+    let tex_handle = match engine.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let layer_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    // Allocate (or reuse) the preview texture
+    if let Some(old) = engine.shape_preview_texture.take() {
+        engine.texture_pool.release(old);
+    }
+    let preview_handle = match engine.texture_pool.acquire(&engine.gl, w, h) {
+        Ok(h) => h,
+        Err(_) => return,
+    };
+    let preview_tex = match engine.texture_pool.get(preview_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    // Copy layer → preview via temp FBO
+    let temp_fbo = gl.create_framebuffer();
+    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, temp_fbo.as_ref());
+    gl.framebuffer_texture_2d(
+        WebGl2RenderingContext::FRAMEBUFFER,
+        WebGl2RenderingContext::COLOR_ATTACHMENT0,
+        WebGl2RenderingContext::TEXTURE_2D,
+        Some(&preview_tex),
+        0,
+    );
+    gl.viewport(0, 0, w as i32, h as i32);
+    gl.disable(WebGl2RenderingContext::BLEND);
+    gl.use_program(Some(&engine.shaders.blit.program));
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+    if let Some(loc) = gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+    engine.draw_fullscreen_quad();
+    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+    gl.delete_framebuffer(temp_fbo.as_ref());
+
+    engine.shape_preview_texture = Some(preview_handle);
+    engine.shape_preview_layer_id = Some(layer_id.to_string());
+}
+
+/// Release the preview texture. Called when the shape drag ends.
+pub fn end_shape_preview(engine: &mut EngineInner) {
+    if let Some(h) = engine.shape_preview_texture.take() {
+        engine.texture_pool.release(h);
+    }
+    engine.shape_preview_layer_id = None;
+}
+
 pub fn render_shape(
     engine: &mut EngineInner,
     layer_id: &str,
@@ -35,10 +98,42 @@ pub fn render_shape(
         None => return,
     };
 
+    // If we have a saved preview, restore the layer from it before drawing
+    // so that each mousemove produces a clean render instead of accumulating.
+    let has_preview = engine.shape_preview_layer_id.as_deref() == Some(layer_id)
+        && engine.shape_preview_texture.is_some();
+    if has_preview {
+        let preview_tex = engine.texture_pool.get(
+            engine.shape_preview_texture.unwrap()
+        ).cloned();
+        if let Some(ptex) = preview_tex {
+            let restore_fbo = gl.create_framebuffer();
+            gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, restore_fbo.as_ref());
+            gl.framebuffer_texture_2d(
+                WebGl2RenderingContext::FRAMEBUFFER,
+                WebGl2RenderingContext::COLOR_ATTACHMENT0,
+                WebGl2RenderingContext::TEXTURE_2D,
+                Some(&layer_tex),
+                0,
+            );
+            gl.viewport(0, 0, w as i32, h as i32);
+            gl.disable(WebGl2RenderingContext::BLEND);
+            gl.use_program(Some(&engine.shaders.blit.program));
+            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&ptex));
+            if let Some(loc) = gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") {
+                gl.uniform1i(Some(&loc), 0);
+            }
+            engine.draw_fullscreen_quad();
+            gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+            gl.delete_framebuffer(restore_fbo.as_ref());
+        }
+    }
+
+    // Draw the shape on top
     let prog = &engine.shaders.shape_fill.program;
     gl.use_program(Some(prog));
 
-    // Render to layer texture via temp FBO
     let temp_fbo = gl.create_framebuffer();
     gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, temp_fbo.as_ref());
     gl.framebuffer_texture_2d(
@@ -50,7 +145,6 @@ pub fn render_shape(
     );
     gl.viewport(0, 0, w as i32, h as i32);
 
-    // Enable blending for shape compositing
     gl.enable(WebGl2RenderingContext::BLEND);
     gl.blend_func(
         WebGl2RenderingContext::ONE,
