@@ -96,7 +96,6 @@ export function handlePaintDown(
   if (!ctx.isStrokeContinuation) {
     editorState.pushHistory();
   }
-  resetSpacingRemainder();
   resetScatterSpacingRemainder();
 
   const engine = getEngine();
@@ -113,6 +112,7 @@ export function handlePaintDown(
     layerStartY: activeLayer.y,
     ...DEFAULT_TRANSFORM_FIELDS,
     strokeDistance: 0,
+    spacingRemainder: 0,
   };
 
   if (!engine) return state;
@@ -145,7 +145,8 @@ export function handlePaintDown(
           gpuBrushDabBatch(engine, activeLayerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
         }
       } else {
-        const pts = lopsy_core_interpolate(lineFrom, layerPos, spacing);
+        const { points: pts, remainder: spacingRem } = interpolateWithSpacing(lineFrom, layerPos, spacing, state.spacingRemainder ?? 0);
+        state.spacingRemainder = spacingRem;
         if (brushFade > 0) {
           emitFlatDabsWithFade(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state);
         } else {
@@ -172,7 +173,8 @@ export function handlePaintDown(
 
     if (shiftLine) {
       const spacing = Math.max(1, size * 0.25);
-      const pts = lopsy_core_interpolate(lineFrom, layerPos, spacing);
+      const { points: pts, remainder: spacingRem } = interpolateWithSpacing(lineFrom, layerPos, spacing, state.spacingRemainder ?? 0);
+      state.spacingRemainder = spacingRem;
       gpuEraserDabBatch(engine, activeLayerId, pts, size, hardness, opacity);
     } else {
       gpuEraserDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, opacity);
@@ -183,43 +185,40 @@ export function handlePaintDown(
   return state;
 }
 
-/**
- * Tracks leftover distance from the last dab so spacing is respected
- * across multiple mouse-move events.
- */
-let spacingRemainder = 0;
-
-export function resetSpacingRemainder(): void {
-  spacingRemainder = 0;
+interface InterpolateResult {
+  points: Float64Array;
+  remainder: number;
 }
 
 /**
  * Flatten two Points into a flat [x,y,...] array for the WASM batch API.
- * Uses spacingRemainder so dabs are evenly spaced across move events.
- * Returns an empty array when no dabs are due.
+ * Tracks spacing remainder across move events via the returned value.
+ * Returns empty points when no dabs are due.
  */
-function lopsy_core_interpolate(from: { x: number; y: number }, to: { x: number; y: number }, spacing: number): Float64Array {
+function interpolateWithSpacing(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  spacing: number,
+  prevRemainder: number,
+): InterpolateResult {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < 1e-6) return new Float64Array(0);
+  if (dist < 1e-6) return { points: new Float64Array(0), remainder: prevRemainder };
 
-  const startOffset = spacing - spacingRemainder;
+  const startOffset = spacing - prevRemainder;
   if (startOffset > dist) {
-    // Not enough distance traveled yet — no dabs this move
-    spacingRemainder += dist;
-    return new Float64Array(0);
+    return { points: new Float64Array(0), remainder: prevRemainder + dist };
   }
 
-  const points: number[] = [];
+  const pts: number[] = [];
   let d = startOffset;
   while (d <= dist) {
     const t = d / dist;
-    points.push(from.x + dx * t, from.y + dy * t);
+    pts.push(from.x + dx * t, from.y + dy * t);
     d += spacing;
   }
-  spacingRemainder = dist - (d - spacing);
-  return new Float64Array(points);
+  return { points: new Float64Array(pts), remainder: dist - (d - spacing) };
 }
 
 /**
@@ -351,7 +350,8 @@ export function handlePaintMove(
           gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1);
         }
       } else {
-        const pts = lopsy_core_interpolate(state.lastPoint, layerLocalPos, spacing);
+        const { points: pts, remainder: spacingRem } = interpolateWithSpacing(state.lastPoint, layerLocalPos, spacing, state.spacingRemainder ?? 0);
+        state.spacingRemainder = spacingRem;
         if (brushFade > 0) {
           emitFlatDabsWithFade(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state);
         } else {
@@ -386,7 +386,8 @@ export function handlePaintMove(
       const hardness = 0.8;
       const opacity = toolSettings.eraserOpacity / 100;
       const spacing = Math.max(1, size * 0.25);
-      const pts = lopsy_core_interpolate(state.lastPoint, layerLocalPos, spacing);
+      const { points: pts, remainder: spacingRem } = interpolateWithSpacing(state.lastPoint, layerLocalPos, spacing, state.spacingRemainder ?? 0);
+      state.spacingRemainder = spacingRem;
       gpuEraserDabBatch(engine, state.layerId, pts, size, hardness, opacity);
       state.lastPoint = layerLocalPos;
       useEditorStore.getState().notifyRender();
