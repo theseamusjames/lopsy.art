@@ -4,6 +4,7 @@ import type { TransformHandle, TransformState } from '../tools/transform/transfo
 import { useToolSettingsStore } from './tool-settings-store';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
+import { colorEquals } from '../utils/color';
 
 export interface TextEditingState {
   layerId: string;
@@ -41,10 +42,6 @@ export interface RulerHover {
 }
 
 const MAX_RECENT_COLORS = 20;
-
-function colorsEqual(a: Color, b: Color): boolean {
-  return a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a;
-}
 
 interface UIState {
   activeTool: ToolId;
@@ -178,7 +175,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   addRecentColor: (color) =>
     set((state) => {
-      const filtered = state.recentColors.filter((c) => !colorsEqual(c, color));
+      const filtered = state.recentColors.filter((c) => !colorEquals(c, color));
       return { recentColors: [color, ...filtered].slice(0, MAX_RECENT_COLORS) };
     }),
 
