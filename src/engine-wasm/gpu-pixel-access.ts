@@ -96,6 +96,9 @@ export function readLayerThumbnail(layerId: string, maxSize: number): ImageData 
 
   if (tw === 0 || th === 0) return null;
 
+  const expectedSize = tw * th * 4 + 8;
+  if (result.byteLength < expectedSize) return null;
+
   const pixelData = new Uint8ClampedArray(tw * th * 4);
   pixelData.set(new Uint8Array(result.buffer, result.byteOffset + 8, tw * th * 4));
 

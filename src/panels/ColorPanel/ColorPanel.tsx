@@ -4,6 +4,7 @@ import { ColorSwatch } from '../../components/ColorSwatch/ColorSwatch';
 import { ColorPicker } from '../../components/ColorPicker/ColorPicker';
 import { Slider } from '../../components/Slider/Slider';
 import { IconButton } from '../../components/IconButton/IconButton';
+import { rgbToHex6, hexToRgb } from '../../utils/color';
 import type { Color } from '../../types';
 import styles from './ColorPanel.module.css';
 
@@ -17,21 +18,13 @@ interface ColorPanelProps {
   collapsed?: boolean;
 }
 
+/** Hex string without # prefix for the text input field. */
 function colorToHex(c: Color): string {
-  const r = c.r.toString(16).padStart(2, '0');
-  const g = c.g.toString(16).padStart(2, '0');
-  const b = c.b.toString(16).padStart(2, '0');
-  return `${r}${g}${b}`;
+  return rgbToHex6(c).slice(1);
 }
 
 function hexToColor(hex: string): Color | null {
-  const clean = hex.replace('#', '');
-  if (clean.length !== 6) return null;
-  const r = parseInt(clean.slice(0, 2), 16);
-  const g = parseInt(clean.slice(2, 4), 16);
-  const b = parseInt(clean.slice(4, 6), 16);
-  if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
-  return { r, g, b, a: 1 };
+  return hexToRgb(hex);
 }
 
 export function ColorPanel({
