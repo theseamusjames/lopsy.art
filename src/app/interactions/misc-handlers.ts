@@ -7,6 +7,8 @@ import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { commitCurrentPath } from './path-stroke';
 import { hitTestAnchor, hitTestSegment, splitSegmentAt } from '../../tools/path/path';
+import type { PathAnchor } from '../../tools/path/path';
+import { ellipseToPathAnchors, polygonToPathAnchors } from '../../tools/shape/shape';
 import { renderTextToCanvas } from '../../tools/text/text';
 import type { TextStyle } from '../../tools/text/text';
 import { createTextLayer } from '../../layers/layer-model';
@@ -730,14 +732,42 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point): vo
   if (!state.startPoint) return;
   const dx = layerLocalPos.x - state.startPoint.x;
   const dy = layerLocalPos.y - state.startPoint.y;
+  const toolSettings = useToolSettingsStore.getState();
+
   if (Math.sqrt(dx * dx + dy * dy) < CLICK_THRESHOLD) {
     useEditorStore.getState().undo();
+    if (toolSettings.shapeOutput === 'path') return;
     useUIStore.getState().setPendingShapeClick({
       center: state.startPoint,
       layerId: state.layerId!,
       layerX: state.layerStartX,
       layerY: state.layerStartY,
     });
+    return;
+  }
+
+  if (toolSettings.shapeOutput === 'path') {
+    // Undo the raster preview that was rendered during drag
+    useEditorStore.getState().undo();
+
+    const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos);
+    const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
+    const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
+    if (rx < 1 && ry < 1) return;
+
+    // Compute center in document space
+    const cx = state.startPoint.x + state.layerStartX;
+    const cy = state.startPoint.y + state.layerStartY;
+
+    const editorState = useEditorStore.getState();
+    let anchors: PathAnchor[];
+    if (toolSettings.shapeMode === 'ellipse') {
+      anchors = ellipseToPathAnchors(cx, cy, rx, ry);
+    } else {
+      anchors = polygonToPathAnchors(cx, cy, rx, ry, toolSettings.shapePolygonSides);
+    }
+    editorState.addPath(anchors, true);
+    editorState.notifyRender();
   }
 }
 

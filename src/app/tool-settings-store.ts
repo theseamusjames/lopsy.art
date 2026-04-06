@@ -12,6 +12,7 @@ interface ToolSettings {
   fillTolerance: number;
   fillContiguous: boolean;
   shapeMode: 'ellipse' | 'polygon';
+  shapeOutput: 'pixels' | 'path';
   shapeFillColor: Color | null;
   shapeStrokeColor: Color | null;
   shapeStrokeWidth: number;
@@ -62,6 +63,7 @@ interface ToolSettings {
   setFillTolerance: (tolerance: number) => void;
   setFillContiguous: (contiguous: boolean) => void;
   setShapeMode: (mode: 'ellipse' | 'polygon') => void;
+  setShapeOutput: (output: 'pixels' | 'path') => void;
   setShapeFillColor: (color: Color | null) => void;
   setShapeStrokeColor: (color: Color | null) => void;
   setShapeStrokeWidth: (width: number) => void;
@@ -82,6 +84,7 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   fillTolerance: 32,
   fillContiguous: true,
   shapeMode: 'ellipse',
+  shapeOutput: 'pixels' as const,
   shapeFillColor: { r: 255, g: 255, b: 255, a: 1 },
   shapeStrokeColor: null,
   shapeStrokeWidth: 2,
@@ -120,6 +123,7 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   setFillTolerance: (tolerance) => set({ fillTolerance: Math.max(0, Math.min(255, tolerance)) }),
   setFillContiguous: (contiguous) => set({ fillContiguous: contiguous }),
   setShapeMode: (mode) => set({ shapeMode: mode }),
+  setShapeOutput: (output) => set({ shapeOutput: output }),
   setShapeFillColor: (color) => set({ shapeFillColor: color }),
   setShapeStrokeColor: (color) => set({ shapeStrokeColor: color }),
   setShapeStrokeWidth: (width) => set({ shapeStrokeWidth: Math.max(1, Math.min(50, width)) }),

@@ -1,5 +1,6 @@
 import type { Color, Point, Rect } from '../../types';
 import type { PixelSurface } from '../fill/fill';
+import type { PathAnchor } from '../path/path';
 
 export type ShapeMode = 'ellipse' | 'polygon';
 
@@ -207,4 +208,47 @@ function strokePolygon(
       }
     }
   }
+}
+
+const KAPPA = 0.5522847498;
+
+/** Approximate an ellipse as a closed cubic Bezier path with 4 anchors. */
+export function ellipseToPathAnchors(cx: number, cy: number, rx: number, ry: number): PathAnchor[] {
+  return [
+    {
+      point: { x: cx, y: cy - ry },
+      handleIn: { x: cx - rx * KAPPA, y: cy - ry },
+      handleOut: { x: cx + rx * KAPPA, y: cy - ry },
+    },
+    {
+      point: { x: cx + rx, y: cy },
+      handleIn: { x: cx + rx, y: cy - ry * KAPPA },
+      handleOut: { x: cx + rx, y: cy + ry * KAPPA },
+    },
+    {
+      point: { x: cx, y: cy + ry },
+      handleIn: { x: cx + rx * KAPPA, y: cy + ry },
+      handleOut: { x: cx - rx * KAPPA, y: cy + ry },
+    },
+    {
+      point: { x: cx - rx, y: cy },
+      handleIn: { x: cx - rx, y: cy + ry * KAPPA },
+      handleOut: { x: cx - rx, y: cy - ry * KAPPA },
+    },
+  ];
+}
+
+/** Create a closed polygon path with N corner anchors (straight segments). */
+export function polygonToPathAnchors(cx: number, cy: number, rx: number, ry: number, sides: number): PathAnchor[] {
+  const n = Math.max(3, Math.round(sides));
+  const anchors: PathAnchor[] = [];
+  for (let i = 0; i < n; i++) {
+    const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+    anchors.push({
+      point: { x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle) },
+      handleIn: null,
+      handleOut: null,
+    });
+  }
+  return anchors;
 }

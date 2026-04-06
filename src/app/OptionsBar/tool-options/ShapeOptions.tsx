@@ -44,11 +44,13 @@ function ColorPopover({ anchorRef, popoverRef, color, onChange, onRemove, remove
 
 export function ShapeOptions() {
   const shapeMode = useToolSettingsStore((s) => s.shapeMode);
+  const shapeOutput = useToolSettingsStore((s) => s.shapeOutput);
   const shapeFillColor = useToolSettingsStore((s) => s.shapeFillColor);
   const shapeStrokeColor = useToolSettingsStore((s) => s.shapeStrokeColor);
   const shapeStrokeWidth = useToolSettingsStore((s) => s.shapeStrokeWidth);
   const shapePolygonSides = useToolSettingsStore((s) => s.shapePolygonSides);
   const setShapeMode = useToolSettingsStore((s) => s.setShapeMode);
+  const setShapeOutput = useToolSettingsStore((s) => s.setShapeOutput);
   const setShapeFillColor = useToolSettingsStore((s) => s.setShapeFillColor);
   const setShapeStrokeColor = useToolSettingsStore((s) => s.setShapeStrokeColor);
   const setShapeStrokeWidth = useToolSettingsStore((s) => s.setShapeStrokeWidth);
@@ -82,6 +84,16 @@ export function ShapeOptions() {
       >
         <option value="ellipse">Ellipse</option>
         <option value="polygon">Polygon</option>
+      </select>
+
+      <span className={styles.label}>Output</span>
+      <select
+        className={styles.select}
+        value={shapeOutput}
+        onChange={(e) => setShapeOutput(e.target.value as 'pixels' | 'path')}
+      >
+        <option value="pixels">Pixels</option>
+        <option value="path">Path</option>
       </select>
 
       {shapeMode === 'polygon' && (
