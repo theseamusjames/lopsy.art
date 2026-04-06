@@ -72,30 +72,33 @@ export function computePerspective(
   const dy = currentPoint.y - startPoint.y;
   const corners = cloneCorners(state.corners);
 
+  // Perspective: dragging a corner moves both corners on that horizontal
+  // edge symmetrically (one moves +dx, the other -dx), while the opposite
+  // edge stays fixed. This creates a vanishing-point / trapezoid effect.
   switch (handle) {
     case 'top-left':
+      // Top edge: TL moves by (dx, dy), TR mirrors horizontally (-dx, dy)
       corners[0] = offsetCorner(state.corners[0], dx, dy);
       corners[1] = offsetCorner(state.corners[1], -dx, dy);
-      corners[2] = offsetCorner(state.corners[2], -dx, -dy);
-      corners[3] = offsetCorner(state.corners[3], dx, -dy);
+      // Bottom stays fixed
       break;
     case 'top-right':
+      // Top edge: TR moves by (dx, dy), TL mirrors (-dx, dy)
       corners[0] = offsetCorner(state.corners[0], -dx, dy);
       corners[1] = offsetCorner(state.corners[1], dx, dy);
-      corners[2] = offsetCorner(state.corners[2], dx, -dy);
-      corners[3] = offsetCorner(state.corners[3], -dx, -dy);
+      // Bottom stays fixed
       break;
     case 'bottom-right':
-      corners[0] = offsetCorner(state.corners[0], -dx, -dy);
-      corners[1] = offsetCorner(state.corners[1], dx, -dy);
+      // Bottom edge: BR moves by (dx, dy), BL mirrors (-dx, dy)
       corners[2] = offsetCorner(state.corners[2], dx, dy);
       corners[3] = offsetCorner(state.corners[3], -dx, dy);
+      // Top stays fixed
       break;
     case 'bottom-left':
-      corners[0] = offsetCorner(state.corners[0], dx, -dy);
-      corners[1] = offsetCorner(state.corners[1], -dx, -dy);
+      // Bottom edge: BL moves by (dx, dy), BR mirrors (-dx, dy)
       corners[2] = offsetCorner(state.corners[2], -dx, dy);
       corners[3] = offsetCorner(state.corners[3], dx, dy);
+      // Top stays fixed
       break;
     case 'top':
       corners[0] = offsetCorner(state.corners[0], dx, dy);

@@ -283,3 +283,46 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
     expect(finalPixels).toBe(0);
   });
 });
+
+test.describe('Perspective mode', { tag: '@chromium' }, () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { createDocument: (w: number, h: number, t: boolean) => void };
+      };
+      store.getState().createDocument(600, 600, false);
+    });
+    await page.waitForSelector('[data-testid="canvas-container"]');
+    await page.waitForTimeout(200);
+  });
+
+  test('perspective mode is set correctly after clicking button', async ({ page }) => {
+    await page.keyboard.press('u');
+    await setToolSetting(page, 'setShapeMode', 'polygon');
+    await setToolSetting(page, 'setShapePolygonSides', 4);
+    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 0, b: 0, a: 1 });
+    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await drawShape(page, 300, 300, 400, 400);
+
+    await cmdClickThumbnail(page);
+    await page.keyboard.press('v');
+    await page.waitForTimeout(100);
+
+    // Click Perspective button
+    const perspBtn = page.locator('button:has-text("Perspective")');
+    await perspBtn.click();
+    await page.waitForTimeout(200);
+
+    // Check the transform state mode
+    const mode = await page.evaluate(() => {
+      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { transform: { mode: string } | null };
+      };
+      return uiStore.getState().transform?.mode;
+    });
+    console.log('Transform mode after clicking Perspective:', mode);
+    expect(mode).toBe('perspective');
+  });
+});

@@ -1,0 +1,1 @@
+- [Transforms must be GPU-side](feedback_transforms_gpu.md) — All pixel manipulation must happen in Rust/WASM engine, never JS Canvas 2D
