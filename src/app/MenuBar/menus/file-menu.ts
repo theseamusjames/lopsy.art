@@ -10,6 +10,7 @@ import {
 } from '../../../engine/effects-renderer';
 import { renderLayerContent } from '../../rendering/render-layers';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
+import { encodeBMP } from '../../../utils/bmp-encoder';
 import { hasActiveAdjustments, applyAdjustmentsToImageData, aggregateGroupAdjustments } from '../../../filters/image-adjustments';
 import { contextOptions, canvasColorSpace, createImageDataFromArray } from '../../../engine/color-space';
 import { getCachedBitmap, seedBitmapFromBlob } from '../../../engine/bitmap-cache';
@@ -59,11 +60,13 @@ export function openFileFromDisk(): void {
   input.click();
 }
 
+export type ExportFormat = 'png' | 'jpeg' | 'webp' | 'bmp';
+
 /**
  * Export using the WASM engine's GPU compositor.
  * Falls back to the CPU compositing path if the engine is unavailable.
  */
-export function exportCanvas(format: 'png' | 'jpeg'): void {
+export function exportCanvas(format: ExportFormat): void {
   const engine = getEngine();
 
   if (engine) {
@@ -73,7 +76,7 @@ export function exportCanvas(format: 'png' | 'jpeg'): void {
   }
 }
 
-function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, format: 'png' | 'jpeg'): void {
+function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, format: ExportFormat): void {
   const sizeArr = getCompositeSize(engine);
   const width = sizeArr[0] ?? 0;
   const height = sizeArr[1] ?? 0;
@@ -104,7 +107,7 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, form
   finishCanvasExport(canvas, width, height, format);
 }
 
-function exportViaCpu(format: 'png' | 'jpeg'): void {
+function exportViaCpu(format: ExportFormat): void {
   const state = useEditorStore.getState();
   const { width, height, backgroundColor } = state.document;
   const canvas = document.createElement('canvas');
@@ -169,22 +172,51 @@ function exportViaCpu(format: 'png' | 'jpeg'): void {
   finishCanvasExport(canvas, width, height, format);
 }
 
-function finishCanvasExport(canvas: HTMLCanvasElement, width: number, height: number, format: 'png' | 'jpeg'): void {
-  const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
-  const ext = format === 'png' ? 'png' : 'jpg';
+const FORMAT_MIME: Record<ExportFormat, string> = {
+  png: 'image/png',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+};
 
-  const finishExport = async (blob: Blob) => {
-    const tagged =
-      format === 'png'
-        ? await addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE })
-        : await addJpegComment(blob, METADATA_NOTE);
-    const url = URL.createObjectURL(tagged);
+const FORMAT_EXT: Record<ExportFormat, string> = {
+  png: 'png',
+  jpeg: 'jpg',
+  webp: 'webp',
+  bmp: 'bmp',
+};
+
+function finishCanvasExport(canvas: HTMLCanvasElement, width: number, height: number, format: ExportFormat): void {
+  const mimeType = FORMAT_MIME[format];
+  const ext = FORMAT_EXT[format];
+
+  const downloadBlob = (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `lopsy.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
     useEditorStore.getState().markClean();
+  };
+
+  // BMP is encoded on the JS side — no canvas.toBlob support
+  if (format === 'bmp') {
+    const ctx = canvas.getContext('2d', contextOptions);
+    if (!ctx) return;
+    const imageData = ctx.getImageData(0, 0, width, height);
+    downloadBlob(encodeBMP(imageData));
+    return;
+  }
+
+  const finishExport = async (blob: Blob) => {
+    const tagged =
+      format === 'png'
+        ? await addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE })
+        : format === 'jpeg'
+          ? await addJpegComment(blob, METADATA_NOTE)
+          : blob;
+    downloadBlob(tagged);
   };
 
   // Prefer OffscreenCanvas.convertToBlob which passes colorSpace to the
@@ -214,5 +246,7 @@ export const fileMenu: MenuDef = {
     { separator: true, label: '' },
     { label: 'Export PNG', shortcut: '\u21E7\u2318E', action: () => exportCanvas('png') },
     { label: 'Export JPEG', action: () => exportCanvas('jpeg') },
+    { label: 'Export WebP', action: () => exportCanvas('webp') },
+    { label: 'Export BMP', action: () => exportCanvas('bmp') },
   ],
 };
