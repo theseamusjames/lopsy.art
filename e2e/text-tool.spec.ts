@@ -125,7 +125,7 @@ test.describe('Text tool', () => {
     const doc = await getEditorDoc(page);
     const textLayers = doc.layers.filter((l) => l.type === 'text');
     expect(textLayers.length).toBe(1);
-    expect(textLayers[0]!.visible).toBe(false); // Hidden while editing
+    expect(textLayers[0]!.visible).toBe(true); // Visible during editing for live preview
   });
 
   test('typing text updates the editing state', async ({ page }) => {

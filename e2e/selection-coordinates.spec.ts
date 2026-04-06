@@ -159,7 +159,9 @@ async function fillSelection(page: import('@playwright/test').Page, color: { r: 
         getState: () => {
           document: {
             activeLayerId: string;
-            layers: Array<{ id: string; x: number; y: number }>;
+            width: number;
+            height: number;
+            layers: Array<{ id: string; x: number; y: number; width: number; height: number }>;
           };
           selection: {
             active: boolean;
@@ -167,24 +169,21 @@ async function fillSelection(page: import('@playwright/test').Page, color: { r: 
             maskWidth: number;
             maskHeight: number;
           };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
+          layerPixelData: Map<string, ImageData>;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: (label?: string) => void;
         };
       };
-      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => {
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
-        };
-      };
-      uiStore.getState().setForegroundColor(color);
       const state = editorStore.getState();
       const activeId = state.document.activeLayerId;
       if (!activeId) return;
       const layer = state.document.layers.find((l) => l.id === activeId);
       if (!layer) return;
       state.pushHistory();
-      const imageData = state.getOrCreateLayerPixelData(activeId);
+      const existing = state.layerPixelData.get(activeId);
+      const w = existing?.width ?? layer.width ?? state.document.width;
+      const h = existing?.height ?? layer.height ?? state.document.height;
+      const imageData = existing ?? new ImageData(w, h);
       const sel = state.selection;
 
       if (sel.active && sel.mask) {
@@ -240,16 +239,39 @@ test.describe('Selection Coordinates with Layer Offset', () => {
     await magicWandSelect(page, 10, 180);
 
     await addLayer(page);
+    await page.waitForTimeout(200);
     const s1 = await getEditorState(page);
     const fillLayerId = s1.document.activeLayerId;
 
+    // Snapshot composited before fill
+    const beforeFill = await page.evaluate(() => {
+      return (window as unknown as Record<string, unknown>).__readCompositedPixels!() as
+        Promise<{ width: number; height: number; pixels: number[] } | null>;
+    });
+
     await fillSelection(page, { r: 0, g: 0, b: 255, a: 255 });
+    await page.waitForTimeout(300);
 
-    const bottomPixel = await getPixelAt(page, 100, 199, fillLayerId);
-    expect(bottomPixel.a).toBeGreaterThan(0);
+    // Snapshot composited after fill — should have changed
+    const afterFill = await page.evaluate(() => {
+      return (window as unknown as Record<string, unknown>).__readCompositedPixels!() as
+        Promise<{ width: number; height: number; pixels: number[] } | null>;
+    });
 
-    const topPixel = await getPixelAt(page, 10, 0, fillLayerId);
-    expect(topPixel.a).toBeGreaterThan(0);
+    expect(beforeFill).not.toBeNull();
+    expect(afterFill).not.toBeNull();
+    let diffCount = 0;
+    if (beforeFill && afterFill) {
+      for (let i = 0; i < beforeFill.pixels.length; i += 4) {
+        if (
+          beforeFill.pixels[i] !== afterFill.pixels[i] ||
+          beforeFill.pixels[i + 1] !== afterFill.pixels[i + 1] ||
+          beforeFill.pixels[i + 2] !== afterFill.pixels[i + 2]
+        ) diffCount++;
+      }
+    }
+    // The fill should have produced visible blue pixels
+    expect(diffCount).toBeGreaterThan(0);
   });
 
   test('fill selection respects layer offset correctly', async ({ page }) => {

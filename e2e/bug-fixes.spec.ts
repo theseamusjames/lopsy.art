@@ -200,7 +200,7 @@ async function getLayerPosition(page: Page, layerId?: string): Promise<{ x: numb
 // ---------------------------------------------------------------------------
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('http://localhost:5173');
+  await page.goto('/');
   await waitForStore(page);
 });
 
@@ -397,7 +397,7 @@ test.describe('Bug Fix: Flatten Image', () => {
     const layer3Id = s2.document.activeLayerId;
     await paintRect(page, 0, 0, 100, 50, { r: 0, g: 0, b: 255, a: 255 }, layer3Id);
 
-    expect((await getEditorState(page)).document.layers).toHaveLength(3);
+    expect((await getEditorState(page)).document.layers).toHaveLength(4);
 
     // Flatten
     await page.evaluate(() => {
@@ -409,7 +409,7 @@ test.describe('Bug Fix: Flatten Image', () => {
     await page.waitForTimeout(300);
 
     const flatState = await getEditorState(page);
-    expect(flatState.document.layers).toHaveLength(1);
+    expect(flatState.document.layers).toHaveLength(2);
 
     // The flattened layer should contain the composite result
     // Use composite readback since flattened data is GPU-only
@@ -437,7 +437,7 @@ test.describe('Bug Fix: Flatten Image', () => {
     await addLayer(page);
     await addLayer(page);
 
-    expect((await getEditorState(page)).document.layers).toHaveLength(3);
+    expect((await getEditorState(page)).document.layers).toHaveLength(4);
 
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -447,12 +447,12 @@ test.describe('Bug Fix: Flatten Image', () => {
     });
     await page.waitForTimeout(300);
 
-    expect((await getEditorState(page)).document.layers).toHaveLength(1);
+    expect((await getEditorState(page)).document.layers).toHaveLength(2);
 
     await undo(page);
     await page.waitForTimeout(500);
     const restored = await getEditorState(page);
-    expect(restored.document.layers).toHaveLength(3);
+    expect(restored.document.layers).toHaveLength(4);
 
     // Verify original layer IDs survived the undo
     const restoredIds = restored.document.layers.map((l) => l.id);
@@ -661,17 +661,19 @@ test.describe('Bug Fix: Image Adjustments', () => {
     // Read baseline composite pixel
     const before = await getCompositePixelAt(page, 50, 50);
 
-    // Apply exposure boost via uiStore
+    // Apply exposure boost via the root group layer's adjustments
     await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          setAdjustments: (adj: Record<string, number>) => void;
-          setAdjustmentsEnabled: (enabled: boolean) => void;
+          document: { rootGroupId: string };
+          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
+          setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
         };
       };
       const state = store.getState();
-      state.setAdjustmentsEnabled(true);
-      state.setAdjustments({
+      const groupId = state.document.rootGroupId;
+      state.setGroupAdjustmentsEnabled(groupId, true);
+      state.setGroupAdjustments(groupId, {
         exposure: 1.0,
         contrast: 0,
         highlights: 0,
@@ -694,12 +696,14 @@ test.describe('Bug Fix: Image Adjustments', () => {
 
     // Reset adjustments
     await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          setAdjustments: (adj: Record<string, number>) => void;
+          document: { rootGroupId: string };
+          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
         };
       };
-      store.getState().setAdjustments({
+      const state = store.getState();
+      state.setGroupAdjustments(state.document.rootGroupId, {
         exposure: 0,
         contrast: 0,
         highlights: 0,
@@ -718,17 +722,19 @@ test.describe('Bug Fix: Image Adjustments', () => {
 
     const original = await getCompositePixelAt(page, 50, 50);
 
-    // Enable strong contrast
+    // Enable strong contrast via root group
     await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          setAdjustments: (adj: Record<string, number>) => void;
-          setAdjustmentsEnabled: (enabled: boolean) => void;
+          document: { rootGroupId: string };
+          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
+          setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
         };
       };
       const state = store.getState();
-      state.setAdjustmentsEnabled(true);
-      state.setAdjustments({
+      const groupId = state.document.rootGroupId;
+      state.setGroupAdjustmentsEnabled(groupId, true);
+      state.setGroupAdjustments(groupId, {
         exposure: 0,
         contrast: 50,
         highlights: 0,
@@ -744,12 +750,16 @@ test.describe('Bug Fix: Image Adjustments', () => {
     // Contrast should shift the value away from 100
     expect(adjusted.r).not.toBe(original.r);
 
-    // Disable adjustments
+    // Disable adjustments via root group
     await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setAdjustmentsEnabled: (enabled: boolean) => void };
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { rootGroupId: string };
+          setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
+        };
       };
-      store.getState().setAdjustmentsEnabled(false);
+      const state = store.getState();
+      state.setGroupAdjustmentsEnabled(state.document.rootGroupId, false);
     });
     await page.waitForTimeout(500);
 
@@ -931,7 +941,7 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
 
     // Verify final state
     const finalState = await getEditorState(page);
-    expect(finalState.document.layers).toHaveLength(5);
+    expect(finalState.document.layers).toHaveLength(6);
     expect(finalState.undoStackLength).toBeGreaterThanOrEqual(20);
 
     const totalUndos = finalState.undoStackLength;
@@ -941,9 +951,9 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
       await undo(page);
     }
 
-    // After undoing everything: should be 1 empty layer (initial state)
+    // After undoing everything: should be 1 empty raster layer + group (initial state)
     const afterFullUndo = await getEditorState(page);
-    expect(afterFullUndo.document.layers).toHaveLength(1);
+    expect(afterFullUndo.document.layers).toHaveLength(2);
     expect(afterFullUndo.undoStackLength).toBe(0);
     expect(afterFullUndo.redoStackLength).toBe(totalUndos);
 
@@ -958,7 +968,7 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
 
     // After redoing everything: should match the final state
     const afterFullRedo = await getEditorState(page);
-    expect(afterFullRedo.document.layers).toHaveLength(5);
+    expect(afterFullRedo.document.layers).toHaveLength(6);
     expect(afterFullRedo.undoStackLength).toBe(totalUndos);
     expect(afterFullRedo.redoStackLength).toBe(0);
 
@@ -1204,7 +1214,7 @@ test.describe('Masterpiece: Full Feature Integration', () => {
     // Verify the composition
     // -----------------------------------------------------------------------
     const finalState = await getEditorState(page);
-    expect(finalState.document.layers).toHaveLength(5);
+    expect(finalState.document.layers).toHaveLength(6);
     expect(finalState.document.width).toBe(600);
     expect(finalState.document.height).toBe(400);
 

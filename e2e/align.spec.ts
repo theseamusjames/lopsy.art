@@ -145,10 +145,10 @@ test.describe('Align layer content', () => {
     await clickAlignButton(page, 'Align left');
 
     const pos = await getLayerPosition(page);
-    // Content was at layer-local (50,50). After align left, content left edge should be at doc x=0.
-    // So layer.x = 0 - 50 = -50
-    expect(pos.x).toBe(-50);
-    expect(pos.y).toBe(0); // y unchanged from initial 0
+    // Auto-crop shrinks layer to 20x20 at (50,50). Content bounds = (50,50,20,20).
+    // Align left: relX = 50-50 = 0, x = -0 = 0. y unchanged from 50.
+    expect(pos.x).toBe(0);
+    expect(pos.y).toBe(50);
   });
 
   test('align right moves content to right edge', async ({ page }) => {
@@ -157,10 +157,10 @@ test.describe('Align layer content', () => {
     await clickAlignButton(page, 'Align right');
 
     const pos = await getLayerPosition(page);
-    // Content right edge should be at doc x=200.
-    // Content spans 50..69 in layer coords, width=20. layer.x = 200 - 20 - 50 = 130
-    expect(pos.x).toBe(130);
-    expect(pos.y).toBe(0);
+    // Auto-crop shrinks layer to 20x20 at (50,50). Content bounds = (50,50,20,20).
+    // Align right: relX = 50-50 = 0, x = 200-20-0 = 180. y unchanged from 50.
+    expect(pos.x).toBe(180);
+    expect(pos.y).toBe(50);
   });
 
   test('align top moves content to top edge', async ({ page }) => {
@@ -169,8 +169,9 @@ test.describe('Align layer content', () => {
     await clickAlignButton(page, 'Align top');
 
     const pos = await getLayerPosition(page);
-    expect(pos.x).toBe(0);
-    expect(pos.y).toBe(-50);
+    // Auto-crop shrinks layer to 20x20 at (50,50). Align top: relY=0, y=0. x unchanged from 50.
+    expect(pos.x).toBe(50);
+    expect(pos.y).toBe(0);
   });
 
   test('align bottom moves content to bottom edge', async ({ page }) => {
@@ -179,8 +180,9 @@ test.describe('Align layer content', () => {
     await clickAlignButton(page, 'Align bottom');
 
     const pos = await getLayerPosition(page);
-    expect(pos.x).toBe(0);
-    expect(pos.y).toBe(130);
+    // Auto-crop shrinks layer to 20x20 at (50,50). Align bottom: relY=0, y=200-20=180. x unchanged from 50.
+    expect(pos.x).toBe(50);
+    expect(pos.y).toBe(180);
   });
 
   test('align center horizontally', async ({ page }) => {
@@ -189,10 +191,9 @@ test.describe('Align layer content', () => {
     await clickAlignButton(page, 'Align center horizontally');
 
     const pos = await getLayerPosition(page);
-    // Center of canvas = 100. Content width = 20. Target x = 100 - 10 = 90.
-    // Content starts at layer-local 50. layer.x = 90 - 50 = 40
-    expect(pos.x).toBe(40);
-    expect(pos.y).toBe(0);
+    // Auto-crop shrinks layer to 20x20 at (50,50). Center-h: relX=0, x=(200-20)/2=90. y unchanged from 50.
+    expect(pos.x).toBe(90);
+    expect(pos.y).toBe(50);
   });
 
   test('align center vertically', async ({ page }) => {
@@ -201,47 +202,48 @@ test.describe('Align layer content', () => {
     await clickAlignButton(page, 'Align center vertically');
 
     const pos = await getLayerPosition(page);
-    expect(pos.x).toBe(0);
-    expect(pos.y).toBe(40);
+    // Auto-crop shrinks layer to 20x20 at (50,50). Center-v: relY=0, y=(200-20)/2=90. x unchanged from 50.
+    expect(pos.x).toBe(50);
+    expect(pos.y).toBe(90);
   });
 
   test('pixel data moves with the layer', async ({ page }) => {
-    // Paint red block at layer-local (10,10)
+    // Paint red block at (10,10) — auto-crop shrinks layer to 20x20 at (10,10)
     await paintRect(page, 10, 10, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
 
     await clickAlignButton(page, 'Align left');
 
     const pos = await getLayerPosition(page);
-    expect(pos.x).toBe(-10);
+    // Auto-crop: layer at (10,10), 20x20. Align left: x=0, y=10.
+    expect(pos.x).toBe(0);
 
-    // Pixel data is in layer-local coords, so the red block is still at (10,10) in the layer
+    // After crop, pixel data is 20x20 — content fills the entire cropped data.
+    // Pixel at local (10,10) is within the 20x20 block and should be red.
     const pixel = await getPixelAt(page, 10, 10);
     expect(pixel.r).toBe(255);
     expect(pixel.a).toBe(255);
 
-    // And pixel at (0,0) in layer is still transparent
-    const emptyPixel = await getPixelAt(page, 0, 0);
-    expect(emptyPixel.a).toBe(0);
+    // After crop, local (0,0) IS part of the red content (the entire 20x20 is red)
+    const originPixel = await getPixelAt(page, 0, 0);
+    expect(originPixel.r).toBe(255);
+    expect(originPixel.a).toBe(255);
   });
 
   test('align only moves content, does not modify pixels', async ({ page }) => {
+    // Paint 40x40 green block at (30,30) — auto-crop shrinks to 40x40 at (30,30)
     await paintRect(page, 30, 30, 40, 40, { r: 0, g: 255, b: 0, a: 255 });
 
-    // Read pixels before
-    const beforePixel = await getPixelAt(page, 50, 50);
+    // After crop, pixel data is 40x40. Check pixel at local (20,20) — within the green block.
+    const beforePixel = await getPixelAt(page, 20, 20);
     expect(beforePixel.g).toBe(255);
     expect(beforePixel.a).toBe(255);
 
     await clickAlignButton(page, 'Align right');
 
-    // Pixel data in layer-local coords should be unchanged
-    const afterPixel = await getPixelAt(page, 50, 50);
+    // Pixel data in layer-local coords should be unchanged after align
+    const afterPixel = await getPixelAt(page, 20, 20);
     expect(afterPixel.g).toBe(255);
     expect(afterPixel.a).toBe(255);
-
-    // Empty area should still be empty
-    const emptyAfter = await getPixelAt(page, 0, 0);
-    expect(emptyAfter.a).toBe(0);
   });
 
   test('align with full-layer content', async ({ page }) => {
@@ -264,10 +266,11 @@ test.describe('Align layer content', () => {
     await clickAlignButton(page, 'Align top');
 
     const pos = await getLayerPosition(page);
-    // After align-left: x = -80, y = 0
-    // After align-top: x = -80, y = -80
-    expect(pos.x).toBe(-80);
-    expect(pos.y).toBe(-80);
+    // Auto-crop: layer at (80,80), 20x20.
+    // After align-left: x=0, y=80
+    // After align-top: x=0, y=0
+    expect(pos.x).toBe(0);
+    expect(pos.y).toBe(0);
   });
 
   test('align to bottom-right corner', async ({ page }) => {
@@ -277,11 +280,11 @@ test.describe('Align layer content', () => {
     await clickAlignButton(page, 'Align bottom');
 
     const pos = await getLayerPosition(page);
-    // Content at (10,10) size 30x30
-    // Align right: layer.x = 200 - 30 - 10 = 160
-    // Align bottom: layer.y = 200 - 30 - 10 = 160
-    expect(pos.x).toBe(160);
-    expect(pos.y).toBe(160);
+    // Auto-crop: layer at (10,10), 30x30.
+    // Align right: relX=0, x=200-30=170. y=10.
+    // Align bottom: relY=0, y=200-30=170. x=170.
+    expect(pos.x).toBe(170);
+    expect(pos.y).toBe(170);
   });
 
   test('center both axes', async ({ page }) => {

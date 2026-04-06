@@ -77,13 +77,13 @@ pub fn apply_dab_batch(
     }
     gl.viewport(0, 0, w as i32, h as i32);
 
-    // Source-over blending for dab accumulation (flow controls buildup rate).
-    // After dab rendering, a clamp pass caps the stroke alpha to the brush opacity.
+    // MAX blending for dab accumulation on the stroke texture.
+    // Each pixel takes the maximum of the existing value and the new dab value.
+    // Since output is premultiplied (color*a, a), MAX selects the highest-alpha
+    // dab at each pixel, preventing opacity compounding from overlapping dabs.
+    // Opacity is applied as a uniform multiplier in the shader.
     gl.enable(WebGl2RenderingContext::BLEND);
-    gl.blend_func(
-        WebGl2RenderingContext::ONE,
-        WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA,
-    );
+    gl.blend_equation(WebGl2RenderingContext::MAX);
 
     let prog = &engine.shaders.brush_dab.program;
     gl.use_program(Some(prog));
@@ -178,47 +178,8 @@ pub fn apply_dab_batch(
     }
 
     gl.disable(WebGl2RenderingContext::BLEND);
-
-    // --- Opacity clamp pass ---
-    // Clamp the stroke texture's alpha to the brush opacity ceiling.
-    // This ensures overlapping dabs within a stroke never exceed the opacity.
-    if opacity < 0.999 {
-        if let Some(stroke_gl_tex) = engine.texture_pool.get(tex_handle).cloned() {
-            // Pass 1: render stroke through opacity_clamp shader into scratch_a
-            engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-            gl.viewport(0, 0, w as i32, h as i32);
-
-            let clamp_prog = &engine.shaders.opacity_clamp.program;
-            gl.use_program(Some(clamp_prog));
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&stroke_gl_tex));
-            if let Some(loc) = gl.get_uniform_location(clamp_prog, "u_tex") {
-                gl.uniform1i(Some(&loc), 0);
-            }
-            if let Some(loc) = gl.get_uniform_location(clamp_prog, "u_maxOpacity") {
-                gl.uniform1f(Some(&loc), opacity);
-            }
-            engine.draw_fullscreen_quad();
-
-            // Pass 2: blit scratch_a back to stroke texture
-            if let Some(fbo) = engine.stroke_fbo {
-                engine.fbo_pool.attach_texture(gl, fbo, &stroke_gl_tex);
-                engine.fbo_pool.bind(gl, fbo);
-            }
-            gl.viewport(0, 0, w as i32, h as i32);
-
-            let blit_prog = &engine.shaders.blit.program;
-            gl.use_program(Some(blit_prog));
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
-            }
-            if let Some(loc) = gl.get_uniform_location(blit_prog, "u_tex") {
-                gl.uniform1i(Some(&loc), 0);
-            }
-            engine.draw_fullscreen_quad();
-        }
-    }
+    // Reset blend equation to default ADD for subsequent passes
+    gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
 
     gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
 

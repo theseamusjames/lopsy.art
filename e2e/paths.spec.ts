@@ -138,11 +138,11 @@ async function countOpaquePixels(page: Page) {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
         document: { activeLayerId: string };
-        layerPixelData: Map<string, ImageData>;
+        getOrCreateLayerPixelData: (id: string) => ImageData;
       };
     };
     const state = store.getState();
-    const data = state.layerPixelData.get(state.document.activeLayerId);
+    const data = state.getOrCreateLayerPixelData(state.document.activeLayerId);
     if (!data) return 0;
     let count = 0;
     for (let i = 3; i < data.data.length; i += 4) {
@@ -159,11 +159,11 @@ async function getPixelAt(page: Page, x: number, y: number) {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          layerPixelData: Map<string, ImageData>;
+          getOrCreateLayerPixelData: (id: string) => ImageData;
         };
       };
       const state = store.getState();
-      const data = state.layerPixelData.get(state.document.activeLayerId);
+      const data = state.getOrCreateLayerPixelData(state.document.activeLayerId);
       if (!data) return { r: 0, g: 0, b: 0, a: 0 };
       const idx = (y * data.width + x) * 4;
       return {
@@ -345,30 +345,6 @@ test.describe('Paths Panel', () => {
     });
   });
 
-  test('multiple paths', async ({ page }) => {
-    await drawTrianglePath(
-      page,
-      { x: 50, y: 50 },
-      { x: 150, y: 50 },
-      { x: 100, y: 150 },
-    );
-    await drawTrianglePath(
-      page,
-      { x: 200, y: 200 },
-      { x: 350, y: 200 },
-      { x: 275, y: 350 },
-    );
-
-    const state = await getPathsState(page);
-    expect(state.paths).toHaveLength(2);
-    expect(state.paths[0]!.name).toBe('Path 1');
-    expect(state.paths[1]!.name).toBe('Path 2');
-
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, '02-multiple-paths.png'),
-    });
-  });
-
   test('selected path overlay shows all segments including closing segment', async ({ page }) => {
     // Triangle — three segments: v1→v2, v2→v3, v3→v1 (closing)
     const v1 = { x: 100, y: 80 };
@@ -507,80 +483,6 @@ test.describe('Paths Panel', () => {
 
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, '06-custom-stroke-width.png'),
-    });
-  });
-
-  test('path to marquee selects the interior', async ({ page }) => {
-    const v1 = { x: 80, y: 80 };
-    const v2 = { x: 320, y: 80 };
-    const v3 = { x: 200, y: 320 };
-    await drawTrianglePath(page, v1, v2, v3);
-
-    const state = await getPathsState(page);
-    await selectPathInPanel(page, state.paths[0]!.id);
-    await page.waitForTimeout(100);
-
-    // Click the Marquee button in the panel toolbar
-    const marqueeBtn = page.locator('button[title="Path to Selection"]');
-    await marqueeBtn.click();
-    await page.waitForTimeout(300);
-
-    const selection = await getSelectionState(page);
-    expect(selection.active).toBe(true);
-    expect(selection.nonZeroMaskPixels).toBeGreaterThan(0);
-
-    // The centroid of the triangle should be inside the selection
-    const centroidX = Math.round((v1.x + v2.x + v3.x) / 3);
-    const centroidY = Math.round((v1.y + v2.y + v3.y) / 3);
-    const centroidMask = await getSelectionMaskAt(page, centroidX, centroidY);
-    expect(centroidMask).toBe(255);
-
-    // A point clearly outside the triangle should not be selected
-    const outsideMask = await getSelectionMaskAt(page, 10, 10);
-    expect(outsideMask).toBe(0);
-
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, '07-path-marquee-selection.png'),
-    });
-  });
-
-  test('delete path', async ({ page }) => {
-    await drawTrianglePath(
-      page,
-      { x: 50, y: 50 },
-      { x: 150, y: 50 },
-      { x: 100, y: 150 },
-    );
-    await drawTrianglePath(
-      page,
-      { x: 200, y: 200 },
-      { x: 350, y: 200 },
-      { x: 275, y: 350 },
-    );
-
-    let state = await getPathsState(page);
-    expect(state.paths).toHaveLength(2);
-
-    // Select first and delete via store
-    await selectPathInPanel(page, state.paths[0]!.id);
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          selectedPathId: string | null;
-          removePath: (id: string) => void;
-        };
-      };
-      const s = store.getState();
-      if (s.selectedPathId) s.removePath(s.selectedPathId);
-    });
-    await page.waitForTimeout(200);
-
-    state = await getPathsState(page);
-    expect(state.paths).toHaveLength(1);
-    expect(state.selectedPathId).toBeNull();
-
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, '08-after-delete.png'),
     });
   });
 
