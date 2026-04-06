@@ -927,6 +927,16 @@ pub fn sample_color(engine: &Engine, x: f64, y: f64, sample_size: u32) -> Vec<u8
 // Shape Rendering
 // ============================================================
 
+#[wasm_bindgen(js_name = "saveShapePreview")]
+pub fn save_shape_preview(engine: &mut Engine, layer_id: &str) {
+    shape_gpu::save_shape_preview(&mut engine.inner, layer_id);
+}
+
+#[wasm_bindgen(js_name = "endShapePreview")]
+pub fn end_shape_preview(engine: &mut Engine) {
+    shape_gpu::end_shape_preview(&mut engine.inner);
+}
+
 #[wasm_bindgen(js_name = "renderShape")]
 pub fn render_shape(
     engine: &mut Engine, layer_id: &str,

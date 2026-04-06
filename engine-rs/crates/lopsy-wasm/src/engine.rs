@@ -42,6 +42,9 @@ pub struct EngineInner {
     pub brush_angle: f32,
     // Selection
     pub selection_mask_texture: Option<TextureHandle>,
+    // Shape preview (stores pre-drag layer content for live preview)
+    pub shape_preview_texture: Option<TextureHandle>,
+    pub shape_preview_layer_id: Option<String>,
     // Clipboard
     pub clipboard_texture: Option<TextureHandle>,
     pub clipboard_width: u32,
@@ -142,6 +145,8 @@ impl EngineInner {
             brush_has_tip: false,
             brush_angle: 0.0,
             selection_mask_texture: None,
+            shape_preview_texture: None,
+            shape_preview_layer_id: None,
             clipboard_texture: None,
             clipboard_width: 0,
             clipboard_height: 0,

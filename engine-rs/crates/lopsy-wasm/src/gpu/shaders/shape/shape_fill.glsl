@@ -15,6 +15,7 @@ out vec4 fragColor;
 const float PI = 3.14159265359;
 
 float sdEllipse(vec2 p, vec2 r) {
+    if (min(r.x, r.y) < 0.5) return 1e6;
     vec2 q = abs(p) / r;
     return (length(q) - 1.0) * min(r.x, r.y);
 }
@@ -23,20 +24,29 @@ float sdRect(vec2 p, vec2 b, float r) {
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
 float sdPolygon(vec2 p, vec2 halfSize, int n, float cr) {
-    // Scale to unit circle space, compute polygon SDF, scale back
+    if (min(halfSize.x, halfSize.y) < 0.5) return 1e6;
+
     float scale = min(halfSize.x, halfSize.y);
-    vec2 q = p / halfSize;
     float an = PI / float(n);
+    float cosAn = cos(an);
+    float maxCr = scale * cosAn * 0.99;
+    float clampedCr = min(cr, maxCr);
+
+    // Inset the polygon by cr so rounding stays within the original bounds.
+    // The inscribed radius is cosAn * scale; shrinking it by cr means
+    // reducing scale by cr / cosAn, then the Minkowski offset (-cr)
+    // grows edges back to their original position while rounding corners.
+    float insetScale = scale - clampedCr / cosAn;
+    vec2 insetHalfSize = halfSize * (insetScale / scale);
+
+    vec2 q = p / insetHalfSize;
     // Rotate so even-sided polygons have flat top edges,
     // odd-sided polygons have vertex pointing up
     float rotOffset = (n / 2 * 2 == n) ? an : 0.0;
     float a = atan(q.x, q.y) + rotOffset;
     a = mod(a + PI, 2.0 * an) - an;
     float r = length(q);
-    float d = (r * cos(a) - cos(an)) * scale;
-    // Apply corner rounding
-    float maxR = scale * cos(an);
-    float clampedCr = min(cr, maxR * 0.99);
+    float d = (r * cos(a) - cosAn) * insetScale;
     return d - clampedCr;
 }
 void main() {

@@ -27,6 +27,8 @@ import {
   renderLinearGradient as gpuRenderLinearGradient,
   renderRadialGradient as gpuRenderRadialGradient,
   renderShape as gpuRenderShape,
+  saveShapePreview as gpuSaveShapePreview,
+  endShapePreview as gpuEndShapePreview,
 } from '../../engine-wasm/wasm-bridge';
 
 function clearJsPixelData(layerId: string): void {
@@ -708,6 +710,8 @@ export function handleShapeGradientDown(
     const ts = useToolSettingsStore.getState();
     if (ts.shapeFillColor) useUIStore.getState().addRecentColor(ts.shapeFillColor);
     if (ts.shapeStrokeColor) useUIStore.getState().addRecentColor(ts.shapeStrokeColor);
+    const engine = getEngine();
+    if (engine) gpuSaveShapePreview(engine, activeLayerId);
   } else {
     useUIStore.getState().addRecentColor(useUIStore.getState().foregroundColor);
     useUIStore.getState().addRecentColor(useUIStore.getState().backgroundColor);
@@ -730,6 +734,10 @@ const CLICK_THRESHOLD = 4;
 
 export function handleShapeUp(state: InteractionState, layerLocalPos: Point): void {
   if (!state.startPoint) return;
+
+  const engine = getEngine();
+  if (engine) gpuEndShapePreview(engine);
+
   const dx = layerLocalPos.x - state.startPoint.x;
   const dy = layerLocalPos.y - state.startPoint.y;
   const toolSettings = useToolSettingsStore.getState();
@@ -800,7 +808,7 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point): 
   const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos);
   const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
   const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
-  if (rx < 1 && ry < 1) return;
+  if (rx < 1 || ry < 1) return;
 
   const engine = getEngine();
   if (!engine) return;
