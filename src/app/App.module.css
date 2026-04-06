@@ -126,15 +126,14 @@
 }
 
 .sidebarScroll {
-  flex-shrink: 0;
+  flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .sidebarBottom {
-  flex: 1;
+  flex-shrink: 0;
   border-top: 1px solid var(--color-border);
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
