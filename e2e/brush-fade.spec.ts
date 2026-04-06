@@ -73,32 +73,39 @@ async function setUIState(page: Page, setter: string, value: unknown) {
   }, { setter, value });
 }
 
-async function readLayerPixelAt(page: Page, x: number, y: number, layerId?: string): Promise<{ r: number; g: number; b: number; a: number }> {
+async function readCompositedPixelAt(page: Page, docX: number, docY: number): Promise<{ r: number; g: number; b: number; a: number }> {
   return page.evaluate(
-    async ({ x, y, lid }) => {
+    async ({ docX, docY }) => {
+      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+        () => Promise<{ width: number; height: number; pixels: number[] } | null>;
+      const result = await readFn();
+      if (!result) return { r: 0, g: 0, b: 0, a: 0 };
+
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          document: {
-            activeLayerId: string;
-            layers: Array<{ id: string; x: number; y: number }>;
-          };
+          document: { width: number; height: number };
+          viewport: { zoom: number; panX: number; panY: number };
         };
       };
       const state = store.getState();
-      const id = lid ?? state.document.activeLayerId;
-      const layer = state.document.layers.find((l) => l.id === id);
-      const lx = layer?.x ?? 0;
-      const ly = layer?.y ?? 0;
-      const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
-        (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
-      const result = await readFn(id);
-      if (!result || result.width === 0) return { r: 0, g: 0, b: 0, a: 0 };
-      const localX = x - lx;
-      const localY = y - ly;
-      if (localX < 0 || localX >= result.width || localY < 0 || localY >= result.height) {
+      const container = document.querySelector('[data-testid="canvas-container"]') as HTMLElement;
+      if (!container) return { r: 0, g: 0, b: 0, a: 0 };
+
+      const rect = container.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const screenX = (docX - state.document.width / 2) * state.viewport.zoom + state.viewport.panX + cx;
+      const screenY = (docY - state.document.height / 2) * state.viewport.zoom + state.viewport.panY + cy;
+
+      const dpr = window.devicePixelRatio || 1;
+      const px = Math.round(screenX * dpr);
+      const py = result.height - 1 - Math.round(screenY * dpr);
+
+      if (px < 0 || px >= result.width || py < 0 || py >= result.height) {
         return { r: 0, g: 0, b: 0, a: 0 };
       }
-      const idx = (localY * result.width + localX) * 4;
+
+      const idx = (py * result.width + px) * 4;
       return {
         r: result.pixels[idx] ?? 0,
         g: result.pixels[idx + 1] ?? 0,
@@ -106,7 +113,7 @@ async function readLayerPixelAt(page: Page, x: number, y: number, layerId?: stri
         a: result.pixels[idx + 3] ?? 0,
       };
     },
-    { x, y, lid: layerId ?? null },
+    { docX, docY },
   );
 }
 
@@ -145,27 +152,31 @@ test.describe('Brush fade (#58)', () => {
     await page.screenshot({ path: 'test-results/screenshots/brush-fade-stroke.png' });
 
     // Sample alpha at the start, middle, and end of the stroke
-    const startPixel = await readLayerPixelAt(page, 60, 100);
-    const midPixel = await readLayerPixelAt(page, 150, 100);
-    const endPixel = await readLayerPixelAt(page, 280, 100);
+    const startPixel = await readCompositedPixelAt(page, 60, 100);
+    const midPixel = await readCompositedPixelAt(page, 150, 100);
+    const endPixel = await readCompositedPixelAt(page, 280, 100);
 
     console.log('\n=== Brush Fade Results ===');
     console.log(`Start (x=60):  r=${startPixel.r} g=${startPixel.g} b=${startPixel.b} a=${startPixel.a}`);
     console.log(`Mid   (x=150): r=${midPixel.r} g=${midPixel.g} b=${midPixel.b} a=${midPixel.a}`);
     console.log(`End   (x=280): r=${endPixel.r} g=${endPixel.g} b=${endPixel.b} a=${endPixel.a}`);
 
-    // Start of the stroke should have high alpha (near full opacity)
-    expect(startPixel.a).toBeGreaterThan(180);
+    // On an opaque composited view, brush fade shows in color channels.
+    // A red brush on white bg: start should be nearly pure red, end nearly white.
+    // Red channel stays high at start, green/blue are low (near 0).
+    // As brush fades, green/blue increase toward background white (255).
+    expect(startPixel.r).toBeGreaterThan(200);
+    expect(startPixel.g).toBeLessThan(50);
 
-    // Middle should be reduced relative to the start
-    expect(midPixel.a).toBeLessThan(startPixel.a);
+    // Middle should show partial fade: green channel higher than start
+    expect(midPixel.g).toBeGreaterThan(startPixel.g);
 
-    // End should be very low or zero (past the 200px fade distance)
-    expect(endPixel.a).toBeLessThan(midPixel.a);
+    // End should be nearly background (past 200px fade distance)
+    expect(endPixel.g).toBeGreaterThan(midPixel.g);
 
-    // Verify the monotonic decrease: start > mid > end
-    expect(startPixel.a).toBeGreaterThan(midPixel.a);
-    expect(midPixel.a).toBeGreaterThan(endPixel.a);
+    // Verify monotonic fade: green increases as brush fades out
+    expect(startPixel.g).toBeLessThan(midPixel.g);
+    expect(midPixel.g).toBeLessThan(endPixel.g);
   });
 
   test('no fade when fade is set to 0', async ({ page }) => {
@@ -185,23 +196,26 @@ test.describe('Brush fade (#58)', () => {
     await page.screenshot({ path: 'test-results/screenshots/brush-no-fade.png' });
 
     // Sample alpha at the start, middle, and end
-    const startPixel = await readLayerPixelAt(page, 60, 100);
-    const midPixel = await readLayerPixelAt(page, 200, 100);
-    const endPixel = await readLayerPixelAt(page, 340, 100);
+    const startPixel = await readCompositedPixelAt(page, 60, 100);
+    const midPixel = await readCompositedPixelAt(page, 200, 100);
+    const endPixel = await readCompositedPixelAt(page, 340, 100);
 
     console.log('\n=== No Fade Results ===');
     console.log(`Start (x=60):  r=${startPixel.r} g=${startPixel.g} b=${startPixel.b} a=${startPixel.a}`);
     console.log(`Mid   (x=200): r=${midPixel.r} g=${midPixel.g} b=${midPixel.b} a=${midPixel.a}`);
     console.log(`End   (x=340): r=${endPixel.r} g=${endPixel.g} b=${endPixel.b} a=${endPixel.a}`);
 
-    // All points should have high alpha (near full opacity)
-    expect(startPixel.a).toBeGreaterThan(200);
-    expect(midPixel.a).toBeGreaterThan(200);
-    expect(endPixel.a).toBeGreaterThan(200);
+    // All points should be solid red (no fade): red high, green/blue low
+    expect(startPixel.r).toBeGreaterThan(200);
+    expect(midPixel.r).toBeGreaterThan(200);
+    expect(endPixel.r).toBeGreaterThan(200);
+    expect(startPixel.g).toBeLessThan(50);
+    expect(midPixel.g).toBeLessThan(50);
+    expect(endPixel.g).toBeLessThan(50);
 
-    // Opacity should be roughly consistent along the stroke (within tolerance)
+    // Green channel should be roughly consistent (within tolerance)
     const tolerance = 30;
-    expect(Math.abs(startPixel.a - midPixel.a)).toBeLessThan(tolerance);
-    expect(Math.abs(midPixel.a - endPixel.a)).toBeLessThan(tolerance);
+    expect(Math.abs(startPixel.g - midPixel.g)).toBeLessThan(tolerance);
+    expect(Math.abs(midPixel.g - endPixel.g)).toBeLessThan(tolerance);
   });
 });
