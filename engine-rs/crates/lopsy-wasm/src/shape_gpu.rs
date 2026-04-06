@@ -18,6 +18,7 @@ pub fn render_shape(
     stroke_b: f32,
     stroke_a: f32,
     stroke_width: f32,
+    sides: u32,
     corner_radius: f32,
 ) {
     let corner_radius = corner_radius.min((width as f32).min(height as f32) / 2.0);
@@ -76,6 +77,9 @@ pub fn render_shape(
     }
     if let Some(loc) = gl.get_uniform_location(prog, "u_cornerRadius") {
         gl.uniform1f(Some(&loc), corner_radius);
+    }
+    if let Some(loc) = gl.get_uniform_location(prog, "u_sides") {
+        gl.uniform1i(Some(&loc), sides as i32);
     }
     if let Some(loc) = gl.get_uniform_location(prog, "u_texSize") {
         gl.uniform2f(Some(&loc), w as f32, h as f32);

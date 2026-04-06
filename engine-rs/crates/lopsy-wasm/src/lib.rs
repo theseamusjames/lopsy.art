@@ -933,13 +933,13 @@ pub fn render_shape(
     shape_type: u32, cx: f64, cy: f64, width: f64, height: f64,
     fill_r: f32, fill_g: f32, fill_b: f32, fill_a: f32,
     stroke_r: f32, stroke_g: f32, stroke_b: f32, stroke_a: f32,
-    stroke_width: f32, _sides: u32, corner_radius: f32,
+    stroke_width: f32, sides: u32, corner_radius: f32,
 ) {
     shape_gpu::render_shape(
         &mut engine.inner, layer_id, shape_type, cx, cy, width, height,
         fill_r, fill_g, fill_b, fill_a,
         stroke_r, stroke_g, stroke_b, stroke_a,
-        stroke_width, corner_radius,
+        stroke_width, sides, corner_radius,
     );
 }
 
