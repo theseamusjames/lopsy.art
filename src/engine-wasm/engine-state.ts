@@ -43,7 +43,7 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   const w = window as unknown as Record<string, unknown>;
   w.__engineState = { getEngine };
   // Dynamically import wasm-bridge to expose getLayerTextureDimensions
-  import('./wasm-bridge').then((mod) => { w.__wasmBridge = mod; });
+  import('./wasm-bridge').then((mod) => { w.__wasmBridge = mod; }).catch(() => {});
 
   return engine;
 }
