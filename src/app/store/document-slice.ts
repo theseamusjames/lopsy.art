@@ -203,6 +203,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set(computeToggleVisibility(s.document, id));
   },
 
+  // No history — lock state is ephemeral UI, not a document edit worth an undo step
   toggleLayerLock: (id) => {
     const doc = get().document;
     const layers = doc.layers.map((l) =>
@@ -211,6 +212,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set({ document: { ...doc, layers } });
   },
 
+  // No history — renaming is lightweight metadata, not worth an undo step
   renameLayer: (id, name) => {
     const doc = get().document;
     const layers = doc.layers.map((l) =>
@@ -219,6 +221,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set({ document: { ...doc, layers } });
   },
 
+  // No history — group creation is cheap; undo would be confusing with empty groups
   addGroup: (name) => {
     const doc = get().document;
     const group = createGroupLayer({ name: name ?? 'Group' });
@@ -245,6 +248,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set({ document: { ...doc, layers } });
   },
 
+  // No history — reparenting is a panel drag operation, not a pixel-level edit
   moveLayerToGroup: (layerId, targetGroupId, insertIndex) => {
     const doc = get().document;
     const newLayers = moveLayerToGroupUtil(doc.layers, layerId, targetGroupId, insertIndex);
@@ -260,6 +264,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set({ document: { ...doc, layers: newLayers, layerOrder: newOrder } });
   },
 
+  // No history — adjustment sliders fire continuously; history is pushed on commit
   setGroupAdjustments: (groupId, adjustments) => {
     const doc = get().document;
     const layers = doc.layers.map((l) =>
@@ -268,6 +273,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set({ document: { ...doc, layers } });
   },
 
+  // No history — toggle is paired with setGroupAdjustments which handles commit
   setGroupAdjustmentsEnabled: (groupId, enabled) => {
     const doc = get().document;
     const layers = doc.layers.map((l) =>
