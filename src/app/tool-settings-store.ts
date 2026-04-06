@@ -17,6 +17,7 @@ interface ToolSettings {
   shapeStrokeColor: Color | null;
   shapeStrokeWidth: number;
   shapePolygonSides: number;
+  shapeCornerRadius: number;
   aspectRatioW: number;
   aspectRatioH: number;
   aspectRatioLocked: boolean;
@@ -36,9 +37,11 @@ interface ToolSettings {
   brushSpacing: number;
   brushScatter: number;
   brushAngle: number;
+  brushFade: number;
   activeBrushTip: BrushTipData | null;
 
   setBrushSize: (size: number) => void;
+  setBrushFade: (fade: number) => void;
   setBrushSpacing: (spacing: number) => void;
   setBrushScatter: (scatter: number) => void;
   setBrushAngle: (angle: number) => void;
@@ -68,6 +71,7 @@ interface ToolSettings {
   setShapeStrokeColor: (color: Color | null) => void;
   setShapeStrokeWidth: (width: number) => void;
   setShapePolygonSides: (sides: number) => void;
+  setShapeCornerRadius: (radius: number) => void;
   setAspectRatioW: (w: number) => void;
   setAspectRatioH: (h: number) => void;
   setAspectRatioLocked: (locked: boolean) => void;
@@ -89,6 +93,7 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   shapeStrokeColor: null,
   shapeStrokeWidth: 2,
   shapePolygonSides: 6,
+  shapeCornerRadius: 0,
   aspectRatioW: 1,
   aspectRatioH: 1,
   aspectRatioLocked: false,
@@ -108,9 +113,11 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   brushSpacing: 0,
   brushScatter: 0,
   brushAngle: 0,
+  brushFade: 0,
   activeBrushTip: null,
 
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(2000, size)) }),
+  setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(2000, fade)) }),
   setBrushSpacing: (spacing) => set({ brushSpacing: Math.max(0, Math.min(200, spacing)) }),
   setBrushScatter: (scatter) => set({ brushScatter: Math.max(0, Math.min(100, scatter)) }),
   setBrushAngle: (angle) => set({ brushAngle: ((angle % 360) + 360) % 360 }),
@@ -128,6 +135,7 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   setShapeStrokeColor: (color) => set({ shapeStrokeColor: color }),
   setShapeStrokeWidth: (width) => set({ shapeStrokeWidth: Math.max(1, Math.min(50, width)) }),
   setShapePolygonSides: (sides) => set({ shapePolygonSides: Math.max(3, Math.min(64, Math.round(sides))) }),
+  setShapeCornerRadius: (radius) => set({ shapeCornerRadius: Math.max(0, Math.min(200, radius)) }),
   setAspectRatioW: (w) => set({ aspectRatioW: Math.max(0.01, w) }),
   setAspectRatioH: (h) => set({ aspectRatioH: Math.max(0.01, h) }),
   setAspectRatioLocked: (locked) => set({ aspectRatioLocked: locked }),

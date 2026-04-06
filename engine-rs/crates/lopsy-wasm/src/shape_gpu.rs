@@ -20,6 +20,7 @@ pub fn render_shape(
     stroke_width: f32,
     corner_radius: f32,
 ) {
+    let corner_radius = corner_radius.min((width as f32).min(height as f32) / 2.0);
     let _ = engine.ensure_layer_full_size(layer_id);
 
     let gl = &engine.gl;

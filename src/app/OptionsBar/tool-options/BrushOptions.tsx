@@ -12,6 +12,8 @@ export function BrushOptions() {
   const setBrushSize = useToolSettingsStore((s) => s.setBrushSize);
   const setBrushOpacity = useToolSettingsStore((s) => s.setBrushOpacity);
   const setBrushHardness = useToolSettingsStore((s) => s.setBrushHardness);
+  const brushFade = useToolSettingsStore((s) => s.brushFade);
+  const setBrushFade = useToolSettingsStore((s) => s.setBrushFade);
 
   const presets = useBrushPresetStore((s) => s.presets);
   const activePresetId = useBrushPresetStore((s) => s.activePresetId);
@@ -31,6 +33,7 @@ export function BrushOptions() {
       <Slider label="Size" value={brushSize} min={1} max={200} onChange={setBrushSize} />
       <Slider label="Opacity" value={brushOpacity} min={1} max={100} onChange={setBrushOpacity} />
       <Slider label="Hardness" value={brushHardness} min={0} max={100} onChange={setBrushHardness} />
+      <Slider label="Fade" value={brushFade} min={0} max={2000} onChange={setBrushFade} suffix="px" />
     </>
   );
 }

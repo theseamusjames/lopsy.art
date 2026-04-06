@@ -817,7 +817,8 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point): 
     fillColor ? fillColor.b / 255 : 0, fillColor ? fillColor.a : 0,
     strokeColor ? strokeColor.r / 255 : 0, strokeColor ? strokeColor.g / 255 : 0,
     strokeColor ? strokeColor.b / 255 : 0, strokeColor ? strokeColor.a : 0,
-    toolSettings.shapeStrokeWidth, toolSettings.shapePolygonSides, 0,
+    toolSettings.shapeStrokeWidth, toolSettings.shapePolygonSides,
+    Math.min(toolSettings.shapeCornerRadius, Math.min(rx * 2, ry * 2) / 2),
   );
   clearJsPixelData(state.layerId);
   useEditorStore.getState().notifyRender();
