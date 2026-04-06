@@ -283,16 +283,18 @@ export function LayerPanel({
               >
                 <Sparkles size={12} />
               </button>
-              <span
-                className={styles.opacity}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditingOpacityId(editingOpacityId === layer.id ? null : layer.id);
-                }}
-                title="Click to adjust opacity"
-              >
-                {Math.round(layer.opacity * 100)}%
-              </span>
+              {!isRootGroup(layer.id) && (
+                <span
+                  className={styles.opacity}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingOpacityId(editingOpacityId === layer.id ? null : layer.id);
+                  }}
+                  title="Click to adjust opacity"
+                >
+                  {Math.round(layer.opacity * 100)}%
+                </span>
+              )}
               <button
                 className={`${styles.lockBtn} ${layer.locked ? styles.lockBtnActive : ''}`}
                 onClick={(e) => {
@@ -304,19 +306,21 @@ export function LayerPanel({
               >
                 {layer.locked ? <Lock size={12} /> : <Unlock size={12} />}
               </button>
-              <button
-                className={styles.visibilityBtn}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleVisibility(layer.id);
-                }}
-                type="button"
-                aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
-              >
-                {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
-              </button>
+              {!isRootGroup(layer.id) && (
+                <button
+                  className={styles.visibilityBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleVisibility(layer.id);
+                  }}
+                  type="button"
+                  aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
+                >
+                  {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                </button>
+              )}
             </div>
-            {editingOpacityId === layer.id && (
+            {editingOpacityId === layer.id && !isRootGroup(layer.id) && (
               <div className={styles.opacitySlider}>
                 <input
                   type="range"
