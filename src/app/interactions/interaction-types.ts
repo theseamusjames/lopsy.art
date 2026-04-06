@@ -22,6 +22,7 @@ export interface InteractionState {
   originalSelectionMaskHeight: number;
   _usedGpuStroke?: boolean;
   strokeDistance?: number;
+  spacingRemainder?: number;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
 }
