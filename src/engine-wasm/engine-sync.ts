@@ -322,7 +322,11 @@ export function syncLayers(
   // Remove layers no longer present
   for (const id of tracked.layerIds) {
     if (!currentIds.has(id)) {
-      removeLayer(engine, id);
+      try {
+        removeLayer(engine, id);
+      } catch (e) {
+        console.error('[syncLayers] removeLayer failed:', id, e);
+      }
       tracked.layerVersions.delete(id);
       tracked.pixelDataVersions.delete(id);
       tracked.sparseVersions.delete(id);
@@ -334,11 +338,19 @@ export function syncLayers(
     const descJson = layerToDescJson(layer, layers);
 
     if (!tracked.layerIds.has(layer.id)) {
-      try { addLayer(engine, descJson); } catch (e) { console.error('[syncLayers] addLayer failed:', layer.id, e); }
-      tracked.layerVersions.set(layer.id, descJson);
+      try {
+        addLayer(engine, descJson);
+        tracked.layerVersions.set(layer.id, descJson);
+      } catch (e) {
+        console.error('[syncLayers] addLayer failed:', layer.id, e);
+      }
     } else if (tracked.layerVersions.get(layer.id) !== descJson) {
-      try { updateLayer(engine, descJson); } catch (e) { console.error('[syncLayers] updateLayer failed:', layer.id, e); }
-      tracked.layerVersions.set(layer.id, descJson);
+      try {
+        updateLayer(engine, descJson);
+        tracked.layerVersions.set(layer.id, descJson);
+      } catch (e) {
+        console.error('[syncLayers] updateLayer failed:', layer.id, e);
+      }
     }
 
     // Upload pixel data if changed or marked dirty (including GPU paint dirty).
