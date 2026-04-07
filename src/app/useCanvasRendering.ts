@@ -283,7 +283,11 @@ export function useCanvasRendering(
 
     initEngine(canvas).then((engine) => {
       if (cancelled) {
-        destroyEngine();
+        // Only destroy if this engine is still the current global engine.
+        // In StrictMode, a second mount may have already replaced it.
+        if (getEngine() === engine) {
+          destroyEngine();
+        }
         return;
       }
       engineReadyRef.current = true;
