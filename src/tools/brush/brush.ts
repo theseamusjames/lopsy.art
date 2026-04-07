@@ -221,7 +221,7 @@ export function interpolatePointsWithScatter(
     let y = from.y + dy * t;
 
     if (scatter > 0) {
-      const offset = (Math.random() - 0.5) * scatter / 100 * brushSize;
+      const offset = (Math.random() - 0.5) * 2 * (scatter / 100) * brushSize * 2;
       x += perpX * offset;
       y += perpY * offset;
     }
