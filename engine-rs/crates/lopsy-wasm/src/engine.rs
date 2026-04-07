@@ -279,30 +279,26 @@ impl EngineInner {
             None
         };
 
-        let new_tex = self.texture_pool.acquire(&self.gl, self.doc_width, self.doc_height)?;
+        // Compute the union of the document area and the layer content area
+        // so that offscreen content is preserved.
+        let min_x = 0i32.min(layer_x);
+        let min_y = 0i32.min(layer_y);
+        let max_x = (self.doc_width as i32).max(layer_x + lw as i32);
+        let max_y = (self.doc_height as i32).max(layer_y + lh as i32);
+        let new_w = (max_x - min_x) as u32;
+        let new_h = (max_y - min_y) as u32;
+
+        let new_tex = self.texture_pool.acquire(&self.gl, new_w, new_h)?;
 
         // Re-upload old content at the correct position in the new texture.
         if let Some(pixels) = old_pixels {
-            let dst_x = layer_x.max(0);
-            let dst_y = layer_y.max(0);
-            let src_skip_x = (-layer_x).max(0) as u32;
-            let src_skip_y = (-layer_y).max(0) as u32;
-            let copy_w = (lw - src_skip_x).min(self.doc_width - dst_x as u32);
-            let copy_h = (lh - src_skip_y).min(self.doc_height - dst_y as u32);
+            let dst_x = layer_x - min_x;
+            let dst_y = layer_y - min_y;
 
-            if copy_w > 0 && copy_h > 0 {
-                let mut sub = vec![0u8; (copy_w * copy_h * 4) as usize];
-                for row in 0..copy_h {
-                    let src_off = ((src_skip_y + row) * lw + src_skip_x) as usize * 4;
-                    let dst_off = (row * copy_w) as usize * 4;
-                    let len = copy_w as usize * 4;
-                    if src_off + len <= pixels.len() && dst_off + len <= sub.len() {
-                        sub[dst_off..dst_off + len].copy_from_slice(&pixels[src_off..src_off + len]);
-                    }
-                }
+            if lw > 0 && lh > 0 {
                 let _ = self.texture_pool.upload_rgba(
                     &self.gl, new_tex,
-                    dst_x, dst_y, copy_w, copy_h, &sub,
+                    dst_x, dst_y, lw, lh, &pixels,
                 );
             }
         }
@@ -312,10 +308,10 @@ impl EngineInner {
             self.texture_pool.release(old_tex);
         }
         if let Some(layer) = self.layer_stack.iter_mut().find(|l| l.id == layer_id) {
-            layer.x = 0;
-            layer.y = 0;
-            layer.width = self.doc_width;
-            layer.height = self.doc_height;
+            layer.x = min_x;
+            layer.y = min_y;
+            layer.width = new_w;
+            layer.height = new_h;
         }
         self.mark_layer_dirty(layer_id);
         Ok(())
