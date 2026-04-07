@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Eye, EyeOff, Folder, FolderPlus, GripVertical, Lock, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Unlock, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, FolderPlus, GripVertical, Lock, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Unlock, X } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
@@ -35,6 +35,7 @@ export function LayerPanel({
 }: LayerPanelProps) {
   const addLayerMask = useEditorStore((s) => s.addLayerMask);
   const removeLayerMask = useEditorStore((s) => s.removeLayerMask);
+  const duplicateLayer = useEditorStore((s) => s.duplicateLayer);
   const toggleLayerLock = useEditorStore((s) => s.toggleLayerLock);
   const renameLayer = useEditorStore((s) => s.renameLayer);
   const addGroup = useEditorStore((s) => s.addGroup);
@@ -390,12 +391,12 @@ export function LayerPanel({
           onClick={() => addGroup()}
         />
         <IconButton
-          icon={<Trash2 size={16} />}
-          label="Delete Layer"
+          icon={<Copy size={16} />}
+          label="Duplicate Layer"
           onClick={() => {
-            if (activeLayerId && !isRootGroup(activeLayerId)) onRemoveLayer(activeLayerId);
+            if (activeLayerId && !isRootGroup(activeLayerId)) duplicateLayer();
           }}
-          disabled={layers.length <= 1 || (activeLayerId !== null && isRootGroup(activeLayerId))}
+          disabled={!activeLayerId || isRootGroup(activeLayerId ?? '')}
         />
         {activeLayerId && (() => {
           const activeLayer = layers.find((l) => l.id === activeLayerId);
@@ -408,6 +409,15 @@ export function LayerPanel({
             />
           );
         })()}
+        <div className={styles.toolbarSpacer} />
+        <IconButton
+          icon={<Trash2 size={16} />}
+          label="Delete Layer"
+          onClick={() => {
+            if (activeLayerId && !isRootGroup(activeLayerId)) onRemoveLayer(activeLayerId);
+          }}
+          disabled={layers.length <= 1 || (activeLayerId !== null && isRootGroup(activeLayerId))}
+        />
       </div>
     </div>
   );

@@ -335,3 +335,7 @@
   padding: var(--space-1) var(--space-2);
   border-top: 1px solid var(--color-border);
 }
+
+.toolbarSpacer {
+  flex: 1;
+}
