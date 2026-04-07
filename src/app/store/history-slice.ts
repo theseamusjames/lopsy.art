@@ -3,6 +3,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { getLayerTextureDimensions, uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 import { resetTrackedState, flushLayerSync } from '../../engine-wasm/engine-sync';
+import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -126,6 +127,9 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   isDirty: false,
 
   undo: () => {
+    // Finalize any deferred GPU stroke so the snapshot captures it
+    finalizePendingStrokeGlobal();
+
     const state = get();
     if (state.undoStack.length === 0) return;
     const previous = state.undoStack[state.undoStack.length - 1];
