@@ -35,55 +35,54 @@ describe('editor-store history', () => {
     expect(restored.data[0]).toBe(originalFirstPixel);
   });
 
-  it('redo restores undone state', () => {
+  it('redo restores document state', () => {
     const state = useEditorStore.getState();
     const layerId = state.document.activeLayerId!;
+    const originalName = state.document.layers.find((l) => l.id === layerId)!.name;
 
-    state.pushHistory();
-    const modified = new ImageData(10, 10);
-    modified.data[0] = 200;
-    modified.data[3] = 255;
-    state.updateLayerPixelData(layerId, modified);
+    // Save original state
     state.pushHistory();
 
+    // Modify document metadata (layer name)
+    const updatedLayers = useEditorStore.getState().document.layers.map((l) =>
+      l.id === layerId ? { ...l, name: 'Modified' } : l,
+    );
+    useEditorStore.setState({
+      document: { ...useEditorStore.getState().document, layers: updatedLayers },
+    });
+
+    // Undo should restore the original name
     useEditorStore.getState().undo();
+    expect(useEditorStore.getState().document.layers.find((l) => l.id === layerId)!.name).toBe(originalName);
+
+    // Redo should bring back 'Modified'
     useEditorStore.getState().redo();
-    const final = useEditorStore.getState().getOrCreateLayerPixelData(layerId);
-    expect(final.data[0]).toBe(200);
+    expect(useEditorStore.getState().document.layers.find((l) => l.id === layerId)!.name).toBe('Modified');
   });
 
-  it('structural sharing: unchanged layers share references in snapshots', () => {
+  it('GPU snapshots share blobs for unchanged layers', () => {
     const state = useEditorStore.getState();
-    const layerId = state.document.activeLayerId!;
 
-    // Add a second layer (so we can test unchanged layers)
+    // Add a second layer
     state.addLayer();
-    const layer2Id = useEditorStore.getState().document.activeLayerId!;
 
-    // Push history, then modify only layer 2
+    // Push two snapshots without modifying anything between them
     useEditorStore.getState().pushHistory();
-    const modified = new ImageData(10, 10);
-    modified.data[0] = 42;
-    modified.data[3] = 255;
-    useEditorStore.getState().updateLayerPixelData(layer2Id, modified);
-
-    // Push another snapshot
     useEditorStore.getState().pushHistory();
 
-    // The two snapshots should share the reference for layer 1 (unchanged)
     const undoStack = useEditorStore.getState().undoStack;
     const snapshot1 = undoStack[undoStack.length - 2]!;
     const snapshot2 = undoStack[undoStack.length - 1]!;
 
-    // Layer 1 was not modified between pushes — should be same reference
-    expect(snapshot2.layerPixelData.get(layerId)).toBe(
-      snapshot1.layerPixelData.get(layerId),
-    );
-
-    // Layer 2 WAS modified — should be different references
-    expect(snapshot2.layerPixelData.get(layer2Id)).not.toBe(
-      snapshot1.layerPixelData.get(layer2Id),
-    );
+    // Without a GPU engine, both snapshots use EMPTY_LAYER_SENTINEL blobs,
+    // which are the same reference for each layer (structural sharing)
+    for (const layerId of state.document.layerOrder) {
+      const blob1 = snapshot1.gpuSnapshots.get(layerId);
+      const blob2 = snapshot2.gpuSnapshots.get(layerId);
+      expect(blob1).toBeDefined();
+      expect(blob2).toBeDefined();
+      expect(blob2).toBe(blob1);
+    }
   });
 
   it('marks dirty layers when pixel data is updated', () => {

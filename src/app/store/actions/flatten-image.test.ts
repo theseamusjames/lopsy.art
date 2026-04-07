@@ -38,9 +38,12 @@ describe('computeFlattenImage', () => {
   it('creates single layer from multiple layers', () => {
     const { doc, pixelData } = makeDoc(2);
     const result = computeFlattenImage(doc, pixelData)!;
-    expect(result.document!.layers).toHaveLength(1);
-    expect(result.document!.layerOrder).toHaveLength(1);
+    // Flattened result: one raster layer + one root group
+    expect(result.document!.layers).toHaveLength(2);
+    expect(result.document!.layerOrder).toHaveLength(2);
     expect(result.document!.layers[0]!.name).toBe('Background');
+    expect(result.document!.layers[1]!.type).toBe('group');
+    expect(result.document!.rootGroupId).toBeDefined();
   });
 
   it('clears JS pixel data (GPU is source of truth)', () => {
