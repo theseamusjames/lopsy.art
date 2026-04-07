@@ -531,7 +531,9 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         || engine.image_highlights.abs() > 1e-6
         || engine.image_shadows.abs() > 1e-6
         || engine.image_whites.abs() > 1e-6
-        || engine.image_blacks.abs() > 1e-6;
+        || engine.image_blacks.abs() > 1e-6
+        || engine.image_saturation.abs() > 1e-6
+        || engine.image_vibrance.abs() > 1e-6;
     let has_vignette = engine.image_vignette.abs() > 1e-6;
 
     if !has_adjustments && !has_vignette { return; }
@@ -561,6 +563,8 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_shadows") { engine.gl.uniform1f(Some(&loc), engine.image_shadows); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_whites") { engine.gl.uniform1f(Some(&loc), engine.image_whites); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blacks") { engine.gl.uniform1f(Some(&loc), engine.image_blacks); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_saturation") { engine.gl.uniform1f(Some(&loc), engine.image_saturation / 100.0); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_vibrance") { engine.gl.uniform1f(Some(&loc), engine.image_vibrance / 100.0); }
         engine.draw_fullscreen_quad();
 
         // Copy scratch_a → composite
