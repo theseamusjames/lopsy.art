@@ -1,11 +1,16 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { PixelBuffer } from '../engine/pixel-data';
 import { invalidateBitmapCache, createPaintingCanvas, destroyPaintingCanvas } from '../engine/bitmap-cache';
 import { extractMaskFromSurface } from '../engine/mask-utils';
 import { getEngine } from '../engine-wasm/engine-state';
-import { beginStroke, endStroke, hasFloat, dropFloat } from '../engine-wasm/wasm-bridge';
+import {
+  beginStroke, endStroke, hasFloat, dropFloat,
+  applyBrushDabBatch as gpuBrushDabBatch,
+} from '../engine-wasm/wasm-bridge';
+import { smoothStroke, HOLD_TIMEOUT_MS, HOLD_RADIUS_PX } from '../tools/smooth-line/smooth-line';
+import { useToolSettingsStore } from './tool-settings-store';
 
 import { clearActiveMaskEditBuffer } from './interactions/mask-buffer';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
@@ -76,6 +81,22 @@ export function useCanvasInteraction(
   const stampOffsetRef = useRef<Point | null>(null);
   const lastPaintPointRef = useRef<LastPaintPoint | null>(null);
   const pendingStrokeRef = useRef<{ layerId: string } | null>(null);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdMouseMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
+
+  const cancelHoldTimer = useCallback(() => {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    if (holdMouseMoveRef.current) {
+      window.removeEventListener('mousemove', holdMouseMoveRef.current);
+      holdMouseMoveRef.current = null;
+    }
+  }, []);
+
+  // Clean up the hold timer on unmount
+  useEffect(() => cancelHoldTimer, [cancelHoldTimer]);
 
   const buildContext = useCallback(
     (e: React.MouseEvent, canvasPos: Point, layerPos: Point, activeLayerId: string, activeLayer: Layer, pixelBuffer: PixelBuffer, paintSurface: PixelBuffer | MaskedPixelBuffer): InteractionContext => ({
@@ -93,6 +114,9 @@ export function useCanvasInteraction(
   const handleToolDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
+
+      // Cancel any pending hold-to-smooth timer from the previous stroke
+      cancelHoldTimer();
 
       const activeTool = useUIStore.getState().activeTool;
       const editorState = useEditorStore.getState();
@@ -210,7 +234,7 @@ export function useCanvasInteraction(
         stateRef.current = newState;
       }
     },
-    [screenToCanvas, containerRef, buildContext],
+    [screenToCanvas, containerRef, buildContext, cancelHoldTimer],
   );
 
   const handleToolMove = useCallback(
@@ -303,6 +327,74 @@ export function useCanvasInteraction(
       lastPaintPointRef.current = { point: state.lastPoint, layerId: state.layerId };
     }
 
+    // Hold-to-smooth: start a timer for brush strokes with enough points.
+    // If the cursor stays still for HOLD_TIMEOUT_MS, undo and re-draw smoothed.
+    const shouldStartHoldTimer =
+      state.tool === 'brush'
+      && state._usedGpuStroke
+      && state.strokePoints
+      && state.strokePoints.length >= 3
+      && state.layerId
+      && !state.maskMode;
+
+    if (shouldStartHoldTimer) {
+      const strokePoints = state.strokePoints!;
+      const layerId = state.layerId!;
+      const holdOrigin = { x: e.clientX, y: e.clientY };
+
+      const onMouseMove = (moveEvt: MouseEvent) => {
+        const dx = moveEvt.clientX - holdOrigin.x;
+        const dy = moveEvt.clientY - holdOrigin.y;
+        if (Math.sqrt(dx * dx + dy * dy) > HOLD_RADIUS_PX) {
+          cancelHoldTimer();
+        }
+      };
+
+      holdMouseMoveRef.current = onMouseMove;
+      window.addEventListener('mousemove', onMouseMove);
+
+      holdTimerRef.current = setTimeout(() => {
+        cancelHoldTimer();
+
+        const engine = getEngine();
+        if (!engine) return;
+
+        const toolSettings = useToolSettingsStore.getState();
+        const size = toolSettings.brushSize;
+        const hardness = toolSettings.brushHardness / 100;
+        const opacity = toolSettings.brushOpacity / 100;
+        const color = useUIStore.getState().foregroundColor;
+        const r = color.r / 255;
+        const g = color.g / 255;
+        const b = color.b / 255;
+        const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
+
+        const result = smoothStroke(strokePoints, spacing);
+        if (result.sampledPoints.length < 2) return;
+
+        // Finalize the pending stroke before undo
+        finalizePendingStroke(pendingStrokeRef);
+
+        // Undo the original freehand stroke
+        useEditorStore.getState().undo();
+
+        // Re-draw with smoothed points
+        beginStroke(engine, layerId);
+        const arr = new Float64Array(result.sampledPoints.length * 2);
+        for (let i = 0; i < result.sampledPoints.length; i++) {
+          arr[i * 2] = result.sampledPoints[i]!.x;
+          arr[i * 2 + 1] = result.sampledPoints[i]!.y;
+        }
+        gpuBrushDabBatch(engine, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
+        endStroke(engine, layerId);
+
+        // Push a new history entry for the smoothed stroke
+        useEditorStore.getState().pushHistory();
+        clearJsPixelData(layerId);
+        useEditorStore.getState().notifyRender();
+      }, HOLD_TIMEOUT_MS);
+    }
+
     // Finalize transform handle drag: keep the GPU float alive so subsequent
     // grabs can re-transform from the original pixels without degradation.
     // The float is only dropped when the user commits (clearPersistentTransform).
@@ -326,7 +418,7 @@ export function useCanvasInteraction(
     }
 
     stateRef.current = { ...INITIAL_STATE };
-  }, [screenToCanvas, containerRef]);
+  }, [screenToCanvas, containerRef, cancelHoldTimer]);
 
   const clearPersistentTransform = useCallback(() => {
     persistentTransformRef.current = null;
