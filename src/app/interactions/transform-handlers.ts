@@ -83,6 +83,12 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
 
   if (!persistentTransformRef.current && sel.active && sel.mask) {
     if (engine && !hasFloat(engine)) {
+      // Ensure selection mask is on the GPU before floating, otherwise
+      // floatSelection extracts the entire layer instead of just the
+      // selected pixels.
+      const maskBytes = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
+      setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
+
       floatSelection(engine, activeLayerId);
 
       clearJsPixelData(activeLayerId);
