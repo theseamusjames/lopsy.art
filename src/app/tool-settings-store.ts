@@ -39,6 +39,8 @@ interface ToolSettings {
   brushAngle: number;
   brushFade: number;
   activeBrushTip: BrushTipData | null;
+  symmetryHorizontal: boolean;
+  symmetryVertical: boolean;
 
   setBrushSize: (size: number) => void;
   setBrushFade: (fade: number) => void;
@@ -76,6 +78,8 @@ interface ToolSettings {
   setAspectRatioH: (h: number) => void;
   setAspectRatioLocked: (locked: boolean) => void;
   setGradientType: (type: 'linear' | 'radial') => void;
+  setSymmetryHorizontal: (enabled: boolean) => void;
+  setSymmetryVertical: (enabled: boolean) => void;
 }
 
 export const useToolSettingsStore = create<ToolSettings>((set) => ({
@@ -115,6 +119,8 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   brushAngle: 0,
   brushFade: 0,
   activeBrushTip: null,
+  symmetryHorizontal: false,
+  symmetryVertical: false,
 
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(2000, size)) }),
   setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(2000, fade)) }),
@@ -140,6 +146,8 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   setAspectRatioH: (h) => set({ aspectRatioH: Math.max(0.01, h) }),
   setAspectRatioLocked: (locked) => set({ aspectRatioLocked: locked }),
   setGradientType: (type) => set({ gradientType: type }),
+  setSymmetryHorizontal: (enabled) => set({ symmetryHorizontal: enabled }),
+  setSymmetryVertical: (enabled) => set({ symmetryVertical: enabled }),
   setStampSize: (size) => set({ stampSize: Math.max(1, Math.min(200, size)) }),
   setPathStrokeWidth: (width) => set({ pathStrokeWidth: Math.max(1, Math.min(50, width)) }),
   setDodgeExposure: (exposure) => set({ dodgeExposure: Math.max(1, Math.min(100, exposure)) }),

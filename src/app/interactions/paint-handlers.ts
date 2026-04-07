@@ -15,8 +15,21 @@ import {
   applyEraserDabBatch as gpuEraserDabBatch,
   drawPencilLine as gpuDrawPencilLine,
 } from '../../engine-wasm/wasm-bridge';
+import type { SymmetryConfig } from '../../tools/symmetry';
+import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from '../../tools/symmetry';
 
 type PaintTool = 'brush' | 'pencil' | 'eraser';
+
+function getSymmetryConfig(): SymmetryConfig {
+  const { symmetryHorizontal, symmetryVertical } = useToolSettingsStore.getState();
+  const doc = useEditorStore.getState().document;
+  return {
+    horizontal: symmetryHorizontal,
+    vertical: symmetryVertical,
+    centerX: doc.width / 2,
+    centerY: doc.height / 2,
+  };
+}
 
 export function handlePaintDown(
   ctx: InteractionContext,
@@ -117,6 +130,8 @@ export function handlePaintDown(
 
   if (!engine) return state;
 
+  const sym = getSymmetryConfig();
+
   if (tool === 'brush') {
     const size = toolSettings.brushSize;
     const hardness = toolSettings.brushHardness / 100;
@@ -135,7 +150,7 @@ export function handlePaintDown(
       if (brushScatter > 0) {
         const scatterPts = interpolatePointsWithScatter(lineFrom, layerPos, spacing, brushScatter, size);
         if (brushFade > 0) {
-          emitDabsWithFade(engine, activeLayerId, scatterPts, lineFrom, size, hardness, r, g, b, color.a, opacity, brushFade, state);
+          emitDabsWithFade(engine, activeLayerId, scatterPts, lineFrom, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym);
         } else {
           const arr = new Float64Array(scatterPts.length * 2);
           for (let i = 0; i < scatterPts.length; i++) {
@@ -143,20 +158,29 @@ export function handlePaintDown(
             arr[i * 2 + 1] = scatterPts[i]!.y;
           }
           gpuBrushDabBatch(engine, activeLayerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
+          for (const m of mirrorBatchPoints(arr, sym)) {
+            gpuBrushDabBatch(engine, activeLayerId, m, size, hardness, r, g, b, color.a, opacity, 1);
+          }
         }
       } else {
         const { points: pts, remainder: spacingRem } = interpolateWithSpacing(lineFrom, layerPos, spacing, state.spacingRemainder ?? 0);
         state.spacingRemainder = spacingRem;
         if (brushFade > 0) {
-          emitFlatDabsWithFade(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state);
+          emitFlatDabsWithFade(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym);
         } else {
           gpuBrushDabBatch(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, 1);
+          for (const m of mirrorBatchPoints(pts, sym)) {
+            gpuBrushDabBatch(engine, activeLayerId, m, size, hardness, r, g, b, color.a, opacity, 1);
+          }
         }
       }
     } else {
       const fadedOpacity = brushFade > 0 ? opacity * Math.max(0, 1 - (state.strokeDistance ?? 0) / brushFade) : opacity;
       if (fadedOpacity > 0) {
         gpuBrushDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, r, g, b, color.a, fadedOpacity, 1);
+        for (const mp of getMirroredPoints(layerPos.x, layerPos.y, sym)) {
+          gpuBrushDab(engine, activeLayerId, mp.x, mp.y, size, hardness, r, g, b, color.a, fadedOpacity, 1);
+        }
       }
     }
   } else if (tool === 'pencil') {
@@ -166,6 +190,15 @@ export function handlePaintDown(
     gpuDrawPencilLine(engine, activeLayerId,
       lineFrom.x, lineFrom.y, layerPos.x, layerPos.y,
       color.r / 255, color.g / 255, color.b / 255, color.a, size);
+    if (isSymmetryActive(sym)) {
+      const mFrom = getMirroredPoints(lineFrom.x, lineFrom.y, sym);
+      const mTo = getMirroredPoints(layerPos.x, layerPos.y, sym);
+      for (let i = 0; i < mFrom.length; i++) {
+        gpuDrawPencilLine(engine, activeLayerId,
+          mFrom[i]!.x, mFrom[i]!.y, mTo[i]!.x, mTo[i]!.y,
+          color.r / 255, color.g / 255, color.b / 255, color.a, size);
+      }
+    }
   } else {
     const size = toolSettings.eraserSize;
     const hardness = 0.8;
@@ -176,8 +209,14 @@ export function handlePaintDown(
       const { points: pts, remainder: spacingRem } = interpolateWithSpacing(lineFrom, layerPos, spacing, state.spacingRemainder ?? 0);
       state.spacingRemainder = spacingRem;
       gpuEraserDabBatch(engine, activeLayerId, pts, size, hardness, opacity);
+      for (const m of mirrorBatchPoints(pts, sym)) {
+        gpuEraserDabBatch(engine, activeLayerId, m, size, hardness, opacity);
+      }
     } else {
       gpuEraserDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, opacity);
+      for (const mp of getMirroredPoints(layerPos.x, layerPos.y, sym)) {
+        gpuEraserDab(engine, activeLayerId, mp.x, mp.y, size, hardness, opacity);
+      }
     }
   }
 
@@ -235,6 +274,7 @@ function emitFlatDabsWithFade(
   baseOpacity: number,
   fadeDistance: number,
   state: InteractionState,
+  sym: SymmetryConfig,
 ): void {
   if (!engine) return;
   let dist = state.strokeDistance ?? 0;
@@ -256,7 +296,11 @@ function emitFlatDabsWithFade(
     }
 
     const fadeFactor = Math.max(0, 1 - dist / fadeDistance);
-    gpuBrushDab(engine, layerId, px, py, size, hardness, r, g, b, a, baseOpacity * fadeFactor, 1);
+    const fadedOp = baseOpacity * fadeFactor;
+    gpuBrushDab(engine, layerId, px, py, size, hardness, r, g, b, a, fadedOp, 1);
+    for (const mp of getMirroredPoints(px, py, sym)) {
+      gpuBrushDab(engine, layerId, mp.x, mp.y, size, hardness, r, g, b, a, fadedOp, 1);
+    }
   }
   state.strokeDistance = dist;
 }
@@ -276,6 +320,7 @@ function emitDabsWithFade(
   baseOpacity: number,
   fadeDistance: number,
   state: InteractionState,
+  sym: SymmetryConfig,
 ): void {
   if (!engine) return;
   let dist = state.strokeDistance ?? 0;
@@ -295,7 +340,11 @@ function emitDabsWithFade(
     }
 
     const fadeFactor = Math.max(0, 1 - dist / fadeDistance);
-    gpuBrushDab(engine, layerId, pt.x, pt.y, size, hardness, r, g, b, a, baseOpacity * fadeFactor, 1);
+    const fadedOp = baseOpacity * fadeFactor;
+    gpuBrushDab(engine, layerId, pt.x, pt.y, size, hardness, r, g, b, a, fadedOp, 1);
+    for (const mp of getMirroredPoints(pt.x, pt.y, sym)) {
+      gpuBrushDab(engine, layerId, mp.x, mp.y, size, hardness, r, g, b, a, fadedOp, 1);
+    }
   }
   state.strokeDistance = dist;
 }
@@ -319,6 +368,8 @@ export function handlePaintMove(
   const engine = getEngine();
   if (!engine) return;
 
+  const sym = getSymmetryConfig();
+
   switch (state.tool) {
     case 'brush': {
       const size = toolSettings.brushSize;
@@ -340,7 +391,7 @@ export function handlePaintMove(
       if (brushScatter > 0) {
         const scatterPts = interpolatePointsWithScatter(state.lastPoint, layerLocalPos, spacing, brushScatter, size);
         if (brushFade > 0) {
-          emitDabsWithFade(engine, state.layerId, scatterPts, state.lastPoint, size, hardness, r, g, b, color.a, opacity, brushFade, state);
+          emitDabsWithFade(engine, state.layerId, scatterPts, state.lastPoint, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym);
         } else {
           const pts = new Float64Array(scatterPts.length * 2);
           for (let i = 0; i < scatterPts.length; i++) {
@@ -348,14 +399,20 @@ export function handlePaintMove(
             pts[i * 2 + 1] = scatterPts[i]!.y;
           }
           gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1);
+          for (const m of mirrorBatchPoints(pts, sym)) {
+            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1);
+          }
         }
       } else {
         const { points: pts, remainder: spacingRem } = interpolateWithSpacing(state.lastPoint, layerLocalPos, spacing, state.spacingRemainder ?? 0);
         state.spacingRemainder = spacingRem;
         if (brushFade > 0) {
-          emitFlatDabsWithFade(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state);
+          emitFlatDabsWithFade(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym);
         } else {
           gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1);
+          for (const m of mirrorBatchPoints(pts, sym)) {
+            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1);
+          }
         }
       }
 
@@ -376,6 +433,15 @@ export function handlePaintMove(
       gpuDrawPencilLine(engine, state.layerId,
         state.lastPoint.x, state.lastPoint.y, layerLocalPos.x, layerLocalPos.y,
         color.r / 255, color.g / 255, color.b / 255, color.a, size);
+      if (isSymmetryActive(sym)) {
+        const mFrom = getMirroredPoints(state.lastPoint.x, state.lastPoint.y, sym);
+        const mTo = getMirroredPoints(layerLocalPos.x, layerLocalPos.y, sym);
+        for (let i = 0; i < mFrom.length; i++) {
+          gpuDrawPencilLine(engine, state.layerId,
+            mFrom[i]!.x, mFrom[i]!.y, mTo[i]!.x, mTo[i]!.y,
+            color.r / 255, color.g / 255, color.b / 255, color.a, size);
+        }
+      }
       state.lastPoint = layerLocalPos;
       useEditorStore.getState().notifyRender();
       break;
@@ -389,6 +455,9 @@ export function handlePaintMove(
       const { points: pts, remainder: spacingRem } = interpolateWithSpacing(state.lastPoint, layerLocalPos, spacing, state.spacingRemainder ?? 0);
       state.spacingRemainder = spacingRem;
       gpuEraserDabBatch(engine, state.layerId, pts, size, hardness, opacity);
+      for (const m of mirrorBatchPoints(pts, sym)) {
+        gpuEraserDabBatch(engine, state.layerId, m, size, hardness, opacity);
+      }
       state.lastPoint = layerLocalPos;
       useEditorStore.getState().notifyRender();
       break;
