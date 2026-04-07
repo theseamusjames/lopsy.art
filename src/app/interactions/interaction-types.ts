@@ -23,6 +23,8 @@ export interface InteractionState {
   _usedGpuStroke?: boolean;
   strokeDistance?: number;
   spacingRemainder?: number;
+  /** Raw stroke points recorded for hold-to-smooth (layer-space). */
+  strokePoints?: Array<{ x: number; y: number }>;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
 }
