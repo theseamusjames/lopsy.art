@@ -45,6 +45,18 @@ describe('isStraightStroke', () => {
     expect(isStraightStroke(pts, 4)).toBe(true);
   });
 
+  it('returns true for long stroke with small relative wobble', () => {
+    // 200px horizontal stroke with ±8px wobble = 4% deviation, under 10%
+    const pts: Point[] = [
+      { x: 0, y: 0 },
+      { x: 50, y: 8 },
+      { x: 100, y: -8 },
+      { x: 150, y: 8 },
+      { x: 200, y: 0 },
+    ];
+    expect(isStraightStroke(pts, 4)).toBe(true);
+  });
+
   it('returns false for a clearly curved stroke', () => {
     const pts: Point[] = [
       { x: 0, y: 0 },
