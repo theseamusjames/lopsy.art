@@ -333,6 +333,10 @@ export function syncLayers(
     }
   }
 
+  // Track which layers were successfully added so we don't mark failed
+  // adds as tracked (which would prevent retry on the next frame).
+  const failedAdds = new Set<string>();
+
   // Add or update layers
   for (const layer of layers) {
     const descJson = layerToDescJson(layer, layers);
@@ -343,6 +347,7 @@ export function syncLayers(
         tracked.layerVersions.set(layer.id, descJson);
       } catch (e) {
         console.error('[syncLayers] addLayer failed:', layer.id, e);
+        failedAdds.add(layer.id);
       }
     } else if (tracked.layerVersions.get(layer.id) !== descJson) {
       try {
@@ -409,6 +414,11 @@ export function syncLayers(
     }
   }
 
+  // Exclude layers that failed to add — they stay out of tracking so
+  // syncLayers retries addLayer on the next frame.
+  for (const id of failedAdds) {
+    currentIds.delete(id);
+  }
   tracked.layerIds = currentIds;
 
   // Sync layer order
