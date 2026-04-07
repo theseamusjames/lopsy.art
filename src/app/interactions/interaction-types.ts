@@ -23,6 +23,7 @@ export interface InteractionState {
   _usedGpuStroke?: boolean;
   strokeDistance?: number;
   spacingRemainder?: number;
+  symmetryCenter?: Point;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
 }

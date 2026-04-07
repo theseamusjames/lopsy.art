@@ -48,6 +48,22 @@ describe('mirrorBatchPoints', () => {
   });
 });
 
+describe('stroke-start centering', () => {
+  it('mirrors around the stroke start point, not document center', () => {
+    // Stroke starts at (50, 30), cursor moves to (70, 30)
+    // With vertical symmetry, the mirror should be at (30, 30)
+    // i.e., 2*50 - 70 = 30
+    const startConfig: SymmetryConfig = {
+      horizontal: false,
+      vertical: true,
+      centerX: 50,
+      centerY: 30,
+    };
+    const pts = getMirroredPoints(70, 30, startConfig);
+    expect(pts).toEqual([{ x: 30, y: 30 }]);
+  });
+});
+
 describe('isSymmetryActive', () => {
   it('returns false when both off', () => {
     expect(isSymmetryActive(config(false, false))).toBe(false);

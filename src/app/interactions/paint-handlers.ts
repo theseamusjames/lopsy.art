@@ -20,14 +20,13 @@ import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from '../../to
 
 type PaintTool = 'brush' | 'pencil' | 'eraser';
 
-function getSymmetryConfig(): SymmetryConfig {
+function getSymmetryConfig(center: { x: number; y: number }): SymmetryConfig {
   const { symmetryHorizontal, symmetryVertical } = useToolSettingsStore.getState();
-  const doc = useEditorStore.getState().document;
   return {
     horizontal: symmetryHorizontal,
     vertical: symmetryVertical,
-    centerX: doc.width / 2,
-    centerY: doc.height / 2,
+    centerX: center.x,
+    centerY: center.y,
   };
 }
 
@@ -126,11 +125,12 @@ export function handlePaintDown(
     ...DEFAULT_TRANSFORM_FIELDS,
     strokeDistance: 0,
     spacingRemainder: 0,
+    symmetryCenter: { x: layerPos.x, y: layerPos.y },
   };
 
   if (!engine) return state;
 
-  const sym = getSymmetryConfig();
+  const sym = getSymmetryConfig(layerPos);
 
   if (tool === 'brush') {
     const size = toolSettings.brushSize;
@@ -368,7 +368,8 @@ export function handlePaintMove(
   const engine = getEngine();
   if (!engine) return;
 
-  const sym = getSymmetryConfig();
+  const symCenter = state.symmetryCenter ?? ctx.layerPos;
+  const sym = getSymmetryConfig(symCenter);
 
   switch (state.tool) {
     case 'brush': {
