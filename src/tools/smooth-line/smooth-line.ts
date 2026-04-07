@@ -11,7 +11,7 @@ import type { Point } from '../../types';
 /** How long the cursor must stay still after mouseup to trigger smoothing. */
 export const HOLD_TIMEOUT_MS = 2000;
 
-/** Maximum movement (in layer-space pixels) allowed during the hold period. */
+/** Maximum movement (in screen pixels) allowed during the hold period. */
 export const HOLD_RADIUS_PX = 4;
 
 // ── Ramer-Douglas-Peucker simplification ────────────────────────────
@@ -71,7 +71,10 @@ export function rdpSimplify(points: ReadonlyArray<Point>, epsilon: number): Poin
 
 /**
  * Returns true when all points lie within `tolerance` pixels of the
- * line from the first to the last point.
+ * line from the first to the last point. The tolerance is the larger
+ * of the fixed minimum and a percentage of the stroke length, so that
+ * long strokes with small relative wobble are still classified as
+ * straight.
  */
 export function isStraightStroke(
   points: ReadonlyArray<Point>,
@@ -81,9 +84,15 @@ export function isStraightStroke(
 
   const first = points[0]!;
   const last = points[points.length - 1]!;
+  const dx = last.x - first.x;
+  const dy = last.y - first.y;
+  const strokeLen = Math.sqrt(dx * dx + dy * dy);
+
+  // Use the larger of: fixed tolerance OR 10% of stroke length
+  const effectiveTolerance = Math.max(tolerance, strokeLen * 0.1);
 
   for (let i = 1; i < points.length - 1; i++) {
-    if (perpendicularDistance(points[i]!, first, last) > tolerance) {
+    if (perpendicularDistance(points[i]!, first, last) > effectiveTolerance) {
       return false;
     }
   }

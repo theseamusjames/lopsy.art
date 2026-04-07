@@ -367,7 +367,9 @@ export function useCanvasInteraction(
         const r = color.r / 255;
         const g = color.g / 255;
         const b = color.b / 255;
-        const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
+        const spacing = toolSettings.brushSpacing > 0
+          ? Math.max(1, size * toolSettings.brushSpacing / 100)
+          : Math.max(1, size * 0.25);
 
         const result = smoothStroke(strokePoints, spacing);
         if (result.sampledPoints.length < 2) return;
@@ -378,20 +380,25 @@ export function useCanvasInteraction(
         // Undo the original freehand stroke
         useEditorStore.getState().undo();
 
-        // Re-draw with smoothed points
-        beginStroke(engine, layerId);
-        const arr = new Float64Array(result.sampledPoints.length * 2);
-        for (let i = 0; i < result.sampledPoints.length; i++) {
-          arr[i * 2] = result.sampledPoints[i]!.x;
-          arr[i * 2 + 1] = result.sampledPoints[i]!.y;
-        }
-        gpuBrushDabBatch(engine, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
-        endStroke(engine, layerId);
+        // Defer the redraw to the next frame so the render loop can
+        // sync the restored layer state to the engine first.
+        requestAnimationFrame(() => {
+          const eng = getEngine();
+          if (!eng) return;
 
-        // Push a new history entry for the smoothed stroke
-        useEditorStore.getState().pushHistory();
-        clearJsPixelData(layerId);
-        useEditorStore.getState().notifyRender();
+          useEditorStore.getState().pushHistory();
+          beginStroke(eng, layerId);
+          const arr = new Float64Array(result.sampledPoints.length * 2);
+          for (let i = 0; i < result.sampledPoints.length; i++) {
+            arr[i * 2] = result.sampledPoints[i]!.x;
+            arr[i * 2 + 1] = result.sampledPoints[i]!.y;
+          }
+          gpuBrushDabBatch(eng, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
+          endStroke(eng, layerId);
+
+          clearJsPixelData(layerId);
+          useEditorStore.getState().notifyRender();
+        });
       }, HOLD_TIMEOUT_MS);
     }
 

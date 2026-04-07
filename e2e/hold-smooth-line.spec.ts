@@ -194,9 +194,12 @@ test.describe('Hold to smooth line (#94)', () => {
     // At least some wobble positions should have paint
     expect(wobblePixelsFound).toBeGreaterThan(0);
 
-    // Now wait for the hold timer to fire (2 seconds + buffer)
+    // Now wait for the hold timer to fire (2 seconds + rAF + buffer)
     // Keep the cursor completely still
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(2800);
+
+    // Take a screenshot for visual inspection
+    await page.screenshot({ path: 'test-results/screenshots/hold-smooth-after.png' });
 
     // Read composited pixels AFTER smoothing
     // The stroke should now be a straight line along y=50
@@ -208,9 +211,10 @@ test.describe('Hold to smooth line (#94)', () => {
         if (p.a > 0 && p.r < 128) offCenterAfter++;
       }
     }
-    // After smoothing, almost no dark pixels should remain far from center
-    // (allow a few for anti-aliasing at edges)
-    expect(offCenterAfter).toBeLessThan(wobblePixelsFound);
+
+    // STRICT CHECK: after smoothing a wobbly stroke to straight,
+    // off-center positions must have ZERO dark pixels (not just fewer)
+    expect(offCenterAfter).toBe(0);
 
     // Verify the center line still has paint
     const centerPx = await readPixelAtDoc(page, 100, 50);
