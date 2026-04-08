@@ -69,6 +69,10 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     if (floatingSelectionRef.current) {
       // Reuse existing float — GPU already has the textures
     } else if (engine && selNow.active && selNow.mask) {
+      // Ensure selection mask is on the GPU before floating
+      const maskBytes = new Uint8Array(selNow.mask.buffer, selNow.mask.byteOffset, selNow.mask.byteLength);
+      setSelectionMask(engine, maskBytes, selNow.maskWidth, selNow.maskHeight);
+
       // First move: float the selection on the GPU
       floatSelection(engine, activeLayerId);
 
@@ -232,6 +236,10 @@ export function handleNudgeMove(
 
     // Float selection on GPU if not already floating
     if (!floatingSelectionRef.current) {
+      // Ensure selection mask is on the GPU before floating
+      const maskBytes = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
+      setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
+
       floatSelection(engine, activeId);
 
       clearJsPixelData(activeId);
