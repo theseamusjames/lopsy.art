@@ -26,7 +26,8 @@ export type FilterDialogId =
   | 'find-edges'
   | 'cel-shading'
   | 'clouds'
-  | 'smoke';
+  | 'smoke'
+  | 'chromatic-aberration';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;

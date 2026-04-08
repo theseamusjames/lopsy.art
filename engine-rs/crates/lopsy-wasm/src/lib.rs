@@ -1510,6 +1510,26 @@ pub fn filter_smoke(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32, 
     );
 }
 
+#[wasm_bindgen(js_name = "filterChromaticAberration")]
+pub fn filter_chromatic_aberration(engine: &mut Engine, layer_id: &str, amount: f32, angle: f32) {
+    if amount <= 0.0 { return; }
+    let prog = &engine.inner.shaders.chromatic_aberration.program;
+    let prog_clone = prog.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog_clone,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_amount") {
+                gl.uniform1f(Some(&loc), amount);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_angle") {
+                gl.uniform1f(Some(&loc), angle);
+            }
+        },
+    );
+}
+
 // ============================================================
 // Selection
 // ============================================================

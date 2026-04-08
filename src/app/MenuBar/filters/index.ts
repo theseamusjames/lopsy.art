@@ -12,6 +12,7 @@ import { findEdges } from './find-edges';
 import { celShading } from './cel-shading';
 import { clouds } from './clouds';
 import { smoke } from './smoke';
+import { chromaticAberration } from './chromatic-aberration';
 
 export type { FilterDefinition };
 
@@ -29,6 +30,7 @@ const allFilters: FilterDefinition[] = [
   celShading,
   clouds,
   smoke,
+  chromaticAberration,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(

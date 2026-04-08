@@ -206,6 +206,7 @@ Applied globally or per-group. All default to 0.
 ### Stylize
 - **Find Edges**: Sobel edge detection, no parameters
 - **Cel Shading**: levels, edge strength
+- **Chromatic Aberration**: amount (0.5 - 50 px), angle (0 - 360 degrees)
 
 ### Render
 - **Clouds**: scale, seed
