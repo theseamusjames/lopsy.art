@@ -126,6 +126,38 @@ function applyVignette(imageData: ImageData, strength: number): void {
   }
 }
 
+function applySaturation(imageData: ImageData, saturation: number): void {
+  const data = imageData.data;
+  const factor = 1 + saturation;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i]! / 255;
+    const g = data[i + 1]! / 255;
+    const b = data[i + 2]! / 255;
+    const gray = r * 0.2126 + g * 0.7152 + b * 0.0722;
+    data[i] = Math.max(0, Math.min(255, Math.round((gray + (r - gray) * factor) * 255)));
+    data[i + 1] = Math.max(0, Math.min(255, Math.round((gray + (g - gray) * factor) * 255)));
+    data[i + 2] = Math.max(0, Math.min(255, Math.round((gray + (b - gray) * factor) * 255)));
+  }
+}
+
+function applyVibrance(imageData: ImageData, vibrance: number): void {
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i]! / 255;
+    const g = data[i + 1]! / 255;
+    const b = data[i + 2]! / 255;
+    const maxC = Math.max(r, g, b);
+    const minC = Math.min(r, g, b);
+    const sat = maxC > 0.001 ? (maxC - minC) / maxC : 0;
+    const boost = vibrance * (1 - sat);
+    const gray = r * 0.2126 + g * 0.7152 + b * 0.0722;
+    const factor = 1 + boost;
+    data[i] = Math.max(0, Math.min(255, Math.round((gray + (r - gray) * factor) * 255)));
+    data[i + 1] = Math.max(0, Math.min(255, Math.round((gray + (g - gray) * factor) * 255)));
+    data[i + 2] = Math.max(0, Math.min(255, Math.round((gray + (b - gray) * factor) * 255)));
+  }
+}
+
 export function applyAdjustmentsToImageData(
   imageData: ImageData,
   adj: ImageAdjustments,
@@ -146,6 +178,14 @@ export function applyAdjustmentsToImageData(
       data[i + 1] = lut[data[i + 1]!]!;
       data[i + 2] = lut[data[i + 2]!]!;
     }
+  }
+
+  if (adj.saturation !== 0) {
+    applySaturation(imageData, adj.saturation);
+  }
+
+  if (adj.vibrance !== 0) {
+    applyVibrance(imageData, adj.vibrance);
   }
 
   if (adj.vignette !== 0) {
