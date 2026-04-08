@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "fonts:generate": "npx tsx scripts/generate-font-previews.ts"
   },
   "dependencies": {
     "lucide-react": "0.577.0",

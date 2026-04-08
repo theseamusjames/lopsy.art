@@ -1,23 +1,7 @@
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { Slider } from '../../../components/Slider/Slider';
+import { FontPicker } from '../../../components/FontPicker/FontPicker';
 import styles from '../OptionsBar.module.css';
-
-const FONT_OPTIONS = [
-  { value: 'Inter, sans-serif', label: 'Inter' },
-  { value: 'Arial, sans-serif', label: 'Arial' },
-  { value: 'Helvetica, Arial, sans-serif', label: 'Helvetica' },
-  { value: 'Georgia, serif', label: 'Georgia' },
-  { value: 'Times New Roman, serif', label: 'Times New Roman' },
-  { value: 'Courier New, monospace', label: 'Courier New' },
-  { value: 'JetBrains Mono, monospace', label: 'JetBrains Mono' },
-  { value: 'Verdana, sans-serif', label: 'Verdana' },
-  { value: 'Trebuchet MS, sans-serif', label: 'Trebuchet MS' },
-  { value: 'Impact, sans-serif', label: 'Impact' },
-  { value: 'Comic Sans MS, cursive', label: 'Comic Sans MS' },
-  { value: 'Palatino, serif', label: 'Palatino' },
-  { value: 'Garamond, serif', label: 'Garamond' },
-  { value: 'Brush Script MT, cursive', label: 'Brush Script' },
-];
 
 export function TextOptions() {
   const textFontSize = useToolSettingsStore((s) => s.textFontSize);
@@ -35,17 +19,7 @@ export function TextOptions() {
     <>
       <Slider label="Size" value={textFontSize} min={1} max={500} onChange={setTextFontSize} />
       <span className={styles.label}>Font</span>
-      <select
-        className={styles.select}
-        value={textFontFamily}
-        onChange={(e) => setTextFontFamily(e.target.value)}
-      >
-        {FONT_OPTIONS.map((font) => (
-          <option key={font.value} value={font.value}>
-            {font.label}
-          </option>
-        ))}
-      </select>
+      <FontPicker value={textFontFamily} onChange={setTextFontFamily} />
       <select
         className={styles.select}
         value={textFontWeight}
