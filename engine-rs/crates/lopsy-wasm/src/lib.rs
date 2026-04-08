@@ -59,6 +59,11 @@ pub fn set_background_color(engine: &mut Engine, r: f32, g: f32, b: f32, a: f32)
     engine.inner.set_background_color(r, g, b, a);
 }
 
+#[wasm_bindgen(js_name = "clearAllLayers")]
+pub fn clear_all_layers(engine: &mut Engine) {
+    engine.inner.clear_all_layers();
+}
+
 // ============================================================
 // Layer Management
 // ============================================================

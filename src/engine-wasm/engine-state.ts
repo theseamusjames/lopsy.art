@@ -6,7 +6,7 @@
  */
 
 import type { Engine } from './wasm-bridge';
-import { initWasm, createEngine } from './wasm-bridge';
+import { initWasm, createEngine, clearAllLayers } from './wasm-bridge';
 import { setEngine as setGpuPixelEngine } from './gpu-pixel-access';
 import { canvasColorSpace } from '../engine/color-space';
 
@@ -46,6 +46,16 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   import('./wasm-bridge').then((mod) => { w.__wasmBridge = mod; }).catch(() => {});
 
   return engine;
+}
+
+/**
+ * Clear all GPU resources (layers, textures, masks, etc.) without
+ * destroying the engine. Used when creating/opening a new document.
+ */
+export function clearEngine(): void {
+  if (engine) {
+    clearAllLayers(engine);
+  }
 }
 
 export function destroyEngine(): void {
