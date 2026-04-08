@@ -112,6 +112,14 @@ export function handlePaintDown(
 
   const engine = getEngine();
 
+  // Symmetry should mirror around the document center, not the click point.
+  // Convert document center to layer-local coordinates.
+  const doc = editorState.document;
+  const docCenter = {
+    x: doc.width / 2 - activeLayer.x,
+    y: doc.height / 2 - activeLayer.y,
+  };
+
   const state: InteractionState = {
     drawing: true,
     lastPoint: layerPos,
@@ -125,13 +133,13 @@ export function handlePaintDown(
     ...DEFAULT_TRANSFORM_FIELDS,
     strokeDistance: 0,
     spacingRemainder: 0,
-    symmetryCenter: { x: layerPos.x, y: layerPos.y },
+    symmetryCenter: docCenter,
     strokePoints: tool === 'brush' ? [{ x: layerPos.x, y: layerPos.y }] : undefined,
   };
 
   if (!engine) return state;
 
-  const sym = getSymmetryConfig(layerPos);
+  const sym = getSymmetryConfig(docCenter);
 
   if (tool === 'brush') {
     const size = toolSettings.brushSize;
