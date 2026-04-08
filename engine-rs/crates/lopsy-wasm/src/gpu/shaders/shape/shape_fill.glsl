@@ -26,18 +26,21 @@ float sdRect(vec2 p, vec2 b, float r) {
 float sdPolygon(vec2 p, vec2 halfSize, int n, float cr) {
     if (min(halfSize.x, halfSize.y) < 0.5) return 1e6;
 
-    float scale = min(halfSize.x, halfSize.y);
     float an = PI / float(n);
     float cosAn = cos(an);
-    float maxCr = scale * cosAn * 0.99;
+
+    // Scale up so the polygon's faces (not vertices) align with halfSize.
+    // The raw SDF places faces at cosAn * scale; dividing by cosAn makes
+    // faces sit at the drawn boundary.
+    vec2 circumHalf = halfSize / cosAn;
+    float scale = min(circumHalf.x, circumHalf.y);
+
+    float maxCr = min(halfSize.x, halfSize.y) * 0.99;
     float clampedCr = min(cr, maxCr);
 
     // Inset the polygon by cr so rounding stays within the original bounds.
-    // The inscribed radius is cosAn * scale; shrinking it by cr means
-    // reducing scale by cr / cosAn, then the Minkowski offset (-cr)
-    // grows edges back to their original position while rounding corners.
     float insetScale = scale - clampedCr / cosAn;
-    vec2 insetHalfSize = halfSize * (insetScale / scale);
+    vec2 insetHalfSize = circumHalf * (insetScale / scale);
 
     vec2 q = p / insetHalfSize;
     // Rotate so even-sided polygons have flat top edges,
