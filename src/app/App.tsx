@@ -110,9 +110,10 @@ export function App() {
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
-  // Touch gesture state for pinch-to-zoom and single-finger pan
+  // Touch gesture state for pinch-to-zoom and two-finger pan
   const touchRef = useRef<{
     active: boolean;
+    mode: 'none' | 'draw' | 'gesture';
     startTouches: Array<{ x: number; y: number }>;
     startZoom: number;
     startPanX: number;
@@ -120,6 +121,7 @@ export function App() {
     startDist: number;
   }>({
     active: false,
+    mode: 'none',
     startTouches: [],
     startZoom: 1,
     startPanX: 0,
@@ -442,20 +444,50 @@ export function App() {
     [viewport.zoom, viewport.panX, viewport.panY, setZoom, setPan],
   );
 
+  // Synthesize a mouse-like event from a Touch for tool handlers
+  const touchToMouse = useCallback(
+    (t: React.Touch, type: 'mousedown' | 'mousemove' | 'mouseup'): React.MouseEvent => {
+      return {
+        clientX: t.clientX,
+        clientY: t.clientY,
+        button: 0,
+        buttons: type === 'mouseup' ? 0 : 1,
+        shiftKey: false,
+        altKey: false,
+        metaKey: false,
+        ctrlKey: false,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        nativeEvent: new MouseEvent(type),
+      } as unknown as React.MouseEvent;
+    },
+    [],
+  );
+
   const handleTouchStart = useCallback(
     (e: React.TouchEvent) => {
       if (e.touches.length === 1) {
+        // Single finger: draw with active tool
         const t = e.touches.item(0);
         if (!t) return;
         touchRef.current = {
           active: true,
+          mode: 'draw',
           startTouches: [{ x: t.clientX, y: t.clientY }],
           startZoom: viewport.zoom,
           startPanX: viewport.panX,
           startPanY: viewport.panY,
           startDist: 0,
         };
+        handleToolDown(touchToMouse(t, 'mousedown'));
       } else if (e.touches.length === 2) {
+        // Second finger arrived: cancel any in-progress draw, switch to gesture
+        if (touchRef.current.mode === 'draw') {
+          const prev = touchRef.current.startTouches[0];
+          if (prev) {
+            handleToolUp(touchToMouse({ clientX: prev.x, clientY: prev.y } as React.Touch, 'mouseup'));
+          }
+        }
         const t0 = e.touches.item(0);
         const t1 = e.touches.item(1);
         if (!t0 || !t1) return;
@@ -464,6 +496,7 @@ export function App() {
         const midY = (t0.clientY + t1.clientY) / 2;
         touchRef.current = {
           active: true,
+          mode: 'gesture',
           startTouches: [{ x: midX, y: midY }],
           startZoom: viewport.zoom,
           startPanX: viewport.panX,
@@ -472,7 +505,7 @@ export function App() {
         };
       }
     },
-    [viewport.zoom, viewport.panX, viewport.panY],
+    [viewport.zoom, viewport.panX, viewport.panY, handleToolDown, handleToolUp, touchToMouse],
   );
 
   const handleTouchMove = useCallback(
@@ -480,14 +513,13 @@ export function App() {
       if (!touchRef.current.active) return;
       const tr = touchRef.current;
 
-      if (e.touches.length === 1 && tr.startDist === 0) {
+      if (e.touches.length === 1 && tr.mode === 'draw') {
+        // Single finger drawing
         const t = e.touches.item(0);
-        const start = tr.startTouches[0];
-        if (!t || !start) return;
-        const dx = t.clientX - start.x;
-        const dy = t.clientY - start.y;
-        setPan(tr.startPanX + dx, tr.startPanY + dy);
-      } else if (e.touches.length === 2 && tr.startDist > 0) {
+        if (!t) return;
+        handleToolMove(touchToMouse(t, 'mousemove'));
+      } else if (e.touches.length === 2 && tr.mode === 'gesture' && tr.startDist > 0) {
+        // Two-finger pan + zoom
         const t0 = e.touches.item(0);
         const t1 = e.touches.item(1);
         const start = tr.startTouches[0];
@@ -504,12 +536,23 @@ export function App() {
         setPan(tr.startPanX + dx, tr.startPanY + dy);
       }
     },
-    [setZoom, setPan],
+    [setZoom, setPan, handleToolMove, touchToMouse],
   );
 
-  const handleTouchEnd = useCallback(() => {
-    touchRef.current.active = false;
-  }, []);
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (touchRef.current.mode === 'draw' && e.touches.length === 0) {
+        const changed = e.changedTouches.item(0);
+        if (changed) {
+          handleToolUp(touchToMouse(changed, 'mouseup'));
+        }
+      }
+      if (e.touches.length === 0) {
+        touchRef.current = { ...touchRef.current, active: false, mode: 'none' };
+      }
+    },
+    [handleToolUp, touchToMouse],
+  );
 
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
   const [historyPanelCollapsed, setHistoryPanelCollapsed] = useState(false);

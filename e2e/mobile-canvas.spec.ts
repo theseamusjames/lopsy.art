@@ -20,7 +20,7 @@ test.describe('Mobile canvas', () => {
     expect(box!.height).toBeGreaterThan(0);
   });
 
-  test('pinch-to-zoom changes the zoom level', async ({ page }) => {
+  test('two-finger pinch-to-zoom changes the zoom level', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);
@@ -33,15 +33,12 @@ test.describe('Mobile canvas', () => {
       return store.getState().viewport.zoom;
     });
 
-    // Simulate a pinch-out (zoom in) gesture using CDP touch events.
-    // Two fingers start close together and spread apart.
     const container = page.getByTestId('canvas-container');
     const box = await container.boundingBox();
     expect(box).not.toBeNull();
 
     const cx = box!.x + box!.width / 2;
     const cy = box!.y + box!.height / 2;
-    // Use vertical pinch so it works even when the canvas container is narrow
     const startGap = 20;
     const stepSize = 30;
 
@@ -55,7 +52,6 @@ test.describe('Mobile canvas', () => {
       ],
     });
 
-    // Move fingers apart in steps (pinch out = zoom in)
     for (let i = 1; i <= 5; i++) {
       await cdp.send('Input.dispatchTouchEvent', {
         type: 'touchMove',
@@ -80,11 +76,10 @@ test.describe('Mobile canvas', () => {
       return store.getState().viewport.zoom;
     });
 
-    // After pinching outward, zoom should have increased
     expect(finalZoom).toBeGreaterThan(initialZoom);
   });
 
-  test('single-finger touch pans the canvas', async ({ page }) => {
+  test('single-finger touch draws instead of panning', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);
@@ -116,6 +111,68 @@ test.describe('Mobile canvas', () => {
       await cdp.send('Input.dispatchTouchEvent', {
         type: 'touchMove',
         touchPoints: [{ x: cx + i * 20, y: cy + i * 10, id: 0 }],
+      });
+    }
+
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: [],
+    });
+
+    await page.waitForTimeout(100);
+
+    // Single-finger touch should NOT pan — it should draw
+    const finalPan = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { viewport: { panX: number; panY: number } };
+      };
+      const v = store.getState().viewport;
+      return { panX: v.panX, panY: v.panY };
+    });
+
+    expect(finalPan.panX).toBe(initialPan.panX);
+    expect(finalPan.panY).toBe(initialPan.panY);
+  });
+
+  test('two-finger gesture pans the canvas', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 800, 600);
+    await page.waitForTimeout(300);
+
+    const initialPan = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { viewport: { panX: number; panY: number } };
+      };
+      const v = store.getState().viewport;
+      return { panX: v.panX, panY: v.panY };
+    });
+
+    const container = page.getByTestId('canvas-container');
+    const box = await container.boundingBox();
+    expect(box).not.toBeNull();
+
+    const cx = box!.x + box!.width / 2;
+    const cy = box!.y + box!.height / 2;
+
+    const cdp = await page.context().newCDPSession(page);
+
+    // Two fingers, fixed distance apart (no zoom), moving together (pan)
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [
+        { x: cx - 20, y: cy, id: 0 },
+        { x: cx + 20, y: cy, id: 1 },
+      ],
+    });
+
+    for (let i = 1; i <= 5; i++) {
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [
+          { x: cx - 20 + i * 20, y: cy + i * 10, id: 0 },
+          { x: cx + 20 + i * 20, y: cy + i * 10, id: 1 },
+        ],
       });
     }
 
