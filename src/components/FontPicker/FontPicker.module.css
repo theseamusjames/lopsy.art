@@ -69,6 +69,8 @@
   border: none;
   cursor: pointer;
   min-height: 32px;
+  content-visibility: auto;
+  contain-intrinsic-height: 32px;
 }
 
 .item:hover {

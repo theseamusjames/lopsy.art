@@ -9,3 +9,6 @@ engine-rs/target/
 
 # Playwright test artifacts
 test-results/
+
+# Generated font previews (deployed separately to Cloudflare Pages)
+public/font-previews/

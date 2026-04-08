@@ -1,3 +1,9 @@
+declare const __FONT_ASSETS_URL__: string;
+
+const FONT_ASSETS_BASE =
+  (typeof __FONT_ASSETS_URL__ !== 'undefined' && __FONT_ASSETS_URL__) ||
+  '/font-previews';
+
 export interface GoogleFont {
   family: string;
   category: string;
@@ -10,7 +16,7 @@ export function getGoogleFontList(): Promise<GoogleFont[]> {
   if (manifestCache) return Promise.resolve(manifestCache);
   if (manifestPromise) return manifestPromise;
 
-  manifestPromise = fetch('/font-previews/manifest.json')
+  manifestPromise = fetch(`${FONT_ASSETS_BASE}/manifest.json`)
     .then((res) => res.json() as Promise<GoogleFont[]>)
     .then((fonts) => {
       manifestCache = fonts;
@@ -45,7 +51,7 @@ export function loadGoogleFont(family: string): Promise<void> {
 }
 
 export function getPreviewUrl(family: string): string {
-  return `/font-previews/${family.replace(/\s+/g, '_')}.png`;
+  return `${FONT_ASSETS_BASE}/${family.replace(/\s+/g, '_')}.png`;
 }
 
 export function fontFamilyCssValue(family: string, category: string): string {

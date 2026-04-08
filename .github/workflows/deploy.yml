@@ -20,7 +20,10 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - run: npm ci
-      - run: npm run build
+      - name: Build
+        run: npm run build
+        env:
+          FONT_ASSETS_URL: https://lopsy-fonts.pages.dev
 
       - name: Create Cloudflare Pages project (if needed)
         uses: cloudflare/wrangler-action@v3

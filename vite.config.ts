@@ -79,6 +79,9 @@ export default defineConfig({
       localsConvention: 'camelCaseOnly',
     },
   },
+  define: {
+    __FONT_ASSETS_URL__: JSON.stringify(process.env.FONT_ASSETS_URL ?? ''),
+  },
   build: {
     chunkSizeWarningLimit: 750,
     rollupOptions: {

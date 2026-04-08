@@ -1,0 +1,48 @@
+name: Generate & Deploy Font Previews
+
+on:
+  workflow_dispatch:
+  schedule:
+    # First of each month — picks up new Google Fonts additions
+    - cron: '0 0 1 * *'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Generate font previews
+        run: npx tsx scripts/generate-font-previews.ts
+
+      - name: Add headers for CORS and caching
+        run: |
+          cat > public/font-previews/_headers << 'HEADERS'
+          /*
+            Access-Control-Allow-Origin: *
+            Cache-Control: public, max-age=31536000, immutable
+          HEADERS
+
+      - name: Create Cloudflare Pages project (if needed)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create lopsy-fonts --production-branch main
+        continue-on-error: true
+
+      - name: Deploy font previews to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy public/font-previews --project-name=lopsy-fonts
