@@ -2,6 +2,7 @@ import { createRasterLayer } from '../../layers/layer-model';
 import { getInsertionGroupId, addToGroup } from '../../layers/group-utils';
 import { clearJsPixelData } from './clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
+import { syncSelection } from '../../engine-wasm/engine-sync';
 import {
   clipboardCopy,
   clipboardCut,
@@ -32,6 +33,12 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     const sel = state.selection;
     const hasSelection = sel.active && sel.bounds !== null && sel.mask !== null;
+
+    // Ensure selection mask is uploaded to GPU before copying
+    if (hasSelection) {
+      syncSelection(engine, sel);
+    }
+
     const bx = hasSelection && sel.bounds ? Math.round(sel.bounds.x) : 0;
     const by = hasSelection && sel.bounds ? Math.round(sel.bounds.y) : 0;
     const bw = hasSelection && sel.bounds ? Math.round(sel.bounds.width) : 0;
@@ -60,6 +67,12 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     const sel = state.selection;
     const hasSelection = sel.active && sel.bounds !== null && sel.mask !== null;
+
+    // Ensure selection mask is uploaded to GPU before cutting
+    if (hasSelection) {
+      syncSelection(engine, sel);
+    }
+
     const bx = hasSelection && sel.bounds ? Math.round(sel.bounds.x) : 0;
     const by = hasSelection && sel.bounds ? Math.round(sel.bounds.y) : 0;
     const bw = hasSelection && sel.bounds ? Math.round(sel.bounds.width) : 0;

@@ -24,6 +24,8 @@ export interface InteractionState {
   strokeDistance?: number;
   spacingRemainder?: number;
   symmetryCenter?: Point;
+  /** Raw stroke points recorded for hold-to-smooth (layer-space). */
+  strokePoints?: Array<{ x: number; y: number }>;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
 }

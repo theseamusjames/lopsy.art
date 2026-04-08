@@ -126,6 +126,7 @@ export function handlePaintDown(
     strokeDistance: 0,
     spacingRemainder: 0,
     symmetryCenter: { x: layerPos.x, y: layerPos.y },
+    strokePoints: tool === 'brush' ? [{ x: layerPos.x, y: layerPos.y }] : undefined,
   };
 
   if (!engine) return state;
@@ -422,6 +423,10 @@ export function handlePaintMove(
         const sdx = layerLocalPos.x - state.lastPoint.x;
         const sdy = layerLocalPos.y - state.lastPoint.y;
         state.strokeDistance = (state.strokeDistance ?? 0) + Math.sqrt(sdx * sdx + sdy * sdy);
+      }
+      // Record point for hold-to-smooth
+      if (state.strokePoints) {
+        state.strokePoints.push({ x: layerLocalPos.x, y: layerLocalPos.y });
       }
       state.lastPoint = layerLocalPos;
       useEditorStore.getState().notifyRender();

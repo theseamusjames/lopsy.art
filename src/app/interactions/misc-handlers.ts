@@ -193,9 +193,9 @@ export function handleDodgeMove(state: InteractionState, layerLocalPos: Point): 
 }
 
 export function handleStampDown(ctx: InteractionContext): InteractionState | undefined {
-  const { layerPos, activeLayerId, activeLayer, altKey, shiftKey } = ctx;
+  const { layerPos, activeLayerId, activeLayer, altKey, metaKey, shiftKey } = ctx;
 
-  if (altKey) {
+  if (altKey || metaKey) {
     ctx.stampSourceRef.current = layerPos;
     ctx.stampOffsetRef.current = null;
     return undefined;

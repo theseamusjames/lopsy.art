@@ -84,6 +84,8 @@ pub struct EngineInner {
     pub image_whites: f32,
     pub image_blacks: f32,
     pub image_vignette: f32,
+    pub image_saturation: f32,
+    pub image_vibrance: f32,
     // Mask editing — skip mask clipping, show blue overlay instead
     pub mask_edit_layer_id: Option<String>,
 }
@@ -181,6 +183,8 @@ impl EngineInner {
             image_whites: 0.0,
             image_blacks: 0.0,
             image_vignette: 0.0,
+            image_saturation: 0.0,
+            image_vibrance: 0.0,
             mask_edit_layer_id: None,
         })
     }

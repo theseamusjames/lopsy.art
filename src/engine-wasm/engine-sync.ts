@@ -36,6 +36,8 @@ import {
   setImageWhites,
   setImageBlacks,
   setImageVignette,
+  setImageSaturation,
+  setImageVibrance,
   clearImageAdjustments,
   setLassoPreview,
   setPathOverlay,
@@ -474,6 +476,8 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
   setImageWhites(engine, adjustments.whites);
   setImageBlacks(engine, adjustments.blacks);
   setImageVignette(engine, adjustments.vignette);
+  setImageSaturation(engine, adjustments.saturation);
+  setImageVibrance(engine, adjustments.vibrance);
 }
 
 export function syncMaskEditMode(engine: Engine, maskEditMode: boolean, activeLayerId: string | null): void {

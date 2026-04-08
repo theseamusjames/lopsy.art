@@ -6,6 +6,8 @@ export interface ImageAdjustments {
   whites: number;
   blacks: number;
   vignette: number;
+  saturation: number;
+  vibrance: number;
 }
 
 export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
@@ -16,12 +18,14 @@ export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
   whites: 0,
   blacks: 0,
   vignette: 0,
+  saturation: 0,
+  vibrance: 0,
 };
 
 export function aggregateGroupAdjustments(
   layers: readonly { type: string; visible: boolean; adjustments?: ImageAdjustments; adjustmentsEnabled?: boolean }[],
 ): ImageAdjustments | null {
-  const agg: ImageAdjustments = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0 };
+  const agg: ImageAdjustments = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0, saturation: 0, vibrance: 0 };
   let found = false;
   for (const l of layers) {
     if (l.type === 'group' && l.adjustments && l.adjustmentsEnabled !== false && l.visible) {
@@ -32,6 +36,8 @@ export function aggregateGroupAdjustments(
       agg.whites += l.adjustments.whites;
       agg.blacks += l.adjustments.blacks;
       agg.vignette += l.adjustments.vignette;
+      agg.saturation += l.adjustments.saturation ?? 0;
+      agg.vibrance += l.adjustments.vibrance ?? 0;
       found = true;
     }
   }
@@ -46,7 +52,9 @@ export function hasActiveAdjustments(adj: ImageAdjustments): boolean {
     adj.shadows !== 0 ||
     adj.whites !== 0 ||
     adj.blacks !== 0 ||
-    adj.vignette !== 0
+    adj.vignette !== 0 ||
+    adj.saturation !== 0 ||
+    adj.vibrance !== 0
   );
 }
 
