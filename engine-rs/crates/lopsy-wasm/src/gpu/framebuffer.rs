@@ -50,4 +50,10 @@ impl FramebufferPool {
     pub fn unbind(&self, gl: &WebGl2RenderingContext) {
         gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
     }
+
+    pub fn release(&mut self, gl: &WebGl2RenderingContext, handle: FramebufferHandle) {
+        if let Some(entry) = self.entries.get(handle.0) {
+            gl.delete_framebuffer(Some(&entry.fbo));
+        }
+    }
 }
