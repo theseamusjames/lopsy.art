@@ -1348,6 +1348,24 @@ pub fn filter_posterize(engine: &mut Engine, layer_id: &str, levels: u32) {
     );
 }
 
+#[wasm_bindgen(js_name = "filterPixelate")]
+pub fn filter_pixelate(engine: &mut Engine, layer_id: &str, block_size: u32) {
+    if block_size <= 1 {
+        return;
+    }
+    let prog = engine.inner.shaders.pixelate.program.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_blockSize") {
+                gl.uniform1f(Some(&loc), block_size as f32);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterThreshold")]
 pub fn filter_threshold(engine: &mut Engine, layer_id: &str, level: u32) {
     let prog = engine.inner.shaders.threshold.program.clone();

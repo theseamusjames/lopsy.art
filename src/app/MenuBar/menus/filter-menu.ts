@@ -14,6 +14,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { separator: true, label: '' },
       { label: 'Find Edges', action: () => applyFindEdges() },
       { label: 'Cel Shading...', action: () => showFilterDialog('cel-shading') },
+      { label: 'Pixelate...', action: () => showFilterDialog('pixelate') },
       { separator: true, label: '' },
       { label: 'Add Noise...', action: () => showFilterDialog('add-noise') },
       { label: 'Fill with Noise...', action: () => showFilterDialog('fill-noise') },
