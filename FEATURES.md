@@ -203,6 +203,9 @@ Applied globally or per-group. All default to 0.
 - **Add Noise**: amount 0 - 255, monochrome on/off
 - **Fill with Noise**: monochrome on/off
 
+### Pixelate
+- **Pixelate / Mosaic**: block size 2 - 64 px
+
 ### Stylize
 - **Find Edges**: Sobel edge detection, no parameters
 - **Cel Shading**: levels, edge strength
