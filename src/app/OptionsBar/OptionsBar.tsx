@@ -98,15 +98,19 @@ export function OptionsBar() {
       {showGrid && (
         <>
           <span className={styles.label}>Grid</span>
-          <select
-            className={styles.gridSelect}
-            value={gridSize}
-            onChange={(e) => setGridSize(Number(e.target.value))}
-          >
-            {gridStops.map((s) => (
-              <option key={s} value={s}>{s}px</option>
-            ))}
-          </select>
+          <input
+            type="range"
+            className={styles.gridSlider}
+            min={0}
+            max={gridStops.length - 1}
+            step={1}
+            value={gridStops.indexOf(gridSize) !== -1
+              ? gridStops.indexOf(gridSize)
+              : gridStops.reduce((best, s, i) =>
+                  Math.abs(s - gridSize) < Math.abs(gridStops[best]! - gridSize) ? i : best, 0)}
+            onChange={(e) => setGridSize(gridStops[Number(e.target.value)]!)}
+          />
+          <span className={styles.gridValue}>{gridSize}px</span>
           <label className={styles.snapCheckbox}>
             <input
               type="checkbox"
