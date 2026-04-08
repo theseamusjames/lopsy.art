@@ -151,6 +151,7 @@ import init, {
   uploadBrushTip,
   clearBrushTip,
   setBrushTipState,
+  clearAllLayers,
 } from './pkg/lopsy_wasm';
 
 export type { Engine };
@@ -170,6 +171,7 @@ export {
   setDocumentSize,
   setViewport,
   setBackgroundColor,
+  clearAllLayers,
   addLayer,
   removeLayer,
   updateLayer,

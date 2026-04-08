@@ -4,7 +4,7 @@ import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
 import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
-import { getEngine } from '../../engine-wasm/engine-state';
+import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
 import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import type { SliceCreator, SparseLayerEntry } from './types';
@@ -148,6 +148,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   documentReady: false,
 
   createDocument: (width, height, transparentBg) => {
+    clearEngine();
     const result = computeCreateDocument(width, height, transparentBg);
     set(result);
     if (result.layerPixelData && result.document) {
@@ -157,6 +158,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   openImageAsDocument: (imageData, name) => {
+    clearEngine();
     const result = computeOpenImage(imageData, name);
     set(result);
     if (result.layerPixelData && result.document) {

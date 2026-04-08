@@ -321,6 +321,84 @@ impl EngineInner {
         Ok(())
     }
 
+    /// Release all layer textures, masks, stroke textures, selection,
+    /// clipboard, float, brush tip, and shape preview. Resets the engine
+    /// to a clean state without destroying the WebGL context.
+    pub fn clear_all_layers(&mut self) {
+        // Layer textures
+        for (_, tex) in self.layer_textures.drain() {
+            self.texture_pool.release(tex);
+        }
+        // Layer masks
+        for (_, tex) in self.layer_masks.drain() {
+            self.texture_pool.release(tex);
+        }
+        // Stroke textures
+        for (_, tex) in self.stroke_textures.drain() {
+            self.texture_pool.release(tex);
+        }
+        self.stroke_opacity.clear();
+        if let Some(fbo) = self.stroke_fbo.take() {
+            self.fbo_pool.release(&self.gl, fbo);
+        }
+        // Brush tip
+        if let Some(tex) = self.brush_tip_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        self.brush_has_tip = false;
+        // Selection mask
+        if let Some(tex) = self.selection_mask_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        // Shape preview
+        if let Some(tex) = self.shape_preview_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        self.shape_preview_layer_id = None;
+        // Clipboard
+        if let Some(tex) = self.clipboard_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        self.clipboard_width = 0;
+        self.clipboard_height = 0;
+        self.clipboard_offset_x = 0;
+        self.clipboard_offset_y = 0;
+        // Float
+        if let Some(tex) = self.float_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        if let Some(tex) = self.float_base_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        self.float_layer_id = None;
+        self.float_width = 0;
+        self.float_height = 0;
+        self.float_layer_x = 0;
+        self.float_layer_y = 0;
+        self.float_transform_mode = 0;
+        // Layer stack and overlays
+        self.layer_stack.clear();
+        self.dirty_layers.clear();
+        self.transform_overlay = None;
+        self.gradient_guide = None;
+        self.lasso_points = None;
+        self.crop_rect = None;
+        self.brush_cursor = None;
+        self.path_overlay = None;
+        self.mask_edit_layer_id = None;
+        // Image adjustments
+        self.image_exposure = 0.0;
+        self.image_contrast = 0.0;
+        self.image_highlights = 0.0;
+        self.image_shadows = 0.0;
+        self.image_whites = 0.0;
+        self.image_blacks = 0.0;
+        self.image_vignette = 0.0;
+        self.image_saturation = 0.0;
+        self.image_vibrance = 0.0;
+        self.needs_recomposite = true;
+    }
+
     pub fn mark_all_dirty(&mut self) {
         for layer in &self.layer_stack {
             self.dirty_layers.insert(layer.id.clone());
