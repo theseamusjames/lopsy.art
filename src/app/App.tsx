@@ -110,6 +110,23 @@ export function App() {
   const [isSpaceDown, setIsSpaceDown] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
+  // Touch gesture state for pinch-to-zoom and single-finger pan
+  const touchRef = useRef<{
+    active: boolean;
+    startTouches: Array<{ x: number; y: number }>;
+    startZoom: number;
+    startPanX: number;
+    startPanY: number;
+    startDist: number;
+  }>({
+    active: false,
+    startTouches: [],
+    startZoom: 1,
+    startPanX: 0,
+    startPanY: 0,
+    startDist: 0,
+  });
+
   const handleCreateDocument = useCallback((width: number, height: number, background: 'white' | 'transparent') => {
     createDocument(width, height, background === 'transparent');
     setShowNewDocumentModal(false);
@@ -425,6 +442,75 @@ export function App() {
     [viewport.zoom, viewport.panX, viewport.panY, setZoom, setPan],
   );
 
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length === 1) {
+        const t = e.touches.item(0);
+        if (!t) return;
+        touchRef.current = {
+          active: true,
+          startTouches: [{ x: t.clientX, y: t.clientY }],
+          startZoom: viewport.zoom,
+          startPanX: viewport.panX,
+          startPanY: viewport.panY,
+          startDist: 0,
+        };
+      } else if (e.touches.length === 2) {
+        const t0 = e.touches.item(0);
+        const t1 = e.touches.item(1);
+        if (!t0 || !t1) return;
+        const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+        const midX = (t0.clientX + t1.clientX) / 2;
+        const midY = (t0.clientY + t1.clientY) / 2;
+        touchRef.current = {
+          active: true,
+          startTouches: [{ x: midX, y: midY }],
+          startZoom: viewport.zoom,
+          startPanX: viewport.panX,
+          startPanY: viewport.panY,
+          startDist: dist,
+        };
+      }
+    },
+    [viewport.zoom, viewport.panX, viewport.panY],
+  );
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (!touchRef.current.active) return;
+      const tr = touchRef.current;
+
+      if (e.touches.length === 1 && tr.startDist === 0) {
+        const t = e.touches.item(0);
+        const start = tr.startTouches[0];
+        if (!t || !start) return;
+        const dx = t.clientX - start.x;
+        const dy = t.clientY - start.y;
+        setPan(tr.startPanX + dx, tr.startPanY + dy);
+      } else if (e.touches.length === 2 && tr.startDist > 0) {
+        const t0 = e.touches.item(0);
+        const t1 = e.touches.item(1);
+        const start = tr.startTouches[0];
+        if (!t0 || !t1 || !start) return;
+        const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+        const scale = dist / tr.startDist;
+        const newZoom = Math.max(0.01, Math.min(64, tr.startZoom * scale));
+        setZoom(newZoom);
+
+        const midX = (t0.clientX + t1.clientX) / 2;
+        const midY = (t0.clientY + t1.clientY) / 2;
+        const dx = midX - start.x;
+        const dy = midY - start.y;
+        setPan(tr.startPanX + dx, tr.startPanY + dy);
+      }
+    },
+    [setZoom, setPan],
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    touchRef.current.active = false;
+  }, []);
+
   const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
   const [historyPanelCollapsed, setHistoryPanelCollapsed] = useState(false);
   const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(false);
@@ -498,6 +584,10 @@ export function App() {
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
           onWheel={handleWheel}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
           onContextMenu={handleContextMenu}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
