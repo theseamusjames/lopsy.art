@@ -9,6 +9,7 @@ import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import type { SliceCreator, SparseLayerEntry } from './types';
 import { useUIStore } from '../ui-store';
+import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 
 import { computeCreateDocument } from './actions/create-document';
 import { computeOpenImage } from './actions/open-image';
@@ -166,6 +167,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   addLayer: () => {
+    finalizePendingStrokeGlobal();
     const s = get();
     s.pushHistory('Add Layer');
     const result = computeAddLayer(s.document);
@@ -194,6 +196,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   setActiveLayer: (id) => {
+    finalizePendingStrokeGlobal();
     set(computeSetActiveLayer(get().document, id));
   },
 
@@ -364,6 +367,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   updateLayerEffects: (id, effects) => {
+    finalizePendingStrokeGlobal();
     const s = get();
     s.pushHistory('Update Effects');
     set(computeUpdateEffects(s.document, s.renderVersion, id, effects));
