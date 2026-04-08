@@ -1,7 +1,9 @@
 import { useCallback } from 'react';
+import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { useBrushPresetStore } from '../../brush-preset-store';
 import { Slider } from '../../../components/Slider/Slider';
+import { IconButton } from '../../../components/IconButton/IconButton';
 import { BrushThumbnail } from '../../../components/BrushModal/BrushThumbnail';
 import styles from './BrushOptions.module.css';
 
@@ -14,6 +16,10 @@ export function BrushOptions() {
   const setBrushHardness = useToolSettingsStore((s) => s.setBrushHardness);
   const brushFade = useToolSettingsStore((s) => s.brushFade);
   const setBrushFade = useToolSettingsStore((s) => s.setBrushFade);
+  const symmetryH = useToolSettingsStore((s) => s.symmetryHorizontal);
+  const symmetryV = useToolSettingsStore((s) => s.symmetryVertical);
+  const setSymH = useToolSettingsStore((s) => s.setSymmetryHorizontal);
+  const setSymV = useToolSettingsStore((s) => s.setSymmetryVertical);
 
   const presets = useBrushPresetStore((s) => s.presets);
   const activePresetId = useBrushPresetStore((s) => s.activePresetId);
@@ -34,6 +40,20 @@ export function BrushOptions() {
       <Slider label="Opacity" value={brushOpacity} min={1} max={100} onChange={setBrushOpacity} />
       <Slider label="Hardness" value={brushHardness} min={0} max={100} onChange={setBrushHardness} />
       <Slider label="Fade" value={brushFade} min={0} max={2000} onChange={setBrushFade} suffix="px" />
+      <div className={styles.symmetryGroup}>
+        <IconButton
+          icon={<FlipHorizontal2 size={16} />}
+          label="Symmetry Horizontal"
+          isActive={symmetryH}
+          onClick={() => setSymH(!symmetryH)}
+        />
+        <IconButton
+          icon={<FlipVertical2 size={16} />}
+          label="Symmetry Vertical"
+          isActive={symmetryV}
+          onClick={() => setSymV(!symmetryV)}
+        />
+      </div>
     </>
   );
 }

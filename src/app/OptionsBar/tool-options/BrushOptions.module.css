@@ -17,3 +17,10 @@
 .tipButton:hover {
   border-color: var(--color-border-strong);
 }
+
+.symmetryGroup {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  margin-left: var(--spacing-sm);
+}
