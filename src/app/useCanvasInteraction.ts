@@ -9,6 +9,7 @@ import {
   beginStroke, endStroke, hasFloat, dropFloat,
   applyBrushDabBatch as gpuBrushDabBatch,
 } from '../engine-wasm/wasm-bridge';
+import { flushLayerSync } from '../engine-wasm/engine-sync';
 import { smoothStroke, HOLD_TIMEOUT_MS, HOLD_RADIUS_PX } from '../tools/smooth-line/smooth-line';
 import { useToolSettingsStore } from './tool-settings-store';
 
@@ -380,25 +381,30 @@ export function useCanvasInteraction(
         // Undo the original freehand stroke
         useEditorStore.getState().undo();
 
-        // Defer the redraw to the next frame so the render loop can
-        // sync the restored layer state to the engine first.
-        requestAnimationFrame(() => {
-          const eng = getEngine();
-          if (!eng) return;
+        // undo() calls resetTrackedState(), which clears the engine-sync
+        // tracking tables. Re-run syncLayers now so that engine.layer_stack
+        // has the restored document state (layer positions, etc.) before we
+        // call beginStroke(), which reads the layer position via
+        // ensure_layer_full_size(). Without this, if our code races ahead of
+        // the render-loop rAF, the engine would use stale layer metadata and
+        // could place dabs at the wrong coordinates.
+        const eng = getEngine();
+        if (!eng) return;
+        const stateAfterUndo = useEditorStore.getState();
+        flushLayerSync(stateAfterUndo);
 
-          useEditorStore.getState().pushHistory();
-          beginStroke(eng, layerId);
-          const arr = new Float64Array(result.sampledPoints.length * 2);
-          for (let i = 0; i < result.sampledPoints.length; i++) {
-            arr[i * 2] = result.sampledPoints[i]!.x;
-            arr[i * 2 + 1] = result.sampledPoints[i]!.y;
-          }
-          gpuBrushDabBatch(eng, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
-          endStroke(eng, layerId);
+        stateAfterUndo.pushHistory();
+        beginStroke(eng, layerId);
+        const arr = new Float64Array(result.sampledPoints.length * 2);
+        for (let i = 0; i < result.sampledPoints.length; i++) {
+          arr[i * 2] = result.sampledPoints[i]!.x;
+          arr[i * 2 + 1] = result.sampledPoints[i]!.y;
+        }
+        gpuBrushDabBatch(eng, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
+        endStroke(eng, layerId);
 
-          clearJsPixelData(layerId);
-          useEditorStore.getState().notifyRender();
-        });
+        clearJsPixelData(layerId);
+        stateAfterUndo.notifyRender();
       }, HOLD_TIMEOUT_MS);
     }
 

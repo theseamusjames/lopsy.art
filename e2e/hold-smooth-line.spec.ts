@@ -165,15 +165,18 @@ test.describe('Hold to smooth line (#94)', () => {
     await page.mouse.move(sp.x, sp.y);
     await page.mouse.down();
 
-    // Move through all waypoints
+    // Move through all waypoints using steps:5 so each segment generates
+    // multiple intermediate mousemove events — "real UI motion" that ensures
+    // the React onMouseMove handler fires frequently and strokePoints is
+    // populated with enough samples for a meaningful smooth.
     for (let i = 1; i < waypoints.length; i++) {
       const wp = await docToScreen(page, waypoints[i]!.x, waypoints[i]!.y);
-      await page.mouse.move(wp.x, wp.y);
+      await page.mouse.move(wp.x, wp.y, { steps: 5 });
     }
 
     // End at the final point
     const ep = await docToScreen(page, endDoc.x, endDoc.y);
-    await page.mouse.move(ep.x, ep.y);
+    await page.mouse.move(ep.x, ep.y, { steps: 3 });
 
     // Release the mouse — this starts the 2-second hold timer
     await page.mouse.up();
@@ -194,9 +197,9 @@ test.describe('Hold to smooth line (#94)', () => {
     // At least some wobble positions should have paint
     expect(wobblePixelsFound).toBeGreaterThan(0);
 
-    // Now wait for the hold timer to fire (2 seconds + rAF + buffer)
-    // Keep the cursor completely still
-    await page.waitForTimeout(2800);
+    // Now wait for the hold timer to fire (2 seconds) + buffer for the render
+    // loop to process the notifyRender() call. Keep the cursor completely still.
+    await page.waitForTimeout(2500);
 
     // Take a screenshot for visual inspection
     await page.screenshot({ path: 'test-results/screenshots/hold-smooth-after.png' });
@@ -238,7 +241,7 @@ test.describe('Hold to smooth line (#94)', () => {
       store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
     });
 
-    // Draw a wobbly stroke
+    // Draw a wobbly stroke using steps for realistic motion
     const start = await docToScreen(page, 20, 50);
     const end = await docToScreen(page, 180, 50);
     await page.mouse.move(start.x, start.y);
@@ -249,9 +252,10 @@ test.describe('Hold to smooth line (#94)', () => {
       await page.mouse.move(
         start.x + (end.x - start.x) * t,
         start.y + (end.y - start.y) * t + wobble,
+        { steps: 3 },
       );
     }
-    await page.mouse.move(end.x, end.y);
+    await page.mouse.move(end.x, end.y, { steps: 3 });
     await page.mouse.up();
 
     await page.waitForTimeout(300);
