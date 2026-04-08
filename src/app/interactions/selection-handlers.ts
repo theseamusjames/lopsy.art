@@ -169,8 +169,9 @@ export function handleSelectionMove(
     let mEnd = canvasPos;
     const uiMarquee = useUIStore.getState();
     if (uiMarquee.showGrid && uiMarquee.snapToGrid) {
-      mStart = snapPositionToGrid(mStart.x, mStart.y, uiMarquee.gridSize);
-      mEnd = snapPositionToGrid(mEnd.x, mEnd.y, uiMarquee.gridSize);
+      const { width: dw, height: dh } = editorState.document;
+      mStart = snapPositionToGrid(mStart.x, mStart.y, uiMarquee.gridSize, dw, dh);
+      mEnd = snapPositionToGrid(mEnd.x, mEnd.y, uiMarquee.gridSize, dw, dh);
     }
     const toolSettings = useToolSettingsStore.getState();
     let w = Math.abs(mEnd.x - mStart.x);
