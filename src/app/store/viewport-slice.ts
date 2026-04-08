@@ -41,8 +41,8 @@ export const createViewportSlice: SliceCreator<ViewportSlice> = (set, get) => ({
     const { width: vw, height: vh } = state.viewport;
     const { width: dw, height: dh } = state.document;
     if (vw <= 0 || vh <= 0 || dw <= 0 || dh <= 0) return;
-    const padding = 40;
-    const zoom = Math.min((vw - padding * 2) / dw, (vh - padding * 2) / dh, 1);
+    const padding = Math.min(40, vw / 4, vh / 4);
+    const zoom = Math.max(0.01, Math.min((vw - padding * 2) / dw, (vh - padding * 2) / dh, 1));
     set((s) => ({
       viewport: { ...s.viewport, zoom, panX: 0, panY: 0 },
     }));
