@@ -28,17 +28,16 @@ float sdPolygon(vec2 p, vec2 halfSize, int n, float cr) {
 
     float an = PI / float(n);
     float cosAn = cos(an);
+    float sinAn = sin(an);
 
     // Scale up so the polygon's faces (not vertices) align with halfSize.
-    // The raw SDF places faces at cosAn * scale; dividing by cosAn makes
-    // faces sit at the drawn boundary.
     vec2 circumHalf = halfSize / cosAn;
     float scale = min(circumHalf.x, circumHalf.y);
 
     float maxCr = min(halfSize.x, halfSize.y) * 0.99;
     float clampedCr = min(cr, maxCr);
 
-    // Inset the polygon by cr so rounding stays within the original bounds.
+    // Inset the polygon by cr so Minkowski rounding stays within bounds.
     float insetScale = scale - clampedCr / cosAn;
     vec2 insetHalfSize = circumHalf * (insetScale / scale);
 
@@ -49,8 +48,18 @@ float sdPolygon(vec2 p, vec2 halfSize, int n, float cr) {
     float a = atan(q.x, q.y) + rotOffset;
     a = mod(a + PI, 2.0 * an) - an;
     float r = length(q);
-    float d = (r * cos(a) - cosAn) * insetScale;
-    return d - clampedCr;
+
+    // Cartesian position in half-sector
+    float ha = abs(a);
+    vec2 sc = vec2(r * sin(ha), r * cos(ha));
+
+    // Distance to the face edge SEGMENT (not infinite line).
+    // Face runs from (0, cosAn) to (sinAn, cosAn); clamping x to that
+    // range produces circular iso-contours around vertices → rounded corners.
+    vec2 nearest = vec2(clamp(sc.x, 0.0, sinAn), cosAn);
+    float dist = length(sc - nearest);
+    float s = (sc.y < cosAn) ? -1.0 : 1.0;
+    return s * dist * insetScale - clampedCr;
 }
 void main() {
     vec2 pos = v_uv * u_texSize;
