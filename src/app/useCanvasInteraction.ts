@@ -166,16 +166,22 @@ export function useCanvasInteraction(
             beginStroke(engine, activeLayerId);
 
             // beginStroke calls ensure_layer_full_size on the WASM side,
-            // which may expand a cropped layer texture to full document
-            // size and reset the layer position to (0,0). Sync the JS
-            // store to match so the two sides don't desync.
+            // which expands a cropped layer texture to the union of the
+            // document area and the existing content area (preserving
+            // offscreen content). Sync the JS store to match.
             const docState = useEditorStore.getState().document;
             const currentLayer = docState.layers.find((l) => l.id === activeLayerId);
-            if (currentLayer && (currentLayer.x !== 0 || currentLayer.y !== 0
-              || (currentLayer.type === 'raster' && (currentLayer.width !== docState.width || currentLayer.height !== docState.height)))) {
+            if (currentLayer && currentLayer.type === 'raster') {
+              const newX = Math.min(0, currentLayer.x);
+              const newY = Math.min(0, currentLayer.y);
+              const newW = Math.max(docState.width, currentLayer.x + currentLayer.width) - newX;
+              const newH = Math.max(docState.height, currentLayer.y + currentLayer.height) - newY;
+              const needsSync = currentLayer.x !== newX || currentLayer.y !== newY
+                || currentLayer.width !== newW || currentLayer.height !== newH;
+              if (needsSync) {
               const updatedLayers = docState.layers.map((l) =>
                 l.id === activeLayerId
-                  ? { ...l, x: 0, y: 0, width: docState.width, height: docState.height } as Layer
+                  ? { ...l, x: newX, y: newY, width: newW, height: newH } as Layer
                   : l,
               );
               const pixelData = new Map(useEditorStore.getState().layerPixelData);
@@ -193,6 +199,7 @@ export function useCanvasInteraction(
               // Re-read activeLayer so layerPos computation below uses updated position
               expandedLayer = updatedLayers.find((l) => l.id === activeLayerId) ?? activeLayer;
               layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
+              }
             }
           }
         }
