@@ -208,8 +208,12 @@
   border-color: var(--color-text-secondary);
 }
 
-.gridSlider {
-  width: 80px;
-  accent-color: var(--color-accent);
+.gridSelect {
+  font-size: var(--font-size-xs);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 2px 4px;
   flex-shrink: 0;
 }
