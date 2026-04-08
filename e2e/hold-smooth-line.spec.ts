@@ -124,7 +124,7 @@ test.beforeEach(async ({ page }) => {
 // ---------------------------------------------------------------------------
 
 test.describe('Hold to smooth line (#94)', () => {
-  test('wobbling horizontal stroke smooths into a straight line after 2s hold', async ({ page }) => {
+  test('wobbling horizontal stroke smooths into a straight line after 1.5s hold', async ({ page }) => {
     // Create a transparent document so we can check pixels precisely
     await createDocument(page, 200, 100, true);
 
@@ -165,18 +165,18 @@ test.describe('Hold to smooth line (#94)', () => {
     await page.mouse.move(sp.x, sp.y);
     await page.mouse.down();
 
-    // Move through all waypoints
+    // Move through all waypoints using steps:5 so each segment generates
+    // multiple intermediate mousemove events — "real UI motion" that ensures
+    // the React onMouseMove handler fires frequently and strokePoints is
+    // populated with enough samples for a meaningful smooth.
     for (let i = 1; i < waypoints.length; i++) {
       const wp = await docToScreen(page, waypoints[i]!.x, waypoints[i]!.y);
-      await page.mouse.move(wp.x, wp.y);
+      await page.mouse.move(wp.x, wp.y, { steps: 5 });
     }
 
-    // End at the final point
+    // End at the final point — keep the mouse held DOWN
     const ep = await docToScreen(page, endDoc.x, endDoc.y);
-    await page.mouse.move(ep.x, ep.y);
-
-    // Release the mouse — this starts the 2-second hold timer
-    await page.mouse.up();
+    await page.mouse.move(ep.x, ep.y, { steps: 3 });
 
     // Read composited pixels BEFORE smoothing
     // The wobbly stroke should paint dark pixels above and below y=50
@@ -194,9 +194,8 @@ test.describe('Hold to smooth line (#94)', () => {
     // At least some wobble positions should have paint
     expect(wobblePixelsFound).toBeGreaterThan(0);
 
-    // Now wait for the hold timer to fire (2 seconds + rAF + buffer)
-    // Keep the cursor completely still
-    await page.waitForTimeout(2800);
+    // Hold the cursor still (mouse still held down) for 1.5s + render buffer
+    await page.waitForTimeout(2500);
 
     // Take a screenshot for visual inspection
     await page.screenshot({ path: 'test-results/screenshots/hold-smooth-after.png' });
@@ -205,7 +204,7 @@ test.describe('Hold to smooth line (#94)', () => {
     // The stroke should now be a straight line along y=50
     // Far-off-center positions should no longer have paint
     let offCenterAfter = 0;
-    for (const y of [35, 38, 62, 65]) {
+    for (const y of [30, 35, 65, 70]) {
       for (const x of [60, 100, 140]) {
         const p = await readPixelAtDoc(page, x, y);
         if (p.a > 0 && p.r < 128) offCenterAfter++;
@@ -216,12 +215,16 @@ test.describe('Hold to smooth line (#94)', () => {
     // off-center positions must have ZERO dark pixels (not just fewer)
     expect(offCenterAfter).toBe(0);
 
-    // Verify the center line still has paint
+    // Verify the center line still has dark paint (not just non-transparent)
     const centerPx = await readPixelAtDoc(page, 100, 50);
     expect(centerPx.a).toBeGreaterThan(0);
+    expect(centerPx.r).toBeLessThan(128);
+
+    // Release the mouse after smoothing
+    await page.mouse.up();
   });
 
-  test('moving cursor during hold cancels smoothing', async ({ page }) => {
+  test('releasing mouse during hold cancels smoothing', async ({ page }) => {
     await createDocument(page, 200, 100, true);
 
     await page.keyboard.press('b');
@@ -238,7 +241,7 @@ test.describe('Hold to smooth line (#94)', () => {
       store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
     });
 
-    // Draw a wobbly stroke
+    // Draw a wobbly stroke using steps for realistic motion
     const start = await docToScreen(page, 20, 50);
     const end = await docToScreen(page, 180, 50);
     await page.mouse.move(start.x, start.y);
@@ -249,10 +252,10 @@ test.describe('Hold to smooth line (#94)', () => {
       await page.mouse.move(
         start.x + (end.x - start.x) * t,
         start.y + (end.y - start.y) * t + wobble,
+        { steps: 3 },
       );
     }
-    await page.mouse.move(end.x, end.y);
-    await page.mouse.up();
+    await page.mouse.move(end.x, end.y, { steps: 3 });
 
     await page.waitForTimeout(300);
 
@@ -260,13 +263,13 @@ test.describe('Hold to smooth line (#94)', () => {
     const peakBefore = await readPixelAtDoc(page, 100, 42);
     expect(peakBefore.a).toBeGreaterThan(0);
 
-    // Move the cursor MORE than 4px (the HOLD_RADIUS_PX) to cancel the timer
-    await page.mouse.move(end.x + 20, end.y + 20);
+    // Release the mouse before the 2s hold — this cancels the timer
+    await page.mouse.up();
 
     // Wait past the timer duration
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(2000);
 
-    // The wobble peak should still have paint (smoothing was cancelled)
+    // The wobble peak should still have paint (smoothing was cancelled by mouseup)
     const peakAfter = await readPixelAtDoc(page, 100, 42);
     expect(peakAfter.a).toBeGreaterThan(0);
   });

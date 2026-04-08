@@ -2,20 +2,14 @@ import { describe, it, expect } from 'vitest';
 import type { Point } from '../../types';
 import {
   HOLD_TIMEOUT_MS,
-  HOLD_RADIUS_PX,
   isStraightStroke,
   rdpSimplify,
   smoothStroke,
-  hasMovedBeyondRadius,
 } from './smooth-line';
 
 describe('smooth-line constants', () => {
-  it('HOLD_TIMEOUT_MS is 2000', () => {
-    expect(HOLD_TIMEOUT_MS).toBe(2000);
-  });
-
-  it('HOLD_RADIUS_PX is 4', () => {
-    expect(HOLD_RADIUS_PX).toBe(4);
+  it('HOLD_TIMEOUT_MS is 1500', () => {
+    expect(HOLD_TIMEOUT_MS).toBe(1500);
   });
 });
 
@@ -161,17 +155,3 @@ describe('smoothStroke', () => {
   });
 });
 
-describe('hasMovedBeyondRadius', () => {
-  it('returns false when within radius', () => {
-    expect(hasMovedBeyondRadius({ x: 0, y: 0 }, { x: 2, y: 2 })).toBe(false);
-  });
-
-  it('returns true when beyond radius', () => {
-    expect(hasMovedBeyondRadius({ x: 0, y: 0 }, { x: 5, y: 0 })).toBe(true);
-  });
-
-  it('uses custom radius', () => {
-    expect(hasMovedBeyondRadius({ x: 0, y: 0 }, { x: 5, y: 0 }, 10)).toBe(false);
-    expect(hasMovedBeyondRadius({ x: 0, y: 0 }, { x: 11, y: 0 }, 10)).toBe(true);
-  });
-});

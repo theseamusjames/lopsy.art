@@ -8,11 +8,8 @@
 
 import type { Point } from '../../types';
 
-/** How long the cursor must stay still after mouseup to trigger smoothing. */
-export const HOLD_TIMEOUT_MS = 2000;
-
-/** Maximum movement (in screen pixels) allowed during the hold period. */
-export const HOLD_RADIUS_PX = 4;
+/** How long the cursor must stay still during a stroke to trigger smoothing. */
+export const HOLD_TIMEOUT_MS = 1500;
 
 // ── Ramer-Douglas-Peucker simplification ────────────────────────────
 
@@ -219,13 +216,13 @@ export interface SmoothResult {
  *
  * @param rawPoints  The recorded freehand stroke (layer-space).
  * @param spacing    Distance between emitted sample points (pixels).
- * @param epsilon    RDP simplification tolerance (pixels).  Default 3.
+ * @param epsilon    RDP simplification tolerance (pixels).  Default 9.
  * @param straightTolerance  Max perpendicular deviation for "straight" (pixels).  Default 4.
  */
 export function smoothStroke(
   rawPoints: ReadonlyArray<Point>,
   spacing: number,
-  epsilon: number = 3,
+  epsilon: number = 9,
   straightTolerance: number = 4,
 ): SmoothResult {
   if (rawPoints.length <= 1) {
@@ -255,17 +252,4 @@ export function smoothStroke(
     isStraight: false,
     sampledPoints: sampled,
   };
-}
-
-/**
- * Check whether the cursor has moved beyond the hold radius.
- */
-export function hasMovedBeyondRadius(
-  origin: Point,
-  current: Point,
-  radius: number = HOLD_RADIUS_PX,
-): boolean {
-  const dx = current.x - origin.x;
-  const dy = current.y - origin.y;
-  return Math.sqrt(dx * dx + dy * dy) > radius;
 }
