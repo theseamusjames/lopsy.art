@@ -18,6 +18,7 @@ import { useToolSettingsStore } from './tool-settings-store';
 import { clearActiveMaskEditBuffer } from './interactions/mask-buffer';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
+import { setPendingStroke, clearPendingStroke } from './interactions/pending-stroke';
 import type {
   InteractionState, InteractionContext,
   FloatingSelection, PersistentTransform, LastPaintPoint,
@@ -37,6 +38,7 @@ function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } |
   const pending = ref.current;
   if (!pending) return;
   ref.current = null;
+  clearPendingStroke();
 
   const engine = getEngine();
   if (!engine) return;
@@ -397,6 +399,7 @@ export function useCanvasInteraction(
         // Defer endStroke: if the next mousedown is a shift-click on the same
         // layer, the stroke texture will be reused instead of double-compositing.
         pendingStrokeRef.current = { layerId: state.layerId };
+        setPendingStroke(state.layerId);
       } else {
         // CPU fallback
         destroyPaintingCanvas(state.layerId);
