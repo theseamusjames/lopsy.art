@@ -1027,6 +1027,18 @@ pub fn set_image_vignette(engine: &mut Engine, value: f32) {
     engine.inner.needs_recomposite = true;
 }
 
+#[wasm_bindgen(js_name = "setImageSaturation")]
+pub fn set_image_saturation(engine: &mut Engine, value: f32) {
+    engine.inner.image_saturation = value;
+    engine.inner.needs_recomposite = true;
+}
+
+#[wasm_bindgen(js_name = "setImageVibrance")]
+pub fn set_image_vibrance(engine: &mut Engine, value: f32) {
+    engine.inner.image_vibrance = value;
+    engine.inner.needs_recomposite = true;
+}
+
 #[wasm_bindgen(js_name = "clearImageAdjustments")]
 pub fn clear_image_adjustments(engine: &mut Engine) {
     engine.inner.image_exposure = 0.0;
@@ -1036,6 +1048,8 @@ pub fn clear_image_adjustments(engine: &mut Engine) {
     engine.inner.image_whites = 0.0;
     engine.inner.image_blacks = 0.0;
     engine.inner.image_vignette = 0.0;
+    engine.inner.image_saturation = 0.0;
+    engine.inner.image_vibrance = 0.0;
     engine.inner.needs_recomposite = true;
 }
 

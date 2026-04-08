@@ -24,6 +24,8 @@ const SLIDERS: AdjustmentSliderDef[] = [
   { key: 'whites', label: 'Whites', min: -100, max: 100, step: 1 },
   { key: 'blacks', label: 'Blacks', min: -100, max: 100, step: 1 },
   { key: 'vignette', label: 'Vignette', min: 0, max: 100, step: 1 },
+  { key: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1 },
+  { key: 'vibrance', label: 'Vibrance', min: -100, max: 100, step: 1 },
 ];
 
 function useActiveGroup(): GroupLayer | null {

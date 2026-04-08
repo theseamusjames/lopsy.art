@@ -73,7 +73,7 @@ function renderFrameGpu(
   const gridSize = uiState.gridSize;
   // Aggregate adjustments from all visible groups
   const adjustments = (() => {
-    const agg = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0 };
+    const agg = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0, saturation: 0, vibrance: 0 };
     let found = false;
     for (const l of layers) {
       if (l.type === 'group' && 'adjustments' in l && 'adjustmentsEnabled' in l) {
@@ -86,6 +86,8 @@ function renderFrameGpu(
           agg.whites += g.adjustments.whites;
           agg.blacks += g.adjustments.blacks;
           agg.vignette += g.adjustments.vignette;
+          agg.saturation += g.adjustments.saturation ?? 0;
+          agg.vibrance += g.adjustments.vibrance ?? 0;
           found = true;
         }
       }
