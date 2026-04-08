@@ -112,11 +112,31 @@ export function snapPositionToGrid(
   x: number,
   y: number,
   gridSize: number,
+  docWidth?: number,
+  docHeight?: number,
 ): { x: number; y: number } {
-  return {
-    x: Math.round(x / gridSize) * gridSize,
-    y: Math.round(y / gridSize) * gridSize,
-  };
+  // Grid is centered at (docWidth/2, docHeight/2).
+  // Snap to the nearest grid line relative to the center.
+  const cx = docWidth !== undefined ? docWidth / 2 : 0;
+  const cy = docHeight !== undefined ? docHeight / 2 : 0;
+  let snappedX = Math.round((x - cx) / gridSize) * gridSize + cx;
+  let snappedY = Math.round((y - cy) / gridSize) * gridSize + cy;
+
+  // Also snap to canvas edges (0, docWidth, docHeight) if closer than
+  // the grid snap, so content aligns to edges even when the centered
+  // grid doesn't perfectly land on them.
+  if (docWidth !== undefined) {
+    const edgeThreshold = gridSize / 2;
+    if (Math.abs(x) < edgeThreshold) snappedX = 0;
+    else if (Math.abs(x - docWidth) < edgeThreshold) snappedX = docWidth;
+  }
+  if (docHeight !== undefined) {
+    const edgeThreshold = gridSize / 2;
+    if (Math.abs(y) < edgeThreshold) snappedY = 0;
+    else if (Math.abs(y - docHeight) < edgeThreshold) snappedY = docHeight;
+  }
+
+  return { x: snappedX, y: snappedY };
 }
 
 export function snapToGuide(

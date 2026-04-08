@@ -183,7 +183,8 @@ export function handleMoveMove(
     let newY = state.layerStartY + dragDy;
     const uiState = useUIStore.getState();
     if (uiState.showGrid && uiState.snapToGrid) {
-      const snapped = snapPositionToGrid(newX, newY, uiState.gridSize);
+      const { width: docW, height: docH } = useEditorStore.getState().document;
+      const snapped = snapPositionToGrid(newX, newY, uiState.gridSize, docW, docH);
       newX = snapped.x;
       newY = snapped.y;
     }

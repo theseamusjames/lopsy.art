@@ -135,15 +135,29 @@ export function renderGrid(
 ): void {
   ctx.save();
 
+  // Grid is centered: lines grow outward from (docWidth/2, docHeight/2)
+  const cx = docWidth / 2;
+  const cy = docHeight / 2;
+
   // Minor grid lines
   ctx.strokeStyle = 'rgba(128, 128, 128, 0.25)';
   ctx.lineWidth = 1 / zoom;
   ctx.beginPath();
-  for (let x = gridSize; x < docWidth; x += gridSize) {
+  // Vertical lines expanding from center
+  for (let x = cx; x < docWidth; x += gridSize) {
     ctx.moveTo(x, 0);
     ctx.lineTo(x, docHeight);
   }
-  for (let y = gridSize; y < docHeight; y += gridSize) {
+  for (let x = cx - gridSize; x > 0; x -= gridSize) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, docHeight);
+  }
+  // Horizontal lines expanding from center
+  for (let y = cy; y < docHeight; y += gridSize) {
+    ctx.moveTo(0, y);
+    ctx.lineTo(docWidth, y);
+  }
+  for (let y = cy - gridSize; y > 0; y -= gridSize) {
     ctx.moveTo(0, y);
     ctx.lineTo(docWidth, y);
   }
@@ -154,11 +168,19 @@ export function renderGrid(
   ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';
   ctx.lineWidth = 1 / zoom;
   ctx.beginPath();
-  for (let x = majorStep; x < docWidth; x += majorStep) {
+  for (let x = cx; x < docWidth; x += majorStep) {
     ctx.moveTo(x, 0);
     ctx.lineTo(x, docHeight);
   }
-  for (let y = majorStep; y < docHeight; y += majorStep) {
+  for (let x = cx - majorStep; x > 0; x -= majorStep) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, docHeight);
+  }
+  for (let y = cy; y < docHeight; y += majorStep) {
+    ctx.moveTo(0, y);
+    ctx.lineTo(docWidth, y);
+  }
+  for (let y = cy - majorStep; y > 0; y -= majorStep) {
     ctx.moveTo(0, y);
     ctx.lineTo(docWidth, y);
   }
