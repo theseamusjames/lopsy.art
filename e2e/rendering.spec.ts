@@ -1910,6 +1910,9 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '36-bucket-fill.png') });
   });
 
+  // NOTE: This test implements box blur inline in page.evaluate() as a
+  // gaussian approximation, testing store-level pixel manipulation, not the
+  // actual GPU filter pipeline.
   test('37 - gaussian blur filter', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     await fitToView(page);
@@ -2010,6 +2013,8 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '37-gaussian-blur.png') });
   });
 
+  // NOTE: This test implements brightness adjustment inline in page.evaluate(),
+  // testing store-level pixel manipulation, not the actual GPU filter pipeline.
   test('38 - brightness/contrast adjustment', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     await fitToView(page);
@@ -2662,6 +2667,8 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '48-move-layer.png') });
   });
 
+  // NOTE: This test implements posterize inline in page.evaluate(),
+  // testing store-level pixel manipulation, not the actual GPU filter pipeline.
   test('49 - posterize reduces colors', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     await fitToView(page);
