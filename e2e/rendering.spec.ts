@@ -1832,6 +1832,19 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '35-blend-screen.png') });
+
+    // Verify the blend mode was set to screen
+    const blendMode = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; blendMode: string }> };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return layer?.blendMode ?? '';
+    });
+    expect(blendMode).toBe('screen');
   });
 
   test('36 - bucket fill tool', async ({ page }) => {
@@ -2425,7 +2438,19 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '44-opacity-zero.png') });
-    // Visual verification: canvas should show checkerboard (transparent), not red
+
+    // Verify layer opacity is 0
+    const layerOpacity = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; opacity: number }> };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return layer?.opacity ?? -1;
+    });
+    expect(layerOpacity).toBe(0);
   });
 
   test('45 - paint outside canvas bounds doesn\'t crash', async ({ page }) => {
@@ -2569,7 +2594,35 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '47-effects-after-undo.png') });
-    // Visual: yellow square with shadow should remain, green gone
+
+    // Verify the drop shadow effect is still enabled after undo of the green paint
+    const effectAfterUndo = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: { dropShadow?: { enabled: boolean } } }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data || !layer) return { shadowEnabled: false, hasYellow: false };
+      // Check center pixel is yellow (not green)
+      const lx = layer.x ?? 0;
+      const ly = layer.y ?? 0;
+      const cx = 100 - lx;
+      const cy = 100 - ly;
+      let isYellow = false;
+      if (cx >= 0 && cx < data.width && cy >= 0 && cy < data.height) {
+        const idx = (cy * data.width + cx) * 4;
+        isYellow = data.data[idx]! > 200 && data.data[idx + 1]! > 200 && data.data[idx + 2]! < 50;
+      }
+      return {
+        shadowEnabled: layer?.effects?.dropShadow?.enabled ?? false,
+        hasYellow: isYellow,
+      };
+    });
+    expect(effectAfterUndo.shadowEnabled).toBe(true);
   });
 
   test('48 - move layer position', async ({ page }) => {
@@ -2859,6 +2912,35 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '53-combined-effects.png') });
+
+    // Verify all three effects are enabled on the layer
+    const effects = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: {
+            activeLayerId: string;
+            layers: Array<{
+              id: string;
+              effects: {
+                dropShadow?: { enabled: boolean };
+                stroke?: { enabled: boolean };
+                innerGlow?: { enabled: boolean };
+              };
+            }>;
+          };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return {
+        dropShadow: layer?.effects?.dropShadow?.enabled ?? false,
+        stroke: layer?.effects?.stroke?.enabled ?? false,
+        innerGlow: layer?.effects?.innerGlow?.enabled ?? false,
+      };
+    });
+    expect(effects.dropShadow).toBe(true);
+    expect(effects.stroke).toBe(true);
+    expect(effects.innerGlow).toBe(true);
   });
 
   test('54 - effects on layer with multiple layers below all remain visible', async ({ page }) => {
@@ -3928,6 +4010,32 @@ test.describe('WASM/WebGL Rendering', () => {
 
     // Screenshot with both drop shadow and inner glow
     await page.screenshot({ path: path.join(AB_DIR, 'ab-with-shadow-and-glow.png') });
+
+    // Verify both effects are enabled
+    const effects = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: {
+            activeLayerId: string;
+            layers: Array<{
+              id: string;
+              effects: {
+                dropShadow?: { enabled: boolean };
+                innerGlow?: { enabled: boolean };
+              };
+            }>;
+          };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return {
+        dropShadow: layer?.effects?.dropShadow?.enabled ?? false,
+        innerGlow: layer?.effects?.innerGlow?.enabled ?? false,
+      };
+    });
+    expect(effects.dropShadow).toBe(true);
+    expect(effects.innerGlow).toBe(true);
   });
 
   test('AB-stroke - large stroke on circle', async ({ page }) => {
@@ -4005,6 +4113,28 @@ test.describe('WASM/WebGL Rendering', () => {
       };
     });
     console.log('Stroke test:', JSON.stringify(result));
+    // Verify stroke effect is enabled on the layer
+    const strokeState = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: {
+            activeLayerId: string;
+            layers: Array<{
+              id: string;
+              effects: { stroke?: { enabled: boolean; width: number } };
+            }>;
+          };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return {
+        enabled: layer?.effects?.stroke?.enabled ?? false,
+        width: layer?.effects?.stroke?.width ?? 0,
+      };
+    });
+    expect(strokeState.enabled).toBe(true);
+    expect(strokeState.width).toBe(22);
   });
 
   test('63 - color overlay replaces layer color', async ({ page }) => {
@@ -4571,6 +4701,29 @@ test.describe('WASM/WebGL Rendering', () => {
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(SCREENSHOT_DIR, `glow-sweep-size-${size}.png`) });
     }
+
+    // Verify the inner glow effect ended at the last sweep size
+    const finalEffect = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: {
+            activeLayerId: string;
+            layers: Array<{
+              id: string;
+              effects: { innerGlow?: { enabled: boolean; size: number } };
+            }>;
+          };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return {
+        enabled: layer?.effects?.innerGlow?.enabled ?? false,
+        size: layer?.effects?.innerGlow?.size ?? 0,
+      };
+    });
+    expect(finalEffect.enabled).toBe(true);
+    expect(finalEffect.size).toBe(30);
   });
 
 });
