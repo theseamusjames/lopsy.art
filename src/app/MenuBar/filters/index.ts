@@ -13,6 +13,7 @@ import { celShading } from './cel-shading';
 import { clouds } from './clouds';
 import { smoke } from './smoke';
 import { pixelate } from './pixelate';
+import { halftone } from './halftone';
 
 export type { FilterDefinition };
 
@@ -31,6 +32,7 @@ const allFilters: FilterDefinition[] = [
   clouds,
   smoke,
   pixelate,
+  halftone,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(

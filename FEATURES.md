@@ -206,6 +206,9 @@ Applied globally or per-group. All default to 0.
 ### Pixelate
 - **Pixelate / Mosaic**: block size 2 - 64 px
 
+### Halftone
+- **Halftone**: dot size 2 - 32 px, angle 0 - 180 degrees, softness 0 - 4
+
 ### Stylize
 - **Find Edges**: Sobel edge detection, no parameters
 - **Cel Shading**: levels, edge strength

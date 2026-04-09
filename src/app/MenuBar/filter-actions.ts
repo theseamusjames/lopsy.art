@@ -30,7 +30,8 @@ export type FilterDialogId =
   | 'cel-shading'
   | 'clouds'
   | 'smoke'
-  | 'pixelate';
+  | 'pixelate'
+  | 'halftone';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;

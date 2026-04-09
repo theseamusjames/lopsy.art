@@ -1371,6 +1371,30 @@ pub fn filter_pixelate(engine: &mut Engine, layer_id: &str, block_size: u32) {
     );
 }
 
+#[wasm_bindgen(js_name = "filterHalftone")]
+pub fn filter_halftone(engine: &mut Engine, layer_id: &str, dot_size: f32, angle: f32, contrast: f32) {
+    if dot_size < 2.0 {
+        return;
+    }
+    let prog = engine.inner.shaders.halftone.program.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_dotSize") {
+                gl.uniform1f(Some(&loc), dot_size);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_angle") {
+                gl.uniform1f(Some(&loc), angle);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_contrast") {
+                gl.uniform1f(Some(&loc), contrast);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterThreshold")]
 pub fn filter_threshold(engine: &mut Engine, layer_id: &str, level: u32) {
     let prog = engine.inner.shaders.threshold.program.clone();
