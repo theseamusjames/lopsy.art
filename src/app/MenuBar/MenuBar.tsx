@@ -7,6 +7,10 @@ import {
   applyGenericFilter,
   applyAddNoise,
   applyFillWithNoise,
+  beginFilterPreview,
+  previewGenericFilter,
+  cancelFilterPreviewSession,
+  applyGenericFilterWithPreview,
 } from './filter-actions';
 import { getMenus, type MenuItem, type ImageDialogId, type HelpDialogId } from './menus';
 import { CanvasSizeModal } from '../../components/CanvasSizeModal/CanvasSizeModal';
@@ -21,6 +25,7 @@ export function MenuBar() {
   const [imageDialog, setImageDialog] = useState<ImageDialogId | null>(null);
   const [helpDialog, setHelpDialog] = useState<HelpDialogId | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
+  const previewActiveRef = useRef(false);
 
   const showFilterDialog = useCallback((id: FilterDialogId) => {
     setOpenMenu(null);
@@ -59,13 +64,39 @@ export function MenuBar() {
   }, []);
 
   const handleDialogCancel = useCallback(() => {
+    if (previewActiveRef.current) {
+      cancelFilterPreviewSession();
+      previewActiveRef.current = false;
+    }
     setActiveDialog(null);
   }, []);
 
   const handleGenericFilterApply = useCallback((values: Record<string, number>) => {
     if (!activeDialog) return;
-    applyGenericFilter(activeDialog, values);
+    if (previewActiveRef.current) {
+      applyGenericFilterWithPreview(activeDialog, values);
+      previewActiveRef.current = false;
+    } else {
+      applyGenericFilter(activeDialog, values);
+    }
     setActiveDialog(null);
+  }, [activeDialog]);
+
+  const handlePreviewStart = useCallback(() => {
+    previewActiveRef.current = true;
+    beginFilterPreview();
+  }, []);
+
+  const handlePreviewStop = useCallback(() => {
+    if (previewActiveRef.current) {
+      cancelFilterPreviewSession();
+      previewActiveRef.current = false;
+    }
+  }, []);
+
+  const handlePreviewChange = useCallback((values: Record<string, number>) => {
+    if (!activeDialog || !previewActiveRef.current) return;
+    previewGenericFilter(activeDialog, values);
   }, [activeDialog]);
 
   const handleNoiseApply = useCallback((settings: { amount: number; type: 'gaussian' | 'uniform'; monochromatic: boolean }) => {
@@ -140,6 +171,9 @@ export function MenuBar() {
           params={filterDef.params}
           onApply={handleGenericFilterApply}
           onCancel={handleDialogCancel}
+          onPreviewStart={handlePreviewStart}
+          onPreviewStop={handlePreviewStop}
+          onPreviewChange={handlePreviewChange}
         />
       )}
       {activeDialog === 'add-noise' && (
