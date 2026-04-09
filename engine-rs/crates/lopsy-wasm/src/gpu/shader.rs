@@ -49,6 +49,7 @@ pub const CEL_SHADING_FRAG: &str = include_str!("shaders/filters/cel_shading.gls
 pub const CLOUDS_FRAG: &str = include_str!("shaders/filters/clouds.glsl");
 pub const SMOKE_FRAG: &str = include_str!("shaders/filters/smoke.glsl");
 pub const PIXELATE_FRAG: &str = include_str!("shaders/filters/pixelate.glsl");
+pub const HALFTONE_FRAG: &str = include_str!("shaders/filters/halftone.glsl");
 pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
 
 // Brush
@@ -170,6 +171,7 @@ pub struct ShaderPrograms {
     pub clouds: ShaderProgram,
     pub smoke: ShaderProgram,
     pub pixelate: ShaderProgram,
+    pub halftone: ShaderProgram,
     pub selection_mask_blend: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab: ShaderProgram,
@@ -231,6 +233,7 @@ impl ShaderPrograms {
             clouds: compile_program(gl, v, CLOUDS_FRAG)?,
             smoke: compile_program(gl, v, SMOKE_FRAG)?,
             pixelate: compile_program(gl, v, PIXELATE_FRAG)?,
+            halftone: compile_program(gl, v, HALFTONE_FRAG)?,
             selection_mask_blend: compile_program(gl, v, SELECTION_MASK_BLEND_FRAG)?,
             // Brush — use standard fullscreen quad vert; dab positioning via fragment shader
             brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,
