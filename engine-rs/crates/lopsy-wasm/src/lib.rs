@@ -1372,10 +1372,11 @@ pub fn filter_pixelate(engine: &mut Engine, layer_id: &str, block_size: u32) {
 }
 
 #[wasm_bindgen(js_name = "filterHalftone")]
-pub fn filter_halftone(engine: &mut Engine, layer_id: &str, dot_size: f32, angle: f32, contrast: f32) {
+pub fn filter_halftone(engine: &mut Engine, layer_id: &str, dot_size: f32, density: f32, angle: f32, contrast: f32) {
     if dot_size < 2.0 {
         return;
     }
+    let density = density.clamp(0.25, 3.0);
     let prog = engine.inner.shaders.halftone.program.clone();
     filter_gpu::apply_filter(
         &mut engine.inner,
@@ -1384,6 +1385,9 @@ pub fn filter_halftone(engine: &mut Engine, layer_id: &str, dot_size: f32, angle
         |gl, prog| {
             if let Some(loc) = gl.get_uniform_location(prog, "u_dotSize") {
                 gl.uniform1f(Some(&loc), dot_size);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_density") {
+                gl.uniform1f(Some(&loc), density);
             }
             if let Some(loc) = gl.get_uniform_location(prog, "u_angle") {
                 gl.uniform1f(Some(&loc), angle);
