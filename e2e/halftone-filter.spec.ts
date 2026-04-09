@@ -156,12 +156,12 @@ test.describe('Halftone Filter', () => {
       const activeId = state.document.activeLayerId;
 
       const engineMod = (window as unknown as Record<string, unknown>).__wasmEngine as {
-        filterHalftone: (engine: unknown, layerId: string, dotSize: number, angle: number, contrast: number) => void;
+        filterHalftone: (engine: unknown, layerId: string, dotSize: number, density: number, angle: number, contrast: number) => void;
       };
       const engine = (window as unknown as Record<string, unknown>).__engine;
       if (engineMod && engine) {
         state.pushHistory('Halftone');
-        engineMod.filterHalftone(engine, activeId, 8, 45, 1.0);
+        engineMod.filterHalftone(engine, activeId, 8, 1.0, 45, 1.0);
         state.notifyRender();
       }
     });

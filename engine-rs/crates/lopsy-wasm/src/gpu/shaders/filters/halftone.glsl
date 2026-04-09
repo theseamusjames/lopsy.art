@@ -6,12 +6,16 @@ uniform sampler2D u_tex;
 uniform float u_dotSize;
 uniform float u_angle;
 uniform float u_contrast;
+uniform float u_density;
 
 out vec4 fragColor;
 
 void main() {
     vec2 texSize = vec2(textureSize(u_tex, 0));
     vec2 pixelCoord = v_uv * texSize;
+
+    // Cell spacing: higher density = tighter packing
+    float spacing = u_dotSize / u_density;
 
     // Rotate coordinates by the halftone angle
     float rad = u_angle * 3.14159265 / 180.0;
@@ -21,8 +25,8 @@ void main() {
     vec2 rotated = rot * pixelCoord;
 
     // Find the center of the nearest halftone cell
-    vec2 cellIndex = floor(rotated / u_dotSize);
-    vec2 cellCenter = (cellIndex + 0.5) * u_dotSize;
+    vec2 cellIndex = floor(rotated / spacing);
+    vec2 cellCenter = (cellIndex + 0.5) * spacing;
 
     // Rotate cell center back to sample the original image
     mat2 invRot = mat2(cosA, -sinA, sinA, cosA);
@@ -50,8 +54,6 @@ void main() {
     // Apply contrast to sharpen/soften dot edges
     float edge = smoothstep(dotRadius + u_contrast, dotRadius - u_contrast, dist);
 
-    // Output: dot color where inside dot, white where outside
-    vec3 result = mix(vec3(1.0), c.rgb, edge);
-
-    fragColor = vec4(result, c.a);
+    // Output: dot color where inside dot, transparent where outside
+    fragColor = vec4(c.rgb, c.a * edge);
 }
