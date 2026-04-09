@@ -111,6 +111,18 @@ test.describe('WASM/WebGL Rendering', () => {
     console.log('Canvas diagnostics:', JSON.stringify(diag, null, 2));
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '01-blank-white-doc.png') });
+
+    // Verify document was created with correct dimensions
+    const docInfo = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { width: number; height: number; layers: unknown[] } };
+      };
+      const state = store.getState();
+      return { width: state.document.width, height: state.document.height, layerCount: state.document.layers.length };
+    });
+    expect(docInfo.width).toBe(400);
+    expect(docInfo.height).toBe(300);
+    expect(docInfo.layerCount).toBeGreaterThan(0);
   });
 
   test('02 - blank transparent document shows checkerboard', async ({ page }) => {
@@ -118,6 +130,18 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '02-blank-transparent-doc.png') });
+
+    // Verify transparent document was created
+    const docInfo = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { width: number; height: number; transparent: boolean } };
+      };
+      const state = store.getState();
+      return { width: state.document.width, height: state.document.height, transparent: state.document.transparent };
+    });
+    expect(docInfo.width).toBe(400);
+    expect(docInfo.height).toBe(300);
+    expect(docInfo.transparent).toBe(true);
   });
 
   test('03 - full red fill (no sparse conversion)', async ({ page }) => {
@@ -151,6 +175,9 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     console.log('Store state:', JSON.stringify(storeInfo, null, 2));
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '03-full-red-fill.png') });
+
+    // Verify the red fill exists in pixel data
+    expect(storeInfo.hasDenseData || storeInfo.hasSparseData).toBe(true);
   });
 
   test('04 - blue rectangle in bottom-right corner', async ({ page }) => {
@@ -159,6 +186,29 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '04-blue-rect-bottom-right.png') });
+
+    // Verify blue pixel data is present at the painted location
+    const pixel = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return null;
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      if (!layer) return null;
+      const lx = 350 - layer.x;
+      const ly = 260 - layer.y;
+      if (lx < 0 || lx >= data.width || ly < 0 || ly >= data.height) return null;
+      const idx = (ly * data.width + lx) * 4;
+      return { r: data.data[idx], g: data.data[idx + 1], b: data.data[idx + 2], a: data.data[idx + 3] };
+    });
+    expect(pixel).not.toBeNull();
+    expect(pixel!.b).toBe(255);
+    expect(pixel!.a).toBe(255);
   });
 
   test('05 - four colored corners verify orientation', async ({ page }) => {
@@ -174,6 +224,35 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '05-four-corners.png') });
+
+    // Verify each corner has the expected color
+    const corners = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+          resolvePixelData: (id: string) => ImageData | undefined;
+        };
+      };
+      const state = store.getState();
+      const data = state.resolvePixelData(state.document.activeLayerId);
+      if (!data) return null;
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      if (!layer) return null;
+      const getP = (docX: number, docY: number) => {
+        const lx = docX - layer.x;
+        const ly = docY - layer.y;
+        if (lx < 0 || lx >= data.width || ly < 0 || ly >= data.height) return [0, 0, 0, 0];
+        const idx = (ly * data.width + lx) * 4;
+        return Array.from(data.data.slice(idx, idx + 4));
+      };
+      return { topLeft: getP(25, 25), topRight: getP(375, 25), bottomLeft: getP(25, 275), bottomRight: getP(375, 275) };
+    });
+    expect(corners).not.toBeNull();
+    expect(corners!.topLeft[0]).toBe(255);       // red
+    expect(corners!.topRight[1]).toBe(255);       // green
+    expect(corners!.bottomLeft[2]).toBe(255);     // blue
+    expect(corners!.bottomRight[0]).toBe(255);    // yellow (R)
+    expect(corners!.bottomRight[1]).toBe(255);    // yellow (G)
   });
 
   test('06 - panning moves document correctly', async ({ page }) => {
@@ -190,6 +269,16 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '06-panned.png') });
+
+    // Verify pan values were applied
+    const viewport = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { viewport: { panX: number; panY: number } };
+      };
+      return store.getState().viewport;
+    });
+    expect(viewport.panX).toBe(100);
+    expect(viewport.panY).toBe(50);
   });
 
   test('07 - zoomed in view', async ({ page }) => {
@@ -207,6 +296,15 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '07-zoomed-4x.png') });
+
+    // Verify zoom was applied
+    const viewport = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { viewport: { zoom: number } };
+      };
+      return store.getState().viewport;
+    });
+    expect(viewport.zoom).toBe(4.0);
   });
 
   test('08 - multi-layer compositing', async ({ page }) => {
@@ -228,6 +326,24 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '08-multi-layer.png') });
+
+    // Verify both layers have pixel data
+    const layerData = await page.evaluate((layerIds: string[]) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          resolvePixelData: (id: string) => ImageData | undefined;
+          document: { layers: Array<{ id: string }> };
+        };
+      };
+      const state = store.getState();
+      return {
+        layerCount: state.document.layers.length,
+        layer0HasData: !!state.resolvePixelData(layerIds[0]!),
+        layer1HasData: !!state.resolvePixelData(layerIds[1]!),
+      };
+    }, layers);
+    expect(layerData.layerCount).toBeGreaterThanOrEqual(3); // 2 raster + root group
+    expect(layerData.layer0HasData || layerData.layer1HasData).toBe(true);
   });
 
   test('09 - brush stroke renders in real-time', async ({ page }) => {
@@ -272,6 +388,22 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(300);
     // Screenshot AFTER the stroke
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '09-brush-after-stroke.png') });
+
+    // Verify the brush stroke produced pixel data on the active layer
+    const hasContent = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          resolvePixelData: (id: string) => ImageData | undefined;
+          layerPixelData: Map<string, ImageData>;
+          sparseLayerData: Map<string, unknown>;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      return state.layerPixelData.has(id) || state.sparseLayerData.has(id);
+    });
+    expect(hasContent).toBe(true);
   });
 
   test('10 - brush inside selection marquee clips to selection', async ({ page }) => {
@@ -557,6 +689,19 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '13-drop-shadow.png') });
+
+    // Verify the drop shadow effect is enabled in the layer state
+    const effectState = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: { dropShadow?: { enabled: boolean } } }> };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return { hasDropShadow: layer?.effects?.dropShadow?.enabled ?? false };
+    });
+    expect(effectState.hasDropShadow).toBe(true);
   });
 
   test('14 - color overlay changes color', async ({ page }) => {
@@ -584,6 +729,23 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '14-color-overlay.png') });
+
+    // Verify the color overlay effect is enabled in the layer state
+    const effectState = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: { colorOverlay?: { enabled: boolean; color: { r: number; g: number; b: number } } } }> };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return {
+        enabled: layer?.effects?.colorOverlay?.enabled ?? false,
+        blue: layer?.effects?.colorOverlay?.color?.b ?? 0,
+      };
+    });
+    expect(effectState.enabled).toBe(true);
+    expect(effectState.blue).toBe(255);
   });
 
   // ========== UNDO / REDO ==========
@@ -743,6 +905,19 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '18-layer-opacity.png') });
+
+    // Verify the opacity was applied to the layer
+    const layerOpacity = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; opacity: number }> };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return layer?.opacity ?? -1;
+    });
+    expect(layerOpacity).toBe(0.5);
   });
 
   test('19 - layer visibility toggle', async ({ page }) => {
@@ -764,6 +939,19 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '19-layer-hidden.png') });
+
+    // Verify the layer is now hidden
+    const isVisible = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; visible: boolean }> };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return layer?.visible ?? true;
+    });
+    expect(isVisible).toBe(false);
   });
 
   test('20 - duplicate layer', async ({ page }) => {
@@ -939,6 +1127,19 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '23-blend-multiply.png') });
+
+    // Verify the blend mode was set to multiply
+    const blendMode = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; blendMode: string }> };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return layer?.blendMode ?? '';
+    });
+    expect(blendMode).toBe('multiply');
   });
 
   // ========== TESTS 24-40 ==========
@@ -1527,6 +1728,23 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '33-outer-glow.png') });
+
+    // Verify the outer glow effect is enabled
+    const effectState = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: { outerGlow?: { enabled: boolean; size: number } } }> };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return {
+        enabled: layer?.effects?.outerGlow?.enabled ?? false,
+        size: layer?.effects?.outerGlow?.size ?? 0,
+      };
+    });
+    expect(effectState.enabled).toBe(true);
+    expect(effectState.size).toBe(20);
   });
 
   test('34 - stroke effect', async ({ page }) => {
@@ -1556,6 +1774,25 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '34-stroke-effect.png') });
+
+    // Verify the stroke effect is enabled
+    const effectState = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; layers: Array<{ id: string; effects: { stroke?: { enabled: boolean; width: number; position: string } } }> };
+        };
+      };
+      const state = store.getState();
+      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
+      return {
+        enabled: layer?.effects?.stroke?.enabled ?? false,
+        width: layer?.effects?.stroke?.width ?? 0,
+        position: layer?.effects?.stroke?.position ?? '',
+      };
+    });
+    expect(effectState.enabled).toBe(true);
+    expect(effectState.width).toBe(4);
+    expect(effectState.position).toBe('outside');
   });
 
   test('35 - layer blend screen mode', async ({ page }) => {

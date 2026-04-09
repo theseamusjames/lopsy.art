@@ -8,6 +8,21 @@ test.describe('New document clears engine resources (#124)', () => {
   });
 
   test('creating a new document clears old layers from engine', async ({ page }) => {
+    // Guard: skip if the WASM bridge is not available
+    const hasWasmBridge = await page.evaluate(() => {
+      const engineState = (window as unknown as Record<string, unknown>).__engineState as {
+        getEngine: () => unknown;
+      } | undefined;
+      const bridge = (window as unknown as Record<string, unknown>).__wasmBridge as {
+        getLayerTextureDimensions?: (engine: unknown, id: string) => unknown;
+      } | undefined;
+      return !!(engineState?.getEngine() && bridge?.getLayerTextureDimensions);
+    });
+    if (!hasWasmBridge) {
+      test.skip(true, 'WASM bridge not available — cannot verify GPU texture cleanup');
+      return;
+    }
+
     // Create first document with content on multiple layers
     await createDocument(page, 200, 200, false);
     await page.waitForTimeout(300);
@@ -15,7 +30,6 @@ test.describe('New document clears engine resources (#124)', () => {
     // Add layers with content
     await addLayer(page);
     await page.waitForTimeout(100);
-    const state1 = await getEditorState(page);
     await paintRect(page, 10, 10, 80, 80, { r: 255, g: 0, b: 0, a: 255 });
     await page.waitForTimeout(100);
 
@@ -26,9 +40,10 @@ test.describe('New document clears engine resources (#124)', () => {
 
     await page.screenshot({ path: 'e2e/screenshots/new-doc-cleanup-before.png' });
 
-    // Verify we have multiple layers
+    // Verify we have multiple layers and capture old layer IDs
     const beforeState = await getEditorState(page);
     expect(beforeState.document.layers.length).toBeGreaterThan(2);
+    const oldLayerIds = beforeState.document.layers.map((l) => l.id);
 
     // Create a new document
     await createDocument(page, 100, 100, true);
@@ -38,40 +53,29 @@ test.describe('New document clears engine resources (#124)', () => {
 
     // Verify the new document has a clean state
     const afterState = await getEditorState(page);
-    // New document should have fewer layers (just the background + root group)
-    expect(afterState.document.layers.length).toBeLessThanOrEqual(
-      beforeState.document.layers.length,
-    );
+    expect(afterState.document.layers.length).toBeGreaterThan(0);
 
-    // Verify the engine doesn't have stale textures from the old document
-    const engineLayerCount = await page.evaluate(() => {
+    // Verify old layer textures were released from the engine
+    const staleTextures = await page.evaluate((ids: string[]) => {
       const engineState = (window as unknown as Record<string, unknown>).__engineState as {
         getEngine: () => unknown;
-      } | undefined;
-      const bridge = (window as unknown as Record<string, unknown>).__wasmBridge as {
-        getLayerTextureDimensions?: (engine: unknown, id: string) => unknown;
-      } | undefined;
-      if (!engineState || !bridge?.getLayerTextureDimensions) return -1;
-      const engine = engineState.getEngine();
-      if (!engine) return -1;
-
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { layers: Array<{ id: string }> } };
       };
-      const layers = store.getState().document.layers;
-      let validTextures = 0;
-      for (const layer of layers) {
+      const bridge = (window as unknown as Record<string, unknown>).__wasmBridge as {
+        getLayerTextureDimensions: (engine: unknown, id: string) => unknown;
+      };
+      const engine = engineState.getEngine();
+      const stale: string[] = [];
+      for (const id of ids) {
         try {
-          const dims = bridge.getLayerTextureDimensions(engine, layer.id);
-          if (dims) validTextures++;
+          const dims = bridge.getLayerTextureDimensions(engine, id);
+          if (dims) stale.push(id);
         } catch {
-          // No texture for this layer — expected for groups
+          // No texture — expected, the layer was cleaned up
         }
       }
-      return validTextures;
-    });
+      return stale;
+    }, oldLayerIds);
 
-    // Should only have textures for the current document's raster layers
-    expect(engineLayerCount).toBeLessThanOrEqual(2);
+    expect(staleTextures, 'Old layer textures should be released after creating a new document').toEqual([]);
   });
 });

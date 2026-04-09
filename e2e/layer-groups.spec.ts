@@ -686,9 +686,6 @@ test.describe('Layer moved out of group is not affected by group visibility', ()
     const groupPos = order.indexOf(groupId);
     // Layer should be after the group in layerOrder (higher in stack)
     // or before all group children
-    console.log('layerOrder:', order);
-    console.log('layerId pos:', layerPos, 'groupId pos:', groupPos);
-
     // Verify the engine descriptor would have visible=true
     // by checking isEffectivelyVisible logic
     const effectiveVis = await page.evaluate(
@@ -1076,7 +1073,6 @@ test.describe('GPU rendering verification', () => {
       };
     }, { layer1Id: layer1.id });
 
-    console.log('Engine check:', check);
     expect(check.effectivelyVisible).toBe(true);
     expect(check.hasPixelData).toBe(true);
     expect(check.inLayerOrder).toBe(true);

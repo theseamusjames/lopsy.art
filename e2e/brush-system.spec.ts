@@ -157,6 +157,18 @@ test.describe('Brush System', () => {
     const after = await snapshot(page);
 
     expect(pixelDiff(before, after)).toBeGreaterThan(0);
+
+    // A soft brush (hardness=0) produces many partially-colored pixels at edges.
+    // Count pixels that changed but are not fully saturated (partial alpha / partial color).
+    let partialCount = 0;
+    const len = Math.min(before.pixels.length, after.pixels.length);
+    for (let i = 0; i < len; i += 4) {
+      const db = Math.abs((after.pixels[i + 2] ?? 0) - (before.pixels[i + 2] ?? 0));
+      if (db > 5 && db < 200) partialCount++;
+    }
+    // Soft brush should produce a significant number of partially-colored edge pixels
+    expect(partialCount).toBeGreaterThan(50);
+
     await page.screenshot({ path: 'test-results/screenshots/brush-02-soft-brush.png' });
   });
 
@@ -206,6 +218,22 @@ test.describe('Brush System', () => {
     const after = await snapshot(page);
 
     expect(pixelDiff(before, after)).toBeGreaterThan(0);
+
+    // With scatter=80, some dabs should land off the center line (y=200).
+    // Check for painted pixels in rows far from the stroke center.
+    const w = after.width;
+    let offCenterCount = 0;
+    for (let y = 0; y < after.height; y++) {
+      if (Math.abs(y - 200) < 20) continue; // skip rows near the stroke center
+      for (let x = 50; x < 550; x++) {
+        const idx = (y * w + x) * 4;
+        const dg = Math.abs((after.pixels[idx + 1] ?? 0) - (before.pixels[idx + 1] ?? 0));
+        if (dg > 30) { offCenterCount++; break; } // found a painted pixel in this off-center row
+      }
+    }
+    // Scatter should place at least some dabs away from the center line
+    expect(offCenterCount).toBeGreaterThan(0);
+
     await page.screenshot({ path: 'test-results/screenshots/brush-05-scatter.png' });
   });
 
@@ -250,6 +278,8 @@ test.describe('Brush System', () => {
 
     expect(diff0).toBeGreaterThan(0);
     expect(diff90).toBeGreaterThan(0);
+    // A 20x5 tip at angle=0 vs angle=90 should produce different pixel coverage
+    expect(diff0).not.toBe(diff90);
   });
 
   test('06 - ABR import loads brushes into preset store', async ({ page }) => {
@@ -292,10 +322,33 @@ test.describe('Brush System', () => {
   test('08 - brush modal preview updates on property change', async ({ page }) => {
     await openBrushModal(page);
     await page.waitForTimeout(200);
+
+    const beforeSnap = await snapshot(page);
     await page.screenshot({ path: 'test-results/screenshots/brush-10-preview-default.png' });
+
+    const oldSize = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { brushSize: number };
+      };
+      return store.getState().brushSize;
+    });
+
     await setToolSetting(page, 'setBrushSize', 60);
     await page.waitForTimeout(300);
+
+    const newSize = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { brushSize: number };
+      };
+      return store.getState().brushSize;
+    });
+
+    const afterSnap = await snapshot(page);
     await page.screenshot({ path: 'test-results/screenshots/brush-11-preview-large.png' });
+
+    expect(newSize).toBe(60);
+    expect(newSize).not.toBe(oldSize);
+    expect(pixelDiff(beforeSnap, afterSnap)).toBeGreaterThan(0);
   });
 
   test('09 - custom brush tip paints non-circular dabs', async ({ page }) => {

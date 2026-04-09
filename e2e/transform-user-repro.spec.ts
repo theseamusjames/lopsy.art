@@ -169,7 +169,6 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
 
     // Verify shape was drawn
     const shapePixels = await countActiveLayerPixelsGPU(page);
-    console.log('After shape:', shapePixels);
     expect(shapePixels).toBeGreaterThan(1000);
 
     // Cmd+click to select content
@@ -190,7 +189,6 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
 
     // Check content still exists after rotation (not lost)
     const afterRotate = await countActiveLayerPixelsGPU(page);
-    console.log('After rotate:', afterRotate);
     expect(afterRotate).toBeGreaterThan(shapePixels * 0.5);
 
     // Commit (Escape)
@@ -199,7 +197,6 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
 
     // Content should still be there after commit
     const afterCommit = await countActiveLayerPixelsGPU(page);
-    console.log('After commit:', afterCommit);
     expect(afterCommit).toBeGreaterThan(shapePixels * 0.5);
   });
 
@@ -241,7 +238,6 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
 
     // Should be empty
     const finalPixels = await countActiveLayerPixelsGPU(page);
-    console.log('Final pixels:', finalPixels);
     expect(finalPixels).toBe(0);
   });
 
@@ -279,7 +275,6 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
     await page.waitForTimeout(300);
 
     const finalPixels = await countActiveLayerPixelsGPU(page);
-    console.log('Rotate→move (no commit) final pixels:', finalPixels);
     expect(finalPixels).toBe(0);
   });
 });
@@ -322,7 +317,6 @@ test.describe('Perspective mode', { tag: '@chromium' }, () => {
       };
       return uiStore.getState().transform?.mode;
     });
-    console.log('Transform mode after clicking Perspective:', mode);
     expect(mode).toBe('perspective');
   });
 });
