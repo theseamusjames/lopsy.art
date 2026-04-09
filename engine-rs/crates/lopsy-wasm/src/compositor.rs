@@ -428,6 +428,11 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
     let doc_h = engine.doc_height;
     let bg = engine.bg_color;
 
+    // Reset GL state — brush/shape/selection tools may have left blending enabled.
+    // If BLEND is on, the blit passes in blend_onto_composite would blend
+    // instead of overwrite, corrupting alpha.
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+
     // Render composite (same as display but without viewport transform)
     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
