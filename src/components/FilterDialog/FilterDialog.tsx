@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Slider } from '../Slider/Slider';
 import styles from './FilterDialog.module.css';
 
@@ -16,11 +16,14 @@ interface FilterDialogProps {
   params: FilterParam[];
   onApply: (values: Record<string, number>) => void;
   onCancel: () => void;
+  onPreviewChange?: (values: Record<string, number>) => void;
+  onPreviewStart?: () => void;
+  onPreviewStop?: () => void;
 }
 
 export type { FilterParam, FilterDialogProps };
 
-export function FilterDialog({ title, params, onApply, onCancel }: FilterDialogProps) {
+export function FilterDialog({ title, params, onApply, onCancel, onPreviewChange, onPreviewStart, onPreviewStop }: FilterDialogProps) {
   const [values, setValues] = useState<Record<string, number>>(() => {
     const initial: Record<string, number> = {};
     for (const param of params) {
@@ -28,14 +31,54 @@ export function FilterDialog({ title, params, onApply, onCancel }: FilterDialogP
     }
     return initial;
   });
+  const [preview, setPreview] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewActiveRef = useRef(false);
 
   const handleChange = useCallback((key: string, value: number) => {
     setValues((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  // Debounced preview update when values change and preview is enabled
+  useEffect(() => {
+    if (!preview || !onPreviewChange) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onPreviewChange(values);
+    }, 150);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [values, preview, onPreviewChange]);
+
+  const handlePreviewToggle = useCallback(() => {
+    setPreview((prev) => {
+      const next = !prev;
+      if (next) {
+        previewActiveRef.current = true;
+        onPreviewStart?.();
+        // Trigger immediate preview with current values
+        if (onPreviewChange) {
+          setTimeout(() => onPreviewChange(values), 0);
+        }
+      } else {
+        previewActiveRef.current = false;
+        onPreviewStop?.();
+      }
+      return next;
+    });
+  }, [onPreviewStart, onPreviewStop, onPreviewChange, values]);
+
   const handleApply = useCallback(() => {
     onApply(values);
   }, [onApply, values]);
+
+  const handleCancel = useCallback(() => {
+    if (previewActiveRef.current) {
+      onPreviewStop?.();
+    }
+    onCancel();
+  }, [onCancel, onPreviewStop]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -43,9 +86,9 @@ export function FilterDialog({ title, params, onApply, onCancel }: FilterDialogP
       handleApply();
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      onCancel();
+      handleCancel();
     }
-  }, [handleApply, onCancel]);
+  }, [handleApply, handleCancel]);
 
   return (
     <div className={styles.overlay}>
@@ -68,12 +111,23 @@ export function FilterDialog({ title, params, onApply, onCancel }: FilterDialogP
           ))}
         </div>
         <div className={styles.footer}>
-          <button className={styles.cancelButton} onClick={onCancel} type="button">
-            Cancel
-          </button>
-          <button className={styles.applyButton} onClick={handleApply} type="button">
-            Apply
-          </button>
+          <label className={styles.previewLabel}>
+            <input
+              type="checkbox"
+              checked={preview}
+              onChange={handlePreviewToggle}
+              className={styles.previewCheckbox}
+            />
+            Preview
+          </label>
+          <div className={styles.footerButtons}>
+            <button className={styles.cancelButton} onClick={handleCancel} type="button">
+              Cancel
+            </button>
+            <button className={styles.applyButton} onClick={handleApply} type="button">
+              Apply
+            </button>
+          </div>
         </div>
       </div>
     </div>
