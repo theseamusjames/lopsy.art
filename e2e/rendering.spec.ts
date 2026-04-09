@@ -981,6 +981,8 @@ test.describe('WASM/WebGL Rendering', () => {
 
   // ========== FILTERS ==========
 
+  // NOTE: This test implements invert inline in page.evaluate(), testing
+  // store-level pixel manipulation, not the actual GPU filter pipeline.
   test('21 - invert filter', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     await fitToView(page);
@@ -1454,6 +1456,8 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '28-canvas-resize.png') });
   });
 
+  // NOTE: This test implements flip horizontal inline in page.evaluate(),
+  // testing store-level pixel manipulation, not the actual GPU filter pipeline.
   test('29 - flip horizontal', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
@@ -1847,6 +1851,8 @@ test.describe('WASM/WebGL Rendering', () => {
     expect(blendMode).toBe('screen');
   });
 
+  // NOTE: This test implements bucket fill inline in page.evaluate(),
+  // testing store-level pixel manipulation, not the actual GPU filter pipeline.
   test('36 - bucket fill tool', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
