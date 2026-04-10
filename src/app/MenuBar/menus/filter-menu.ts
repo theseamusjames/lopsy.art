@@ -30,6 +30,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Desaturate', action: () => applyDesaturate() },
       { label: 'Posterize...', action: () => showFilterDialog('posterize') },
       { label: 'Threshold...', action: () => showFilterDialog('threshold') },
+      { label: 'Solarize...', action: () => showFilterDialog('solarize') },
     ],
   };
 }

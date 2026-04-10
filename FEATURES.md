@@ -212,6 +212,7 @@ Applied globally or per-group. All default to 0.
 ### Stylize
 - **Find Edges**: Sobel edge detection, no parameters
 - **Cel Shading**: levels, edge strength
+- **Solarize**: threshold 0 - 255 (inverts tones above the threshold, classic darkroom effect)
 
 ### Render
 - **Clouds**: scale, seed

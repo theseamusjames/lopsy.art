@@ -1414,6 +1414,21 @@ pub fn filter_threshold(engine: &mut Engine, layer_id: &str, level: u32) {
     );
 }
 
+#[wasm_bindgen(js_name = "filterSolarize")]
+pub fn filter_solarize(engine: &mut Engine, layer_id: &str, threshold: u32) {
+    let prog = engine.inner.shaders.solarize.program.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_threshold") {
+                gl.uniform1f(Some(&loc), threshold as f32 / 255.0);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterAddNoise")]
 pub fn filter_add_noise(
     engine: &mut Engine, layer_id: &str,

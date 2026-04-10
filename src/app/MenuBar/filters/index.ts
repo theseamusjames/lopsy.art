@@ -14,6 +14,7 @@ import { clouds } from './clouds';
 import { smoke } from './smoke';
 import { pixelate } from './pixelate';
 import { halftone } from './halftone';
+import { solarize } from './solarize';
 
 export type { FilterDefinition };
 
@@ -33,6 +34,7 @@ const allFilters: FilterDefinition[] = [
   smoke,
   pixelate,
   halftone,
+  solarize,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(
