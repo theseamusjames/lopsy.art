@@ -1,218 +1,128 @@
 import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import {
   createDocument,
   waitForStore,
   getEditorState,
   getPixelAt,
-  paintCircle,
+  paintRect,
   addLayer,
   moveLayer,
 } from './helpers';
 
-// ---------------------------------------------------------------------------
-// Selection helpers (test-specific, not shared)
-// ---------------------------------------------------------------------------
-
-async function magicWandSelect(page: import('@playwright/test').Page, canvasX: number, canvasY: number, tolerance = 0, contiguous = true) {
-  await page.evaluate(
-    ({ cx, cy, tol, contig }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: {
-            width: number;
-            height: number;
-            layers: Array<{ id: string; x: number; y: number }>;
-            activeLayerId: string;
-          };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
-          setSelection: (
-            bounds: { x: number; y: number; width: number; height: number },
-            mask: Uint8ClampedArray,
-            maskWidth: number,
-            maskHeight: number,
-          ) => void;
-        };
-      };
-      const state = store.getState();
-      const layer = state.document.layers.find((l) => l.id === state.document.activeLayerId)!;
-      const data = state.getOrCreateLayerPixelData(layer.id);
-      const docW = state.document.width;
-      const docH = state.document.height;
-
-      const lx = cx - layer.x;
-      const ly = cy - layer.y;
-
-      const w = data.width;
-      const h = data.height;
-
-      const getPixel = (px: number, py: number) => {
-        const idx = (py * w + px) * 4;
-        return {
-          r: data.data[idx] ?? 0,
-          g: data.data[idx + 1] ?? 0,
-          b: data.data[idx + 2] ?? 0,
-          a: data.data[idx + 3] ?? 0,
-        };
-      };
-
-      if (lx < 0 || lx >= w || ly < 0 || ly >= h) {
-        const mask = new Uint8ClampedArray(docW * docH);
-        for (let y = 0; y < docH; y++) {
-          for (let x = 0; x < docW; x++) {
-            const slx = x - layer.x;
-            const sly = y - layer.y;
-            if (slx < 0 || slx >= w || sly < 0 || sly >= h) {
-              mask[y * docW + x] = 255;
-            } else {
-              const p = getPixel(slx, sly);
-              if (p.a === 0) {
-                mask[y * docW + x] = 255;
-              }
-            }
-          }
-        }
-        let minX = docW, minY = docH, maxX = 0, maxY = 0;
-        for (let y = 0; y < docH; y++) {
-          for (let x = 0; x < docW; x++) {
-            if (mask[y * docW + x]! > 0) {
-              minX = Math.min(minX, x);
-              minY = Math.min(minY, y);
-              maxX = Math.max(maxX, x);
-              maxY = Math.max(maxY, y);
-            }
-          }
-        }
-        if (maxX >= minX && maxY >= minY) {
-          state.setSelection({ x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 }, mask, docW, docH);
-        }
-        return;
-      }
-
-      const targetColor = getPixel(lx, ly);
-      const visited = new Set<number>();
-      const selected: Array<{ x: number; y: number }> = [];
-
-      const colorMatch = (px: number, py: number) => {
-        const c = getPixel(px, py);
-        const diff = Math.abs(c.r - targetColor.r) + Math.abs(c.g - targetColor.g) +
-          Math.abs(c.b - targetColor.b) + Math.abs(c.a - targetColor.a);
-        return diff <= tol * 4;
-      };
-
-      if (contig) {
-        const stack = [{ x: lx, y: ly }];
-        while (stack.length > 0) {
-          const p = stack.pop()!;
-          const key = p.y * w + p.x;
-          if (visited.has(key)) continue;
-          if (p.x < 0 || p.x >= w || p.y < 0 || p.y >= h) continue;
-          if (!colorMatch(p.x, p.y)) continue;
-          visited.add(key);
-          selected.push(p);
-          stack.push({ x: p.x + 1, y: p.y });
-          stack.push({ x: p.x - 1, y: p.y });
-          stack.push({ x: p.x, y: p.y + 1 });
-          stack.push({ x: p.x, y: p.y - 1 });
-        }
-      } else {
-        for (let py = 0; py < h; py++) {
-          for (let px = 0; px < w; px++) {
-            if (colorMatch(px, py)) {
-              selected.push({ x: px, y: py });
-            }
-          }
-        }
-      }
-
-      const mask = new Uint8ClampedArray(docW * docH);
-      for (const pt of selected) {
-        const mx = pt.x + layer.x;
-        const my = pt.y + layer.y;
-        if (mx >= 0 && mx < docW && my >= 0 && my < docH) {
-          mask[my * docW + mx] = 255;
-        }
-      }
-
-      let minX = docW, minY = docH, maxX = 0, maxY = 0;
-      for (let y = 0; y < docH; y++) {
-        for (let x = 0; x < docW; x++) {
-          if (mask[y * docW + x]! > 0) {
-            minX = Math.min(minX, x);
-            minY = Math.min(minY, y);
-            maxX = Math.max(maxX, x);
-            maxY = Math.max(maxY, y);
-          }
-        }
-      }
-      if (maxX >= minX && maxY >= minY) {
-        state.setSelection({ x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 }, mask, docW, docH);
-      }
-    },
-    { cx: canvasX, cy: canvasY, tol: tolerance, contig: contiguous },
-  );
+interface SelectionInfo {
+  active: boolean;
+  bounds: { x: number; y: number; width: number; height: number } | null;
 }
 
-async function fillSelection(page: import('@playwright/test').Page, color: { r: number; g: number; b: number; a: number }) {
-  await page.evaluate(
-    (color) => {
-      const editorStore = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: {
-            activeLayerId: string;
-            width: number;
-            height: number;
-            layers: Array<{ id: string; x: number; y: number; width: number; height: number }>;
-          };
-          selection: {
-            active: boolean;
-            mask: Uint8ClampedArray | null;
-            maskWidth: number;
-            maskHeight: number;
-          };
-          layerPixelData: Map<string, ImageData>;
-          updateLayerPixelData: (id: string, data: ImageData) => void;
-          pushHistory: (label?: string) => void;
+async function getSelection(page: Page): Promise<SelectionInfo> {
+  return page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        selection: {
+          active: boolean;
+          bounds: { x: number; y: number; width: number; height: number } | null;
         };
       };
-      const state = editorStore.getState();
-      const activeId = state.document.activeLayerId;
-      if (!activeId) return;
-      const layer = state.document.layers.find((l) => l.id === activeId);
-      if (!layer) return;
-      state.pushHistory();
-      const existing = state.layerPixelData.get(activeId);
-      const w = existing?.width ?? layer.width ?? state.document.width;
-      const h = existing?.height ?? layer.height ?? state.document.height;
-      const imageData = existing ?? new ImageData(w, h);
-      const sel = state.selection;
+    };
+    const sel = store.getState().selection;
+    return { active: sel.active, bounds: sel.bounds };
+  });
+}
 
-      if (sel.active && sel.mask) {
-        for (let y = 0; y < sel.maskHeight; y++) {
-          for (let x = 0; x < sel.maskWidth; x++) {
-            if ((sel.mask[y * sel.maskWidth + x] ?? 0) > 0) {
-              const lx = x - layer.x;
-              const ly = y - layer.y;
-              if (lx < 0 || lx >= imageData.width || ly < 0 || ly >= imageData.height) continue;
-              const idx = (ly * imageData.width + lx) * 4;
-              imageData.data[idx] = color.r;
-              imageData.data[idx + 1] = color.g;
-              imageData.data[idx + 2] = color.b;
-              imageData.data[idx + 3] = Math.round(color.a);
-            }
-          }
-        }
-      } else {
-        for (let i = 0; i < imageData.data.length; i += 4) {
-          imageData.data[i] = color.r;
-          imageData.data[i + 1] = color.g;
-          imageData.data[i + 2] = color.b;
-          imageData.data[i + 3] = Math.round(color.a);
-        }
-      }
-      state.updateLayerPixelData(activeId, imageData);
-    },
-    color,
-  );
+// ---------------------------------------------------------------------------
+// Helpers — drive the real wand and fill tools via mouse events on the
+// canvas. These exercise the GPU flood-fill path in misc-handlers.ts and
+// selection-handlers.ts (the production code), not test-local copies.
+// ---------------------------------------------------------------------------
+
+async function setActiveTool(page: Page, tool: string): Promise<void> {
+  await page.evaluate((t) => {
+    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+      getState: () => { setActiveTool: (t: string) => void };
+    };
+    ui.getState().setActiveTool(t);
+  }, tool);
+  await page.waitForTimeout(50);
+}
+
+async function setForegroundColor(page: Page, color: { r: number; g: number; b: number; a: number }): Promise<void> {
+  await page.evaluate((c) => {
+    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+      getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+    };
+    ui.getState().setForegroundColor(c);
+  }, color);
+}
+
+async function docToScreen(page: Page, docX: number, docY: number) {
+  return page.evaluate(({ x, y }) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { width: number; height: number };
+        viewport: { zoom: number; panX: number; panY: number };
+      };
+    };
+    const state = store.getState();
+    const container = document.querySelector('[data-testid="canvas-container"]') as HTMLElement;
+    const rect = container.getBoundingClientRect();
+    const sx = (x - state.document.width / 2) * state.viewport.zoom + state.viewport.panX + rect.width / 2;
+    const sy = (y - state.document.height / 2) * state.viewport.zoom + state.viewport.panY + rect.height / 2;
+    return { x: rect.left + sx, y: rect.top + sy };
+  }, { x: docX, y: docY });
+}
+
+/**
+ * Click on the canvas at a doc coordinate. Used to trigger single-click
+ * tools (wand, fill) via real mouse events.
+ */
+async function clickAtDoc(page: Page, docX: number, docY: number): Promise<void> {
+  const { x, y } = await docToScreen(page, docX, docY);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+}
+
+// Read a single composited screen pixel at a doc coordinate.
+async function readCompositedAtDoc(
+  page: Page,
+  docX: number,
+  docY: number,
+): Promise<{ r: number; g: number; b: number; a: number }> {
+  return page.evaluate(async ({ x, y }) => {
+    const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+      () => Promise<{ width: number; height: number; pixels: number[] } | null>;
+    const result = await readFn();
+    if (!result) return { r: 0, g: 0, b: 0, a: 0 };
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { width: number; height: number };
+        viewport: { zoom: number; panX: number; panY: number };
+      };
+    };
+    const state = store.getState();
+    // The composited buffer is in screen pixels. Project doc → screen.
+    const sx = Math.round(
+      (x - state.document.width / 2) * state.viewport.zoom + state.viewport.panX + result.width / 2,
+    );
+    const sy = Math.round(
+      (y - state.document.height / 2) * state.viewport.zoom + state.viewport.panY + result.height / 2,
+    );
+    if (sx < 0 || sx >= result.width || sy < 0 || sy >= result.height) {
+      return { r: 0, g: 0, b: 0, a: 0 };
+    }
+    // The composited buffer is read with gl.readPixels, which returns
+    // bottom-up image data. Flip y to read the right row.
+    const flippedY = result.height - 1 - sy;
+    const idx = (flippedY * result.width + sx) * 4;
+    return {
+      r: result.pixels[idx] ?? 0,
+      g: result.pixels[idx + 1] ?? 0,
+      b: result.pixels[idx + 2] ?? 0,
+      a: result.pixels[idx + 3] ?? 0,
+    };
+  }, { x: docX, y: docY });
 }
 
 // ---------------------------------------------------------------------------
@@ -228,170 +138,162 @@ test.beforeEach(async ({ page }) => {
 // Magic Wand + Fill on Offset Layer
 // ===========================================================================
 
-test.describe('Selection Coordinates with Layer Offset', () => {
-  test('magic wand outside circle on offset layer fills entire empty area', async ({ page }) => {
+test.describe('Selection coordinates with layer offset', () => {
+  test('wand on a moved layer selects the colour at the click point in document space', async ({ page }) => {
+    // 200×200 transparent doc with a single Background layer.
     await createDocument(page, 200, 200, true);
+
+    // Paint a 60×60 red square at layer-local (60, 60)..(120, 120).
+    // Auto-crop runs after paint, leaving the layer cropped to those bounds.
+    await paintRect(page, 60, 60, 60, 60, { r: 255, g: 0, b: 0, a: 255 });
+
+    // Now move the cropped layer down by 20 doc px so the red square sits
+    // at doc (60, 80)..(120, 140) instead of (60, 60)..(120, 120).
+    const s0 = await getEditorState(page);
+    const layerId = s0.document.layers[0]!.id;
+    await moveLayer(page, layerId, 80, 80); // top-left of cropped layer in doc coords
+
+    // Switch to the wand tool and click on the red square in document
+    // space — at doc (90, 110), the centre of the square's new position.
+    await setActiveTool(page, 'wand');
+    await clickAtDoc(page, 90, 110);
+
+    // The wand must have produced a selection that covers ~60×60 = 3600
+    // pixels — the size of the red square.
+    const sel = await getSelection(page);
+    expect(sel.active).toBe(true);
+    expect(sel.bounds).not.toBeNull();
+    const bounds = sel.bounds!;
+    // The selection bounds in doc space should hug the moved square.
+    expect(bounds.x).toBeGreaterThanOrEqual(78);
+    expect(bounds.x).toBeLessThanOrEqual(82);
+    expect(bounds.y).toBeGreaterThanOrEqual(78);
+    expect(bounds.y).toBeLessThanOrEqual(82);
+    expect(bounds.width).toBeGreaterThanOrEqual(58);
+    expect(bounds.width).toBeLessThanOrEqual(62);
+    expect(bounds.height).toBeGreaterThanOrEqual(58);
+    expect(bounds.height).toBeLessThanOrEqual(62);
+  });
+
+  test('fill tool fills only inside the active selection bounds', async ({ page }) => {
+    // 100×100 transparent doc.
+    await createDocument(page, 100, 100, true);
+
+    // Paint a 40×40 red square at doc (30, 30).
+    await paintRect(page, 30, 30, 40, 40, { r: 255, g: 0, b: 0, a: 255 });
+
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
 
-    await paintCircle(page, 100, 100, 40, { r: 255, g: 0, b: 0, a: 255 }, bgId);
-    await moveLayer(page, bgId, 0, -50);
-    await magicWandSelect(page, 10, 180);
-
+    // Add a new layer ABOVE so the fill goes onto an empty layer.
     await addLayer(page);
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(100);
     const s1 = await getEditorState(page);
     const fillLayerId = s1.document.activeLayerId;
+    expect(fillLayerId).not.toBe(bgId);
 
-    // Snapshot composited before fill
-    const beforeFill = await page.evaluate(() => {
-      return (window as unknown as Record<string, unknown>).__readCompositedPixels!() as
-        Promise<{ width: number; height: number; pixels: number[] } | null>;
+    // Use the wand to select all the empty area on the background layer.
+    // First switch back to the bg layer, then click outside the red square
+    // to wand-select the transparent region.
+    await page.evaluate((id) => {
+      const ed = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { setActiveLayer: (id: string) => void };
+      };
+      ed.getState().setActiveLayer(id);
+    }, bgId);
+    await page.waitForTimeout(50);
+
+    await setActiveTool(page, 'wand');
+    await clickAtDoc(page, 5, 5);
+    await page.waitForTimeout(150);
+
+    const sWand = await getSelection(page);
+    expect(sWand.active).toBe(true);
+
+    // Now switch back to the empty fill layer and apply a green fill via
+    // the bucket tool. The fill must respect the active selection mask
+    // (selection-handlers.ts intersects fillMask with selection mask).
+    await page.evaluate((id) => {
+      const ed = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { setActiveLayer: (id: string) => void };
+      };
+      ed.getState().setActiveLayer(id);
+    }, fillLayerId);
+    await page.waitForTimeout(200); // let engine sync the layer
+
+    await setForegroundColor(page, { r: 0, g: 255, b: 0, a: 1 });
+    await setActiveTool(page, 'fill');
+    // The wand also wires up a transform overlay (handles around the
+    // selection bounds). The fill click must NOT land on a handle or it
+    // will be intercepted by the transform handler. Clear the transform
+    // so only the selection mask remains.
+    await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { setTransform: (t: null) => void };
+      };
+      ui.getState().setTransform(null);
     });
-
-    await fillSelection(page, { r: 0, g: 0, b: 255, a: 255 });
+    await page.waitForTimeout(50);
+    // Click outside the red square (in the area selected by the wand).
+    await clickAtDoc(page, 5, 5);
     await page.waitForTimeout(300);
 
-    // Snapshot composited after fill — should have changed
-    const afterFill = await page.evaluate(() => {
-      return (window as unknown as Record<string, unknown>).__readCompositedPixels!() as
-        Promise<{ width: number; height: number; pixels: number[] } | null>;
-    });
+    // Pixels OUTSIDE the red square (in the selection) must now be green
+    // on the fill layer. Read via getPixelAt against the fill layer.
+    const outside = await getPixelAt(page, 5, 5, fillLayerId);
+    expect(outside.g).toBe(255);
+    expect(outside.a).toBe(255);
 
-    expect(beforeFill).not.toBeNull();
-    expect(afterFill).not.toBeNull();
-    let diffCount = 0;
-    if (beforeFill && afterFill) {
-      for (let i = 0; i < beforeFill.pixels.length; i += 4) {
-        if (
-          beforeFill.pixels[i] !== afterFill.pixels[i] ||
-          beforeFill.pixels[i + 1] !== afterFill.pixels[i + 1] ||
-          beforeFill.pixels[i + 2] !== afterFill.pixels[i + 2]
-        ) diffCount++;
-      }
-    }
-    // The fill should have produced visible blue pixels
-    expect(diffCount).toBeGreaterThan(0);
+    const oppositeCorner = await getPixelAt(page, 95, 95, fillLayerId);
+    expect(oppositeCorner.g).toBe(255);
+    expect(oppositeCorner.a).toBe(255);
+
+    // Pixels INSIDE the red square's doc-space bounds must NOT be green
+    // on the fill layer (the selection excluded them).
+    const inside = await getPixelAt(page, 50, 50, fillLayerId);
+    expect(inside.a).toBe(0);
   });
 
-  test('fill selection respects layer offset correctly', async ({ page }) => {
+  test('full-canvas selection fills every pixel of a new layer', async ({ page }) => {
+    // 100×100 doc with the background painted red, then moved off-canvas
+    // to ensure layer offsets do not affect a doc-space full selection.
     await createDocument(page, 100, 100, true);
+    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0, a: 255 });
+
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
-
-    // Paint a small square in the center
-    await page.evaluate(
-      ({ id }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            getOrCreateLayerPixelData: (id: string) => ImageData;
-            updateLayerPixelData: (id: string, data: ImageData) => void;
-            pushHistory: (label?: string) => void;
-          };
-        };
-        const state = store.getState();
-        state.pushHistory('Paint');
-        const data = state.getOrCreateLayerPixelData(id);
-        for (let y = 30; y < 70; y++) {
-          for (let x = 30; x < 70; x++) {
-            const idx = (y * data.width + x) * 4;
-            data.data[idx] = 255;
-            data.data[idx + 1] = 0;
-            data.data[idx + 2] = 0;
-            data.data[idx + 3] = 255;
-          }
-        }
-        state.updateLayerPixelData(id, data);
-      },
-      { id: bgId },
-    );
-
-    await moveLayer(page, bgId, 20, 20);
-    await magicWandSelect(page, 5, 5);
-
-    await addLayer(page);
-    const s1 = await getEditorState(page);
-    const fillLayerId = s1.document.activeLayerId;
-
-    await fillSelection(page, { r: 0, g: 255, b: 0, a: 255 });
-
-    const br = await getPixelAt(page, 99, 99, fillLayerId);
-    expect(br.g).toBe(255);
-    expect(br.a).toBe(255);
-
-    const tl = await getPixelAt(page, 0, 0, fillLayerId);
-    expect(tl.g).toBe(255);
-    expect(tl.a).toBe(255);
-
-    const center = await getPixelAt(page, 60, 60, fillLayerId);
-    expect(center.a).toBe(0);
-  });
-
-  test('selection on layer moved far off-canvas edge', async ({ page }) => {
-    await createDocument(page, 100, 100, true);
-    const s0 = await getEditorState(page);
-    const bgId = s0.document.layers[0]!.id;
-
-    // Paint entire layer red
-    await page.evaluate(
-      ({ id }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            getOrCreateLayerPixelData: (id: string) => ImageData;
-            updateLayerPixelData: (id: string, data: ImageData) => void;
-            pushHistory: (label?: string) => void;
-          };
-        };
-        const state = store.getState();
-        state.pushHistory('Paint');
-        const data = state.getOrCreateLayerPixelData(id);
-        for (let i = 0; i < data.data.length; i += 4) {
-          data.data[i] = 255;
-          data.data[i + 1] = 0;
-          data.data[i + 2] = 0;
-          data.data[i + 3] = 255;
-        }
-        state.updateLayerPixelData(id, data);
-      },
-      { id: bgId },
-    );
-
     await moveLayer(page, bgId, -75, -75);
 
-    // Create a full-canvas selection manually
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { width: number; height: number };
-          setSelection: (
-            bounds: { x: number; y: number; width: number; height: number },
-            mask: Uint8ClampedArray,
-            maskWidth: number,
-            maskHeight: number,
-          ) => void;
-        };
-      };
-      const state = store.getState();
-      const w = state.document.width;
-      const h = state.document.height;
-      const mask = new Uint8ClampedArray(w * h);
-      mask.fill(255);
-      state.setSelection({ x: 0, y: 0, width: w, height: h }, mask, w, h);
-    });
+    // Use a marquee-rect drag covering the whole document to create a
+    // doc-space full selection via the real selection tool.
+    await setActiveTool(page, 'marquee-rect');
+    const start = await docToScreen(page, 0, 0);
+    const end = await docToScreen(page, 100, 100);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(end.x, end.y, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
 
+    const sSel = await getSelection(page);
+    expect(sSel.active).toBe(true);
+
+    // Add a new layer above and use the bucket tool with green to fill it.
     await addLayer(page);
+    await page.waitForTimeout(50);
     const s1 = await getEditorState(page);
     const fillLayerId = s1.document.activeLayerId;
 
-    await fillSelection(page, { r: 0, g: 0, b: 255, a: 255 });
+    await setForegroundColor(page, { r: 0, g: 0, b: 255, a: 1 });
+    await setActiveTool(page, 'fill');
+    await clickAtDoc(page, 50, 50);
+    await page.waitForTimeout(200);
 
-    const topLeft = await getPixelAt(page, 0, 0, fillLayerId);
-    expect(topLeft.b).toBe(255);
-
-    const bottomRight = await getPixelAt(page, 99, 99, fillLayerId);
-    expect(bottomRight.b).toBe(255);
-
-    const center = await getPixelAt(page, 50, 50, fillLayerId);
-    expect(center.b).toBe(255);
+    // Every corner and the centre of the new layer must be blue.
+    for (const [x, y] of [[0, 0], [99, 0], [0, 99], [99, 99], [50, 50]]) {
+      const px = await getPixelAt(page, x!, y!, fillLayerId);
+      expect(px.b, `pixel(${x},${y}).b`).toBe(255);
+      expect(px.a, `pixel(${x},${y}).a`).toBe(255);
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForStore, createDocument, getPixelAt } from './helpers';
+import { waitForStore, createDocument, getPixelAt, getEditorState } from './helpers';
 
 test.describe('Brush symmetry renders immediately (#119)', () => {
   test.beforeEach(async ({ page }) => {
@@ -189,7 +189,16 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
 
     await page.screenshot({ path: 'e2e/screenshots/brush-symmetry-effects.png' });
 
-    // The effects should now be visible (the pending stroke was committed
-    // before effects were applied, so effects operate on the actual layer content)
+    // Verify the drop shadow effect is enabled on the active layer
+    const editorState = await getEditorState(page);
+    const activeLayer = editorState.document.layers.find(
+      (l) => l.id === editorState.document.activeLayerId,
+    );
+    expect(activeLayer).toBeTruthy();
+    expect(activeLayer!.effects.dropShadow.enabled).toBe(true);
+
+    // Verify the layer has pixel content from the brush stroke
+    const pixel = await getPixelAt(page, 50, 50);
+    expect(pixel.a).toBeGreaterThan(0);
   });
 });

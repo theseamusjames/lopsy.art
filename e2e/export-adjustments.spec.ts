@@ -1,5 +1,92 @@
 import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { waitForStore, createDocument, paintRect } from './helpers';
+
+// PNG magic bytes: 137 80 78 71 13 10 26 10
+const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+interface PixelSnap {
+  width: number;
+  height: number;
+  pixels: number[];
+}
+
+async function readComposited(page: Page): Promise<PixelSnap | null> {
+  return page.evaluate(() =>
+    (window as unknown as Record<string, unknown>).__readCompositedPixels!() as Promise<PixelSnap | null>,
+  );
+}
+
+/**
+ * Read a single composited screen pixel at the given doc coordinate.
+ * The composited buffer is bottom-up (from gl.readPixels), so we flip y.
+ */
+async function readCompositedAtDoc(
+  page: Page,
+  docX: number,
+  docY: number,
+): Promise<{ r: number; g: number; b: number; a: number }> {
+  return page.evaluate(async ({ x, y }) => {
+    const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+      () => Promise<{ width: number; height: number; pixels: number[] } | null>;
+    const result = await readFn();
+    if (!result) return { r: 0, g: 0, b: 0, a: 0 };
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { width: number; height: number };
+        viewport: { zoom: number; panX: number; panY: number };
+      };
+    };
+    const state = store.getState();
+    const sx = Math.round(
+      (x - state.document.width / 2) * state.viewport.zoom + state.viewport.panX + result.width / 2,
+    );
+    const sy = Math.round(
+      (y - state.document.height / 2) * state.viewport.zoom + state.viewport.panY + result.height / 2,
+    );
+    if (sx < 0 || sx >= result.width || sy < 0 || sy >= result.height) {
+      return { r: 0, g: 0, b: 0, a: 0 };
+    }
+    const flippedY = result.height - 1 - sy;
+    const idx = (flippedY * result.width + sx) * 4;
+    return {
+      r: result.pixels[idx] ?? 0,
+      g: result.pixels[idx + 1] ?? 0,
+      b: result.pixels[idx + 2] ?? 0,
+      a: result.pixels[idx + 3] ?? 0,
+    };
+  }, { x: docX, y: docY });
+}
+
+async function setGroupAdjustments(
+  page: Page,
+  saturation: number,
+  vibrance: number,
+): Promise<void> {
+  await page.evaluate(({ s, v }) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { rootGroupId: string };
+        setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
+        setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
+      };
+    };
+    const state = store.getState();
+    const groupId = state.document.rootGroupId;
+    state.setGroupAdjustmentsEnabled(groupId, true);
+    state.setGroupAdjustments(groupId, {
+      exposure: 0,
+      contrast: 0,
+      highlights: 0,
+      shadows: 0,
+      whites: 0,
+      blacks: 0,
+      vignette: 0,
+      saturation: s,
+      vibrance: v,
+    });
+  }, { s: saturation, v: vibrance });
+}
 
 test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
   test.beforeEach(async ({ page }) => {
@@ -9,84 +96,131 @@ test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
     await page.waitForTimeout(300);
   });
 
-  test('exported image includes saturation and vibrance adjustments', async ({ page }) => {
-    // Paint a mid-saturation colored rectangle
-    await paintRect(page, 20, 20, 60, 60, { r: 180, g: 100, b: 100, a: 255 });
+  test('group saturation desaturates the live composite via the GPU shader', async ({ page }) => {
+    // Paint a partially-saturated red (255, 80, 80). With the maximum
+    // negative saturation the GPU shader (gpu/shaders/filters/adjustments.glsl)
+    // mixes the colour with its luma value, collapsing R/G/B toward gray.
+    //
+    // The AdjustmentsPanel slider produces values in -100..100 (see
+    // src/panels/AdjustmentsPanel/AdjustmentsPanel.tsx). The GPU compositor
+    // divides by 100 internally, so -100 → full desaturation in the shader.
+    await paintRect(page, 20, 20, 60, 60, { r: 255, g: 80, b: 80, a: 255 });
     await page.waitForTimeout(200);
 
-    // Read original pixel color before adjustments
-    const beforePixel = await page.evaluate(async () => {
-      const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
-        (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { activeLayerId: string } };
-      };
-      const result = await readFn(store.getState().document.activeLayerId);
-      if (!result) return { r: 0, g: 0, b: 0 };
-      const idx = (50 * result.width + 50) * 4;
-      return { r: result.pixels[idx]!, g: result.pixels[idx + 1]!, b: result.pixels[idx + 2]! };
-    });
+    const before = await readCompositedAtDoc(page, 50, 50);
+    expect(before.r).toBeGreaterThan(200);
+    expect(before.g).toBeLessThan(120);
+    expect(before.b).toBeLessThan(120);
 
-    // Apply strong saturation and vibrance adjustments
-    await page.evaluate(() => {
+    // Use the slider's full range — -100 → -1 in the shader after the
+    // engine's /100 normalisation, which produces the gray-equivalent.
+    await setGroupAdjustments(page, -100, 0);
+    await page.waitForTimeout(200);
+
+    const after = await readCompositedAtDoc(page, 50, 50);
+    // The channel spread must shrink dramatically — gray equivalent is
+    // luma ≈ 110, so R drops from 255 → ~110, G/B rise from 80 → ~110.
+    const beforeSpread = Math.max(before.r, before.g, before.b) - Math.min(before.r, before.g, before.b);
+    const afterSpread = Math.max(after.r, after.g, after.b) - Math.min(after.r, after.g, after.b);
+    expect(afterSpread).toBeLessThan(beforeSpread / 4);
+    // R must drop substantially.
+    expect(after.r).toBeLessThan(before.r - 30);
+    // G must rise (it was the least-saturated channel; pulls toward luma).
+    expect(after.g).toBeGreaterThan(before.g + 20);
+
+    // The adjustments must persist on the group layer in the store.
+    const stored = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          imageAdjustments: Record<string, number>;
-          setImageAdjustments: (adj: Record<string, number>) => void;
-        };
+        getState: () => { document: { rootGroupId: string; layers: Array<Record<string, unknown>> } };
       };
       const state = store.getState();
-      state.setImageAdjustments({
-        ...state.imageAdjustments,
-        saturation: 0.5,
-        vibrance: 0.5,
-      });
+      const group = state.document.layers.find((l) => l.id === state.document.rootGroupId);
+      return group?.adjustments as Record<string, number> | undefined;
     });
-    await page.waitForTimeout(300);
+    expect(stored?.saturation).toBe(-100);
+  });
 
-    await page.screenshot({ path: 'e2e/screenshots/export-adjustments-canvas.png' });
-
-    // Trigger PNG export and capture the download
-    const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'File' }).click();
+  test('PNG export reflects active group adjustments', async ({ page }) => {
+    // Paint a partially-saturated red so adjustments have a visible effect.
+    await paintRect(page, 20, 20, 60, 60, { r: 255, g: 80, b: 80, a: 255 });
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Export PNG' }).click();
-    const download = await downloadPromise;
 
-    // Read exported PNG pixels
-    const stream = await download.createReadStream();
-    const chunks: Buffer[] = [];
-    if (stream) {
-      for await (const chunk of stream) {
-        chunks.push(chunk as Buffer);
-      }
-    }
-    const pngBuffer = Buffer.concat(chunks);
-    expect(pngBuffer.length).toBeGreaterThan(0);
+    // First export — no adjustments — to capture a baseline pixel value.
+    const baselinePixel = await exportAndDecodePixel(page, 50, 50);
+    expect(baselinePixel).not.toBeNull();
+    // The baseline must contain the painted red.
+    expect(baselinePixel!.r).toBeGreaterThan(200);
+    expect(baselinePixel!.g).toBeLessThan(120);
 
-    await page.screenshot({ path: 'e2e/screenshots/export-adjustments-result.png' });
+    // Apply a meaningful negative-saturation adjustment via the slider's
+    // own units (-100..100). The aggregateGroupAdjustments path picks this
+    // up from the rootGroup and the export pipeline runs the JS LUT
+    // (applyAdjustmentsToImageData) over it. The exact post-export pixel
+    // depends on the JS desaturation math; we only require that the export
+    // CHANGED the painted region — not what it changed to.
+    await setGroupAdjustments(page, -100, 0);
+    await page.waitForTimeout(200);
 
-    // Verify the adjustments module applies saturation/vibrance by checking
-    // that applyAdjustmentsToImageData modifies pixel data when saturation is set
-    const modified = await page.evaluate(() => {
-      const mod = (window as unknown as Record<string, { applyAdjustmentsToImageData?: unknown }>)
-        .__imageAdjustmentsModule;
-      // Fallback: verify the adjustment state is set
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { imageAdjustments: Record<string, number> };
-      };
-      const adj = store.getState().imageAdjustments;
-      return {
-        saturation: adj.saturation,
-        vibrance: adj.vibrance,
-      };
-    });
+    const adjustedPixel = await exportAndDecodePixel(page, 50, 50);
+    expect(adjustedPixel).not.toBeNull();
 
-    expect(modified.saturation).toBe(0.5);
-    expect(modified.vibrance).toBe(0.5);
-
-    // The key assertion: with saturation boosted, the red channel should
-    // increase and the green channel should decrease for our reddish color
-    expect(beforePixel.r).toBeGreaterThan(beforePixel.g);
+    // The adjusted export must differ from the baseline in at least one
+    // RGB channel by a meaningful amount. Pure-image-equal would mean the
+    // export pipeline ignored the adjustment.
+    const dr = Math.abs(baselinePixel!.r! - adjustedPixel!.r!);
+    const dg = Math.abs(baselinePixel!.g! - adjustedPixel!.g!);
+    const db = Math.abs(baselinePixel!.b! - adjustedPixel!.b!);
+    expect(dr + dg + db).toBeGreaterThan(50);
   });
 });
+
+/**
+ * Trigger PNG export from the File menu, decode the resulting PNG via the
+ * browser, and return the RGBA at the requested pixel. Returns null if
+ * the export or decode fails.
+ */
+async function exportAndDecodePixel(
+  page: Page,
+  x: number,
+  y: number,
+): Promise<{ r: number; g: number; b: number; a: number } | null> {
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'File' }).click();
+  await page.waitForTimeout(150);
+  await page.getByRole('button', { name: 'Export PNG' }).click();
+  const download = await downloadPromise;
+
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  if (stream) {
+    for await (const chunk of stream) chunks.push(chunk as Buffer);
+  }
+  const pngBuffer = Buffer.concat(chunks);
+  if (pngBuffer.length === 0) return null;
+  for (let i = 0; i < PNG_MAGIC.length; i++) {
+    if (pngBuffer[i] !== PNG_MAGIC[i]) return null;
+  }
+
+  return page.evaluate(async ({ bytes, px, py }) => {
+    const blob = new Blob([new Uint8Array(bytes)], { type: 'image/png' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = (e) => reject(e);
+        img.src = url;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(px, py, 1, 1).data;
+      return { r: data[0]!, g: data[1]!, b: data[2]!, a: data[3]! };
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }, { bytes: Array.from(pngBuffer), px: x, py: y });
+}
