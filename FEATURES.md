@@ -213,6 +213,7 @@ Applied globally or per-group. All default to 0.
 - **Find Edges**: Sobel edge detection, no parameters
 - **Cel Shading**: levels, edge strength
 - **Solarize**: threshold 0 - 255 (inverts tones above the threshold, classic darkroom effect)
+- **Kaleidoscope**: segments 2 - 32, rotation 0 - 360 degrees (mirrors the image into a radial wedge pattern around the center)
 
 ### Render
 - **Clouds**: scale, seed

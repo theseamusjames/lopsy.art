@@ -1429,6 +1429,24 @@ pub fn filter_solarize(engine: &mut Engine, layer_id: &str, threshold: u32) {
     );
 }
 
+#[wasm_bindgen(js_name = "filterKaleidoscope")]
+pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, rotation_degrees: f32) {
+    let prog = engine.inner.shaders.kaleidoscope.program.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_segments") {
+                gl.uniform1f(Some(&loc), segments.max(2) as f32);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_rotation") {
+                gl.uniform1f(Some(&loc), rotation_degrees.to_radians());
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterAddNoise")]
 pub fn filter_add_noise(
     engine: &mut Engine, layer_id: &str,

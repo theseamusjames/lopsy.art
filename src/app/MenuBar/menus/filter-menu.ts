@@ -16,6 +16,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Cel Shading...', action: () => showFilterDialog('cel-shading') },
       { label: 'Pixelate...', action: () => showFilterDialog('pixelate') },
       { label: 'Halftone...', action: () => showFilterDialog('halftone') },
+      { label: 'Kaleidoscope...', action: () => showFilterDialog('kaleidoscope') },
       { separator: true, label: '' },
       { label: 'Add Noise...', action: () => showFilterDialog('add-noise') },
       { label: 'Fill with Noise...', action: () => showFilterDialog('fill-noise') },

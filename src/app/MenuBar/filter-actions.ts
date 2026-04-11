@@ -32,7 +32,8 @@ export type FilterDialogId =
   | 'smoke'
   | 'pixelate'
   | 'halftone'
-  | 'solarize';
+  | 'solarize'
+  | 'kaleidoscope';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;
