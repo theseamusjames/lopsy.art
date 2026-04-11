@@ -1,116 +1,181 @@
 import { test, expect } from '@playwright/test';
-import { waitForStore, createDocument, paintRect, getPixelAt } from './helpers';
+import type { Page } from '@playwright/test';
+import { waitForStore, createDocument, getPixelAt } from './helpers';
 
-const RED = { r: 255, g: 0, b: 0, a: 255 };
-const BLUE = { r: 0, g: 0, b: 255, a: 255 };
+/**
+ * Paint three side-by-side coloured blocks into the active layer in a
+ * single store update so the per-call auto-crop doesn't shrink the layer
+ * after the first rect.
+ */
+async function paintThreeBlocks(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { activeLayerId: string; width: number; height: number };
+        layerPixelData: Map<string, ImageData>;
+        updateLayerPixelData: (id: string, data: ImageData) => void;
+        pushHistory: (label?: string) => void;
+      };
+    };
+    const state = store.getState();
+    const id = state.document.activeLayerId;
+    state.pushHistory('Paint blocks');
+    const w = state.document.width;
+    const h = state.document.height;
+    const data = new ImageData(w, h);
+    const blocks: Array<[number, number, number, number, [number, number, number]]> = [
+      [0, 0, 10, 10, [255, 0, 0]],
+      [10, 0, 10, 10, [0, 255, 0]],
+      [20, 0, 10, 10, [0, 0, 255]],
+    ];
+    for (const [bx, by, bw, bh, [r, g, b]] of blocks) {
+      for (let y = by; y < by + bh; y++) {
+        for (let x = bx; x < bx + bw; x++) {
+          const i = (y * w + x) * 4;
+          data.data[i] = r;
+          data.data[i + 1] = g;
+          data.data[i + 2] = b;
+          data.data[i + 3] = 255;
+        }
+      }
+    }
+    state.updateLayerPixelData(id, data);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Pixelate filter
+//
+// The shader (engine-rs/.../pixelate.glsl) samples a single pixel at the
+// CENTER of each blockSize×blockSize block and writes it to every pixel in
+// the block. So the meaningful test is:
+//
+//   1. Paint content where each blockSize-aligned region has a known color
+//      at its center.
+//   2. Apply pixelate with that block size.
+//   3. Verify each block is uniformly the color that was at its center.
+// ---------------------------------------------------------------------------
 
 test.describe('Pixelate / Mosaic Filter', () => {
-
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
   });
 
-  test('applies pixelate filter via menu and renders mosaic blocks', async ({ page }) => {
-    await createDocument(page, 100, 100, true);
+  test('applies pixelate via menu and produces uniform blocks', async ({ page }) => {
+    // 30×10 transparent doc with three side-by-side 10×10 blocks of solid
+    // colour at known positions:
+    //   x = 0..9   → red
+    //   x = 10..19 → green
+    //   x = 20..29 → blue
+    // The centre of each block is at x = 5 / 15 / 25 — the colour that
+    // pixelate should sample with blockSize = 10.
+    await createDocument(page, 30, 10, true);
+    await paintThreeBlocks(page);
 
-    // Paint alternating 1px-wide vertical stripes: red at even x, blue at odd x.
-    // Use a single paintRect per stripe — 100 stripes total.
-    for (let x = 0; x < 100; x++) {
-      const color = x % 2 === 0 ? RED : BLUE;
-      await paintRect(page, x, 0, 1, 100, color);
-    }
+    // Sanity: the painted layer is exactly the three blocks.
+    expect((await getPixelAt(page, 0, 5)).r).toBe(255);
+    expect((await getPixelAt(page, 9, 5)).r).toBe(255);
+    expect((await getPixelAt(page, 10, 5)).g).toBe(255);
+    expect((await getPixelAt(page, 19, 5)).g).toBe(255);
+    expect((await getPixelAt(page, 20, 5)).b).toBe(255);
+    expect((await getPixelAt(page, 29, 5)).b).toBe(255);
 
-    // Verify initial stripe pattern: adjacent columns should differ.
-    const beforeEven = await getPixelAt(page, 0, 50);
-    const beforeOdd = await getPixelAt(page, 1, 50);
-    expect(beforeEven.r).toBe(255);
-    expect(beforeEven.b).toBe(0);
-    expect(beforeOdd.r).toBe(0);
-    expect(beforeOdd.b).toBe(255);
-
-    // Open Filter menu and click Pixelate
+    // Open Filter → Pixelate via the menu UI.
     await page.click('text=Filter');
     await page.click('text=Pixelate...');
 
-    // The filter dialog should be visible
-    const dialogHeading = page.locator('h2:has-text("Pixelate")');
-    await expect(dialogHeading).toBeVisible({ timeout: 3000 });
+    const dialog = page.locator('[class*="overlay"][class*="FilterDialog"], [class*="overlay_"]').first();
+    // The dialog hosts a heading <h2>Pixelate</h2>; wait for it.
+    await expect(page.locator('h2:has-text("Pixelate")')).toBeVisible({ timeout: 3000 });
 
-    // Set block size to 10 via the range slider
-    const slider = page.locator('input[type="range"]');
+    // Set blockSize to 10 by writing into the slider scoped to the dialog
+    // body. The dialog contains exactly one range slider (the blockSize
+    // param). Use the .slider class from the Slider component to scope.
+    const slider = page.locator('h2:has-text("Pixelate")')
+      .locator('xpath=ancestor::*[contains(@class,"modal")][1]')
+      .locator('input[type="range"]');
+    await expect(slider).toHaveCount(1);
     await slider.fill('10');
 
-    // Click Apply button
+    // Click Apply.
     await page.locator('button:has-text("Apply")').click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('h2:has-text("Pixelate")')).toHaveCount(0, { timeout: 3000 });
+    await page.waitForTimeout(200);
 
-    // After pixelation with block size 10, every pixel within a single 10px
-    // block should have the same color. Sample two pixels within the first
-    // block (x=0..9) that were different colors before.
-    const afterA = await getPixelAt(page, 0, 50);
-    const afterB = await getPixelAt(page, 1, 50);
-    const afterC = await getPixelAt(page, 5, 50);
-    const afterD = await getPixelAt(page, 9, 50);
-
-    // All four pixels within the same 10px block must now be identical.
-    expect(afterA.r).toBe(afterB.r);
-    expect(afterA.g).toBe(afterB.g);
-    expect(afterA.b).toBe(afterB.b);
-
-    expect(afterA.r).toBe(afterC.r);
-    expect(afterA.g).toBe(afterC.g);
-    expect(afterA.b).toBe(afterC.b);
-
-    expect(afterA.r).toBe(afterD.r);
-    expect(afterA.g).toBe(afterD.g);
-    expect(afterA.b).toBe(afterD.b);
-
-    // The uniform color should be a blend of red and blue (roughly half each).
-    // Allow tolerance for rounding. Equal red/blue stripes averaged: r≈127, b≈127.
-    expect(afterA.r).toBeGreaterThan(90);
-    expect(afterA.r).toBeLessThan(170);
-    expect(afterA.b).toBeGreaterThan(90);
-    expect(afterA.b).toBeLessThan(170);
-    // Green should remain near zero.
-    expect(afterA.g).toBeLessThan(30);
-  });
-
-  test('pixelate filter can be undone', async ({ page }) => {
-    await createDocument(page, 100, 100, true);
-
-    // Paint alternating 1px stripes so we have varied content.
-    for (let x = 0; x < 100; x++) {
-      const color = x % 2 === 0 ? RED : BLUE;
-      await paintRect(page, x, 0, 1, 100, color);
+    // After pixelate the entire 0..9 block should be red, 10..19 green,
+    // 20..29 blue. Sample multiple positions inside each block.
+    for (const x of [0, 3, 5, 9]) {
+      const p = await getPixelAt(page, x, 5);
+      expect(p.r, `block 1 px(${x},5).r`).toBe(255);
+      expect(p.g, `block 1 px(${x},5).g`).toBe(0);
+      expect(p.b, `block 1 px(${x},5).b`).toBe(0);
+    }
+    for (const x of [10, 14, 15, 19]) {
+      const p = await getPixelAt(page, x, 5);
+      expect(p.r, `block 2 px(${x},5).r`).toBe(0);
+      expect(p.g, `block 2 px(${x},5).g`).toBe(255);
+      expect(p.b, `block 2 px(${x},5).b`).toBe(0);
+    }
+    for (const x of [20, 24, 25, 29]) {
+      const p = await getPixelAt(page, x, 5);
+      expect(p.r, `block 3 px(${x},5).r`).toBe(0);
+      expect(p.g, `block 3 px(${x},5).g`).toBe(0);
+      expect(p.b, `block 3 px(${x},5).b`).toBe(255);
     }
 
-    // Read a pixel before filter — should be pure red.
-    const beforePixel = await getPixelAt(page, 0, 50);
-    expect(beforePixel.r).toBe(255);
-    expect(beforePixel.b).toBe(0);
+    // The same property must hold along a different y row, since pixelate
+    // is 2D — block 1 at y=0..9 should be uniformly red.
+    for (const y of [0, 4, 9]) {
+      const p = await getPixelAt(page, 5, y);
+      expect(p.r, `block 1 vert px(5,${y}).r`).toBe(255);
+    }
+  });
 
-    // Apply pixelate via the Filter menu UI.
+  test('pixelate is undoable and restores the original pixels', async ({ page }) => {
+    await createDocument(page, 30, 10, true);
+    await paintThreeBlocks(page);
+
+    // Snapshot the corner pixels before pixelating: the boundary between
+    // block 1 and block 2 (x=9 / x=10) is sharp.
+    const beforeLeftEdge = await getPixelAt(page, 9, 5);
+    const beforeRightEdge = await getPixelAt(page, 10, 5);
+    expect(beforeLeftEdge.r).toBe(255);
+    expect(beforeRightEdge.g).toBe(255);
+
+    // Apply pixelate with blockSize = 30 — this single block spans the
+    // entire image and samples the centre at x = 15, y = 5 (green).
     await page.click('text=Filter');
     await page.click('text=Pixelate...');
     await expect(page.locator('h2:has-text("Pixelate")')).toBeVisible({ timeout: 3000 });
-    const slider = page.locator('input[type="range"]');
-    await slider.fill('10');
+    const slider = page.locator('h2:has-text("Pixelate")')
+      .locator('xpath=ancestor::*[contains(@class,"modal")][1]')
+      .locator('input[type="range"]');
+    await slider.fill('30');
     await page.locator('button:has-text("Apply")').click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('h2:has-text("Pixelate")')).toHaveCount(0, { timeout: 3000 });
+    await page.waitForTimeout(200);
 
-    // After pixelation the pixel should have changed — no longer pure red.
-    const afterPixel = await getPixelAt(page, 0, 50);
-    expect(afterPixel.r).not.toBe(255);
-    expect(afterPixel.b).toBeGreaterThan(0);
+    // Now the entire image is uniform — every pixel should match the
+    // sampled centre colour (green).
+    const after = await getPixelAt(page, 0, 0);
+    expect(after.g).toBe(255);
+    expect(after.r).toBe(0);
+    expect(after.b).toBe(0);
+    const afterRight = await getPixelAt(page, 29, 9);
+    expect(afterRight.g).toBe(255);
 
-    // Undo
+    // Undo with the keyboard shortcut — Linux/Win uses Control, macOS uses
+    // Meta. Send both for portability.
     await page.keyboard.press('Control+z');
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(200);
 
-    // After undo the pixel should be back to pure red.
-    const undonePixel = await getPixelAt(page, 0, 50);
-    expect(undonePixel.r).toBe(255);
-    expect(undonePixel.b).toBe(0);
+    // The pre-filter pixels must be restored exactly.
+    const restoredLeft = await getPixelAt(page, 9, 5);
+    const restoredRight = await getPixelAt(page, 10, 5);
+    expect(restoredLeft.r).toBe(255);
+    expect(restoredLeft.g).toBe(0);
+    expect(restoredRight.g).toBe(255);
+    expect(restoredRight.r).toBe(0);
   });
 });

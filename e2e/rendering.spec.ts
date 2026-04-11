@@ -131,17 +131,34 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '02-blank-transparent-doc.png') });
 
-    // Verify transparent document was created
+    // A "transparent" document is signalled by backgroundColor.a === 0
+    // (vs 1 for a white-background doc) — there is no separate
+    // `transparent` flag on the document state.
     const docInfo = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { width: number; height: number; transparent: boolean } };
+        getState: () => {
+          document: {
+            width: number;
+            height: number;
+            backgroundColor: { r: number; g: number; b: number; a: number };
+            layers: Array<{ id: string }>;
+          };
+        };
       };
       const state = store.getState();
-      return { width: state.document.width, height: state.document.height, transparent: state.document.transparent };
+      return {
+        width: state.document.width,
+        height: state.document.height,
+        bgAlpha: state.document.backgroundColor.a,
+        rasterLayerCount: state.document.layers.length,
+      };
     });
     expect(docInfo.width).toBe(400);
     expect(docInfo.height).toBe(300);
-    expect(docInfo.transparent).toBe(true);
+    // Transparent documents create exactly one Background raster layer plus
+    // a root group layer (2 total) — opaque docs add a separate "Layer 1".
+    expect(docInfo.bgAlpha).toBe(0);
+    expect(docInfo.rasterLayerCount).toBe(2);
   });
 
   test('03 - full red fill (no sparse conversion)', async ({ page }) => {
@@ -389,21 +406,31 @@ test.describe('WASM/WebGL Rendering', () => {
     // Screenshot AFTER the stroke
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '09-brush-after-stroke.png') });
 
-    // Verify the brush stroke produced pixel data on the active layer
-    const hasContent = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
-          layerPixelData: Map<string, ImageData>;
-          sparseLayerData: Map<string, unknown>;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      return state.layerPixelData.has(id) || state.sparseLayerData.has(id);
+    // Brush strokes are rendered to a deferred GPU stroke texture that
+    // is composited each frame. Read the COMPOSITED screen pixels (which
+    // include the active stroke) and verify a meaningful number of dark
+    // pixels appear along the brush path.
+    const opaqueCount = await page.evaluate(async () => {
+      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
+        () => Promise<{ width: number; height: number; pixels: number[] } | null>;
+      const result = await readFn();
+      if (!result || result.width === 0) return 0;
+      // Count pixels that are clearly black (the default brush colour) —
+      // dark grey or pure black, ignoring the workspace background and
+      // the checkerboard pattern.
+      let count = 0;
+      for (let i = 0; i < result.pixels.length; i += 4) {
+        const r = result.pixels[i] ?? 0;
+        const g = result.pixels[i + 1] ?? 0;
+        const b = result.pixels[i + 2] ?? 0;
+        const a = result.pixels[i + 3] ?? 0;
+        if (a > 200 && r < 60 && g < 60 && b < 60) count++;
+      }
+      return count;
     });
-    expect(hasContent).toBe(true);
+    // A 30-px brush dragged across ~60% of a 400×300 doc must produce
+    // thousands of dark pixels — far more than incidental UI chrome.
+    expect(opaqueCount).toBeGreaterThan(2000);
   });
 
   test('10 - brush inside selection marquee clips to selection', async ({ page }) => {

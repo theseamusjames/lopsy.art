@@ -320,19 +320,48 @@ test.describe('Brush System', () => {
   });
 
   test('08 - brush modal preview updates on property change', async ({ page }) => {
+    // Set the brush to a small size before opening the modal so the
+    // preview's clamping (size = clamp(brushSize, 2, 40)) yields a clearly
+    // different stamp than at size 40 later.
+    await setToolSetting(page, 'setBrushSize', 4);
+    await page.waitForTimeout(50);
+
     await openBrushModal(page);
     await page.waitForTimeout(200);
 
-    const beforeSnap = await snapshot(page);
-    await page.screenshot({ path: 'test-results/screenshots/brush-10-preview-default.png' });
+    /**
+     * Read the BrushPreview canvas (the 240×80 preview swatch inside the
+     * brush modal) directly via the DOM. This is the canvas the test
+     * needs to assert against — the main composited screen pixels do
+     * not contain it.
+     */
+    const readPreview = async () =>
+      page.evaluate(() => {
+        const canvases = Array.from(document.querySelectorAll('canvas')) as HTMLCanvasElement[];
+        // The brush preview canvas is exactly 240×80 by construction
+        // (BrushPreview.tsx). The main WebGL canvas is much larger.
+        const preview = canvases.find((c) => c.width === 240 && c.height === 80);
+        if (!preview) return null;
+        const ctx = preview.getContext('2d');
+        if (!ctx) return null;
+        const img = ctx.getImageData(0, 0, preview.width, preview.height);
+        return { width: preview.width, height: preview.height, pixels: Array.from(img.data) };
+      });
 
-    const oldSize = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { brushSize: number };
-      };
-      return store.getState().brushSize;
-    });
+    const before = await readPreview();
+    expect(before).not.toBeNull();
+    expect(before!.width).toBe(240);
 
+    // The preview must have rendered something for size=4 — count opaque
+    // (non-zero alpha) pixels along the bezier path.
+    let beforeOpaque = 0;
+    for (let i = 3; i < before!.pixels.length; i += 4) {
+      if ((before!.pixels[i] ?? 0) > 0) beforeOpaque++;
+    }
+    expect(beforeOpaque).toBeGreaterThan(0);
+
+    // Bump the brush size to 60 — the preview clamps to 40, far larger
+    // than the original 4.
     await setToolSetting(page, 'setBrushSize', 60);
     await page.waitForTimeout(300);
 
@@ -342,13 +371,26 @@ test.describe('Brush System', () => {
       };
       return store.getState().brushSize;
     });
-
-    const afterSnap = await snapshot(page);
-    await page.screenshot({ path: 'test-results/screenshots/brush-11-preview-large.png' });
-
     expect(newSize).toBe(60);
-    expect(newSize).not.toBe(oldSize);
-    expect(pixelDiff(beforeSnap, afterSnap)).toBeGreaterThan(0);
+
+    const after = await readPreview();
+    expect(after).not.toBeNull();
+
+    // Larger brush → many more opaque pixels in the preview.
+    let afterOpaque = 0;
+    for (let i = 3; i < after!.pixels.length; i += 4) {
+      if ((after!.pixels[i] ?? 0) > 0) afterOpaque++;
+    }
+    expect(afterOpaque).toBeGreaterThan(beforeOpaque * 2);
+
+    // The two preview rasters must differ in a substantial number of
+    // pixels (anti-aliasing alone would be a few dozen at most).
+    let differing = 0;
+    for (let i = 0; i < before!.pixels.length; i += 4) {
+      const da = Math.abs((before!.pixels[i + 3] ?? 0) - (after!.pixels[i + 3] ?? 0));
+      if (da > 20) differing++;
+    }
+    expect(differing).toBeGreaterThan(200);
   });
 
   test('09 - custom brush tip paints non-circular dabs', async ({ page }) => {
