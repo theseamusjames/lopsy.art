@@ -1,0 +1,301 @@
+# E2E Test Writing Guide
+
+This guide captures hard-won knowledge about writing meaningful e2e tests
+for Lopsy. If you're fixing a failing test or adding a new one, read this
+first — most of the pitfalls below were learned the painful way.
+
+## The golden rule
+
+**A meaningful assertion must be able to fail when the feature breaks.**
+
+If the test's assertion could pass against a completely stubbed or
+missing implementation, the test doesn't test anything. Ask yourself:
+
+- Would this pass if the feature were deleted?
+- Would this pass if the feature were silently replaced with a no-op?
+- Is the assertion exercising my own helper code or real production code?
+
+If the answer to any of these is "yes (still passes)", rewrite the test.
+
+---
+
+## Where to find things
+
+### Exposed window globals (`src/main.tsx`)
+
+These are only set in dev mode and only exist for testing. Always
+double-check that a global exists before using it — don't assume.
+
+| Global | Purpose |
+|---|---|
+| `__editorStore` | Zustand store for document, layers, history, selection |
+| `__uiStore` | Zustand store for active tool, grid, guides, colors, transforms |
+| `__toolSettingsStore` | Zustand store for per-tool settings (brush size, shape fill, etc.) |
+| `__brushPresetStore` | Zustand store for brush presets and the brush modal |
+| `__readCompositedPixels()` | Async. Triggers a fresh render and returns the full WebGL canvas as `{width, height, pixels[]}`. The buffer is bottom-up — flip y when projecting doc coords. |
+| `__readLayerPixels(layerId?)` | Async. Syncs layers and returns a single layer's GPU texture as `{width, height, pixels[]}`. Returns `{width: 0, height: 0, pixels: []}` if the layer isn't tracked by the engine. |
+
+**What is NOT exposed:** there is no `__engineState`, `__wasmBridge`,
+`__wasmEngine`, or `__imageAdjustmentsModule`. Several historical tests
+referenced these and silently passed because the globals returned
+`undefined`. Don't add them — use the four stores plus the two read
+functions.
+
+### Shared helpers (`e2e/helpers.ts`)
+
+Prefer these over local copies. If you're redefining `createDocument`,
+`waitForStore`, or `getEditorState` in your spec file, stop and import
+them instead.
+
+| Helper | Notes |
+|---|---|
+| `waitForStore(page)` | Polls until `window.__editorStore` exists. First call on a fresh `page.goto('/')` must wait for vite to compile — budget 10+ seconds on cold start. |
+| `createDocument(page, w, h, transparent)` | Creates a new doc. For `transparent=true` the single raster layer is the Background; for `transparent=false` a second empty "Layer 1" is added and activated. |
+| `getEditorState(page)` | Returns `{document, undoStackLength, redoStackLength}`. Does NOT return selection — read `__editorStore.getState().selection` directly if you need it. |
+| `getPixelAt(page, x, y, layerId?)` | Reads a single pixel from `__readLayerPixels`. Converts doc coords to layer-local automatically. Returns `{r:0, g:0, b:0, a:0}` for out-of-bounds reads — don't mistake that for "assertion passed". |
+| `paintRect(page, x, y, w, h, color, layerId?)` | Paints into `layerPixelData`, then calls `updateLayerPixelData` which triggers auto-crop. See the auto-crop gotcha below. |
+| `paintCircle(page, cx, cy, radius, color, layerId?)` | Same auto-crop behaviour as `paintRect`. |
+| `addLayer(page)`, `setActiveLayer(page, id)`, `moveLayer(page, id, x, y)` | Direct store actions; do NOT exercise real tool flow. |
+| `undo(page)`, `redo(page)` | Direct store actions. |
+
+### Useful selectors
+
+- Canvas container: `[data-testid="canvas-container"]`. Mouse events
+  (`onMouseDown/Move/Up`) are bound here.
+- Overlay canvas: `canvas` with `/overlayCanvas/.test(className)`. This
+  is the 2D overlay where the grid, rulers, selection ants, and cursor
+  are drawn. Its `getContext('2d').getImageData(...)` gives you the
+  rendered overlay.
+- Main WebGL canvas: the other `<canvas>` inside the canvas container.
+  Read composited pixels via `__readCompositedPixels`, not by grabbing
+  this element directly.
+- Grid slider: `input[type="range"][class*="gridSlider"]`. The
+  `[class*="..."]` trick matches CSS-module-hashed class names.
+- Filter dialog slider: scope by title, e.g.
+  `page.locator('h2:has-text("Pixelate")').locator('xpath=ancestor::*[contains(@class,"modal")][1]').locator('input[type="range"]')`.
+- Brush preview canvas: the unique `<canvas width=240 height=80>` in the
+  brush modal. Find with `canvases.find(c => c.width === 240 && c.height === 80)`.
+
+---
+
+## Pitfalls that caused real test failures
+
+### 1. Auto-crop after every `paintRect`
+
+`updateLayerPixelData` fires `cropLayerToContent` internally, which
+shifts `layer.x / layer.y` to the content bounds and shrinks the
+texture. Consequences:
+
+- After painting a square at doc `(60, 60)` on a 200×200 layer, the
+  layer becomes `x=60, y=60, width=60, height=60` — not `x=0, y=0`.
+- A **second** `paintRect` that tries to draw outside the new bounds is
+  silently dropped (the helper reads existing data first, sees
+  `width=60`, and the out-of-bounds pixels fall off).
+
+**Fix:** if you need multiple painted regions, build the full ImageData
+in one `page.evaluate` call and call `updateLayerPixelData` exactly
+once. See `paintThreeBlocks` in `pixelate-filter.spec.ts` for the
+canonical pattern.
+
+### 2. Brush strokes live in a deferred GPU texture
+
+After `mouse.up` on a brush stroke, the GPU stroke texture is **not**
+merged into the layer texture yet — `setPendingStroke` marks it pending
+so shift-click can continue. `__readLayerPixels` reads the layer
+texture and sees nothing.
+
+**Fix:** either (a) force the merge by calling `pushHistory`
+(`finalizePendingStrokeGlobal` runs inside `pushHistory`), or (b) use
+`__readCompositedPixels`, which runs the compositor and includes the
+active stroke texture.
+
+### 3. Wand creates a transform overlay that intercepts clicks
+
+After a successful wand selection, `handleSelectionDown` calls
+`setTransform(createTransformState(wandBounds))`, drawing transform
+handles around the selection bounds. `useCanvasInteraction` then calls
+`handleTransformDown` **before** dispatching to the tool handler — so
+the next click near a handle triggers the transform handler, not your
+active tool.
+
+**Fix:** after a wand selection, clear the transform with
+`__uiStore.getState().setTransform(null)` before firing the next click.
+
+### 4. Auto-crop makes `addLayer` + `setActiveTool('move')` fragile
+
+`addLayer` creates a new layer but does not necessarily activate it for
+subsequent tool interactions in a test. After calling `addLayer`,
+explicitly call `setActiveLayer` to the desired layer before setting
+the move tool and dragging. Without it, the drag may act on the
+previous active layer (or a cropped one) and produce surprising
+results.
+
+### 5. Move-tool drag only works via real mouse events
+
+Calling `moveLayer` from the helper bypasses `snapPositionToGrid`
+entirely — it writes the position directly. If you're testing snap
+behaviour, you MUST simulate real mouse events:
+
+```ts
+await page.mouse.move(start.x, start.y);
+await page.mouse.down();
+await page.mouse.move(end.x, end.y, { steps: 15 });
+await page.mouse.up();
+```
+
+### 6. The overlay canvas spans the container, not the document
+
+The overlay's bounding rect equals the canvas container — much larger
+than the document at low zoom. Don't assume `overlay.width / 2` is the
+document center. Compute doc-to-overlay projection explicitly from
+`viewport.panX/panY/zoom` and the container rect, matching the
+transform in `useCanvasRendering.ts`:
+
+```
+docCenterOnOverlayX = viewport.panX + overlay.width / 2
+overlayX(docX) = (docX - doc.width/2) * zoom + viewport.panX + overlay.width/2
+```
+
+### 7. Scanning along a grid line gives you noise
+
+Reading pixels along `y = height/2` when the grid is enabled will hit
+the horizontal centre grid line for the entire row — every column
+shows alpha > 0. Pick a scan row that's clearly between two grid lines
+(e.g. `docY = doc.height/2 + 7`) before searching for vertical lines.
+
+### 8. CSS Module class names are hashed
+
+`styles.gridSlider` becomes something like `_gridSlider_abc123`. Match
+with attribute-contains: `input[type="range"][class*="gridSlider"]`.
+Don't hard-code the hash.
+
+### 9. Slider values don't always match the underlying uniform
+
+The Adjustments panel stores saturation in `-100..100` but the export
+pipeline (`applyAdjustmentsToImageData`) treats it as `-1..1`, while
+the GPU shader divides by 100 at upload. The result: a value of `-1`
+does nothing on the live composite (shader sees `-0.01`), but `-100`
+clamps channels to 0/255 in the export path.
+
+**Fix:** know which path you're testing. For live composite use the
+slider range (`-100..100`). For export, compare two exports (with and
+without the adjustment) and assert they differ, rather than asserting
+specific channel values.
+
+### 10. Polygon corner radius is a no-op for `sides=4`
+
+`shape_fill.glsl`'s `sdPolygon` has degenerate rounding math for
+4-sided polygons — the rounded shape equals the original square. If
+you want to verify rounded rectangles visually, use **ellipse** mode
+instead. `sides=6` works for the polygon SDF and can be used for
+"rounded vertex" tests.
+
+### 11. Tool-settings store expects specific ranges
+
+`setShapePolygonSides` clamps to `[3, 64]`. `setShapeCornerRadius`
+clamps to `[0, 200]`. `setBrushSize` clamps to `[1, 2000]`. Check the
+setter before asserting on the stored value — the clamp may silently
+change what you wrote.
+
+### 12. Fit-to-view caps zoom at 1.0
+
+`fitToView` won't zoom in past 1:1 even if the viewport is much larger
+than the document. For a 501×501 doc in a 932×628 viewport,
+`viewport.zoom = 1, panX = 0, panY = 0`. The doc is centred inside the
+canvas container (not the overlay).
+
+---
+
+## Choosing what to assert
+
+### Read pixel content, not store plumbing
+
+Asserting that `state.someField === someValue` only verifies the JS
+store round-trips. It doesn't verify the feature renders anything.
+
+**Good:** "after pixelate, every pixel in a 10×10 block matches its
+centre colour."
+
+**Bad:** "after pixelate, the active layer still exists."
+
+### Use doc-coordinate pixel probes at known positions
+
+For features with known geometry — shapes, filters, fills — compute
+the exact doc coordinates where specific colours should appear, and
+read those pixels. A centre/edge/outside probe trio is usually enough
+to catch the interesting failure modes.
+
+### Use pixel diff between two rasters for continuous features
+
+For features where the exact output is hard to predict (export
+pipeline, brush strokes, effects), compare two snapshots (before/after
+the change) and assert that they differ by a meaningful number of
+pixels. This catches "feature is a silent no-op" without requiring
+you to model the output.
+
+### Read composited vs. layer, depending on what the feature affects
+
+| Feature | Read method |
+|---|---|
+| Pure layer content (fill, shape, paint, filter) | `__readLayerPixels(id)` / `getPixelAt` |
+| Group adjustments, effects, selection overlay, active brush stroke | `__readCompositedPixels()` |
+| Grid, rulers, marching ants, guides, transform handles | Overlay 2D canvas via `getImageData` |
+| Brush preview, thumbnails, filter preview | The specific `<canvas>` element in the relevant component (brush preview is 240×80) |
+
+### Screenshots belong with the test
+
+Save screenshots to `e2e/screenshots/<test-name>.png` so that when you
+open a failing test a week later, the rendered output is right there.
+Screenshots are committed to git — they double as reference material
+for understanding what the test does, and a reviewer can sanity-check
+"does this assertion match what's on screen" without running the
+test.
+
+---
+
+## Workflow for fixing a failing test
+
+1. **Run the single failing test** to get the real error message, not a
+   summary count. `npx playwright test --project=chromium e2e/<file> -g "<name>"`.
+2. **Read the test and ask: what is it trying to verify?** If the
+   answer is unclear, the test is probably the problem — not the
+   feature.
+3. **Look up the production code path** the test should be exercising.
+   Find the store action or handler that does the real work
+   (`src/app/store/actions/*`, `src/app/interactions/*-handlers.ts`,
+   `src/tools/*/\*.ts`, `engine-rs/**/*.rs`).
+4. **Check the units**. Is the slider in `0..100` or `-1..1`? Is the
+   angle in radians or degrees? Is the coordinate doc-space or
+   layer-local? The test's assertion values must match the production
+   code's units.
+5. **Write a one-off debug test** if the failure is mysterious. Dump
+   viewport state, active layer, pixel samples along a scan line,
+   layer bounds — whatever you need. Delete it before committing.
+6. **Verify visually.** Before claiming a test passes meaningfully,
+   open the screenshot it saves and confirm the pixels the test
+   inspects actually look like what you expect. A test that passes
+   against the wrong region of a correct image is worse than a failing
+   one.
+
+---
+
+## Command reference
+
+```bash
+# Warm the dev server (playwright's webServer config reuses it)
+npx vite --port 5174
+
+# Run one test file in chromium only
+npx playwright test --project=chromium e2e/<file>.spec.ts
+
+# Run one test by name pattern
+npx playwright test --project=chromium e2e/<file>.spec.ts -g "<test name>"
+
+# Rebuild WASM when engine-rs sources change
+npm run wasm:build
+```
+
+The WASM build **must** be present in `src/engine-wasm/pkg/` or the app
+fails to initialise and every test times out in `waitForStore`. The
+dev server emits a "WASM is stale" warning when the Rust sources are
+newer than the compiled output — heed it.
