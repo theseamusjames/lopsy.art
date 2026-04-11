@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForStore, createDocument } from './helpers';
+import { waitForStore, createDocument, getEditorState } from './helpers';
 
 test.describe('Mobile canvas', () => {
   test.use({
@@ -20,7 +20,9 @@ test.describe('Mobile canvas', () => {
     expect(box!.height).toBeGreaterThan(0);
   });
 
-  test('two-finger pinch-to-zoom changes the zoom level', async ({ page }) => {
+  test('two-finger pinch-to-zoom changes the zoom level', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'CDP touch only works in Chromium');
+
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);
@@ -76,10 +78,12 @@ test.describe('Mobile canvas', () => {
       return store.getState().viewport.zoom;
     });
 
-    expect(finalZoom).toBeGreaterThan(initialZoom);
+    expect(finalZoom).toBeGreaterThan(initialZoom * 1.1);
   });
 
-  test('single-finger touch draws instead of panning', async ({ page }) => {
+  test('single-finger touch draws instead of panning', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'CDP touch only works in Chromium');
+
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);
@@ -132,20 +136,25 @@ test.describe('Mobile canvas', () => {
 
     expect(finalPan.panX).toBe(initialPan.panX);
     expect(finalPan.panY).toBe(initialPan.panY);
+
+    const state = await getEditorState(page);
+    expect(state.undoStackLength).toBeGreaterThan(0);
   });
 
-  test('two-finger gesture pans the canvas', async ({ page }) => {
+  test('two-finger gesture pans the canvas', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'CDP touch only works in Chromium');
+
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);
     await page.waitForTimeout(300);
 
-    const initialPan = await page.evaluate(() => {
+    const initialState = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { viewport: { panX: number; panY: number } };
+        getState: () => { viewport: { panX: number; panY: number; zoom: number } };
       };
       const v = store.getState().viewport;
-      return { panX: v.panX, panY: v.panY };
+      return { panX: v.panX, panY: v.panY, zoom: v.zoom };
     });
 
     const container = page.getByTestId('canvas-container');
@@ -183,15 +192,16 @@ test.describe('Mobile canvas', () => {
 
     await page.waitForTimeout(100);
 
-    const finalPan = await page.evaluate(() => {
+    const finalState = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { viewport: { panX: number; panY: number } };
+        getState: () => { viewport: { panX: number; panY: number; zoom: number } };
       };
       const v = store.getState().viewport;
-      return { panX: v.panX, panY: v.panY };
+      return { panX: v.panX, panY: v.panY, zoom: v.zoom };
     });
 
-    expect(finalPan.panX).toBeGreaterThan(initialPan.panX);
-    expect(finalPan.panY).toBeGreaterThan(initialPan.panY);
+    expect(finalState.panX).toBeGreaterThan(initialState.panX);
+    expect(finalState.panY).toBeGreaterThan(initialState.panY);
+    expect(finalState.zoom).toBeCloseTo(initialState.zoom, 2);
   });
 });

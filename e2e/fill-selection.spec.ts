@@ -3,6 +3,7 @@ import {
   createDocument,
   waitForStore,
   getPixelAt,
+  getEditorState as getEditorSnapshot,
 } from './helpers';
 
 // ---------------------------------------------------------------------------
@@ -130,11 +131,19 @@ test.describe('Fill tool with selection (#63)', () => {
     await page.keyboard.press('g');
     await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
 
+    // Record undo stack length before fill to verify the fill actually runs
+    const beforeFill = await getEditorSnapshot(page);
+    const undoBefore = beforeFill.undoStackLength;
+
     // 3. Click inside the selection to fill
     await clickAtDoc(page, 100, 100);
 
     // Wait for fill to process
     await page.waitForTimeout(300);
+
+    // Verify the fill tool executed (undo stack should have grown)
+    const afterFill = await getEditorSnapshot(page);
+    expect(afterFill.undoStackLength).toBeGreaterThan(undoBefore);
 
     // 4. Screenshot for visual debugging
     await page.screenshot({ path: 'test-results/screenshots/fill-within-selection.png' });
@@ -142,6 +151,8 @@ test.describe('Fill tool with selection (#63)', () => {
     // 5. Verify: pixel inside selection should be the fill color (red)
     const insidePixel = await getPixelAt(page, 100, 100);
     expect(insidePixel.r).toBe(255);
+    expect(insidePixel.g).toBe(0);
+    expect(insidePixel.b).toBe(0);
     expect(insidePixel.a).toBe(255);
 
     // 6. Verify: pixel outside selection should be unchanged (transparent)
@@ -151,6 +162,10 @@ test.describe('Fill tool with selection (#63)', () => {
     // Also check outside on the other side
     const outsidePixel2 = await getPixelAt(page, 190, 190);
     expect(outsidePixel2.a).toBe(0);
+
+    // 7. Boundary check: pixel just outside the selection edge should be transparent
+    const boundaryPixel = await getPixelAt(page, 151, 151);
+    expect(boundaryPixel.a).toBe(0);
   });
 
   test('fill tool does not bleed outside selection bounds', async ({ page }) => {
@@ -167,13 +182,33 @@ test.describe('Fill tool with selection (#63)', () => {
     // Fill with green
     await page.keyboard.press('g');
     await setUIState(page, 'setForegroundColor', { r: 0, g: 255, b: 0, a: 1 });
+
+    // Record undo stack length before fill to verify the fill actually runs
+    const beforeFill = await getEditorSnapshot(page);
+    const undoBefore = beforeFill.undoStackLength;
+
     await clickAtDoc(page, 35, 35);
     await page.waitForTimeout(300);
 
-    // Inside selection should be green
+    // Verify the fill tool executed (undo stack should have grown)
+    const afterFill = await getEditorSnapshot(page);
+    expect(afterFill.undoStackLength).toBeGreaterThan(undoBefore);
+
+    // Inside selection should be green (full RGBA check)
     const insidePixel = await getPixelAt(page, 35, 35);
+    expect(insidePixel.r).toBe(0);
     expect(insidePixel.g).toBe(255);
+    expect(insidePixel.b).toBe(0);
     expect(insidePixel.a).toBe(255);
+
+    // Boundary check: pixel just inside selection edge should be green
+    const innerEdge = await getPixelAt(page, 59, 59);
+    expect(innerEdge.g).toBe(255);
+    expect(innerEdge.a).toBe(255);
+
+    // Boundary check: pixel just outside selection edge should be transparent
+    const outerEdge = await getPixelAt(page, 61, 61);
+    expect(outerEdge.a).toBe(0);
 
     // Center of canvas (well outside selection) should be transparent
     const centerPixel = await getPixelAt(page, 100, 100);
@@ -201,8 +236,17 @@ test.describe('Fill tool with selection (#63)', () => {
     // selection mask, only the selection area should receive color.
     await page.keyboard.press('g');
     await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 255, a: 1 });
+
+    // Record undo stack length before fill to verify the fill actually runs
+    const beforeFill = await getEditorSnapshot(page);
+    const undoBefore = beforeFill.undoStackLength;
+
     await clickAtDoc(page, 10, 10);
     await page.waitForTimeout(300);
+
+    // Verify the fill tool executed (undo stack should have grown)
+    const afterFill = await getEditorSnapshot(page);
+    expect(afterFill.undoStackLength).toBeGreaterThan(undoBefore);
 
     await page.screenshot({ path: 'test-results/screenshots/fill-outside-selection.png' });
 
@@ -210,9 +254,16 @@ test.describe('Fill tool with selection (#63)', () => {
     const outsidePixel = await getPixelAt(page, 10, 10);
     expect(outsidePixel.a).toBe(0);
 
-    // Inside the selection may be filled (flood fill matched the color)
     // The key invariant: pixels outside the selection are never affected
     const cornerPixel = await getPixelAt(page, 190, 190);
     expect(cornerPixel.a).toBe(0);
+
+    // Positive assertion: pixels INSIDE the selection should have received the fill color.
+    // Flood fill from transparent matches everything, but selection clips to (50,50)-(150,150).
+    const insidePixel = await getPixelAt(page, 100, 100);
+    expect(insidePixel.r).toBe(0);
+    expect(insidePixel.g).toBe(0);
+    expect(insidePixel.b).toBe(255);
+    expect(insidePixel.a).toBe(255);
   });
 });

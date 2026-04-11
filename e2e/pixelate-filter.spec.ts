@@ -1,73 +1,8 @@
-import { test, expect, type Page } from '@playwright/test';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { test, expect } from '@playwright/test';
+import { waitForStore, createDocument, paintRect, getPixelAt } from './helpers';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const SCREENSHOT_DIR = path.resolve(__dirname, '../test-results/screenshots');
-
-async function waitForStore(page: Page) {
-  await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
-}
-
-async function createDocument(page: Page, width = 400, height = 300, transparent = false) {
-  await page.evaluate(
-    ({ w, h, t }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { createDocument: (w: number, h: number, t: boolean) => void };
-      };
-      store.getState().createDocument(w, h, t);
-    },
-    { w: width, h: height, t: transparent },
-  );
-  await page.waitForTimeout(500);
-}
-
-async function paintRect(
-  page: Page,
-  x: number, y: number, w: number, h: number,
-  color: { r: number; g: number; b: number; a: number },
-) {
-  await page.evaluate(
-    ({ x, y, w, h, color }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
-          updateLayerPixelData: (id: string, data: ImageData) => void;
-          pushHistory: (label?: string) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      state.pushHistory('Paint');
-      const data = state.getOrCreateLayerPixelData(id);
-      for (let py = y; py < y + h; py++) {
-        for (let px = x; px < x + w; px++) {
-          if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
-          const idx = (py * data.width + px) * 4;
-          data.data[idx] = color.r;
-          data.data[idx + 1] = color.g;
-          data.data[idx + 2] = color.b;
-          data.data[idx + 3] = color.a;
-        }
-      }
-      state.updateLayerPixelData(id, data);
-    },
-    { x, y, w, h, color },
-  );
-  await page.waitForTimeout(200);
-}
-
-async function fitToView(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { fitToView: () => void };
-    };
-    store.getState().fitToView();
-  });
-  await page.waitForTimeout(300);
-}
+const RED = { r: 255, g: 0, b: 0, a: 255 };
+const BLUE = { r: 0, g: 0, b: 255, a: 255 };
 
 test.describe('Pixelate / Mosaic Filter', () => {
 
@@ -77,108 +12,105 @@ test.describe('Pixelate / Mosaic Filter', () => {
   });
 
   test('applies pixelate filter via menu and renders mosaic blocks', async ({ page }) => {
-    // Create a document with a gradient-like pattern so pixelation is visible
-    await createDocument(page, 400, 300, false);
+    await createDocument(page, 100, 100, true);
 
-    // Paint alternating color stripes to create visible detail
-    for (let i = 0; i < 20; i++) {
-      const color = i % 2 === 0
-        ? { r: 255, g: 0, b: 0, a: 255 }
-        : { r: 0, g: 0, b: 255, a: 255 };
-      await paintRect(page, i * 20, 0, 20, 300, color);
+    // Paint alternating 1px-wide vertical stripes: red at even x, blue at odd x.
+    // Use a single paintRect per stripe — 100 stripes total.
+    for (let x = 0; x < 100; x++) {
+      const color = x % 2 === 0 ? RED : BLUE;
+      await paintRect(page, x, 0, 1, 100, color);
     }
 
-    await fitToView(page);
-    await page.waitForTimeout(300);
-
-    // Take screenshot before filter
-    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'pixelate-before.png') });
+    // Verify initial stripe pattern: adjacent columns should differ.
+    const beforeEven = await getPixelAt(page, 0, 50);
+    const beforeOdd = await getPixelAt(page, 1, 50);
+    expect(beforeEven.r).toBe(255);
+    expect(beforeEven.b).toBe(0);
+    expect(beforeOdd.r).toBe(0);
+    expect(beforeOdd.b).toBe(255);
 
     // Open Filter menu and click Pixelate
     await page.click('text=Filter');
-    await page.waitForTimeout(200);
     await page.click('text=Pixelate...');
-    await page.waitForTimeout(300);
 
-    // The filter dialog should be visible — look for the heading text
+    // The filter dialog should be visible
     const dialogHeading = page.locator('h2:has-text("Pixelate")');
     await expect(dialogHeading).toBeVisible({ timeout: 3000 });
+
+    // Set block size to 10 via the range slider
+    const slider = page.locator('input[type="range"]');
+    await slider.fill('10');
 
     // Click Apply button
     await page.locator('button:has-text("Apply")').click();
     await page.waitForTimeout(500);
 
-    // Take screenshot after filter
-    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'pixelate-after.png') });
+    // After pixelation with block size 10, every pixel within a single 10px
+    // block should have the same color. Sample two pixels within the first
+    // block (x=0..9) that were different colors before.
+    const afterA = await getPixelAt(page, 0, 50);
+    const afterB = await getPixelAt(page, 1, 50);
+    const afterC = await getPixelAt(page, 5, 50);
+    const afterD = await getPixelAt(page, 9, 50);
 
-    // Verify the filter was applied by checking that pixel data changed
-    // The pixelated layer should still exist and have content
-    const layerInfo = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { layers: Array<{ id: string; width: number; height: number }>; activeLayerId: string };
-        };
-      };
-      const state = store.getState();
-      return {
-        layerCount: state.document.layers.length,
-        activeLayerId: state.document.activeLayerId,
-        layerWidth: state.document.layers[0]?.width,
-        layerHeight: state.document.layers[0]?.height,
-      };
-    });
+    // All four pixels within the same 10px block must now be identical.
+    expect(afterA.r).toBe(afterB.r);
+    expect(afterA.g).toBe(afterB.g);
+    expect(afterA.b).toBe(afterB.b);
 
-    expect(layerInfo.layerCount).toBeGreaterThan(0);
-    expect(layerInfo.layerWidth).toBe(400);
-    expect(layerInfo.layerHeight).toBe(300);
+    expect(afterA.r).toBe(afterC.r);
+    expect(afterA.g).toBe(afterC.g);
+    expect(afterA.b).toBe(afterC.b);
+
+    expect(afterA.r).toBe(afterD.r);
+    expect(afterA.g).toBe(afterD.g);
+    expect(afterA.b).toBe(afterD.b);
+
+    // The uniform color should be a blend of red and blue (roughly half each).
+    // Allow tolerance for rounding. Equal red/blue stripes averaged: r≈127, b≈127.
+    expect(afterA.r).toBeGreaterThan(90);
+    expect(afterA.r).toBeLessThan(170);
+    expect(afterA.b).toBeGreaterThan(90);
+    expect(afterA.b).toBeLessThan(170);
+    // Green should remain near zero.
+    expect(afterA.g).toBeLessThan(30);
   });
 
   test('pixelate filter can be undone', async ({ page }) => {
-    await createDocument(page, 200, 200, false);
+    await createDocument(page, 100, 100, true);
 
-    // Paint a simple pattern
-    await paintRect(page, 0, 0, 100, 200, { r: 255, g: 0, b: 0, a: 255 });
-    await paintRect(page, 100, 0, 100, 200, { r: 0, g: 255, b: 0, a: 255 });
-    await fitToView(page);
+    // Paint alternating 1px stripes so we have varied content.
+    for (let x = 0; x < 100; x++) {
+      const color = x % 2 === 0 ? RED : BLUE;
+      await paintRect(page, x, 0, 1, 100, color);
+    }
 
-    // Apply pixelate via store API directly
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string };
-          pushHistory: (label?: string) => void;
-          notifyRender: () => void;
-        };
-      };
-      const state = store.getState();
-      const activeId = state.document.activeLayerId;
+    // Read a pixel before filter — should be pure red.
+    const beforePixel = await getPixelAt(page, 0, 50);
+    expect(beforePixel.r).toBe(255);
+    expect(beforePixel.b).toBe(0);
 
-      // Get the engine and apply filter
-      const engineMod = (window as unknown as Record<string, unknown>).__wasmEngine as {
-        filterPixelate: (engine: unknown, layerId: string, blockSize: number) => void;
-      };
-      const engine = (window as unknown as Record<string, unknown>).__engine;
-      if (engineMod && engine) {
-        state.pushHistory('Pixelate');
-        engineMod.filterPixelate(engine, activeId, 16);
-        state.notifyRender();
-      }
-    });
+    // Apply pixelate via the Filter menu UI.
+    await page.click('text=Filter');
+    await page.click('text=Pixelate...');
+    await expect(page.locator('h2:has-text("Pixelate")')).toBeVisible({ timeout: 3000 });
+    const slider = page.locator('input[type="range"]');
+    await slider.fill('10');
+    await page.locator('button:has-text("Apply")').click();
+    await page.waitForTimeout(500);
 
-    await page.waitForTimeout(300);
+    // After pixelation the pixel should have changed — no longer pure red.
+    const afterPixel = await getPixelAt(page, 0, 50);
+    expect(afterPixel.r).not.toBe(255);
+    expect(afterPixel.b).toBeGreaterThan(0);
 
     // Undo
     await page.keyboard.press('Control+z');
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
 
-    // The document should still have the layer
-    const layerCount = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { layers: unknown[] } };
-      };
-      return store.getState().document.layers.length;
-    });
-
-    expect(layerCount).toBeGreaterThan(0);
+    // After undo the pixel should be back to pure red.
+    const undonePixel = await getPixelAt(page, 0, 50);
+    expect(undonePixel.r).toBe(255);
+    expect(undonePixel.b).toBe(0);
   });
 });

@@ -308,7 +308,11 @@ test.describe('Bug Fix: Layer Masks', () => {
 // ===========================================================================
 
 test.describe('Bug Fix: Selection Constraining Painting', () => {
-  test('painting with active selection only modifies pixels inside selection bounds', async ({ page }) => {
+  // paintRect writes directly to the JS pixel store and does not go through
+  // the GPU selection mask. This test verifies that paintRect correctly
+  // bounds-checks its coordinate arguments. True GPU selection mask enforcement
+  // requires real tool interactions (brush/fill via mouse events).
+  test('paintRect bounds-checks pixel writes correctly', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     const s0 = await getEditorState(page);
     const layerId = s0.document.layers[0]!.id;
@@ -349,12 +353,12 @@ test.describe('Bug Fix: Selection Constraining Painting', () => {
     await paintRect(page, 50, 50, 100, 100, { r: 0, g: 255, b: 0, a: 255 }, layerId);
     await page.waitForTimeout(300);
 
-    // Inside selection: should be green — use composite readback (JS data may flush to GPU)
+    // Inside painted region: should be green
     const insidePixel = await getCompositePixelAt(page, 100, 100);
     expect(insidePixel.g).toBeGreaterThan(200);
     expect(insidePixel.a).toBeGreaterThan(200);
 
-    // Outside selection: should still be transparent (we only painted inside)
+    // Outside painted region: should still be transparent
     const outsidePixel = await getCompositePixelAt(page, 10, 10);
     expect(outsidePixel.g).toBeLessThan(50);
 
@@ -465,7 +469,9 @@ test.describe('Bug Fix: Flatten Image', () => {
 // ===========================================================================
 
 test.describe('Bug Fix: Clone Stamp', () => {
-  test('cloned content matches source region', async ({ page }) => {
+  // This test manually copies pixels in JS to verify store-level pixel
+  // copy fidelity. It does not invoke the GPU clone stamp tool.
+  test('manual pixel copy reproduces source region', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     const s0 = await getEditorState(page);
     const layerId = s0.document.layers[0]!.id;
@@ -769,15 +775,17 @@ test.describe('Bug Fix: Image Adjustments', () => {
 
     // Re-enable and reset for cleanup
     await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          setAdjustments: (adj: Record<string, number>) => void;
-          setAdjustmentsEnabled: (enabled: boolean) => void;
+          document: { rootGroupId: string };
+          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
+          setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
         };
       };
       const state = store.getState();
-      state.setAdjustmentsEnabled(true);
-      state.setAdjustments({
+      const groupId = state.document.rootGroupId;
+      state.setGroupAdjustmentsEnabled(groupId, true);
+      state.setGroupAdjustments(groupId, {
         exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0,
       });
     });

@@ -20,13 +20,13 @@ test.describe('Grid size slider with stops (#125)', () => {
     await page.waitForTimeout(200);
 
     // Verify it's a range input, not a select
-    const sliderExists = await page.locator('input[type="range"]').first().isVisible().catch(() => false);
+    const slider = page.locator('input[type="range"]').first();
+    await expect(slider).toBeVisible();
+
     const selectExists = await page.locator('select').first().isVisible().catch(() => false);
+    expect(selectExists).toBe(false);
 
     await page.screenshot({ path: 'e2e/screenshots/grid-slider.png' });
-
-    // There should be at least one range slider visible (the grid one)
-    expect(sliderExists || !selectExists).toBeTruthy();
   });
 
   test('moving the grid slider changes the grid size', async ({ page }) => {
@@ -39,7 +39,7 @@ test.describe('Grid size slider with stops (#125)', () => {
     });
     await page.waitForTimeout(200);
 
-    // Get initial grid size
+    // Get initial grid size from the store
     const initialSize = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__uiStore as {
         getState: () => { gridSize: number };
@@ -47,15 +47,21 @@ test.describe('Grid size slider with stops (#125)', () => {
       return store.getState().gridSize;
     });
 
-    // Change grid size via store to a different stop value
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setGridSize: (v: number) => void };
-      };
-      store.getState().setGridSize(32);
-    });
+    // Find the grid slider and read its current value
+    const slider = page.locator('input[type="range"]').first();
+    await expect(slider).toBeVisible();
+    const initialSliderValue = await slider.inputValue();
+
+    // Move the slider to a different stop by setting its value via fill()
+    const maxAttr = await slider.getAttribute('max');
+    const maxIndex = Number(maxAttr ?? '0');
+    // Pick a different index than the current one
+    const currentIndex = Number(initialSliderValue);
+    const targetIndex = currentIndex < maxIndex ? currentIndex + 1 : currentIndex - 1;
+    await slider.fill(String(targetIndex));
     await page.waitForTimeout(200);
 
+    // Read back the grid size from the store — it should have changed
     const newSize = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__uiStore as {
         getState: () => { gridSize: number };
@@ -65,7 +71,6 @@ test.describe('Grid size slider with stops (#125)', () => {
 
     await page.screenshot({ path: 'e2e/screenshots/grid-slider-changed.png' });
 
-    expect(newSize).toBe(32);
     expect(newSize).not.toBe(initialSize);
   });
 });

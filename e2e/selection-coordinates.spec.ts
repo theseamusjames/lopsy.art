@@ -230,6 +230,12 @@ test.beforeEach(async ({ page }) => {
 
 test.describe('Selection Coordinates with Layer Offset', () => {
   test('magic wand outside circle on offset layer fills entire empty area', async ({ page }) => {
+    // NOTE: magicWandSelect and fillSelection are JS helpers that manipulate
+    // Zustand state directly — they do NOT exercise the real tool code paths.
+    // The click at document (10, 180) with layer offset (0, -50) maps to
+    // layer-local y = 230, which is out of bounds for a 200px-tall layer.
+    // This triggers the helper's "select all transparent pixels" branch
+    // rather than performing a real flood-fill from the click point.
     await createDocument(page, 200, 200, true);
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
@@ -270,10 +276,28 @@ test.describe('Selection Coordinates with Layer Offset', () => {
         ) diffCount++;
       }
     }
-    // The fill should have produced visible blue pixels
-    expect(diffCount).toBeGreaterThan(0);
+    // The fill should have produced visible blue pixels across a significant
+    // portion of the canvas (the entire transparent area outside the circle).
+    // 200x200 = 40000 pixels; the red circle is ~5027 pixels, so >30000
+    // pixels should have changed.
+    expect(diffCount).toBeGreaterThan(30000);
+
+    // Verify specific pixels: corners should be blue (outside the circle)
+    if (afterFill) {
+      const topLeftIdx = 0;
+      expect(afterFill.pixels[topLeftIdx]).toBe(0);       // R
+      expect(afterFill.pixels[topLeftIdx + 2]).toBe(255);  // B
+
+      const bottomRightIdx = (199 * 200 + 199) * 4;
+      expect(afterFill.pixels[bottomRightIdx]).toBe(0);       // R
+      expect(afterFill.pixels[bottomRightIdx + 2]).toBe(255); // B
+    }
   });
 
+  // Store-level integration test: validates that the fillSelection JS helper
+  // correctly maps document-space selection masks to layer-local pixel
+  // coordinates when a layer has a non-zero offset. This does NOT exercise
+  // the real magic wand or fill tool code — it manipulates Zustand directly.
   test('fill selection respects layer offset correctly', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const s0 = await getEditorState(page);
@@ -315,6 +339,7 @@ test.describe('Selection Coordinates with Layer Offset', () => {
 
     await fillSelection(page, { r: 0, g: 255, b: 0, a: 255 });
 
+    // Pixels outside the red square (in document space) should be filled green
     const br = await getPixelAt(page, 99, 99, fillLayerId);
     expect(br.g).toBe(255);
     expect(br.a).toBe(255);
@@ -323,11 +348,35 @@ test.describe('Selection Coordinates with Layer Offset', () => {
     expect(tl.g).toBe(255);
     expect(tl.a).toBe(255);
 
+    // Pixel inside the red square should NOT be filled (selection excluded it)
     const center = await getPixelAt(page, 60, 60, fillLayerId);
     expect(center.a).toBe(0);
+
+    // Boundary assertions: just outside the red square should be filled,
+    // just inside should not. The red square occupies layer-local (30,30)-(69,69),
+    // which maps to document-space (50,50)-(89,89) after the (20,20) offset.
+    const justOutsideLeft = await getPixelAt(page, 49, 60, fillLayerId);
+    expect(justOutsideLeft.g).toBe(255);
+    expect(justOutsideLeft.a).toBe(255);
+
+    const justInsideLeft = await getPixelAt(page, 50, 60, fillLayerId);
+    expect(justInsideLeft.a).toBe(0);
+
+    const justOutsideTop = await getPixelAt(page, 60, 49, fillLayerId);
+    expect(justOutsideTop.g).toBe(255);
+    expect(justOutsideTop.a).toBe(255);
+
+    const justInsideTop = await getPixelAt(page, 60, 50, fillLayerId);
+    expect(justInsideTop.a).toBe(0);
   });
 
-  test('selection on layer moved far off-canvas edge', async ({ page }) => {
+  // Store-level integration test: creates a full-canvas selection mask
+  // manually via setSelection (mask.fill(255)), completely bypassing the
+  // selection tools. The off-canvas layer position (-75, -75) is irrelevant
+  // because the selection and fill target a freshly added layer at (0, 0).
+  // This effectively tests that fillSelection covers every document pixel
+  // when given an all-255 mask.
+  test('full-canvas selection fills entire new layer regardless of other layer positions', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
@@ -385,13 +434,26 @@ test.describe('Selection Coordinates with Layer Offset', () => {
 
     await fillSelection(page, { r: 0, g: 0, b: 255, a: 255 });
 
+    // All four corners and center should be filled blue, confirming the
+    // fill covered the entire 100x100 document.
     const topLeft = await getPixelAt(page, 0, 0, fillLayerId);
     expect(topLeft.b).toBe(255);
+    expect(topLeft.a).toBe(255);
+
+    const topRight = await getPixelAt(page, 99, 0, fillLayerId);
+    expect(topRight.b).toBe(255);
+    expect(topRight.a).toBe(255);
+
+    const bottomLeft = await getPixelAt(page, 0, 99, fillLayerId);
+    expect(bottomLeft.b).toBe(255);
+    expect(bottomLeft.a).toBe(255);
 
     const bottomRight = await getPixelAt(page, 99, 99, fillLayerId);
     expect(bottomRight.b).toBe(255);
+    expect(bottomRight.a).toBe(255);
 
     const center = await getPixelAt(page, 50, 50, fillLayerId);
     expect(center.b).toBe(255);
+    expect(center.a).toBe(255);
   });
 });
