@@ -19,6 +19,102 @@ If the answer to any of these is "yes (still passes)", rewrite the test.
 
 ---
 
+## Screenshots are the source of truth
+
+**Always write tests by screenshot first, assertion second.** The
+screenshot is the contract — it's the visual record of what the test
+is actually verifying, committed alongside the spec file for future
+reviewers.
+
+### The screenshot-first workflow
+
+1. **Set up the state** you want to verify. Paint, click, drag,
+   configure — whatever the feature under test requires.
+2. **Take a screenshot immediately**, before writing any `expect`
+   calls:
+   ```ts
+   await page.screenshot({ path: 'e2e/screenshots/my-feature.png' });
+   ```
+3. **Open the screenshot and look at it.** What colours are where?
+   Where are the edges? What pixel-level facts stand out? These are
+   the things your assertions should check — and only these.
+4. **Write assertions that describe the screenshot.** Read specific
+   pixels at specific doc coordinates. Count opaque pixels in a
+   region. Measure the spread of channel values at a known point.
+   The assertions must match what a human can see in the image.
+5. **Run the test and re-open the screenshot.** If the assertions
+   pass but the screenshot no longer shows what the assertions
+   describe (e.g. a regression shifted the content), the test needs
+   stricter pixel probes. If the assertions fail but the screenshot
+   looks correct, your assertion values or coordinates are wrong —
+   not the feature.
+
+### Screenshots are committed to git
+
+Every test that saves a screenshot commits it. This is intentional:
+
+- **Reviewers** can open the screenshot and verify that the assertions
+  correspond to visible facts in the image. Without the screenshot, a
+  reviewer has no way to tell whether `expect(pixel.r).toBe(255)` is
+  correct — maybe the shape tool never rendered the red fill and the
+  test is reading an unrelated pixel.
+- **Regressions** are easier to diagnose. When a test fails months
+  later, the committed screenshot is the reference for what the test
+  used to see. Compare it against Playwright's failure screenshot in
+  `test-results/` to pinpoint what changed.
+- **Stable output is a feature, not a side effect.** Two runs of the
+  same test should produce byte-for-byte identical screenshots unless
+  production code changed. If your test produces non-deterministic
+  screenshots, something is leaking state between runs (timer, random
+  seed, uninitialised GPU texture, un-reset UI) — fix that before
+  adding the test.
+
+### What to screenshot
+
+- **`page.screenshot(...)`** captures the whole viewport — app
+  chrome, panels, toolbar, and the canvas area. Use this when the
+  feature's visibility depends on UI state (a dialog is open, a tool
+  is active, a slider has moved).
+- **`element.screenshot(...)`** on the canvas container isolates the
+  drawing surface. Use this when the feature is purely about what's
+  rendered on the document and you want to minimize noise from
+  surrounding UI.
+- **Composited pixel dump via `__readCompositedPixels`** is a
+  programmatic "screenshot" of the WebGL canvas. It's what pixel-probe
+  assertions read from — it bypasses the overlay and UI chrome, so
+  the coordinates match doc space directly.
+
+Save screenshots to `e2e/screenshots/<descriptive-name>.png`. Use
+kebab-case names that match the feature, not the test file, so two
+tests exercising the same feature produce the same base name with a
+suffix (`-before`, `-after`, `-with-selection`).
+
+### When the screenshot disagrees with your assertion
+
+This happens constantly. Almost every test in this suite has been
+through at least one "I know what it SHOULD look like but the
+screenshot shows something else" cycle. The screenshot wins:
+
+- If the assertion says the corner is transparent and the screenshot
+  shows a red pixel at that corner, the assertion is wrong (or the
+  feature is broken).
+- If the assertion says two shapes should differ and the screenshot
+  shows them identical, either the feature doesn't do what you
+  thought (e.g. polygon `sides=4` + `cornerRadius` is a no-op — that
+  was found this way) or your "before" state leaked into the "after"
+  capture.
+- If the assertion says a pixel at doc (50, 50) is red and the
+  screenshot shows the red region starting at (55, 55), your
+  coordinates don't match the feature's rendering — either move the
+  probe or use a wider tolerance.
+
+**Never adjust an assertion by trial and error until it passes.** If
+you don't know *why* the new value is correct from looking at the
+screenshot, the test is just curve-fitting to the current output and
+will pass against any future regression.
+
+---
+
 ## Where to find things
 
 ### Exposed window globals (`src/main.tsx`)
@@ -244,12 +340,10 @@ you to model the output.
 
 ### Screenshots belong with the test
 
-Save screenshots to `e2e/screenshots/<test-name>.png` so that when you
-open a failing test a week later, the rendered output is right there.
-Screenshots are committed to git — they double as reference material
-for understanding what the test does, and a reviewer can sanity-check
-"does this assertion match what's on screen" without running the
-test.
+See "Screenshots are the source of truth" at the top of this file. In
+short: save to `e2e/screenshots/<descriptive-name>.png`, commit
+alongside the spec, and make sure a reviewer can look at the
+screenshot and verify your assertions without running the test.
 
 ---
 
@@ -257,25 +351,32 @@ test.
 
 1. **Run the single failing test** to get the real error message, not a
    summary count. `npx playwright test --project=chromium e2e/<file> -g "<name>"`.
-2. **Read the test and ask: what is it trying to verify?** If the
-   answer is unclear, the test is probably the problem — not the
-   feature.
-3. **Look up the production code path** the test should be exercising.
+2. **Open the committed screenshot for this test** (or Playwright's
+   failure screenshot in `test-results/` if there's no baseline).
+   That's the source of truth — you're reconciling the assertions
+   against what's actually on screen, not the other way around.
+3. **Read the test and ask: what is it trying to verify?** Compare
+   the assertion's claim ("pixel at (50, 50) should be red") to the
+   screenshot. If they don't agree, one of them is wrong.
+4. **Look up the production code path** the test should be exercising.
    Find the store action or handler that does the real work
    (`src/app/store/actions/*`, `src/app/interactions/*-handlers.ts`,
    `src/tools/*/\*.ts`, `engine-rs/**/*.rs`).
-4. **Check the units**. Is the slider in `0..100` or `-1..1`? Is the
+5. **Check the units**. Is the slider in `0..100` or `-1..1`? Is the
    angle in radians or degrees? Is the coordinate doc-space or
    layer-local? The test's assertion values must match the production
-   code's units.
-5. **Write a one-off debug test** if the failure is mysterious. Dump
+   code's units *and* the screenshot.
+6. **Write a one-off debug test** if the failure is mysterious. Dump
    viewport state, active layer, pixel samples along a scan line,
-   layer bounds — whatever you need. Delete it before committing.
-6. **Verify visually.** Before claiming a test passes meaningfully,
-   open the screenshot it saves and confirm the pixels the test
-   inspects actually look like what you expect. A test that passes
-   against the wrong region of a correct image is worse than a failing
-   one.
+   layer bounds — whatever you need. Always save a screenshot inside
+   the debug test; it will usually reveal the problem immediately.
+   Delete the debug test before committing.
+7. **Re-run and re-check the screenshot.** A green test whose
+   screenshot no longer matches the asserted content is worse than a
+   failing test — it's a regression waiting to go unnoticed. If the
+   screenshot changed unexpectedly, either your fix is wrong or a
+   production regression slipped in; don't commit until you understand
+   which.
 
 ---
 
