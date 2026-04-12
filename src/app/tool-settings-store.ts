@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Color } from '../types';
+import type { GradientStop } from '../tools/gradient/gradient';
 import type { BrushTipData } from '../types/brush';
 
 interface ToolSettings {
@@ -22,6 +23,8 @@ interface ToolSettings {
   aspectRatioH: number;
   aspectRatioLocked: boolean;
   gradientType: 'linear' | 'radial';
+  gradientStops: readonly GradientStop[];
+  gradientReverse: boolean;
   stampSize: number;
   pathStrokeWidth: number;
   dodgeExposure: number;
@@ -78,6 +81,11 @@ interface ToolSettings {
   setAspectRatioH: (h: number) => void;
   setAspectRatioLocked: (locked: boolean) => void;
   setGradientType: (type: 'linear' | 'radial') => void;
+  setGradientStops: (stops: readonly GradientStop[]) => void;
+  setGradientReverse: (reverse: boolean) => void;
+  addGradientStop: (position: number, color: Color) => void;
+  removeGradientStop: (index: number) => void;
+  updateGradientStop: (index: number, stop: Partial<GradientStop>) => void;
   setSymmetryHorizontal: (enabled: boolean) => void;
   setSymmetryVertical: (enabled: boolean) => void;
 }
@@ -102,6 +110,11 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   aspectRatioH: 1,
   aspectRatioLocked: false,
   gradientType: 'linear',
+  gradientStops: [
+    { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
+    { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
+  ],
+  gradientReverse: false,
   stampSize: 20,
   pathStrokeWidth: 2,
   dodgeExposure: 50,
@@ -146,6 +159,35 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   setAspectRatioH: (h) => set({ aspectRatioH: Math.max(0.01, h) }),
   setAspectRatioLocked: (locked) => set({ aspectRatioLocked: locked }),
   setGradientType: (type) => set({ gradientType: type }),
+  setGradientStops: (stops) => {
+    const clamped = stops.length < 2
+      ? [...stops, ...Array.from({ length: 2 - stops.length }, (_, i) => ({ position: i, color: { r: 0, g: 0, b: 0, a: 1 } }))]
+      : stops.slice(0, 16);
+    const sorted = [...clamped].sort((a, b) => a.position - b.position);
+    set({ gradientStops: sorted });
+  },
+  setGradientReverse: (reverse) => set({ gradientReverse: reverse }),
+  addGradientStop: (position, color) => set((state) => {
+    if (state.gradientStops.length >= 16) return state;
+    const newStops = [...state.gradientStops, { position: Math.max(0, Math.min(1, position)), color }];
+    newStops.sort((a, b) => a.position - b.position);
+    return { gradientStops: newStops };
+  }),
+  removeGradientStop: (index) => set((state) => {
+    if (state.gradientStops.length <= 2) return state;
+    const newStops = state.gradientStops.filter((_, i) => i !== index);
+    return { gradientStops: newStops };
+  }),
+  updateGradientStop: (index, partial) => set((state) => {
+    const newStops = state.gradientStops.map((stop, i) => {
+      if (i !== index) return stop;
+      return {
+        position: partial.position !== undefined ? Math.max(0, Math.min(1, partial.position)) : stop.position,
+        color: partial.color ?? stop.color,
+      };
+    });
+    return { gradientStops: [...newStops].sort((a, b) => a.position - b.position) };
+  }),
   setSymmetryHorizontal: (enabled) => set({ symmetryHorizontal: enabled }),
   setSymmetryVertical: (enabled) => set({ symmetryVertical: enabled }),
   setStampSize: (size) => set({ stampSize: Math.max(1, Math.min(200, size)) }),
