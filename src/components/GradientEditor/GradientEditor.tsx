@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GradientStop } from '../../tools/gradient/gradient';
 import { interpolateGradient } from '../../tools/gradient/gradient';
-import { ColorPicker } from '../ColorPicker/ColorPicker';
-import type { Color } from '../../types';
 import styles from './GradientEditor.module.css';
 
 interface GradientEditorProps {
   stops: readonly GradientStop[];
+  selectedIndex: number;
   onStopsChange: (stops: readonly GradientStop[]) => void;
+  onSelectStop: (index: number) => void;
 }
 
 function stopToCss(stop: GradientStop): string {
@@ -15,18 +15,14 @@ function stopToCss(stop: GradientStop): string {
   return `rgba(${r},${g},${b},${a}) ${stop.position * 100}%`;
 }
 
-function buildGradientCss(stops: readonly GradientStop[]): string {
+export function buildGradientCss(stops: readonly GradientStop[]): string {
   const sorted = [...stops].sort((a, b) => a.position - b.position);
   return `linear-gradient(to right, ${sorted.map(stopToCss).join(', ')})`;
 }
 
-export function GradientEditor({ stops, onStopsChange }: GradientEditorProps) {
-  const [selectedIndex, setSelectedIndex] = useState(0);
+export function GradientEditor({ stops, selectedIndex, onStopsChange, onSelectStop }: GradientEditorProps) {
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
-  const handleRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const sorted = [...stops].sort((a, b) => a.position - b.position);
 
@@ -47,20 +43,14 @@ export function GradientEditor({ stops, onStopsChange }: GradientEditorProps) {
     newStops.sort((a, b) => a.position - b.position);
     const newIndex = newStops.findIndex((s) => s.position === position && s.color === color);
     onStopsChange(newStops);
-    setSelectedIndex(newIndex >= 0 ? newIndex : stops.length);
-  }, [stops, onStopsChange, getPositionFromEvent, draggingIndex]);
+    onSelectStop(newIndex >= 0 ? newIndex : stops.length);
+  }, [stops, onStopsChange, onSelectStop, getPositionFromEvent, draggingIndex]);
 
   const handleHandleMouseDown = useCallback((e: React.MouseEvent, index: number) => {
     e.stopPropagation();
-    setSelectedIndex(index);
+    onSelectStop(index);
     setDraggingIndex(index);
-  }, []);
-
-  const handleHandleDoubleClick = useCallback((e: React.MouseEvent, index: number) => {
-    e.stopPropagation();
-    setSelectedIndex(index);
-    setShowPicker(true);
-  }, []);
+  }, [onSelectStop]);
 
   useEffect(() => {
     if (draggingIndex === null) return;
@@ -71,12 +61,12 @@ export function GradientEditor({ stops, onStopsChange }: GradientEditorProps) {
         i === draggingIndex ? { ...stop, position } : stop,
       );
       newStops.sort((a, b) => a.position - b.position);
-      const newIndex = newStops.findIndex(
-        (s) => s.position === position,
-      );
+      const newIndex = newStops.findIndex((s) => s.position === position);
       onStopsChange(newStops);
-      if (newIndex >= 0) setDraggingIndex(newIndex);
-      setSelectedIndex(newIndex >= 0 ? newIndex : draggingIndex);
+      if (newIndex >= 0) {
+        setDraggingIndex(newIndex);
+        onSelectStop(newIndex);
+      }
     };
 
     const handleUp = () => {
@@ -89,50 +79,7 @@ export function GradientEditor({ stops, onStopsChange }: GradientEditorProps) {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
     };
-  }, [draggingIndex, stops, onStopsChange, getPositionFromEvent]);
-
-  useEffect(() => {
-    if (!showPicker) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setShowPicker(false);
-      }
-    };
-
-    const timer = setTimeout(() => {
-      window.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showPicker]);
-
-  const handleColorChange = useCallback((color: Color) => {
-    const newStops = stops.map((stop, i) =>
-      i === selectedIndex ? { ...stop, color } : stop,
-    );
-    onStopsChange(newStops);
-  }, [stops, selectedIndex, onStopsChange]);
-
-  const handleDelete = useCallback(() => {
-    if (stops.length <= 2) return;
-    const newStops = stops.filter((_, i) => i !== selectedIndex);
-    onStopsChange(newStops);
-    setSelectedIndex(Math.min(selectedIndex, newStops.length - 1));
-    setShowPicker(false);
-  }, [stops, selectedIndex, onStopsChange]);
-
-  const selectedStop = sorted[selectedIndex];
-  const activeHandle = handleRefs.current.get(selectedIndex);
-
-  let pickerPos = { top: 0, left: 0 };
-  if (showPicker && activeHandle) {
-    const rect = activeHandle.getBoundingClientRect();
-    pickerPos = { top: rect.bottom + 4, left: rect.left - 95 };
-  }
+  }, [draggingIndex, stops, onStopsChange, onSelectStop, getPositionFromEvent]);
 
   return (
     <div className={styles.editor} data-testid="gradient-editor">
@@ -151,40 +98,16 @@ export function GradientEditor({ stops, onStopsChange }: GradientEditorProps) {
         {sorted.map((stop, index) => (
           <div
             key={index}
-            ref={(el) => {
-              if (el) handleRefs.current.set(index, el);
-              else handleRefs.current.delete(index);
-            }}
             className={`${styles.handle} ${index === selectedIndex ? styles.handleActive : ''}`}
             style={{
               left: `${stop.position * 100}%`,
               backgroundColor: `rgb(${stop.color.r},${stop.color.g},${stop.color.b})`,
             }}
             onMouseDown={(e) => handleHandleMouseDown(e, index)}
-            onDoubleClick={(e) => handleHandleDoubleClick(e, index)}
             data-testid={`gradient-stop-${index}`}
           />
         ))}
       </div>
-      <div className={styles.stopActions}>
-        <button
-          className={styles.deleteBtn}
-          onClick={handleDelete}
-          disabled={stops.length <= 2}
-          data-testid="gradient-delete-stop"
-        >
-          Delete stop
-        </button>
-      </div>
-      {showPicker && selectedStop && (
-        <div
-          ref={pickerRef}
-          className={styles.colorPopover}
-          style={{ top: pickerPos.top, left: Math.max(0, pickerPos.left) }}
-        >
-          <ColorPicker color={selectedStop.color} onChange={handleColorChange} />
-        </div>
-      )}
     </div>
   );
 }
