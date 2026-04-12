@@ -81,6 +81,12 @@
 ### Polygonal Lasso
 - Click-to-place-points polygon selection
 
+### Magnetic Lasso
+- **Width**: 1 - 40 px (perpendicular search radius from the cursor path)
+- **Contrast**: 1 - 100% (minimum edge strength to snap onto)
+- **Frequency**: 0 - 200 px (distance between auto-placed anchors; 0 disables auto-anchoring)
+- Edge detection runs in WASM against the active layer's GPU texture; only snapped coordinates cross back to JS
+
 ### Magic Wand
 - **Tolerance**: 0 - 255
 - **Contiguous**: on/off

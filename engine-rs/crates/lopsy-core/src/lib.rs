@@ -9,5 +9,6 @@ pub mod pixel_buffer;
 pub mod filters;
 pub mod export;
 pub mod flood_fill;
+pub mod magnetic_lasso;
 pub mod compress;
 pub mod decode;

@@ -37,6 +37,21 @@ function MarqueeEllipseIcon({ size }: { size: number }) {
   );
 }
 
+function MagneticLassoIcon({ size }: { size: number }) {
+  // Lasso loop with a horseshoe magnet overlapping it from above — the
+  // magnet's poles dip into the top of the loop so the two shapes read as
+  // one combined icon at 16 px instead of floating apart.
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="13" cy="13" rx="6" ry="5" />
+      <path d="M18 17 C 20 19, 21 21, 21 22" />
+      <path d="M10 11 L10 4 A3 2 0 0 1 16 4 L16 11" />
+      <path d="M8 11 L12 11" />
+      <path d="M14 11 L18 11" />
+    </svg>
+  );
+}
+
 function GradientIcon({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -65,6 +80,7 @@ const toolGroups: ToolDef[][] = [
     { id: 'marquee-rect', icon: <MarqueeRectIcon size={ICON_SIZE} />, label: 'Rectangular Marquee (M)' },
     { id: 'marquee-ellipse', icon: <MarqueeEllipseIcon size={ICON_SIZE} />, label: 'Elliptical Marquee' },
     { id: 'lasso', icon: <Lasso size={ICON_SIZE} />, label: 'Lasso (L)' },
+    { id: 'lasso-magnetic', icon: <MagneticLassoIcon size={ICON_SIZE} />, label: 'Magnetic Lasso' },
     { id: 'wand', icon: <Wand2 size={ICON_SIZE} />, label: 'Magic Wand (W)' },
   ],
   [

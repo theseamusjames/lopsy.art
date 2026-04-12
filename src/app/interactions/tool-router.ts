@@ -51,6 +51,11 @@ export const toolHandlers: Partial<Record<ToolId, ToolHandler>> = {
     move: (_ctx, state) => handleSelectionMove(state, _ctx.canvasPos),
     up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos, ctx.screenToCanvas!, ctx.containerRef!, ctx),
   },
+  'lasso-magnetic': {
+    down: (ctx) => handleSelectionDown(ctx, 'lasso-magnetic'),
+    move: (_ctx, state) => handleSelectionMove(state, _ctx.canvasPos),
+    up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos, ctx.screenToCanvas!, ctx.containerRef!, ctx),
+  },
   fill: {
     down: (ctx) => { handleFillDown(ctx); return undefined; },
   },
