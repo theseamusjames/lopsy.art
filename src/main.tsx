@@ -85,18 +85,19 @@ if (import.meta.env.DEV) {
   };
 }
 
-// Prevent browser zoom so Ctrl+wheel and pinch gestures only affect the canvas
-document.addEventListener('wheel', (e) => {
+// Prevent browser zoom so Ctrl+wheel and pinch gestures only affect the canvas.
+// Register at window + capture phase so nothing can stop propagation first.
+window.addEventListener('wheel', (e) => {
   if (e.ctrlKey || e.metaKey) e.preventDefault();
-}, { passive: false });
-document.addEventListener('gesturestart', (e) => e.preventDefault());
-document.addEventListener('gesturechange', (e) => e.preventDefault());
-document.addEventListener('gestureend', (e) => e.preventDefault());
-document.addEventListener('keydown', (e) => {
+}, { passive: false, capture: true });
+window.addEventListener('gesturestart', (e) => e.preventDefault(), { capture: true });
+window.addEventListener('gesturechange', (e) => e.preventDefault(), { capture: true });
+window.addEventListener('gestureend', (e) => e.preventDefault(), { capture: true });
+window.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
     e.preventDefault();
   }
-});
+}, { capture: true });
 
 const root = document.getElementById('root');
 if (!root) {

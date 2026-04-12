@@ -191,6 +191,7 @@ export function App() {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (useEditorStore.getState().isDirty) {
         e.preventDefault();
+        e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
