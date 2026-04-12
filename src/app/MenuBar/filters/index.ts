@@ -16,6 +16,7 @@ import { pixelate } from './pixelate';
 import { halftone } from './halftone';
 import { solarize } from './solarize';
 import { kaleidoscope } from './kaleidoscope';
+import { chromaticAberration } from './chromatic-aberration';
 
 export type { FilterDefinition };
 
@@ -37,6 +38,7 @@ const allFilters: FilterDefinition[] = [
   halftone,
   solarize,
   kaleidoscope,
+  chromaticAberration,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(

@@ -1447,6 +1447,30 @@ pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, r
     );
 }
 
+#[wasm_bindgen(js_name = "filterChromaticAberration")]
+pub fn filter_chromatic_aberration(
+    engine: &mut Engine, layer_id: &str,
+    offset_r: f32, offset_b: f32, angle_degrees: f32,
+) {
+    let prog = engine.inner.shaders.chromatic_aberration.program.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_offsetR") {
+                gl.uniform1f(Some(&loc), offset_r);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_offsetB") {
+                gl.uniform1f(Some(&loc), offset_b);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_angle") {
+                gl.uniform1f(Some(&loc), angle_degrees.to_radians());
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterAddNoise")]
 pub fn filter_add_noise(
     engine: &mut Engine, layer_id: &str,

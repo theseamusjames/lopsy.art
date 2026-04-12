@@ -209,6 +209,9 @@ Applied globally or per-group. All default to 0.
 ### Halftone
 - **Halftone**: dot size 2 - 32 px, angle 0 - 180 degrees, softness 0 - 4
 
+### Distort
+- **Chromatic Aberration**: red offset 0 - 50 px, blue offset 0 - 50 px, angle 0 - 360 degrees (splits RGB channels with adjustable offset for a lens fringe / glitch effect)
+
 ### Stylize
 - **Find Edges**: Sobel edge detection, no parameters
 - **Cel Shading**: levels, edge strength
