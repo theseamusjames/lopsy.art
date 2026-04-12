@@ -1,0 +1,30 @@
+.swatch {
+  width: 80px;
+  height: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.swatch:hover {
+  border-color: var(--color-text-secondary);
+}
+
+.advancedBtn {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.advancedBtn:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+}

@@ -825,18 +825,22 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point): 
 export function handleGradientMove(state: InteractionState, layerLocalPos: Point): void {
   if (!state.startPoint || !state.layerId) return;
 
-  const fg = useUIStore.getState().foregroundColor;
-  const bg = useUIStore.getState().backgroundColor;
   const toolSettings = useToolSettingsStore.getState();
   const gradType = toolSettings.gradientType;
+  const reverse = toolSettings.gradientReverse;
 
   const engine = getEngine();
   if (!engine) return;
 
-  const stopsJson = JSON.stringify([
-    { position: 0, r: fg.r / 255, g: fg.g / 255, b: fg.b / 255, a: fg.a },
-    { position: 1, r: bg.r / 255, g: bg.g / 255, b: bg.b / 255, a: bg.a },
-  ]);
+  const stops = toolSettings.gradientStops.map((s) => ({
+    position: reverse ? 1 - s.position : s.position,
+    r: s.color.r / 255,
+    g: s.color.g / 255,
+    b: s.color.b / 255,
+    a: s.color.a,
+  }));
+  if (reverse) stops.reverse();
+  const stopsJson = JSON.stringify(stops);
 
   const startX = state.startPoint.x + state.layerStartX;
   const startY = state.startPoint.y + state.layerStartY;
