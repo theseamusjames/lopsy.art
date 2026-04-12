@@ -172,6 +172,45 @@ test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
     const db = Math.abs(baselinePixel!.b! - adjustedPixel!.b!);
     expect(dr + dg + db).toBeGreaterThan(50);
   });
+
+  test('live composite and PNG export agree on the same saturation value', async ({ page }) => {
+    // Regression test for the JS saturation/vibrance unit-mismatch fix
+    // (src/filters/image-adjustments.ts). Before the fix, the GPU shader
+    // divided saturation by 100 but the JS export pipeline did not, so
+    // the same slider value produced wildly different results on screen
+    // vs in the exported PNG. A user who saw a nicely desaturated live
+    // preview would get a totally crushed (or unchanged) PNG file.
+    //
+    // Paint a partially-saturated red and apply a slider-mid-range
+    // negative saturation. Both the live composite and the exported PNG
+    // should show the painted region desaturated to roughly the same
+    // gray value.
+    await paintRect(page, 20, 20, 60, 60, { r: 255, g: 80, b: 80, a: 255 });
+    await page.waitForTimeout(200);
+
+    await setGroupAdjustments(page, -100, 0);
+    await page.waitForTimeout(200);
+
+    const live = await readCompositedAtDoc(page, 50, 50);
+    const exported = await exportAndDecodePixel(page, 50, 50);
+    expect(exported).not.toBeNull();
+
+    // Both paths must desaturate the same input to roughly the same
+    // output. We allow a small per-channel tolerance to accommodate
+    // rounding differences between the GPU float pipeline and the JS
+    // integer pipeline (gl.readPixels and the PNG decoder each clamp
+    // to u8 at different points).
+    expect(Math.abs(live.r - exported!.r!)).toBeLessThanOrEqual(8);
+    expect(Math.abs(live.g - exported!.g!)).toBeLessThanOrEqual(8);
+    expect(Math.abs(live.b - exported!.b!)).toBeLessThanOrEqual(8);
+
+    // And both paths must actually have desaturated: the R/G/B spread
+    // must have shrunk from the original (175) to under a third of that.
+    const liveSpread = Math.max(live.r, live.g, live.b) - Math.min(live.r, live.g, live.b);
+    const exportedSpread = Math.max(exported!.r!, exported!.g!, exported!.b!) - Math.min(exported!.r!, exported!.g!, exported!.b!);
+    expect(liveSpread).toBeLessThan(60);
+    expect(exportedSpread).toBeLessThan(60);
+  });
 });
 
 /**

@@ -284,4 +284,125 @@ test.describe('Shape tool corner radius (#62)', () => {
 
     await page.screenshot({ path: 'e2e/screenshots/sharp-corners.png' });
   });
+
+  test('4-sided polygon with cornerRadius > 0 renders a rounded rectangle', async ({ page }) => {
+    // Detailed regression test for rounded rectangles. Before the
+    // sdPolygon fix, setting cornerRadius > 0 on a 4-sided polygon was
+    // a silent no-op (the generic SDF's inset+round pipeline collapsed
+    // into identity). This test verifies the corners are actually
+    // carved out and the straight sections reach the bounding box.
+    await createDocument(page, 400, 300, true);
+
+    await activateShapeTool(page);
+    await setToolSetting(page, 'setShapeMode', 'polygon');
+    await setToolSetting(page, 'setShapePolygonSides', 4);
+    await setToolSetting(page, 'setShapeCornerRadius', 40);
+    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setToolSetting(page, 'setShapeStrokeColor', null);
+
+    // Drag from centre (200, 150) to edge (300, 250) — halfSize (100, 100)
+    // → bounding box (100, 50)..(300, 250). cornerRadius = 40 means each
+    // corner is rounded by a 40×40 quarter-circle.
+    await dragShape(page, { x: 200, y: 150 }, { x: 300, y: 250 });
+    await page.screenshot({ path: 'e2e/screenshots/rounded-corners-4sided.png' });
+
+    // The centre must be opaque red.
+    const centre = await getPixelAt(page, 200, 150);
+    expect(centre.r).toBe(255);
+    expect(centre.a).toBe(255);
+
+    // Edge midpoints must be filled (the straight sections of the
+    // rounded rectangle reach all the way to the bounding box edges).
+    const topMid = await getPixelAt(page, 200, 52);
+    expect(topMid.a).toBeGreaterThan(200);
+    const leftMid = await getPixelAt(page, 102, 150);
+    expect(leftMid.a).toBeGreaterThan(200);
+    const rightMid = await getPixelAt(page, 298, 150);
+    expect(rightMid.a).toBeGreaterThan(200);
+    const bottomMid = await getPixelAt(page, 200, 248);
+    expect(bottomMid.a).toBeGreaterThan(200);
+
+    // The exact bounding-box corners must be fully transparent — the
+    // rounded corner's quarter-circle has been carved out. Sample a few
+    // px inside each corner (well within the 40-px radius) to be robust
+    // against anti-aliasing at the exact corner pixel.
+    const tlCorner = await getPixelAt(page, 105, 55);
+    expect(tlCorner.a).toBe(0);
+    const trCorner = await getPixelAt(page, 295, 55);
+    expect(trCorner.a).toBe(0);
+    const blCorner = await getPixelAt(page, 105, 245);
+    expect(blCorner.a).toBe(0);
+    const brCorner = await getPixelAt(page, 295, 245);
+    expect(brCorner.a).toBe(0);
+
+    // The inner point on the quarter-circle arc at 45° from the corner
+    // centre (40 px inset in both axes) must be filled — that's the
+    // start of the "safe" region inside the rounded corner.
+    const tlInner = await getPixelAt(page, 145, 95);
+    expect(tlInner.a).toBeGreaterThan(200);
+  });
+
+  // Parameterised regression test: cornerRadius > 0 must visibly reduce
+  // the opaque pixel count for every supported polygon count. Before
+  // the sdPolygon SDF was corrected, this was only true for n=4 (and
+  // only via the sdRect special-case); every other n was a silent no-op.
+  for (const sides of [3, 4, 5, 6, 7, 8, 12]) {
+    test(`n=${sides} polygon honours cornerRadius (no-op regression)`, async ({ page }) => {
+      await createDocument(page, 400, 300, true);
+
+      const drawAt = async (cornerRadius: number) => {
+        await activateShapeTool(page);
+        await setToolSetting(page, 'setShapeMode', 'polygon');
+        await setToolSetting(page, 'setShapePolygonSides', sides);
+        await setToolSetting(page, 'setShapeCornerRadius', cornerRadius);
+        await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+        await setToolSetting(page, 'setShapeStrokeColor', null);
+        await dragShape(page, { x: 200, y: 150 }, { x: 300, y: 250 });
+      };
+
+      const countOpaqueOnActiveLayer = async () =>
+        page.evaluate(async () => {
+          const ed = (window as unknown as Record<string, unknown>).__editorStore as {
+            getState: () => { document: { activeLayerId: string } };
+          };
+          const id = ed.getState().document.activeLayerId;
+          const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
+            (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
+          const result = await readFn(id);
+          if (!result) return 0;
+          let count = 0;
+          for (let i = 3; i < result.pixels.length; i += 4) {
+            if ((result.pixels[i] ?? 0) > 200) count++;
+          }
+          return count;
+        });
+
+      await drawAt(0);
+      const sharpCount = await countOpaqueOnActiveLayer();
+      expect(sharpCount).toBeGreaterThan(10000);
+
+      // Undo the sharp shape before drawing the rounded one so we're
+      // not comparing shapes on a polluted layer.
+      await page.evaluate(() => {
+        const ed = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { undo: () => void };
+        };
+        ed.getState().undo();
+      });
+      await page.waitForTimeout(100);
+
+      await drawAt(30);
+      const roundedCount = await countOpaqueOnActiveLayer();
+      expect(roundedCount).toBeGreaterThan(10000);
+
+      // Rounded version must cover fewer pixels than the sharp version —
+      // the quarter-circle arcs at each corner shave pixels off. The
+      // delta shrinks as n grows (a 12-gon is close to a circle already),
+      // but must always be nonzero.
+      const delta = sharpCount - roundedCount;
+      expect(delta, `n=${sides} sharp=${sharpCount} rounded=${roundedCount}`).toBeGreaterThan(0);
+
+      await page.screenshot({ path: `e2e/screenshots/rounded-corners-n${sides}.png` });
+    });
+  }
 });
