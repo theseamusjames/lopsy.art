@@ -50,7 +50,7 @@ export function GradientOptions() {
         onClick={handleOpenModal}
         data-testid="gradient-advanced-btn"
       >
-        Advanced\u2026
+        Advanced…
       </button>
 
       <div className={styles.separator} />
