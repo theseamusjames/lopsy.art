@@ -34,21 +34,51 @@ pub fn compute_edge_field(rgba: &[u8], width: u32, height: u32) -> Vec<u8> {
         r * LUMA_R + g * LUMA_G + b * LUMA_B
     }
 
+    #[inline(always)]
+    fn alpha_at(rgba: &[u8], w: usize, x: usize, y: usize) -> f32 {
+        rgba[(y * w + x) * 4 + 3] as f32
+    }
+
+    #[inline(always)]
+    fn sobel_mag(
+        tl: f32, tc: f32, tr: f32,
+        ml: f32, mr: f32,
+        bl: f32, bc: f32, br: f32,
+    ) -> f32 {
+        let gx = -tl - 2.0 * ml - bl + tr + 2.0 * mr + br;
+        let gy = -tl - 2.0 * tc - tr + bl + 2.0 * bc + br;
+        (gx * gx + gy * gy).sqrt()
+    }
+
     for y in 1..h - 1 {
         for x in 1..w - 1 {
-            let tl = luma_at(rgba, w, x - 1, y - 1);
-            let tc = luma_at(rgba, w, x, y - 1);
-            let tr = luma_at(rgba, w, x + 1, y - 1);
-            let ml = luma_at(rgba, w, x - 1, y);
-            let mr = luma_at(rgba, w, x + 1, y);
-            let bl = luma_at(rgba, w, x - 1, y + 1);
-            let bc = luma_at(rgba, w, x, y + 1);
-            let br = luma_at(rgba, w, x + 1, y + 1);
+            // Sobel over luma picks up colour/brightness boundaries on
+            // opaque regions; Sobel over alpha picks up the layer's own
+            // coverage boundary (crucial for auto-cropped/transparent
+            // layers, where a black-on-transparent edge has zero luma
+            // gradient). Take the max so either boundary registers.
+            let ltl = luma_at(rgba, w, x - 1, y - 1);
+            let ltc = luma_at(rgba, w, x, y - 1);
+            let ltr = luma_at(rgba, w, x + 1, y - 1);
+            let lml = luma_at(rgba, w, x - 1, y);
+            let lmr = luma_at(rgba, w, x + 1, y);
+            let lbl = luma_at(rgba, w, x - 1, y + 1);
+            let lbc = luma_at(rgba, w, x, y + 1);
+            let lbr = luma_at(rgba, w, x + 1, y + 1);
+            let luma_mag = sobel_mag(ltl, ltc, ltr, lml, lmr, lbl, lbc, lbr);
 
-            let gx = -tl - 2.0 * ml - bl + tr + 2.0 * mr + br;
-            let gy = -tl - 2.0 * tc - tr + bl + 2.0 * bc + br;
+            let atl = alpha_at(rgba, w, x - 1, y - 1);
+            let atc = alpha_at(rgba, w, x, y - 1);
+            let atr = alpha_at(rgba, w, x + 1, y - 1);
+            let aml = alpha_at(rgba, w, x - 1, y);
+            let amr = alpha_at(rgba, w, x + 1, y);
+            let abl = alpha_at(rgba, w, x - 1, y + 1);
+            let abc = alpha_at(rgba, w, x, y + 1);
+            let abr = alpha_at(rgba, w, x + 1, y + 1);
+            let alpha_mag = sobel_mag(atl, atc, atr, aml, amr, abl, abc, abr);
+
             // Normalise: Sobel on 0..255 inputs peaks at 4*255 = 1020.
-            let mag = (gx * gx + gy * gy).sqrt() / 4.0;
+            let mag = luma_mag.max(alpha_mag) / 4.0;
             let clamped = mag.clamp(0.0, 255.0) as u8;
             edges[y * w + x] = clamped;
         }
@@ -146,6 +176,57 @@ pub fn snap_segment(
     out
 }
 
+/// Snap a single point onto the strongest edge within `radius` pixels in any
+/// direction. Returns the original point if no edge clears `threshold`.
+pub fn snap_point(
+    edges: &[u8],
+    width: u32,
+    height: u32,
+    x: f32,
+    y: f32,
+    radius: u32,
+    threshold: u8,
+) -> (f32, f32) {
+    let w = width as i32;
+    let h = height as i32;
+    if w < 3 || h < 3 {
+        return (x, y);
+    }
+    let r = radius as i32;
+    let cx = x.round() as i32;
+    let cy = y.round() as i32;
+
+    let mut best_mag: i32 = threshold as i32 - 1;
+    let mut best_x = x;
+    let mut best_y = y;
+    let mut best_dist_sq = i32::MAX;
+
+    for dy in -r..=r {
+        for dx in -r..=r {
+            if dx * dx + dy * dy > r * r {
+                continue;
+            }
+            let sx = cx + dx;
+            let sy = cy + dy;
+            let m = sample_edge(edges, w, h, sx, sy) as i32;
+            if m < threshold as i32 {
+                continue;
+            }
+            let dist_sq = dx * dx + dy * dy;
+            // Prefer the strongest edge; on ties, prefer the one closest to
+            // the input point.
+            if m > best_mag || (m == best_mag && dist_sq < best_dist_sq) {
+                best_mag = m;
+                best_x = sx as f32;
+                best_y = sy as f32;
+                best_dist_sq = dist_sq;
+            }
+        }
+    }
+
+    (best_x, best_y)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,6 +312,28 @@ mod tests {
         for s in (2..pts.len() - 2).step_by(2) {
             assert!((pts[s + 1] - 10.0).abs() < 0.01);
         }
+    }
+
+    #[test]
+    fn snap_point_pulls_onto_nearest_edge() {
+        let w = 20u32;
+        let h = 20u32;
+        let mut edges = vec![0u8; (w * h) as usize];
+        // Vertical edge at x=10
+        for y in 0..h {
+            edges[(y * w + 10) as usize] = 200;
+        }
+        let (sx, sy) = snap_point(&edges, w, h, 7.0, 10.0, 5, 50);
+        assert!((sx - 10.0).abs() < 0.5);
+        assert!((sy - 10.0).abs() < 0.5);
+    }
+
+    #[test]
+    fn snap_point_returns_input_when_no_edges() {
+        let edges = vec![0u8; 20 * 20];
+        let (sx, sy) = snap_point(&edges, 20, 20, 5.5, 5.5, 3, 50);
+        assert_eq!(sx, 5.5);
+        assert_eq!(sy, 5.5);
     }
 
     #[test]

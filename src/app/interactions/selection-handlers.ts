@@ -15,6 +15,7 @@ import {
   readLayerPixelsForFill as wasmReadLayerPixelsForFill,
   magneticLassoBegin as wasmMagneticLassoBegin,
   magneticLassoSnap as wasmMagneticLassoSnap,
+  magneticLassoSnapPoint as wasmMagneticLassoSnapPoint,
   magneticLassoEnd as wasmMagneticLassoEnd,
 } from '../../engine-wasm/wasm-bridge';
 import { createPolygonMask as tsCreatePolygonMask } from '../../tools/lasso/lasso';
@@ -193,7 +194,16 @@ export function handleSelectionDown(
     } catch {
       return undefined;
     }
-    magneticLassoTrace = beginLasso(canvasPos);
+    // Snap the initial anchor onto the nearest edge so the closing segment
+    // doesn't drag the path back out to an unsnapped cursor position.
+    const settings = useToolSettingsStore.getState();
+    const radius = settings.magneticLassoWidth;
+    const threshold = Math.max(1, Math.min(255, Math.round(settings.magneticLassoContrast * 2.55)));
+    const snapped = wasmMagneticLassoSnapPoint(engine, canvasPos.x, canvasPos.y, radius, threshold);
+    const startPoint = snapped.length >= 2
+      ? { x: snapped[0]!, y: snapped[1]! }
+      : canvasPos;
+    magneticLassoTrace = beginLasso(startPoint);
     updateMagneticLassoPreview(magneticLassoTrace);
     return {
       drawing: true,
@@ -276,11 +286,25 @@ export function handleSelectionMove(
     let trace = magneticUpdateCursor(magneticLassoTrace, canvasPos, snap);
     const frequency = useToolSettingsStore.getState().magneticLassoFrequency;
     if (shouldAutoAnchor(trace, frequency)) {
-      trace = magneticAddAnchor(trace, canvasPos, snap);
+      // Anchor at a locally-snapped point so the committed polyline stays
+      // glued to edges instead of jumping back out to the raw cursor at
+      // every auto-anchor. `snap_segment` does not snap its endpoints, so
+      // we pull the cursor onto the nearest edge explicitly.
+      trace = magneticAddAnchor(trace, snapCursorToEdge(canvasPos), snap);
     }
     magneticLassoTrace = trace;
     updateMagneticLassoPreview(trace);
   }
+}
+
+function snapCursorToEdge(p: Point): Point {
+  const engine = getEngine();
+  if (!engine) return p;
+  const settings = useToolSettingsStore.getState();
+  const radius = settings.magneticLassoWidth;
+  const threshold = Math.max(1, Math.min(255, Math.round(settings.magneticLassoContrast * 2.55)));
+  const snapped = wasmMagneticLassoSnapPoint(engine, p.x, p.y, radius, threshold);
+  return snapped.length >= 2 ? { x: snapped[0]!, y: snapped[1]! } : p;
 }
 
 export function handleSelectionUp(
@@ -327,7 +351,15 @@ export function handleSelectionUp(
     const engine = getEngine();
     if (magneticLassoTrace && engine) {
       const snap = makeMagneticSnapFn();
-      const polyline = magneticCloseLasso(magneticLassoTrace, snap);
+      // Commit a final anchor at the mouseup cursor (snapped onto the nearest
+      // edge) so the closing path has real geometry even when no auto-anchor
+      // ever fired. `snap_segment` keeps its endpoints unsnapped, so without
+      // this the polyline would include the raw cursor at the final corner.
+      const endPoint = magneticLassoTrace.liveSegment[magneticLassoTrace.liveSegment.length - 1];
+      const final = endPoint
+        ? magneticAddAnchor(magneticLassoTrace, snapCursorToEdge(endPoint), snap)
+        : magneticLassoTrace;
+      const polyline = magneticCloseLasso(final, snap);
       if (polyline.length >= 3) {
         const editorState = useEditorStore.getState();
         const { width: docW, height: docH } = editorState.document;
