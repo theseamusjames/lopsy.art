@@ -37,6 +37,17 @@ function MarqueeEllipseIcon({ size }: { size: number }) {
   );
 }
 
+function MagneticLassoIcon({ size }: { size: number }) {
+  // Lasso silhouette with a small horseshoe "magnet" tucked against it.
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 4c-3 0-6 2-6 5s3 5 6 5c1 0 2-.3 3-.8" />
+      <path d="M11 13c-1 2-1 4 0 5s3 1 4 0" />
+      <path d="M4 15v3M7 15v3M4 18h3" />
+    </svg>
+  );
+}
+
 function GradientIcon({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -65,6 +76,7 @@ const toolGroups: ToolDef[][] = [
     { id: 'marquee-rect', icon: <MarqueeRectIcon size={ICON_SIZE} />, label: 'Rectangular Marquee (M)' },
     { id: 'marquee-ellipse', icon: <MarqueeEllipseIcon size={ICON_SIZE} />, label: 'Elliptical Marquee' },
     { id: 'lasso', icon: <Lasso size={ICON_SIZE} />, label: 'Lasso (L)' },
+    { id: 'lasso-magnetic', icon: <MagneticLassoIcon size={ICON_SIZE} />, label: 'Magnetic Lasso' },
     { id: 'wand', icon: <Wand2 size={ICON_SIZE} />, label: 'Magic Wand (W)' },
   ],
   [

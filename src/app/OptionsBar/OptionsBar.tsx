@@ -15,6 +15,7 @@ import { GradientOptions } from './tool-options/GradientOptions';
 import { StampOptions } from './tool-options/StampOptions';
 import { PathOptions } from './tool-options/PathOptions';
 import { TextOptions } from './tool-options/TextOptions';
+import { MagneticLassoOptions } from './tool-options/MagneticLassoOptions';
 import styles from './OptionsBar.module.css';
 
 const TOOL_LABELS: Record<ToolId, string> = {
@@ -32,6 +33,7 @@ const TOOL_LABELS: Record<ToolId, string> = {
   'marquee-ellipse': 'Elliptical Marquee',
   'lasso': 'Lasso',
   'lasso-poly': 'Polygonal Lasso',
+  'lasso-magnetic': 'Magnetic Lasso',
   'wand': 'Magic Wand',
   'shape': 'Shape',
   'text': 'Text',
@@ -53,6 +55,7 @@ function ToolOptions({ tool }: { tool: ToolId }) {
     case 'stamp': return <StampOptions />;
     case 'path': return <PathOptions />;
     case 'text': return <TextOptions />;
+    case 'lasso-magnetic': return <MagneticLassoOptions />;
     case 'marquee-rect':
     case 'marquee-ellipse': return <MarqueeOptions />;
     case 'crop': return <span className={styles.hint}>Drag to select crop area</span>;

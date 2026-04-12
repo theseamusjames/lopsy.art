@@ -31,6 +31,9 @@ interface ToolSettings {
   dodgeMode: 'dodge' | 'burn';
   wandTolerance: number;
   wandContiguous: boolean;
+  magneticLassoWidth: number;
+  magneticLassoContrast: number;
+  magneticLassoFrequency: number;
   textContent: string;
   textFontSize: number;
   textFontFamily: string;
@@ -57,6 +60,9 @@ interface ToolSettings {
   setDodgeMode: (mode: 'dodge' | 'burn') => void;
   setWandTolerance: (tolerance: number) => void;
   setWandContiguous: (contiguous: boolean) => void;
+  setMagneticLassoWidth: (width: number) => void;
+  setMagneticLassoContrast: (contrast: number) => void;
+  setMagneticLassoFrequency: (frequency: number) => void;
   setTextContent: (content: string) => void;
   setTextFontSize: (size: number) => void;
   setTextFontFamily: (family: string) => void;
@@ -121,6 +127,9 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   dodgeMode: 'dodge',
   wandTolerance: 32,
   wandContiguous: true,
+  magneticLassoWidth: 10,
+  magneticLassoContrast: 40,
+  magneticLassoFrequency: 40,
   textContent: 'Text',
   textFontSize: 24,
   textFontFamily: 'sans-serif',
@@ -196,6 +205,9 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   setDodgeMode: (mode) => set({ dodgeMode: mode }),
   setWandTolerance: (tolerance) => set({ wandTolerance: Math.max(0, Math.min(255, tolerance)) }),
   setWandContiguous: (contiguous) => set({ wandContiguous: contiguous }),
+  setMagneticLassoWidth: (width) => set({ magneticLassoWidth: Math.max(1, Math.min(40, Math.round(width))) }),
+  setMagneticLassoContrast: (contrast) => set({ magneticLassoContrast: Math.max(1, Math.min(100, Math.round(contrast))) }),
+  setMagneticLassoFrequency: (frequency) => set({ magneticLassoFrequency: Math.max(0, Math.min(200, Math.round(frequency))) }),
   setTextContent: (content) => set({ textContent: content }),
   setTextFontSize: (size) => set({ textFontSize: Math.max(1, Math.min(500, size)) }),
   setTextFontFamily: (family) => set({ textFontFamily: family }),

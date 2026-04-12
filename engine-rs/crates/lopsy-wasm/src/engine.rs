@@ -91,6 +91,10 @@ pub struct EngineInner {
     pub image_vibrance: f32,
     // Mask editing — skip mask clipping, show blue overlay instead
     pub mask_edit_layer_id: Option<String>,
+    // Magnetic lasso session (doc-sized Sobel edge field; present only while tool active)
+    pub magnetic_lasso_edges: Option<Vec<u8>>,
+    pub magnetic_lasso_width: u32,
+    pub magnetic_lasso_height: u32,
 }
 
 impl EngineInner {
@@ -191,6 +195,9 @@ impl EngineInner {
             image_saturation: 0.0,
             image_vibrance: 0.0,
             mask_edit_layer_id: None,
+            magnetic_lasso_edges: None,
+            magnetic_lasso_width: 0,
+            magnetic_lasso_height: 0,
         })
     }
 
@@ -396,6 +403,9 @@ impl EngineInner {
         self.brush_cursor = None;
         self.path_overlay = None;
         self.mask_edit_layer_id = None;
+        self.magnetic_lasso_edges = None;
+        self.magnetic_lasso_width = 0;
+        self.magnetic_lasso_height = 0;
         // Image adjustments
         self.image_exposure = 0.0;
         self.image_contrast = 0.0;
