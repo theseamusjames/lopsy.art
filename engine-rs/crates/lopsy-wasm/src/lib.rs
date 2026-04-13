@@ -1485,6 +1485,26 @@ pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, r
     );
 }
 
+#[wasm_bindgen(js_name = "filterOilPaint")]
+pub fn filter_oil_paint(engine: &mut Engine, layer_id: &str, radius: f32, sharpness: f32) {
+    let radius = radius.clamp(1.0, 10.0);
+    let sharpness = sharpness.clamp(0.1, 5.0);
+    let prog = engine.inner.shaders.oil_paint.program.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_radius") {
+                gl.uniform1f(Some(&loc), radius);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_sharpness") {
+                gl.uniform1f(Some(&loc), sharpness);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterAddNoise")]
 pub fn filter_add_noise(
     engine: &mut Engine, layer_id: &str,

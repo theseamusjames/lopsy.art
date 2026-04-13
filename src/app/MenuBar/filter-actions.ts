@@ -33,7 +33,8 @@ export type FilterDialogId =
   | 'pixelate'
   | 'halftone'
   | 'solarize'
-  | 'kaleidoscope';
+  | 'kaleidoscope'
+  | 'oil-paint';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;
