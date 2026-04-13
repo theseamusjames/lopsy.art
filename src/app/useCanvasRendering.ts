@@ -22,6 +22,7 @@ import {
 import { renderGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
+import { aggregateGroupAdjustments } from '../filters/image-adjustments';
 import { renderTextDragOverlay, renderTextEditOverlay } from './rendering/render-text-overlay';
 import { renderTextToCanvas } from '../tools/text/text';
 import type { TextStyle } from '../tools/text/text';
@@ -71,29 +72,10 @@ function renderFrameGpu(
   const showGrid = uiState.showGrid;
   const showRulers = uiState.showRulers;
   const gridSize = uiState.gridSize;
-  // Aggregate adjustments from all visible groups
-  const adjustments = (() => {
-    const agg = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0, saturation: 0, vibrance: 0 };
-    let found = false;
-    for (const l of layers) {
-      if (l.type === 'group' && 'adjustments' in l && 'adjustmentsEnabled' in l) {
-        const g = l as import('../types').GroupLayer;
-        if (g.adjustmentsEnabled && g.visible) {
-          agg.exposure += g.adjustments.exposure;
-          agg.contrast += g.adjustments.contrast;
-          agg.highlights += g.adjustments.highlights;
-          agg.shadows += g.adjustments.shadows;
-          agg.whites += g.adjustments.whites;
-          agg.blacks += g.adjustments.blacks;
-          agg.vignette += g.adjustments.vignette;
-          agg.saturation += g.adjustments.saturation ?? 0;
-          agg.vibrance += g.adjustments.vibrance ?? 0;
-          found = true;
-        }
-      }
-    }
-    return found ? agg : uiState.adjustments;
-  })();
+  // Aggregate adjustments from all visible groups (delegates to the shared
+  // helper so curves and any future fields stay in one place).
+  const groupAdjustments = aggregateGroupAdjustments(layers);
+  const adjustments = groupAdjustments ?? uiState.adjustments;
   const adjustmentsEnabled = layers.some(
     (l) => l.type === 'group' && 'adjustmentsEnabled' in l && (l as import('../types').GroupLayer).adjustmentsEnabled,
   ) || uiState.adjustmentsEnabled;

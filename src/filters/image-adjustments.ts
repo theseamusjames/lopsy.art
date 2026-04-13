@@ -1,3 +1,6 @@
+import type { Curves } from './curves';
+import { IDENTITY_CURVES, isIdentityCurves, applyCurvesToImageData } from './curves';
+
 export interface ImageAdjustments {
   exposure: number;
   contrast: number;
@@ -8,6 +11,11 @@ export interface ImageAdjustments {
   vignette: number;
   saturation: number;
   vibrance: number;
+  /**
+   * Per-channel tone curves. Optional so existing documents keep working
+   * without a migration; absent / identity curves skip the GPU + JS path.
+   */
+  curves?: Curves;
 }
 
 export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
@@ -20,6 +28,7 @@ export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
   vignette: 0,
   saturation: 0,
   vibrance: 0,
+  curves: IDENTITY_CURVES,
 };
 
 export function aggregateGroupAdjustments(
@@ -27,6 +36,10 @@ export function aggregateGroupAdjustments(
 ): ImageAdjustments | null {
   const agg: ImageAdjustments = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0, saturation: 0, vibrance: 0 };
   let found = false;
+  // Curves don't compose linearly the way scalar adjustments do — pick the
+  // first non-identity curve set we find. This matches how groups stack
+  // adjustment layers in Photoshop (last-write-wins for non-additive ops).
+  let pickedCurves: Curves | undefined;
   for (const l of layers) {
     if (l.type === 'group' && l.adjustments && l.adjustmentsEnabled !== false && l.visible) {
       agg.exposure += l.adjustments.exposure;
@@ -38,9 +51,13 @@ export function aggregateGroupAdjustments(
       agg.vignette += l.adjustments.vignette;
       agg.saturation += l.adjustments.saturation ?? 0;
       agg.vibrance += l.adjustments.vibrance ?? 0;
+      if (!pickedCurves && l.adjustments.curves && !isIdentityCurves(l.adjustments.curves)) {
+        pickedCurves = l.adjustments.curves;
+      }
       found = true;
     }
   }
+  if (pickedCurves) agg.curves = pickedCurves;
   return found ? agg : null;
 }
 
@@ -54,7 +71,8 @@ export function hasActiveAdjustments(adj: ImageAdjustments): boolean {
     adj.blacks !== 0 ||
     adj.vignette !== 0 ||
     adj.saturation !== 0 ||
-    adj.vibrance !== 0
+    adj.vibrance !== 0 ||
+    !isIdentityCurves(adj.curves)
   );
 }
 
@@ -196,5 +214,9 @@ export function applyAdjustmentsToImageData(
 
   if (adj.vignette !== 0) {
     applyVignette(imageData, adj.vignette);
+  }
+
+  if (adj.curves && !isIdentityCurves(adj.curves)) {
+    applyCurvesToImageData(imageData.data, adj.curves);
   }
 }

@@ -1,15 +1,42 @@
+import { useState } from 'react';
 import { Eye, EyeOff, X } from 'lucide-react';
 import { Slider } from '../../components/Slider/Slider';
 import { IconButton } from '../../components/IconButton/IconButton';
+import { CurveEditor } from '../../components/CurveEditor/CurveEditor';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
-import type { ImageAdjustments } from '../../filters/image-adjustments';
+import {
+  IDENTITY_CURVES,
+  IDENTITY_POINTS,
+  isIdentityCurve,
+  type CurveChannel,
+  type CurvePoint,
+  type Curves,
+} from '../../filters/curves';
 import type { GroupLayer } from '../../types';
 import styles from './AdjustmentsPanel.module.css';
 
+const CHANNEL_COLORS: Record<CurveChannel, string> = {
+  rgb: '#e0e0e0',
+  r: '#ff5e5e',
+  g: '#5eff7e',
+  b: '#5e9eff',
+};
+
+const CHANNEL_LABELS: Record<CurveChannel, string> = {
+  rgb: 'RGB',
+  r: 'R',
+  g: 'G',
+  b: 'B',
+};
+
+type ScalarAdjustmentKey =
+  | 'exposure' | 'contrast' | 'highlights' | 'shadows'
+  | 'whites' | 'blacks' | 'vignette' | 'saturation' | 'vibrance';
+
 interface AdjustmentSliderDef {
-  key: keyof ImageAdjustments;
+  key: ScalarAdjustmentKey;
   label: string;
   min: number;
   max: number;
@@ -59,12 +86,26 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
   const adjustments = group.adjustments ?? DEFAULT_ADJUSTMENTS;
   const adjustmentsEnabled = group.adjustmentsEnabled ?? true;
 
-  const handleChange = (key: keyof ImageAdjustments, value: number) => {
+  const handleChange = (key: ScalarAdjustmentKey, value: number) => {
     setGroupAdjustments(group.id, { ...adjustments, [key]: value });
   };
 
   const handleReset = () => {
     setGroupAdjustments(group.id, { ...DEFAULT_ADJUSTMENTS });
+  };
+
+  const curves: Curves = adjustments.curves ?? IDENTITY_CURVES;
+  const handleCurveChange = (channel: CurveChannel, points: CurvePoint[]) => {
+    setGroupAdjustments(group.id, {
+      ...adjustments,
+      curves: { ...curves, [channel]: points },
+    });
+  };
+  const handleResetCurve = (channel: CurveChannel) => {
+    setGroupAdjustments(group.id, {
+      ...adjustments,
+      curves: { ...curves, [channel]: IDENTITY_POINTS },
+    });
   };
 
   return (
@@ -93,6 +134,11 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
           showValue={false}
         />
       ))}
+      <CurvesSection
+        curves={curves}
+        onChange={handleCurveChange}
+        onReset={handleResetCurve}
+      />
       <div className={styles.footer}>
         <button type="button" className={styles.textBtn} onClick={handleReset}>
           Reset
@@ -105,6 +151,55 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
           {adjustmentsEnabled ? <Eye size={14} /> : <EyeOff size={14} />}
         </button>
       </div>
+    </div>
+  );
+}
+
+interface CurvesSectionProps {
+  curves: Curves;
+  onChange: (channel: CurveChannel, points: CurvePoint[]) => void;
+  onReset: (channel: CurveChannel) => void;
+}
+
+function CurvesSection({ curves, onChange, onReset }: CurvesSectionProps) {
+  const [channel, setChannel] = useState<CurveChannel>('rgb');
+  const channels: CurveChannel[] = ['rgb', 'r', 'g', 'b'];
+  const points = curves[channel];
+  const isIdentity = isIdentityCurve(points);
+
+  return (
+    <div className={styles.curvesSection}>
+      <div className={styles.curvesHeader}>
+        <span className={styles.label}>Curves</span>
+        <div className={styles.channelTabs} role="tablist" aria-label="Curve channel">
+          {channels.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="tab"
+              aria-selected={channel === c}
+              className={`${styles.channelTab} ${channel === c ? styles.channelTabActive : ''}`}
+              style={{ color: CHANNEL_COLORS[c] }}
+              onClick={() => setChannel(c)}
+            >
+              {CHANNEL_LABELS[c]}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className={styles.textBtn}
+          onClick={() => onReset(channel)}
+          disabled={isIdentity}
+        >
+          Reset
+        </button>
+      </div>
+      <CurveEditor
+        points={points}
+        color={CHANNEL_COLORS[channel]}
+        onChange={(pts) => onChange(channel, pts)}
+      />
     </div>
   );
 }
