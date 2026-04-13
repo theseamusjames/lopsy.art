@@ -1055,6 +1055,44 @@ pub fn clear_image_adjustments(engine: &mut Engine) {
     engine.inner.image_vignette = 0.0;
     engine.inner.image_saturation = 0.0;
     engine.inner.image_vibrance = 0.0;
+    if let Some(tex) = engine.inner.image_curves_texture.take() {
+        engine.inner.texture_pool.release(tex);
+    }
+    engine.inner.has_image_curves = false;
+    engine.inner.needs_recomposite = true;
+}
+
+/// Upload the packed 256x4 RGBA curves LUT (R=red curve, G=green, B=blue,
+/// A=master). Allocates the LUT texture lazily on first call. Pass an
+/// empty / 0-length slice via `clearImageCurves` to disable.
+#[wasm_bindgen(js_name = "setImageCurvesLut")]
+pub fn set_image_curves_lut(engine: &mut Engine, lut: &[u8]) -> Result<(), JsError> {
+    if lut.len() != 256 * 4 {
+        return Err(JsError::new("Curves LUT must be exactly 256 * 4 bytes"));
+    }
+    let inner = &mut engine.inner;
+    let tex = match inner.image_curves_texture {
+        Some(t) => t,
+        None => {
+            let t = inner.texture_pool.acquire(&inner.gl, 256, 1)
+                .map_err(|e| JsError::new(&e))?;
+            inner.image_curves_texture = Some(t);
+            t
+        }
+    };
+    inner.texture_pool.upload_rgba(&inner.gl, tex, 0, 0, 256, 1, lut)
+        .map_err(|e| JsError::new(&e))?;
+    inner.has_image_curves = true;
+    inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "clearImageCurves")]
+pub fn clear_image_curves(engine: &mut Engine) {
+    if let Some(tex) = engine.inner.image_curves_texture.take() {
+        engine.inner.texture_pool.release(tex);
+    }
+    engine.inner.has_image_curves = false;
     engine.inner.needs_recomposite = true;
 }
 

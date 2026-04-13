@@ -183,6 +183,12 @@ Applied globally or per-group. All default to 0.
 - **Saturation**: -100 to +100
 - **Vibrance**: -100 to +100
 - **Vignette**: 0 to 100
+- **Curves**: per-channel tone curves (RGB master + R / G / B), evaluated as
+  monotone cubic Hermite splines. Master applies to every channel first,
+  then per-channel curves remap their own value. Edited via the
+  `CurveEditor` (drag points, click to add, double-click or yank to remove).
+  Runs as a single 256×1 RGBA LUT texture sampled in the GPU adjustments
+  shader; identity curves bypass the lookup.
 
 ---
 

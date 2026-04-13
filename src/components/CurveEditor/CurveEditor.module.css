@@ -1,0 +1,21 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.canvas {
+  display: block;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: crosshair;
+  touch-action: none;
+  background: var(--color-bg-tertiary);
+}
+
+.hint {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-disabled);
+  text-align: center;
+}
