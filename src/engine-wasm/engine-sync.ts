@@ -10,6 +10,7 @@ import { getEngine } from './engine-state';
 import type { Layer, BlendMode } from '../types';
 import type { SparseLayerEntry } from '../app/store/types';
 import type { ImageAdjustments } from '../filters/image-adjustments';
+import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import {
   setDocumentSize,
   setViewport,
@@ -38,6 +39,8 @@ import {
   setImageVignette,
   setImageSaturation,
   setImageVibrance,
+  setImageCurvesLut,
+  clearImageCurves,
   clearImageAdjustments,
   setLassoPreview,
   setPathOverlay,
@@ -227,6 +230,11 @@ interface TrackedState {
   brushTipData: BrushTipData | null;
   brushAngle: number;
   brushHasTip: boolean;
+  /** Reference equality on the active Curves object so we only re-upload
+   *  the LUT texture when the user actually edited a control point. */
+  curvesRef: unknown;
+  /** True when the engine is in "no curves" mode; null on first frame. */
+  curvesIdentity: boolean | null;
 }
 
 function createTrackedState(): TrackedState {
@@ -252,6 +260,8 @@ function createTrackedState(): TrackedState {
     brushTipData: null,
     brushAngle: 0,
     brushHasTip: false,
+    curvesRef: null,
+    curvesIdentity: null,
   };
 }
 
@@ -467,6 +477,7 @@ export function syncRulers(engine: Engine, showRulers: boolean): void {
 export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, enabled: boolean): void {
   if (!enabled) {
     clearImageAdjustments(engine);
+    tracked.curvesIdentity = null;
     return;
   }
   setImageExposure(engine, adjustments.exposure);
@@ -478,6 +489,22 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
   setImageVignette(engine, adjustments.vignette);
   setImageSaturation(engine, adjustments.saturation);
   setImageVibrance(engine, adjustments.vibrance);
+
+  // Curves: build the 256x4 RGBA LUT and upload only when the points
+  // changed (cheap identity check via reference equality on the curves
+  // object held in the document model).
+  const curves = adjustments.curves;
+  if (!curves || isIdentityCurves(curves)) {
+    if (tracked.curvesIdentity !== true) {
+      clearImageCurves(engine);
+      tracked.curvesIdentity = true;
+    }
+  } else if (tracked.curvesRef !== curves) {
+    const lut = buildCurvesLutRgba(curves);
+    setImageCurvesLut(engine, lut);
+    tracked.curvesRef = curves;
+    tracked.curvesIdentity = false;
+  }
 }
 
 export function syncMaskEditMode(engine: Engine, maskEditMode: boolean, activeLayerId: string | null): void {

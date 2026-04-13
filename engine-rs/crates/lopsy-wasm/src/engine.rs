@@ -89,6 +89,10 @@ pub struct EngineInner {
     pub image_vignette: f32,
     pub image_saturation: f32,
     pub image_vibrance: f32,
+    /// 256x1 RGBA texture holding the four per-channel curve LUTs
+    /// (R/G/B = per-channel, A = master). None when no curves are active.
+    pub image_curves_texture: Option<TextureHandle>,
+    pub has_image_curves: bool,
     // Mask editing — skip mask clipping, show blue overlay instead
     pub mask_edit_layer_id: Option<String>,
 }
@@ -190,6 +194,8 @@ impl EngineInner {
             image_vignette: 0.0,
             image_saturation: 0.0,
             image_vibrance: 0.0,
+            image_curves_texture: None,
+            has_image_curves: false,
             mask_edit_layer_id: None,
         })
     }
@@ -406,6 +412,10 @@ impl EngineInner {
         self.image_vignette = 0.0;
         self.image_saturation = 0.0;
         self.image_vibrance = 0.0;
+        if let Some(tex) = self.image_curves_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        self.has_image_curves = false;
         self.needs_recomposite = true;
     }
 

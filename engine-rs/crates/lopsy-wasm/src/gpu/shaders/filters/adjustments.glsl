@@ -11,6 +11,11 @@ uniform float u_whites;
 uniform float u_blacks;
 uniform float u_saturation;
 uniform float u_vibrance;
+// Curves: 256x1 RGBA texture. R/G/B = per-channel curve LUTs,
+// A = master RGB curve LUT. u_hasCurves=0 skips the lookups so the
+// common no-curves case stays identical to the old shader.
+uniform sampler2D u_curveLut;
+uniform float u_hasCurves;
 out vec4 fragColor;
 void main() {
     vec4 c = texture(u_tex, v_uv);
@@ -38,5 +43,19 @@ void main() {
         c.rgb = mix(vec3(gray2), c.rgb, 1.0 + boost);
     }
 
-    fragColor = vec4(clamp(c.rgb, 0.0, 1.0), c.a);
+    c.rgb = clamp(c.rgb, 0.0, 1.0);
+
+    // Curves: master first on every channel, then per-channel remap.
+    if (u_hasCurves > 0.5) {
+        // Sample at the centre of each texel column for crisp lookups.
+        float ofs = 0.5 / 256.0;
+        c.r = texture(u_curveLut, vec2(c.r + ofs, 0.5)).a;
+        c.g = texture(u_curveLut, vec2(c.g + ofs, 0.5)).a;
+        c.b = texture(u_curveLut, vec2(c.b + ofs, 0.5)).a;
+        c.r = texture(u_curveLut, vec2(c.r + ofs, 0.5)).r;
+        c.g = texture(u_curveLut, vec2(c.g + ofs, 0.5)).g;
+        c.b = texture(u_curveLut, vec2(c.b + ofs, 0.5)).b;
+    }
+
+    fragColor = vec4(c.rgb, c.a);
 }
