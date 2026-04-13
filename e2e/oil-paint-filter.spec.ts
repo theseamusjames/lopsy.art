@@ -79,17 +79,49 @@ test.describe('Oil Paint Filter', () => {
   test('applies oil paint filter via menu and smooths color regions', async ({ page }) => {
     await createDocument(page, 400, 300, false);
 
-    // Paint a pattern with sharp edges — oil paint should smooth these
-    // Left half: red, right half: blue, with a noisy band in the middle
-    await paintRect(page, 0, 0, 180, 300, { r: 220, g: 40, b: 40, a: 255 });
-    await paintRect(page, 220, 0, 180, 300, { r: 40, g: 40, b: 220, a: 255 });
-    // Noisy transition band
-    for (let i = 0; i < 20; i++) {
-      const t = i / 19;
-      const r = Math.round(220 * (1 - t) + 40 * t);
-      const b = Math.round(40 * (1 - t) + 220 * t);
-      await paintRect(page, 180 + i * 2, 0, 2, 300, { r, g: 40, b, a: 255 });
-    }
+    // Paint a noisy, high-frequency pattern. An oil paint / Kuwahara filter
+    // needs variance to smooth — flat regions show no effect. This pattern
+    // combines smooth color fields with strong per-pixel noise so the filter's
+    // painterly smoothing is clearly visible in the before/after.
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          pushHistory: (label?: string) => void;
+        };
+      };
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      state.pushHistory('Paint');
+      const data = state.getOrCreateLayerPixelData(id);
+      const W = data.width;
+      const H = data.height;
+      let seed = 1;
+      const rnd = () => {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        return seed / 0xffffffff;
+      };
+      for (let py = 0; py < H; py++) {
+        for (let px = 0; px < W; px++) {
+          const u = px / W;
+          const v = py / H;
+          const base = Math.sin(u * Math.PI * 3.0) * 0.5 + 0.5;
+          const band = Math.cos((u + v) * Math.PI * 4.0) * 0.5 + 0.5;
+          const r = base * 220 + band * 30 + (rnd() - 0.5) * 120;
+          const g = (1 - base) * 140 + band * 80 + (rnd() - 0.5) * 120;
+          const b = band * 220 + (1 - base) * 30 + (rnd() - 0.5) * 120;
+          const idx = (py * W + px) * 4;
+          data.data[idx] = Math.max(0, Math.min(255, r));
+          data.data[idx + 1] = Math.max(0, Math.min(255, g));
+          data.data[idx + 2] = Math.max(0, Math.min(255, b));
+          data.data[idx + 3] = 255;
+        }
+      }
+      state.updateLayerPixelData(id, data);
+    });
+    await page.waitForTimeout(300);
 
     await fitToView(page);
     await page.waitForTimeout(300);
