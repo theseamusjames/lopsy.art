@@ -227,6 +227,7 @@ Applied globally or per-group. All default to 0.
 - **Solarize**: threshold 0 - 255 (inverts tones above the threshold, classic darkroom effect)
 - **Kaleidoscope**: segments 2 - 32, rotation 0 - 360 degrees (mirrors the image into a radial wedge pattern around the center)
 - **Oil Paint**: radius 1 - 10, sharpness 0.1 - 5.0 (Kuwahara filter that smooths color regions while preserving edges, creating a painterly look)
+- **Chromatic Aberration**: amount 1 - 50 px, direction 0 - 360 degrees (splits RGB channels along a configurable axis, creating retro lens fringing and glitch effects)
 
 ### Render
 - **Clouds**: scale, seed
