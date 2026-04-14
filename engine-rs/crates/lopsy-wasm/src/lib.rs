@@ -1505,6 +1505,25 @@ pub fn filter_oil_paint(engine: &mut Engine, layer_id: &str, radius: f32, sharpn
     );
 }
 
+#[wasm_bindgen(js_name = "filterChromaticAberration")]
+pub fn filter_chromatic_aberration(engine: &mut Engine, layer_id: &str, amount: f32, angle_degrees: f32) {
+    let amount = amount.clamp(0.0, 100.0);
+    let prog = engine.inner.shaders.chromatic_aberration.program.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_amount") {
+                gl.uniform1f(Some(&loc), amount);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_angle") {
+                gl.uniform1f(Some(&loc), angle_degrees.to_radians());
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterAddNoise")]
 pub fn filter_add_noise(
     engine: &mut Engine, layer_id: &str,

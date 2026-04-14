@@ -17,6 +17,7 @@ import { halftone } from './halftone';
 import { solarize } from './solarize';
 import { kaleidoscope } from './kaleidoscope';
 import { oilPaint } from './oil-paint';
+import { chromaticAberration } from './chromatic-aberration';
 
 export type { FilterDefinition };
 
@@ -39,6 +40,7 @@ const allFilters: FilterDefinition[] = [
   solarize,
   kaleidoscope,
   oilPaint,
+  chromaticAberration,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(

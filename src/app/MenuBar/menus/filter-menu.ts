@@ -18,6 +18,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Halftone...', action: () => showFilterDialog('halftone') },
       { label: 'Kaleidoscope...', action: () => showFilterDialog('kaleidoscope') },
       { label: 'Oil Paint...', action: () => showFilterDialog('oil-paint') },
+      { label: 'Chromatic Aberration...', action: () => showFilterDialog('chromatic-aberration') },
       { separator: true, label: '' },
       { label: 'Add Noise...', action: () => showFilterDialog('add-noise') },
       { label: 'Fill with Noise...', action: () => showFilterDialog('fill-noise') },
