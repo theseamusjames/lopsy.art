@@ -46,6 +46,14 @@ void main() {
         color.a = 1.0;
     }
 
+    // Triangular dither to break 8-bit banding on smooth gradients.
+    // Two uniform hashes produce triangular distribution in [-1, 1] / 255.
+    vec2 seed = gl_FragCoord.xy;
+    float n0 = fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
+    float n1 = fract(sin(dot(seed, vec2(63.7264, 10.873))) * 28637.1136);
+    float dither = (n0 + n1 - 1.0) / 255.0;
+    color.rgb += dither;
+
     // Pass through — RGBA16F values > 1.0 are preserved for EDR when the
     // canvas drawingBufferColorSpace is set to 'display-p3'.
     fragColor = color;
