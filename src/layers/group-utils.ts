@@ -132,12 +132,20 @@ export function moveLayerToGroup(
 
   return layers.map((l) => {
     if (isGroupLayer(l)) {
-      // Remove from old parent
-      if (l.children.includes(layerId)) {
+      const isOldParent = l.children.includes(layerId);
+      const isNewParent = l.id === targetGroupId;
+
+      if (isOldParent && isNewParent) {
+        // Reorder within the same group
+        const filtered = l.children.filter((c) => c !== layerId);
+        const idx = insertIndex !== undefined ? insertIndex : filtered.length;
+        filtered.splice(idx, 0, layerId);
+        return { ...l, children: filtered };
+      }
+      if (isOldParent) {
         return { ...l, children: l.children.filter((c) => c !== layerId) };
       }
-      // Add to new parent
-      if (l.id === targetGroupId) {
+      if (isNewParent) {
         const newChildren = [...l.children];
         const idx = insertIndex !== undefined ? insertIndex : newChildren.length;
         newChildren.splice(idx, 0, layerId);
@@ -189,17 +197,25 @@ export function getInsertionGroupId(
 /**
  * Compute the layerOrder insertion index for a new layer.
  * Inserts just above the active layer in layerOrder.
- * If active layer is a group, inserts just before it (so the new layer
- * appears inside the group visually, above the group's existing children).
+ * Never inserts above the root group — the root group must remain the
+ * topmost item in the visual stack (last in layerOrder).
  */
 export function getInsertionOrderIndex(
   layerOrder: readonly string[],
   activeLayerId: string | null,
+  rootGroupId?: string | null,
 ): number {
   if (!activeLayerId) return layerOrder.length;
   const idx = layerOrder.indexOf(activeLayerId);
   if (idx === -1) return layerOrder.length;
-  return idx + 1;
+  let insertIdx = idx + 1;
+  if (rootGroupId) {
+    const rootIdx = layerOrder.indexOf(rootGroupId);
+    if (rootIdx !== -1 && insertIdx > rootIdx) {
+      insertIdx = rootIdx;
+    }
+  }
+  return insertIdx;
 }
 
 /**
