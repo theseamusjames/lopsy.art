@@ -8,7 +8,7 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   white-space: nowrap;
-  min-width: 40px;
+  min-width: var(--slider-label-width, 40px);
 }
 
 .slider {

@@ -18,7 +18,7 @@ export function computeAddLayer(
     layers = addToGroup(layers, newLayer.id, groupId);
   }
 
-  const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId);
+  const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId, doc.rootGroupId);
   const layerOrder = [...doc.layerOrder];
   layerOrder.splice(orderIdx, 0, newLayer.id);
 

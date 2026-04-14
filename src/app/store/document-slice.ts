@@ -235,7 +235,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (targetGroupId) {
       layers = addToGroupUtil(layers, group.id, targetGroupId);
     }
-    const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId);
+    const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId, doc.rootGroupId);
     const layerOrder = [...doc.layerOrder];
     layerOrder.splice(orderIdx, 0, group.id);
     set({
