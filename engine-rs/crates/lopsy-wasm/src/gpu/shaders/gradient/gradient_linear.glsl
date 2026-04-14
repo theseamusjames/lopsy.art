@@ -27,6 +27,13 @@ void main() {
         }
     }
 
+    // Triangular dither to reduce banding when stored in RGBA8 textures.
+    vec2 seed = gl_FragCoord.xy;
+    float n0 = fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
+    float n1 = fract(sin(dot(seed, vec2(63.7264, 10.873))) * 28637.1136);
+    float dither = (n0 + n1 - 1.0) / 255.0;
+    gradColor.rgb += dither;
+
     vec4 existing = texture(u_existingTex, v_uv);
 
     if (u_hasMask == 1) {
