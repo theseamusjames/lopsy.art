@@ -26,6 +26,9 @@ export interface SparseLayerEntry {
 }
 
 export interface HistorySnapshot {
+  /** Stable id used by the History Brush tool to pin a source across
+   *  new pushes and undo/redo. Every snapshot gets one at creation. */
+  id: string;
   document: DocumentState;
   /** Compressed GPU pixel snapshots per layer (RLE-encoded RGBA blobs). */
   gpuSnapshots: Map<string, Uint8Array>;
@@ -54,6 +57,8 @@ export interface EditorState {
   sparseLayerData: Map<string, SparseLayerEntry>;
   undoStack: HistorySnapshot[];
   redoStack: HistorySnapshot[];
+  /** Stable id for the "Original" (blank) snapshot row in the history panel. */
+  originSnapshotId: string;
   dirtyLayerIds: Set<string>;
   renderVersion: number;
   selection: SelectionData;

@@ -31,6 +31,10 @@ interface ToolSettings {
   dodgeMode: 'dodge' | 'burn';
   smudgeSize: number;
   smudgeStrength: number;
+  historyBrushSize: number;
+  historyBrushOpacity: number;
+  historyBrushHardness: number;
+  historyBrushSourceId: string | null;
   wandTolerance: number;
   wandContiguous: boolean;
   magneticLassoWidth: number;
@@ -62,6 +66,10 @@ interface ToolSettings {
   setDodgeMode: (mode: 'dodge' | 'burn') => void;
   setSmudgeSize: (size: number) => void;
   setSmudgeStrength: (strength: number) => void;
+  setHistoryBrushSize: (size: number) => void;
+  setHistoryBrushOpacity: (opacity: number) => void;
+  setHistoryBrushHardness: (hardness: number) => void;
+  setHistoryBrushSourceId: (id: string | null) => void;
   setWandTolerance: (tolerance: number) => void;
   setWandContiguous: (contiguous: boolean) => void;
   setMagneticLassoWidth: (width: number) => void;
@@ -131,6 +139,10 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   dodgeMode: 'dodge',
   smudgeSize: 30,
   smudgeStrength: 50,
+  historyBrushSize: 30,
+  historyBrushOpacity: 100,
+  historyBrushHardness: 80,
+  historyBrushSourceId: null,
   wandTolerance: 32,
   wandContiguous: true,
   magneticLassoWidth: 10,
@@ -211,6 +223,10 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   setDodgeMode: (mode) => set({ dodgeMode: mode }),
   setSmudgeSize: (size) => set({ smudgeSize: Math.max(1, Math.min(200, size)) }),
   setSmudgeStrength: (strength) => set({ smudgeStrength: Math.max(0, Math.min(100, strength)) }),
+  setHistoryBrushSize: (size) => set({ historyBrushSize: Math.max(1, Math.min(200, size)) }),
+  setHistoryBrushOpacity: (opacity) => set({ historyBrushOpacity: Math.max(1, Math.min(100, opacity)) }),
+  setHistoryBrushHardness: (hardness) => set({ historyBrushHardness: Math.max(0, Math.min(100, hardness)) }),
+  setHistoryBrushSourceId: (id) => set({ historyBrushSourceId: id }),
   setWandTolerance: (tolerance) => set({ wandTolerance: Math.max(0, Math.min(255, tolerance)) }),
   setWandContiguous: (contiguous) => set({ wandContiguous: contiguous }),
   setMagneticLassoWidth: (width) => set({ magneticLassoWidth: Math.max(1, Math.min(40, Math.round(width))) }),

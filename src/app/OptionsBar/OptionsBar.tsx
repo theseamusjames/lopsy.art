@@ -17,6 +17,7 @@ import { StampOptions } from './tool-options/StampOptions';
 import { PathOptions } from './tool-options/PathOptions';
 import { TextOptions } from './tool-options/TextOptions';
 import { MagneticLassoOptions } from './tool-options/MagneticLassoOptions';
+import { HistoryBrushOptions } from './tool-options/HistoryBrushOptions';
 import styles from './OptionsBar.module.css';
 
 const TOOL_LABELS: Record<ToolId, string> = {
@@ -31,6 +32,7 @@ const TOOL_LABELS: Record<ToolId, string> = {
   'dodge': 'Dodge/Burn',
   'burn': 'Dodge/Burn',
   'smudge': 'Smudge',
+  'history-brush': 'History Brush',
   'marquee-rect': 'Rectangular Marquee',
   'marquee-ellipse': 'Elliptical Marquee',
   'lasso': 'Lasso',
@@ -53,6 +55,7 @@ function ToolOptions({ tool }: { tool: ToolId }) {
     case 'wand': return <WandOptions />;
     case 'dodge': return <DodgeOptions />;
     case 'smudge': return <SmudgeOptions />;
+    case 'history-brush': return <HistoryBrushOptions />;
     case 'shape': return <ShapeOptions />;
     case 'gradient': return <GradientOptions />;
     case 'stamp': return <StampOptions />;

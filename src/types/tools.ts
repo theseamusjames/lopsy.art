@@ -12,6 +12,7 @@ export type ToolId =
   | 'dodge'
   | 'burn'
   | 'smudge'
+  | 'history-brush'
   | 'marquee-rect'
   | 'marquee-ellipse'
   | 'lasso'

@@ -10,6 +10,7 @@ pub mod selection_gpu;
 pub mod dodge_burn_gpu;
 pub mod smudge_gpu;
 pub mod clone_stamp_gpu;
+pub mod history_brush_gpu;
 pub mod overlay_renderer;
 pub mod color_mgmt;
 
@@ -864,6 +865,44 @@ pub fn apply_stamp_dab_batch(
     points: &[f64], source_offset_x: f64, source_offset_y: f64, size: f32,
 ) {
     clone_stamp_gpu::apply_clone_stamp_dab_batch(&mut engine.inner, layer_id, points, source_offset_x, source_offset_y, size);
+}
+
+// ============================================================
+// History Brush
+// ============================================================
+
+#[wasm_bindgen(js_name = "historyBrushBegin")]
+pub fn history_brush_begin(
+    engine: &mut Engine,
+    layer_id: &str,
+    snapshot_blob: &[u8],
+) -> Result<(), JsError> {
+    history_brush_gpu::begin(&mut engine.inner, layer_id, snapshot_blob)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "historyBrushEnd")]
+pub fn history_brush_end(engine: &mut Engine) {
+    history_brush_gpu::end(&mut engine.inner);
+}
+
+#[wasm_bindgen(js_name = "applyHistoryBrushDabBatch")]
+pub fn apply_history_brush_dab_batch(
+    engine: &mut Engine,
+    layer_id: &str,
+    points: &[f64],
+    size: f32,
+    hardness: f32,
+    opacity: f32,
+) {
+    history_brush_gpu::apply_dab_batch(
+        &mut engine.inner,
+        layer_id,
+        points,
+        size,
+        hardness,
+        opacity,
+    );
 }
 
 // ============================================================

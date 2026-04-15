@@ -8,11 +8,19 @@ import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
   redoStack: HistorySnapshot[];
+  originSnapshotId: string;
   isDirty: boolean;
   undo: () => void;
   redo: () => void;
   pushHistory: (label?: string) => void;
   markClean: () => void;
+}
+
+function generateSnapshotId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `snap-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 // Sentinel value for layers that had no GPU texture at snapshot time.
@@ -96,6 +104,7 @@ function snapshotCurrentState(
 ): HistorySnapshot {
   if (metadataOnly) {
     return {
+      id: generateSnapshotId(),
       document: state.document,
       gpuSnapshots: new Map(),
       layerPixelData: new Map(),
@@ -111,6 +120,7 @@ function snapshotCurrentState(
   const gpuSnapshots = snapshotGpuLayers(state.document.layerOrder, allDirty, prevSnapshot);
 
   return {
+    id: generateSnapshotId(),
     document: state.document,
     gpuSnapshots,
     layerPixelData: new Map(),
@@ -124,6 +134,7 @@ function snapshotCurrentState(
 export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   undoStack: [],
   redoStack: [],
+  originSnapshotId: generateSnapshotId(),
   isDirty: false,
 
   undo: () => {
@@ -191,6 +202,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const gpuSnapshots = snapshotGpuLayers(state.document.layerOrder, state.dirtyLayerIds, prevSnapshot);
 
     const snapshot: HistorySnapshot = {
+      id: generateSnapshotId(),
       document: state.document,
       gpuSnapshots,
       layerPixelData: new Map(),

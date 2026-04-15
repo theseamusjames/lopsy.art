@@ -99,6 +99,10 @@ pub struct EngineInner {
     pub magnetic_lasso_edges: Option<Vec<u8>>,
     pub magnetic_lasso_width: u32,
     pub magnetic_lasso_height: u32,
+    // History Brush session — decompressed source pixels uploaded to a
+    // temporary texture sized to match the active layer texture.
+    pub history_brush_source: Option<TextureHandle>,
+    pub history_brush_layer_id: Option<String>,
 }
 
 impl EngineInner {
@@ -204,6 +208,8 @@ impl EngineInner {
             magnetic_lasso_edges: None,
             magnetic_lasso_width: 0,
             magnetic_lasso_height: 0,
+            history_brush_source: None,
+            history_brush_layer_id: None,
         })
     }
 
@@ -412,6 +418,10 @@ impl EngineInner {
         self.magnetic_lasso_edges = None;
         self.magnetic_lasso_width = 0;
         self.magnetic_lasso_height = 0;
+        if let Some(tex) = self.history_brush_source.take() {
+            self.texture_pool.release(tex);
+        }
+        self.history_brush_layer_id = None;
         // Image adjustments
         self.image_exposure = 0.0;
         self.image_contrast = 0.0;

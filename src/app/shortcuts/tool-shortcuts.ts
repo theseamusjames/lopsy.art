@@ -23,6 +23,7 @@ export function handleToolShortcut(e: KeyboardEvent): boolean {
     s: () => setActiveTool('stamp'),
     o: () => setActiveTool('dodge'),
     r: () => setActiveTool('smudge'),
+    y: () => setActiveTool('history-brush'),
     x: () => swapColors(),
     d: () => resetColors(),
   };
@@ -52,6 +53,8 @@ export function handleSizeShortcut(e: KeyboardEvent): boolean {
     ts.setEraserSize(ts.eraserSize + delta);
   } else if (tool === 'stamp') {
     ts.setStampSize(ts.stampSize + delta);
+  } else if (tool === 'history-brush') {
+    ts.setHistoryBrushSize(ts.historyBrushSize + delta);
   } else if (tool === 'path') {
     ts.setPathStrokeWidth(ts.pathStrokeWidth + delta);
   } else if (tool === 'shape') {

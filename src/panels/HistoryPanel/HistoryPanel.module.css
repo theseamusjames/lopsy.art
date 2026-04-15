@@ -6,6 +6,57 @@
   overflow-y: auto;
 }
 
+.row {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+
+.row:hover {
+  background: var(--color-bg-hover);
+}
+
+.rowActive {
+  background: var(--color-accent-subtle);
+}
+
+.rowActive .entry,
+.rowActive .index {
+  color: var(--color-accent);
+}
+
+.rowFuture .entry,
+.rowFuture .index {
+  color: var(--color-text-disabled);
+}
+
+.marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  border-right: 1px solid var(--color-border);
+}
+
+.marker:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+.markerActive {
+  color: var(--color-accent);
+}
+
+.markerActive:hover {
+  color: var(--color-accent);
+}
+
 .entry {
   display: flex;
   align-items: center;
@@ -18,20 +69,8 @@
   border: none;
   background: none;
   text-align: left;
-  width: 100%;
-}
-
-.entry:hover {
-  background: var(--color-bg-hover);
-}
-
-.entryActive {
-  background: var(--color-accent-subtle);
-  color: var(--color-accent);
-}
-
-.entryFuture {
-  color: var(--color-text-disabled);
+  flex: 1;
+  min-width: 0;
 }
 
 .index {
@@ -40,14 +79,6 @@
   color: var(--color-text-secondary);
   min-width: 16px;
   text-align: right;
-}
-
-.entryActive .index {
-  color: var(--color-accent);
-}
-
-.entryFuture .index {
-  color: var(--color-text-disabled);
 }
 
 .listCollapsed {

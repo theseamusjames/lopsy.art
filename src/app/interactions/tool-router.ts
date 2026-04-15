@@ -15,6 +15,11 @@ import {
   handlePathDown, handlePathMove, handlePathUp,
   handleShapeGradientDown, handleShapeUp, handleShapeMove, handleGradientMove,
 } from './misc-handlers';
+import {
+  handleHistoryBrushDown,
+  handleHistoryBrushMove,
+  handleHistoryBrushUp,
+} from './history-brush-handlers';
 
 export const toolHandlers: Partial<Record<ToolId, ToolHandler>> = {
   move: {
@@ -75,6 +80,11 @@ export const toolHandlers: Partial<Record<ToolId, ToolHandler>> = {
   stamp: {
     down: (ctx) => handleStampDown(ctx),
     move: (ctx, state) => handleStampMove(state, ctx.layerPos, ctx.stampOffsetRef),
+  },
+  'history-brush': {
+    down: (ctx) => handleHistoryBrushDown(ctx),
+    move: (ctx, state) => handleHistoryBrushMove(state, ctx.layerPos),
+    up: () => handleHistoryBrushUp(),
   },
   text: {
     down: (ctx) => handleTextDown(ctx),

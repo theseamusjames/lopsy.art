@@ -53,6 +53,19 @@ function MagneticLassoIcon({ size }: { size: number }) {
   );
 }
 
+function HistoryBrushIcon({ size }: { size: number }) {
+  // A paintbrush angled over a clock face — the clock reads as "history",
+  // the brush reads as "paint from that state".
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="10" r="5" />
+      <path d="M9 7 L9 10 L11 11" />
+      <path d="M14 14 L19 19" />
+      <path d="M18 17 L21 20 A1.5 1.5 0 0 1 20 21 L17 18 Z" />
+    </svg>
+  );
+}
+
 function GradientIcon({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -97,6 +110,7 @@ const toolGroups: ToolDef[][] = [
   [
     { id: 'dodge', icon: <Sun size={ICON_SIZE} />, label: 'Dodge/Burn (O)' },
     { id: 'smudge', icon: <Droplets size={ICON_SIZE} />, label: 'Smudge (R)' },
+    { id: 'history-brush', icon: <HistoryBrushIcon size={ICON_SIZE} />, label: 'History Brush (Y)' },
     { id: 'eyedropper', icon: <Pipette size={ICON_SIZE} />, label: 'Eyedropper (I)' },
   ],
   [
