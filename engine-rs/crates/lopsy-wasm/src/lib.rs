@@ -1524,6 +1524,52 @@ pub fn filter_chromatic_aberration(engine: &mut Engine, layer_id: &str, amount: 
     );
 }
 
+#[wasm_bindgen(js_name = "filterGradientMap")]
+pub fn filter_gradient_map(
+    engine: &mut Engine,
+    layer_id: &str,
+    stop_count: u32,
+    positions: &[f32],
+    colors_r: &[f32],
+    colors_g: &[f32],
+    colors_b: &[f32],
+    colors_a: &[f32],
+    mix_amount: f32,
+) {
+    let count = (stop_count as usize).min(16);
+    let mix_val = mix_amount.clamp(0.0, 1.0);
+    let prog = engine.inner.shaders.gradient_map.program.clone();
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        &prog,
+        |gl, prog| {
+            if let Some(loc) = gl.get_uniform_location(prog, "u_stopCount") {
+                gl.uniform1i(Some(&loc), count as i32);
+            }
+            if let Some(loc) = gl.get_uniform_location(prog, "u_mix") {
+                gl.uniform1f(Some(&loc), mix_val);
+            }
+            for i in 0..count {
+                let pos_name = format!("u_stopPositions[{i}]");
+                if let Some(loc) = gl.get_uniform_location(prog, &pos_name) {
+                    gl.uniform1f(Some(&loc), positions.get(i).copied().unwrap_or(0.0));
+                }
+                let stop_name = format!("u_stops[{i}]");
+                if let Some(loc) = gl.get_uniform_location(prog, &stop_name) {
+                    gl.uniform4f(
+                        Some(&loc),
+                        colors_r.get(i).copied().unwrap_or(0.0),
+                        colors_g.get(i).copied().unwrap_or(0.0),
+                        colors_b.get(i).copied().unwrap_or(0.0),
+                        colors_a.get(i).copied().unwrap_or(1.0),
+                    );
+                }
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterAddNoise")]
 pub fn filter_add_noise(
     engine: &mut Engine, layer_id: &str,

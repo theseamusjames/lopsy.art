@@ -7,10 +7,12 @@ import {
   filterAddNoise,
   filterFillWithNoise,
   filterFindEdges,
+  filterGradientMap,
   saveFilterPreview,
   restoreFilterPreview,
   clearFilterPreview,
 } from '../../engine-wasm/wasm-bridge';
+import type { GradientPreset } from '../../components/FilterDialog/GradientMapDialog';
 import { filterRegistry } from './filters';
 import type { FilterDefinition } from './filters';
 
@@ -35,7 +37,8 @@ export type FilterDialogId =
   | 'solarize'
   | 'kaleidoscope'
   | 'oil-paint'
-  | 'chromatic-aberration';
+  | 'chromatic-aberration'
+  | 'gradient-map';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;
@@ -181,6 +184,59 @@ export function applyFindEdges(): void {
 
   useEditorStore.getState().pushHistory();
   filterFindEdges(engine, activeId);
+  clearJsPixelData(activeId);
+  useEditorStore.getState().notifyRender();
+}
+
+function applyGradientMapToEngine(
+  engine: NonNullable<ReturnType<typeof getEngine>>,
+  layerId: string,
+  preset: GradientPreset,
+  mix: number,
+): void {
+  const positions = new Float32Array(preset.stops.map((s) => s.position));
+  const r = new Float32Array(preset.stops.map((s) => s.color[0]));
+  const g = new Float32Array(preset.stops.map((s) => s.color[1]));
+  const b = new Float32Array(preset.stops.map((s) => s.color[2]));
+  const a = new Float32Array(preset.stops.map((s) => s.color[3]));
+  filterGradientMap(engine, layerId, preset.stops.length, positions, r, g, b, a, mix);
+}
+
+export function applyGradientMap(preset: GradientPreset, mix: number): void {
+  const activeId = getActiveLayerId();
+  if (!activeId) return;
+  const engine = getEngine();
+  if (!engine) return;
+
+  useEditorStore.getState().pushHistory();
+  applyGradientMapToEngine(engine, activeId, preset, mix);
+  clearJsPixelData(activeId);
+  useEditorStore.getState().notifyRender();
+}
+
+export function previewGradientMap(preset: GradientPreset, mix: number): void {
+  const activeId = getActiveLayerId();
+  if (!activeId) return;
+  const engine = getEngine();
+  if (!engine) return;
+
+  restoreFilterPreview(engine);
+  applyGradientMapToEngine(engine, activeId, preset, mix);
+  clearJsPixelData(activeId);
+  useEditorStore.getState().notifyRender();
+}
+
+export function applyGradientMapWithPreview(preset: GradientPreset, mix: number): void {
+  const activeId = getActiveLayerId();
+  if (!activeId) return;
+  const engine = getEngine();
+  if (!engine) return;
+
+  restoreFilterPreview(engine);
+  clearFilterPreview(engine);
+
+  useEditorStore.getState().pushHistory();
+  applyGradientMapToEngine(engine, activeId, preset, mix);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }

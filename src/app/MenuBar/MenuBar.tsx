@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilterDialog } from '../../components/FilterDialog/FilterDialog';
 import { NoiseDialog, FillNoiseDialog } from '../../components/FilterDialog/NoiseDialog';
+import { GradientMapDialog } from '../../components/FilterDialog/GradientMapDialog';
+import type { GradientPreset } from '../../components/FilterDialog/GradientMapDialog';
 import {
   type FilterDialogId,
   getFilterDialogConfig,
   applyGenericFilter,
   applyAddNoise,
   applyFillWithNoise,
+  applyGradientMap,
+  applyGradientMapWithPreview,
+  previewGradientMap,
   beginFilterPreview,
   previewGenericFilter,
   cancelFilterPreviewSession,
@@ -109,6 +114,21 @@ export function MenuBar() {
     setActiveDialog(null);
   }, []);
 
+  const handleGradientMapApply = useCallback((preset: GradientPreset, mix: number) => {
+    if (previewActiveRef.current) {
+      applyGradientMapWithPreview(preset, mix);
+      previewActiveRef.current = false;
+    } else {
+      applyGradientMap(preset, mix);
+    }
+    setActiveDialog(null);
+  }, []);
+
+  const handleGradientMapPreview = useCallback((preset: GradientPreset, mix: number) => {
+    if (!previewActiveRef.current) return;
+    previewGradientMap(preset, mix);
+  }, []);
+
   useEffect(() => {
     if (openMenu === null) return;
     const handleClick = (e: MouseEvent) => {
@@ -120,7 +140,7 @@ export function MenuBar() {
     return () => window.removeEventListener('mousedown', handleClick);
   }, [openMenu]);
 
-  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise'
+  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'gradient-map'
     ? getFilterDialogConfig(activeDialog)
     : null;
 
@@ -188,6 +208,15 @@ export function MenuBar() {
           title="Fill with Noise"
           onApply={handleFillNoiseApply}
           onCancel={handleDialogCancel}
+        />
+      )}
+      {activeDialog === 'gradient-map' && (
+        <GradientMapDialog
+          onApply={handleGradientMapApply}
+          onCancel={handleDialogCancel}
+          onPreviewStart={handlePreviewStart}
+          onPreviewStop={handlePreviewStop}
+          onPreviewChange={handleGradientMapPreview}
         />
       )}
       {imageDialog === 'canvas-size' && (
