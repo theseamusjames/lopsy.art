@@ -9,6 +9,7 @@ import {
   Pipette,
   Stamp,
   Sun,
+  Droplets,
   Type,
   Pentagon,
   Crop,
@@ -95,6 +96,7 @@ const toolGroups: ToolDef[][] = [
   ],
   [
     { id: 'dodge', icon: <Sun size={ICON_SIZE} />, label: 'Dodge/Burn (O)' },
+    { id: 'smudge', icon: <Droplets size={ICON_SIZE} />, label: 'Smudge (R)' },
     { id: 'eyedropper', icon: <Pipette size={ICON_SIZE} />, label: 'Eyedropper (I)' },
   ],
   [

@@ -22,6 +22,7 @@ export function handleToolShortcut(e: KeyboardEvent): boolean {
     p: () => setActiveTool('path'),
     s: () => setActiveTool('stamp'),
     o: () => setActiveTool('dodge'),
+    r: () => setActiveTool('smudge'),
     x: () => swapColors(),
     d: () => resetColors(),
   };
@@ -43,6 +44,8 @@ export function handleSizeShortcut(e: KeyboardEvent): boolean {
 
   if (tool === 'brush' || tool === 'dodge') {
     ts.setBrushSize(ts.brushSize + delta);
+  } else if (tool === 'smudge') {
+    ts.setSmudgeSize(ts.smudgeSize + delta);
   } else if (tool === 'pencil') {
     ts.setPencilSize(ts.pencilSize + delta);
   } else if (tool === 'eraser') {

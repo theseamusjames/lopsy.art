@@ -8,6 +8,7 @@ import { handleTransformMove } from './transform-handlers';
 import {
   handleFillDown, handleEyedropperDown, handleEyedropperMove,
   handleDodgeDown, handleDodgeMove,
+  handleSmudgeDown, handleSmudgeMove,
   handleStampDown, handleStampMove,
   handleTextDown, handleTextMove, handleTextUp,
   handleCropDown, handleCropMove, handleCropUp,
@@ -66,6 +67,10 @@ export const toolHandlers: Partial<Record<ToolId, ToolHandler>> = {
   dodge: {
     down: (ctx) => handleDodgeDown(ctx),
     move: (ctx, state) => handleDodgeMove(state, ctx.layerPos),
+  },
+  smudge: {
+    down: (ctx) => handleSmudgeDown(ctx),
+    move: (ctx, state) => handleSmudgeMove(state, ctx.layerPos),
   },
   stamp: {
     down: (ctx) => handleStampDown(ctx),

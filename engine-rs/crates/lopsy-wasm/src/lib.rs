@@ -8,6 +8,7 @@ pub mod gradient_gpu;
 pub mod shape_gpu;
 pub mod selection_gpu;
 pub mod dodge_burn_gpu;
+pub mod smudge_gpu;
 pub mod clone_stamp_gpu;
 pub mod overlay_renderer;
 pub mod color_mgmt;
@@ -821,6 +822,27 @@ pub fn apply_dodge_burn_dab_batch(
     points: &[f64], size: f32, mode: u32, exposure: f32,
 ) {
     dodge_burn_gpu::apply_dodge_burn_dab_batch(&mut engine.inner, layer_id, points, size, mode, exposure);
+}
+
+// ============================================================
+// Smudge
+// ============================================================
+
+#[wasm_bindgen(js_name = "applySmudgeDab")]
+pub fn apply_smudge_dab(
+    engine: &mut Engine, layer_id: &str,
+    cx: f64, cy: f64, prev_x: f64, prev_y: f64,
+    size: f32, strength: f32,
+) {
+    smudge_gpu::apply_smudge_dab(&mut engine.inner, layer_id, cx, cy, prev_x, prev_y, size, strength);
+}
+
+#[wasm_bindgen(js_name = "applySmudgeDabBatch")]
+pub fn apply_smudge_dab_batch(
+    engine: &mut Engine, layer_id: &str,
+    points: &[f64], size: f32, strength: f32,
+) {
+    smudge_gpu::apply_smudge_dab_batch(&mut engine.inner, layer_id, points, size, strength);
 }
 
 // ============================================================

@@ -34,6 +34,12 @@
 - **Size**: 1 - 200 px
 - Alt/Cmd+click to set source point
 
+### Smudge
+- **Size**: 1 - 200 px
+- **Strength**: 0 - 100% (how far pixels are pulled along the stroke)
+- Shortcut: `R`
+- Pulls colors along the stroke direction, blending neighbouring pixels.
+
 ---
 
 ## Shape & Vector Tools
