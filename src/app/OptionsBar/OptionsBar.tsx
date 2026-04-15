@@ -10,6 +10,7 @@ import { FillOptions } from './tool-options/FillOptions';
 import { WandOptions } from './tool-options/WandOptions';
 import { MarqueeOptions } from './tool-options/MarqueeOptions';
 import { DodgeOptions } from './tool-options/DodgeOptions';
+import { SmudgeOptions } from './tool-options/SmudgeOptions';
 import { ShapeOptions } from './tool-options/ShapeOptions';
 import { GradientOptions } from './tool-options/GradientOptions';
 import { StampOptions } from './tool-options/StampOptions';
@@ -29,6 +30,7 @@ const TOOL_LABELS: Record<ToolId, string> = {
   'stamp': 'Clone Stamp',
   'dodge': 'Dodge/Burn',
   'burn': 'Dodge/Burn',
+  'smudge': 'Smudge',
   'marquee-rect': 'Rectangular Marquee',
   'marquee-ellipse': 'Elliptical Marquee',
   'lasso': 'Lasso',
@@ -50,6 +52,7 @@ function ToolOptions({ tool }: { tool: ToolId }) {
     case 'fill': return <FillOptions />;
     case 'wand': return <WandOptions />;
     case 'dodge': return <DodgeOptions />;
+    case 'smudge': return <SmudgeOptions />;
     case 'shape': return <ShapeOptions />;
     case 'gradient': return <GradientOptions />;
     case 'stamp': return <StampOptions />;

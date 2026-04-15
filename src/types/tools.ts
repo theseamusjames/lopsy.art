@@ -11,6 +11,7 @@ export type ToolId =
   | 'stamp'
   | 'dodge'
   | 'burn'
+  | 'smudge'
   | 'marquee-rect'
   | 'marquee-ellipse'
   | 'lasso'

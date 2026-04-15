@@ -29,6 +29,8 @@ interface ToolSettings {
   pathStrokeWidth: number;
   dodgeExposure: number;
   dodgeMode: 'dodge' | 'burn';
+  smudgeSize: number;
+  smudgeStrength: number;
   wandTolerance: number;
   wandContiguous: boolean;
   magneticLassoWidth: number;
@@ -58,6 +60,8 @@ interface ToolSettings {
   setPathStrokeWidth: (width: number) => void;
   setDodgeExposure: (exposure: number) => void;
   setDodgeMode: (mode: 'dodge' | 'burn') => void;
+  setSmudgeSize: (size: number) => void;
+  setSmudgeStrength: (strength: number) => void;
   setWandTolerance: (tolerance: number) => void;
   setWandContiguous: (contiguous: boolean) => void;
   setMagneticLassoWidth: (width: number) => void;
@@ -125,6 +129,8 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   pathStrokeWidth: 2,
   dodgeExposure: 50,
   dodgeMode: 'dodge',
+  smudgeSize: 30,
+  smudgeStrength: 50,
   wandTolerance: 32,
   wandContiguous: true,
   magneticLassoWidth: 10,
@@ -203,6 +209,8 @@ export const useToolSettingsStore = create<ToolSettings>((set) => ({
   setPathStrokeWidth: (width) => set({ pathStrokeWidth: Math.max(1, Math.min(50, width)) }),
   setDodgeExposure: (exposure) => set({ dodgeExposure: Math.max(1, Math.min(100, exposure)) }),
   setDodgeMode: (mode) => set({ dodgeMode: mode }),
+  setSmudgeSize: (size) => set({ smudgeSize: Math.max(1, Math.min(200, size)) }),
+  setSmudgeStrength: (strength) => set({ smudgeStrength: Math.max(0, Math.min(100, strength)) }),
   setWandTolerance: (tolerance) => set({ wandTolerance: Math.max(0, Math.min(255, tolerance)) }),
   setWandContiguous: (contiguous) => set({ wandContiguous: contiguous }),
   setMagneticLassoWidth: (width) => set({ magneticLassoWidth: Math.max(1, Math.min(40, Math.round(width))) }),
