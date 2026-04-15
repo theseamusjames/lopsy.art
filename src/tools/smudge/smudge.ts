@@ -9,8 +9,9 @@ import type { Point, PixelSurface } from '../../types';
  * dab earlier. `strength` (0–1) controls how much each pixel is pulled; at
  * 1 the brush fully replaces with the "pulled" color, at 0 nothing changes.
  *
- * A soft-circle falloff (linear in radius) is applied so the centre of the
- * dab smudges hardest and the edge tapers to zero.
+ * A soft-circle falloff (quadratic-squared with an anti-aliased edge) is
+ * applied so the centre of the dab smudges hardest and the edge tapers
+ * invisibly into the surrounding unsmudged pixels.
  *
  * This is the CPU reference implementation used by unit tests and by mask
  * edit mode. The live render path uses the GPU shader in
@@ -67,8 +68,22 @@ export function applySmudgeDab(
       if (distSq > radiusSq) continue;
 
       const dist = Math.sqrt(distSq);
-      const falloff = 1 - dist / radius;
-      const t = Math.min(1, Math.max(0, falloff * strength));
+      const d = dist / radius;
+      // Soft quadratic falloff, squared again so the outer ring fades to
+      // zero rather than terminating with a visible brush silhouette. Must
+      // match the GPU shader in smudge_dab.glsl.
+      let soft = 1 - d * d;
+      soft = soft * soft;
+      // 1-px smoothstep feather at the outer edge.
+      const edgeStart = radius - 1;
+      let edge = 1;
+      if (dist >= radius) edge = 0;
+      else if (dist > edgeStart) {
+        const u = (dist - edgeStart) / (radius - edgeStart);
+        const smooth = u * u * (3 - 2 * u);
+        edge = 1 - smooth;
+      }
+      const t = Math.min(1, Math.max(0, soft * edge * strength));
       if (t <= 0) continue;
 
       const existingIdx = (oy + radius) * snapshotDiameter + (ox + radius);

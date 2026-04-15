@@ -20,9 +20,24 @@ void main() {
         return;
     }
 
-    // Radial falloff: strongest at center, zero at edge.
-    float t = (1.0 - dist / radius) * u_strength;
+    // Soft quadratic falloff (matches brush_dab), peaking at 1.0 in the centre
+    // and smoothly decaying to 0 at the edge. Cubing it pushes more of the
+    // weight into the centre so the outer ring fades out invisibly rather
+    // than clamping at a sharp circular silhouette.
+    float d = clamp(dist / radius, 0.0, 1.0);
+    float soft = 1.0 - d * d;
+    soft = soft * soft;
+
+    // 1px smoothstep feather at the outer edge so the dab doesn't terminate
+    // with a hard ring against unsmudged pixels.
+    float edge = 1.0 - smoothstep(radius - 1.0, radius, dist);
+    float t = soft * edge * u_strength;
     t = clamp(t, 0.0, 1.0);
+
+    if (t <= 0.0) {
+        fragColor = existing;
+        return;
+    }
 
     // Sample from the prior dab position: each fragment reads the pixel that
     // was at fragPos - (center - prev) when the previous dab was painted,

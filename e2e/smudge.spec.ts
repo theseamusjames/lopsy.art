@@ -121,20 +121,20 @@ test.describe('Smudge Tool', () => {
     await page.waitForTimeout(100);
     expect(await getActiveTool(page)).toBe('brush');
 
-    await setToolSetting(page, 'setBrushSize', 120);
+    await setToolSetting(page, 'setBrushSize', 100);
     await setToolSetting(page, 'setBrushHardness', 100);
     await setToolSetting(page, 'setBrushSpacing', 25);
 
     const baseline = await snapshot(page);
 
-    // Paint the left half red — a few wide strokes cover the canvas.
+    // Paint the left half red — overlapping rows completely cover the canvas.
     await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
-    for (let y = 60; y < 400; y += 120) {
+    for (let y = 50; y < 400; y += 70) {
       await drawStroke(page, { x: 0, y }, { x: 300, y }, 6);
     }
     // Paint the right half blue.
     await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 255, a: 1 });
-    for (let y = 60; y < 400; y += 120) {
+    for (let y = 50; y < 400; y += 70) {
       await drawStroke(page, { x: 300, y }, { x: 600, y }, 6);
     }
 
