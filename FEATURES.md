@@ -195,6 +195,20 @@ Applied globally or per-group. All default to 0.
   `CurveEditor` (drag points, click to add, double-click or yank to remove).
   Runs as a single 256×1 RGBA LUT texture sampled in the GPU adjustments
   shader; identity curves bypass the lookup.
+- **Levels**: per-channel input/output tonal remap with gamma.
+  - **Input Black**: 0 - 254 (tones at/below map to output black)
+  - **Input White**: 1 - 255 (tones at/above map to output white; clamped
+    to stay strictly greater than Input Black)
+  - **Gamma**: 0.1 - 10 (midtone curve; 1.0 is linear, >1 brightens,
+    <1 darkens)
+  - **Output Black**: 0 - 255 (lower bound of the output band)
+  - **Output White**: 0 - 255 (upper bound; can be inverted below Output
+    Black for a tonal flip)
+  - Per-channel: RGB master + R / G / B, same pipeline as Curves. Master
+    applies to every channel first, then per-channel Levels remap.
+  - GPU path: packed 256×1 RGBA LUT sampled in the adjustments shader,
+    applied *before* Curves so the classic "levels then curves" order
+    composes correctly. Identity levels bypass the lookup.
 
 ---
 

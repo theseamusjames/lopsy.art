@@ -539,7 +539,8 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         || engine.image_blacks.abs() > 1e-6
         || engine.image_saturation.abs() > 1e-6
         || engine.image_vibrance.abs() > 1e-6
-        || engine.has_image_curves;
+        || engine.has_image_curves
+        || engine.has_image_levels;
     let has_vignette = engine.image_vignette.abs() > 1e-6;
 
     if !has_adjustments && !has_vignette { return; }
@@ -584,6 +585,20 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_hasCurves") {
             engine.gl.uniform1f(Some(&loc), if has_curves { 1.0 } else { 0.0 });
+        }
+        // Levels LUT — bound to TEXTURE2 (TEXTURE1 is already curves).
+        let has_levels = engine.has_image_levels && engine.image_levels_texture.is_some();
+        if has_levels {
+            if let Some(levels_tex) = engine.image_levels_texture.and_then(|h| engine.texture_pool.get(h)) {
+                let levels_tex = levels_tex.clone();
+                engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
+                engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&levels_tex));
+                if let Some(loc) = engine.gl.get_uniform_location(prog, "u_levelsLut") { engine.gl.uniform1i(Some(&loc), 2); }
+                engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            }
+        }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_hasLevels") {
+            engine.gl.uniform1f(Some(&loc), if has_levels { 1.0 } else { 0.0 });
         }
         engine.draw_fullscreen_quad();
 

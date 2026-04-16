@@ -14,6 +14,13 @@ import {
   type CurvePoint,
   type Curves,
 } from '../../filters/curves';
+import {
+  IDENTITY_LEVELS,
+  IDENTITY_LEVELS_CHANNEL,
+  isIdentityLevelsChannel,
+  type Levels,
+  type LevelsChannel,
+} from '../../filters/levels';
 import type { GroupLayer } from '../../types';
 import styles from './AdjustmentsPanel.module.css';
 
@@ -114,6 +121,20 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
     });
   };
 
+  const levels: Levels = adjustments.levels ?? IDENTITY_LEVELS;
+  const handleLevelsChange = (channel: CurveChannel, next: LevelsChannel) => {
+    setGroupAdjustments(group.id, {
+      ...adjustments,
+      levels: { ...levels, [channel]: next },
+    });
+  };
+  const handleResetLevels = (channel: CurveChannel) => {
+    setGroupAdjustments(group.id, {
+      ...adjustments,
+      levels: { ...levels, [channel]: IDENTITY_LEVELS_CHANNEL },
+    });
+  };
+
   const sliders = activeTab === 'values' ? VALUE_SLIDERS : COLOR_SLIDERS;
 
   return (
@@ -166,6 +187,13 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
             onReset={handleResetCurve}
           />
         )}
+        {activeTab === 'values' && (
+          <LevelsSection
+            levels={levels}
+            onChange={handleLevelsChange}
+            onReset={handleResetLevels}
+          />
+        )}
       </div>
       <div className={styles.footer}>
         <button type="button" className={styles.textBtn} onClick={handleReset}>
@@ -178,6 +206,114 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
         >
           {adjustmentsEnabled ? <Eye size={14} /> : <EyeOff size={14} />}
         </button>
+      </div>
+    </div>
+  );
+}
+
+interface LevelsSectionProps {
+  levels: Levels;
+  onChange: (channel: CurveChannel, next: LevelsChannel) => void;
+  onReset: (channel: CurveChannel) => void;
+}
+
+function LevelsSection({ levels, onChange, onReset }: LevelsSectionProps) {
+  const [channel, setChannel] = useState<CurveChannel>('rgb');
+  const channels: CurveChannel[] = ['rgb', 'r', 'g', 'b'];
+  const current = levels[channel];
+  const isIdentity = isIdentityLevelsChannel(current);
+
+  const patch = (fields: Partial<LevelsChannel>) => {
+    onChange(channel, { ...current, ...fields });
+  };
+
+  // Clamp input-white strictly above input-black as the user drags, so the
+  // curve never flips or becomes degenerate.
+  const handleInBlack = (v: number) => {
+    const next = Math.max(0, Math.min(254, Math.round(v)));
+    const clampedWhite = Math.max(current.inWhite, next + 1);
+    patch({ inBlack: next, inWhite: clampedWhite });
+  };
+  const handleInWhite = (v: number) => {
+    const next = Math.max(1, Math.min(255, Math.round(v)));
+    const clampedBlack = Math.min(current.inBlack, next - 1);
+    patch({ inBlack: clampedBlack, inWhite: next });
+  };
+
+  return (
+    <div className={styles.curvesSection} data-testid="levels-section">
+      <div className={styles.curvesHeader}>
+        <span className={styles.label}>Levels</span>
+        <div className={styles.channelTabs} role="tablist" aria-label="Levels channel">
+          {channels.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="tab"
+              aria-selected={channel === c}
+              className={`${styles.channelTab} ${channel === c ? styles.channelTabActive : ''}`}
+              style={{ color: CHANNEL_COLORS[c] }}
+              onClick={() => setChannel(c)}
+            >
+              {CHANNEL_LABELS[c]}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className={styles.textBtn}
+          onClick={() => onReset(channel)}
+          disabled={isIdentity}
+        >
+          Reset
+        </button>
+      </div>
+      <div className={styles.sliders} data-testid="levels-sliders">
+        <Slider
+          label="Input Black"
+          value={current.inBlack}
+          min={0}
+          max={254}
+          step={1}
+          defaultValue={0}
+          onChange={handleInBlack}
+        />
+        <Slider
+          label="Gamma"
+          value={current.gamma}
+          min={0.1}
+          max={10}
+          step={0.01}
+          defaultValue={1}
+          onChange={(v) => patch({ gamma: v })}
+        />
+        <Slider
+          label="Input White"
+          value={current.inWhite}
+          min={1}
+          max={255}
+          step={1}
+          defaultValue={255}
+          onChange={handleInWhite}
+        />
+        <Slider
+          label="Output Black"
+          value={current.outBlack}
+          min={0}
+          max={255}
+          step={1}
+          defaultValue={0}
+          onChange={(v) => patch({ outBlack: Math.round(v) })}
+        />
+        <Slider
+          label="Output White"
+          value={current.outWhite}
+          min={0}
+          max={255}
+          step={1}
+          defaultValue={255}
+          onChange={(v) => patch({ outWhite: Math.round(v) })}
+        />
       </div>
     </div>
   );

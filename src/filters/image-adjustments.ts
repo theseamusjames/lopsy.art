@@ -1,5 +1,7 @@
 import type { Curves } from './curves';
 import { IDENTITY_CURVES, isIdentityCurves, applyCurvesToImageData } from './curves';
+import type { Levels } from './levels';
+import { IDENTITY_LEVELS, isIdentityLevels, applyLevelsToImageData } from './levels';
 
 export interface ImageAdjustments {
   exposure: number;
@@ -16,6 +18,12 @@ export interface ImageAdjustments {
    * without a migration; absent / identity curves skip the GPU + JS path.
    */
   curves?: Curves;
+  /**
+   * Per-channel Levels. Optional for the same reason as curves.
+   * Applied on the GPU before curves so the two compose in the classic
+   * "levels first, then curves" order.
+   */
+  levels?: Levels;
 }
 
 export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
@@ -29,6 +37,7 @@ export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
   saturation: 0,
   vibrance: 0,
   curves: IDENTITY_CURVES,
+  levels: IDENTITY_LEVELS,
 };
 
 export function aggregateGroupAdjustments(
@@ -36,10 +45,11 @@ export function aggregateGroupAdjustments(
 ): ImageAdjustments | null {
   const agg: ImageAdjustments = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0, saturation: 0, vibrance: 0 };
   let found = false;
-  // Curves don't compose linearly the way scalar adjustments do — pick the
-  // first non-identity curve set we find. This matches how groups stack
+  // Curves / Levels don't compose linearly the way scalar adjustments do —
+  // pick the first non-identity set we find. This matches how groups stack
   // adjustment layers in Photoshop (last-write-wins for non-additive ops).
   let pickedCurves: Curves | undefined;
+  let pickedLevels: Levels | undefined;
   for (const l of layers) {
     if (l.type === 'group' && l.adjustments && l.adjustmentsEnabled !== false && l.visible) {
       agg.exposure += l.adjustments.exposure;
@@ -54,10 +64,14 @@ export function aggregateGroupAdjustments(
       if (!pickedCurves && l.adjustments.curves && !isIdentityCurves(l.adjustments.curves)) {
         pickedCurves = l.adjustments.curves;
       }
+      if (!pickedLevels && l.adjustments.levels && !isIdentityLevels(l.adjustments.levels)) {
+        pickedLevels = l.adjustments.levels;
+      }
       found = true;
     }
   }
   if (pickedCurves) agg.curves = pickedCurves;
+  if (pickedLevels) agg.levels = pickedLevels;
   return found ? agg : null;
 }
 
@@ -72,7 +86,8 @@ export function hasActiveAdjustments(adj: ImageAdjustments): boolean {
     adj.vignette !== 0 ||
     adj.saturation !== 0 ||
     adj.vibrance !== 0 ||
-    !isIdentityCurves(adj.curves)
+    !isIdentityCurves(adj.curves) ||
+    !isIdentityLevels(adj.levels)
   );
 }
 
@@ -214,6 +229,11 @@ export function applyAdjustmentsToImageData(
 
   if (adj.vignette !== 0) {
     applyVignette(imageData, adj.vignette);
+  }
+
+  // Order matches the GPU shader: levels runs before curves.
+  if (adj.levels && !isIdentityLevels(adj.levels)) {
+    applyLevelsToImageData(imageData.data, adj.levels);
   }
 
   if (adj.curves && !isIdentityCurves(adj.curves)) {

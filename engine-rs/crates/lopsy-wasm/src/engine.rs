@@ -93,6 +93,10 @@ pub struct EngineInner {
     /// (R/G/B = per-channel, A = master). None when no curves are active.
     pub image_curves_texture: Option<TextureHandle>,
     pub has_image_curves: bool,
+    /// 256x1 RGBA texture holding the four per-channel Levels LUTs
+    /// (R/G/B = per-channel, A = master). None when levels are identity.
+    pub image_levels_texture: Option<TextureHandle>,
+    pub has_image_levels: bool,
     // Mask editing — skip mask clipping, show blue overlay instead
     pub mask_edit_layer_id: Option<String>,
     // Magnetic lasso session (doc-sized Sobel edge field; present only while tool active)
@@ -200,6 +204,8 @@ impl EngineInner {
             image_vibrance: 0.0,
             image_curves_texture: None,
             has_image_curves: false,
+            image_levels_texture: None,
+            has_image_levels: false,
             mask_edit_layer_id: None,
             magnetic_lasso_edges: None,
             magnetic_lasso_width: 0,
@@ -426,6 +432,10 @@ impl EngineInner {
             self.texture_pool.release(tex);
         }
         self.has_image_curves = false;
+        if let Some(tex) = self.image_levels_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        self.has_image_levels = false;
         self.needs_recomposite = true;
     }
 
