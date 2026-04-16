@@ -12,3 +12,4 @@ pub mod flood_fill;
 pub mod magnetic_lasso;
 pub mod compress;
 pub mod decode;
+pub mod psd;

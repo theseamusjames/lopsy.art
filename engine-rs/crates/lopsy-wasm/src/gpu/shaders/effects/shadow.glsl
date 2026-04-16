@@ -16,6 +16,10 @@ void main() {
     // Map document UV to layer-local UV, applying shadow offset
     vec2 docPos = v_uv * u_docSize;
     vec2 layerUV = (docPos - u_srcOffset - u_offset) / u_srcSize;
+    // Layer-local UV WITHOUT shadow offset — used to knock the shadow out
+    // from behind the layer's opaque pixels so the layer's blend mode operates
+    // against the original background, not the shadow color.
+    vec2 knockoutUV = (docPos - u_srcOffset) / u_srcSize;
     // Early out if far from layer bounds (with blur margin)
     vec2 marginUV = (u_blur + 1.0) * u_texelSize;
     if (layerUV.x < -marginUV.x || layerUV.x > 1.0 + marginUV.x ||
@@ -70,5 +74,13 @@ void main() {
         alpha = alpha > 0.001 ? pow(alpha, exponent) : 0.0;
     }
 
-    fragColor = vec4(u_shadowColor.rgb, alpha * u_shadowColor.a * u_opacity);
+    // Knock out the shadow behind the layer — Photoshop "Layer Knocks Out
+    // Drop Shadow" behavior. This ensures blend modes on the layer operate
+    // against the original background, not the shadow.
+    float knockoutAlpha = 0.0;
+    if (knockoutUV.x >= 0.0 && knockoutUV.x <= 1.0 && knockoutUV.y >= 0.0 && knockoutUV.y <= 1.0) {
+        knockoutAlpha = texture(u_srcTex, knockoutUV).a;
+    }
+
+    fragColor = vec4(u_shadowColor.rgb, alpha * u_shadowColor.a * u_opacity * (1.0 - knockoutAlpha));
 }

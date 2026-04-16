@@ -25,6 +25,7 @@ import { useToolSettingsStore } from './tool-settings-store';
 import { drawShape } from '../tools/shape/shape';
 import { PixelBuffer } from '../engine/pixel-data';
 import { pasteOrOpenBlob } from './paste-or-open';
+import { importPsdFile } from './MenuBar/menus/file-menu';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
@@ -136,6 +137,13 @@ export function App() {
 
   const handleOpenFile = useCallback((file: File) => {
     const name = file.name.replace(/\.[^.]+$/, '');
+    if (/\.psd$/i.test(file.name)) {
+      file.arrayBuffer().then(async (buffer) => {
+        await importPsdFile(new Uint8Array(buffer), name);
+        setShowNewDocumentModal(false);
+      });
+      return;
+    }
     pasteOrOpenBlob(file, name).then(() => {
       setShowNewDocumentModal(false);
     });
