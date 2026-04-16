@@ -169,6 +169,10 @@ import init, {
   clearBrushTip,
   setBrushTipState,
   clearAllLayers,
+  exportPsd,
+  parsePsd,
+  getPsdLayerPixels,
+  getPsdLayerMask,
 } from './pkg/lopsy_wasm';
 
 export type { Engine };
@@ -348,4 +352,8 @@ export {
   uploadBrushTip,
   clearBrushTip,
   setBrushTipState,
+  exportPsd,
+  parsePsd,
+  getPsdLayerPixels,
+  getPsdLayerMask,
 };
