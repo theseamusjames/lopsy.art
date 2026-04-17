@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useUIStore } from '../../app/ui-store';
 import { ColorPicker } from '../ColorPicker/ColorPicker';
 import styles from './GuideColorPicker.module.css';
@@ -18,6 +19,18 @@ export function GuideColorPicker() {
   const showGuides = useUIStore((s) => s.showGuides);
   const guideColor = useUIStore((s) => s.guideColor);
   const setGuideColor = useUIStore((s) => s.setGuideColor);
+  const closeModalOfKind = useUIStore((s) => s.closeModalOfKind);
+
+  // ESC dismisses the picker. The modal slot lets us subscribe only while
+  // open, so the keydown listener isn't attached to the document full-time.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeModalOfKind('guideColor');
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, closeModalOfKind]);
 
   // The picker is meaningless when rulers or guides are hidden — those UIs
   // are the only way to interact with guide color.
@@ -25,7 +38,7 @@ export function GuideColorPicker() {
 
   return (
     <div
-      className={styles.root}
+      className={styles.guideColorPicker}
       onMouseDown={(e) => e.stopPropagation()}
     >
       <ColorPicker color={guideColor} onChange={setGuideColor} />
