@@ -1,5 +1,5 @@
-import type { Engine } from '../../../engine-wasm/wasm-bridge';
-import type { FilterParam } from '../../../components/FilterDialog/FilterDialog';
+import type { Engine } from '../engine-wasm/wasm-bridge';
+import type { FilterParam } from '../components/FilterDialog/FilterDialog';
 
 export interface FilterDefinition {
   id: string;

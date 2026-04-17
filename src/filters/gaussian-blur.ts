@@ -1,5 +1,5 @@
-import { filterGaussianBlur } from '../../../engine-wasm/wasm-bridge';
-import type { FilterDefinition } from './types';
+import { filterGaussianBlur } from '../engine-wasm/wasm-bridge';
+import type { FilterDefinition } from './filter-types';
 
 export const gaussianBlur: FilterDefinition = {
   id: 'gaussian-blur',

@@ -1,5 +1,5 @@
-import { filterOilPaint } from '../../../engine-wasm/wasm-bridge';
-import type { FilterDefinition } from './types';
+import { filterOilPaint } from '../engine-wasm/wasm-bridge';
+import type { FilterDefinition } from './filter-types';
 
 export const oilPaint: FilterDefinition = {
   id: 'oil-paint',

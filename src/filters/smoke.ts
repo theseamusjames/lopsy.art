@@ -1,5 +1,5 @@
-import { filterSmoke } from '../../../engine-wasm/wasm-bridge';
-import type { FilterDefinition } from './types';
+import { filterSmoke } from '../engine-wasm/wasm-bridge';
+import type { FilterDefinition } from './filter-types';
 
 export const smoke: FilterDefinition = {
   id: 'smoke',

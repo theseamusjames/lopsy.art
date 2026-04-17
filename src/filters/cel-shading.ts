@@ -1,5 +1,5 @@
-import { filterCelShading } from '../../../engine-wasm/wasm-bridge';
-import type { FilterDefinition } from './types';
+import { filterCelShading } from '../engine-wasm/wasm-bridge';
+import type { FilterDefinition } from './filter-types';
 
 export const celShading: FilterDefinition = {
   id: 'cel-shading',

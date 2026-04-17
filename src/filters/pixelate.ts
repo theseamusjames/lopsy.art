@@ -1,5 +1,5 @@
-import { filterPixelate } from '../../../engine-wasm/wasm-bridge';
-import type { FilterDefinition } from './types';
+import { filterPixelate } from '../engine-wasm/wasm-bridge';
+import type { FilterDefinition } from './filter-types';
 
 export const pixelate: FilterDefinition = {
   id: 'pixelate',

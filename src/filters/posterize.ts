@@ -1,5 +1,5 @@
-import { filterPosterize } from '../../../engine-wasm/wasm-bridge';
-import type { FilterDefinition } from './types';
+import { filterPosterize } from '../engine-wasm/wasm-bridge';
+import type { FilterDefinition } from './filter-types';
 
 export const posterize: FilterDefinition = {
   id: 'posterize',

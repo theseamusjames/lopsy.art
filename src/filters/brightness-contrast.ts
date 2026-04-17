@@ -1,5 +1,5 @@
-import { filterBrightnessContrast } from '../../../engine-wasm/wasm-bridge';
-import type { FilterDefinition } from './types';
+import { filterBrightnessContrast } from '../engine-wasm/wasm-bridge';
+import type { FilterDefinition } from './filter-types';
 
 export const brightnessContrast: FilterDefinition = {
   id: 'brightness-contrast',

@@ -1,5 +1,5 @@
-import { filterRadialBlur } from '../../../engine-wasm/wasm-bridge';
-import type { FilterDefinition } from './types';
+import { filterRadialBlur } from '../engine-wasm/wasm-bridge';
+import type { FilterDefinition } from './filter-types';
 
 export const radialBlur: FilterDefinition = {
   id: 'radial-blur',

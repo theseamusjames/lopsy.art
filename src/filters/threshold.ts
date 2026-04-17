@@ -1,5 +1,5 @@
-import { filterThreshold } from '../../../engine-wasm/wasm-bridge';
-import type { FilterDefinition } from './types';
+import { filterThreshold } from '../engine-wasm/wasm-bridge';
+import type { FilterDefinition } from './filter-types';
 
 export const threshold: FilterDefinition = {
   id: 'threshold',

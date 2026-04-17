@@ -1,5 +1,5 @@
-import { filterFindEdges } from '../../../engine-wasm/wasm-bridge';
-import type { FilterDefinition } from './types';
+import { filterFindEdges } from '../engine-wasm/wasm-bridge';
+import type { FilterDefinition } from './filter-types';
 
 export const findEdges: FilterDefinition = {
   id: 'find-edges',

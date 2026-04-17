@@ -1,4 +1,4 @@
-import type { FilterDefinition } from './types';
+import type { FilterDefinition } from './filter-types';
 import { gaussianBlur } from './gaussian-blur';
 import { boxBlur } from './box-blur';
 import { unsharpMask } from './unsharp-mask';

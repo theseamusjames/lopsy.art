@@ -1,5 +1,5 @@
-import { filterHueSaturation } from '../../../engine-wasm/wasm-bridge';
-import type { FilterDefinition } from './types';
+import { filterHueSaturation } from '../engine-wasm/wasm-bridge';
+import type { FilterDefinition } from './filter-types';
 
 export const hueSaturation: FilterDefinition = {
   id: 'hue-saturation',
