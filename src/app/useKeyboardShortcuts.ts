@@ -11,7 +11,7 @@ import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob } from './paste-or-open';
 import { processTextKey } from '../tools/text/text-input';
-import { commitTextEditing } from './interactions/misc-handlers';
+import { commitTextEditing } from '../tools/text/text-interaction';
 import { POINTER_IDLE, POINTER_SPACE_HELD, type PointerMode } from './pointer-mode';
 
 // Fallback timer for browsers where the paste event may not fire on non-editable

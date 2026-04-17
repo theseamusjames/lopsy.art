@@ -5,16 +5,16 @@ import { handleMoveDown, handleMoveMove, handleMoveUp } from './move-handlers';
 import { handlePaintDown, handlePaintMove } from './paint-handlers';
 import { handleSelectionDown, handleSelectionMove, handleSelectionUp } from './selection-handlers';
 import { handleTransformMove } from './transform-handlers';
-import {
-  handleFillDown, handleEyedropperDown, handleEyedropperMove,
-  handleDodgeDown, handleDodgeMove,
-  handleSmudgeDown, handleSmudgeMove,
-  handleStampDown, handleStampMove,
-  handleTextDown, handleTextMove, handleTextUp,
-  handleCropDown, handleCropMove, handleCropUp,
-  handlePathDown, handlePathMove, handlePathUp,
-  handleShapeGradientDown, handleShapeUp, handleShapeMove, handleGradientMove,
-} from './misc-handlers';
+import { handleFillDown } from '../../tools/fill/fill-interaction';
+import { handleEyedropperDown, handleEyedropperMove } from '../../tools/eyedropper/eyedropper-interaction';
+import { handleDodgeDown, handleDodgeMove } from '../../tools/dodge/dodge-interaction';
+import { handleSmudgeDown, handleSmudgeMove } from '../../tools/smudge/smudge-interaction';
+import { handleStampDown, handleStampMove } from '../../tools/stamp/stamp-interaction';
+import { handleTextDown, handleTextMove, handleTextUp } from '../../tools/text/text-interaction';
+import { handleCropDown, handleCropMove, handleCropUp } from '../../tools/crop/crop-interaction';
+import { handlePathDown, handlePathMove, handlePathUp } from '../../tools/path/path-interaction';
+import { handleShapeDown, handleShapeMove, handleShapeUp } from '../../tools/shape/shape-interaction';
+import { handleGradientDown, handleGradientMove } from '../../tools/gradient/gradient-interaction';
 
 export const toolHandlers: Partial<Record<ToolId, ToolHandler>> = {
   move: {
@@ -92,12 +92,12 @@ export const toolHandlers: Partial<Record<ToolId, ToolHandler>> = {
     up: () => handlePathUp(),
   },
   shape: {
-    down: (ctx) => handleShapeGradientDown(ctx, 'shape'),
+    down: (ctx) => handleShapeDown(ctx),
     move: (ctx, state) => handleShapeMove(state, ctx.layerPos),
     up: (ctx, state) => handleShapeUp(state, ctx.layerPos),
   },
   gradient: {
-    down: (ctx) => handleShapeGradientDown(ctx, 'gradient'),
+    down: (ctx) => handleGradientDown(ctx),
     move: (ctx, state) => handleGradientMove(state, ctx.layerPos),
   },
 };

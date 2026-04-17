@@ -33,7 +33,7 @@ import { useContextMenu } from './useContextMenu';
 import { ColorPicker } from '../components/ColorPicker/ColorPicker';
 import { ContextMenu } from '../components/ContextMenu/ContextMenu';
 import { TextActionButtons } from '../components/TextActionButtons/TextActionButtons';
-import { commitTextEditing } from './interactions/misc-handlers';
+import { commitTextEditing } from '../tools/text/text-interaction';
 import { POINTER_IDLE, isPanning, type PointerMode } from './pointer-mode';
 import styles from './App.module.css';
 
