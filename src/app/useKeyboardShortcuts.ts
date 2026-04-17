@@ -12,6 +12,7 @@ import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob } from './paste-or-open';
 import { processTextKey } from '../tools/text/text-input';
 import { commitTextEditing } from './interactions/misc-handlers';
+import { POINTER_IDLE, POINTER_SPACE_HELD, type PointerMode } from './pointer-mode';
 
 // Fallback timer for browsers where the paste event may not fire on non-editable
 // elements (e.g. Firefox with canvas focus). The keydown handler schedules a
@@ -35,16 +36,19 @@ function cancelFallbackPaste(): void {
 
 interface KeyboardShortcutDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
-  setIsSpaceDown: (v: boolean) => void;
-  setIsPanning: (v: boolean) => void;
+  /**
+   * Update the pointer mode in response to space being held / released.
+   * Receives the current mode so it can transition out of `panning` cleanly
+   * when space comes up mid-drag.
+   */
+  setPointerMode: (next: PointerMode | ((prev: PointerMode) => PointerMode)) => void;
   clearPersistentTransform: () => void;
   nudgeMove: (dx: number, dy: number) => void;
 }
 
 export function useKeyboardShortcuts({
   canvasRef,
-  setIsSpaceDown,
-  setIsPanning,
+  setPointerMode,
   clearPersistentTransform,
   nudgeMove,
 }: KeyboardShortcutDeps): void {
@@ -96,7 +100,8 @@ export function useKeyboardShortcuts({
 
       if (e.code === 'Space') {
         e.preventDefault();
-        setIsSpaceDown(true);
+        // Don't override an in-progress pan; only signal "ready to pan".
+        setPointerMode((prev) => prev.kind === 'panning' ? prev : POINTER_SPACE_HELD);
         return;
       }
 
@@ -140,8 +145,9 @@ export function useKeyboardShortcuts({
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
-        setIsSpaceDown(false);
-        setIsPanning(false);
+        // Releasing space ends both the "ready to pan" state and any
+        // pan-in-progress; both collapse back to idle.
+        setPointerMode(POINTER_IDLE);
       }
     };
 
@@ -214,7 +220,7 @@ export function useKeyboardShortcuts({
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('paste', handlePaste);
     };
-  }, [setZoom, setPan, viewport.zoom, docWidth, docHeight, canvasRef, setIsSpaceDown, setIsPanning, clearPersistentTransform, nudgeMove]);
+  }, [setZoom, setPan, viewport.zoom, docWidth, docHeight, canvasRef, setPointerMode, clearPersistentTransform, nudgeMove]);
 }
 
 function handleDeleteKey(): void {

@@ -34,6 +34,7 @@ import { ColorPicker } from '../components/ColorPicker/ColorPicker';
 import { ContextMenu } from '../components/ContextMenu/ContextMenu';
 import { TextActionButtons } from '../components/TextActionButtons/TextActionButtons';
 import { commitTextEditing } from './interactions/misc-handlers';
+import { POINTER_IDLE, isPanning, type PointerMode } from './pointer-mode';
 import styles from './App.module.css';
 
 // Isolated component for canvas rendering — prevents renderVersion and
@@ -94,9 +95,7 @@ export function App() {
     return () => document.removeEventListener('keydown', handleKey);
   }, [showGuideColorPicker]);
 
-  const [isPanning, setIsPanning] = useState(false);
-  const [isSpaceDown, setIsSpaceDown] = useState(false);
-  const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const [pointerMode, setPointerMode] = useState<PointerMode>(POINTER_IDLE);
 
   // Touch gesture state for pinch-to-zoom and two-finger pan
   const touchRef = useRef<{
@@ -252,7 +251,7 @@ export function App() {
   const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove } = useCanvasInteraction(screenToCanvas, containerRef);
 
   // Cursor management
-  const { updateHoveredHandle } = useCanvasCursor(containerRef, isPanning, isSpaceDown);
+  const { updateHoveredHandle } = useCanvasCursor(containerRef, pointerMode);
 
   // Context menu
   const { contextMenu, handleContextMenu, handleClose: handleContextMenuClose } = useContextMenu();
@@ -260,8 +259,7 @@ export function App() {
   // Keyboard shortcuts (extracted to useKeyboardShortcuts)
   useKeyboardShortcuts({
     canvasRef,
-    setIsSpaceDown,
-    setIsPanning,
+    setPointerMode,
     clearPersistentTransform,
     nudgeMove,
   });
@@ -312,59 +310,52 @@ export function App() {
       const canvasPos = screenToCanvas(screenX, screenY);
       flushCursorPosition(canvasPos);
 
-      // Ruler hover for guide placement
-      // Guide hover detection — always runs so playhead updates
-      if (showGuides && !isPanning) {
+      const panning = isPanning(pointerMode);
+
+      // Ruler hover for guide placement — always runs so playhead updates,
+      // but suppressed during a pan so guides don't twitch with the canvas.
+      if (showGuides && !panning) {
         setHoveredGuide(findGuideAtCursor(canvasPos.x, canvasPos.y));
       }
 
-      if (showRulers && showGuides && !isPanning) {
+      if (showRulers && showGuides && !panning) {
         const isOnHorizontalRuler = screenY < RULER_SIZE && screenX > RULER_SIZE;
         const isOnVerticalRuler = screenX < RULER_SIZE && screenY > RULER_SIZE;
 
         if (isOnHorizontalRuler) {
-          setRulerHover({
-            orientation: 'vertical',
-            position: canvasPos.x,
-            screenX,
-            screenY,
-          });
+          setRulerHover({ orientation: 'vertical', position: canvasPos.x, screenX, screenY });
           return;
         } else if (isOnVerticalRuler) {
-          setRulerHover({
-            orientation: 'horizontal',
-            position: canvasPos.y,
-            screenX,
-            screenY,
-          });
+          setRulerHover({ orientation: 'horizontal', position: canvasPos.y, screenX, screenY });
           return;
         } else {
           setRulerHover(null);
         }
       }
 
-      if (isPanning) {
-        const dx = e.clientX - panStartRef.current.x;
-        const dy = e.clientY - panStartRef.current.y;
-        setPan(panStartRef.current.panX + dx, panStartRef.current.panY + dy);
+      if (pointerMode.kind === 'panning') {
+        const dx = e.clientX - pointerMode.startScreenX;
+        const dy = e.clientY - pointerMode.startScreenY;
+        setPan(pointerMode.startPanX + dx, pointerMode.startPanY + dy);
       } else {
         updateHoveredHandle(canvasPos);
         handleToolMove(e);
       }
     },
-    [isPanning, screenToCanvas, setPan, handleToolMove, updateHoveredHandle, flushCursorPosition, showRulers, showGuides, setRulerHover, setHoveredGuide, findGuideAtCursor],
+    [pointerMode, screenToCanvas, setPan, handleToolMove, updateHoveredHandle, flushCursorPosition, showRulers, showGuides, setRulerHover, setHoveredGuide, findGuideAtCursor],
   );
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (isSpaceDown || e.button === 1) {
-        setIsPanning(true);
-        panStartRef.current = {
-          x: e.clientX,
-          y: e.clientY,
-          panX: viewport.panX,
-          panY: viewport.panY,
-        };
+      // Space-held + click, or middle-click anywhere, starts a pan.
+      if (pointerMode.kind === 'spaceHeld' || e.button === 1) {
+        setPointerMode({
+          kind: 'panning',
+          startScreenX: e.clientX,
+          startScreenY: e.clientY,
+          startPanX: viewport.panX,
+          startPanY: viewport.panY,
+        });
         e.preventDefault();
         return;
       }
@@ -411,20 +402,25 @@ export function App() {
 
       handleToolDown(e);
     },
-    [isSpaceDown, viewport.panX, viewport.panY, handleToolDown, showRulers, showGuides, screenToCanvas, addGuide, setRulerHover, findGuideAtCursor, showGuideColorPicker],
+    [pointerMode, viewport.panX, viewport.panY, handleToolDown, showRulers, showGuides, screenToCanvas, addGuide, setRulerHover, findGuideAtCursor, showGuideColorPicker],
   );
 
+  const endPan = useCallback(() => {
+    // End pan but don't drop spaceHeld — releasing space is what does that.
+    setPointerMode((prev) => prev.kind === 'panning' ? POINTER_IDLE : prev);
+  }, []);
+
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
-    setIsPanning(false);
+    endPan();
     handleToolUp(e);
-  }, [handleToolUp]);
+  }, [endPan, handleToolUp]);
 
   const handleMouseLeave = useCallback((e: React.MouseEvent) => {
-    setIsPanning(false);
+    endPan();
     handleToolUp(e);
     setRulerHover(null);
     setHoveredGuide(null);
-  }, [handleToolUp, setRulerHover, setHoveredGuide]);
+  }, [endPan, handleToolUp, setRulerHover, setHoveredGuide]);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
