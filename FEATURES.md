@@ -234,6 +234,7 @@ Applied globally or per-group. All default to 0.
 - **Kaleidoscope**: segments 2 - 32, rotation 0 - 360 degrees (mirrors the image into a radial wedge pattern around the center)
 - **Oil Paint**: radius 1 - 10, sharpness 0.1 - 5.0 (Kuwahara filter that smooths color regions while preserving edges, creating a painterly look)
 - **Chromatic Aberration**: amount 1 - 50 px, direction 0 - 360 degrees (splits RGB channels along a configurable axis, creating retro lens fringing and glitch effects)
+- **Gradient Map**: 8 built-in presets (Sepia, Cool Tone, Warm Sunset, Infrared, Duotone Blue, Duotone Green, Duotone Pink, Neon), mix 0 - 100% (remaps pixel luminance through a color gradient for creative color grading; uses Rec. 709 luminance with triangular dithering)
 
 ### Render
 - **Clouds**: scale, seed
