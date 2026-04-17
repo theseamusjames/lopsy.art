@@ -8,29 +8,22 @@ import { HistoryPanel } from '../panels/HistoryPanel/HistoryPanel';
 import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
 import { AdjustmentsPanel } from '../panels/AdjustmentsPanel/AdjustmentsPanel';
 import { PathsPanel } from '../panels/PathsPanel/PathsPanel';
-import { StrokePathModal } from '../components/StrokePathModal/StrokePathModal';
 import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
 import { MenuBar } from './MenuBar/MenuBar';
 import { OptionsBar } from './OptionsBar/OptionsBar';
 import { StatusBar } from './StatusBar/StatusBar';
 import { NewDocumentModal } from '../components/NewDocumentModal/NewDocumentModal';
-import { ShapeSizeModal } from '../components/ShapeSizeModal/ShapeSizeModal';
-import { BrushModal } from '../components/BrushModal/BrushModal';
-import { useBrushPresetStore } from './brush-preset-store';
+import { ModalHost } from '../components/ModalHost/ModalHost';
+import { GuideColorPicker } from '../components/GuideColorPicker/GuideColorPicker';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useCanvasInteraction } from './useCanvasInteraction';
-import { useToolSettingsStore } from './tool-settings-store';
-import { drawShape } from '../tools/shape/shape';
-import { PixelBuffer } from '../engine/pixel-data';
 import { pasteOrOpenBlob } from './paste-or-open';
-import { importPsdFile } from './MenuBar/menus/file-menu';
-import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
+import { importPsdFile } from '../io/psd';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
 import { useContextMenu } from './useContextMenu';
-import { ColorPicker } from '../components/ColorPicker/ColorPicker';
 import { ContextMenu } from '../components/ContextMenu/ContextMenu';
 import { TextActionButtons } from '../components/TextActionButtons/TextActionButtons';
 import { commitTextEditing } from '../tools/text/text-interaction';
@@ -66,12 +59,9 @@ export function App() {
   const setPan = useEditorStore((s) => s.setPan);
 
   const documentReady = useEditorStore((s) => s.documentReady);
-  const createDocument = useEditorStore((s) => s.createDocument);
-  const showNewDocumentModal = useUIStore((s) => s.showNewDocumentModal);
-  const setShowNewDocumentModal = useUIStore((s) => s.setShowNewDocumentModal);
-
-  const pendingShapeClick = useUIStore((s) => s.pendingShapeClick);
-  const setPendingShapeClick = useUIStore((s) => s.setPendingShapeClick);
+  const openModal = useUIStore((s) => s.openModal);
+  const closeModal = useUIStore((s) => s.closeModal);
+  const closeModalOfKind = useUIStore((s) => s.closeModalOfKind);
 
   const showRulers = useUIStore((s) => s.showRulers);
   const showGuides = useUIStore((s) => s.showGuides);
@@ -79,21 +69,6 @@ export function App() {
   const addGuide = useUIStore((s) => s.addGuide);
   const setHoveredGuide = useUIStore((s) => s.setHoveredGuide);
   const setRulerHover = useUIStore((s) => s.setRulerHover);
-  const guideColor = useUIStore((s) => s.guideColor);
-  const setGuideColor = useUIStore((s) => s.setGuideColor);
-
-  const [showGuideColorPicker, setShowGuideColorPicker] = useState(false);
-
-  useEffect(() => {
-    if (!showGuideColorPicker) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowGuideColorPicker(false);
-      }
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [showGuideColorPicker]);
 
   const [pointerMode, setPointerMode] = useState<PointerMode>(POINTER_IDLE);
 
@@ -116,24 +91,9 @@ export function App() {
     startDist: 0,
   });
 
-  const handleCreateDocument = useCallback((width: number, height: number, background: 'white' | 'transparent') => {
-    createDocument(width, height, background === 'transparent');
-    setShowNewDocumentModal(false);
-  }, [createDocument, setShowNewDocumentModal]);
-
-  const handleOpenFile = useCallback((file: File) => {
-    const name = file.name.replace(/\.[^.]+$/, '');
-    if (/\.psd$/i.test(file.name)) {
-      file.arrayBuffer().then(async (buffer) => {
-        await importPsdFile(new Uint8Array(buffer), name);
-        setShowNewDocumentModal(false);
-      });
-      return;
-    }
-    pasteOrOpenBlob(file, name).then(() => {
-      setShowNewDocumentModal(false);
-    });
-  }, [setShowNewDocumentModal]);
+  // ModalHost owns the post-document NewDocumentModal + ShapeSizeModal +
+  // BrushModal + StrokePathModal. App only needs the pre-document fallback
+  // below and the drag/drop handlers that feed into both paths.
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -146,39 +106,36 @@ export function App() {
     if (!file || !file.type.startsWith('image/')) return;
 
     const name = file.name.replace(/\.[^.]+$/, '');
-    pasteOrOpenBlob(file, name).then(() => {
-      setShowNewDocumentModal(false);
-    });
-  }, [setShowNewDocumentModal]);
+    // Dropping an image while the new-document modal is open should dismiss
+    // it — the drop is effectively the answer to "what do you want to open?"
+    pasteOrOpenBlob(file, name).then(() => closeModalOfKind('newDocument'));
+  }, [closeModalOfKind]);
 
-  const handlePasteClipboard = useCallback((blob: Blob) => {
-    pasteOrOpenBlob(blob, 'Copied File').then(() => {
-      setShowNewDocumentModal(false);
-    });
-  }, [setShowNewDocumentModal]);
-
-  const handleShapeSizeConfirm = useCallback((width: number, height: number) => {
-    const pending = useUIStore.getState().pendingShapeClick;
-    if (!pending) return;
-    const editorState = useEditorStore.getState();
-    const imageData = editorState.getOrCreateLayerPixelData(pending.layerId);
-    const pixelBuffer = PixelBuffer.fromImageData(imageData);
-    const surface = wrapWithSelectionMask(pixelBuffer, pending.layerX, pending.layerY);
-    const ts = useToolSettingsStore.getState();
-    editorState.pushHistory();
-    if (ts.shapeFillColor) useUIStore.getState().addRecentColor(ts.shapeFillColor);
-    if (ts.shapeStrokeColor) useUIStore.getState().addRecentColor(ts.shapeStrokeColor);
-    const edge = { x: pending.center.x + width / 2, y: pending.center.y + height / 2 };
-    drawShape(surface, pending.center, edge, {
-      mode: ts.shapeMode,
-      fillColor: ts.shapeFillColor,
-      strokeColor: ts.shapeStrokeColor,
-      strokeWidth: ts.shapeStrokeWidth,
-      sides: ts.shapePolygonSides,
-    });
-    editorState.updateLayerPixelData(pending.layerId, pixelBuffer.toImageData());
-    setPendingShapeClick(null);
-  }, [setPendingShapeClick]);
+  // Pre-document fallback for NewDocumentModal — see render below.
+  const handlePreDocCreate = useCallback(
+    (width: number, height: number, background: 'white' | 'transparent') => {
+      useEditorStore.getState().createDocument(width, height, background === 'transparent');
+      closeModal();
+    },
+    [closeModal],
+  );
+  const handlePreDocOpenFile = useCallback((file: File) => {
+    const name = file.name.replace(/\.[^.]+$/, '');
+    if (/\.psd$/i.test(file.name)) {
+      file.arrayBuffer().then(async (buffer) => {
+        await importPsdFile(new Uint8Array(buffer), name);
+        closeModal();
+      });
+      return;
+    }
+    pasteOrOpenBlob(file, name).then(() => closeModal());
+  }, [closeModal]);
+  const handlePreDocPasteClipboard = useCallback(
+    (blob: Blob) => {
+      pasteOrOpenBlob(blob, 'Copied File').then(() => closeModal());
+    },
+    [closeModal],
+  );
 
   // Warn before navigating away with unsaved changes
   useEffect(() => {
@@ -365,16 +322,18 @@ export function App() {
         const screenX = e.clientX - rect.left;
         const screenY = e.clientY - rect.top;
 
-        // Click on the ruler corner swatch to toggle guide color picker
+        // Click on the ruler corner swatch to toggle the guide color picker.
         if (showGuides && screenX < RULER_SIZE && screenY < RULER_SIZE) {
-          setShowGuideColorPicker((prev) => !prev);
+          const modalNow = useUIStore.getState().modal;
+          if (modalNow?.kind === 'guideColor') closeModal();
+          else openModal({ kind: 'guideColor' });
           return;
         }
       }
 
-      // Close guide color picker on any click outside the corner
-      if (showGuideColorPicker) {
-        setShowGuideColorPicker(false);
+      // Any click outside the corner dismisses the picker.
+      if (useUIStore.getState().modal?.kind === 'guideColor') {
+        closeModalOfKind('guideColor');
       }
 
       if (rect && showRulers && showGuides && e.button === 0) {
@@ -402,7 +361,7 @@ export function App() {
 
       handleToolDown(e);
     },
-    [pointerMode, viewport.panX, viewport.panY, handleToolDown, showRulers, showGuides, screenToCanvas, addGuide, setRulerHover, findGuideAtCursor, showGuideColorPicker],
+    [pointerMode, viewport.panX, viewport.panY, handleToolDown, showRulers, showGuides, screenToCanvas, addGuide, setRulerHover, findGuideAtCursor, openModal, closeModal, closeModalOfKind],
   );
 
   const endPan = useCallback(() => {
@@ -569,21 +528,21 @@ export function App() {
     return () => ro.disconnect();
   }, [showEffectsDrawer]);
 
-  const showBrushModal = useBrushPresetStore((s) => s.showBrushModal);
-
-  const showModal = !documentReady || showNewDocumentModal;
-
   if (!hasWebGL2) {
     return <WebGL2Warning />;
   }
 
+  // Pre-document: the whole app is just a non-dismissible NewDocumentModal
+  // wrapped in a drag-and-drop target. The post-document modal host below
+  // handles user-invoked NewDocumentModal (dismissible) plus every other
+  // modal through the ui-store slot.
   if (!documentReady) {
     return (
       <div className={styles.app} onDragOver={handleDragOver} onDrop={handleDrop}>
         <NewDocumentModal
-          onCreateDocument={handleCreateDocument}
-          onOpenFile={handleOpenFile}
-          onPasteClipboard={handlePasteClipboard}
+          onCreateDocument={handlePreDocCreate}
+          onOpenFile={handlePreDocOpenFile}
+          onPasteClipboard={handlePreDocPasteClipboard}
         />
       </div>
     );
@@ -591,22 +550,7 @@ export function App() {
 
   return (
     <div className={styles.app}>
-      {pendingShapeClick && (
-        <ShapeSizeModal
-          onConfirm={handleShapeSizeConfirm}
-          onCancel={() => setPendingShapeClick(null)}
-        />
-      )}
-      {showBrushModal && <BrushModal />}
-      {showModal && (
-        <NewDocumentModal
-          onCreateDocument={handleCreateDocument}
-          onOpenFile={handleOpenFile}
-          onPasteClipboard={handlePasteClipboard}
-          onCancel={() => setShowNewDocumentModal(false)}
-        />
-      )}
-      <StrokePathModal />
+      <ModalHost />
       <div className={styles.header}>
         <MenuBar />
         <OptionsBar />
@@ -643,17 +587,7 @@ export function App() {
             onClose={handleContextMenuClose}
           />
         )}
-        {showGuideColorPicker && showRulers && showGuides && (
-          <div
-            className={styles.guideColorPicker}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <ColorPicker
-              color={guideColor}
-              onChange={setGuideColor}
-            />
-          </div>
-        )}
+        <GuideColorPicker />
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div className={styles.effectsDrawer} ref={effectsDrawerRef}>

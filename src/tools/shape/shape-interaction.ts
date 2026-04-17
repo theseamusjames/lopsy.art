@@ -1,7 +1,7 @@
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 import type { Point } from '../../types';
-import { useUIStore } from '../../app/ui-store';
+import { useUIStore, type ShapeSizeClick } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
@@ -11,7 +11,9 @@ import {
   saveShapePreview as gpuSaveShapePreview,
   endShapePreview as gpuEndShapePreview,
 } from '../../engine-wasm/wasm-bridge';
-import { ellipseToPathAnchors, polygonToPathAnchors } from './shape';
+import { PixelBuffer } from '../../engine/pixel-data';
+import { wrapWithSelectionMask } from '../../app/interactions/selection-mask-wrap';
+import { drawShape, ellipseToPathAnchors, polygonToPathAnchors } from './shape';
 import type { PathAnchor } from '../path/path';
 
 const CLICK_THRESHOLD = 4;
@@ -93,6 +95,36 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point): 
   );
   clearJsPixelData(state.layerId);
   useEditorStore.getState().notifyRender();
+}
+
+/**
+ * Apply a shape whose dimensions came from the ShapeSize modal (user clicked
+ * instead of dragged — we asked them for the size). Pulls current tool
+ * settings, pushes history, and rasterizes into the clicked layer's pixel
+ * buffer. Split out of the modal's own confirm callback so the modal host
+ * can stay purely declarative.
+ */
+export function confirmShapeSize(width: number, height: number, click: ShapeSizeClick): void {
+  const editorState = useEditorStore.getState();
+  const imageData = editorState.getOrCreateLayerPixelData(click.layerId);
+  const pixelBuffer = PixelBuffer.fromImageData(imageData);
+  const surface = wrapWithSelectionMask(pixelBuffer, click.layerX, click.layerY);
+  const ts = useToolSettingsStore.getState();
+
+  editorState.pushHistory();
+  if (ts.shapeFillColor) useUIStore.getState().addRecentColor(ts.shapeFillColor);
+  if (ts.shapeStrokeColor) useUIStore.getState().addRecentColor(ts.shapeStrokeColor);
+
+  const edge = { x: click.center.x + width / 2, y: click.center.y + height / 2 };
+  drawShape(surface, click.center, edge, {
+    mode: ts.shapeMode,
+    fillColor: ts.shapeFillColor,
+    strokeColor: ts.shapeStrokeColor,
+    strokeWidth: ts.shapeStrokeWidth,
+    sides: ts.shapePolygonSides,
+  });
+
+  editorState.updateLayerPixelData(click.layerId, pixelBuffer.toImageData());
 }
 
 export function handleShapeUp(state: InteractionState, layerLocalPos: Point): void {
