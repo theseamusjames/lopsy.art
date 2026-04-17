@@ -1,3 +1,17 @@
+// KNOWN TECHNICAL DEBT: pixel data lives in the Zustand store
+// (layerPixelData + sparseLayerData Maps below) despite the project's
+// GPU-first design principle that says the GPU texture is the source of
+// truth. This file's actions orchestrate *all* of: Map bookkeeping, GPU
+// upload, dirty-layer tracking, bitmap-cache invalidation, and sparse↔
+// dense conversion.
+//
+// The clean fix is a separate PixelDataManager class holding the Maps
+// while the store keeps only the orchestration (dirtyLayerIds +
+// renderVersion) and exposes a `resolvePixelData` accessor. That
+// refactor needs to touch every caller of getOrCreateLayerPixelData /
+// updateLayerPixelData / expandLayerForEditing and coordinate with
+// history snapshots — it's not landing in a staff-review PR. Tracked
+// for a dedicated follow-up.
 import type { Layer } from '../../types';
 import type { SliceCreator, SparseLayerEntry } from './types';
 import { createImageData } from '../../engine/color-space';
