@@ -3,7 +3,8 @@ import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, FolderPlus, GripV
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
-import type { Layer } from '../../types';
+import { PanelContainer } from '../PanelContainer/PanelContainer';
+import { usePanelCollapse } from '../usePanelCollapse';
 import { LayerThumbnail } from './LayerThumbnail';
 import { MaskThumbnail } from './MaskThumbnail';
 import { selectLayerAlpha, convertMaskToMarquee } from './layer-selection';
@@ -11,28 +12,23 @@ import { buildFlatDisplayList, isGroupLayer, canMoveToGroup, findParentGroup } f
 import styles from './LayerPanel.module.css';
 
 interface LayerPanelProps {
-  layers: Layer[];
-  activeLayerId: string | null;
+  /**
+   * The active-layer selection callback intentionally lives on the prop
+   * surface: it clears the persistent transform overlay before swapping
+   * layers, which is interaction-layer state App.tsx owns.
+   */
   onSelectLayer: (id: string) => void;
-  onToggleVisibility: (id: string) => void;
-  onAddLayer: () => void;
-  onRemoveLayer: (id: string) => void;
-  onReorderLayer: (fromIndex: number, toIndex: number) => void;
-  onUpdateOpacity: (id: string, opacity: number) => void;
-  collapsed?: boolean;
 }
 
-export function LayerPanel({
-  layers,
-  activeLayerId,
-  onSelectLayer,
-  onToggleVisibility,
-  onAddLayer,
-  onRemoveLayer,
-  onReorderLayer,
-  onUpdateOpacity,
-  collapsed = false,
-}: LayerPanelProps) {
+export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
+  const [collapsed, setCollapsed] = usePanelCollapse('layers');
+  const layers = useEditorStore((s) => s.document.layers);
+  const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
+  const onToggleVisibility = useEditorStore((s) => s.toggleLayerVisibility);
+  const onAddLayer = useEditorStore((s) => s.addLayer);
+  const onRemoveLayer = useEditorStore((s) => s.removeLayer);
+  const onReorderLayer = useEditorStore((s) => s.moveLayer);
+  const onUpdateOpacity = useEditorStore((s) => s.updateLayerOpacity);
   const addLayerMask = useEditorStore((s) => s.addLayerMask);
   const removeLayerMask = useEditorStore((s) => s.removeLayerMask);
   const duplicateLayer = useEditorStore((s) => s.duplicateLayer);
@@ -179,6 +175,7 @@ export function LayerPanel({
   const isRootGroup = (layerId: string) => layerId === rootGroupId;
 
   return (
+    <PanelContainer title="Layers" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
     <div className={styles.panel}>
       <div
         ref={listRef}
@@ -420,5 +417,6 @@ export function LayerPanel({
         />
       </div>
     </div>
+    </PanelContainer>
   );
 }

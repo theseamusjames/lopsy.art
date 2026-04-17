@@ -4,7 +4,6 @@ import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
 import { ColorPanel } from '../panels/ColorPanel/ColorPanel';
-import { PanelContainer } from '../panels/PanelContainer/PanelContainer';
 import { HistoryPanel } from '../panels/HistoryPanel/HistoryPanel';
 import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
 import { AdjustmentsPanel } from '../panels/AdjustmentsPanel/AdjustmentsPanel';
@@ -57,23 +56,11 @@ export function App() {
   const sidebarBottomRef = useRef<HTMLDivElement>(null);
   const effectsDrawerRef = useRef<HTMLDivElement>(null);
 
-  const foregroundColor = useUIStore((s) => s.foregroundColor);
-  const backgroundColor = useUIStore((s) => s.backgroundColor);
-  const setForegroundColor = useUIStore((s) => s.setForegroundColor);
-  const setBackgroundColor = useUIStore((s) => s.setBackgroundColor);
-  const swapColors = useUIStore((s) => s.swapColors);
-  const recentColors = useUIStore((s) => s.recentColors);
-
   const doc = useEditorStore((s) => s.document);
   const viewport = useEditorStore((s) => s.viewport);
   const layers = useEditorStore((s) => s.document.layers);
   const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
-  const addLayer = useEditorStore((s) => s.addLayer);
-  const removeLayer = useEditorStore((s) => s.removeLayer);
   const setActiveLayer = useEditorStore((s) => s.setActiveLayer);
-  const toggleLayerVisibility = useEditorStore((s) => s.toggleLayerVisibility);
-  const moveLayer = useEditorStore((s) => s.moveLayer);
-  const updateLayerOpacity = useEditorStore((s) => s.updateLayerOpacity);
   const setZoom = useEditorStore((s) => s.setZoom);
   const setPan = useEditorStore((s) => s.setPan);
 
@@ -563,25 +550,28 @@ export function App() {
     [handleToolUp, touchToMouse],
   );
 
-  const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
-  const [historyPanelCollapsed, setHistoryPanelCollapsed] = useState(false);
-  const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(false);
-  const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
-  const [pathsPanelCollapsed, setPathsPanelCollapsed] = useState(false);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const visiblePanels = useUIStore((s) => s.visiblePanels);
 
+  // Effects drawer hangs off the bottom panel block. Subscribe to the block's
+  // size via ResizeObserver instead of pinning to a specific panel's collapse
+  // state — works regardless of which panels are open or collapsed.
   useLayoutEffect(() => {
     const bottom = sidebarBottomRef.current;
     const drawer = effectsDrawerRef.current;
-    if (!bottom || !drawer) return;
-    const parentRect = bottom.offsetParent?.getBoundingClientRect();
-    const bottomRect = bottom.getBoundingClientRect();
-    if (!parentRect) return;
-    const top = bottomRect.top - parentRect.top;
-    drawer.style.top = `${top}px`;
-    drawer.style.height = `${bottom.offsetHeight}px`;
-  }, [showEffectsDrawer, colorPanelCollapsed]);
+    if (!bottom || !drawer || !showEffectsDrawer) return;
+    const update = () => {
+      const parentRect = bottom.offsetParent?.getBoundingClientRect();
+      const bottomRect = bottom.getBoundingClientRect();
+      if (!parentRect) return;
+      drawer.style.top = `${bottomRect.top - parentRect.top}px`;
+      drawer.style.height = `${bottom.offsetHeight}px`;
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(bottom);
+    return () => ro.disconnect();
+  }, [showEffectsDrawer]);
 
   const showBrushModal = useBrushPresetStore((s) => s.showBrushModal);
 
@@ -680,71 +670,13 @@ export function App() {
           {visiblePanels.size > 0 && (
             <div className={styles.sidebar}>
               <div className={styles.sidebarScroll}>
-                {visiblePanels.has('info') && (
-                  <PanelContainer
-                    title="Info"
-                    collapsed={infoPanelCollapsed}
-                    onToggle={() => setInfoPanelCollapsed(!infoPanelCollapsed)}
-                  >
-                    <InfoPanel collapsed={infoPanelCollapsed} />
-                  </PanelContainer>
-                )}
-                {visiblePanels.has('color') && (
-                  <PanelContainer
-                    title="Color"
-                    collapsed={colorPanelCollapsed}
-                    onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
-                  >
-                    <ColorPanel
-                      foregroundColor={foregroundColor}
-                      backgroundColor={backgroundColor}
-                      recentColors={recentColors}
-                      onForegroundChange={setForegroundColor}
-                      onBackgroundChange={setBackgroundColor}
-                      onSwap={swapColors}
-                      collapsed={colorPanelCollapsed}
-                    />
-                  </PanelContainer>
-                )}
-                {visiblePanels.has('history') && (
-                  <PanelContainer
-                    title="History"
-                    collapsed={historyPanelCollapsed}
-                    onToggle={() => setHistoryPanelCollapsed(!historyPanelCollapsed)}
-                  >
-                    <HistoryPanel collapsed={historyPanelCollapsed} />
-                  </PanelContainer>
-                )}
-                {visiblePanels.has('paths') && (
-                  <PanelContainer
-                    title="Paths"
-                    collapsed={pathsPanelCollapsed}
-                    onToggle={() => setPathsPanelCollapsed(!pathsPanelCollapsed)}
-                  >
-                    <PathsPanel collapsed={pathsPanelCollapsed} />
-                  </PanelContainer>
-                )}
+                {visiblePanels.has('info') && <InfoPanel />}
+                {visiblePanels.has('color') && <ColorPanel />}
+                {visiblePanels.has('history') && <HistoryPanel />}
+                {visiblePanels.has('paths') && <PathsPanel />}
               </div>
               <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
-                {visiblePanels.has('layers') && (
-                  <PanelContainer
-                    title="Layers"
-                    collapsed={layersPanelCollapsed}
-                    onToggle={() => setLayersPanelCollapsed(!layersPanelCollapsed)}
-                  >
-                    <LayerPanel
-                      layers={[...layers]}
-                      activeLayerId={activeLayerId}
-                      onSelectLayer={handleSelectLayer}
-                      onToggleVisibility={toggleLayerVisibility}
-                      onAddLayer={addLayer}
-                      onRemoveLayer={removeLayer}
-                      onReorderLayer={moveLayer}
-                      onUpdateOpacity={updateLayerOpacity}
-                      collapsed={layersPanelCollapsed}
-                    />
-                  </PanelContainer>
-                )}
+                {visiblePanels.has('layers') && <LayerPanel onSelectLayer={handleSelectLayer} />}
               </div>
             </div>
           )}
