@@ -1,17 +1,18 @@
 import { useEffect, useRef } from 'react';
 import { useEditorStore } from '../../app/editor-store';
 import { contextOptions } from '../../engine/color-space';
+import { usePixelDataVersion } from '../../engine/usePixelDataVersion';
 import type { Layer } from '../../types';
 import styles from './LayerPanel.module.css';
 
 export function LayerThumbnail({ layer }: { layer: Layer }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Subscribe to this layer's data references and dirtyLayerIds.
-  // dirtyLayerIds tracks GPU-only changes (stroke end, undo) where JS
-  // pixel data is cleared but the GPU texture has new content.
-  const layerData = useEditorStore((s) => s.layerPixelData.get(layer.id));
-  const sparseEntry = useEditorStore((s) => s.sparseLayerData.get(layer.id));
+  // Re-render the thumbnail whenever this layer's pixel data changes.
+  // pixelVersion bumps on every dense/sparse write; dirtyLayerIds bumps
+  // on GPU-only changes (stroke end, undo) where JS data was cleared but
+  // the GPU texture has new content worth re-reading.
+  const pixelVersion = usePixelDataVersion(layer.id);
   const isDirty = useEditorStore((s) => s.dirtyLayerIds.has(layer.id));
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export function LayerThumbnail({ layer }: { layer: Layer }) {
     const w = pixelData.width * scale;
     const h = pixelData.height * scale;
     ctx.drawImage(tempCanvas, (thumbSize - w) / 2, (thumbSize - h) / 2, w, h);
-  }, [layer.id, layerData, sparseEntry, isDirty]);
+  }, [layer.id, pixelVersion, isDirty]);
 
   return <canvas ref={canvasRef} className={styles.thumbnailCanvas} />;
 }

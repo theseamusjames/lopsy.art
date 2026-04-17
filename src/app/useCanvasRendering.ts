@@ -62,8 +62,6 @@ function renderFrameGpu(
   const viewport = editorState.viewport;
   const layers = doc.layers;
   const selection = editorState.selection;
-  const pixelData = editorState.layerPixelData;
-  const sparseData = editorState.sparseLayerData;
   const dirtyLayerIds = editorState.dirtyLayerIds;
 
   const activeTool = uiState.activeTool;
@@ -125,7 +123,7 @@ function renderFrameGpu(
   syncDocumentSize(engine, doc.width, doc.height);
   syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
   syncViewport(engine, viewport.zoom, viewport.panX, viewport.panY, screenW, screenH);
-  syncLayers(engine, layers, doc.layerOrder, pixelData, sparseData, dirtyLayerIds);
+  syncLayers(engine, layers, doc.layerOrder, dirtyLayerIds);
   syncSelection(engine, selection);
   syncGrid(engine, showGrid, gridSize);
   syncRulers(engine, showRulers);

@@ -29,6 +29,7 @@ import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 // PAINT_TOOLS / GPU_TOOLS are derived from the tool registry, so adding a
 // new paint or GPU tool is a single-file change at the descriptor.
 import { PAINT_TOOLS, GPU_TOOLS } from '../tools/tool-registry';
+import { pixelDataManager } from '../engine/pixel-data-manager';
 
 export { getActiveMaskEditBuffer } from './interactions/mask-buffer';
 export { strokeCurrentPath } from './interactions/path-stroke';
@@ -182,16 +183,11 @@ export function useCanvasInteraction(
                   ? { ...l, x: newX, y: newY, width: newW, height: newH } as Layer
                   : l,
               );
-              const pixelData = new Map(useEditorStore.getState().layerPixelData);
-              pixelData.delete(activeLayerId);
-              const sparseMap = new Map(useEditorStore.getState().sparseLayerData);
-              sparseMap.delete(activeLayerId);
+              pixelDataManager.remove(activeLayerId);
               const dirtyIds = new Set(useEditorStore.getState().dirtyLayerIds);
               dirtyIds.add(activeLayerId);
               useEditorStore.setState({
                 document: { ...docState, layers: updatedLayers },
-                layerPixelData: pixelData,
-                sparseLayerData: sparseMap,
                 dirtyLayerIds: dirtyIds,
               });
               // Re-read activeLayer so layerPos computation below uses updated position
@@ -409,7 +405,7 @@ export function useCanvasInteraction(
         // CPU fallback
         destroyPaintingCanvas(state.layerId);
         const editorState = useEditorStore.getState();
-        const layerData = editorState.layerPixelData.get(state.layerId);
+        const layerData = pixelDataManager.get(state.layerId);
         if (layerData) {
           editorState.updateLayerPixelData(state.layerId, layerData);
         }

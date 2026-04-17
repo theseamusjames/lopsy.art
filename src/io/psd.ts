@@ -18,6 +18,7 @@ import {
   initWasm,
 } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState, flushLayerSync } from '../engine-wasm/engine-sync';
+import { pixelDataManager } from '../engine/pixel-data-manager';
 import type { Layer, GroupLayer, RasterLayer } from '../types/layers';
 import { DEFAULT_EFFECTS } from '../layers/layer-model';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
@@ -339,6 +340,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
 
   const dirtyLayerIds = new Set<string>(newPixelData.keys());
 
+  pixelDataManager.replace(newPixelData, new Map());
   store.setState({
     document: {
       ...edState.document,
@@ -349,8 +351,6 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
       layerOrder: newLayerOrder,
       activeLayerId,
     },
-    layerPixelData: newPixelData,
-    sparseLayerData: new Map(),
     dirtyLayerIds,
     isDirty: false,
     renderVersion: edState.renderVersion + 1,

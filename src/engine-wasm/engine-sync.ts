@@ -9,6 +9,7 @@ import type { Engine } from './wasm-bridge';
 import { getEngine } from './engine-state';
 import type { Layer } from '../types';
 import type { SparseLayerEntry } from '../app/store/types';
+import { pixelDataManager } from '../engine/pixel-data-manager';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
@@ -333,8 +334,6 @@ export function syncLayers(
   engine: Engine,
   layers: readonly Layer[],
   layerOrder: readonly string[],
-  pixelData: Map<string, ImageData>,
-  sparseData: Map<string, SparseLayerEntry>,
   dirtyLayerIds: Set<string>,
 ): void {
   const tracked = getTracked(engine);
@@ -382,8 +381,8 @@ export function syncLayers(
     // Upload pixel data if changed or marked dirty (including GPU paint dirty).
     // When no JS data exists AND no sparse data, the GPU texture is source of truth
     // (e.g. after a GPU paint stroke or undo restore) — skip upload.
-    const data = pixelData.get(layer.id);
-    const sparseEntry = sparseData.get(layer.id);
+    const data = pixelDataManager.get(layer.id);
+    const sparseEntry = pixelDataManager.getSparse(layer.id);
     const isDirty = dirtyLayerIds.has(layer.id);
     const pixelChanged = tracked.pixelDataVersions.get(layer.id) !== data;
     const sparseChanged = tracked.sparseVersions.get(layer.id) !== sparseEntry;
@@ -654,11 +653,9 @@ export function markAllLayersDirty(engine: Engine): void {
  */
 export function flushLayerSync(state: {
   document: { layers: readonly Layer[]; layerOrder: readonly string[] };
-  layerPixelData: Map<string, ImageData>;
-  sparseLayerData: Map<string, SparseLayerEntry>;
   dirtyLayerIds: Set<string>;
 }): void {
   const engine = getEngine();
   if (!engine) return;
-  syncLayers(engine, state.document.layers, state.document.layerOrder, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
+  syncLayers(engine, state.document.layers, state.document.layerOrder, state.dirtyLayerIds);
 }

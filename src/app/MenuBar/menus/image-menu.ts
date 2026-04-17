@@ -5,6 +5,7 @@ import {
   rotateLayer90,
   setDocumentSize,
 } from '../../../engine-wasm/wasm-bridge';
+import { pixelDataManager } from '../../../engine/pixel-data-manager';
 import type { Layer } from '../../../types';
 import type { MenuDef } from './types';
 
@@ -19,14 +20,11 @@ export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
   state.pushHistory();
   flipLayer(engine, activeId, axis === 'horizontal');
 
-  // Clear stale JS pixel data
-  const pixelData = new Map(state.layerPixelData);
-  pixelData.delete(activeId);
-  const sparseMap = new Map(state.sparseLayerData);
-  sparseMap.delete(activeId);
+  // GPU is now source of truth — clear stale JS pixel data.
+  pixelDataManager.remove(activeId);
   const dirtyIds = new Set(state.dirtyLayerIds);
   dirtyIds.add(activeId);
-  useEditorStore.setState({ layerPixelData: pixelData, sparseLayerData: sparseMap, dirtyLayerIds: dirtyIds });
+  useEditorStore.setState({ dirtyLayerIds: dirtyIds });
   state.notifyRender();
 }
 
@@ -75,6 +73,8 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
   // Update document size on the engine
   setDocumentSize(engine, newWidth, newHeight);
 
+  // GPU-side rotate invalidates every layer's JS cache.
+  pixelDataManager.clearAll();
   useEditorStore.setState({
     document: {
       ...doc,
@@ -82,8 +82,6 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
       height: newHeight,
       layers: newLayers,
     },
-    layerPixelData: new Map(),
-    sparseLayerData: new Map(),
     renderVersion: state.renderVersion + 1,
   });
 }

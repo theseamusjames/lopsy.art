@@ -1,5 +1,5 @@
 import type { DocumentState } from '../../../types';
-import type { EditorState } from '../types';
+import type { ActionResult } from '../types';
 import { duplicateLayer as duplicateLayerModel } from '../../../layers/layer-model';
 import { findParentGroup, addToGroup, isGroupLayer, getDescendantIds } from '../../../layers/group-utils';
 import { getEngine } from '../../../engine-wasm/engine-state';
@@ -8,7 +8,7 @@ import { duplicateLayerTexture } from '../../../engine-wasm/wasm-bridge';
 export function computeDuplicateLayer(
   doc: DocumentState,
   layerPixelData: Map<string, ImageData>,
-): Partial<EditorState> | undefined {
+): ActionResult | undefined {
   const activeId = doc.activeLayerId;
   if (!activeId) return undefined;
   const layer = doc.layers.find((l) => l.id === activeId);

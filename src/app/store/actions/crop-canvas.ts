@@ -1,5 +1,5 @@
 import type { DocumentState, Layer, Rect } from '../../../types';
-import type { EditorState } from '../types';
+import type { ActionResult } from '../types';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { cropLayerTexture } from '../../../engine-wasm/wasm-bridge';
 
@@ -8,7 +8,7 @@ export function computeCropCanvas(
   _layerPixelData: Map<string, ImageData>,
   renderVersion: number,
   rect: Rect,
-): Partial<EditorState> | undefined {
+): ActionResult | undefined {
   const docW = doc.width;
   const docH = doc.height;
   const x1 = Math.max(0, Math.round(rect.x));

@@ -1,11 +1,11 @@
 import type { BlendMode, DocumentState, Layer, LayerEffects } from '../../../types';
-import type { EditorState } from '../types';
+import type { ActionResult } from '../types';
 import { isGroupLayer, getDescendantIds } from '../../../layers/group-utils';
 
 export function computeSetActiveLayer(
   doc: DocumentState,
   id: string,
-): Partial<EditorState> {
+): ActionResult {
   return {
     document: { ...doc, activeLayerId: id },
   };
@@ -14,7 +14,7 @@ export function computeSetActiveLayer(
 export function computeToggleVisibility(
   doc: DocumentState,
   id: string,
-): Partial<EditorState> {
+): ActionResult {
   return {
     document: {
       ...doc,
@@ -29,7 +29,7 @@ export function computeUpdateOpacity(
   doc: DocumentState,
   id: string,
   opacity: number,
-): Partial<EditorState> {
+): ActionResult {
   return {
     document: {
       ...doc,
@@ -44,7 +44,7 @@ export function computeUpdateBlendMode(
   doc: DocumentState,
   id: string,
   blendMode: BlendMode,
-): Partial<EditorState> {
+): ActionResult {
   return {
     document: {
       ...doc,
@@ -61,7 +61,7 @@ export function computeUpdatePosition(
   id: string,
   x: number,
   y: number,
-): Partial<EditorState> {
+): ActionResult {
   const layer = doc.layers.find((l) => l.id === id);
 
   // When moving a group, apply the delta to all descendants
@@ -97,7 +97,7 @@ export function computeUpdateEffects(
   renderVersion: number,
   id: string,
   effects: LayerEffects,
-): Partial<EditorState> {
+): ActionResult {
   return {
     document: {
       ...doc,
@@ -113,7 +113,7 @@ export function computeToggleMask(
   doc: DocumentState,
   renderVersion: number,
   id: string,
-): Partial<EditorState> | undefined {
+): ActionResult | undefined {
   const layer = doc.layers.find((l) => l.id === id);
   if (!layer?.mask) return undefined;
 
@@ -134,7 +134,7 @@ export function computeUpdateMaskData(
   renderVersion: number,
   layerId: string,
   maskData: Uint8ClampedArray,
-): Partial<EditorState> {
+): ActionResult {
   return {
     document: {
       ...doc,

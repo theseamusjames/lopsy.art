@@ -1,5 +1,5 @@
 import type { DocumentState, Layer, Rect } from '../../../types';
-import type { EditorState, SelectionData } from '../types';
+import type { SelectionData, ActionResult } from '../types';
 import { computeAlign, getContentBounds, type AlignEdge } from '../../../tools/move/move';
 import { readLayerAsImageData } from '../../../engine-wasm/gpu-pixel-access';
 
@@ -9,7 +9,7 @@ export function computeAlignLayer(
   selection: SelectionData,
   renderVersion: number,
   edge: AlignEdge,
-): Partial<EditorState> | undefined {
+): ActionResult | undefined {
   const activeId = doc.activeLayerId;
   if (!activeId) return undefined;
   const layer = doc.layers.find((l) => l.id === activeId);

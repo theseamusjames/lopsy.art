@@ -1,5 +1,5 @@
 import type { DocumentState } from '../../../types';
-import type { EditorState } from '../types';
+import type { ActionResult } from '../types';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { mergeLayers, rasterizeLayerEffects, uploadLayerPixels } from '../../../engine-wasm/wasm-bridge';
 import { hasEnabledEffects } from '../../../layers/layer-model';
@@ -8,7 +8,7 @@ import { removeFromParentGroup } from '../../../layers/group-utils';
 export function computeMergeDown(
   doc: DocumentState,
   layerPixelData: Map<string, ImageData>,
-): Partial<EditorState> | undefined {
+): ActionResult | undefined {
   const activeId = doc.activeLayerId;
   if (!activeId) return undefined;
   const orderIdx = doc.layerOrder.indexOf(activeId);

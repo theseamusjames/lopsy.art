@@ -3,6 +3,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { getLayerTextureDimensions, uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 import { resetTrackedState, flushLayerSync } from '../../engine-wasm/engine-sync';
+import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 
 export interface HistorySlice {
@@ -144,13 +145,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const eng = getEngine();
     if (eng) resetTrackedState(eng);
 
+    // Clear JS pixel data — GPU is the source of truth after a restore.
+    pixelDataManager.clearAll();
     set({
       undoStack: state.undoStack.slice(0, -1),
       redoStack: [...state.redoStack, currentSnapshot],
       document: previous.document,
-      // Clear JS pixel data — GPU is source of truth
-      layerPixelData: new Map(),
-      sparseLayerData: new Map(),
       dirtyLayerIds: new Set(previous.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
@@ -169,13 +169,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const eng = getEngine();
     if (eng) resetTrackedState(eng);
 
+    // Clear JS pixel data — GPU is the source of truth after a restore.
+    pixelDataManager.clearAll();
     set({
       redoStack: state.redoStack.slice(0, -1),
       undoStack: [...state.undoStack, currentSnapshot],
       document: next.document,
-      // Clear JS pixel data — GPU is source of truth
-      layerPixelData: new Map(),
-      sparseLayerData: new Map(),
       dirtyLayerIds: new Set(next.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
