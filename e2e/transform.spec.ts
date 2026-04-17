@@ -414,7 +414,6 @@ test.describe('Free Transform', () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          layerPixelData: Map<string, ImageData>;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           notifyRender: () => void;
         };

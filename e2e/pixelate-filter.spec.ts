@@ -12,7 +12,6 @@ async function paintThreeBlocks(page: Page): Promise<void> {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
         document: { activeLayerId: string; width: number; height: number };
-        layerPixelData: Map<string, ImageData>;
         updateLayerPixelData: (id: string, data: ImageData) => void;
         pushHistory: (label?: string) => void;
       };

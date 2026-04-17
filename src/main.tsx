@@ -5,6 +5,7 @@ import { useEditorStore } from './app/editor-store';
 import { useUIStore } from './app/ui-store';
 import { useToolSettingsStore } from './app/tool-settings-store';
 import { useBrushPresetStore } from './app/brush-preset-store';
+import { pixelDataManager } from './engine/pixel-data-manager';
 import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
 import { render as renderWasm, readLayerPixels, getLayerTextureDimensions } from './engine-wasm/wasm-bridge';
 import {
@@ -23,6 +24,9 @@ if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__uiStore = useUIStore;
   (window as unknown as Record<string, unknown>).__toolSettingsStore = useToolSettingsStore;
   (window as unknown as Record<string, unknown>).__brushPresetStore = useBrushPresetStore;
+  // Pixel-data Maps used to live on the store; they live on the manager now.
+  // E2e tests that read or mutate pixel state go through this singleton.
+  (window as unknown as Record<string, unknown>).__pixelData = pixelDataManager;
   // Read composited pixels from the WebGL canvas by triggering a render
   // inside requestAnimationFrame and reading before buffer swap.
   // Returns screen-sized pixels (includes workspace background).

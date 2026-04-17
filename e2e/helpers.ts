@@ -158,15 +158,17 @@ export async function paintRect(
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number; layers: Array<{ id: string; width: number; height: number }> };
-          layerPixelData: Map<string, ImageData>;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: (label?: string) => void;
         };
       };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        get: (id: string) => ImageData | undefined;
+      };
       const state = store.getState();
       const id = lid ?? state.document.activeLayerId;
       state.pushHistory('Paint');
-      const existing = state.layerPixelData.get(id);
+      const existing = pixelData.get(id);
       const layer = state.document.layers.find((l) => l.id === id);
       const lw = existing?.width ?? layer?.width ?? state.document.width;
       const lh = existing?.height ?? layer?.height ?? state.document.height;
@@ -200,15 +202,17 @@ export async function paintCircle(
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number; layers: Array<{ id: string; width: number; height: number }> };
-          layerPixelData: Map<string, ImageData>;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: (label?: string) => void;
         };
       };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        get: (id: string) => ImageData | undefined;
+      };
       const state = store.getState();
       const id = lid ?? state.document.activeLayerId;
       state.pushHistory('Paint Circle');
-      const existing = state.layerPixelData.get(id);
+      const existing = pixelData.get(id);
       const layer = state.document.layers.find((l) => l.id === id);
       const lw = existing?.width ?? layer?.width ?? state.document.width;
       const lh = existing?.height ?? layer?.height ?? state.document.height;

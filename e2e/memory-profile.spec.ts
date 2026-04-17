@@ -46,11 +46,13 @@ async function snapshot(page: Page, label: string) {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
         document: { layers: Array<{ id: string; name: string; x: number; y: number; width?: number; height?: number }> };
-        layerPixelData: Map<string, ImageData>;
-        sparseLayerData: Map<string, { sparse: { count: number; indices: { byteLength: number }; rgba: { byteLength: number }; width: number; height: number } }>;
         undoStack?: Array<unknown>;
         redoStack?: Array<unknown>;
       };
+    };
+    const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+      get: (id: string) => ImageData | undefined;
+      getSparse: (id: string) => { sparse: { count: number; indices: { byteLength: number }; rgba: { byteLength: number }; width: number; height: number } } | undefined;
     };
     const state = store.getState();
 
@@ -85,8 +87,8 @@ async function snapshot(page: Page, label: string) {
     }
 
     const layers = state.document.layers.map(l => {
-      const dense = state.layerPixelData.get(l.id);
-      const sparse = state.sparseLayerData.get(l.id);
+      const dense = pixelData.get(l.id);
+      const sparse = pixelData.getSparse(l.id);
       return {
         name: l.name,
         pos: `${l.x},${l.y}`,

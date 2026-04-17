@@ -172,11 +172,12 @@ test.describe('Filter + Selection Mask (Issue #138)', () => {
           document: { activeLayerId: string };
           pushHistory: (label?: string) => void;
           notifyRender: () => void;
-          layerPixelData: Map<string, unknown>;
-          sparseLayerData: Map<string, unknown>;
           dirtyLayerIds: Set<string>;
         };
         setState: (partial: Record<string, unknown>) => void;
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        remove: (id: string) => void;
       };
       const state = store.getState();
       const activeId = state.document.activeLayerId;
@@ -190,14 +191,10 @@ test.describe('Filter + Selection Mask (Issue #138)', () => {
       if (wasmBridge && engine) {
         state.pushHistory('Invert');
         wasmBridge.filterInvert(engine, activeId);
-        // Clear ALL JS pixel caches so reads go to GPU
-        const pixelDataMap = new Map(state.layerPixelData);
-        pixelDataMap.delete(activeId);
-        const sparseMap = new Map(state.sparseLayerData);
-        sparseMap.delete(activeId);
+        pixelData.remove(activeId);
         const dirtyIds = new Set(state.dirtyLayerIds);
         dirtyIds.add(activeId);
-        store.setState({ layerPixelData: pixelDataMap, sparseLayerData: sparseMap, dirtyLayerIds: dirtyIds });
+        store.setState({ dirtyLayerIds: dirtyIds });
         state.notifyRender();
       }
     });
@@ -243,11 +240,12 @@ test.describe('Filter + Selection Mask (Issue #138)', () => {
           document: { activeLayerId: string };
           pushHistory: (label?: string) => void;
           notifyRender: () => void;
-          layerPixelData: Map<string, unknown>;
-          sparseLayerData: Map<string, unknown>;
           dirtyLayerIds: Set<string>;
         };
         setState: (partial: Record<string, unknown>) => void;
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        remove: (id: string) => void;
       };
       const state = store.getState();
       const activeId = state.document.activeLayerId;
@@ -261,13 +259,10 @@ test.describe('Filter + Selection Mask (Issue #138)', () => {
       if (wasmBridge && engine) {
         state.pushHistory('Pixelate');
         wasmBridge.filterPixelate(engine, activeId, 16);
-        const pixelDataMap = new Map(state.layerPixelData);
-        pixelDataMap.delete(activeId);
-        const sparseMap = new Map(state.sparseLayerData);
-        sparseMap.delete(activeId);
+        pixelData.remove(activeId);
         const dirtyIds = new Set(state.dirtyLayerIds);
         dirtyIds.add(activeId);
-        store.setState({ layerPixelData: pixelDataMap, sparseLayerData: sparseMap, dirtyLayerIds: dirtyIds });
+        store.setState({ dirtyLayerIds: dirtyIds });
         state.notifyRender();
       }
     });

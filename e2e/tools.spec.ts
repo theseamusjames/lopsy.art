@@ -492,7 +492,6 @@ test.describe('Fill Tool', () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          layerPixelData: Map<string, ImageData>;
           updateLayerPixelData: (id: string, data: ImageData) => void;
         };
       };
@@ -509,7 +508,6 @@ test.describe('Fill Tool', () => {
           data.data[idx + 3] = 255;
         }
       }
-      state.layerPixelData.set(id, data);
       store.getState().updateLayerPixelData(id, data);
     });
 
@@ -534,7 +532,6 @@ test.describe('Fill Tool', () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          layerPixelData: Map<string, ImageData>;
           updateLayerPixelData: (id: string, data: ImageData) => void;
         };
       };
@@ -823,7 +820,6 @@ test.describe('Magic Wand', () => {
       const edStore = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          layerPixelData: Map<string, ImageData>;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           setSelection: (bounds: { x: number; y: number; width: number; height: number }, mask: Uint8ClampedArray, w: number, h: number) => void;
           selection: { bounds: { width: number } | null };
@@ -1344,13 +1340,13 @@ test.describe('Filters', () => {
 
     const pixel = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string };
-          layerPixelData: Map<string, ImageData>;
-        };
+        getState: () => { document: { activeLayerId: string } };
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        get: (id: string) => ImageData | undefined;
       };
       const state = store.getState();
-      const data = state.layerPixelData.get(state.document.activeLayerId);
+      const data = pixelData.get(state.document.activeLayerId);
       if (!data) return { r: 0, g: 0, b: 0, a: 0 };
       const idx = (50 * data.width + 50) * 4;
       return { r: data.data[idx]!, g: data.data[idx + 1]!, b: data.data[idx + 2]!, a: data.data[idx + 3]! };
@@ -1413,10 +1409,13 @@ test.describe('Filters', () => {
 
     const pixel = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { activeLayerId: string }; layerPixelData: Map<string, ImageData> };
+        getState: () => { document: { activeLayerId: string } };
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        get: (id: string) => ImageData | undefined;
       };
       const state = store.getState();
-      const data = state.layerPixelData.get(state.document.activeLayerId);
+      const data = pixelData.get(state.document.activeLayerId);
       if (!data) return { r: 0, g: 0, b: 0, a: 0 };
       const idx = (50 * data.width + 50) * 4;
       return { r: data.data[idx]!, g: data.data[idx + 1]!, b: data.data[idx + 2]!, a: data.data[idx + 3]! };
@@ -1463,10 +1462,13 @@ test.describe('Filters', () => {
 
     const afterPixel = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { activeLayerId: string }; layerPixelData: Map<string, ImageData> };
+        getState: () => { document: { activeLayerId: string } };
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        get: (id: string) => ImageData | undefined;
       };
       const state = store.getState();
-      const data = state.layerPixelData.get(state.document.activeLayerId);
+      const data = pixelData.get(state.document.activeLayerId);
       if (!data) return { r: 0, g: 0, b: 0, a: 0 };
       const idx = (50 * data.width + 50) * 4;
       return { r: data.data[idx]!, g: data.data[idx + 1]!, b: data.data[idx + 2]!, a: data.data[idx + 3]! };
@@ -1554,10 +1556,13 @@ test.describe('Filters', () => {
     // The center pixel should be dimmer (spread out)
     const blurResult = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { activeLayerId: string }; layerPixelData: Map<string, ImageData> };
+        getState: () => { document: { activeLayerId: string } };
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        get: (id: string) => ImageData | undefined;
       };
       const state = store.getState();
-      const data = state.layerPixelData.get(state.document.activeLayerId);
+      const data = pixelData.get(state.document.activeLayerId);
       if (!data) return { centerR: 0, neighborR: 0 };
       const ci = (50 * data.width + 50) * 4;
       const ni = (50 * data.width + 51) * 4;

@@ -80,14 +80,14 @@ async function getPixelAt(page: Page, x: number, y: number, layerId?: string) {
   return page.evaluate(
     ({ x, y, lid }) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string };
-          layerPixelData: Map<string, ImageData>;
-        };
+        getState: () => { document: { activeLayerId: string } };
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        get: (id: string) => ImageData | undefined;
       };
       const state = store.getState();
       const id = lid ?? state.document.activeLayerId;
-      const data = state.layerPixelData.get(id);
+      const data = pixelData.get(id);
       if (!data) return { r: 0, g: 0, b: 0, a: 0 };
       const idx = (y * data.width + x) * 4;
       return {

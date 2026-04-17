@@ -172,10 +172,12 @@ test.describe('WASM/WebGL Rendering', () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { layers: Array<{ id: string; x: number; y: number; width: number; height: number }>; width: number; height: number };
-          layerPixelData: Map<string, ImageData>;
-          sparseLayerData: Map<string, unknown>;
           viewport: { zoom: number; panX: number; panY: number };
         };
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        hasDense: (id: string) => boolean;
+        hasSparse: (id: string) => boolean;
       };
       const state = store.getState();
       const layer = state.document.layers[0];
@@ -185,8 +187,8 @@ test.describe('WASM/WebGL Rendering', () => {
         layerId: layer?.id,
         layerPos: layer ? `${layer.x},${layer.y}` : 'none',
         layerSize: layer ? `${layer.width}x${layer.height}` : 'none',
-        hasDenseData: layer ? state.layerPixelData.has(layer.id) : false,
-        hasSparseData: layer ? state.sparseLayerData.has(layer.id) : false,
+        hasDenseData: layer ? pixelData.hasDense(layer.id) : false,
+        hasSparseData: layer ? pixelData.hasSparse(layer.id) : false,
         viewport: `zoom=${state.viewport.zoom.toFixed(2)} pan=${state.viewport.panX.toFixed(0)},${state.viewport.panY.toFixed(0)}`,
       };
     });
@@ -2343,14 +2345,16 @@ test.describe('WASM/WebGL Rendering', () => {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number; width: number; height: number }> };
           resolvePixelData: (id: string) => ImageData | undefined;
-          sparseLayerData: Map<string, unknown>;
         };
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        hasSparse: (id: string) => boolean;
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
       const layer = state.document.layers.find(l => l.id === id);
       const data = state.resolvePixelData(id);
-      const isSparse = state.sparseLayerData.has(id);
+      const isSparse = pixelData.hasSparse(id);
       if (!layer || !data) return { error: 'no data' };
 
       // Check center pixel of the painted rect in layer-local coords
@@ -3326,17 +3330,17 @@ test.describe('WASM/WebGL Rendering', () => {
     // Verify red is visible
     const before = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          layerPixelData: Map<string, ImageData>;
-          sparseLayerData: Map<string, unknown>;
-        };
+        getState: () => { document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> } };
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        hasDense: (id: string) => boolean;
+        hasSparse: (id: string) => boolean;
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
       return {
-        hasDense: state.layerPixelData.has(id),
-        hasSparse: state.sparseLayerData.has(id),
+        hasDense: pixelData.hasDense(id),
+        hasSparse: pixelData.hasSparse(id),
         layerPos: `${state.document.layers.find(l => l.id === id)?.x},${state.document.layers.find(l => l.id === id)?.y}`,
       };
     });
@@ -3354,17 +3358,17 @@ test.describe('WASM/WebGL Rendering', () => {
     // After undo: layer should have no data, no visible mark
     const after = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          layerPixelData: Map<string, ImageData>;
-          sparseLayerData: Map<string, unknown>;
-        };
+        getState: () => { document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> } };
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        hasDense: (id: string) => boolean;
+        hasSparse: (id: string) => boolean;
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
       return {
-        hasDense: state.layerPixelData.has(id),
-        hasSparse: state.sparseLayerData.has(id),
+        hasDense: pixelData.hasDense(id),
+        hasSparse: pixelData.hasSparse(id),
         layerPos: `${state.document.layers.find(l => l.id === id)?.x},${state.document.layers.find(l => l.id === id)?.y}`,
       };
     });
@@ -4355,22 +4359,20 @@ test.describe('WASM/WebGL Rendering', () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          layerPixelData: Map<string, unknown>;
-          sparseLayerData: Map<string, unknown>;
           dirtyLayerIds: Set<string>;
         };
         setState: (s: Record<string, unknown>) => void;
       };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        remove: (id: string) => void;
+      };
       // Clear JS data — simulate GPU-only state (like after gradient tool)
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const pix = new Map(state.layerPixelData);
-      pix.delete(id);
-      const sparse = new Map(state.sparseLayerData);
-      sparse.delete(id);
+      pixelData.remove(id);
       const dirty = new Set(state.dirtyLayerIds);
       dirty.add(id);
-      store.setState({ layerPixelData: pix, sparseLayerData: sparse, dirtyLayerIds: dirty });
+      store.setState({ dirtyLayerIds: dirty });
     });
     await page.waitForTimeout(200);
 
@@ -4383,11 +4385,7 @@ test.describe('WASM/WebGL Rendering', () => {
           pushHistory: (l?: string) => void;
           getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
-          layerPixelData: Map<string, unknown>;
-          sparseLayerData: Map<string, unknown>;
-          dirtyLayerIds: Set<string>;
         };
-        setState: (s: Record<string, unknown>) => void;
       };
       store.getState().addLayer();
       const id = store.getState().document.activeLayerId;
@@ -4411,21 +4409,19 @@ test.describe('WASM/WebGL Rendering', () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          layerPixelData: Map<string, unknown>;
-          sparseLayerData: Map<string, unknown>;
           dirtyLayerIds: Set<string>;
         };
         setState: (s: Record<string, unknown>) => void;
       };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        remove: (id: string) => void;
+      };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const pix = new Map(state.layerPixelData);
-      pix.delete(id);
-      const sparse = new Map(state.sparseLayerData);
-      sparse.delete(id);
+      pixelData.remove(id);
       const dirty = new Set(state.dirtyLayerIds);
       dirty.add(id);
-      store.setState({ layerPixelData: pix, sparseLayerData: sparse, dirtyLayerIds: dirty });
+      store.setState({ dirtyLayerIds: dirty });
     });
     await page.waitForTimeout(300);
 
