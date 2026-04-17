@@ -10,29 +10,14 @@ struct TextureEntry {
     in_use: bool,
 }
 
-/// Cap on the number of free entries kept around per (width,height) bucket.
-/// Above this, released textures are queued for deletion instead of pooled.
-/// Tuned for the common case: a few scratch textures per size are reused
-/// repeatedly during paint strokes; long sessions don't accumulate orphans.
-const MAX_FREE_PER_SIZE: usize = 4;
-
 pub struct TexturePool {
-    /// Slots are tombstoned with `None` after deletion so `TextureHandle`
-    /// indices stay stable for the life of the pool.
-    entries: Vec<Option<TextureEntry>>,
-    /// Textures awaiting GL deletion. Drained at the start of `acquire`,
-    /// where a `&WebGl2RenderingContext` is in scope.
-    pending_deletions: Vec<WebGlTexture>,
+    entries: Vec<TextureEntry>,
     use_float: bool,
 }
 
 impl TexturePool {
     pub fn new(use_float: bool) -> Self {
-        Self {
-            entries: Vec::new(),
-            pending_deletions: Vec::new(),
-            use_float,
-        }
+        Self { entries: Vec::new(), use_float }
     }
 
     /// Verify RGBA16F is actually renderable on this GPU.
@@ -91,22 +76,13 @@ impl TexturePool {
         }
     }
 
-    /// Drain the pending-deletion queue. Called automatically at the start of
-    /// `acquire`; can also be called manually (e.g., before sleep / unload).
-    pub fn flush_deletions(&mut self, gl: &WebGl2RenderingContext) {
-        for tex in self.pending_deletions.drain(..) {
-            gl.delete_texture(Some(&tex));
-        }
-    }
-
-    /// Free every GL resource held by the pool. Call once when tearing down
-    /// the engine.
+    /// Delete every WebGL texture held by the pool. Call once when tearing
+    /// down the engine — without this, freeing the Rust-side Engine leaves
+    /// the WebGL textures alive in the context until the context itself
+    /// dies, which for an SPA may be never.
     pub fn destroy(&mut self, gl: &WebGl2RenderingContext) {
-        self.flush_deletions(gl);
-        for slot in self.entries.drain(..) {
-            if let Some(entry) = slot {
-                gl.delete_texture(Some(&entry.texture));
-            }
+        for entry in self.entries.drain(..) {
+            gl.delete_texture(Some(&entry.texture));
         }
     }
 
@@ -116,35 +92,30 @@ impl TexturePool {
         width: u32,
         height: u32,
     ) -> Result<TextureHandle, String> {
-        // Reclaim any GL textures freed since the last acquire.
-        self.flush_deletions(gl);
-
-        // Look for a free texture of matching size.
-        for (i, slot) in self.entries.iter_mut().enumerate() {
-            if let Some(entry) = slot {
-                if !entry.in_use && entry.width == width && entry.height == height {
-                    entry.in_use = true;
-                    // Clear via temporary FBO (works for both RGBA8 and RGBA16F).
-                    let fbo = gl.create_framebuffer().ok_or("Failed to create temp FBO for clear")?;
-                    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
-                    gl.framebuffer_texture_2d(
-                        WebGl2RenderingContext::FRAMEBUFFER,
-                        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-                        WebGl2RenderingContext::TEXTURE_2D,
-                        Some(&entry.texture),
-                        0,
-                    );
-                    gl.viewport(0, 0, width as i32, height as i32);
-                    gl.clear_color(0.0, 0.0, 0.0, 0.0);
-                    gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-                    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-                    gl.delete_framebuffer(Some(&fbo));
-                    return Ok(TextureHandle(i));
-                }
+        // Look for a free texture of matching size
+        for (i, entry) in self.entries.iter_mut().enumerate() {
+            if !entry.in_use && entry.width == width && entry.height == height {
+                entry.in_use = true;
+                // Clear via temporary FBO (works for both RGBA8 and RGBA16F)
+                let fbo = gl.create_framebuffer().ok_or("Failed to create temp FBO for clear")?;
+                gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+                gl.framebuffer_texture_2d(
+                    WebGl2RenderingContext::FRAMEBUFFER,
+                    WebGl2RenderingContext::COLOR_ATTACHMENT0,
+                    WebGl2RenderingContext::TEXTURE_2D,
+                    Some(&entry.texture),
+                    0,
+                );
+                gl.viewport(0, 0, width as i32, height as i32);
+                gl.clear_color(0.0, 0.0, 0.0, 0.0);
+                gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+                gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+                gl.delete_framebuffer(Some(&fbo));
+                return Ok(TextureHandle(i));
             }
         }
 
-        // Allocate a new texture.
+        // Allocate new texture
         let texture = gl.create_texture().ok_or("Failed to create texture")?;
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&texture));
         gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
@@ -180,57 +151,35 @@ impl TexturePool {
             WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
         );
 
-        // Reuse a tombstoned slot if one exists, otherwise append.
-        if let Some(idx) = self.entries.iter().position(|s| s.is_none()) {
-            self.entries[idx] = Some(TextureEntry { texture, width, height, in_use: true });
-            Ok(TextureHandle(idx))
-        } else {
-            let handle = TextureHandle(self.entries.len());
-            self.entries.push(Some(TextureEntry { texture, width, height, in_use: true }));
-            Ok(handle)
-        }
+        let handle = TextureHandle(self.entries.len());
+        self.entries.push(TextureEntry {
+            texture,
+            width,
+            height,
+            in_use: true,
+        });
+
+        Ok(handle)
     }
 
-    /// Mark a texture as free. If the per-size free-pool is already saturated,
-    /// the GL texture is queued for deletion (deleted on the next `acquire`).
-    /// Idempotent — releasing the same handle twice or releasing a tombstoned
-    /// slot is a no-op.
     pub fn release(&mut self, handle: TextureHandle) {
-        let (w, h) = match self.entries.get(handle.0).and_then(|s| s.as_ref()) {
-            Some(e) if e.in_use => (e.width, e.height),
-            _ => return,
-        };
-
-        let same_size_free = self.entries.iter()
-            .filter_map(|s| s.as_ref())
-            .filter(|e| !e.in_use && e.width == w && e.height == h)
-            .count();
-
-        if same_size_free >= MAX_FREE_PER_SIZE {
-            if let Some(entry) = self.entries[handle.0].take() {
-                self.pending_deletions.push(entry.texture);
-            }
-        } else if let Some(entry) = self.entries.get_mut(handle.0).and_then(|s| s.as_mut()) {
+        if let Some(entry) = self.entries.get_mut(handle.0) {
             entry.in_use = false;
         }
     }
 
     pub fn get(&self, handle: TextureHandle) -> Option<&WebGlTexture> {
-        self.entries.get(handle.0)
-            .and_then(|s| s.as_ref())
-            .map(|e| &e.texture)
+        self.entries.get(handle.0).map(|e| &e.texture)
     }
 
     pub fn get_size(&self, handle: TextureHandle) -> Option<(u32, u32)> {
-        self.entries.get(handle.0)
-            .and_then(|s| s.as_ref())
-            .map(|e| (e.width, e.height))
+        self.entries.get(handle.0).map(|e| (e.width, e.height))
     }
 
     /// Set NEAREST filtering on a texture (for system textures that are always
     /// sampled at exact texel centers — avoids interpolation precision issues).
     pub fn set_nearest_filter(&self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
-        if let Some(entry) = self.entries.get(handle.0).and_then(|s| s.as_ref()) {
+        if let Some(entry) = self.entries.get(handle.0) {
             gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&entry.texture));
             gl.tex_parameteri(
                 WebGl2RenderingContext::TEXTURE_2D,
@@ -294,7 +243,7 @@ impl TexturePool {
         if self.use_float {
             tex_sub_image_2d_f32(gl, x, y, w, h, data)?;
         } else {
-            // Quantize f32 → u8 for RGBA8 textures.
+            // Quantize f32 → u8 for RGBA8 textures
             let u8_data: Vec<u8> = data.iter().map(|&v| (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8).collect();
             gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
                 WebGl2RenderingContext::TEXTURE_2D,
@@ -316,8 +265,8 @@ impl TexturePool {
         gl: &WebGl2RenderingContext,
         handle: TextureHandle,
         canvas: &web_sys::HtmlCanvasElement,
-        _w: u32,
-        _h: u32,
+        w: u32,
+        h: u32,
     ) -> Result<(), String> {
         let texture = self.get(handle).ok_or("Texture not found")?;
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
@@ -327,7 +276,7 @@ impl TexturePool {
         gl.pixel_storei(WebGl2RenderingContext::UNPACK_FLIP_Y_WEBGL, 0);
 
         if self.use_float {
-            // For float textures: upload via texImage2D which converts u8→f16.
+            // For float textures: upload via texImage2D which converts u8→f16
             gl.tex_image_2d_with_u32_and_u32_and_html_canvas_element(
                 WebGl2RenderingContext::TEXTURE_2D,
                 0,
@@ -336,6 +285,14 @@ impl TexturePool {
                 WebGl2RenderingContext::FLOAT,
                 canvas,
             ).map_err(|e| format!("tex_image_2d canvas float failed: {:?}", e))?;
+
+            // Resize entry if needed
+            if let Some(entry) = self.entries.get(handle.0) {
+                if entry.width != w || entry.height != h {
+                    // entry is immutable here; sizes are already correct
+                    // from the acquire/resize step in the caller
+                }
+            }
         } else {
             gl.tex_sub_image_2d_with_u32_and_u32_and_html_canvas_element(
                 WebGl2RenderingContext::TEXTURE_2D,
@@ -391,12 +348,12 @@ impl TexturePool {
     }
 }
 
-/// SAFETY-scoped wrapper around `tex_sub_image_2d` for f32 data.
-/// `Float32Array::view` returns a borrow into wasm linear memory; this helper
-/// keeps the view's lifetime bounded by a single function body, so no
+/// Scoped wrapper around `tex_sub_image_2d` for f32 data.
+/// `Float32Array::view` returns a borrow into wasm linear memory; keeping
+/// the view's lifetime bounded by a single function body means no
 /// intervening allocation can relocate the underlying buffer between view
-/// creation and the GL call. Lifting this out of the call sites makes the
-/// safety guarantee structural rather than commented-only.
+/// creation and the GL call. Extracting the helper makes the safety
+/// guarantee structural rather than commented-only.
 fn tex_sub_image_2d_f32(
     gl: &WebGl2RenderingContext,
     x: i32,
