@@ -1066,6 +1066,19 @@ pub fn set_image_vibrance(engine: &mut Engine, value: f32) {
     engine.inner.needs_recomposite = true;
 }
 
+#[wasm_bindgen(js_name = "setImageColorBalance")]
+pub fn set_image_color_balance(
+    engine: &mut Engine,
+    shadows_cr: f32, shadows_mg: f32, shadows_yb: f32,
+    midtones_cr: f32, midtones_mg: f32, midtones_yb: f32,
+    highlights_cr: f32, highlights_mg: f32, highlights_yb: f32,
+) {
+    engine.inner.image_cb_shadows = [shadows_cr, shadows_mg, shadows_yb];
+    engine.inner.image_cb_midtones = [midtones_cr, midtones_mg, midtones_yb];
+    engine.inner.image_cb_highlights = [highlights_cr, highlights_mg, highlights_yb];
+    engine.inner.needs_recomposite = true;
+}
+
 #[wasm_bindgen(js_name = "clearImageAdjustments")]
 pub fn clear_image_adjustments(engine: &mut Engine) {
     engine.inner.image_exposure = 0.0;
@@ -1077,6 +1090,9 @@ pub fn clear_image_adjustments(engine: &mut Engine) {
     engine.inner.image_vignette = 0.0;
     engine.inner.image_saturation = 0.0;
     engine.inner.image_vibrance = 0.0;
+    engine.inner.image_cb_shadows = [0.0; 3];
+    engine.inner.image_cb_midtones = [0.0; 3];
+    engine.inner.image_cb_highlights = [0.0; 3];
     if let Some(tex) = engine.inner.image_curves_texture.take() {
         engine.inner.texture_pool.release(tex);
     }

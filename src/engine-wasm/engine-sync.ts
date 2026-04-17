@@ -10,6 +10,7 @@ import { getEngine } from './engine-state';
 import type { Layer, BlendMode } from '../types';
 import type { SparseLayerEntry } from '../app/store/types';
 import type { ImageAdjustments } from '../filters/image-adjustments';
+import { isIdentityColorBalance } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import {
   setDocumentSize,
@@ -41,6 +42,7 @@ import {
   setImageVibrance,
   setImageCurvesLut,
   clearImageCurves,
+  setImageColorBalance,
   clearImageAdjustments,
   setLassoPreview,
   setPathOverlay,
@@ -489,6 +491,19 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
   setImageVignette(engine, adjustments.vignette);
   setImageSaturation(engine, adjustments.saturation);
   setImageVibrance(engine, adjustments.vibrance);
+
+  // Color balance
+  const cb = adjustments.colorBalance;
+  if (cb && !isIdentityColorBalance(cb)) {
+    setImageColorBalance(
+      engine,
+      cb.shadowsCyanRed, cb.shadowsMagentaGreen, cb.shadowsYellowBlue,
+      cb.midtonesCyanRed, cb.midtonesMagentaGreen, cb.midtonesYellowBlue,
+      cb.highlightsCyanRed, cb.highlightsMagentaGreen, cb.highlightsYellowBlue,
+    );
+  } else {
+    setImageColorBalance(engine, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  }
 
   // Curves: build the 256x4 RGBA LUT and upload only when the points
   // changed (cheap identity check via reference equality on the curves

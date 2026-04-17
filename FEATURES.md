@@ -195,6 +195,12 @@ Applied globally or per-group. All default to 0.
   `CurveEditor` (drag points, click to add, double-click or yank to remove).
   Runs as a single 256×1 RGBA LUT texture sampled in the GPU adjustments
   shader; identity curves bypass the lookup.
+- **Color Balance**: per-tonal-range (Shadows / Midtones / Highlights) color
+  shifting along three complementary axes: Cyan ↔ Red, Magenta ↔ Green,
+  Yellow ↔ Blue. Each axis ranges from -100 to +100. Tonal range weighting
+  uses luminance-based smoothstep functions so shadows-only shifts leave
+  highlights untouched and vice versa. Applied in the GPU adjustments shader
+  after saturation/vibrance and before curves.
 
 ---
 

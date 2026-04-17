@@ -11,6 +11,10 @@ uniform float u_whites;
 uniform float u_blacks;
 uniform float u_saturation;
 uniform float u_vibrance;
+// Color balance: per-tonal-range RGB shifts (normalised -1..1)
+uniform vec3 u_cbShadows;
+uniform vec3 u_cbMidtones;
+uniform vec3 u_cbHighlights;
 // Curves: 256x1 RGBA texture. R/G/B = per-channel curve LUTs,
 // A = master RGB curve LUT. u_hasCurves=0 skips the lookups so the
 // common no-curves case stays identical to the old shader.
@@ -41,6 +45,16 @@ void main() {
         float boost = u_vibrance * (1.0 - sat);
         float gray2 = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
         c.rgb = mix(vec3(gray2), c.rgb, 1.0 + boost);
+    }
+
+    // Color balance: weight shifts by luminance-based tonal range
+    {
+        float cbLum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+        float sw = 1.0 - smoothstep(0.0, 0.67, cbLum);
+        float hw = smoothstep(0.33, 1.0, cbLum);
+        float mw = 1.0 - sw - hw;
+        mw = max(mw, 0.0);
+        c.rgb += u_cbShadows * sw + u_cbMidtones * mw + u_cbHighlights * hw;
     }
 
     c.rgb = clamp(c.rgb, 0.0, 1.0);

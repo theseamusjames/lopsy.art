@@ -1,6 +1,39 @@
 import type { Curves } from './curves';
 import { IDENTITY_CURVES, isIdentityCurves, applyCurvesToImageData } from './curves';
 
+export interface ColorBalance {
+  shadowsCyanRed: number;
+  shadowsMagentaGreen: number;
+  shadowsYellowBlue: number;
+  midtonesCyanRed: number;
+  midtonesMagentaGreen: number;
+  midtonesYellowBlue: number;
+  highlightsCyanRed: number;
+  highlightsMagentaGreen: number;
+  highlightsYellowBlue: number;
+}
+
+export const IDENTITY_COLOR_BALANCE: ColorBalance = {
+  shadowsCyanRed: 0,
+  shadowsMagentaGreen: 0,
+  shadowsYellowBlue: 0,
+  midtonesCyanRed: 0,
+  midtonesMagentaGreen: 0,
+  midtonesYellowBlue: 0,
+  highlightsCyanRed: 0,
+  highlightsMagentaGreen: 0,
+  highlightsYellowBlue: 0,
+};
+
+export function isIdentityColorBalance(cb?: ColorBalance): boolean {
+  if (!cb) return true;
+  return (
+    cb.shadowsCyanRed === 0 && cb.shadowsMagentaGreen === 0 && cb.shadowsYellowBlue === 0 &&
+    cb.midtonesCyanRed === 0 && cb.midtonesMagentaGreen === 0 && cb.midtonesYellowBlue === 0 &&
+    cb.highlightsCyanRed === 0 && cb.highlightsMagentaGreen === 0 && cb.highlightsYellowBlue === 0
+  );
+}
+
 export interface ImageAdjustments {
   exposure: number;
   contrast: number;
@@ -16,6 +49,7 @@ export interface ImageAdjustments {
    * without a migration; absent / identity curves skip the GPU + JS path.
    */
   curves?: Curves;
+  colorBalance?: ColorBalance;
 }
 
 export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
@@ -40,6 +74,8 @@ export function aggregateGroupAdjustments(
   // first non-identity curve set we find. This matches how groups stack
   // adjustment layers in Photoshop (last-write-wins for non-additive ops).
   let pickedCurves: Curves | undefined;
+  const aggCb: ColorBalance = { ...IDENTITY_COLOR_BALANCE };
+  let hasCb = false;
   for (const l of layers) {
     if (l.type === 'group' && l.adjustments && l.adjustmentsEnabled !== false && l.visible) {
       agg.exposure += l.adjustments.exposure;
@@ -54,10 +90,24 @@ export function aggregateGroupAdjustments(
       if (!pickedCurves && l.adjustments.curves && !isIdentityCurves(l.adjustments.curves)) {
         pickedCurves = l.adjustments.curves;
       }
+      if (l.adjustments.colorBalance && !isIdentityColorBalance(l.adjustments.colorBalance)) {
+        const cb = l.adjustments.colorBalance;
+        aggCb.shadowsCyanRed += cb.shadowsCyanRed;
+        aggCb.shadowsMagentaGreen += cb.shadowsMagentaGreen;
+        aggCb.shadowsYellowBlue += cb.shadowsYellowBlue;
+        aggCb.midtonesCyanRed += cb.midtonesCyanRed;
+        aggCb.midtonesMagentaGreen += cb.midtonesMagentaGreen;
+        aggCb.midtonesYellowBlue += cb.midtonesYellowBlue;
+        aggCb.highlightsCyanRed += cb.highlightsCyanRed;
+        aggCb.highlightsMagentaGreen += cb.highlightsMagentaGreen;
+        aggCb.highlightsYellowBlue += cb.highlightsYellowBlue;
+        hasCb = true;
+      }
       found = true;
     }
   }
   if (pickedCurves) agg.curves = pickedCurves;
+  if (hasCb) agg.colorBalance = aggCb;
   return found ? agg : null;
 }
 
@@ -72,7 +122,8 @@ export function hasActiveAdjustments(adj: ImageAdjustments): boolean {
     adj.vignette !== 0 ||
     adj.saturation !== 0 ||
     adj.vibrance !== 0 ||
-    !isIdentityCurves(adj.curves)
+    !isIdentityCurves(adj.curves) ||
+    !isIdentityColorBalance(adj.colorBalance)
   );
 }
 
@@ -182,6 +233,43 @@ function applyVibrance(imageData: ImageData, vibrance: number): void {
   }
 }
 
+function applyColorBalance(imageData: ImageData, cb: ColorBalance): void {
+  const data = imageData.data;
+  const sCR = cb.shadowsCyanRed / 100;
+  const sMG = cb.shadowsMagentaGreen / 100;
+  const sYB = cb.shadowsYellowBlue / 100;
+  const mCR = cb.midtonesCyanRed / 100;
+  const mMG = cb.midtonesMagentaGreen / 100;
+  const mYB = cb.midtonesYellowBlue / 100;
+  const hCR = cb.highlightsCyanRed / 100;
+  const hMG = cb.highlightsMagentaGreen / 100;
+  const hYB = cb.highlightsYellowBlue / 100;
+
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i]! / 255;
+    let g = data[i + 1]! / 255;
+    let b = data[i + 2]! / 255;
+    const lum = r * 0.2126 + g * 0.7152 + b * 0.0722;
+
+    const sw = 1.0 - smoothstep(0.0, 0.67, lum);
+    const hw = smoothstep(0.33, 1.0, lum);
+    const mw = Math.max(0, 1.0 - sw - hw);
+
+    r += sCR * sw + mCR * mw + hCR * hw;
+    g += sMG * sw + mMG * mw + hMG * hw;
+    b += sYB * sw + mYB * mw + hYB * hw;
+
+    data[i] = Math.max(0, Math.min(255, Math.round(r * 255)));
+    data[i + 1] = Math.max(0, Math.min(255, Math.round(g * 255)));
+    data[i + 2] = Math.max(0, Math.min(255, Math.round(b * 255)));
+  }
+}
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
 export function applyAdjustmentsToImageData(
   imageData: ImageData,
   adj: ImageAdjustments,
@@ -214,6 +302,10 @@ export function applyAdjustmentsToImageData(
 
   if (adj.vignette !== 0) {
     applyVignette(imageData, adj.vignette);
+  }
+
+  if (adj.colorBalance && !isIdentityColorBalance(adj.colorBalance)) {
+    applyColorBalance(imageData, adj.colorBalance);
   }
 
   if (adj.curves && !isIdentityCurves(adj.curves)) {

@@ -89,6 +89,10 @@ pub struct EngineInner {
     pub image_vignette: f32,
     pub image_saturation: f32,
     pub image_vibrance: f32,
+    // Color balance (per tonal range RGB shifts, -100..100 normalised to -1..1)
+    pub image_cb_shadows: [f32; 3],
+    pub image_cb_midtones: [f32; 3],
+    pub image_cb_highlights: [f32; 3],
     /// 256x1 RGBA texture holding the four per-channel curve LUTs
     /// (R/G/B = per-channel, A = master). None when no curves are active.
     pub image_curves_texture: Option<TextureHandle>,
@@ -198,6 +202,9 @@ impl EngineInner {
             image_vignette: 0.0,
             image_saturation: 0.0,
             image_vibrance: 0.0,
+            image_cb_shadows: [0.0; 3],
+            image_cb_midtones: [0.0; 3],
+            image_cb_highlights: [0.0; 3],
             image_curves_texture: None,
             has_image_curves: false,
             mask_edit_layer_id: None,
@@ -422,6 +429,9 @@ impl EngineInner {
         self.image_vignette = 0.0;
         self.image_saturation = 0.0;
         self.image_vibrance = 0.0;
+        self.image_cb_shadows = [0.0; 3];
+        self.image_cb_midtones = [0.0; 3];
+        self.image_cb_highlights = [0.0; 3];
         if let Some(tex) = self.image_curves_texture.take() {
             self.texture_pool.release(tex);
         }
