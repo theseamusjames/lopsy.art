@@ -16,7 +16,6 @@ import {
   syncMaskEditMode,
   syncBrushTip,
   renderEngine,
-  resetTrackedState,
   markAllLayersDirty,
 } from '../engine-wasm/engine-sync';
 import { renderGrid, renderRulers } from './rendering/render-grid';
@@ -285,8 +284,9 @@ export function useCanvasRendering(
       engineReadyRef.current = false;
       canvas.removeEventListener('webglcontextlost', handleContextLost);
       canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+      // Tracked state is keyed by Engine in a WeakMap; destroying the engine
+      // drops the JS wrapper, and the WeakMap entry follows. No reset needed.
       destroyEngine();
-      resetTrackedState();
     };
   }, [canvasRef]);
 

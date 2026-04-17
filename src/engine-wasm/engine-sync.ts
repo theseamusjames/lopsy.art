@@ -275,10 +275,21 @@ function createTrackedState(): TrackedState {
   };
 }
 
-let tracked: TrackedState = createTrackedState();
+// Tracked state is keyed by Engine instance so it lives and dies with the
+// engine — no module-level singleton, no HMR pollution, no test cross-talk.
+const trackedByEngine = new WeakMap<Engine, TrackedState>();
 
-export function resetTrackedState(): void {
-  tracked = createTrackedState();
+function getTracked(engine: Engine): TrackedState {
+  let t = trackedByEngine.get(engine);
+  if (!t) {
+    t = createTrackedState();
+    trackedByEngine.set(engine, t);
+  }
+  return t;
+}
+
+export function resetTrackedState(engine: Engine): void {
+  trackedByEngine.set(engine, createTrackedState());
 }
 
 /**
@@ -286,8 +297,8 @@ export function resetTrackedState(): void {
  * Use this when uploading via a non-standard path (e.g. canvas upload)
  * to prevent syncLayers from re-uploading stale byte data.
  */
-export function markPixelDataSynced(layerId: string, data: ImageData): void {
-  tracked.pixelDataVersions.set(layerId, data);
+export function markPixelDataSynced(engine: Engine, layerId: string, data: ImageData): void {
+  getTracked(engine).pixelDataVersions.set(layerId, data);
 }
 
 // ---------------------------------------------------------------------------
@@ -295,6 +306,7 @@ export function markPixelDataSynced(layerId: string, data: ImageData): void {
 // ---------------------------------------------------------------------------
 
 export function syncDocumentSize(engine: Engine, width: number, height: number): void {
+  const tracked = getTracked(engine);
   if (tracked.docWidth === width && tracked.docHeight === height) return;
   setDocumentSize(engine, width, height);
   tracked.docWidth = width;
@@ -302,6 +314,7 @@ export function syncDocumentSize(engine: Engine, width: number, height: number):
 }
 
 export function syncBackgroundColor(engine: Engine, r: number, g: number, b: number, a: number): void {
+  const tracked = getTracked(engine);
   const key = `${r},${g},${b},${a}`;
   if (tracked.bgColor === key) return;
   setBackgroundColor(engine, r / 255, g / 255, b / 255, a);
@@ -316,6 +329,7 @@ export function syncViewport(
   screenW: number,
   screenH: number,
 ): void {
+  const tracked = getTracked(engine);
   if (
     tracked.viewportZoom === zoom &&
     tracked.viewportPanX === panX &&
@@ -339,6 +353,7 @@ export function syncLayers(
   sparseData: Map<string, SparseLayerEntry>,
   dirtyLayerIds: Set<string>,
 ): void {
+  const tracked = getTracked(engine);
   const currentIds = new Set(layers.map((l) => l.id));
 
   // Remove layers no longer present
@@ -452,6 +467,7 @@ export function syncLayers(
 }
 
 export function syncSelection(engine: Engine, selection: SelectionData): void {
+  const tracked = getTracked(engine);
   if (selection.active && selection.mask) {
     if (tracked.selectionMask !== selection.mask) {
       const bytes = new Uint8Array(selection.mask.buffer, selection.mask.byteOffset, selection.mask.byteLength);
@@ -467,6 +483,7 @@ export function syncSelection(engine: Engine, selection: SelectionData): void {
 }
 
 export function syncGrid(engine: Engine, showGrid: boolean, gridSize: number): void {
+  const tracked = getTracked(engine);
   if (tracked.showGrid !== showGrid) {
     setGridVisible(engine, showGrid);
     tracked.showGrid = showGrid;
@@ -478,6 +495,7 @@ export function syncGrid(engine: Engine, showGrid: boolean, gridSize: number): v
 }
 
 export function syncRulers(engine: Engine, showRulers: boolean): void {
+  const tracked = getTracked(engine);
   if (tracked.showRulers !== showRulers) {
     setRulersVisible(engine, showRulers);
     tracked.showRulers = showRulers;
@@ -485,6 +503,7 @@ export function syncRulers(engine: Engine, showRulers: boolean): void {
 }
 
 export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, enabled: boolean): void {
+  const tracked = getTracked(engine);
   if (!enabled) {
     clearImageAdjustments(engine);
     tracked.curvesIdentity = null;
@@ -610,6 +629,7 @@ export function syncBrushTip(
   activeBrushTip: BrushTipData | null,
   brushAngle: number,
 ): void {
+  const tracked = getTracked(engine);
   const hasTip = activeBrushTip !== null;
   const tipChanged = tracked.brushTipData !== activeBrushTip;
 

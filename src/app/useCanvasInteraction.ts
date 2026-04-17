@@ -346,7 +346,7 @@ export function useCanvasInteraction(
 
           const eng = getEngine();
           if (!eng) return;
-          resetTrackedState();
+          resetTrackedState(eng);
           flushLayerSync(useEditorStore.getState());
 
           beginStroke(eng, layerId);

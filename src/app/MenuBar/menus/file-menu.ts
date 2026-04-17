@@ -366,7 +366,8 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
 
   // Reset engine-sync tracking so it cleanly re-adds all layers on the next
   // frame with the correct blend modes, opacities, and pixel data.
-  resetTrackedState();
+  const eng = getEngine();
+  if (eng) resetTrackedState(eng);
 
   const manifestJson = parsePsd(data);
   const manifest = JSON.parse(manifestJson) as {

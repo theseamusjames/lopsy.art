@@ -141,7 +141,8 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     // Restore GPU textures from the snapshot, then reset sync tracking
     // so syncLayers re-pushes all layer positions/dimensions to the engine.
     restoreGpuFromSnapshot(previous);
-    resetTrackedState();
+    const eng = getEngine();
+    if (eng) resetTrackedState(eng);
 
     set({
       undoStack: state.undoStack.slice(0, -1),
@@ -165,7 +166,8 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
 
     // Restore GPU textures from the snapshot, then reset sync tracking
     restoreGpuFromSnapshot(next);
-    resetTrackedState();
+    const eng = getEngine();
+    if (eng) resetTrackedState(eng);
 
     set({
       redoStack: state.redoStack.slice(0, -1),
