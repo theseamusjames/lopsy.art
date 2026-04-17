@@ -530,6 +530,10 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Resul
 /// to the composite texture. Renders composite → scratch_a via adjustments shader,
 /// then copies scratch_a → composite.
 fn apply_image_adjustments(engine: &mut EngineInner) {
+    let has_color_balance =
+        engine.image_cb_shadows.iter().any(|v| v.abs() > 1e-6)
+        || engine.image_cb_midtones.iter().any(|v| v.abs() > 1e-6)
+        || engine.image_cb_highlights.iter().any(|v| v.abs() > 1e-6);
     let has_adjustments =
         engine.image_exposure.abs() > 1e-6
         || engine.image_contrast.abs() > 1e-6
@@ -539,6 +543,7 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         || engine.image_blacks.abs() > 1e-6
         || engine.image_saturation.abs() > 1e-6
         || engine.image_vibrance.abs() > 1e-6
+        || has_color_balance
         || engine.has_image_curves;
     let has_vignette = engine.image_vignette.abs() > 1e-6;
 
@@ -571,6 +576,13 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blacks") { engine.gl.uniform1f(Some(&loc), engine.image_blacks); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_saturation") { engine.gl.uniform1f(Some(&loc), engine.image_saturation / 100.0); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_vibrance") { engine.gl.uniform1f(Some(&loc), engine.image_vibrance / 100.0); }
+        // Color balance — normalise from -100..100 to -1..1
+        let cbs = engine.image_cb_shadows;
+        let cbm = engine.image_cb_midtones;
+        let cbh = engine.image_cb_highlights;
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_cbShadows") { engine.gl.uniform3f(Some(&loc), cbs[0] / 100.0, cbs[1] / 100.0, cbs[2] / 100.0); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_cbMidtones") { engine.gl.uniform3f(Some(&loc), cbm[0] / 100.0, cbm[1] / 100.0, cbm[2] / 100.0); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_cbHighlights") { engine.gl.uniform3f(Some(&loc), cbh[0] / 100.0, cbh[1] / 100.0, cbh[2] / 100.0); }
         // Curves LUT — bound to TEXTURE1 so it doesn't clobber u_tex.
         let has_curves = engine.has_image_curves && engine.image_curves_texture.is_some();
         if has_curves {

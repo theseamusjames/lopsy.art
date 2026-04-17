@@ -5,7 +5,12 @@ import { IconButton } from '../../components/IconButton/IconButton';
 import { CurveEditor } from '../../components/CurveEditor/CurveEditor';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
-import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
+import {
+  DEFAULT_ADJUSTMENTS,
+  IDENTITY_COLOR_BALANCE,
+  isIdentityColorBalance,
+  type ColorBalance,
+} from '../../filters/image-adjustments';
 import {
   IDENTITY_CURVES,
   IDENTITY_POINTS,
@@ -58,7 +63,7 @@ const COLOR_SLIDERS: AdjustmentSliderDef[] = [
   { key: 'vibrance', label: 'Vibrance', min: -100, max: 100, step: 1 },
 ];
 
-type TabId = 'values' | 'colors';
+type TabId = 'values' | 'colors' | 'balance';
 
 function useActiveGroup(): GroupLayer | null {
   return useEditorStore((s) => {
@@ -116,6 +121,11 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
 
   const sliders = activeTab === 'values' ? VALUE_SLIDERS : COLOR_SLIDERS;
 
+  const colorBalance: ColorBalance = adjustments.colorBalance ?? IDENTITY_COLOR_BALANCE;
+  const handleColorBalanceChange = (cb: ColorBalance) => {
+    setGroupAdjustments(group.id, { ...adjustments, colorBalance: cb });
+  };
+
   return (
     <div className={styles.panel}>
       {showHeader && (
@@ -143,28 +153,44 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
         >
           Colors
         </button>
+        <button
+          type="button"
+          className={`${styles.tab} ${activeTab === 'balance' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('balance')}
+        >
+          Balance
+        </button>
       </div>
       <div className={styles.scrollArea}>
-        <div className={styles.sliders}>
-          {sliders.map((s) => (
-            <Slider
-              key={s.key}
-              label={s.label}
-              value={adjustments[s.key]}
-              min={s.min}
-              max={s.max}
-              step={s.step}
-              defaultValue={0}
-              onChange={(v) => handleChange(s.key, v)}
-            />
-          ))}
-        </div>
-        {activeTab === 'colors' && (
-          <CurvesSection
-            curves={curves}
-            onChange={handleCurveChange}
-            onReset={handleResetCurve}
+        {activeTab === 'balance' ? (
+          <ColorBalanceSection
+            colorBalance={colorBalance}
+            onChange={handleColorBalanceChange}
           />
+        ) : (
+          <>
+            <div className={styles.sliders}>
+              {sliders.map((s) => (
+                <Slider
+                  key={s.key}
+                  label={s.label}
+                  value={adjustments[s.key]}
+                  min={s.min}
+                  max={s.max}
+                  step={s.step}
+                  defaultValue={0}
+                  onChange={(v) => handleChange(s.key, v)}
+                />
+              ))}
+            </div>
+            {activeTab === 'colors' && (
+              <CurvesSection
+                curves={curves}
+                onChange={handleCurveChange}
+                onReset={handleResetCurve}
+              />
+            )}
+          </>
         )}
       </div>
       <div className={styles.footer}>
@@ -178,6 +204,102 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
         >
           {adjustmentsEnabled ? <Eye size={14} /> : <EyeOff size={14} />}
         </button>
+      </div>
+    </div>
+  );
+}
+
+type ToneRange = 'shadows' | 'midtones' | 'highlights';
+
+const TONE_RANGE_LABELS: Record<ToneRange, string> = {
+  shadows: 'Shadows',
+  midtones: 'Midtones',
+  highlights: 'Highlights',
+};
+
+interface ColorBalanceSliderDef {
+  label: string;
+  leftLabel: string;
+  rightLabel: string;
+  getKey: (range: ToneRange) => keyof ColorBalance;
+}
+
+const CB_SLIDERS: ColorBalanceSliderDef[] = [
+  {
+    label: 'Cyan / Red',
+    leftLabel: 'Cyan',
+    rightLabel: 'Red',
+    getKey: (r) => `${r}CyanRed` as keyof ColorBalance,
+  },
+  {
+    label: 'Magenta / Green',
+    leftLabel: 'Magenta',
+    rightLabel: 'Green',
+    getKey: (r) => `${r}MagentaGreen` as keyof ColorBalance,
+  },
+  {
+    label: 'Yellow / Blue',
+    leftLabel: 'Yellow',
+    rightLabel: 'Blue',
+    getKey: (r) => `${r}YellowBlue` as keyof ColorBalance,
+  },
+];
+
+interface ColorBalanceSectionProps {
+  colorBalance: ColorBalance;
+  onChange: (cb: ColorBalance) => void;
+}
+
+function ColorBalanceSection({ colorBalance, onChange }: ColorBalanceSectionProps) {
+  const [toneRange, setToneRange] = useState<ToneRange>('midtones');
+  const toneRanges: ToneRange[] = ['shadows', 'midtones', 'highlights'];
+  const isIdentity = isIdentityColorBalance(colorBalance);
+
+  return (
+    <div className={styles.colorBalanceSection}>
+      <div className={styles.curvesHeader}>
+        <span className={styles.label}>Tone Range</span>
+        <div className={styles.channelTabs} role="tablist" aria-label="Tone range">
+          {toneRanges.map((r) => (
+            <button
+              key={r}
+              type="button"
+              role="tab"
+              aria-selected={toneRange === r}
+              className={`${styles.channelTab} ${toneRange === r ? styles.channelTabActive : ''}`}
+              onClick={() => setToneRange(r)}
+            >
+              {TONE_RANGE_LABELS[r]}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className={styles.textBtn}
+          onClick={() => onChange(IDENTITY_COLOR_BALANCE)}
+          disabled={isIdentity}
+        >
+          Reset
+        </button>
+      </div>
+      <div className={styles.balanceSliders}>
+        {CB_SLIDERS.map((s) => {
+          const key = s.getKey(toneRange);
+          return (
+            <div key={key} className={styles.balanceRow}>
+              <span className={styles.balanceLabel}>{s.leftLabel}</span>
+              <Slider
+                value={colorBalance[key]}
+                min={-100}
+                max={100}
+                step={1}
+                defaultValue={0}
+                onChange={(v) => onChange({ ...colorBalance, [key]: v })}
+              />
+              <span className={styles.balanceLabel}>{s.rightLabel}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
