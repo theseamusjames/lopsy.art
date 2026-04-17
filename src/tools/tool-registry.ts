@@ -33,6 +33,9 @@ import { TextOptions } from '../app/OptionsBar/tool-options/TextOptions';
 import { MagneticLassoOptions } from '../app/OptionsBar/tool-options/MagneticLassoOptions';
 import { CropOptions } from '../app/OptionsBar/tool-options/CropOptions';
 
+import { useUIStore } from '../app/ui-store';
+import { useToolSettingsStore } from '../app/tool-settings-store';
+
 /**
  * Single source of truth for every tool. Adding a new tool is a single-file
  * change: append a descriptor here. The router, options bar, keyboard
@@ -54,6 +57,11 @@ export interface ToolDescriptor {
   /** True for tools whose down/move are handled directly via WASM and don't
    *  need JS-side pixel data (skips the 16-bit → 8-bit round-trip). */
   isGpu?: boolean;
+  /** Hook that runs when the user selects this tool. Used for tool-specific
+   *  setup (e.g. shape tool seeding its fill color from the current
+   *  foreground) so those side effects live with the tool rather than
+   *  leaking into generic setActiveTool code. */
+  onActivate?: () => void;
 }
 
 export const toolRegistry: Record<ToolId, ToolDescriptor> = {
@@ -237,6 +245,12 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
       down: (ctx) => handleShapeDown(ctx),
       move: (ctx, state) => handleShapeMove(state, ctx.layerPos),
       up: (ctx, state) => handleShapeUp(state, ctx.layerPos),
+    },
+    // Seed the shape's fill color from the current foreground on activation —
+    // users expect "pick a color, then click shape" to draw in that color.
+    onActivate: () => {
+      const fg = useUIStore.getState().foregroundColor;
+      useToolSettingsStore.getState().setShapeFillColor(fg);
     },
   },
   text: {
