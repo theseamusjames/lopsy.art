@@ -454,3 +454,14 @@ impl EngineInner {
         self.gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
     }
 }
+
+impl Drop for EngineInner {
+    /// Release every WebGL texture and FBO held by the pools. Without this,
+    /// the JS-side `engine.free()` would drop the Rust struct but leave the
+    /// underlying GL objects alive in the WebGL context until that context
+    /// itself is destroyed (which, for an SPA, may be never).
+    fn drop(&mut self) {
+        self.texture_pool.destroy(&self.gl);
+        self.fbo_pool.destroy(&self.gl);
+    }
+}
