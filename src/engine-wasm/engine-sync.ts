@@ -7,7 +7,7 @@
 
 import type { Engine } from './wasm-bridge';
 import { getEngine } from './engine-state';
-import type { Layer, BlendMode } from '../types';
+import type { Layer } from '../types';
 import type { SparseLayerEntry } from '../app/store/types';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
@@ -66,26 +66,10 @@ import type { BrushTipData } from '../types/brush';
 
 // ---------------------------------------------------------------------------
 // Blend mode mapping: TypeScript union → Rust serde enum variant
+// Canonical table lives in src/types/blend-mode-tables.ts.
 // ---------------------------------------------------------------------------
 
-const BLEND_MODE_MAP: Record<BlendMode, string> = {
-  'normal': 'Normal',
-  'multiply': 'Multiply',
-  'screen': 'Screen',
-  'overlay': 'Overlay',
-  'darken': 'Darken',
-  'lighten': 'Lighten',
-  'color-dodge': 'ColorDodge',
-  'color-burn': 'ColorBurn',
-  'hard-light': 'HardLight',
-  'soft-light': 'SoftLight',
-  'difference': 'Difference',
-  'exclusion': 'Exclusion',
-  'hue': 'Hue',
-  'saturation': 'Saturation',
-  'color': 'Color',
-  'luminosity': 'Luminosity',
-};
+import { BLEND_MODE_TO_PASCAL as BLEND_MODE_MAP } from '../types/blend-mode-tables';
 
 const LAYER_TYPE_MAP: Record<string, string> = {
   'raster': 'Raster',

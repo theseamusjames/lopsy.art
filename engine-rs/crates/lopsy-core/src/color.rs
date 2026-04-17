@@ -46,25 +46,176 @@ pub enum BlendMode {
 }
 
 impl BlendMode {
+    /// Every blend mode, in PSD-index order. The enum's `#[repr(u8)]`
+    /// discriminants match the index into this slice by construction.
+    pub const ALL: &'static [BlendMode] = &[
+        Self::Normal,
+        Self::Multiply,
+        Self::Screen,
+        Self::Overlay,
+        Self::Darken,
+        Self::Lighten,
+        Self::ColorDodge,
+        Self::ColorBurn,
+        Self::HardLight,
+        Self::SoftLight,
+        Self::Difference,
+        Self::Exclusion,
+        Self::Hue,
+        Self::Saturation,
+        Self::Color,
+        Self::Luminosity,
+    ];
+
     pub fn from_u8(v: u8) -> Option<Self> {
-        match v {
-            0 => Some(Self::Normal),
-            1 => Some(Self::Multiply),
-            2 => Some(Self::Screen),
-            3 => Some(Self::Overlay),
-            4 => Some(Self::Darken),
-            5 => Some(Self::Lighten),
-            6 => Some(Self::ColorDodge),
-            7 => Some(Self::ColorBurn),
-            8 => Some(Self::HardLight),
-            9 => Some(Self::SoftLight),
-            10 => Some(Self::Difference),
-            11 => Some(Self::Exclusion),
-            12 => Some(Self::Hue),
-            13 => Some(Self::Saturation),
-            14 => Some(Self::Color),
-            15 => Some(Self::Luminosity),
-            _ => None,
+        Self::ALL.get(v as usize).copied()
+    }
+
+    /// Lowercase kebab-case identifier used by the TS `BlendMode` union
+    /// and by PSD blend-key tables. Matches `src/types/color.ts`.
+    pub const fn kebab_name(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Multiply => "multiply",
+            Self::Screen => "screen",
+            Self::Overlay => "overlay",
+            Self::Darken => "darken",
+            Self::Lighten => "lighten",
+            Self::ColorDodge => "color-dodge",
+            Self::ColorBurn => "color-burn",
+            Self::HardLight => "hard-light",
+            Self::SoftLight => "soft-light",
+            Self::Difference => "difference",
+            Self::Exclusion => "exclusion",
+            Self::Hue => "hue",
+            Self::Saturation => "saturation",
+            Self::Color => "color",
+            Self::Luminosity => "luminosity",
+        }
+    }
+
+    /// PascalCase name used by the serde representation that engine-sync
+    /// sends over the WASM bridge. Matches the enum variant names.
+    pub const fn pascal_name(self) -> &'static str {
+        match self {
+            Self::Normal => "Normal",
+            Self::Multiply => "Multiply",
+            Self::Screen => "Screen",
+            Self::Overlay => "Overlay",
+            Self::Darken => "Darken",
+            Self::Lighten => "Lighten",
+            Self::ColorDodge => "ColorDodge",
+            Self::ColorBurn => "ColorBurn",
+            Self::HardLight => "HardLight",
+            Self::SoftLight => "SoftLight",
+            Self::Difference => "Difference",
+            Self::Exclusion => "Exclusion",
+            Self::Hue => "Hue",
+            Self::Saturation => "Saturation",
+            Self::Color => "Color",
+            Self::Luminosity => "Luminosity",
+        }
+    }
+
+    /// Human-readable display name used in the blend-mode dropdown.
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::Normal => "Normal",
+            Self::Multiply => "Multiply",
+            Self::Screen => "Screen",
+            Self::Overlay => "Overlay",
+            Self::Darken => "Darken",
+            Self::Lighten => "Lighten",
+            Self::ColorDodge => "Color Dodge",
+            Self::ColorBurn => "Color Burn",
+            Self::HardLight => "Hard Light",
+            Self::SoftLight => "Soft Light",
+            Self::Difference => "Difference",
+            Self::Exclusion => "Exclusion",
+            Self::Hue => "Hue",
+            Self::Saturation => "Saturation",
+            Self::Color => "Color",
+            Self::Luminosity => "Luminosity",
+        }
+    }
+
+    /// PSD blend-key string as used in the file format spec. Lives
+    /// alongside the other name formats so one change lands everywhere.
+    pub const fn psd_key(self) -> &'static [u8; 4] {
+        match self {
+            Self::Normal => b"norm",
+            Self::Multiply => b"mul ",
+            Self::Screen => b"scrn",
+            Self::Overlay => b"over",
+            Self::Darken => b"dark",
+            Self::Lighten => b"lite",
+            Self::ColorDodge => b"div ",
+            Self::ColorBurn => b"idiv",
+            Self::HardLight => b"hLit",
+            Self::SoftLight => b"sLit",
+            Self::Difference => b"diff",
+            Self::Exclusion => b"smud",
+            Self::Hue => b"hue ",
+            Self::Saturation => b"sat ",
+            Self::Color => b"colr",
+            Self::Luminosity => b"lum ",
+        }
+    }
+
+    /// The PSD-index of this mode (matches its `#[repr(u8)]` discriminant).
+    pub const fn psd_index(self) -> u8 {
+        self as u8
+    }
+}
+
+#[cfg(test)]
+mod blend_mode_tables_tests {
+    use super::BlendMode;
+
+    /// Drift detector: the kebab names used by TS (src/types/blend-mode-tables.ts)
+    /// must exactly match the Rust enum's names in PSD-index order. If this
+    /// test fails, the TS union/tables need to be updated — the Rust enum
+    /// is the source of truth.
+    #[test]
+    fn kebab_names_match_ts_source_of_truth() {
+        let expected: &[&str] = &[
+            "normal", "multiply", "screen", "overlay",
+            "darken", "lighten", "color-dodge", "color-burn",
+            "hard-light", "soft-light", "difference", "exclusion",
+            "hue", "saturation", "color", "luminosity",
+        ];
+        let actual: Vec<&'static str> =
+            BlendMode::ALL.iter().map(|m| m.kebab_name()).collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn psd_index_matches_repr_discriminant() {
+        for (i, mode) in BlendMode::ALL.iter().enumerate() {
+            assert_eq!(mode.psd_index() as usize, i, "{:?} at slot {}", mode, i);
+            assert_eq!(BlendMode::from_u8(mode.psd_index()), Some(*mode));
+        }
+    }
+
+    #[test]
+    fn from_u8_rejects_out_of_range() {
+        assert_eq!(BlendMode::from_u8(16), None);
+        assert_eq!(BlendMode::from_u8(255), None);
+    }
+
+    #[test]
+    fn psd_keys_are_four_bytes_each() {
+        for mode in BlendMode::ALL {
+            assert_eq!(mode.psd_key().len(), 4, "{:?}", mode);
+        }
+    }
+
+    #[test]
+    fn pascal_names_are_valid_rust_identifiers() {
+        for mode in BlendMode::ALL {
+            let name = mode.pascal_name();
+            assert!(name.chars().next().unwrap().is_ascii_uppercase());
+            assert!(name.chars().all(|c| c.is_ascii_alphanumeric()));
         }
     }
 }

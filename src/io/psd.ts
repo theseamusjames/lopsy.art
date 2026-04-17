@@ -18,40 +18,14 @@ import {
   initWasm,
 } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState, flushLayerSync } from '../engine-wasm/engine-sync';
-import type { BlendMode } from '../types/color';
 import type { Layer, GroupLayer, RasterLayer } from '../types/layers';
 import { DEFAULT_EFFECTS } from '../layers/layer-model';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
+import { BLEND_MODE_TO_PSD_INDEX, BLEND_MODES_BY_PSD_INDEX } from '../types/blend-mode-tables';
 
-// ─── PSD Blend Mode Mapping ────────────────────────────────────────────
-// Mirror tables: the index of a mode in U8_TO_BLEND_MODE equals its
-// BLEND_MODE_TO_U8 value. Keep them in sync if editing.
-
-const BLEND_MODE_TO_U8: Record<BlendMode, number> = {
-  'normal': 0,
-  'multiply': 1,
-  'screen': 2,
-  'overlay': 3,
-  'darken': 4,
-  'lighten': 5,
-  'color-dodge': 6,
-  'color-burn': 7,
-  'hard-light': 8,
-  'soft-light': 9,
-  'difference': 10,
-  'exclusion': 11,
-  'hue': 12,
-  'saturation': 13,
-  'color': 14,
-  'luminosity': 15,
-};
-
-const U8_TO_BLEND_MODE: BlendMode[] = [
-  'normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten',
-  'color-dodge', 'color-burn', 'hard-light', 'soft-light',
-  'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity',
-];
+const BLEND_MODE_TO_U8 = BLEND_MODE_TO_PSD_INDEX;
+const U8_TO_BLEND_MODE = BLEND_MODES_BY_PSD_INDEX;
 
 // ─── PSD Export ────────────────────────────────────────────────────────
 

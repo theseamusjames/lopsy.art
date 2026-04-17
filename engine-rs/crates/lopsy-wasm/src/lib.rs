@@ -104,6 +104,27 @@ pub fn blend_colors(
     vec![c8.r, c8.g, c8.b, c8.a]
 }
 
+/// All blend modes with their canonical names, exposed as JSON so the TS
+/// side can build its psd-index ↔ union-tag maps from the same Rust source
+/// of truth. The array is indexed by PSD index (matching `psd_index`).
+///
+/// Shape: `[{ "kebab": "normal", "pascal": "Normal", "display": "Normal" }, ...]`
+#[wasm_bindgen(js_name = "blendModeCatalog")]
+pub fn blend_mode_catalog() -> String {
+    let mut out = String::from("[");
+    for (i, mode) in BlendMode::ALL.iter().enumerate() {
+        if i > 0 { out.push(','); }
+        out.push_str(&format!(
+            r#"{{"kebab":"{}","pascal":"{}","display":"{}"}}"#,
+            mode.kebab_name(),
+            mode.pascal_name(),
+            mode.display_name(),
+        ));
+    }
+    out.push(']');
+    out
+}
+
 
 // ============================================================
 // Coordinate Transforms
