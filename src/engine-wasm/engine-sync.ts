@@ -488,7 +488,9 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
   if (!enabled) {
     clearImageAdjustments(engine);
     tracked.curvesIdentity = null;
+    tracked.curvesRef = null;
     tracked.levelsIdentity = null;
+    tracked.levelsRef = null;
     return;
   }
   setImageExposure(engine, adjustments.exposure);
@@ -508,6 +510,7 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
     if (tracked.levelsIdentity !== true) {
       clearImageLevels(engine);
       tracked.levelsIdentity = true;
+      tracked.levelsRef = null;
     }
   } else if (tracked.levelsRef !== levels) {
     const lut = buildLevelsLutRgba(levels);
@@ -524,6 +527,7 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
     if (tracked.curvesIdentity !== true) {
       clearImageCurves(engine);
       tracked.curvesIdentity = true;
+      tracked.curvesRef = null;
     }
   } else if (tracked.curvesRef !== curves) {
     const lut = buildCurvesLutRgba(curves);

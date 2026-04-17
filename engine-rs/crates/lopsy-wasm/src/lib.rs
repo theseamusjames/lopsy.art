@@ -1081,6 +1081,10 @@ pub fn clear_image_adjustments(engine: &mut Engine) {
         engine.inner.texture_pool.release(tex);
     }
     engine.inner.has_image_curves = false;
+    if let Some(tex) = engine.inner.image_levels_texture.take() {
+        engine.inner.texture_pool.release(tex);
+    }
+    engine.inner.has_image_levels = false;
     engine.inner.needs_recomposite = true;
 }
 
