@@ -1081,6 +1081,10 @@ pub fn clear_image_adjustments(engine: &mut Engine) {
         engine.inner.texture_pool.release(tex);
     }
     engine.inner.has_image_curves = false;
+    if let Some(tex) = engine.inner.image_levels_texture.take() {
+        engine.inner.texture_pool.release(tex);
+    }
+    engine.inner.has_image_levels = false;
     engine.inner.needs_recomposite = true;
 }
 
@@ -1115,6 +1119,40 @@ pub fn clear_image_curves(engine: &mut Engine) {
         engine.inner.texture_pool.release(tex);
     }
     engine.inner.has_image_curves = false;
+    engine.inner.needs_recomposite = true;
+}
+
+/// Upload the packed 256x4 RGBA Levels LUT for one channel.
+/// Values are [inputBlack, inputWhite, gamma, outputBlack, outputWhite] as f32 in [0,1] except gamma in [0.01,10].
+/// Allocates the LUT texture lazily on first call. Pass a 0-length slice via `clearImageLevels` to disable.
+#[wasm_bindgen(js_name = "setImageLevelsLut")]
+pub fn set_image_levels_lut(engine: &mut Engine, lut: &[u8]) -> Result<(), JsError> {
+    if lut.len() != 256 * 4 {
+        return Err(JsError::new("Levels LUT must be exactly 256 * 4 bytes"));
+    }
+    let inner = &mut engine.inner;
+    let tex = match inner.image_levels_texture {
+        Some(t) => t,
+        None => {
+            let t = inner.texture_pool.acquire(&inner.gl, 256, 1)
+                .map_err(|e| JsError::new(&e))?;
+            inner.image_levels_texture = Some(t);
+            t
+        }
+    };
+    inner.texture_pool.upload_rgba(&inner.gl, tex, 0, 0, 256, 1, lut)
+        .map_err(|e| JsError::new(&e))?;
+    inner.has_image_levels = true;
+    inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "clearImageLevels")]
+pub fn clear_image_levels(engine: &mut Engine) {
+    if let Some(tex) = engine.inner.image_levels_texture.take() {
+        engine.inner.texture_pool.release(tex);
+    }
+    engine.inner.has_image_levels = false;
     engine.inner.needs_recomposite = true;
 }
 

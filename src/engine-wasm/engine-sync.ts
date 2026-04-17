@@ -11,6 +11,7 @@ import type { Layer, BlendMode } from '../types';
 import type { SparseLayerEntry } from '../app/store/types';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
+import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
 import {
   setDocumentSize,
   setViewport,
@@ -41,6 +42,8 @@ import {
   setImageVibrance,
   setImageCurvesLut,
   clearImageCurves,
+  setImageLevelsLut,
+  clearImageLevels,
   clearImageAdjustments,
   setLassoPreview,
   setPathOverlay,
@@ -235,6 +238,11 @@ interface TrackedState {
   curvesRef: unknown;
   /** True when the engine is in "no curves" mode; null on first frame. */
   curvesIdentity: boolean | null;
+  /** Reference equality on the active Levels object so we only re-upload
+   *  the LUT texture when the user actually edited a control point. */
+  levelsRef: unknown;
+  /** True when the engine is in "no levels" mode; null on first frame. */
+  levelsIdentity: boolean | null;
 }
 
 function createTrackedState(): TrackedState {
@@ -262,6 +270,8 @@ function createTrackedState(): TrackedState {
     brushHasTip: false,
     curvesRef: null,
     curvesIdentity: null,
+    levelsRef: null,
+    levelsIdentity: null,
   };
 }
 
@@ -478,6 +488,9 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
   if (!enabled) {
     clearImageAdjustments(engine);
     tracked.curvesIdentity = null;
+    tracked.curvesRef = null;
+    tracked.levelsIdentity = null;
+    tracked.levelsRef = null;
     return;
   }
   setImageExposure(engine, adjustments.exposure);
@@ -490,6 +503,22 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
   setImageSaturation(engine, adjustments.saturation);
   setImageVibrance(engine, adjustments.vibrance);
 
+  // Levels: build the 256x4 RGBA LUT and upload only when the values
+  // changed (reference equality on the levels object).
+  const levels = adjustments.levels;
+  if (!levels || isIdentityLevels(levels)) {
+    if (tracked.levelsIdentity !== true) {
+      clearImageLevels(engine);
+      tracked.levelsIdentity = true;
+      tracked.levelsRef = null;
+    }
+  } else if (tracked.levelsRef !== levels) {
+    const lut = buildLevelsLutRgba(levels);
+    setImageLevelsLut(engine, lut);
+    tracked.levelsRef = levels;
+    tracked.levelsIdentity = false;
+  }
+
   // Curves: build the 256x4 RGBA LUT and upload only when the points
   // changed (cheap identity check via reference equality on the curves
   // object held in the document model).
@@ -498,6 +527,7 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
     if (tracked.curvesIdentity !== true) {
       clearImageCurves(engine);
       tracked.curvesIdentity = true;
+      tracked.curvesRef = null;
     }
   } else if (tracked.curvesRef !== curves) {
     const lut = buildCurvesLutRgba(curves);

@@ -11,6 +11,11 @@ uniform float u_whites;
 uniform float u_blacks;
 uniform float u_saturation;
 uniform float u_vibrance;
+// Levels: 256x1 RGBA texture. R/G/B = per-channel Levels LUTs,
+// A = master RGB Levels LUT. u_hasLevels=0 skips the lookups.
+// Levels are applied before Curves (matches Photoshop compositing order).
+uniform sampler2D u_levelsLut;
+uniform float u_hasLevels;
 // Curves: 256x1 RGBA texture. R/G/B = per-channel curve LUTs,
 // A = master RGB curve LUT. u_hasCurves=0 skips the lookups so the
 // common no-curves case stays identical to the old shader.
@@ -44,6 +49,17 @@ void main() {
     }
 
     c.rgb = clamp(c.rgb, 0.0, 1.0);
+
+    // Levels: master first on every channel, then per-channel remap.
+    if (u_hasLevels > 0.5) {
+        float ofs = 0.5 / 256.0;
+        c.r = texture(u_levelsLut, vec2(c.r + ofs, 0.5)).a;
+        c.g = texture(u_levelsLut, vec2(c.g + ofs, 0.5)).a;
+        c.b = texture(u_levelsLut, vec2(c.b + ofs, 0.5)).a;
+        c.r = texture(u_levelsLut, vec2(c.r + ofs, 0.5)).r;
+        c.g = texture(u_levelsLut, vec2(c.g + ofs, 0.5)).g;
+        c.b = texture(u_levelsLut, vec2(c.b + ofs, 0.5)).b;
+    }
 
     // Curves: master first on every channel, then per-channel remap.
     if (u_hasCurves > 0.5) {

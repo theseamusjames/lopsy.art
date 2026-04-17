@@ -8,9 +8,26 @@ interface SliderProps {
   step?: number;
   label?: string;
   defaultValue?: number;
+  scale?: 'linear' | 'log';
   onChange: (value: number) => void;
   showValue?: boolean;
   suffix?: string;
+}
+
+function posLog(v: number, min: number, max: number): number {
+  const norm = Math.log(v / min) / Math.log(max / min);
+  return min + norm * (max - min);
+}
+
+function valLog(inputValue: number, min: number, max: number): number {
+  const norm = (inputValue - min) / (max - min);
+  return min * Math.pow(max / min, Math.max(0, Math.min(1, norm)));
+}
+
+function nextValueLog(v: number, step: number, min: number, max: number): number {
+  const norm = Math.log(v / min) / Math.log(max / min);
+  const next = Math.max(0, Math.min(1, norm + step));
+  return min * Math.pow(max / min, next);
 }
 
 export function Slider({
@@ -20,6 +37,7 @@ export function Slider({
   step = 1,
   label,
   defaultValue,
+  scale = 'linear',
   onChange,
   showValue = true,
   suffix,
@@ -48,18 +66,22 @@ export function Slider({
         (e.target as HTMLInputElement).blur();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        const next = value + step;
+        const next = scale === 'log' ? nextValueLog(value, step, min, max) : value + step;
         onChange(next);
         setLocalValue(String(next));
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        const next = value - step;
+        const next = scale === 'log' ? nextValueLog(value, step, min, max) : value - step;
         onChange(next);
         setLocalValue(String(next));
       }
     },
-    [value, step, onChange],
+    [value, step, onChange, scale, min, max],
   );
+
+  // For log scale: the slider knob position is mapped logarithmically.
+  // The HTML input stores the knob position, we convert to/from the actual value.
+  const inputValue = scale === 'log' ? posLog(value, min, max) : value;
 
   return (
     <div className={styles.container} onDoubleClick={handleDoubleClick}>
@@ -67,11 +89,15 @@ export function Slider({
       <input
         type="range"
         className={styles.slider}
-        value={Math.max(min, Math.min(max, value))}
+        value={Math.max(min, Math.min(max, inputValue))}
         min={min}
         max={max}
         step={step}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={(e) => {
+          const iv = Number(e.target.value);
+          const v = scale === 'log' ? valLog(iv, min, max) : iv;
+          onChange(v);
+        }}
       />
       {showValue && (
         <div className={styles.valueWrapper}>

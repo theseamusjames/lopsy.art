@@ -93,6 +93,13 @@ pub struct EngineInner {
     /// (R/G/B = per-channel, A = master). None when no curves are active.
     pub image_curves_texture: Option<TextureHandle>,
     pub has_image_curves: bool,
+    // Levels: [inputBlack, inputWhite, gamma, outputBlack, outputWhite] per channel
+    pub image_levels_rgb: [f32; 5],
+    pub image_levels_r: [f32; 5],
+    pub image_levels_g: [f32; 5],
+    pub image_levels_b: [f32; 5],
+    pub image_levels_texture: Option<TextureHandle>,
+    pub has_image_levels: bool,
     // Mask editing — skip mask clipping, show blue overlay instead
     pub mask_edit_layer_id: Option<String>,
     // Magnetic lasso session (doc-sized Sobel edge field; present only while tool active)
@@ -200,6 +207,12 @@ impl EngineInner {
             image_vibrance: 0.0,
             image_curves_texture: None,
             has_image_curves: false,
+            image_levels_rgb: [0.0, 1.0, 1.0, 0.0, 1.0],
+            image_levels_r: [0.0, 1.0, 1.0, 0.0, 1.0],
+            image_levels_g: [0.0, 1.0, 1.0, 0.0, 1.0],
+            image_levels_b: [0.0, 1.0, 1.0, 0.0, 1.0],
+            image_levels_texture: None,
+            has_image_levels: false,
             mask_edit_layer_id: None,
             magnetic_lasso_edges: None,
             magnetic_lasso_width: 0,

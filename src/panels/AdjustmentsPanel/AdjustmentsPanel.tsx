@@ -14,6 +14,9 @@ import {
   type CurvePoint,
   type Curves,
 } from '../../filters/curves';
+import { IDENTITY_LEVELS } from '../../filters/levels';
+import type { Levels } from '../../filters/levels';
+import { LevelsEditor } from './LevelsEditor';
 import type { GroupLayer } from '../../types';
 import styles from './AdjustmentsPanel.module.css';
 
@@ -58,7 +61,7 @@ const COLOR_SLIDERS: AdjustmentSliderDef[] = [
   { key: 'vibrance', label: 'Vibrance', min: -100, max: 100, step: 1 },
 ];
 
-type TabId = 'values' | 'colors';
+type TabId = 'values' | 'levels' | 'colors';
 
 function useActiveGroup(): GroupLayer | null {
   return useEditorStore((s) => {
@@ -114,6 +117,14 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
     });
   };
 
+  const levels: Levels = adjustments.levels ?? IDENTITY_LEVELS;
+  const handleLevelsChange = (newLevels: Levels) => {
+    setGroupAdjustments(group.id, { ...adjustments, levels: newLevels });
+  };
+  const handleResetLevels = () => {
+    setGroupAdjustments(group.id, { ...adjustments, levels: IDENTITY_LEVELS });
+  };
+
   const sliders = activeTab === 'values' ? VALUE_SLIDERS : COLOR_SLIDERS;
 
   return (
@@ -138,6 +149,13 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
         </button>
         <button
           type="button"
+          className={`${styles.tab} ${activeTab === 'levels' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('levels')}
+        >
+          Levels
+        </button>
+        <button
+          type="button"
           className={`${styles.tab} ${activeTab === 'colors' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('colors')}
         >
@@ -145,26 +163,51 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
         </button>
       </div>
       <div className={styles.scrollArea}>
-        <div className={styles.sliders}>
-          {sliders.map((s) => (
-            <Slider
-              key={s.key}
-              label={s.label}
-              value={adjustments[s.key]}
-              min={s.min}
-              max={s.max}
-              step={s.step}
-              defaultValue={0}
-              onChange={(v) => handleChange(s.key, v)}
-            />
-          ))}
-        </div>
-        {activeTab === 'colors' && (
-          <CurvesSection
-            curves={curves}
-            onChange={handleCurveChange}
-            onReset={handleResetCurve}
+        {activeTab === 'values' && (
+          <div className={styles.sliders}>
+            {sliders.map((s) => (
+              <Slider
+                key={s.key}
+                label={s.label}
+                value={adjustments[s.key]}
+                min={s.min}
+                max={s.max}
+                step={s.step}
+                defaultValue={0}
+                onChange={(v) => handleChange(s.key, v)}
+              />
+            ))}
+          </div>
+        )}
+        {activeTab === 'levels' && (
+          <LevelsEditor
+            levels={levels}
+            onChange={handleLevelsChange}
+            onReset={handleResetLevels}
           />
+        )}
+        {activeTab === 'colors' && (
+          <>
+            <div className={styles.sliders}>
+              {sliders.map((s) => (
+                <Slider
+                  key={s.key}
+                  label={s.label}
+                  value={adjustments[s.key]}
+                  min={s.min}
+                  max={s.max}
+                  step={s.step}
+                  defaultValue={0}
+                  onChange={(v) => handleChange(s.key, v)}
+                />
+              ))}
+            </div>
+            <CurvesSection
+              curves={curves}
+              onChange={handleCurveChange}
+              onReset={handleResetCurve}
+            />
+          </>
         )}
       </div>
       <div className={styles.footer}>
