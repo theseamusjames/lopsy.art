@@ -12,77 +12,77 @@ use crate::Engine;
 
 #[wasm_bindgen(js_name = "setImageExposure")]
 pub fn set_image_exposure(engine: &mut Engine, value: f32) {
-    engine.inner.image_exposure = value;
+    engine.inner.adjustments.exposure = value;
     engine.inner.needs_recomposite = true;
 }
 
 #[wasm_bindgen(js_name = "setImageContrast")]
 pub fn set_image_contrast(engine: &mut Engine, value: f32) {
-    engine.inner.image_contrast = value;
+    engine.inner.adjustments.contrast = value;
     engine.inner.needs_recomposite = true;
 }
 
 #[wasm_bindgen(js_name = "setImageHighlights")]
 pub fn set_image_highlights(engine: &mut Engine, value: f32) {
-    engine.inner.image_highlights = value;
+    engine.inner.adjustments.highlights = value;
     engine.inner.needs_recomposite = true;
 }
 
 #[wasm_bindgen(js_name = "setImageShadows")]
 pub fn set_image_shadows(engine: &mut Engine, value: f32) {
-    engine.inner.image_shadows = value;
+    engine.inner.adjustments.shadows = value;
     engine.inner.needs_recomposite = true;
 }
 
 #[wasm_bindgen(js_name = "setImageWhites")]
 pub fn set_image_whites(engine: &mut Engine, value: f32) {
-    engine.inner.image_whites = value;
+    engine.inner.adjustments.whites = value;
     engine.inner.needs_recomposite = true;
 }
 
 #[wasm_bindgen(js_name = "setImageBlacks")]
 pub fn set_image_blacks(engine: &mut Engine, value: f32) {
-    engine.inner.image_blacks = value;
+    engine.inner.adjustments.blacks = value;
     engine.inner.needs_recomposite = true;
 }
 
 #[wasm_bindgen(js_name = "setImageVignette")]
 pub fn set_image_vignette(engine: &mut Engine, value: f32) {
-    engine.inner.image_vignette = value;
+    engine.inner.adjustments.vignette = value;
     engine.inner.needs_recomposite = true;
 }
 
 #[wasm_bindgen(js_name = "setImageSaturation")]
 pub fn set_image_saturation(engine: &mut Engine, value: f32) {
-    engine.inner.image_saturation = value;
+    engine.inner.adjustments.saturation = value;
     engine.inner.needs_recomposite = true;
 }
 
 #[wasm_bindgen(js_name = "setImageVibrance")]
 pub fn set_image_vibrance(engine: &mut Engine, value: f32) {
-    engine.inner.image_vibrance = value;
+    engine.inner.adjustments.vibrance = value;
     engine.inner.needs_recomposite = true;
 }
 
 #[wasm_bindgen(js_name = "clearImageAdjustments")]
 pub fn clear_image_adjustments(engine: &mut Engine) {
-    engine.inner.image_exposure = 0.0;
-    engine.inner.image_contrast = 0.0;
-    engine.inner.image_highlights = 0.0;
-    engine.inner.image_shadows = 0.0;
-    engine.inner.image_whites = 0.0;
-    engine.inner.image_blacks = 0.0;
-    engine.inner.image_vignette = 0.0;
-    engine.inner.image_saturation = 0.0;
-    engine.inner.image_vibrance = 0.0;
-    if let Some(tex) = engine.inner.image_curves_texture.take() {
+    engine.inner.adjustments.exposure = 0.0;
+    engine.inner.adjustments.contrast = 0.0;
+    engine.inner.adjustments.highlights = 0.0;
+    engine.inner.adjustments.shadows = 0.0;
+    engine.inner.adjustments.whites = 0.0;
+    engine.inner.adjustments.blacks = 0.0;
+    engine.inner.adjustments.vignette = 0.0;
+    engine.inner.adjustments.saturation = 0.0;
+    engine.inner.adjustments.vibrance = 0.0;
+    if let Some(tex) = engine.inner.adjustments.curves_texture.take() {
         engine.inner.texture_pool.release(tex);
     }
-    engine.inner.has_image_curves = false;
-    if let Some(tex) = engine.inner.image_levels_texture.take() {
+    engine.inner.adjustments.has_curves = false;
+    if let Some(tex) = engine.inner.adjustments.levels_texture.take() {
         engine.inner.texture_pool.release(tex);
     }
-    engine.inner.has_image_levels = false;
+    engine.inner.adjustments.has_levels = false;
     engine.inner.needs_recomposite = true;
 }
 
@@ -95,28 +95,28 @@ pub fn set_image_curves_lut(engine: &mut Engine, lut: &[u8]) -> Result<(), JsErr
         return Err(JsError::new("Curves LUT must be exactly 256 * 4 bytes"));
     }
     let inner = &mut engine.inner;
-    let tex = match inner.image_curves_texture {
+    let tex = match inner.adjustments.curves_texture {
         Some(t) => t,
         None => {
             let t = inner.texture_pool.acquire(&inner.gl, 256, 1)
                 .map_err(|e| JsError::new(&e))?;
-            inner.image_curves_texture = Some(t);
+            inner.adjustments.curves_texture = Some(t);
             t
         }
     };
     inner.texture_pool.upload_rgba(&inner.gl, tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
-    inner.has_image_curves = true;
+    inner.adjustments.has_curves = true;
     inner.needs_recomposite = true;
     Ok(())
 }
 
 #[wasm_bindgen(js_name = "clearImageCurves")]
 pub fn clear_image_curves(engine: &mut Engine) {
-    if let Some(tex) = engine.inner.image_curves_texture.take() {
+    if let Some(tex) = engine.inner.adjustments.curves_texture.take() {
         engine.inner.texture_pool.release(tex);
     }
-    engine.inner.has_image_curves = false;
+    engine.inner.adjustments.has_curves = false;
     engine.inner.needs_recomposite = true;
 }
 
@@ -129,28 +129,28 @@ pub fn set_image_levels_lut(engine: &mut Engine, lut: &[u8]) -> Result<(), JsErr
         return Err(JsError::new("Levels LUT must be exactly 256 * 4 bytes"));
     }
     let inner = &mut engine.inner;
-    let tex = match inner.image_levels_texture {
+    let tex = match inner.adjustments.levels_texture {
         Some(t) => t,
         None => {
             let t = inner.texture_pool.acquire(&inner.gl, 256, 1)
                 .map_err(|e| JsError::new(&e))?;
-            inner.image_levels_texture = Some(t);
+            inner.adjustments.levels_texture = Some(t);
             t
         }
     };
     inner.texture_pool.upload_rgba(&inner.gl, tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
-    inner.has_image_levels = true;
+    inner.adjustments.has_levels = true;
     inner.needs_recomposite = true;
     Ok(())
 }
 
 #[wasm_bindgen(js_name = "clearImageLevels")]
 pub fn clear_image_levels(engine: &mut Engine) {
-    if let Some(tex) = engine.inner.image_levels_texture.take() {
+    if let Some(tex) = engine.inner.adjustments.levels_texture.take() {
         engine.inner.texture_pool.release(tex);
     }
-    engine.inner.has_image_levels = false;
+    engine.inner.adjustments.has_levels = false;
     engine.inner.needs_recomposite = true;
 }
 

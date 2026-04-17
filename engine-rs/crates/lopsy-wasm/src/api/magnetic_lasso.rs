@@ -26,9 +26,9 @@ pub fn magnetic_lasso_begin(engine: &mut Engine, layer_id: &str) -> Result<(), J
 
     let pixels = api::fill::read_layer_pixels_for_fill(engine, layer_id)?;
     let edges = lopsy_core::magnetic_lasso::compute_edge_field(&pixels, doc_w, doc_h);
-    engine.inner.magnetic_lasso_edges = Some(edges);
-    engine.inner.magnetic_lasso_width = doc_w;
-    engine.inner.magnetic_lasso_height = doc_h;
+    engine.inner.mlasso.edges = Some(edges);
+    engine.inner.mlasso.width = doc_w;
+    engine.inner.mlasso.height = doc_h;
     Ok(())
 }
 
@@ -42,13 +42,13 @@ pub fn magnetic_lasso_snap(
     radius: u32,
     threshold: u8,
 ) -> Vec<f32> {
-    let Some(edges) = engine.inner.magnetic_lasso_edges.as_ref() else {
+    let Some(edges) = engine.inner.mlasso.edges.as_ref() else {
         return vec![from_x, from_y, to_x, to_y];
     };
     lopsy_core::magnetic_lasso::snap_segment(
         edges,
-        engine.inner.magnetic_lasso_width,
-        engine.inner.magnetic_lasso_height,
+        engine.inner.mlasso.width,
+        engine.inner.mlasso.height,
         from_x, from_y, to_x, to_y,
         radius, threshold,
     )
@@ -62,13 +62,13 @@ pub fn magnetic_lasso_snap_point(
     radius: u32,
     threshold: u8,
 ) -> Vec<f32> {
-    let Some(edges) = engine.inner.magnetic_lasso_edges.as_ref() else {
+    let Some(edges) = engine.inner.mlasso.edges.as_ref() else {
         return vec![x, y];
     };
     let (sx, sy) = lopsy_core::magnetic_lasso::snap_point(
         edges,
-        engine.inner.magnetic_lasso_width,
-        engine.inner.magnetic_lasso_height,
+        engine.inner.mlasso.width,
+        engine.inner.mlasso.height,
         x, y, radius, threshold,
     );
     vec![sx, sy]
@@ -76,8 +76,8 @@ pub fn magnetic_lasso_snap_point(
 
 #[wasm_bindgen(js_name = "magneticLassoEnd")]
 pub fn magnetic_lasso_end(engine: &mut Engine) {
-    engine.inner.magnetic_lasso_edges = None;
-    engine.inner.magnetic_lasso_width = 0;
-    engine.inner.magnetic_lasso_height = 0;
+    engine.inner.mlasso.edges = None;
+    engine.inner.mlasso.width = 0;
+    engine.inner.mlasso.height = 0;
 }
 

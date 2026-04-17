@@ -9,6 +9,72 @@ use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
 use crate::gpu::shader::ShaderPrograms;
 use crate::gpu::texture_pool::{TextureHandle, TexturePool};
 
+/// Magnetic-lasso state: a precomputed Sobel edge field that the snap
+/// routine reads to pull candidate segments toward strong edges. Lifetime
+/// is bracketed by `magneticLassoBegin` / `magneticLassoEnd`; in between
+/// it lives here so repeated snaps don't recompute the field.
+#[derive(Default)]
+pub struct MagneticLassoState {
+    pub edges: Option<Vec<u8>>,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl MagneticLassoState {
+    pub fn clear(&mut self) {
+        self.edges = None;
+        self.width = 0;
+        self.height = 0;
+    }
+}
+
+/// Per-document image adjustments applied on the compositor's final pass.
+/// Scalars plus optional LUT textures for curves and levels. Values here
+/// don't touch pixel data — they're read by the compositor each frame.
+pub struct ImageAdjustmentState {
+    pub exposure: f32,
+    pub contrast: f32,
+    pub highlights: f32,
+    pub shadows: f32,
+    pub whites: f32,
+    pub blacks: f32,
+    pub vignette: f32,
+    pub saturation: f32,
+    pub vibrance: f32,
+    pub curves_texture: Option<TextureHandle>,
+    pub has_curves: bool,
+    pub levels_rgb: [f32; 5],
+    pub levels_r: [f32; 5],
+    pub levels_g: [f32; 5],
+    pub levels_b: [f32; 5],
+    pub levels_texture: Option<TextureHandle>,
+    pub has_levels: bool,
+}
+
+impl Default for ImageAdjustmentState {
+    fn default() -> Self {
+        Self {
+            exposure: 0.0,
+            contrast: 0.0,
+            highlights: 0.0,
+            shadows: 0.0,
+            whites: 0.0,
+            blacks: 0.0,
+            vignette: 0.0,
+            saturation: 0.0,
+            vibrance: 0.0,
+            curves_texture: None,
+            has_curves: false,
+            levels_rgb: [0.0, 1.0, 1.0, 0.0, 1.0],
+            levels_r: [0.0, 1.0, 1.0, 0.0, 1.0],
+            levels_g: [0.0, 1.0, 1.0, 0.0, 1.0],
+            levels_b: [0.0, 1.0, 1.0, 0.0, 1.0],
+            levels_texture: None,
+            has_levels: false,
+        }
+    }
+}
+
 pub struct EngineInner {
     pub gl: WebGl2RenderingContext,
     pub gpu_ctx: GpuContext,
@@ -79,33 +145,16 @@ pub struct EngineInner {
     pub brush_cursor: Option<[f64; 3]>,
     pub path_overlay: Option<String>,
     pub selection_time: f64,
-    // Image adjustments
-    pub image_exposure: f32,
-    pub image_contrast: f32,
-    pub image_highlights: f32,
-    pub image_shadows: f32,
-    pub image_whites: f32,
-    pub image_blacks: f32,
-    pub image_vignette: f32,
-    pub image_saturation: f32,
-    pub image_vibrance: f32,
-    /// 256x1 RGBA texture holding the four per-channel curve LUTs
-    /// (R/G/B = per-channel, A = master). None when no curves are active.
-    pub image_curves_texture: Option<TextureHandle>,
-    pub has_image_curves: bool,
-    // Levels: [inputBlack, inputWhite, gamma, outputBlack, outputWhite] per channel
-    pub image_levels_rgb: [f32; 5],
-    pub image_levels_r: [f32; 5],
-    pub image_levels_g: [f32; 5],
-    pub image_levels_b: [f32; 5],
-    pub image_levels_texture: Option<TextureHandle>,
-    pub has_image_levels: bool,
-    // Mask editing — skip mask clipping, show blue overlay instead
+    /// Per-document image adjustments — exposure/contrast/highlights/
+    /// shadows/whites/blacks/vignette/saturation/vibrance plus curves and
+    /// levels LUTs. Applied on the compositor's final pass, not baked into
+    /// pixels.
+    pub adjustments: ImageAdjustmentState,
+    /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
-    // Magnetic lasso session (doc-sized Sobel edge field; present only while tool active)
-    pub magnetic_lasso_edges: Option<Vec<u8>>,
-    pub magnetic_lasso_width: u32,
-    pub magnetic_lasso_height: u32,
+    /// Magnetic lasso session (doc-sized Sobel edge field; present only
+    /// while the tool is actively tracing).
+    pub mlasso: MagneticLassoState,
 }
 
 impl EngineInner {
@@ -196,27 +245,9 @@ impl EngineInner {
             brush_cursor: None,
             path_overlay: None,
             selection_time: 0.0,
-            image_exposure: 0.0,
-            image_contrast: 0.0,
-            image_highlights: 0.0,
-            image_shadows: 0.0,
-            image_whites: 0.0,
-            image_blacks: 0.0,
-            image_vignette: 0.0,
-            image_saturation: 0.0,
-            image_vibrance: 0.0,
-            image_curves_texture: None,
-            has_image_curves: false,
-            image_levels_rgb: [0.0, 1.0, 1.0, 0.0, 1.0],
-            image_levels_r: [0.0, 1.0, 1.0, 0.0, 1.0],
-            image_levels_g: [0.0, 1.0, 1.0, 0.0, 1.0],
-            image_levels_b: [0.0, 1.0, 1.0, 0.0, 1.0],
-            image_levels_texture: None,
-            has_image_levels: false,
+            adjustments: ImageAdjustmentState::default(),
             mask_edit_layer_id: None,
-            magnetic_lasso_edges: None,
-            magnetic_lasso_width: 0,
-            magnetic_lasso_height: 0,
+            mlasso: MagneticLassoState::default(),
         })
     }
 
@@ -422,23 +453,23 @@ impl EngineInner {
         self.brush_cursor = None;
         self.path_overlay = None;
         self.mask_edit_layer_id = None;
-        self.magnetic_lasso_edges = None;
-        self.magnetic_lasso_width = 0;
-        self.magnetic_lasso_height = 0;
+        self.mlasso.edges = None;
+        self.mlasso.width = 0;
+        self.mlasso.height = 0;
         // Image adjustments
-        self.image_exposure = 0.0;
-        self.image_contrast = 0.0;
-        self.image_highlights = 0.0;
-        self.image_shadows = 0.0;
-        self.image_whites = 0.0;
-        self.image_blacks = 0.0;
-        self.image_vignette = 0.0;
-        self.image_saturation = 0.0;
-        self.image_vibrance = 0.0;
-        if let Some(tex) = self.image_curves_texture.take() {
+        self.adjustments.exposure = 0.0;
+        self.adjustments.contrast = 0.0;
+        self.adjustments.highlights = 0.0;
+        self.adjustments.shadows = 0.0;
+        self.adjustments.whites = 0.0;
+        self.adjustments.blacks = 0.0;
+        self.adjustments.vignette = 0.0;
+        self.adjustments.saturation = 0.0;
+        self.adjustments.vibrance = 0.0;
+        if let Some(tex) = self.adjustments.curves_texture.take() {
             self.texture_pool.release(tex);
         }
-        self.has_image_curves = false;
+        self.adjustments.has_curves = false;
         self.needs_recomposite = true;
     }
 
