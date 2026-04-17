@@ -9,3 +9,4 @@ engine-rs/target/
 
 # Playwright test artifacts
 test-results/
+engine-rs/test-output/
