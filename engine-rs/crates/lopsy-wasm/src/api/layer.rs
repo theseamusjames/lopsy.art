@@ -10,7 +10,7 @@
 //! logically a bolted-on layer feature — lives here.
 
 use wasm_bindgen::prelude::*;
-use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
+use web_sys::HtmlCanvasElement;
 
 use lopsy_core::layer::LayerDesc;
 

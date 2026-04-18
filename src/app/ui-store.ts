@@ -4,6 +4,7 @@ import type { TransformHandle, TransformState } from '../tools/transform/transfo
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { colorEquals } from '../utils/color';
+import { toolRegistry } from '../tools/tool-registry';
 
 export interface TextEditingState {
   layerId: string;
@@ -246,13 +247,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     } else {
       set({ activeTool: tool });
     }
-    // Tool-specific activation side effects live on the tool descriptor
-    // itself (src/tools/tool-registry.ts) so this function stays
-    // tool-agnostic. Import is lazy to avoid a ui-store ↔ tool-registry
-    // initialization cycle at module load time.
-    void import('../tools/tool-registry').then(({ toolRegistry }) => {
-      toolRegistry[tool]?.onActivate?.();
-    });
+    toolRegistry[tool]?.onActivate?.();
   },
   setForegroundColor: (color) => set({ foregroundColor: color }),
   setBackgroundColor: (color) => set({ backgroundColor: color }),
