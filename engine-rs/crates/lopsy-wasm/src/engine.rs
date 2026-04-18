@@ -103,6 +103,19 @@ pub struct EngineInner {
     pub stroke_textures: HashMap<String, TextureHandle>,
     pub stroke_opacity: HashMap<String, f32>,
     pub stroke_fbo: Option<FramebufferHandle>,
+    /// Dodge/burn per-stroke coverage texture: a scalar strength field
+    /// (RGBA, all four channels equal) MAX-accumulated across dabs so
+    /// overlapping dabs within one stroke don't compound. Baked into the
+    /// layer on `end_dodge_burn_stroke` via the dodge_burn shader with
+    /// `u_exposure = 1.0`.
+    pub stroke_dodge_textures: HashMap<String, TextureHandle>,
+    /// Per-frame compositor preview: the result of applying the coverage
+    /// texture to the layer, so the user sees their in-progress stroke
+    /// without touching the source pixels.
+    pub stroke_dodge_preview_textures: HashMap<String, TextureHandle>,
+    /// 0 = dodge, 1 = burn — captured on `begin_dodge_burn_stroke` so the
+    /// compositor preview and bake share the mode.
+    pub stroke_dodge_modes: HashMap<String, u32>,
     // Custom brush tip
     pub brush_tip_texture: Option<TextureHandle>,
     pub brush_tip_width: u32,
@@ -213,6 +226,9 @@ impl EngineInner {
             stroke_textures: HashMap::new(),
             stroke_opacity: HashMap::new(),
             stroke_fbo: None,
+            stroke_dodge_textures: HashMap::new(),
+            stroke_dodge_preview_textures: HashMap::new(),
+            stroke_dodge_modes: HashMap::new(),
             brush_tip_texture: None,
             brush_tip_width: 0,
             brush_tip_height: 0,
@@ -408,6 +424,14 @@ impl EngineInner {
         if let Some(fbo) = self.stroke_fbo.take() {
             self.fbo_pool.release(&self.gl, fbo);
         }
+        // Dodge/burn stroke state
+        for (_, tex) in self.stroke_dodge_textures.drain() {
+            self.texture_pool.release(tex);
+        }
+        for (_, tex) in self.stroke_dodge_preview_textures.drain() {
+            self.texture_pool.release(tex);
+        }
+        self.stroke_dodge_modes.clear();
         // Brush tip
         if let Some(tex) = self.brush_tip_texture.take() {
             self.texture_pool.release(tex);

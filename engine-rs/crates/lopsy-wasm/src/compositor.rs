@@ -83,8 +83,20 @@ pub fn composite(engine: &mut EngineInner) {
                 if *enabled { Some((tex, *mw, *mh)) } else { None }
             })
         };
-        if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
-            blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+        // If an in-progress dodge/burn stroke exists for this layer, render
+        // the preview (layer + coverage via dodge/burn shader) into the
+        // per-stroke preview texture and composite that instead of the raw
+        // layer. This way the stroke is non-destructive until `endStroke`
+        // bakes it in.
+        let composite_src = if engine.stroke_dodge_textures.contains_key(layer_id) {
+            render_dodge_burn_preview(engine, layer_id, tex_handle, tw, th)
+                .map(|h| (h, tw, th))
+        } else {
+            None
+        };
+        let (src_handle, src_w, src_h) = composite_src.unwrap_or((tex_handle, tw, th));
+        if let Some(src_tex) = engine.texture_pool.get(src_handle).cloned() {
+            blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
         }
 
         // --- Active stroke texture ---
@@ -326,6 +338,67 @@ fn blend_effect_onto_composite(engine: &mut EngineInner) {
     }
     if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
     engine.draw_fullscreen_quad();
+}
+
+/// Render the in-progress dodge/burn stroke into its per-layer preview
+/// texture: `preview = dodge_burn(layer, coverage, mode, exposure=1.0)`.
+/// Returns the preview texture handle, or `None` if no preview slot is
+/// available. Exposure is already baked into the coverage values, so we
+/// pass 1.0 here.
+fn render_dodge_burn_preview(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    layer_handle: TextureHandle,
+    tw: u32,
+    th: u32,
+) -> Option<TextureHandle> {
+    let coverage_handle = *engine.stroke_dodge_textures.get(layer_id)?;
+    let preview_handle = *engine.stroke_dodge_preview_textures.get(layer_id)?;
+    let mode = *engine.stroke_dodge_modes.get(layer_id).unwrap_or(&0);
+
+    // Layer texture may have been resized (ensure_layer_full_size) since
+    // begin_stroke — if coverage/preview are stale, skip preview and let
+    // the raw layer through.
+    if engine.texture_pool.get_size(coverage_handle).map_or(true, |(w, h)| w != tw || h != th) {
+        return None;
+    }
+    if engine.texture_pool.get_size(preview_handle).map_or(true, |(w, h)| w != tw || h != th) {
+        return None;
+    }
+
+    let layer_gl_tex = engine.texture_pool.get(layer_handle)?.clone();
+    let coverage_gl_tex = engine.texture_pool.get(coverage_handle)?.clone();
+    let preview_gl_tex = engine.texture_pool.get(preview_handle)?.clone();
+
+    let gl = &engine.gl;
+    gl.disable(WebGl2RenderingContext::BLEND);
+
+    engine.render_to_texture(&preview_gl_tex, tw as i32, th as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.dodge_burn;
+        gl.use_program(Some(&shader.program));
+
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_gl_tex));
+        if let Some(loc) = shader.location(gl, "u_layerTex") { gl.uniform1i(Some(&loc), 0); }
+
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&coverage_gl_tex));
+        if let Some(loc) = shader.location(gl, "u_stampTex") { gl.uniform1i(Some(&loc), 1); }
+
+        if let Some(loc) = shader.location(gl, "u_mode") { gl.uniform1i(Some(&loc), mode as i32); }
+        if let Some(loc) = shader.location(gl, "u_exposure") { gl.uniform1f(Some(&loc), 1.0); }
+
+        engine.draw_fullscreen_quad();
+    });
+
+    // Unbind to avoid feedback loops in subsequent passes.
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+
+    Some(preview_handle)
 }
 
 /// Render outer or inner glow.

@@ -7,7 +7,7 @@ import { handlePaintDown, handlePaintMove } from '../app/interactions/paint-hand
 import { handleSelectionDown, handleSelectionMove, handleSelectionUp } from '../app/interactions/selection-handlers';
 import { handleFillDown } from './fill/fill-interaction';
 import { handleEyedropperDown, handleEyedropperMove } from './eyedropper/eyedropper-interaction';
-import { handleDodgeDown, handleDodgeMove } from './dodge/dodge-interaction';
+import { handleDodgeDown, handleDodgeMove, handleDodgeUp } from './dodge/dodge-interaction';
 import { handleSmudgeDown, handleSmudgeMove } from './smudge/smudge-interaction';
 import { handleStampDown, handleStampMove } from './stamp/stamp-interaction';
 import { handleTextDown, handleTextMove, handleTextUp } from './text/text-interaction';
@@ -161,6 +161,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     handler: {
       down: (ctx) => handleDodgeDown(ctx),
       move: (ctx, state) => handleDodgeMove(state, ctx.layerPos),
+      up: (_ctx, state) => handleDodgeUp(state),
     },
   },
   smudge: {
