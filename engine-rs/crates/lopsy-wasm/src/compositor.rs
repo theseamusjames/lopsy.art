@@ -61,15 +61,26 @@ pub fn composite(engine: &mut EngineInner) {
         };
         let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((*layer_w as u32, *layer_h as u32));
 
+        // If a brush stroke is in progress for this layer, pre-merge
+        // (layer + stroke_texture) into a scratch so effects (drop shadow,
+        // stroke, glows) sample the in-progress stroke as if it were part
+        // of the layer. Without this, effects lag by one stroke because
+        // endStroke is deferred until the next mousedown (shift-click
+        // continuation).
+        let merged_handle: Option<TextureHandle> = engine.stroke_textures.get(layer_id)
+            .copied()
+            .and_then(|stroke_handle| render_layer_plus_stroke(engine, tex_handle, stroke_handle, tw, th));
+        let effect_tex_handle = merged_handle.unwrap_or(tex_handle);
+
         // --- "Behind" effects: outer glow, drop shadow ---
         if let Some(ref glow) = effects.outer_glow {
             if glow.enabled {
-                render_glow(engine, tex_handle, tw, th, glow, 0, *layer_x, *layer_y);
+                render_glow(engine, effect_tex_handle, tw, th, glow, 0, *layer_x, *layer_y);
             }
         }
         if let Some(ref shadow) = effects.drop_shadow {
             if shadow.enabled {
-                render_shadow(engine, tex_handle, tw, th, shadow, *layer_x, *layer_y);
+                render_shadow(engine, effect_tex_handle, tw, th, shadow, *layer_x, *layer_y);
             }
         }
 
@@ -89,8 +100,10 @@ pub fn composite(engine: &mut EngineInner) {
         // layer. This way the stroke is non-destructive until `endStroke`
         // bakes it in.
         let composite_src = if engine.stroke_dodge_textures.contains_key(layer_id) {
-            render_dodge_burn_preview(engine, layer_id, tex_handle, tw, th)
+            render_dodge_burn_preview(engine, layer_id, effect_tex_handle, tw, th)
                 .map(|h| (h, tw, th))
+        } else if merged_handle.is_some() {
+            Some((effect_tex_handle, tw, th))
         } else {
             None
         };
@@ -100,11 +113,14 @@ pub fn composite(engine: &mut EngineInner) {
         }
 
         // --- Active stroke texture ---
-        // Brush opacity is already clamped into the stroke texture via the opacity clamp pass.
-        if let Some(&stroke_handle) = engine.stroke_textures.get(layer_id) {
-            if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
-                let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
-                blend_onto_composite(engine, &stroke_tex, *opacity, 0, *layer_x, *layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+        // Skipped when we merged the stroke into effect_tex_handle above —
+        // it's already in the composite source.
+        if merged_handle.is_none() {
+            if let Some(&stroke_handle) = engine.stroke_textures.get(layer_id) {
+                if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
+                    let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
+                    blend_onto_composite(engine, &stroke_tex, *opacity, 0, *layer_x, *layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                }
             }
         }
 
@@ -118,13 +134,17 @@ pub fn composite(engine: &mut EngineInner) {
         // --- "On top" effects: inner glow, stroke effect ---
         if let Some(ref glow) = effects.inner_glow {
             if glow.enabled {
-                render_glow(engine, tex_handle, tw, th, glow, 1, *layer_x, *layer_y);
+                render_glow(engine, effect_tex_handle, tw, th, glow, 1, *layer_x, *layer_y);
             }
         }
         if let Some(ref stroke) = effects.stroke {
             if stroke.enabled {
-                render_stroke(engine, tex_handle, tw, th, stroke, *layer_x, *layer_y);
+                render_stroke(engine, effect_tex_handle, tw, th, stroke, *layer_x, *layer_y);
             }
+        }
+
+        if let Some(merged) = merged_handle {
+            engine.texture_pool.release(merged);
         }
     }
 
@@ -338,6 +358,48 @@ fn blend_effect_onto_composite(engine: &mut EngineInner) {
     }
     if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
     engine.draw_fullscreen_quad();
+}
+
+/// Render (layer + pending stroke) into a scratch texture via the
+/// source-over composite shader, matching what `end_stroke` will bake into
+/// the layer. Returns the merged texture handle (caller must release), or
+/// `None` if the stroke texture size doesn't match the layer.
+fn render_layer_plus_stroke(
+    engine: &mut EngineInner,
+    layer_handle: TextureHandle,
+    stroke_handle: TextureHandle,
+    tw: u32,
+    th: u32,
+) -> Option<TextureHandle> {
+    if engine.texture_pool.get_size(stroke_handle).map_or(true, |(w, h)| w != tw || h != th) {
+        return None;
+    }
+    let layer_gl = engine.texture_pool.get(layer_handle)?.clone();
+    let stroke_gl = engine.texture_pool.get(stroke_handle)?.clone();
+    let merged = engine.texture_pool.acquire(&engine.gl, tw, th).ok()?;
+    let merged_gl = engine.texture_pool.get(merged)?.clone();
+
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&merged_gl, tw as i32, th as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.composite;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&stroke_gl));
+        if let Some(loc) = shader.location(gl, "u_srcTex") { gl.uniform1i(Some(&loc), 0); }
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_gl));
+        if let Some(loc) = shader.location(gl, "u_dstTex") { gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(gl, "u_opacity") { gl.uniform1f(Some(&loc), 1.0); }
+        engine.draw_fullscreen_quad();
+    });
+
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+
+    Some(merged)
 }
 
 /// Render the in-progress dodge/burn stroke into its per-layer preview
