@@ -20,9 +20,7 @@ interface PointerHandlerDeps {
   updateHoveredHandle: (pos: Point) => void;
 }
 
-export interface CanvasPointerHandlers {
-  handleWheel: (e: React.WheelEvent) => void;
-}
+export interface CanvasPointerHandlers {}
 
 interface PointerState {
   id: number;
@@ -360,21 +358,31 @@ export function useCanvasPointerHandlers({
     };
   }, [flushCursorPosition]);
 
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+  // Attach wheel natively (non-passive) so ctrl+wheel can preventDefault
+  // the browser's page-zoom — React's synthetic onWheel is passive and
+  // preventDefault inside it warns. Window-level with a target containment
+  // check so we pick the event up regardless of whether the canvas
+  // container was mounted before this hook ran.
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      const el = containerRef.current;
+      if (!el) return;
+      const target = e.target as Node | null;
+      if (!target || !el.contains(target)) return;
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         const factor = Math.pow(1.002, -e.deltaY);
-        const newZoom = Math.max(0.01, Math.min(64, viewport.zoom * factor));
+        const vp = useEditorStore.getState().viewport;
+        const newZoom = Math.max(0.01, Math.min(64, vp.zoom * factor));
         setZoom(newZoom);
       } else {
-        setPan(viewport.panX - e.deltaX, viewport.panY - e.deltaY);
+        const vp = useEditorStore.getState().viewport;
+        setPan(vp.panX - e.deltaX, vp.panY - e.deltaY);
       }
-    },
-    [viewport.zoom, viewport.panX, viewport.panY, setZoom, setPan],
-  );
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel);
+  }, [containerRef, setZoom, setPan]);
 
-  return {
-    handleWheel,
-  };
+  return {};
 }

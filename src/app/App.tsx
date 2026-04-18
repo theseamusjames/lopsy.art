@@ -110,7 +110,7 @@ export function App() {
     nudgeMove,
   });
 
-  const { handleWheel } = useCanvasPointerHandlers({
+  useCanvasPointerHandlers({
     containerRef,
     screenToCanvas,
     pointerMode,
@@ -159,7 +159,6 @@ export function App() {
           ref={containerRef}
           data-testid="canvas-container"
           className={styles.canvas}
-          onWheel={handleWheel}
           onContextMenu={handleContextMenu}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
