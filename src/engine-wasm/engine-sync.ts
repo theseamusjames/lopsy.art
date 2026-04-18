@@ -7,8 +7,9 @@
 
 import type { Engine } from './wasm-bridge';
 import { getEngine } from './engine-state';
-import type { Layer, BlendMode } from '../types';
+import type { Layer } from '../types';
 import type { SparseLayerEntry } from '../app/store/types';
+import { pixelDataManager } from '../engine/pixel-data-manager';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
@@ -66,26 +67,10 @@ import type { BrushTipData } from '../types/brush';
 
 // ---------------------------------------------------------------------------
 // Blend mode mapping: TypeScript union → Rust serde enum variant
+// Canonical table lives in src/types/blend-mode-tables.ts.
 // ---------------------------------------------------------------------------
 
-const BLEND_MODE_MAP: Record<BlendMode, string> = {
-  'normal': 'Normal',
-  'multiply': 'Multiply',
-  'screen': 'Screen',
-  'overlay': 'Overlay',
-  'darken': 'Darken',
-  'lighten': 'Lighten',
-  'color-dodge': 'ColorDodge',
-  'color-burn': 'ColorBurn',
-  'hard-light': 'HardLight',
-  'soft-light': 'SoftLight',
-  'difference': 'Difference',
-  'exclusion': 'Exclusion',
-  'hue': 'Hue',
-  'saturation': 'Saturation',
-  'color': 'Color',
-  'luminosity': 'Luminosity',
-};
+import { BLEND_MODE_TO_PASCAL as BLEND_MODE_MAP } from '../types/blend-mode-tables';
 
 const LAYER_TYPE_MAP: Record<string, string> = {
   'raster': 'Raster',
@@ -275,10 +260,21 @@ function createTrackedState(): TrackedState {
   };
 }
 
-let tracked: TrackedState = createTrackedState();
+// Tracked state is keyed by Engine instance so it lives and dies with the
+// engine — no module-level singleton, no HMR pollution, no test cross-talk.
+const trackedByEngine = new WeakMap<Engine, TrackedState>();
 
-export function resetTrackedState(): void {
-  tracked = createTrackedState();
+function getTracked(engine: Engine): TrackedState {
+  let t = trackedByEngine.get(engine);
+  if (!t) {
+    t = createTrackedState();
+    trackedByEngine.set(engine, t);
+  }
+  return t;
+}
+
+export function resetTrackedState(engine: Engine): void {
+  trackedByEngine.set(engine, createTrackedState());
 }
 
 /**
@@ -286,8 +282,8 @@ export function resetTrackedState(): void {
  * Use this when uploading via a non-standard path (e.g. canvas upload)
  * to prevent syncLayers from re-uploading stale byte data.
  */
-export function markPixelDataSynced(layerId: string, data: ImageData): void {
-  tracked.pixelDataVersions.set(layerId, data);
+export function markPixelDataSynced(engine: Engine, layerId: string, data: ImageData): void {
+  getTracked(engine).pixelDataVersions.set(layerId, data);
 }
 
 // ---------------------------------------------------------------------------
@@ -295,6 +291,7 @@ export function markPixelDataSynced(layerId: string, data: ImageData): void {
 // ---------------------------------------------------------------------------
 
 export function syncDocumentSize(engine: Engine, width: number, height: number): void {
+  const tracked = getTracked(engine);
   if (tracked.docWidth === width && tracked.docHeight === height) return;
   setDocumentSize(engine, width, height);
   tracked.docWidth = width;
@@ -302,6 +299,7 @@ export function syncDocumentSize(engine: Engine, width: number, height: number):
 }
 
 export function syncBackgroundColor(engine: Engine, r: number, g: number, b: number, a: number): void {
+  const tracked = getTracked(engine);
   const key = `${r},${g},${b},${a}`;
   if (tracked.bgColor === key) return;
   setBackgroundColor(engine, r / 255, g / 255, b / 255, a);
@@ -316,6 +314,7 @@ export function syncViewport(
   screenW: number,
   screenH: number,
 ): void {
+  const tracked = getTracked(engine);
   if (
     tracked.viewportZoom === zoom &&
     tracked.viewportPanX === panX &&
@@ -335,10 +334,9 @@ export function syncLayers(
   engine: Engine,
   layers: readonly Layer[],
   layerOrder: readonly string[],
-  pixelData: Map<string, ImageData>,
-  sparseData: Map<string, SparseLayerEntry>,
   dirtyLayerIds: Set<string>,
 ): void {
+  const tracked = getTracked(engine);
   const currentIds = new Set(layers.map((l) => l.id));
 
   // Remove layers no longer present
@@ -383,8 +381,8 @@ export function syncLayers(
     // Upload pixel data if changed or marked dirty (including GPU paint dirty).
     // When no JS data exists AND no sparse data, the GPU texture is source of truth
     // (e.g. after a GPU paint stroke or undo restore) — skip upload.
-    const data = pixelData.get(layer.id);
-    const sparseEntry = sparseData.get(layer.id);
+    const data = pixelDataManager.get(layer.id);
+    const sparseEntry = pixelDataManager.getSparse(layer.id);
     const isDirty = dirtyLayerIds.has(layer.id);
     const pixelChanged = tracked.pixelDataVersions.get(layer.id) !== data;
     const sparseChanged = tracked.sparseVersions.get(layer.id) !== sparseEntry;
@@ -452,6 +450,7 @@ export function syncLayers(
 }
 
 export function syncSelection(engine: Engine, selection: SelectionData): void {
+  const tracked = getTracked(engine);
   if (selection.active && selection.mask) {
     if (tracked.selectionMask !== selection.mask) {
       const bytes = new Uint8Array(selection.mask.buffer, selection.mask.byteOffset, selection.mask.byteLength);
@@ -467,6 +466,7 @@ export function syncSelection(engine: Engine, selection: SelectionData): void {
 }
 
 export function syncGrid(engine: Engine, showGrid: boolean, gridSize: number): void {
+  const tracked = getTracked(engine);
   if (tracked.showGrid !== showGrid) {
     setGridVisible(engine, showGrid);
     tracked.showGrid = showGrid;
@@ -478,6 +478,7 @@ export function syncGrid(engine: Engine, showGrid: boolean, gridSize: number): v
 }
 
 export function syncRulers(engine: Engine, showRulers: boolean): void {
+  const tracked = getTracked(engine);
   if (tracked.showRulers !== showRulers) {
     setRulersVisible(engine, showRulers);
     tracked.showRulers = showRulers;
@@ -485,6 +486,7 @@ export function syncRulers(engine: Engine, showRulers: boolean): void {
 }
 
 export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, enabled: boolean): void {
+  const tracked = getTracked(engine);
   if (!enabled) {
     clearImageAdjustments(engine);
     tracked.curvesIdentity = null;
@@ -610,6 +612,7 @@ export function syncBrushTip(
   activeBrushTip: BrushTipData | null,
   brushAngle: number,
 ): void {
+  const tracked = getTracked(engine);
   const hasTip = activeBrushTip !== null;
   const tipChanged = tracked.brushTipData !== activeBrushTip;
 
@@ -650,11 +653,9 @@ export function markAllLayersDirty(engine: Engine): void {
  */
 export function flushLayerSync(state: {
   document: { layers: readonly Layer[]; layerOrder: readonly string[] };
-  layerPixelData: Map<string, ImageData>;
-  sparseLayerData: Map<string, SparseLayerEntry>;
   dirtyLayerIds: Set<string>;
 }): void {
   const engine = getEngine();
   if (!engine) return;
-  syncLayers(engine, state.document.layers, state.document.layerOrder, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
+  syncLayers(engine, state.document.layers, state.document.layerOrder, state.dirtyLayerIds);
 }

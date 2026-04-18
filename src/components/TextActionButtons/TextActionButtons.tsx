@@ -2,7 +2,7 @@ import { useCallback, type RefObject } from 'react';
 import { Check, X } from 'lucide-react';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
-import { commitTextEditing } from '../../app/interactions/misc-handlers';
+import { commitTextEditing } from '../../tools/text/text-interaction';
 import styles from './TextActionButtons.module.css';
 
 interface TextActionButtonsProps {

@@ -1,5 +1,5 @@
 import type { DocumentState, Layer } from '../../../types';
-import type { EditorState } from '../types';
+import type { ActionResult } from '../types';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { scaleLayerTexture } from '../../../engine-wasm/wasm-bridge';
 
@@ -9,7 +9,7 @@ export function computeResizeImage(
   renderVersion: number,
   newWidth: number,
   newHeight: number,
-): Partial<EditorState> {
+): ActionResult {
   const oldW = doc.width;
   const oldH = doc.height;
   const scaleX = newWidth / oldW;

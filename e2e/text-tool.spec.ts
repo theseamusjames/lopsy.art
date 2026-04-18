@@ -250,13 +250,15 @@ test.describe('Text tool', () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { layers: Array<{ id: string; type: string }> };
-          layerPixelData: Map<string, ImageData>;
         };
+      };
+      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
+        get: (id: string) => ImageData | undefined;
       };
       const state = store.getState();
       const textLayer = state.document.layers.find((l) => l.type === 'text');
       if (!textLayer) return false;
-      const data = state.layerPixelData.get(textLayer.id);
+      const data = pixelData.get(textLayer.id);
       if (!data) return false;
       // Check if any pixel has non-zero alpha (text was rendered)
       for (let i = 3; i < data.data.length; i += 4) {

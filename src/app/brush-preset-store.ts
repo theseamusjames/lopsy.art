@@ -1,17 +1,22 @@
 import { create } from 'zustand';
 import type { BrushPreset, BrushTipData } from '../types/brush';
 import { useToolSettingsStore } from './tool-settings-store';
+import { useUIStore } from './ui-store';
 
 interface BrushPresetState {
   presets: BrushPreset[];
   activePresetId: string | null;
-  showBrushModal: boolean;
 
   addPreset: (preset: BrushPreset) => void;
   addPresets: (presets: BrushPreset[]) => void;
   removePreset: (id: string) => void;
   updatePreset: (id: string, patch: Partial<Omit<BrushPreset, 'id'>>) => void;
   setActivePreset: (id: string) => void;
+  /**
+   * Back-compat wrapper that delegates to the ui-store modal slot. The
+   * boolean used to live on this store; callers (including e2e tests via
+   * `__brushPresetStore`) keep working unchanged.
+   */
   setShowBrushModal: (show: boolean) => void;
 }
 
@@ -308,7 +313,6 @@ function syncToToolSettings(preset: BrushPreset): void {
 export const useBrushPresetStore = create<BrushPresetState>((set, get) => ({
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
-  showBrushModal: false,
 
   addPreset: (preset) => set((s) => ({ presets: [...s.presets, preset] })),
 
@@ -332,7 +336,7 @@ export const useBrushPresetStore = create<BrushPresetState>((set, get) => ({
     syncToToolSettings(preset);
   },
 
-  setShowBrushModal: (show) => set({ showBrushModal: show }),
+  setShowBrushModal: (show) => useUIStore.getState().setShowBrushModal(show),
 }));
 
 /** Create a unique id for a new custom preset. */

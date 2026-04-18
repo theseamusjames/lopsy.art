@@ -76,6 +76,16 @@ impl TexturePool {
         }
     }
 
+    /// Delete every WebGL texture held by the pool. Call once when tearing
+    /// down the engine — without this, freeing the Rust-side Engine leaves
+    /// the WebGL textures alive in the context until the context itself
+    /// dies, which for an SPA may be never.
+    pub fn destroy(&mut self, gl: &WebGl2RenderingContext) {
+        for entry in self.entries.drain(..) {
+            gl.delete_texture(Some(&entry.texture));
+        }
+    }
+
     pub fn acquire(
         &mut self,
         gl: &WebGl2RenderingContext,
@@ -200,18 +210,7 @@ impl TexturePool {
 
         if self.use_float {
             let f32_data: Vec<f32> = data.iter().map(|&b| b as f32 / 255.0).collect();
-            // SAFETY: Float32Array view used immediately in the GL call with no
-            // intervening allocations that could relocate wasm memory.
-            let view = unsafe { js_sys::Float32Array::view(&f32_data) };
-            gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_array_buffer_view_and_src_offset(
-                WebGl2RenderingContext::TEXTURE_2D,
-                0, x, y,
-                w as i32, h as i32,
-                WebGl2RenderingContext::RGBA,
-                WebGl2RenderingContext::FLOAT,
-                &view,
-                0,
-            ).map_err(|e| format!("tex_sub_image_2d float failed: {:?}", e))?;
+            tex_sub_image_2d_f32(gl, x, y, w, h, &f32_data)?;
         } else {
             gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
                 WebGl2RenderingContext::TEXTURE_2D,
@@ -242,17 +241,7 @@ impl TexturePool {
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
 
         if self.use_float {
-            // Upload f32 data directly — no conversion needed
-            let view = unsafe { js_sys::Float32Array::view(data) };
-            gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_array_buffer_view_and_src_offset(
-                WebGl2RenderingContext::TEXTURE_2D,
-                0, x, y,
-                w as i32, h as i32,
-                WebGl2RenderingContext::RGBA,
-                WebGl2RenderingContext::FLOAT,
-                &view,
-                0,
-            ).map_err(|e| format!("tex_sub_image_2d float failed: {:?}", e))?;
+            tex_sub_image_2d_f32(gl, x, y, w, h, data)?;
         } else {
             // Quantize f32 → u8 for RGBA8 textures
             let u8_data: Vec<u8> = data.iter().map(|&v| (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8).collect();
@@ -357,4 +346,32 @@ impl TexturePool {
             Ok(pixels)
         }
     }
+}
+
+/// Scoped wrapper around `tex_sub_image_2d` for f32 data.
+/// `Float32Array::view` returns a borrow into wasm linear memory; keeping
+/// the view's lifetime bounded by a single function body means no
+/// intervening allocation can relocate the underlying buffer between view
+/// creation and the GL call. Extracting the helper makes the safety
+/// guarantee structural rather than commented-only.
+fn tex_sub_image_2d_f32(
+    gl: &WebGl2RenderingContext,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+    data: &[f32],
+) -> Result<(), String> {
+    // SAFETY: `view` is consumed by the GL call within this function body
+    // before any allocation can occur — wasm memory cannot be relocated.
+    let view = unsafe { js_sys::Float32Array::view(data) };
+    gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_array_buffer_view_and_src_offset(
+        WebGl2RenderingContext::TEXTURE_2D,
+        0, x, y,
+        w as i32, h as i32,
+        WebGl2RenderingContext::RGBA,
+        WebGl2RenderingContext::FLOAT,
+        &view,
+        0,
+    ).map_err(|e| format!("tex_sub_image_2d float failed: {:?}", e))
 }

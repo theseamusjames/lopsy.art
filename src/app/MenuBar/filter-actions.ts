@@ -11,8 +11,8 @@ import {
   restoreFilterPreview,
   clearFilterPreview,
 } from '../../engine-wasm/wasm-bridge';
-import { filterRegistry } from './filters';
-import type { FilterDefinition } from './filters';
+import { filterRegistry } from '../../filters/filter-registry';
+import type { FilterDefinition } from '../../filters/filter-types';
 
 export type FilterDialogId =
   | 'gaussian-blur'

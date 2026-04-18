@@ -56,4 +56,13 @@ impl FramebufferPool {
             gl.delete_framebuffer(Some(&entry.fbo));
         }
     }
+
+    /// Delete every FBO held by the pool. Call once when tearing down the
+    /// engine so WebGL reclaims all FBO memory without waiting for the
+    /// context itself to be destroyed.
+    pub fn destroy(&mut self, gl: &WebGl2RenderingContext) {
+        for entry in self.entries.drain(..) {
+            gl.delete_framebuffer(Some(&entry.fbo));
+        }
+    }
 }

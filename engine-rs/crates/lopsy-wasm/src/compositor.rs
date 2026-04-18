@@ -531,17 +531,17 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Resul
 /// then copies scratch_a → composite.
 fn apply_image_adjustments(engine: &mut EngineInner) {
     let has_adjustments =
-        engine.image_exposure.abs() > 1e-6
-        || engine.image_contrast.abs() > 1e-6
-        || engine.image_highlights.abs() > 1e-6
-        || engine.image_shadows.abs() > 1e-6
-        || engine.image_whites.abs() > 1e-6
-        || engine.image_blacks.abs() > 1e-6
-        || engine.image_saturation.abs() > 1e-6
-        || engine.image_vibrance.abs() > 1e-6
-        || engine.has_image_curves
-        || engine.has_image_levels;
-    let has_vignette = engine.image_vignette.abs() > 1e-6;
+        engine.adjustments.exposure.abs() > 1e-6
+        || engine.adjustments.contrast.abs() > 1e-6
+        || engine.adjustments.highlights.abs() > 1e-6
+        || engine.adjustments.shadows.abs() > 1e-6
+        || engine.adjustments.whites.abs() > 1e-6
+        || engine.adjustments.blacks.abs() > 1e-6
+        || engine.adjustments.saturation.abs() > 1e-6
+        || engine.adjustments.vibrance.abs() > 1e-6
+        || engine.adjustments.has_curves
+        || engine.adjustments.has_levels;
+    let has_vignette = engine.adjustments.vignette.abs() > 1e-6;
 
     if !has_adjustments && !has_vignette { return; }
 
@@ -564,18 +564,18 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_brightness") { engine.gl.uniform1f(Some(&loc), 0.0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_contrast") { engine.gl.uniform1f(Some(&loc), engine.image_contrast / 100.0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_exposure") { engine.gl.uniform1f(Some(&loc), engine.image_exposure); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_highlights") { engine.gl.uniform1f(Some(&loc), engine.image_highlights); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_shadows") { engine.gl.uniform1f(Some(&loc), engine.image_shadows); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_whites") { engine.gl.uniform1f(Some(&loc), engine.image_whites); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blacks") { engine.gl.uniform1f(Some(&loc), engine.image_blacks); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_saturation") { engine.gl.uniform1f(Some(&loc), engine.image_saturation / 100.0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_vibrance") { engine.gl.uniform1f(Some(&loc), engine.image_vibrance / 100.0); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_contrast") { engine.gl.uniform1f(Some(&loc), engine.adjustments.contrast / 100.0); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_exposure") { engine.gl.uniform1f(Some(&loc), engine.adjustments.exposure); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_highlights") { engine.gl.uniform1f(Some(&loc), engine.adjustments.highlights); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_shadows") { engine.gl.uniform1f(Some(&loc), engine.adjustments.shadows); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_whites") { engine.gl.uniform1f(Some(&loc), engine.adjustments.whites); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blacks") { engine.gl.uniform1f(Some(&loc), engine.adjustments.blacks); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_saturation") { engine.gl.uniform1f(Some(&loc), engine.adjustments.saturation / 100.0); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_vibrance") { engine.gl.uniform1f(Some(&loc), engine.adjustments.vibrance / 100.0); }
         // Levels LUT — bound to TEXTURE2 so it doesn't clobber u_tex or u_curveLut.
-        let has_levels = engine.has_image_levels && engine.image_levels_texture.is_some();
+        let has_levels = engine.adjustments.has_levels && engine.adjustments.levels_texture.is_some();
         if has_levels {
-            if let Some(levels_tex) = engine.image_levels_texture.and_then(|h| engine.texture_pool.get(h)) {
+            if let Some(levels_tex) = engine.adjustments.levels_texture.and_then(|h| engine.texture_pool.get(h)) {
                 let levels_tex = levels_tex.clone();
                 engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
                 engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&levels_tex));
@@ -588,9 +588,9 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         }
 
         // Curves LUT — bound to TEXTURE1 so it doesn't clobber u_tex or u_levelsLut.
-        let has_curves = engine.has_image_curves && engine.image_curves_texture.is_some();
+        let has_curves = engine.adjustments.has_curves && engine.adjustments.curves_texture.is_some();
         if has_curves {
-            if let Some(curve_tex) = engine.image_curves_texture.and_then(|h| engine.texture_pool.get(h)) {
+            if let Some(curve_tex) = engine.adjustments.curves_texture.and_then(|h| engine.texture_pool.get(h)) {
                 let curve_tex = curve_tex.clone();
                 engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
                 engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&curve_tex));
@@ -628,7 +628,7 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
         if let Some(loc) = engine.gl.get_uniform_location(prog, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_amount") { engine.gl.uniform1f(Some(&loc), engine.image_vignette); }
+        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_amount") { engine.gl.uniform1f(Some(&loc), engine.adjustments.vignette); }
         engine.draw_fullscreen_quad();
 
         // Copy scratch_a → composite

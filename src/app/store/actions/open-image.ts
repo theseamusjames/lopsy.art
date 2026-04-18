@@ -1,4 +1,4 @@
-import type { EditorState, SelectionData } from '../types';
+import type { SelectionData, ActionResult } from '../types';
 import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
 
 function imageHasTransparency(data: Uint8ClampedArray): boolean {
@@ -11,7 +11,7 @@ function imageHasTransparency(data: Uint8ClampedArray): boolean {
 export function computeOpenImage(
   imageData: ImageData,
   name: string,
-): Partial<EditorState> {
+): ActionResult {
   const hasAlpha = imageHasTransparency(imageData.data);
   const layer = createRasterLayer({ name: 'Background', width: imageData.width, height: imageData.height });
   const rootGroup = createGroupLayer({ name: 'Project', children: [layer.id] });

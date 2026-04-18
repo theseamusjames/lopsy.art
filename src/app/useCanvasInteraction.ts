@@ -26,11 +26,15 @@ import type {
 import { handleTransformDown } from './interactions/transform-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
 import { toolHandlers, handleTransformMove } from './interactions/tool-router';
+// PAINT_TOOLS / GPU_TOOLS are derived from the tool registry, so adding a
+// new paint or GPU tool is a single-file change at the descriptor.
+import { PAINT_TOOLS, GPU_TOOLS } from '../tools/tool-registry';
+import { pixelDataManager } from '../engine/pixel-data-manager';
 
 export { getActiveMaskEditBuffer } from './interactions/mask-buffer';
 export { strokeCurrentPath } from './interactions/path-stroke';
 
-import type { Point, ToolId, Layer } from '../types';
+import type { Point, Layer } from '../types';
 import type { MaskedPixelBuffer } from '../engine/pixel-data';
 
 /** Finalize a deferred stroke from a previous mouseup. */
@@ -69,11 +73,6 @@ const INITIAL_STATE: InteractionState = {
   moveOriginalMask: null,
   moveOriginalBounds: null,
 };
-
-const PAINT_TOOLS: ReadonlySet<ToolId> = new Set(['brush', 'pencil', 'eraser', 'dodge', 'stamp']);
-// Tools that render entirely on the GPU and don't need JS-side pixel data.
-// These skip expandLayerForEditing to avoid the 16-bit → 8-bit round-trip.
-const GPU_TOOLS: ReadonlySet<ToolId> = new Set(['brush', 'pencil', 'eraser', 'dodge', 'stamp', 'gradient', 'shape']);
 
 export function useCanvasInteraction(
   screenToCanvas: (screenX: number, screenY: number) => Point,
@@ -184,16 +183,11 @@ export function useCanvasInteraction(
                   ? { ...l, x: newX, y: newY, width: newW, height: newH } as Layer
                   : l,
               );
-              const pixelData = new Map(useEditorStore.getState().layerPixelData);
-              pixelData.delete(activeLayerId);
-              const sparseMap = new Map(useEditorStore.getState().sparseLayerData);
-              sparseMap.delete(activeLayerId);
+              pixelDataManager.remove(activeLayerId);
               const dirtyIds = new Set(useEditorStore.getState().dirtyLayerIds);
               dirtyIds.add(activeLayerId);
               useEditorStore.setState({
                 document: { ...docState, layers: updatedLayers },
-                layerPixelData: pixelData,
-                sparseLayerData: sparseMap,
                 dirtyLayerIds: dirtyIds,
               });
               // Re-read activeLayer so layerPos computation below uses updated position
@@ -346,7 +340,7 @@ export function useCanvasInteraction(
 
           const eng = getEngine();
           if (!eng) return;
-          resetTrackedState();
+          resetTrackedState(eng);
           flushLayerSync(useEditorStore.getState());
 
           beginStroke(eng, layerId);
@@ -411,7 +405,7 @@ export function useCanvasInteraction(
         // CPU fallback
         destroyPaintingCanvas(state.layerId);
         const editorState = useEditorStore.getState();
-        const layerData = editorState.layerPixelData.get(state.layerId);
+        const layerData = pixelDataManager.get(state.layerId);
         if (layerData) {
           editorState.updateLayerPixelData(state.layerId, layerData);
         }

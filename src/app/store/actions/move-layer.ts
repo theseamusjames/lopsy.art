@@ -1,5 +1,5 @@
 import type { DocumentState } from '../../../types';
-import type { EditorState } from '../types';
+import type { ActionResult } from '../types';
 import { findParentGroup, removeFromParentGroup, addToGroup, isGroupLayer } from '../../../layers/group-utils';
 
 export function computeMoveLayer(
@@ -7,7 +7,7 @@ export function computeMoveLayer(
   renderVersion: number,
   fromIndex: number,
   toIndex: number,
-): Partial<EditorState> | undefined {
+): ActionResult | undefined {
   let layers = [...doc.layers];
   const order = [...doc.layerOrder];
   const [movedLayer] = layers.splice(fromIndex, 1);

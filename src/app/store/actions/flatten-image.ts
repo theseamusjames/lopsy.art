@@ -1,5 +1,5 @@
 import type { DocumentState } from '../../../types';
-import type { EditorState } from '../types';
+import type { ActionResult } from '../types';
 import type { Layer } from '../../../types';
 import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
 import { getEngine } from '../../../engine-wasm/engine-state';
@@ -8,7 +8,7 @@ import { compositeForExport, uploadLayerPixels, addLayer } from '../../../engine
 export function computeFlattenImage(
   doc: DocumentState,
   _layerPixelData: Map<string, ImageData>,
-): Partial<EditorState> | undefined {
+): ActionResult | undefined {
   if (doc.layers.length <= 1) return undefined;
 
   const { width, height } = doc;

@@ -1,5 +1,5 @@
 import type { DocumentState, Layer } from '../../../types';
-import type { EditorState } from '../types';
+import type { ActionResult } from '../types';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { resizeCanvasTexture } from '../../../engine-wasm/wasm-bridge';
 
@@ -11,7 +11,7 @@ export function computeResizeCanvas(
   newHeight: number,
   anchorX: number,
   anchorY: number,
-): Partial<EditorState> {
+): ActionResult {
   const oldW = doc.width;
   const oldH = doc.height;
   const offsetX = Math.round((newWidth - oldW) * anchorX);

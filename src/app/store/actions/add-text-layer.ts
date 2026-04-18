@@ -1,11 +1,11 @@
 import type { DocumentState, TextLayer } from '../../../types';
-import type { EditorState } from '../types';
+import type { ActionResult } from '../types';
 import { getInsertionGroupId, getInsertionOrderIndex, addToGroup } from '../../../layers/group-utils';
 
 export function computeAddTextLayer(
   doc: DocumentState,
   textLayer: TextLayer,
-): Partial<EditorState> {
+): ActionResult {
   let layers = [...doc.layers, textLayer];
   const groupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
   if (groupId) {
@@ -28,7 +28,7 @@ export function computeUpdateTextLayerProperties(
   doc: DocumentState,
   id: string,
   props: Partial<Omit<TextLayer, 'id' | 'type'>>,
-): Partial<EditorState> {
+): ActionResult {
   const layers = doc.layers.map((layer) => {
     if (layer.id !== id || layer.type !== 'text') return layer;
     return { ...layer, ...props };

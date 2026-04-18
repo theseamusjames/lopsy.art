@@ -1,5 +1,5 @@
 import type { DocumentState, Layer } from '../../../types';
-import type { EditorState } from '../types';
+import type { ActionResult } from '../types';
 import { hasEnabledEffects, DEFAULT_EFFECTS } from '../../../layers/layer-model';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { rasterizeLayerEffects, uploadLayerPixels } from '../../../engine-wasm/wasm-bridge';
@@ -7,7 +7,7 @@ import { rasterizeLayerEffects, uploadLayerPixels } from '../../../engine-wasm/w
 export function computeRasterizeStyle(
   doc: DocumentState,
   layerPixelData: Map<string, ImageData>,
-): Partial<EditorState> | undefined {
+): ActionResult | undefined {
   const activeId = doc.activeLayerId;
   if (!activeId) return undefined;
   const layer = doc.layers.find((l) => l.id === activeId);

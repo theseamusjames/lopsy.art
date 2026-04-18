@@ -1,5 +1,5 @@
 import type { Layer } from '../../../types';
-import type { EditorState, SelectionData } from '../types';
+import type { SelectionData, ActionResult } from '../types';
 import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
 import { createImageData } from '../../../engine/color-space';
 
@@ -7,7 +7,7 @@ export function computeCreateDocument(
   width: number,
   height: number,
   transparentBg: boolean,
-): Partial<EditorState> {
+): ActionResult {
   const bgLayer = createRasterLayer({ name: 'Background', width, height });
   const bgColor = transparentBg
     ? { r: 0, g: 0, b: 0, a: 0 }

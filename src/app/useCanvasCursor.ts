@@ -6,6 +6,7 @@ import { useToolSettingsStore } from './tool-settings-store';
 import { hitTestHandle, getCursorForHandle } from '../tools/transform/transform';
 import type { TransformHandle } from '../tools/transform/transform';
 import type { ToolId, Point } from '../types';
+import { showsGrabCursor, type PointerMode } from './pointer-mode';
 import styles from './App.module.css';
 
 function isPathEditMode(): boolean {
@@ -87,8 +88,7 @@ function getCursorClassForHandle(handle: TransformHandle): string {
 
 export function useCanvasCursor(
   containerRef: RefObject<HTMLDivElement | null>,
-  isPanning: boolean,
-  isSpaceDown: boolean,
+  pointerMode: PointerMode,
 ): {
   updateHoveredHandle: (canvasPos: Point) => void;
 } {
@@ -105,7 +105,7 @@ export function useCanvasCursor(
 
     let cursorClass: string;
 
-    if (isPanning || isSpaceDown) {
+    if (showsGrabCursor(pointerMode)) {
       cursorClass = styles.canvasGrab ?? '';
     } else if (hoveredHandle) {
       cursorClass = getCursorClassForHandle(hoveredHandle);
@@ -134,7 +134,7 @@ export function useCanvasCursor(
     if (cursorClass) {
       container.classList.add(cursorClass);
     }
-  }, [containerRef, isPanning, isSpaceDown, activeTool, hoveredHandle, transform, selectionActive, selectedPathId]);
+  }, [containerRef, pointerMode, activeTool, hoveredHandle, transform, selectionActive, selectedPathId]);
 
   // Hit test transform handles on hover
   const updateHoveredHandle = useCallback(

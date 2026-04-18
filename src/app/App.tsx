@@ -4,37 +4,30 @@ import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
 import { ColorPanel } from '../panels/ColorPanel/ColorPanel';
-import { PanelContainer } from '../panels/PanelContainer/PanelContainer';
 import { HistoryPanel } from '../panels/HistoryPanel/HistoryPanel';
 import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
 import { AdjustmentsPanel } from '../panels/AdjustmentsPanel/AdjustmentsPanel';
 import { PathsPanel } from '../panels/PathsPanel/PathsPanel';
-import { StrokePathModal } from '../components/StrokePathModal/StrokePathModal';
 import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
 import { MenuBar } from './MenuBar/MenuBar';
 import { OptionsBar } from './OptionsBar/OptionsBar';
 import { StatusBar } from './StatusBar/StatusBar';
 import { NewDocumentModal } from '../components/NewDocumentModal/NewDocumentModal';
-import { ShapeSizeModal } from '../components/ShapeSizeModal/ShapeSizeModal';
-import { BrushModal } from '../components/BrushModal/BrushModal';
-import { useBrushPresetStore } from './brush-preset-store';
+import { ModalHost } from '../components/ModalHost/ModalHost';
+import { GuideColorPicker } from '../components/GuideColorPicker/GuideColorPicker';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useCanvasInteraction } from './useCanvasInteraction';
-import { useToolSettingsStore } from './tool-settings-store';
-import { drawShape } from '../tools/shape/shape';
-import { PixelBuffer } from '../engine/pixel-data';
 import { pasteOrOpenBlob } from './paste-or-open';
-import { importPsdFile } from './MenuBar/menus/file-menu';
-import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
+import { importPsdFile } from '../io/psd';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
 import { useContextMenu } from './useContextMenu';
-import { ColorPicker } from '../components/ColorPicker/ColorPicker';
 import { ContextMenu } from '../components/ContextMenu/ContextMenu';
 import { TextActionButtons } from '../components/TextActionButtons/TextActionButtons';
-import { commitTextEditing } from './interactions/misc-handlers';
+import { commitTextEditing } from '../tools/text/text-interaction';
+import { POINTER_IDLE, isPanning, type PointerMode } from './pointer-mode';
 import styles from './App.module.css';
 
 // Isolated component for canvas rendering — prevents renderVersion and
@@ -57,33 +50,18 @@ export function App() {
   const sidebarBottomRef = useRef<HTMLDivElement>(null);
   const effectsDrawerRef = useRef<HTMLDivElement>(null);
 
-  const foregroundColor = useUIStore((s) => s.foregroundColor);
-  const backgroundColor = useUIStore((s) => s.backgroundColor);
-  const setForegroundColor = useUIStore((s) => s.setForegroundColor);
-  const setBackgroundColor = useUIStore((s) => s.setBackgroundColor);
-  const swapColors = useUIStore((s) => s.swapColors);
-  const recentColors = useUIStore((s) => s.recentColors);
-
   const doc = useEditorStore((s) => s.document);
   const viewport = useEditorStore((s) => s.viewport);
   const layers = useEditorStore((s) => s.document.layers);
   const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
-  const addLayer = useEditorStore((s) => s.addLayer);
-  const removeLayer = useEditorStore((s) => s.removeLayer);
   const setActiveLayer = useEditorStore((s) => s.setActiveLayer);
-  const toggleLayerVisibility = useEditorStore((s) => s.toggleLayerVisibility);
-  const moveLayer = useEditorStore((s) => s.moveLayer);
-  const updateLayerOpacity = useEditorStore((s) => s.updateLayerOpacity);
   const setZoom = useEditorStore((s) => s.setZoom);
   const setPan = useEditorStore((s) => s.setPan);
 
   const documentReady = useEditorStore((s) => s.documentReady);
-  const createDocument = useEditorStore((s) => s.createDocument);
-  const showNewDocumentModal = useUIStore((s) => s.showNewDocumentModal);
-  const setShowNewDocumentModal = useUIStore((s) => s.setShowNewDocumentModal);
-
-  const pendingShapeClick = useUIStore((s) => s.pendingShapeClick);
-  const setPendingShapeClick = useUIStore((s) => s.setPendingShapeClick);
+  const openModal = useUIStore((s) => s.openModal);
+  const closeModal = useUIStore((s) => s.closeModal);
+  const closeModalOfKind = useUIStore((s) => s.closeModalOfKind);
 
   const showRulers = useUIStore((s) => s.showRulers);
   const showGuides = useUIStore((s) => s.showGuides);
@@ -91,25 +69,8 @@ export function App() {
   const addGuide = useUIStore((s) => s.addGuide);
   const setHoveredGuide = useUIStore((s) => s.setHoveredGuide);
   const setRulerHover = useUIStore((s) => s.setRulerHover);
-  const guideColor = useUIStore((s) => s.guideColor);
-  const setGuideColor = useUIStore((s) => s.setGuideColor);
 
-  const [showGuideColorPicker, setShowGuideColorPicker] = useState(false);
-
-  useEffect(() => {
-    if (!showGuideColorPicker) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowGuideColorPicker(false);
-      }
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [showGuideColorPicker]);
-
-  const [isPanning, setIsPanning] = useState(false);
-  const [isSpaceDown, setIsSpaceDown] = useState(false);
-  const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const [pointerMode, setPointerMode] = useState<PointerMode>(POINTER_IDLE);
 
   // Touch gesture state for pinch-to-zoom and two-finger pan
   const touchRef = useRef<{
@@ -130,24 +91,9 @@ export function App() {
     startDist: 0,
   });
 
-  const handleCreateDocument = useCallback((width: number, height: number, background: 'white' | 'transparent') => {
-    createDocument(width, height, background === 'transparent');
-    setShowNewDocumentModal(false);
-  }, [createDocument, setShowNewDocumentModal]);
-
-  const handleOpenFile = useCallback((file: File) => {
-    const name = file.name.replace(/\.[^.]+$/, '');
-    if (/\.psd$/i.test(file.name)) {
-      file.arrayBuffer().then(async (buffer) => {
-        await importPsdFile(new Uint8Array(buffer), name);
-        setShowNewDocumentModal(false);
-      });
-      return;
-    }
-    pasteOrOpenBlob(file, name).then(() => {
-      setShowNewDocumentModal(false);
-    });
-  }, [setShowNewDocumentModal]);
+  // ModalHost owns the post-document NewDocumentModal + ShapeSizeModal +
+  // BrushModal + StrokePathModal. App only needs the pre-document fallback
+  // below and the drag/drop handlers that feed into both paths.
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -160,39 +106,36 @@ export function App() {
     if (!file || !file.type.startsWith('image/')) return;
 
     const name = file.name.replace(/\.[^.]+$/, '');
-    pasteOrOpenBlob(file, name).then(() => {
-      setShowNewDocumentModal(false);
-    });
-  }, [setShowNewDocumentModal]);
+    // Dropping an image while the new-document modal is open should dismiss
+    // it — the drop is effectively the answer to "what do you want to open?"
+    pasteOrOpenBlob(file, name).then(() => closeModalOfKind('newDocument'));
+  }, [closeModalOfKind]);
 
-  const handlePasteClipboard = useCallback((blob: Blob) => {
-    pasteOrOpenBlob(blob, 'Copied File').then(() => {
-      setShowNewDocumentModal(false);
-    });
-  }, [setShowNewDocumentModal]);
-
-  const handleShapeSizeConfirm = useCallback((width: number, height: number) => {
-    const pending = useUIStore.getState().pendingShapeClick;
-    if (!pending) return;
-    const editorState = useEditorStore.getState();
-    const imageData = editorState.getOrCreateLayerPixelData(pending.layerId);
-    const pixelBuffer = PixelBuffer.fromImageData(imageData);
-    const surface = wrapWithSelectionMask(pixelBuffer, pending.layerX, pending.layerY);
-    const ts = useToolSettingsStore.getState();
-    editorState.pushHistory();
-    if (ts.shapeFillColor) useUIStore.getState().addRecentColor(ts.shapeFillColor);
-    if (ts.shapeStrokeColor) useUIStore.getState().addRecentColor(ts.shapeStrokeColor);
-    const edge = { x: pending.center.x + width / 2, y: pending.center.y + height / 2 };
-    drawShape(surface, pending.center, edge, {
-      mode: ts.shapeMode,
-      fillColor: ts.shapeFillColor,
-      strokeColor: ts.shapeStrokeColor,
-      strokeWidth: ts.shapeStrokeWidth,
-      sides: ts.shapePolygonSides,
-    });
-    editorState.updateLayerPixelData(pending.layerId, pixelBuffer.toImageData());
-    setPendingShapeClick(null);
-  }, [setPendingShapeClick]);
+  // Pre-document fallback for NewDocumentModal — see render below.
+  const handlePreDocCreate = useCallback(
+    (width: number, height: number, background: 'white' | 'transparent') => {
+      useEditorStore.getState().createDocument(width, height, background === 'transparent');
+      closeModal();
+    },
+    [closeModal],
+  );
+  const handlePreDocOpenFile = useCallback((file: File) => {
+    const name = file.name.replace(/\.[^.]+$/, '');
+    if (/\.psd$/i.test(file.name)) {
+      file.arrayBuffer().then(async (buffer) => {
+        await importPsdFile(new Uint8Array(buffer), name);
+        closeModal();
+      });
+      return;
+    }
+    pasteOrOpenBlob(file, name).then(() => closeModal());
+  }, [closeModal]);
+  const handlePreDocPasteClipboard = useCallback(
+    (blob: Blob) => {
+      pasteOrOpenBlob(blob, 'Copied File').then(() => closeModal());
+    },
+    [closeModal],
+  );
 
   // Warn before navigating away with unsaved changes
   useEffect(() => {
@@ -265,7 +208,7 @@ export function App() {
   const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove } = useCanvasInteraction(screenToCanvas, containerRef);
 
   // Cursor management
-  const { updateHoveredHandle } = useCanvasCursor(containerRef, isPanning, isSpaceDown);
+  const { updateHoveredHandle } = useCanvasCursor(containerRef, pointerMode);
 
   // Context menu
   const { contextMenu, handleContextMenu, handleClose: handleContextMenuClose } = useContextMenu();
@@ -273,8 +216,7 @@ export function App() {
   // Keyboard shortcuts (extracted to useKeyboardShortcuts)
   useKeyboardShortcuts({
     canvasRef,
-    setIsSpaceDown,
-    setIsPanning,
+    setPointerMode,
     clearPersistentTransform,
     nudgeMove,
   });
@@ -325,59 +267,52 @@ export function App() {
       const canvasPos = screenToCanvas(screenX, screenY);
       flushCursorPosition(canvasPos);
 
-      // Ruler hover for guide placement
-      // Guide hover detection — always runs so playhead updates
-      if (showGuides && !isPanning) {
+      const panning = isPanning(pointerMode);
+
+      // Ruler hover for guide placement — always runs so playhead updates,
+      // but suppressed during a pan so guides don't twitch with the canvas.
+      if (showGuides && !panning) {
         setHoveredGuide(findGuideAtCursor(canvasPos.x, canvasPos.y));
       }
 
-      if (showRulers && showGuides && !isPanning) {
+      if (showRulers && showGuides && !panning) {
         const isOnHorizontalRuler = screenY < RULER_SIZE && screenX > RULER_SIZE;
         const isOnVerticalRuler = screenX < RULER_SIZE && screenY > RULER_SIZE;
 
         if (isOnHorizontalRuler) {
-          setRulerHover({
-            orientation: 'vertical',
-            position: canvasPos.x,
-            screenX,
-            screenY,
-          });
+          setRulerHover({ orientation: 'vertical', position: canvasPos.x, screenX, screenY });
           return;
         } else if (isOnVerticalRuler) {
-          setRulerHover({
-            orientation: 'horizontal',
-            position: canvasPos.y,
-            screenX,
-            screenY,
-          });
+          setRulerHover({ orientation: 'horizontal', position: canvasPos.y, screenX, screenY });
           return;
         } else {
           setRulerHover(null);
         }
       }
 
-      if (isPanning) {
-        const dx = e.clientX - panStartRef.current.x;
-        const dy = e.clientY - panStartRef.current.y;
-        setPan(panStartRef.current.panX + dx, panStartRef.current.panY + dy);
+      if (pointerMode.kind === 'panning') {
+        const dx = e.clientX - pointerMode.startScreenX;
+        const dy = e.clientY - pointerMode.startScreenY;
+        setPan(pointerMode.startPanX + dx, pointerMode.startPanY + dy);
       } else {
         updateHoveredHandle(canvasPos);
         handleToolMove(e);
       }
     },
-    [isPanning, screenToCanvas, setPan, handleToolMove, updateHoveredHandle, flushCursorPosition, showRulers, showGuides, setRulerHover, setHoveredGuide, findGuideAtCursor],
+    [pointerMode, screenToCanvas, setPan, handleToolMove, updateHoveredHandle, flushCursorPosition, showRulers, showGuides, setRulerHover, setHoveredGuide, findGuideAtCursor],
   );
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (isSpaceDown || e.button === 1) {
-        setIsPanning(true);
-        panStartRef.current = {
-          x: e.clientX,
-          y: e.clientY,
-          panX: viewport.panX,
-          panY: viewport.panY,
-        };
+      // Space-held + click, or middle-click anywhere, starts a pan.
+      if (pointerMode.kind === 'spaceHeld' || e.button === 1) {
+        setPointerMode({
+          kind: 'panning',
+          startScreenX: e.clientX,
+          startScreenY: e.clientY,
+          startPanX: viewport.panX,
+          startPanY: viewport.panY,
+        });
         e.preventDefault();
         return;
       }
@@ -387,16 +322,18 @@ export function App() {
         const screenX = e.clientX - rect.left;
         const screenY = e.clientY - rect.top;
 
-        // Click on the ruler corner swatch to toggle guide color picker
+        // Click on the ruler corner swatch to toggle the guide color picker.
         if (showGuides && screenX < RULER_SIZE && screenY < RULER_SIZE) {
-          setShowGuideColorPicker((prev) => !prev);
+          const modalNow = useUIStore.getState().modal;
+          if (modalNow?.kind === 'guideColor') closeModal();
+          else openModal({ kind: 'guideColor' });
           return;
         }
       }
 
-      // Close guide color picker on any click outside the corner
-      if (showGuideColorPicker) {
-        setShowGuideColorPicker(false);
+      // Any click outside the corner dismisses the picker.
+      if (useUIStore.getState().modal?.kind === 'guideColor') {
+        closeModalOfKind('guideColor');
       }
 
       if (rect && showRulers && showGuides && e.button === 0) {
@@ -424,20 +361,25 @@ export function App() {
 
       handleToolDown(e);
     },
-    [isSpaceDown, viewport.panX, viewport.panY, handleToolDown, showRulers, showGuides, screenToCanvas, addGuide, setRulerHover, findGuideAtCursor, showGuideColorPicker],
+    [pointerMode, viewport.panX, viewport.panY, handleToolDown, showRulers, showGuides, screenToCanvas, addGuide, setRulerHover, findGuideAtCursor, openModal, closeModal, closeModalOfKind],
   );
 
+  const endPan = useCallback(() => {
+    // End pan but don't drop spaceHeld — releasing space is what does that.
+    setPointerMode((prev) => prev.kind === 'panning' ? POINTER_IDLE : prev);
+  }, []);
+
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
-    setIsPanning(false);
+    endPan();
     handleToolUp(e);
-  }, [handleToolUp]);
+  }, [endPan, handleToolUp]);
 
   const handleMouseLeave = useCallback((e: React.MouseEvent) => {
-    setIsPanning(false);
+    endPan();
     handleToolUp(e);
     setRulerHover(null);
     setHoveredGuide(null);
-  }, [handleToolUp, setRulerHover, setHoveredGuide]);
+  }, [endPan, handleToolUp, setRulerHover, setHoveredGuide]);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
@@ -563,41 +505,44 @@ export function App() {
     [handleToolUp, touchToMouse],
   );
 
-  const [colorPanelCollapsed, setColorPanelCollapsed] = useState(false);
-  const [historyPanelCollapsed, setHistoryPanelCollapsed] = useState(false);
-  const [infoPanelCollapsed, setInfoPanelCollapsed] = useState(false);
-  const [layersPanelCollapsed, setLayersPanelCollapsed] = useState(false);
-  const [pathsPanelCollapsed, setPathsPanelCollapsed] = useState(false);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const visiblePanels = useUIStore((s) => s.visiblePanels);
 
+  // Effects drawer hangs off the bottom panel block. Subscribe to the block's
+  // size via ResizeObserver instead of pinning to a specific panel's collapse
+  // state — works regardless of which panels are open or collapsed.
   useLayoutEffect(() => {
     const bottom = sidebarBottomRef.current;
     const drawer = effectsDrawerRef.current;
-    if (!bottom || !drawer) return;
-    const parentRect = bottom.offsetParent?.getBoundingClientRect();
-    const bottomRect = bottom.getBoundingClientRect();
-    if (!parentRect) return;
-    const top = bottomRect.top - parentRect.top;
-    drawer.style.top = `${top}px`;
-    drawer.style.height = `${bottom.offsetHeight}px`;
-  }, [showEffectsDrawer, colorPanelCollapsed]);
-
-  const showBrushModal = useBrushPresetStore((s) => s.showBrushModal);
-
-  const showModal = !documentReady || showNewDocumentModal;
+    if (!bottom || !drawer || !showEffectsDrawer) return;
+    const update = () => {
+      const parentRect = bottom.offsetParent?.getBoundingClientRect();
+      const bottomRect = bottom.getBoundingClientRect();
+      if (!parentRect) return;
+      drawer.style.top = `${bottomRect.top - parentRect.top}px`;
+      drawer.style.height = `${bottom.offsetHeight}px`;
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(bottom);
+    return () => ro.disconnect();
+  }, [showEffectsDrawer]);
 
   if (!hasWebGL2) {
     return <WebGL2Warning />;
   }
 
+  // Pre-document: the whole app is just a non-dismissible NewDocumentModal
+  // wrapped in a drag-and-drop target. The post-document modal host below
+  // handles user-invoked NewDocumentModal (dismissible) plus every other
+  // modal through the ui-store slot.
   if (!documentReady) {
     return (
       <div className={styles.app} onDragOver={handleDragOver} onDrop={handleDrop}>
         <NewDocumentModal
-          onCreateDocument={handleCreateDocument}
-          onOpenFile={handleOpenFile}
-          onPasteClipboard={handlePasteClipboard}
+          onCreateDocument={handlePreDocCreate}
+          onOpenFile={handlePreDocOpenFile}
+          onPasteClipboard={handlePreDocPasteClipboard}
         />
       </div>
     );
@@ -605,22 +550,7 @@ export function App() {
 
   return (
     <div className={styles.app}>
-      {pendingShapeClick && (
-        <ShapeSizeModal
-          onConfirm={handleShapeSizeConfirm}
-          onCancel={() => setPendingShapeClick(null)}
-        />
-      )}
-      {showBrushModal && <BrushModal />}
-      {showModal && (
-        <NewDocumentModal
-          onCreateDocument={handleCreateDocument}
-          onOpenFile={handleOpenFile}
-          onPasteClipboard={handlePasteClipboard}
-          onCancel={() => setShowNewDocumentModal(false)}
-        />
-      )}
-      <StrokePathModal />
+      <ModalHost />
       <div className={styles.header}>
         <MenuBar />
         <OptionsBar />
@@ -657,17 +587,7 @@ export function App() {
             onClose={handleContextMenuClose}
           />
         )}
-        {showGuideColorPicker && showRulers && showGuides && (
-          <div
-            className={styles.guideColorPicker}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <ColorPicker
-              color={guideColor}
-              onChange={setGuideColor}
-            />
-          </div>
-        )}
+        <GuideColorPicker />
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div className={styles.effectsDrawer} ref={effectsDrawerRef}>
@@ -680,71 +600,13 @@ export function App() {
           {visiblePanels.size > 0 && (
             <div className={styles.sidebar}>
               <div className={styles.sidebarScroll}>
-                {visiblePanels.has('info') && (
-                  <PanelContainer
-                    title="Info"
-                    collapsed={infoPanelCollapsed}
-                    onToggle={() => setInfoPanelCollapsed(!infoPanelCollapsed)}
-                  >
-                    <InfoPanel collapsed={infoPanelCollapsed} />
-                  </PanelContainer>
-                )}
-                {visiblePanels.has('color') && (
-                  <PanelContainer
-                    title="Color"
-                    collapsed={colorPanelCollapsed}
-                    onToggle={() => setColorPanelCollapsed(!colorPanelCollapsed)}
-                  >
-                    <ColorPanel
-                      foregroundColor={foregroundColor}
-                      backgroundColor={backgroundColor}
-                      recentColors={recentColors}
-                      onForegroundChange={setForegroundColor}
-                      onBackgroundChange={setBackgroundColor}
-                      onSwap={swapColors}
-                      collapsed={colorPanelCollapsed}
-                    />
-                  </PanelContainer>
-                )}
-                {visiblePanels.has('history') && (
-                  <PanelContainer
-                    title="History"
-                    collapsed={historyPanelCollapsed}
-                    onToggle={() => setHistoryPanelCollapsed(!historyPanelCollapsed)}
-                  >
-                    <HistoryPanel collapsed={historyPanelCollapsed} />
-                  </PanelContainer>
-                )}
-                {visiblePanels.has('paths') && (
-                  <PanelContainer
-                    title="Paths"
-                    collapsed={pathsPanelCollapsed}
-                    onToggle={() => setPathsPanelCollapsed(!pathsPanelCollapsed)}
-                  >
-                    <PathsPanel collapsed={pathsPanelCollapsed} />
-                  </PanelContainer>
-                )}
+                {visiblePanels.has('info') && <InfoPanel />}
+                {visiblePanels.has('color') && <ColorPanel />}
+                {visiblePanels.has('history') && <HistoryPanel />}
+                {visiblePanels.has('paths') && <PathsPanel />}
               </div>
               <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
-                {visiblePanels.has('layers') && (
-                  <PanelContainer
-                    title="Layers"
-                    collapsed={layersPanelCollapsed}
-                    onToggle={() => setLayersPanelCollapsed(!layersPanelCollapsed)}
-                  >
-                    <LayerPanel
-                      layers={[...layers]}
-                      activeLayerId={activeLayerId}
-                      onSelectLayer={handleSelectLayer}
-                      onToggleVisibility={toggleLayerVisibility}
-                      onAddLayer={addLayer}
-                      onRemoveLayer={removeLayer}
-                      onReorderLayer={moveLayer}
-                      onUpdateOpacity={updateLayerOpacity}
-                      collapsed={layersPanelCollapsed}
-                    />
-                  </PanelContainer>
-                )}
+                {visiblePanels.has('layers') && <LayerPanel onSelectLayer={handleSelectLayer} />}
               </div>
             </div>
           )}

@@ -4,6 +4,7 @@ import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { IconButton } from '../../components/IconButton/IconButton';
 import type { BlendMode, LayerEffects } from '../../types';
+import { BLEND_MODE_TO_DISPLAY } from '../../types/blend-mode-tables';
 import { DropShadowForm } from './DropShadowForm';
 import { StrokeForm } from './StrokeForm';
 import { GlowForm } from './GlowForm';
@@ -12,51 +13,16 @@ import styles from './LayerEffectsPanel.module.css';
 
 type EffectKey = 'dropShadow' | 'stroke' | 'outerGlow' | 'innerGlow' | 'colorOverlay';
 
-const BLEND_MODE_GROUPS: { label: string; modes: { value: BlendMode; label: string }[] }[] = [
-  {
-    label: 'Normal',
-    modes: [{ value: 'normal', label: 'Normal' }],
-  },
-  {
-    label: 'Darken',
-    modes: [
-      { value: 'darken', label: 'Darken' },
-      { value: 'multiply', label: 'Multiply' },
-      { value: 'color-burn', label: 'Color Burn' },
-    ],
-  },
-  {
-    label: 'Lighten',
-    modes: [
-      { value: 'lighten', label: 'Lighten' },
-      { value: 'screen', label: 'Screen' },
-      { value: 'color-dodge', label: 'Color Dodge' },
-    ],
-  },
-  {
-    label: 'Contrast',
-    modes: [
-      { value: 'overlay', label: 'Overlay' },
-      { value: 'soft-light', label: 'Soft Light' },
-      { value: 'hard-light', label: 'Hard Light' },
-    ],
-  },
-  {
-    label: 'Comparative',
-    modes: [
-      { value: 'difference', label: 'Difference' },
-      { value: 'exclusion', label: 'Exclusion' },
-    ],
-  },
-  {
-    label: 'Composite',
-    modes: [
-      { value: 'hue', label: 'Hue' },
-      { value: 'saturation', label: 'Saturation' },
-      { value: 'color', label: 'Color' },
-      { value: 'luminosity', label: 'Luminosity' },
-    ],
-  },
+// Grouping is a UX choice, not a Rust-side concept — the engine treats all
+// blend modes uniformly. Display labels are pulled from the shared
+// blend-mode-tables module so every surface says the same thing.
+const BLEND_MODE_GROUPS: { label: string; modes: BlendMode[] }[] = [
+  { label: 'Normal', modes: ['normal'] },
+  { label: 'Darken', modes: ['darken', 'multiply', 'color-burn'] },
+  { label: 'Lighten', modes: ['lighten', 'screen', 'color-dodge'] },
+  { label: 'Contrast', modes: ['overlay', 'soft-light', 'hard-light'] },
+  { label: 'Comparative', modes: ['difference', 'exclusion'] },
+  { label: 'Composite', modes: ['hue', 'saturation', 'color', 'luminosity'] },
 ];
 
 const EFFECT_LIST: { key: EffectKey; label: string }[] = [
@@ -182,8 +148,8 @@ export function LayerEffectsPanel() {
           {BLEND_MODE_GROUPS.map((group) => (
             <optgroup key={group.label} label={group.label}>
               {group.modes.map((mode) => (
-                <option key={mode.value} value={mode.value}>
-                  {mode.label}
+                <option key={mode} value={mode}>
+                  {BLEND_MODE_TO_DISPLAY[mode]}
                 </option>
               ))}
             </optgroup>

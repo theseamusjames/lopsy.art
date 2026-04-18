@@ -1,5 +1,5 @@
 import type { DocumentState } from '../../../types';
-import type { EditorState, SparseLayerEntry } from '../types';
+import type { SparseLayerEntry, ActionResult } from '../types';
 import { getDescendantIds, isGroupLayer, removeFromParentGroup } from '../../../layers/group-utils';
 
 export function computeRemoveLayer(
@@ -7,7 +7,7 @@ export function computeRemoveLayer(
   layerPixelData: Map<string, ImageData>,
   sparseLayerData: Map<string, SparseLayerEntry>,
   id: string,
-): Partial<EditorState> | undefined {
+): ActionResult | undefined {
   if (doc.layers.length <= 1) return undefined;
 
   // Protect root group from deletion

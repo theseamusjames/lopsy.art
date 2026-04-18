@@ -5,6 +5,7 @@ import { useEditorStore } from './app/editor-store';
 import { useUIStore } from './app/ui-store';
 import { useToolSettingsStore } from './app/tool-settings-store';
 import { useBrushPresetStore } from './app/brush-preset-store';
+import { pixelDataManager } from './engine/pixel-data-manager';
 import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
 import { render as renderWasm, readLayerPixels, getLayerTextureDimensions } from './engine-wasm/wasm-bridge';
 import {
@@ -23,6 +24,9 @@ if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__uiStore = useUIStore;
   (window as unknown as Record<string, unknown>).__toolSettingsStore = useToolSettingsStore;
   (window as unknown as Record<string, unknown>).__brushPresetStore = useBrushPresetStore;
+  // Pixel-data Maps used to live on the store; they live on the manager now.
+  // E2e tests that read or mutate pixel state go through this singleton.
+  (window as unknown as Record<string, unknown>).__pixelData = pixelDataManager;
   // Read composited pixels from the WebGL canvas by triggering a render
   // inside requestAnimationFrame and reading before buffer swap.
   // Returns screen-sized pixels (includes workspace background).
@@ -41,7 +45,7 @@ if (import.meta.env.DEV) {
         syncDocumentSize(engine, doc.width, doc.height);
         syncBackgroundColor(engine, bg.r, bg.g, bg.b, bg.a);
         syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH);
-        syncLayers(engine, doc.layers, doc.layerOrder, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
+        syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds);
         syncSelection(engine, state.selection);
         renderWasm(engine);
         const gl = canvas.getContext('webgl2');
@@ -70,7 +74,7 @@ if (import.meta.env.DEV) {
         syncDocumentSize(engine, doc.width, doc.height);
         syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
         syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH);
-        syncLayers(engine, doc.layers, doc.layerOrder, state.layerPixelData, state.sparseLayerData, state.dirtyLayerIds);
+        syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds);
         const id = layerId ?? doc.activeLayerId;
         if (!id) { resolve({ width: 0, height: 0, pixels: [] }); return; }
         const dims = getLayerTextureDimensions(engine, id);

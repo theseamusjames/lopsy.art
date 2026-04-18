@@ -50,8 +50,8 @@ export interface ClipboardData {
 export interface EditorState {
   document: DocumentState;
   viewport: ViewportState;
-  layerPixelData: Map<string, ImageData>;
-  sparseLayerData: Map<string, SparseLayerEntry>;
+  // layerPixelData + sparseLayerData live in the PixelDataManager
+  // (src/engine/pixel-data-manager.ts), not the store. See pixel-data-slice.
   undoStack: HistorySnapshot[];
   redoStack: HistorySnapshot[];
   dirtyLayerIds: Set<string>;
@@ -141,3 +141,15 @@ export interface EditorState {
 }
 
 export type SliceCreator<T> = StateCreator<EditorState, [], [], T>;
+
+/**
+ * Shape returned by `compute*` action helpers. Most of them build both a
+ * store state delta AND new pixel-data maps; the Maps no longer live in
+ * the store (they're in PixelDataManager), so callers extract the pixel
+ * fields, push them to the manager, and spread the remaining EditorState
+ * delta into `set()`.
+ */
+export type ActionResult = Partial<EditorState> & {
+  layerPixelData?: Map<string, ImageData>;
+  sparseLayerData?: Map<string, SparseLayerEntry>;
+};

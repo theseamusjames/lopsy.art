@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { Color, Point, ToolId } from '../types';
 import type { TransformHandle, TransformState } from '../tools/transform/transform';
-import { useToolSettingsStore } from './tool-settings-store';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { colorEquals } from '../utils/color';
@@ -41,6 +40,26 @@ export interface RulerHover {
   screenY: number;
 }
 
+export interface ShapeSizeClick {
+  center: Point;
+  layerId: string;
+  layerX: number;
+  layerY: number;
+}
+
+/**
+ * One-at-a-time modal slot. Only one kind can be open; opening a new kind
+ * replaces whatever was there. Payloads ride on the variant so data and
+ * visibility can't drift apart (the old pattern had parallel booleans +
+ * separate data fields — five different ways to say "is a modal open?").
+ */
+export type ModalState =
+  | { kind: 'newDocument' }
+  | { kind: 'shapeSize'; click: ShapeSizeClick }
+  | { kind: 'strokePath'; pathId: string }
+  | { kind: 'guideColor' }
+  | { kind: 'brush' };
+
 const MAX_RECENT_COLORS = 20;
 
 interface UIState {
@@ -62,14 +81,25 @@ interface UIState {
   transform: TransformState | null;
   activeTransformHandle: TransformHandle | null;
   maskEditMode: boolean;
-  showNewDocumentModal: boolean;
+  /** Active modal, or null when nothing is open. Only one at a time. */
+  modal: ModalState | null;
   showEffectsDrawer: boolean;
   visiblePanels: Set<string>;
   cursorPosition: Point;
   gradientPreview: { start: Point; end: Point } | null;
   setCursorPosition: (pos: Point) => void;
   setMaskEditMode: (mode: boolean) => void;
+  /** Open a modal, replacing any that was already open. */
+  openModal: (next: ModalState) => void;
+  /** Close whatever modal is open. */
+  closeModal: () => void;
+  /** Close only if the currently-open modal matches this kind (no-op otherwise). */
+  closeModalOfKind: (kind: ModalState['kind']) => void;
+  /** Backward-compat setter — use openModal/closeModalOfKind for new code. */
   setShowNewDocumentModal: (show: boolean) => void;
+  /** Backward-compat setter for the brush preset modal — the boolean lived on
+   *  brush-preset-store before the modal slot existed. */
+  setShowBrushModal: (show: boolean) => void;
   setShowEffectsDrawer: (show: boolean) => void;
   togglePanel: (panelId: string) => void;
   setGradientPreview: (preview: { start: Point; end: Point } | null) => void;
@@ -95,13 +125,15 @@ interface UIState {
   setCropRect: (rect: { x: number; y: number; width: number; height: number } | null) => void;
   setTransform: (transform: TransformState | null) => void;
   setActiveTransformHandle: (handle: TransformHandle | null) => void;
-  pendingShapeClick: { center: Point; layerId: string; layerX: number; layerY: number } | null;
-  setPendingShapeClick: (pending: { center: Point; layerId: string; layerX: number; layerY: number } | null) => void;
+  /** Backward-compat setter. Reads should use modal directly:
+   *  `modal?.kind === 'shapeSize' ? modal.click : null` */
+  setPendingShapeClick: (pending: ShapeSizeClick | null) => void;
   adjustments: ImageAdjustments;
   adjustmentsEnabled: boolean;
   setAdjustments: (adj: ImageAdjustments) => void;
   setAdjustmentsEnabled: (enabled: boolean) => void;
-  strokeModalPathId: string | null;
+  /** Backward-compat setter. Reads should use modal directly:
+   *  `modal?.kind === 'strokePath' ? modal.pathId : null` */
   setStrokeModalPathId: (id: string | null) => void;
   editingAnchorIndex: number | null;
   setEditingAnchorIndex: (index: number | null) => void;
@@ -127,7 +159,7 @@ interface UIState {
   setTextDrag: (drag: TextDragState | null) => void;
 }
 
-export const useUIStore = create<UIState>((set) => ({
+export const useUIStore = create<UIState>((set, get) => ({
   activeTool: 'move',
   foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
   backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
@@ -146,12 +178,10 @@ export const useUIStore = create<UIState>((set) => ({
   transform: null,
   activeTransformHandle: null,
   maskEditMode: false,
-  showNewDocumentModal: false,
+  modal: null,
   showEffectsDrawer: false,
   visiblePanels: new Set(['color', 'layers']),
   cursorPosition: { x: 0, y: 0 },
-  pendingShapeClick: null,
-  setPendingShapeClick: (pending) => set({ pendingShapeClick: pending }),
   adjustments: { ...DEFAULT_ADJUSTMENTS },
   adjustmentsEnabled: true,
   setAdjustments: (adj) => set({ adjustments: adj }),
@@ -159,7 +189,30 @@ export const useUIStore = create<UIState>((set) => ({
   gradientPreview: null,
   setCursorPosition: (pos) => set({ cursorPosition: pos }),
   setMaskEditMode: (mode) => set({ maskEditMode: mode }),
-  setShowNewDocumentModal: (show) => set({ showNewDocumentModal: show }),
+
+  // ─── Modal slot ────────────────────────────────────────────────────────
+  openModal: (next) => set({ modal: next }),
+  closeModal: () => set({ modal: null }),
+  closeModalOfKind: (kind) => {
+    if (get().modal?.kind === kind) set({ modal: null });
+  },
+  setShowNewDocumentModal: (show) => {
+    if (show) get().openModal({ kind: 'newDocument' });
+    else get().closeModalOfKind('newDocument');
+  },
+  setPendingShapeClick: (click) => {
+    if (click) get().openModal({ kind: 'shapeSize', click });
+    else get().closeModalOfKind('shapeSize');
+  },
+  setStrokeModalPathId: (id) => {
+    if (id) get().openModal({ kind: 'strokePath', pathId: id });
+    else get().closeModalOfKind('strokePath');
+  },
+  setShowBrushModal: (show) => {
+    if (show) get().openModal({ kind: 'brush' });
+    else get().closeModalOfKind('brush');
+  },
+
   setShowEffectsDrawer: (show) => set({ showEffectsDrawer: show }),
   togglePanel: (panelId) =>
     set((state) => {
@@ -193,9 +246,13 @@ export const useUIStore = create<UIState>((set) => ({
     } else {
       set({ activeTool: tool });
     }
-    if (tool === 'shape') {
-      useToolSettingsStore.getState().setShapeFillColor(current.foregroundColor);
-    }
+    // Tool-specific activation side effects live on the tool descriptor
+    // itself (src/tools/tool-registry.ts) so this function stays
+    // tool-agnostic. Import is lazy to avoid a ui-store ↔ tool-registry
+    // initialization cycle at module load time.
+    void import('../tools/tool-registry').then(({ toolRegistry }) => {
+      toolRegistry[tool]?.onActivate?.();
+    });
   },
   setForegroundColor: (color) => set({ foregroundColor: color }),
   setBackgroundColor: (color) => set({ backgroundColor: color }),
@@ -235,8 +292,6 @@ export const useUIStore = create<UIState>((set) => ({
   setCropRect: (rect) => set({ cropRect: rect }),
   setTransform: (transform) => set({ transform }),
   setActiveTransformHandle: (handle) => set({ activeTransformHandle: handle }),
-  strokeModalPathId: null,
-  setStrokeModalPathId: (id) => set({ strokeModalPathId: id }),
   editingAnchorIndex: null,
   setEditingAnchorIndex: (index) => set({ editingAnchorIndex: index }),
   convertingAnchorToSpline: false,

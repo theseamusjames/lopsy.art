@@ -1,37 +1,31 @@
 import { useUIStore } from '../ui-store';
 import { useToolSettingsStore } from '../tool-settings-store';
+import { SHORTCUT_TO_TOOL } from '../../tools/tool-registry';
+
+/**
+ * Color swatches aren't tools but share the single-key shortcut namespace,
+ * so they live alongside the tool map.
+ */
+const COLOR_SHORTCUTS: Record<string, () => void> = {
+  x: () => useUIStore.getState().swapColors(),
+  d: () => useUIStore.getState().resetColors(),
+};
 
 export function handleToolShortcut(e: KeyboardEvent): boolean {
-  const setActiveTool = useUIStore.getState().setActiveTool;
-  const swapColors = useUIStore.getState().swapColors;
-  const resetColors = useUIStore.getState().resetColors;
+  const key = e.key.toLowerCase();
 
-  const toolMap: Record<string, () => void> = {
-    v: () => setActiveTool('move'),
-    b: () => setActiveTool('brush'),
-    n: () => setActiveTool('pencil'),
-    e: () => setActiveTool('eraser'),
-    g: () => setActiveTool('fill'),
-    i: () => setActiveTool('eyedropper'),
-    t: () => setActiveTool('text'),
-    u: () => setActiveTool('shape'),
-    m: () => setActiveTool('marquee-rect'),
-    l: () => setActiveTool('lasso'),
-    w: () => setActiveTool('wand'),
-    c: () => setActiveTool('crop'),
-    p: () => setActiveTool('path'),
-    s: () => setActiveTool('stamp'),
-    o: () => setActiveTool('dodge'),
-    r: () => setActiveTool('smudge'),
-    x: () => swapColors(),
-    d: () => resetColors(),
-  };
-
-  const handler = toolMap[e.key.toLowerCase()];
-  if (handler) {
-    handler();
+  const toolId = SHORTCUT_TO_TOOL.get(key);
+  if (toolId) {
+    useUIStore.getState().setActiveTool(toolId);
     return true;
   }
+
+  const colorAction = COLOR_SHORTCUTS[key];
+  if (colorAction) {
+    colorAction();
+    return true;
+  }
+
   return false;
 }
 

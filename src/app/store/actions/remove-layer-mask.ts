@@ -1,11 +1,11 @@
 import type { DocumentState, Layer } from '../../../types';
-import type { EditorState } from '../types';
+import type { ActionResult } from '../types';
 
 export function computeRemoveLayerMask(
   doc: DocumentState,
   renderVersion: number,
   id: string,
-): Partial<EditorState> | undefined {
+): ActionResult | undefined {
   const layer = doc.layers.find((l) => l.id === id);
   if (!layer?.mask) return undefined;
 
