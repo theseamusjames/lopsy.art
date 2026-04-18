@@ -189,10 +189,16 @@ export function useCanvasPointerHandlers({
 
       if (gestureRef.current.active) return;
 
-      const rect = deps.containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
+      const container = deps.containerRef.current;
+      const rect = container?.getBoundingClientRect();
+      if (!rect || !container) return;
       // Tool/pan interactions originate from inside the canvas container.
-      if (!isInsideRect(rect, e.clientX, e.clientY)) return;
+      // DOM ancestry check (not just rect) so pointer events on sibling
+      // overlays that visually sit above the canvas — e.g. the effects
+      // drawer, positioned right:100% over the canvas area — don't start
+      // a tool stroke.
+      const target = e.target as Node | null;
+      if (!target || !container.contains(target)) return;
 
       // Space-held + primary, or middle-click, starts a pan.
       if (deps.pointerMode.kind === 'spaceHeld' || e.button === 1) {
