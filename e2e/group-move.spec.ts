@@ -52,10 +52,29 @@ test.describe('Group move moves all children (#121)', () => {
       return { groupId, layer1Id, layer2Id };
     });
 
-    // Paint content on both layers so they're visible
+    // Paint content on both layers so they're visible.
+    // Note: updateLayerPixelData auto-crops to content bounds and shifts layer.x/y
+    // accordingly, so we capture the post-paint positions as our baseline.
     await paintRect(page, 10, 20, 50, 50, { r: 255, g: 0, b: 0, a: 255 }, setup.layer1Id);
     await paintRect(page, 100, 150, 50, 50, { r: 0, g: 0, b: 255, a: 255 }, setup.layer2Id);
     await page.waitForTimeout(200);
+
+    const before = await page.evaluate(
+      ({ layer1Id, layer2Id }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => {
+            document: { layers: Array<{ id: string; x: number; y: number }> };
+          };
+        };
+        const layers = store.getState().document.layers;
+        const find = (id: string) => layers.find((l) => l.id === id);
+        return {
+          layer1: { x: find(layer1Id)?.x ?? 0, y: find(layer1Id)?.y ?? 0 },
+          layer2: { x: find(layer2Id)?.x ?? 0, y: find(layer2Id)?.y ?? 0 },
+        };
+      },
+      { layer1Id: setup.layer1Id, layer2Id: setup.layer2Id },
+    );
 
     await page.screenshot({ path: 'e2e/screenshots/group-move-before.png' });
 
@@ -101,12 +120,10 @@ test.describe('Group move moves all children (#121)', () => {
       { groupId: setup.groupId, layer1Id: setup.layer1Id, layer2Id: setup.layer2Id },
     );
 
-    // Layer 1: was at (10, 20), should now be at (60, 50)
-    expect(positions.layer1.x).toBe(10 + dx);
-    expect(positions.layer1.y).toBe(20 + dy);
-
-    // Layer 2: was at (100, 150), should now be at (150, 180)
-    expect(positions.layer2.x).toBe(100 + dx);
-    expect(positions.layer2.y).toBe(150 + dy);
+    // Both children should have moved by exactly the group delta.
+    expect(positions.layer1.x).toBe(before.layer1.x + dx);
+    expect(positions.layer1.y).toBe(before.layer1.y + dy);
+    expect(positions.layer2.x).toBe(before.layer2.x + dx);
+    expect(positions.layer2.y).toBe(before.layer2.y + dy);
   });
 });

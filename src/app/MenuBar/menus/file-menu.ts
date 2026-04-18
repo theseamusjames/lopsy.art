@@ -12,6 +12,7 @@ import {
 } from '../../../engine-wasm/wasm-bridge';
 import type { MenuDef } from './types';
 import { exportPsdFile, importPsdFile } from '../../../io/psd';
+import { describeError, notifyError } from '../../notifications-store';
 
 // Re-export so existing callers (App.tsx, e2e tests) keep working.
 export { importPsdFile, exportPsdFile };
@@ -34,9 +35,10 @@ export function openFileFromDisk(): void {
 
     // Route PSD files to the PSD importer
     if (/\.psd$/i.test(file.name)) {
-      file.arrayBuffer().then((buffer) => {
-        importPsdFile(new Uint8Array(buffer), file.name.replace(/\.psd$/i, ''));
-      });
+      file
+        .arrayBuffer()
+        .then((buffer) => importPsdFile(new Uint8Array(buffer), file.name.replace(/\.psd$/i, '')))
+        .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
       return;
     }
 
@@ -161,15 +163,20 @@ function finishCanvasExport(canvas: HTMLCanvasElement, width: number, height: nu
     const offCtx = offscreen.getContext('2d', contextOptions);
     if (offCtx) {
       offCtx.drawImage(canvas, 0, 0);
-      offscreen.convertToBlob({ type: mimeType, quality: 0.92, colorSpace: canvasColorSpace } as ImageEncodeOptions)
-        .then(finishExport);
+      offscreen
+        .convertToBlob({ type: mimeType, quality: 0.92, colorSpace: canvasColorSpace } as ImageEncodeOptions)
+        .then(finishExport)
+        .catch((err) => notifyError(`Failed to export: ${describeError(err)}`));
       return;
     }
   }
 
-  canvas.toBlob(async (blob) => {
-    if (!blob) return;
-    await finishExport(blob);
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      notifyError('Failed to export: browser could not encode image.');
+      return;
+    }
+    finishExport(blob).catch((err) => notifyError(`Failed to export: ${describeError(err)}`));
   }, mimeType, 0.92);
 }
 

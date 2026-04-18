@@ -1,15 +1,15 @@
-import type { Point, PixelSurface } from '../../types';
+import type { Point, PixelSurface, FontStyle, TextAlign } from '../../types';
 import { contextOptions } from '../../engine/color-space';
 
 export interface TextStyle {
   fontSize: number;
   fontFamily: string;
   fontWeight: number;
-  fontStyle: 'normal' | 'italic';
+  fontStyle: FontStyle;
   color: { r: number; g: number; b: number; a: number };
   lineHeight: number;
   letterSpacing: number;
-  textAlign: 'left' | 'center' | 'right' | 'justify';
+  textAlign: TextAlign;
 }
 
 export interface TextLayout {
@@ -89,7 +89,7 @@ export function wrapText(
 export function alignLineX(
   lineWidth: number,
   containerWidth: number | null,
-  align: 'left' | 'center' | 'right' | 'justify',
+  align: TextAlign,
 ): number {
   if (containerWidth === null) return 0;
   switch (align) {

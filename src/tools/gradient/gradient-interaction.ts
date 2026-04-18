@@ -15,9 +15,9 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer } = ctx;
   const editorState = useEditorStore.getState();
   editorState.pushHistory();
-  const ui = useUIStore.getState();
-  ui.addRecentColor(ui.foregroundColor);
-  ui.addRecentColor(ui.backgroundColor);
+  const ts = useToolSettingsStore.getState();
+  ts.addRecentColor(ts.foregroundColor);
+  ts.addRecentColor(ts.backgroundColor);
 
   return {
     drawing: true,

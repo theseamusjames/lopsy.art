@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
 import { useToolSettingsStore } from '../../tool-settings-store';
-import { useBrushPresetStore } from '../../brush-preset-store';
+import { useUIStore } from '../../ui-store';
 import { Slider } from '../../../components/Slider/Slider';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { BrushThumbnail } from '../../../components/BrushModal/BrushThumbnail';
@@ -21,12 +21,12 @@ export function BrushOptions() {
   const setSymH = useToolSettingsStore((s) => s.setSymmetryHorizontal);
   const setSymV = useToolSettingsStore((s) => s.setSymmetryVertical);
 
-  const presets = useBrushPresetStore((s) => s.presets);
-  const activePresetId = useBrushPresetStore((s) => s.activePresetId);
+  const presets = useToolSettingsStore((s) => s.presets);
+  const activePresetId = useToolSettingsStore((s) => s.activePresetId);
   const activePreset = presets.find((p) => p.id === activePresetId) ?? presets[0];
 
   const handleOpenBrushModal = useCallback(() => {
-    useBrushPresetStore.getState().setShowBrushModal(true);
+    useUIStore.getState().setShowBrushModal(true);
   }, []);
 
   return (

@@ -9,9 +9,9 @@ import {
   applyDodgeBurnDabBatch as gpuDodgeBurnDabBatch,
 } from '../../engine-wasm/wasm-bridge';
 import { interpolateFlat } from '../common/dab-interpolation';
+import type { DodgeMode } from './dodge';
 
-/** Map dodge/burn mode string to the GPU enum (0 = dodge, 1 = burn). */
-function dodgeModeToU32(mode: 'dodge' | 'burn'): number {
+function dodgeModeToU32(mode: DodgeMode): number {
   return mode === 'dodge' ? 0 : 1;
 }
 

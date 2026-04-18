@@ -87,6 +87,9 @@ pub struct EngineInner {
     pub composite_fbo: FramebufferHandle,
     pub scratch_fbo_a: FramebufferHandle,
     pub scratch_fbo_b: FramebufferHandle,
+    /// Reusable FBO for `render_to_texture` — re-attaches to the caller's
+    /// destination texture each call so we don't create/delete an FBO per blit.
+    pub render_fbo: FramebufferHandle,
     pub composite_texture: TextureHandle,
     pub scratch_texture_a: TextureHandle,
     pub scratch_texture_b: TextureHandle,
@@ -179,6 +182,7 @@ impl EngineInner {
         let composite_fbo = fbo_pool.create(&gl)?;
         let scratch_fbo_a = fbo_pool.create(&gl)?;
         let scratch_fbo_b = fbo_pool.create(&gl)?;
+        let render_fbo = fbo_pool.create(&gl)?;
 
         fbo_pool.attach_texture(&gl, composite_fbo, texture_pool.get(composite_texture).unwrap());
         fbo_pool.attach_texture(&gl, scratch_fbo_a, texture_pool.get(scratch_texture_a).unwrap());
@@ -196,6 +200,7 @@ impl EngineInner {
             composite_fbo,
             scratch_fbo_a,
             scratch_fbo_b,
+            render_fbo,
             composite_texture,
             scratch_texture_a,
             scratch_texture_b,
@@ -483,6 +488,28 @@ impl EngineInner {
     /// Draw a fullscreen quad (3 vertices, no VBO needed)
     pub fn draw_fullscreen_quad(&self) {
         self.gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
+    }
+
+    /// Binds the reusable `render_fbo` with `dst_tex` attached, sets the
+    /// viewport, and calls `setup_and_draw` (which should bind the shader,
+    /// upload uniforms, and call `draw_fullscreen_quad`). Unbinds the FBO on
+    /// return. Replaces the `create_framebuffer → bind → attach → viewport →
+    /// ... → unbind → delete_framebuffer` boilerplate.
+    pub fn render_to_texture<F>(
+        &self,
+        dst_tex: &web_sys::WebGlTexture,
+        viewport_w: i32,
+        viewport_h: i32,
+        setup_and_draw: F,
+    )
+    where
+        F: FnOnce(&Self),
+    {
+        self.fbo_pool.attach_texture(&self.gl, self.render_fbo, dst_tex);
+        self.fbo_pool.bind(&self.gl, self.render_fbo);
+        self.gl.viewport(0, 0, viewport_w, viewport_h);
+        setup_and_draw(self);
+        self.fbo_pool.unbind(&self.gl);
     }
 }
 

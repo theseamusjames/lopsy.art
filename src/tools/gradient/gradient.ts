@@ -1,12 +1,14 @@
 import type { Color } from '../../types';
 
+export type GradientType = 'linear' | 'radial';
+
 export interface GradientStop {
   readonly position: number;
   readonly color: Color;
 }
 
 export interface GradientSettings {
-  readonly type: 'linear' | 'radial';
+  readonly type: GradientType;
   readonly stops: readonly GradientStop[];
   readonly reverse: boolean;
 }

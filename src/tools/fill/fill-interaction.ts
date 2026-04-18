@@ -1,5 +1,4 @@
 import type { InteractionContext } from '../../app/interactions/interaction-types';
-import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
@@ -16,9 +15,9 @@ export function handleFillDown(ctx: InteractionContext): void {
   const { layerPos, activeLayerId } = ctx;
   const editorState = useEditorStore.getState();
   editorState.pushHistory();
-  const color = useUIStore.getState().foregroundColor;
-  useUIStore.getState().addRecentColor(color);
   const toolSettings = useToolSettingsStore.getState();
+  const color = toolSettings.foregroundColor;
+  toolSettings.addRecentColor(color);
   const tolerance = toolSettings.fillTolerance;
   const contiguous = toolSettings.fillContiguous;
 

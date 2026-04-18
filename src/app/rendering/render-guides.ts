@@ -1,7 +1,7 @@
 import type { Guide, RulerHover } from '../ui-store';
 import type { Color } from '../../types';
+import { RULER_SIZE } from './ruler-constants';
 
-const RULER_SIZE = 20;
 const PLAYHEAD_HOVER_COLOR = 'rgba(255, 255, 255, 0.9)';
 const PLAYHEAD_SELECTED_COLOR = 'rgba(255, 255, 255, 1)';
 const TOOLTIP_BG = 'rgba(0, 0, 0, 0.8)';

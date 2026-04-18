@@ -73,51 +73,44 @@ pub fn apply_fill_to_layer(
     );
 
     // Use flood_fill_apply shader
-    let prog = &engine.inner.shaders.flood_fill_apply.program;
-    gl.use_program(Some(prog));
+    let shader = &engine.inner.shaders.flood_fill_apply;
+    gl.use_program(Some(&shader.program));
 
     engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_a);
     gl.viewport(0, 0, w as i32, h as i32);
 
     gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = gl.get_uniform_location(prog, "u_layerTex") {
+    if let Some(loc) = shader.location(gl, "u_layerTex") {
         gl.uniform1i(Some(&loc), 0);
     }
     gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     if let Some(tex) = engine.inner.texture_pool.get(mask_tex) {
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex));
     }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_maskTex") {
+    if let Some(loc) = shader.location(gl, "u_maskTex") {
         gl.uniform1i(Some(&loc), 1);
     }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_fillColor") {
+    if let Some(loc) = shader.location(gl, "u_fillColor") {
         gl.uniform4f(Some(&loc), fill_r, fill_g, fill_b, fill_a);
     }
 
     engine.inner.draw_fullscreen_quad();
 
     // Copy scratch A -> layer texture
-    let temp_fbo = gl.create_framebuffer();
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, temp_fbo.as_ref());
-    gl.framebuffer_texture_2d(
-        WebGl2RenderingContext::FRAMEBUFFER,
-        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-        WebGl2RenderingContext::TEXTURE_2D,
-        Some(&layer_tex),
-        0,
-    );
-    gl.use_program(Some(&engine.inner.shaders.blit.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(scratch) = engine.inner.texture_pool.get(engine.inner.scratch_texture_a) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
-    }
-    if let Some(loc) = gl.get_uniform_location(&engine.inner.shaders.blit.program, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    engine.inner.draw_fullscreen_quad();
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-    gl.delete_framebuffer(temp_fbo.as_ref());
+    let scratch_a_tex = engine.inner.texture_pool.get(engine.inner.scratch_texture_a).cloned();
+    engine.inner.render_to_texture(&layer_tex, w as i32, h as i32, |eng| {
+        let gl = &eng.gl;
+        gl.use_program(Some(&eng.shaders.blit.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(s) = &scratch_a_tex {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
+        }
+        if let Some(loc) = eng.shaders.blit.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        eng.draw_fullscreen_quad();
+    });
 
     engine.inner.texture_pool.release(mask_tex);
     engine.inner.mark_layer_dirty(layer_id);

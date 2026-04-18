@@ -1,4 +1,6 @@
-use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlUniformLocation};
 
 pub const FULLSCREEN_QUAD_VERT: &str = r#"#version 300 es
 precision highp float;
@@ -81,6 +83,24 @@ pub const TONEMAP_FRAG: &str = include_str!("shaders/color/tonemap.glsl");
 
 pub struct ShaderProgram {
     pub program: WebGlProgram,
+    uniforms: RefCell<HashMap<String, Option<WebGlUniformLocation>>>,
+}
+
+impl ShaderProgram {
+    fn new(program: WebGlProgram) -> Self {
+        Self { program, uniforms: RefCell::new(HashMap::new()) }
+    }
+
+    /// Looks up a uniform location, caching the result so that subsequent calls
+    /// avoid the `gl.getUniformLocation` round trip. Safe to call per-draw.
+    pub fn location(&self, gl: &WebGl2RenderingContext, name: &str) -> Option<WebGlUniformLocation> {
+        if let Some(cached) = self.uniforms.borrow().get(name) {
+            return cached.clone();
+        }
+        let loc = gl.get_uniform_location(&self.program, name);
+        self.uniforms.borrow_mut().insert(name.to_string(), loc.clone());
+        loc
+    }
 }
 
 pub fn compile_shader(
@@ -136,7 +156,7 @@ pub fn compile_program(
     let program = link_program(gl, &vert, &frag)?;
     gl.delete_shader(Some(&vert));
     gl.delete_shader(Some(&frag));
-    Ok(ShaderProgram { program })
+    Ok(ShaderProgram::new(program))
 }
 
 pub struct ShaderPrograms {

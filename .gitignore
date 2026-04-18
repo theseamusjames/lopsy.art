@@ -3,6 +3,7 @@ dist
 .context
 *.local
 .DS_Store
+storybook-static
 
 # Rust build artifacts
 engine-rs/target/

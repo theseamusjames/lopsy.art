@@ -44,8 +44,6 @@ pub fn apply_smudge_dab_batch(
         None => return,
     };
 
-    let prog = &engine.shaders.smudge_dab.program;
-
     let mut prev_x = points[0];
     let mut prev_y = points[1];
 
@@ -57,52 +55,45 @@ pub fn apply_smudge_dab_batch(
         engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
         gl.viewport(0, 0, w as i32, h as i32);
 
-        gl.use_program(Some(prog));
+        let shader = &engine.shaders.smudge_dab;
+        gl.use_program(Some(&shader.program));
         gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = gl.get_uniform_location(prog, "u_sourceTex") {
+        if let Some(loc) = shader.location(gl, "u_sourceTex") {
             gl.uniform1i(Some(&loc), 0);
         }
-        if let Some(loc) = gl.get_uniform_location(prog, "u_center") {
+        if let Some(loc) = shader.location(gl, "u_center") {
             gl.uniform2f(Some(&loc), cx as f32, cy as f32);
         }
-        if let Some(loc) = gl.get_uniform_location(prog, "u_prev") {
+        if let Some(loc) = shader.location(gl, "u_prev") {
             gl.uniform2f(Some(&loc), prev_x as f32, prev_y as f32);
         }
-        if let Some(loc) = gl.get_uniform_location(prog, "u_size") {
+        if let Some(loc) = shader.location(gl, "u_size") {
             gl.uniform1f(Some(&loc), size);
         }
-        if let Some(loc) = gl.get_uniform_location(prog, "u_strength") {
+        if let Some(loc) = shader.location(gl, "u_strength") {
             gl.uniform1f(Some(&loc), strength);
         }
-        if let Some(loc) = gl.get_uniform_location(prog, "u_texSize") {
+        if let Some(loc) = shader.location(gl, "u_texSize") {
             gl.uniform2f(Some(&loc), w as f32, h as f32);
         }
 
         engine.draw_fullscreen_quad();
 
         // Copy scratch A back to layer so subsequent dabs see the updated pixels
-        let temp_fbo = gl.create_framebuffer();
-        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, temp_fbo.as_ref());
-        gl.framebuffer_texture_2d(
-            WebGl2RenderingContext::FRAMEBUFFER,
-            WebGl2RenderingContext::COLOR_ATTACHMENT0,
-            WebGl2RenderingContext::TEXTURE_2D,
-            Some(&layer_tex),
-            0,
-        );
-        gl.use_program(Some(&engine.shaders.blit.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
-        }
-        if let Some(loc) = gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        engine.draw_fullscreen_quad();
-
-        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-        gl.delete_framebuffer(temp_fbo.as_ref());
+        let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
+        engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+            let gl = &engine.gl;
+            gl.use_program(Some(&engine.shaders.blit.program));
+            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            if let Some(s) = &scratch_a_tex {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
+            }
+            if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+                gl.uniform1i(Some(&loc), 0);
+            }
+            engine.draw_fullscreen_quad();
+        });
 
         prev_x = cx;
         prev_y = cy;

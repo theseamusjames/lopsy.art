@@ -1,5 +1,6 @@
 use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
+use crate::gpu::shader::ShaderProgram;
 
 #[derive(serde::Deserialize)]
 struct GradientStop {
@@ -48,70 +49,59 @@ pub fn render_linear_gradient(
     gl.use_program(Some(&engine.shaders.blit.program));
     gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") {
+    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
         gl.uniform1i(Some(&loc), 0);
     }
     engine.draw_fullscreen_quad();
 
-    // Render gradient with selection mask into the layer texture
-    let temp_fbo = gl.create_framebuffer();
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, temp_fbo.as_ref());
-    gl.framebuffer_texture_2d(
-        WebGl2RenderingContext::FRAMEBUFFER,
-        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-        WebGl2RenderingContext::TEXTURE_2D,
-        Some(&layer_tex),
-        0,
-    );
-    gl.viewport(0, 0, w as i32, h as i32);
+    let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
+    let mask_tex_opt = engine.selection_mask_texture
+        .and_then(|h| engine.texture_pool.get(h).cloned());
+    let has_mask = mask_tex_opt.is_some();
 
-    let prog = &engine.shaders.gradient_linear.program;
-    gl.use_program(Some(prog));
+    engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.gradient_linear;
+        gl.use_program(Some(&shader.program));
 
-    // Bind existing content (from scratch_a)
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex));
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_existingTex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-
-    // Bind selection mask
-    let has_mask = engine.selection_mask_texture.is_some();
-    if has_mask {
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        if let Some(mask_handle) = engine.selection_mask_texture {
-            if let Some(mask_tex) = engine.texture_pool.get(mask_handle) {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
-            }
+        // Bind existing content (from scratch_a)
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(s) = &scratch_tex {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
         }
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_maskTex") {
-        gl.uniform1i(Some(&loc), 1);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_hasMask") {
-        gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
-        gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_layerOffset") {
-        gl.uniform2f(Some(&loc), layer_x, layer_y);
-    }
+        if let Some(loc) = shader.location(gl, "u_existingTex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
 
-    set_gradient_uniforms(gl, prog, &stops, w, h);
-    if let Some(loc) = gl.get_uniform_location(prog, "u_start") {
-        gl.uniform2f(Some(&loc), start_x as f32, start_y as f32);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_end") {
-        gl.uniform2f(Some(&loc), end_x as f32, end_y as f32);
-    }
+        // Bind selection mask
+        if let Some(m) = &mask_tex_opt {
+            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
+        }
+        if let Some(loc) = shader.location(gl, "u_maskTex") {
+            gl.uniform1i(Some(&loc), 1);
+        }
+        if let Some(loc) = shader.location(gl, "u_hasMask") {
+            gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
+        }
+        if let Some(loc) = shader.location(gl, "u_docSize") {
+            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+        }
+        if let Some(loc) = shader.location(gl, "u_layerOffset") {
+            gl.uniform2f(Some(&loc), layer_x, layer_y);
+        }
 
-    engine.draw_fullscreen_quad();
+        set_gradient_uniforms(gl, shader, &stops, w, h);
+        if let Some(loc) = shader.location(gl, "u_start") {
+            gl.uniform2f(Some(&loc), start_x as f32, start_y as f32);
+        }
+        if let Some(loc) = shader.location(gl, "u_end") {
+            gl.uniform2f(Some(&loc), end_x as f32, end_y as f32);
+        }
 
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-    gl.delete_framebuffer(temp_fbo.as_ref());
+        engine.draw_fullscreen_quad();
+    });
+
     engine.mark_layer_dirty(layer_id);
 }
 
@@ -152,94 +142,83 @@ pub fn render_radial_gradient(
     gl.use_program(Some(&engine.shaders.blit.program));
     gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") {
+    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
         gl.uniform1i(Some(&loc), 0);
     }
     engine.draw_fullscreen_quad();
 
-    // Render gradient with selection mask
-    let temp_fbo = gl.create_framebuffer();
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, temp_fbo.as_ref());
-    gl.framebuffer_texture_2d(
-        WebGl2RenderingContext::FRAMEBUFFER,
-        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-        WebGl2RenderingContext::TEXTURE_2D,
-        Some(&layer_tex),
-        0,
-    );
-    gl.viewport(0, 0, w as i32, h as i32);
+    let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
+    let mask_tex_opt = engine.selection_mask_texture
+        .and_then(|h| engine.texture_pool.get(h).cloned());
+    let has_mask = mask_tex_opt.is_some();
 
-    let prog = &engine.shaders.gradient_radial.program;
-    gl.use_program(Some(prog));
+    engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.gradient_radial;
+        gl.use_program(Some(&shader.program));
 
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex));
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_existingTex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-
-    let has_mask = engine.selection_mask_texture.is_some();
-    if has_mask {
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        if let Some(mask_handle) = engine.selection_mask_texture {
-            if let Some(mask_tex) = engine.texture_pool.get(mask_handle) {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
-            }
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(s) = &scratch_tex {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
         }
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_maskTex") {
-        gl.uniform1i(Some(&loc), 1);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_hasMask") {
-        gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_docSize") {
-        gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_layerOffset") {
-        gl.uniform2f(Some(&loc), layer_x, layer_y);
-    }
+        if let Some(loc) = shader.location(gl, "u_existingTex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
 
-    set_gradient_uniforms(gl, prog, &stops, w, h);
-    if let Some(loc) = gl.get_uniform_location(prog, "u_center") {
-        gl.uniform2f(Some(&loc), center_x as f32, center_y as f32);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_radius") {
-        gl.uniform1f(Some(&loc), radius as f32);
-    }
+        if let Some(m) = &mask_tex_opt {
+            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
+        }
+        if let Some(loc) = shader.location(gl, "u_maskTex") {
+            gl.uniform1i(Some(&loc), 1);
+        }
+        if let Some(loc) = shader.location(gl, "u_hasMask") {
+            gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
+        }
+        if let Some(loc) = shader.location(gl, "u_docSize") {
+            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+        }
+        if let Some(loc) = shader.location(gl, "u_layerOffset") {
+            gl.uniform2f(Some(&loc), layer_x, layer_y);
+        }
 
-    engine.draw_fullscreen_quad();
+        set_gradient_uniforms(gl, shader, &stops, w, h);
+        if let Some(loc) = shader.location(gl, "u_center") {
+            gl.uniform2f(Some(&loc), center_x as f32, center_y as f32);
+        }
+        if let Some(loc) = shader.location(gl, "u_radius") {
+            gl.uniform1f(Some(&loc), radius as f32);
+        }
 
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-    gl.delete_framebuffer(temp_fbo.as_ref());
+        engine.draw_fullscreen_quad();
+    });
+
     engine.mark_layer_dirty(layer_id);
 }
 
 fn set_gradient_uniforms(
     gl: &WebGl2RenderingContext,
-    prog: &web_sys::WebGlProgram,
+    shader: &ShaderProgram,
     stops: &[GradientStop],
     w: u32,
     h: u32,
 ) {
     let count = stops.len().min(16) as i32;
-    if let Some(loc) = gl.get_uniform_location(prog, "u_stopCount") {
+    if let Some(loc) = shader.location(gl, "u_stopCount") {
         gl.uniform1i(Some(&loc), count);
     }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_texSize") {
+    if let Some(loc) = shader.location(gl, "u_texSize") {
         gl.uniform2f(Some(&loc), w as f32, h as f32);
     }
 
     // Set stop colors and positions
     for (i, stop) in stops.iter().enumerate().take(16) {
         let name = format!("u_stops[{i}]");
-        if let Some(loc) = gl.get_uniform_location(prog, &name) {
+        if let Some(loc) = shader.location(gl, &name) {
             gl.uniform4f(Some(&loc), stop.r, stop.g, stop.b, stop.a);
         }
         let name = format!("u_stopPositions[{i}]");
-        if let Some(loc) = gl.get_uniform_location(prog, &name) {
+        if let Some(loc) = shader.location(gl, &name) {
             gl.uniform1f(Some(&loc), stop.position);
         }
     }

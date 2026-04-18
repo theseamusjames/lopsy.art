@@ -300,7 +300,7 @@ export function useCanvasInteraction(
           const size = toolSettings.brushSize;
           const hardness = toolSettings.brushHardness / 100;
           const opacity = toolSettings.brushOpacity / 100;
-          const color = useUIStore.getState().foregroundColor;
+          const color = toolSettings.foregroundColor;
           const r = color.r / 255;
           const g = color.g / 255;
           const b = color.b / 255;

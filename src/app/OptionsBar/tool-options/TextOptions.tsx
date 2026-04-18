@@ -1,5 +1,6 @@
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { Slider } from '../../../components/Slider/Slider';
+import type { FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
 
 const FONT_OPTIONS = [
@@ -57,7 +58,7 @@ export function TextOptions() {
       <select
         className={styles.select}
         value={textFontStyle}
-        onChange={(e) => setTextFontStyle(e.target.value as 'normal' | 'italic')}
+        onChange={(e) => setTextFontStyle(e.target.value as FontStyle)}
       >
         <option value="normal">Normal</option>
         <option value="italic">Italic</option>
@@ -66,7 +67,7 @@ export function TextOptions() {
       <select
         className={styles.select}
         value={textAlign}
-        onChange={(e) => setTextAlign(e.target.value as 'left' | 'center' | 'right' | 'justify')}
+        onChange={(e) => setTextAlign(e.target.value as TextAlign)}
       >
         <option value="left">Left</option>
         <option value="center">Center</option>

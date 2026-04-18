@@ -39,10 +39,10 @@ export function commitTextEditing(): void {
   }
 
   const toolSettings = useToolSettingsStore.getState();
-  const textColor = uiState.foregroundColor;
+  const textColor = toolSettings.foregroundColor;
 
   editorState.pushHistory('Text');
-  uiState.addRecentColor(textColor);
+  toolSettings.addRecentColor(textColor);
 
   const style: TextStyle = {
     fontSize: toolSettings.textFontSize,
@@ -111,7 +111,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
     toolSettings.setTextFontWeight(hitLayer.fontWeight);
     toolSettings.setTextFontStyle(hitLayer.fontStyle);
     toolSettings.setTextAlign(hitLayer.textAlign);
-    uiState.setForegroundColor(hitLayer.color);
+    toolSettings.setForegroundColor(hitLayer.color);
 
     editorState.setActiveLayer(hitLayer.id);
 
@@ -174,7 +174,7 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
   const uiState = useUIStore.getState();
   const editorState = useEditorStore.getState();
   const toolSettings = useToolSettingsStore.getState();
-  const textColor = uiState.foregroundColor;
+  const textColor = toolSettings.foregroundColor;
 
   uiState.setTextDrag(null);
 

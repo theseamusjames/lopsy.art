@@ -133,13 +133,13 @@ pub fn composite(engine: &mut EngineInner) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(comp_tex));
     }
 
-    let prog = &engine.shaders.final_blit.program;
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_compositeTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_resolution") { engine.gl.uniform2f(Some(&loc), screen_w as f32, screen_h as f32); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_zoom") { engine.gl.uniform1f(Some(&loc), vp_zoom as f32); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_pan") { engine.gl.uniform2f(Some(&loc), vp_pan_x as f32, vp_pan_y as f32); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_bgAlpha") { engine.gl.uniform1f(Some(&loc), bg[3]); }
+    let shader = &engine.shaders.final_blit;
+    if let Some(loc) = shader.location(&engine.gl, "u_compositeTex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_resolution") { engine.gl.uniform2f(Some(&loc), screen_w as f32, screen_h as f32); }
+    if let Some(loc) = shader.location(&engine.gl, "u_zoom") { engine.gl.uniform1f(Some(&loc), vp_zoom as f32); }
+    if let Some(loc) = shader.location(&engine.gl, "u_pan") { engine.gl.uniform2f(Some(&loc), vp_pan_x as f32, vp_pan_y as f32); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+    if let Some(loc) = shader.location(&engine.gl, "u_bgAlpha") { engine.gl.uniform1f(Some(&loc), bg[3]); }
 
     engine.draw_fullscreen_quad();
 
@@ -175,36 +175,36 @@ fn blend_onto_composite(
     if let Some(comp_tex) = engine.texture_pool.get(engine.composite_texture) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(comp_tex));
     }
-    let prog = &engine.shaders.blend.program;
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), opacity); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blendMode") { engine.gl.uniform1i(Some(&loc), blend_mode); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), if premultiplied { 1 } else { 0 }); }
+    let shader = &engine.shaders.blend;
+    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
+    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), opacity); }
+    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), blend_mode); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), if premultiplied { 1 } else { 0 }); }
 
     // Color overlay — applied inline in the blend shader
     if let Some(ov) = overlay {
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_overlayColor") { engine.gl.uniform3f(Some(&loc), ov.color[0], ov.color[1], ov.color[2]); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_overlayOpacity") { engine.gl.uniform1f(Some(&loc), ov.opacity); }
+        if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(&engine.gl, "u_overlayColor") { engine.gl.uniform3f(Some(&loc), ov.color[0], ov.color[1], ov.color[2]); }
+        if let Some(loc) = shader.location(&engine.gl, "u_overlayOpacity") { engine.gl.uniform1f(Some(&loc), ov.opacity); }
     } else {
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
     }
 
     // Layer mask
     if let Some((mask_gl_tex, mask_w, mask_h)) = mask_tex {
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_gl_tex));
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 2); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_maskSize") { engine.gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 2); }
+        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(&engine.gl, "u_maskSize") { engine.gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
     } else {
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
     }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     engine.draw_fullscreen_quad();
@@ -222,7 +222,7 @@ fn blend_onto_composite(
     if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex));
     }
-    if let Some(loc) = engine.gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
     engine.draw_fullscreen_quad();
 }
 
@@ -246,18 +246,18 @@ fn render_mask_overlay(
     if let Some(comp_tex) = engine.texture_pool.get(engine.composite_texture) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(comp_tex));
     }
-    let prog = &engine.shaders.blend.program;
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcSize") { engine.gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 1); }
+    let shader = &engine.shaders.blend;
+    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
+    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 1); }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     engine.draw_fullscreen_quad();
@@ -272,7 +272,7 @@ fn render_mask_overlay(
     if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex));
     }
-    if let Some(loc) = engine.gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
     engine.draw_fullscreen_quad();
 }
 
@@ -291,22 +291,22 @@ fn blend_effect_onto_composite(engine: &mut EngineInner) {
     let doc_h = engine.doc_height as f32;
 
     // Use the blend shader: src=effect, dst=composite → render into scratch_b
-    let prog = &engine.shaders.blend.program;
-    engine.gl.use_program(Some(prog));
+    let shader = &engine.shaders.blend;
+    engine.gl.use_program(Some(&shader.program));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&effect_tex));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = engine.gl.get_uniform_location(prog, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
+    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
@@ -324,7 +324,7 @@ fn blend_effect_onto_composite(engine: &mut EngineInner) {
     if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex));
     }
-    if let Some(loc) = engine.gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
     engine.draw_fullscreen_quad();
 }
 
@@ -336,17 +336,17 @@ fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th:
         engine.gl.use_program(Some(&engine.shaders.glow.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        let prog = &engine.shaders.glow.program;
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_glowColor") { engine.gl.uniform4f(Some(&loc), glow.color[0], glow.color[1], glow.color[2], glow.color[3]); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_size") { engine.gl.uniform1f(Some(&loc), glow.size); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_spread") { engine.gl.uniform1f(Some(&loc), glow.spread); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), glow.opacity); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_mode") { engine.gl.uniform1i(Some(&loc), mode); }
+        let shader = &engine.shaders.glow;
+        if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_glowColor") { engine.gl.uniform4f(Some(&loc), glow.color[0], glow.color[1], glow.color[2], glow.color[3]); }
+        if let Some(loc) = shader.location(&engine.gl, "u_size") { engine.gl.uniform1f(Some(&loc), glow.size); }
+        if let Some(loc) = shader.location(&engine.gl, "u_spread") { engine.gl.uniform1f(Some(&loc), glow.spread); }
+        if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), glow.opacity); }
+        if let Some(loc) = shader.location(&engine.gl, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_mode") { engine.gl.uniform1i(Some(&loc), mode); }
 
         engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
         engine.gl.viewport(0, 0, doc_w, doc_h);
@@ -366,17 +366,17 @@ fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         engine.gl.use_program(Some(&engine.shaders.shadow.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        let prog = &engine.shaders.shadow.program;
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_shadowColor") { engine.gl.uniform4f(Some(&loc), shadow.color[0], shadow.color[1], shadow.color[2], shadow.color[3]); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_offset") { engine.gl.uniform2f(Some(&loc), shadow.offset_x, shadow.offset_y); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blur") { engine.gl.uniform1f(Some(&loc), shadow.blur); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_spread") { engine.gl.uniform1f(Some(&loc), shadow.spread); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), shadow.opacity); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+        let shader = &engine.shaders.shadow;
+        if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_shadowColor") { engine.gl.uniform4f(Some(&loc), shadow.color[0], shadow.color[1], shadow.color[2], shadow.color[3]); }
+        if let Some(loc) = shader.location(&engine.gl, "u_offset") { engine.gl.uniform2f(Some(&loc), shadow.offset_x, shadow.offset_y); }
+        if let Some(loc) = shader.location(&engine.gl, "u_blur") { engine.gl.uniform1f(Some(&loc), shadow.blur); }
+        if let Some(loc) = shader.location(&engine.gl, "u_spread") { engine.gl.uniform1f(Some(&loc), shadow.spread); }
+        if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), shadow.opacity); }
+        if let Some(loc) = shader.location(&engine.gl, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
 
         engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
         engine.gl.viewport(0, 0, doc_w, doc_h);
@@ -401,16 +401,16 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         engine.gl.use_program(Some(&engine.shaders.stroke_edt.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        let prog = &engine.shaders.stroke_edt.program;
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_strokeColor") { engine.gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_width") { engine.gl.uniform1f(Some(&loc), stroke.width); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_position") { engine.gl.uniform1i(Some(&loc), position); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_opacity") { engine.gl.uniform1f(Some(&loc), stroke.opacity); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+        let shader = &engine.shaders.stroke_edt;
+        if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_strokeColor") { engine.gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
+        if let Some(loc) = shader.location(&engine.gl, "u_width") { engine.gl.uniform1f(Some(&loc), stroke.width); }
+        if let Some(loc) = shader.location(&engine.gl, "u_position") { engine.gl.uniform1i(Some(&loc), position); }
+        if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), stroke.opacity); }
+        if let Some(loc) = shader.location(&engine.gl, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
 
         engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
         engine.gl.viewport(0, 0, doc_w, doc_h);
@@ -558,20 +558,20 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
         engine.gl.viewport(0, 0, doc_w, doc_h);
 
-        let prog = &engine.shaders.adjustments.program;
-        engine.gl.use_program(Some(prog));
+        let shader = &engine.shaders.adjustments;
+        engine.gl.use_program(Some(&shader.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_brightness") { engine.gl.uniform1f(Some(&loc), 0.0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_contrast") { engine.gl.uniform1f(Some(&loc), engine.adjustments.contrast / 100.0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_exposure") { engine.gl.uniform1f(Some(&loc), engine.adjustments.exposure); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_highlights") { engine.gl.uniform1f(Some(&loc), engine.adjustments.highlights); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_shadows") { engine.gl.uniform1f(Some(&loc), engine.adjustments.shadows); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_whites") { engine.gl.uniform1f(Some(&loc), engine.adjustments.whites); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_blacks") { engine.gl.uniform1f(Some(&loc), engine.adjustments.blacks); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_saturation") { engine.gl.uniform1f(Some(&loc), engine.adjustments.saturation / 100.0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_vibrance") { engine.gl.uniform1f(Some(&loc), engine.adjustments.vibrance / 100.0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_brightness") { engine.gl.uniform1f(Some(&loc), 0.0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_contrast") { engine.gl.uniform1f(Some(&loc), engine.adjustments.contrast / 100.0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_exposure") { engine.gl.uniform1f(Some(&loc), engine.adjustments.exposure); }
+        if let Some(loc) = shader.location(&engine.gl, "u_highlights") { engine.gl.uniform1f(Some(&loc), engine.adjustments.highlights); }
+        if let Some(loc) = shader.location(&engine.gl, "u_shadows") { engine.gl.uniform1f(Some(&loc), engine.adjustments.shadows); }
+        if let Some(loc) = shader.location(&engine.gl, "u_whites") { engine.gl.uniform1f(Some(&loc), engine.adjustments.whites); }
+        if let Some(loc) = shader.location(&engine.gl, "u_blacks") { engine.gl.uniform1f(Some(&loc), engine.adjustments.blacks); }
+        if let Some(loc) = shader.location(&engine.gl, "u_saturation") { engine.gl.uniform1f(Some(&loc), engine.adjustments.saturation / 100.0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_vibrance") { engine.gl.uniform1f(Some(&loc), engine.adjustments.vibrance / 100.0); }
         // Levels LUT — bound to TEXTURE2 so it doesn't clobber u_tex or u_curveLut.
         let has_levels = engine.adjustments.has_levels && engine.adjustments.levels_texture.is_some();
         if has_levels {
@@ -579,11 +579,11 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
                 let levels_tex = levels_tex.clone();
                 engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
                 engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&levels_tex));
-                if let Some(loc) = engine.gl.get_uniform_location(prog, "u_levelsLut") { engine.gl.uniform1i(Some(&loc), 2); }
+                if let Some(loc) = shader.location(&engine.gl, "u_levelsLut") { engine.gl.uniform1i(Some(&loc), 2); }
                 engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
             }
         }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_hasLevels") {
+        if let Some(loc) = shader.location(&engine.gl, "u_hasLevels") {
             engine.gl.uniform1f(Some(&loc), if has_levels { 1.0 } else { 0.0 });
         }
 
@@ -594,11 +594,11 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
                 let curve_tex = curve_tex.clone();
                 engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
                 engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&curve_tex));
-                if let Some(loc) = engine.gl.get_uniform_location(prog, "u_curveLut") { engine.gl.uniform1i(Some(&loc), 1); }
+                if let Some(loc) = shader.location(&engine.gl, "u_curveLut") { engine.gl.uniform1i(Some(&loc), 1); }
                 engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
             }
         }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_hasCurves") {
+        if let Some(loc) = shader.location(&engine.gl, "u_hasCurves") {
             engine.gl.uniform1f(Some(&loc), if has_curves { 1.0 } else { 0.0 });
         }
         engine.draw_fullscreen_quad();
@@ -610,7 +610,7 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
             engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
         }
-        if let Some(loc) = engine.gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
         engine.draw_fullscreen_quad();
     }
 
@@ -623,12 +623,12 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
         engine.gl.viewport(0, 0, doc_w, doc_h);
 
-        let prog = &engine.shaders.vignette.program;
-        engine.gl.use_program(Some(prog));
+        let shader = &engine.shaders.vignette;
+        engine.gl.use_program(Some(&shader.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = engine.gl.get_uniform_location(prog, "u_amount") { engine.gl.uniform1f(Some(&loc), engine.adjustments.vignette); }
+        if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_amount") { engine.gl.uniform1f(Some(&loc), engine.adjustments.vignette); }
         engine.draw_fullscreen_quad();
 
         // Copy scratch_a → composite
@@ -638,7 +638,7 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
             engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
         }
-        if let Some(loc) = engine.gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
         engine.draw_fullscreen_quad();
     }
 }

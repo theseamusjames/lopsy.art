@@ -3,7 +3,10 @@ import type { Point } from './geometry';
 import type { LayerEffects, LayerMask } from './effects';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 
-export type LayerType = 'raster' | 'text' | 'shape' | 'group' | 'adjustment' | 'fill';
+export type LayerType = 'raster' | 'text' | 'shape' | 'group';
+
+export type FontStyle = 'normal' | 'italic';
+export type TextAlign = 'left' | 'center' | 'right' | 'justify';
 
 export interface LayerBase {
   readonly id: string;
@@ -32,11 +35,11 @@ export interface TextLayer extends LayerBase {
   readonly fontFamily: string;
   readonly fontSize: number;
   readonly fontWeight: number;
-  readonly fontStyle: 'normal' | 'italic';
+  readonly fontStyle: FontStyle;
   readonly color: Color;
   readonly lineHeight: number;
   readonly letterSpacing: number;
-  readonly textAlign: 'left' | 'center' | 'right' | 'justify';
+  readonly textAlign: TextAlign;
   readonly width: number | null; // null = point text, number = area text
 }
 

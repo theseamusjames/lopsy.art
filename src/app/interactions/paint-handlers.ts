@@ -120,6 +120,8 @@ export function handlePaintDown(
     y: doc.height / 2 - activeLayer.y,
   };
 
+  const strokeColor = useToolSettingsStore.getState().foregroundColor;
+
   const state: InteractionState = {
     drawing: true,
     lastPoint: layerPos,
@@ -135,6 +137,7 @@ export function handlePaintDown(
     spacingRemainder: 0,
     symmetryCenter: docCenter,
     strokePoints: tool === 'brush' ? [{ x: layerPos.x, y: layerPos.y }] : undefined,
+    strokeColor,
   };
 
   if (!engine) return state;
@@ -148,8 +151,8 @@ export function handlePaintDown(
     const brushSpacing = toolSettings.brushSpacing;
     const brushScatter = toolSettings.brushScatter;
     const brushFade = toolSettings.brushFade;
-    const color = useUIStore.getState().foregroundColor;
-    useUIStore.getState().addRecentColor(color);
+    const color = strokeColor;
+    useToolSettingsStore.getState().addRecentColor(color);
     const r = color.r / 255;
     const g = color.g / 255;
     const b = color.b / 255;
@@ -193,8 +196,8 @@ export function handlePaintDown(
       }
     }
   } else if (tool === 'pencil') {
-    const color = useUIStore.getState().foregroundColor;
-    useUIStore.getState().addRecentColor(color);
+    const color = strokeColor;
+    useToolSettingsStore.getState().addRecentColor(color);
     const size = toolSettings.pencilSize;
     gpuDrawPencilLine(engine, activeLayerId,
       lineFrom.x, lineFrom.y, layerPos.x, layerPos.y,
@@ -387,7 +390,7 @@ export function handlePaintMove(
       const opacity = toolSettings.brushOpacity / 100;
       const brushScatter = toolSettings.brushScatter;
       const brushFade = toolSettings.brushFade;
-      const color = useUIStore.getState().foregroundColor;
+      const color = state.strokeColor ?? useToolSettingsStore.getState().foregroundColor;
       const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
       const r = color.r / 255;
       const g = color.g / 255;
@@ -442,7 +445,7 @@ export function handlePaintMove(
     }
 
     case 'pencil': {
-      const color = useUIStore.getState().foregroundColor;
+      const color = state.strokeColor ?? useToolSettingsStore.getState().foregroundColor;
       const size = toolSettings.pencilSize;
       gpuDrawPencilLine(engine, state.layerId,
         state.lastPoint.x, state.lastPoint.y, layerLocalPos.x, layerLocalPos.y,

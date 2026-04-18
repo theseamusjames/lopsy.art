@@ -3,6 +3,7 @@ import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { pasteOrOpenBlob } from '../../app/paste-or-open';
 import { importPsdFile } from '../../io/psd';
+import { describeError, notifyError } from '../../app/notifications-store';
 import { confirmShapeSize } from '../../tools/shape/shape-interaction';
 import { NewDocumentModal } from '../NewDocumentModal/NewDocumentModal';
 import { ShapeSizeModal } from '../ShapeSizeModal/ShapeSizeModal';
@@ -48,20 +49,25 @@ export function ModalHost() {
     (file: File) => {
       const name = file.name.replace(/\.[^.]+$/, '');
       if (/\.psd$/i.test(file.name)) {
-        file.arrayBuffer().then(async (buffer) => {
-          await importPsdFile(new Uint8Array(buffer), name);
-          closeModal();
-        });
+        file
+          .arrayBuffer()
+          .then((buffer) => importPsdFile(new Uint8Array(buffer), name))
+          .then(() => closeModal())
+          .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
         return;
       }
-      pasteOrOpenBlob(file, name).then(() => closeModal());
+      pasteOrOpenBlob(file, name)
+        .then(() => closeModal())
+        .catch((err) => notifyError(`Failed to open file: ${describeError(err)}`));
     },
     [closeModal],
   );
 
   const handlePasteClipboard = useCallback(
     (blob: Blob) => {
-      pasteOrOpenBlob(blob, 'Copied File').then(() => closeModal());
+      pasteOrOpenBlob(blob, 'Copied File')
+        .then(() => closeModal())
+        .catch((err) => notifyError(`Failed to paste image: ${describeError(err)}`));
     },
     [closeModal],
   );

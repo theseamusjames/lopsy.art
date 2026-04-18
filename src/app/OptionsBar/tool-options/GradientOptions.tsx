@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { GradientModal } from '../../../components/GradientModal/GradientModal';
 import { buildGradientCss } from '../../../components/GradientEditor/GradientEditor';
+import type { GradientType } from '../../../tools/gradient/gradient';
 import styles from '../OptionsBar.module.css';
 import gradientStyles from './GradientOptions.module.css';
 
@@ -29,7 +30,7 @@ export function GradientOptions() {
       <select
         className={styles.select}
         value={gradientType}
-        onChange={(e) => setGradientType(e.target.value as 'linear' | 'radial')}
+        onChange={(e) => setGradientType(e.target.value as GradientType)}
       >
         <option value="linear">Linear</option>
         <option value="radial">Radial</option>

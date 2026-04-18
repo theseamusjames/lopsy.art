@@ -1,5 +1,6 @@
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { Slider } from '../../../components/Slider/Slider';
+import type { DodgeMode } from '../../../tools/dodge/dodge';
 import styles from '../OptionsBar.module.css';
 
 export function DodgeOptions() {
@@ -16,7 +17,7 @@ export function DodgeOptions() {
       <select
         className={styles.select}
         value={dodgeMode}
-        onChange={(e) => setDodgeMode(e.target.value as 'dodge' | 'burn')}
+        onChange={(e) => setDodgeMode(e.target.value as DodgeMode)}
       >
         <option value="dodge">Dodge</option>
         <option value="burn">Burn</option>

@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import type { ContextMenuItem } from '../components/ContextMenu/ContextMenu';
 import { useEditorStore } from './editor-store';
-import { useBrushPresetStore, abrBrushToPreset } from './brush-preset-store';
+import { useToolSettingsStore, abrBrushToPreset } from './tool-settings-store';
+import { useUIStore } from './ui-store';
 import { createBrushTipFromSelection } from '../tools/brush/brush-from-selection';
 import { selectAll } from './MenuBar/menus/select-menu';
 
@@ -51,10 +52,10 @@ export function useContextMenu() {
           });
 
           const preset = abrBrushToPreset('Custom Brush', tip);
-          const presetStore = useBrushPresetStore.getState();
-          presetStore.addPreset(preset);
-          presetStore.setActivePreset(preset.id);
-          presetStore.setShowBrushModal(true);
+          const toolStore = useToolSettingsStore.getState();
+          toolStore.addPreset(preset);
+          toolStore.setActivePreset(preset.id);
+          useUIStore.getState().setShowBrushModal(true);
         },
       });
 

@@ -6,7 +6,6 @@ use crate::engine::EngineInner;
 pub fn save_shape_preview(engine: &mut EngineInner, layer_id: &str) {
     let _ = engine.ensure_layer_full_size(layer_id);
 
-    let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,
         None => return,
@@ -31,26 +30,17 @@ pub fn save_shape_preview(engine: &mut EngineInner, layer_id: &str) {
     };
 
     // Copy layer → preview via temp FBO
-    let temp_fbo = gl.create_framebuffer();
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, temp_fbo.as_ref());
-    gl.framebuffer_texture_2d(
-        WebGl2RenderingContext::FRAMEBUFFER,
-        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-        WebGl2RenderingContext::TEXTURE_2D,
-        Some(&preview_tex),
-        0,
-    );
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.disable(WebGl2RenderingContext::BLEND);
-    gl.use_program(Some(&engine.shaders.blit.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    engine.draw_fullscreen_quad();
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-    gl.delete_framebuffer(temp_fbo.as_ref());
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&preview_tex, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        gl.use_program(Some(&engine.shaders.blit.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        engine.draw_fullscreen_quad();
+    });
 
     engine.shape_preview_texture = Some(preview_handle);
     engine.shape_preview_layer_id = Some(layer_id.to_string());
@@ -87,7 +77,6 @@ pub fn render_shape(
     let corner_radius = corner_radius.min((width as f32).min(height as f32) / 2.0);
     let _ = engine.ensure_layer_full_size(layer_id);
 
-    let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,
         None => return,
@@ -107,82 +96,63 @@ pub fn render_shape(
             engine.shape_preview_texture.unwrap()
         ).cloned();
         if let Some(ptex) = preview_tex {
-            let restore_fbo = gl.create_framebuffer();
-            gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, restore_fbo.as_ref());
-            gl.framebuffer_texture_2d(
-                WebGl2RenderingContext::FRAMEBUFFER,
-                WebGl2RenderingContext::COLOR_ATTACHMENT0,
-                WebGl2RenderingContext::TEXTURE_2D,
-                Some(&layer_tex),
-                0,
-            );
-            gl.viewport(0, 0, w as i32, h as i32);
-            gl.disable(WebGl2RenderingContext::BLEND);
-            gl.use_program(Some(&engine.shaders.blit.program));
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&ptex));
-            if let Some(loc) = gl.get_uniform_location(&engine.shaders.blit.program, "u_tex") {
-                gl.uniform1i(Some(&loc), 0);
-            }
-            engine.draw_fullscreen_quad();
-            gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-            gl.delete_framebuffer(restore_fbo.as_ref());
+            engine.gl.disable(WebGl2RenderingContext::BLEND);
+            engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+                let gl = &engine.gl;
+                gl.use_program(Some(&engine.shaders.blit.program));
+                gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&ptex));
+                if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+                    gl.uniform1i(Some(&loc), 0);
+                }
+                engine.draw_fullscreen_quad();
+            });
         }
     }
 
     // Draw the shape on top
-    let prog = &engine.shaders.shape_fill.program;
-    gl.use_program(Some(prog));
+    engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.shape_fill;
+        gl.use_program(Some(&shader.program));
 
-    let temp_fbo = gl.create_framebuffer();
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, temp_fbo.as_ref());
-    gl.framebuffer_texture_2d(
-        WebGl2RenderingContext::FRAMEBUFFER,
-        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-        WebGl2RenderingContext::TEXTURE_2D,
-        Some(&layer_tex),
-        0,
-    );
-    gl.viewport(0, 0, w as i32, h as i32);
+        gl.enable(WebGl2RenderingContext::BLEND);
+        gl.blend_func(
+            WebGl2RenderingContext::ONE,
+            WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA,
+        );
 
-    gl.enable(WebGl2RenderingContext::BLEND);
-    gl.blend_func(
-        WebGl2RenderingContext::ONE,
-        WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA,
-    );
+        if let Some(loc) = shader.location(gl, "u_shapeType") {
+            gl.uniform1i(Some(&loc), shape_type as i32);
+        }
+        if let Some(loc) = shader.location(gl, "u_center") {
+            gl.uniform2f(Some(&loc), cx as f32, cy as f32);
+        }
+        if let Some(loc) = shader.location(gl, "u_size") {
+            gl.uniform2f(Some(&loc), width as f32, height as f32);
+        }
+        if let Some(loc) = shader.location(gl, "u_fillColor") {
+            gl.uniform4f(Some(&loc), fill_r, fill_g, fill_b, fill_a);
+        }
+        if let Some(loc) = shader.location(gl, "u_strokeColor") {
+            gl.uniform4f(Some(&loc), stroke_r, stroke_g, stroke_b, stroke_a);
+        }
+        if let Some(loc) = shader.location(gl, "u_strokeWidth") {
+            gl.uniform1f(Some(&loc), stroke_width);
+        }
+        if let Some(loc) = shader.location(gl, "u_cornerRadius") {
+            gl.uniform1f(Some(&loc), corner_radius);
+        }
+        if let Some(loc) = shader.location(gl, "u_sides") {
+            gl.uniform1i(Some(&loc), sides as i32);
+        }
+        if let Some(loc) = shader.location(gl, "u_texSize") {
+            gl.uniform2f(Some(&loc), w as f32, h as f32);
+        }
 
-    if let Some(loc) = gl.get_uniform_location(prog, "u_shapeType") {
-        gl.uniform1i(Some(&loc), shape_type as i32);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_center") {
-        gl.uniform2f(Some(&loc), cx as f32, cy as f32);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_size") {
-        gl.uniform2f(Some(&loc), width as f32, height as f32);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_fillColor") {
-        gl.uniform4f(Some(&loc), fill_r, fill_g, fill_b, fill_a);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_strokeColor") {
-        gl.uniform4f(Some(&loc), stroke_r, stroke_g, stroke_b, stroke_a);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_strokeWidth") {
-        gl.uniform1f(Some(&loc), stroke_width);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_cornerRadius") {
-        gl.uniform1f(Some(&loc), corner_radius);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_sides") {
-        gl.uniform1i(Some(&loc), sides as i32);
-    }
-    if let Some(loc) = gl.get_uniform_location(prog, "u_texSize") {
-        gl.uniform2f(Some(&loc), w as f32, h as f32);
-    }
+        engine.draw_fullscreen_quad();
+    });
 
-    engine.draw_fullscreen_quad();
-
-    gl.disable(WebGl2RenderingContext::BLEND);
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-    gl.delete_framebuffer(temp_fbo.as_ref());
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
     engine.mark_layer_dirty(layer_id);
 }

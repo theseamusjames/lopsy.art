@@ -10,6 +10,7 @@ import { getEngine } from './engine-state';
 import type { Layer } from '../types';
 import type { SparseLayerEntry } from '../app/store/types';
 import { pixelDataManager } from '../engine/pixel-data-manager';
+import { buildLayerIndex, isEffectivelyVisible, type LayerIndex } from '../layers/layer-index';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
@@ -80,26 +81,7 @@ const LAYER_TYPE_MAP: Record<string, string> = {
   'adjustment': 'Adjustment',
 };
 
-function isEffectivelyVisible(layer: Layer, allLayers: readonly Layer[]): boolean {
-  if (!layer.visible) return false;
-  // Walk up the group hierarchy — if any ancestor is hidden, this layer is hidden
-  let currentId = layer.id;
-  for (;;) {
-    let parentFound = false;
-    for (const l of allLayers) {
-      if (l.type === 'group' && 'children' in l && (l as import('../types').GroupLayer).children.includes(currentId)) {
-        if (!l.visible) return false;
-        currentId = l.id;
-        parentFound = true;
-        break;
-      }
-    }
-    if (!parentFound) break;
-  }
-  return true;
-}
-
-function layerToDescJson(layer: Layer, allLayers?: readonly Layer[]): string {
+function layerToDescJson(layer: Layer, effectiveVisible: boolean): string {
   const effects: Record<string, unknown> = {};
 
   const eff = layer.effects;
@@ -167,7 +149,7 @@ function layerToDescJson(layer: Layer, allLayers?: readonly Layer[]): string {
     id: layer.id,
     name: layer.name,
     layer_type: LAYER_TYPE_MAP[layer.type] ?? 'Raster',
-    visible: allLayers ? isEffectivelyVisible(layer, allLayers) : layer.visible,
+    visible: effectiveVisible,
     locked: layer.locked,
     opacity: layer.opacity,
     blend_mode: BLEND_MODE_MAP[layer.blendMode] ?? 'Normal',
@@ -207,6 +189,15 @@ interface TrackedState {
   viewportHeight: number;
   layerIds: Set<string>;
   layerVersions: Map<string, string>;
+  /** Layer reference that produced the cached descriptor. If the reference
+   *  and the effective visibility are both unchanged, the descriptor is
+   *  also unchanged and we can skip JSON.stringify entirely. */
+  layerRefs: Map<string, Layer>;
+  layerEffectiveVisible: Map<string, boolean>;
+  /** Layer ids currently known to have a mask on the engine side. Used to
+   *  decide whether a removeLayerMask call is needed — previously done by
+   *  substring-sniffing the cached descriptor JSON, which was fragile. */
+  masksOnEngine: Set<string>;
   pixelDataVersions: Map<string, ImageData | undefined>;
   sparseVersions: Map<string, SparseLayerEntry | undefined>;
   layerOrder: string;
@@ -242,6 +233,9 @@ function createTrackedState(): TrackedState {
     viewportHeight: 0,
     layerIds: new Set(),
     layerVersions: new Map(),
+    layerRefs: new Map(),
+    layerEffectiveVisible: new Map(),
+    masksOnEngine: new Set(),
     pixelDataVersions: new Map(),
     sparseVersions: new Map(),
     layerOrder: '',
@@ -339,6 +333,10 @@ export function syncLayers(
   const tracked = getTracked(engine);
   const currentIds = new Set(layers.map((l) => l.id));
 
+  // Build a per-sync LayerIndex so ancestor-visibility checks are O(depth)
+  // per layer instead of the O(n²) nested walk this used to do.
+  const index: LayerIndex = buildLayerIndex(layers);
+
   // Remove layers no longer present
   for (const id of tracked.layerIds) {
     if (!currentIds.has(id)) {
@@ -348,6 +346,9 @@ export function syncLayers(
         console.error('[syncLayers] removeLayer failed:', id, e);
       }
       tracked.layerVersions.delete(id);
+      tracked.layerRefs.delete(id);
+      tracked.layerEffectiveVisible.delete(id);
+      tracked.masksOnEngine.delete(id);
       tracked.pixelDataVersions.delete(id);
       tracked.sparseVersions.delete(id);
     }
@@ -359,23 +360,43 @@ export function syncLayers(
 
   // Add or update layers
   for (const layer of layers) {
-    const descJson = layerToDescJson(layer, layers);
+    const effectiveVisible = isEffectivelyVisible(index, layer.id);
 
-    if (!tracked.layerIds.has(layer.id)) {
+    // Fast path: if both the layer reference and its effective visibility
+    // are unchanged since last sync, the descriptor JSON is also unchanged.
+    // Skip the serialization entirely. This is the common case — most
+    // frames re-render without any layer mutation.
+    const refUnchanged = tracked.layerRefs.get(layer.id) === layer;
+    const visUnchanged = tracked.layerEffectiveVisible.get(layer.id) === effectiveVisible;
+    const isKnown = tracked.layerIds.has(layer.id);
+
+    let descJson: string | undefined;
+    if (!isKnown || !refUnchanged || !visUnchanged) {
+      descJson = layerToDescJson(layer, effectiveVisible);
+    }
+
+    if (!isKnown) {
       try {
-        addLayer(engine, descJson);
-        tracked.layerVersions.set(layer.id, descJson);
+        addLayer(engine, descJson!);
+        tracked.layerVersions.set(layer.id, descJson!);
+        tracked.layerRefs.set(layer.id, layer);
+        tracked.layerEffectiveVisible.set(layer.id, effectiveVisible);
       } catch (e) {
         console.error('[syncLayers] addLayer failed:', layer.id, e);
         failedAdds.add(layer.id);
       }
-    } else if (tracked.layerVersions.get(layer.id) !== descJson) {
+    } else if (descJson !== undefined && tracked.layerVersions.get(layer.id) !== descJson) {
       try {
         updateLayer(engine, descJson);
         tracked.layerVersions.set(layer.id, descJson);
       } catch (e) {
         console.error('[syncLayers] updateLayer failed:', layer.id, e);
       }
+      tracked.layerRefs.set(layer.id, layer);
+      tracked.layerEffectiveVisible.set(layer.id, effectiveVisible);
+    } else if (descJson !== undefined) {
+      tracked.layerRefs.set(layer.id, layer);
+      tracked.layerEffectiveVisible.set(layer.id, effectiveVisible);
     }
 
     // Upload pixel data if changed or marked dirty (including GPU paint dirty).
@@ -425,12 +446,10 @@ export function syncLayers(
     if (layer.mask) {
       const maskBytes = new Uint8Array(layer.mask.data.buffer, layer.mask.data.byteOffset, layer.mask.data.byteLength);
       uploadLayerMask(engine, layer.id, maskBytes, layer.mask.width, layer.mask.height);
-    } else if (tracked.layerIds.has(layer.id)) {
-      // Only remove mask if layer existed before — new layers start with no mask
-      const prevDesc = tracked.layerVersions.get(layer.id);
-      if (prevDesc && prevDesc.includes('"mask"') && !prevDesc.includes('"mask":null')) {
-        removeLayerMask(engine, layer.id);
-      }
+      tracked.masksOnEngine.add(layer.id);
+    } else if (tracked.masksOnEngine.has(layer.id)) {
+      removeLayerMask(engine, layer.id);
+      tracked.masksOnEngine.delete(layer.id);
     }
   }
 

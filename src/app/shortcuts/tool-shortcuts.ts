@@ -7,8 +7,8 @@ import { SHORTCUT_TO_TOOL } from '../../tools/tool-registry';
  * so they live alongside the tool map.
  */
 const COLOR_SHORTCUTS: Record<string, () => void> = {
-  x: () => useUIStore.getState().swapColors(),
-  d: () => useUIStore.getState().resetColors(),
+  x: () => useToolSettingsStore.getState().swapColors(),
+  d: () => useToolSettingsStore.getState().resetColors(),
 };
 
 export function handleToolShortcut(e: KeyboardEvent): boolean {

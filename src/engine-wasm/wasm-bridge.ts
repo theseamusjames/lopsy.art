@@ -180,10 +180,18 @@ import init, {
 export type { Engine };
 
 let initPromise: Promise<void> | null = null;
+let initError: unknown = null;
 
 export async function initWasm(): Promise<void> {
+  if (initError) throw initError;
   if (!initPromise) {
-    initPromise = init().then(() => {});
+    initPromise = init()
+      .then(() => {})
+      .catch((err) => {
+        initError = err;
+        initPromise = null;
+        throw err;
+      });
   }
   await initPromise;
 }

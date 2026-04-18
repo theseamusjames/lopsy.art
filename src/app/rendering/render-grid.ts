@@ -1,6 +1,6 @@
 import type { Color, Point } from '../../types';
+import { RULER_SIZE } from './ruler-constants';
 
-const RULER_SIZE = 20;
 const RULER_BG = '#2a2a2a';
 const RULER_TEXT = '#888888';
 const RULER_TICK = '#555555';
