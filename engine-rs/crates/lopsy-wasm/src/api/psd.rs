@@ -148,7 +148,7 @@ pub fn export_psd(
 ///
 /// Returns JSON: `{ width, height, depth, layers: [{ name, visible, opacity, blendMode, x, y, width, height, clipToBelow, groupKind, hasMask, maskX?, maskY?, maskWidth?, maskHeight? }] }`
 ///
-/// Layer pixel data is extracted separately via `getPsdLayerPixels`.
+/// Layer pixel data is uploaded directly to the GPU via `decodeAndUploadPsdLayer`.
 #[wasm_bindgen(js_name = "parsePsd")]
 pub fn parse_psd(data: &[u8]) -> Result<String, JsError> {
     use lopsy_core::psd::reader::read_psd;
@@ -222,20 +222,55 @@ pub fn parse_psd(data: &[u8]) -> Result<String, JsError> {
         .map_err(|e| JsError::new(&format!("JSON serialize: {e}")))
 }
 
-/// Get the RGBA pixel data for a specific layer from a parsed PSD file.
-/// Returns interleaved RGBA bytes (u8 for 8-bit, big-endian u16 pairs for 16-bit).
-#[wasm_bindgen(js_name = "getPsdLayerPixels")]
-pub fn get_psd_layer_pixels(data: &[u8], layer_index: u32) -> Result<Vec<u8>, JsError> {
+/// Parse a PSD and upload a single layer's pixels directly to its GPU texture.
+/// For 16-bit PSDs this preserves precision by uploading normalized f32 RGBA;
+/// the JS side never sees the raw u16 pairs, so nothing gets truncated.
+#[wasm_bindgen(js_name = "decodeAndUploadPsdLayer")]
+pub fn decode_and_upload_psd_layer(
+    engine: &mut Engine,
+    layer_id: &str,
+    data: &[u8],
+    layer_index: u32,
+) -> Result<(), JsError> {
     use lopsy_core::psd::reader::read_psd;
+    use lopsy_core::psd::types::PsdDepth;
 
     let doc = read_psd(data).map_err(|e| JsError::new(&e.to_string()))?;
     let idx = layer_index as usize;
 
-    if idx >= doc.layers.len() {
-        return Err(JsError::new(&format!("layer index {idx} out of range ({})", doc.layers.len())));
+    let layer = doc.layers.get(idx)
+        .ok_or_else(|| JsError::new(&format!("layer index {idx} out of range ({})", doc.layers.len())))?;
+
+    let width = layer.rect.width();
+    let height = layer.rect.height();
+    if width == 0 || height == 0 || layer.pixel_data.is_empty() {
+        return Ok(());
     }
 
-    Ok(doc.layers[idx].pixel_data.clone())
+    match doc.depth {
+        PsdDepth::Eight => {
+            layer_manager::upload_pixels(
+                &mut engine.inner, layer_id, &layer.pixel_data, width, height, 0, 0,
+            ).map_err(|e| JsError::new(&e))
+        }
+        PsdDepth::Sixteen => {
+            let pixel_count = (width as usize) * (height as usize) * 4;
+            let src = &layer.pixel_data;
+            if src.len() < pixel_count * 2 {
+                return Err(JsError::new("16-bit PSD layer: pixel_data too short"));
+            }
+            let mut f32_data = Vec::with_capacity(pixel_count);
+            for p in 0..pixel_count {
+                let hi = src[p * 2] as u16;
+                let lo = src[p * 2 + 1] as u16;
+                let val = (hi << 8) | lo;
+                f32_data.push(val as f32 / 65535.0);
+            }
+            layer_manager::upload_pixels_f32(
+                &mut engine.inner, layer_id, &f32_data, width, height,
+            ).map_err(|e| JsError::new(&e))
+        }
+    }
 }
 
 /// Get the mask data for a specific layer from a parsed PSD file.

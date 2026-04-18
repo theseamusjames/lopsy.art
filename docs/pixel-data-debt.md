@@ -22,8 +22,10 @@ sparse storage, and re-uploads to the GPU on mutation.
 **Why it exists.** The engine consumes `ImageData` via
 `uploadLayerPixels(engine, layerId, rawBytes, w, h, x, y)`. Operations
 that still originate on the CPU (filters that don't yet have a GPU
-implementation, PSD import, paste-from-clipboard) produce `ImageData`
-that this slice caches until the GPU is ready for it.
+implementation, paste-from-clipboard) produce `ImageData` that this
+slice caches until the GPU is ready for it. PSD import bypasses this
+slice — it decodes in Rust and uploads directly to the layer texture
+(u8 for 8-bit PSDs, f32 for 16-bit) via `decodeAndUploadPsdLayer`.
 
 **Plan.** Every filter must land as a `filter_gpu.rs` shader. When the
 last CPU filter path is retired, this slice collapses into a thin
@@ -86,7 +88,7 @@ additive/subtractive mask coverage. A proper migration wants:
 |--------------------------------------------------------|-------------|
 | Engine readback for undo snapshot (`gpu-pixel-access`) | OK          |
 | Engine readback for PNG/JPEG export                    | OK          |
-| PSD import producing ImageData (then uploaded)         | OK          |
+| PSD import (Rust → GPU, no ImageData detour)           | OK          |
 | Filter computed on CPU and then uploaded               | **Debt**    |
 | Brush/eraser touching a JS pixel buffer                | **Debt**    |
 | Selection mask built by `selection-ops.ts`             | OK          |

@@ -173,7 +173,7 @@ import init, {
   clearAllLayers,
   exportPsd,
   parsePsd,
-  getPsdLayerPixels,
+  decodeAndUploadPsdLayer,
   getPsdLayerMask,
 } from './pkg/lopsy_wasm';
 
@@ -366,6 +366,6 @@ export {
   setBrushTipState,
   exportPsd,
   parsePsd,
-  getPsdLayerPixels,
+  decodeAndUploadPsdLayer,
   getPsdLayerMask,
 };

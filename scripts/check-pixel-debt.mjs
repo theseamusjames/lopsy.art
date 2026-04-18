@@ -70,7 +70,7 @@ const ALLOWLIST = {
 
   // Export / file I/O — produce raw buffers for encoders.
   'src/app/MenuBar/menus/file-menu.ts': 1,
-  'src/io/psd.ts': 3,
+  'src/io/psd.ts': 1,
 
   // Wide-gamut ImageData plumbing — engine infrastructure.
   'src/engine/canvas-ops.ts': 1,
