@@ -96,13 +96,13 @@ export function computeUpdateEffects(
   doc: DocumentState,
   renderVersion: number,
   id: string,
-  effects: LayerEffects,
+  effects: Partial<LayerEffects>,
 ): ActionResult {
   return {
     document: {
       ...doc,
       layers: doc.layers.map((l) =>
-        l.id === id ? ({ ...l, effects } as Layer) : l,
+        l.id === id ? ({ ...l, effects: { ...l.effects, ...effects } } as Layer) : l,
       ),
     },
     renderVersion: renderVersion + 1,

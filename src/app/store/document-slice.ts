@@ -147,7 +147,7 @@ export interface DocumentSlice {
   mergeDown: () => void;
   flattenImage: () => void;
   rasterizeLayerStyle: () => void;
-  updateLayerEffects: (id: string, effects: LayerEffects) => void;
+  updateLayerEffects: (id: string, effects: Partial<LayerEffects>) => void;
   addLayerMask: (id: string) => void;
   removeLayerMask: (id: string) => void;
   toggleLayerMask: (id: string) => void;
