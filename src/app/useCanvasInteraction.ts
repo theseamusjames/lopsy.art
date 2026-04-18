@@ -136,11 +136,11 @@ export function useCanvasInteraction(
 
       // Fall back to CPU when:
       // - mask edit mode (paints on mask surface)
-      // - active selection (GPU brush doesn't clip to selection mask yet)
       // - tool doesn't have a GPU path
-      const hasSelection = useEditorStore.getState().selection.active;
+      // GPU brush/eraser shaders clip to the selection mask, so an active
+      // selection does NOT force the CPU path.
       const isGpuTool = GPU_TOOLS.has(activeTool);
-      const useGpu = engine && isGpuTool && !maskEditMode && !hasSelection;
+      const useGpu = engine && isGpuTool && !maskEditMode;
       const useGpuStroke = useGpu && isPaintTool;
 
       let pixelBuffer: PixelBuffer;
