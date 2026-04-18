@@ -8,7 +8,7 @@
  *   filter. The FilterDialog needs to stop pointer events inside its
  *   overlay/modal from reaching the window-level tool handlers.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 async function waitForStore(page: Page) {
   await page.waitForFunction(

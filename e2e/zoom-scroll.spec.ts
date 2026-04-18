@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { waitForStore, createDocument } from './helpers';
 
 test.describe('Zoom scroll behavior (#54)', () => {

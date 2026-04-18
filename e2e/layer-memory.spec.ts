@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { waitForStore } from './helpers';
 
 async function getJSHeapUsedMB(page: import('@playwright/test').Page): Promise<number> {

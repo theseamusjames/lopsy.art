@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { createDocument, getEditorState, paintRect } from './helpers';
 
 const isMac = process.platform === 'darwin';

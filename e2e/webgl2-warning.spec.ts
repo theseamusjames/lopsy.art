@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Disable WebGL2 before the page initializes by monkey-patching getContext
 // so that any call for 'webgl2' returns null — identical to what a browser

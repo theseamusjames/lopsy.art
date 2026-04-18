@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 // Regression coverage for: clicking inside the guide color picker
 // closes it instead of letting the user interact with the ColorPicker.

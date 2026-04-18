@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 // ---------------------------------------------------------------------------
 // Helpers (same pattern as brush-opacity-range.spec.ts)

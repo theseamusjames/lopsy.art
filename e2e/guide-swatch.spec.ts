@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('guide color picker hue bar drag releases properly', async ({ page }) => {
   await page.goto('/');

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { waitForStore, createDocument, getPixelAt, getEditorState } from './helpers';
 
 test.describe('Brush symmetry renders immediately (#119)', () => {
