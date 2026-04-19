@@ -24,42 +24,68 @@ pub fn composite(engine: &mut EngineInner) {
     engine.gl.clear_color(bg[0], bg[1], bg[2], bg[3]);
     engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
-    // 2. Collect layer info (avoids borrowing engine.layer_stack during rendering)
+    // 2. Iterate layers by index so we can take fresh borrows of engine
+    //    inside the loop without holding a long-lived borrow of layer_stack.
+    //    For each layer we read the scalar fields + clone only the enabled
+    //    effect descs in a short scope, then the `&mut engine` render calls
+    //    run freely. This avoids the previous per-frame Vec<tuple>
+    //    allocation and the unconditional EffectsDesc.clone().
     let mask_edit_id = engine.mask_edit_layer_id.clone();
-    let layer_info: Vec<_> = engine.layer_stack.iter().map(|layer| {
-        let is_mask_editing = mask_edit_id.as_deref() == Some(layer.id.as_str());
-        let mask_info = engine.layer_masks.get(&layer.id).and_then(|&mask_handle| {
-            let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
-            let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
-            let mask_enabled = layer.mask.as_ref().map_or(false, |m| m.enabled);
-            Some((mask_gl, mw, mh, mask_enabled))
-        });
-        (
-            layer.id.clone(),
-            layer.visible,
-            layer.opacity,
-            layer.blend_mode as i32,
-            layer.x as f32,
-            layer.y as f32,
-            layer.width as f32,
-            layer.height as f32,
-            layer.effects.clone(),
-            mask_info,
-            is_mask_editing,
-        )
-    }).collect();
+    let n = engine.layer_stack.len();
 
-    // 3. For each visible layer, render with effects
-    for (layer_id, visible, opacity, blend_mode, layer_x, layer_y, layer_w, layer_h, effects, mask_info, is_mask_editing) in &layer_info {
-        if !visible || *opacity < 1e-7 {
+    for idx in 0..n {
+        let (
+            layer_id,
+            visible,
+            opacity,
+            blend_mode,
+            layer_x,
+            layer_y,
+            layer_w,
+            layer_h,
+            outer_glow,
+            inner_glow,
+            drop_shadow,
+            stroke_eff,
+            color_overlay,
+            is_mask_editing,
+        ) = {
+            let layer = &engine.layer_stack[idx];
+            let is_editing = mask_edit_id.as_deref() == Some(layer.id.as_str());
+            (
+                layer.id.clone(),
+                layer.visible,
+                layer.opacity,
+                layer.blend_mode as i32,
+                layer.x as f32,
+                layer.y as f32,
+                layer.width as f32,
+                layer.height as f32,
+                layer.effects.outer_glow.as_ref().filter(|g| g.enabled).cloned(),
+                layer.effects.inner_glow.as_ref().filter(|g| g.enabled).cloned(),
+                layer.effects.drop_shadow.as_ref().filter(|s| s.enabled).cloned(),
+                layer.effects.stroke.as_ref().filter(|s| s.enabled).cloned(),
+                layer.effects.color_overlay.as_ref().filter(|o| o.enabled).cloned(),
+                is_editing,
+            )
+        };
+
+        if !visible || opacity < 1e-7 {
             continue;
         }
 
-        let tex_handle = match engine.layer_textures.get(layer_id) {
+        let mask_info = engine.layer_masks.get(&layer_id).copied().and_then(|mask_handle| {
+            let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
+            let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
+            let mask_enabled = engine.layer_stack[idx].mask.as_ref().map_or(false, |m| m.enabled);
+            Some((mask_gl, mw, mh, mask_enabled))
+        });
+
+        let tex_handle = match engine.layer_textures.get(&layer_id) {
             Some(&h) => h,
             None => continue,
         };
-        let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((*layer_w as u32, *layer_h as u32));
+        let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((layer_w as u32, layer_h as u32));
 
         // If a brush stroke is in progress for this layer, pre-merge
         // (layer + stroke_texture) into a scratch so effects (drop shadow,
@@ -67,27 +93,23 @@ pub fn composite(engine: &mut EngineInner) {
         // of the layer. Without this, effects lag by one stroke because
         // endStroke is deferred until the next mousedown (shift-click
         // continuation).
-        let merged_handle: Option<TextureHandle> = engine.stroke_textures.get(layer_id)
+        let merged_handle: Option<TextureHandle> = engine.stroke_textures.get(&layer_id)
             .copied()
             .and_then(|stroke_handle| render_layer_plus_stroke(engine, tex_handle, stroke_handle, tw, th));
         let effect_tex_handle = merged_handle.unwrap_or(tex_handle);
 
         // --- "Behind" effects: outer glow, drop shadow ---
-        if let Some(ref glow) = effects.outer_glow {
-            if glow.enabled {
-                render_glow(engine, effect_tex_handle, tw, th, glow, 0, *layer_x, *layer_y);
-            }
+        if let Some(ref glow) = outer_glow {
+            render_glow(engine, effect_tex_handle, tw, th, glow, 0, layer_x, layer_y);
         }
-        if let Some(ref shadow) = effects.drop_shadow {
-            if shadow.enabled {
-                render_shadow(engine, effect_tex_handle, tw, th, shadow, *layer_x, *layer_y);
-            }
+        if let Some(ref shadow) = drop_shadow {
+            render_shadow(engine, effect_tex_handle, tw, th, shadow, layer_x, layer_y);
         }
 
         // --- Color overlay + blend layer onto composite ---
         // In mask edit mode: skip mask clipping so full layer content is visible
-        let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
-        let mask_arg = if *is_mask_editing {
+        let overlay_desc = color_overlay.as_ref();
+        let mask_arg = if is_mask_editing {
             None
         } else {
             mask_info.as_ref().and_then(|(tex, mw, mh, enabled)| {
@@ -99,8 +121,8 @@ pub fn composite(engine: &mut EngineInner) {
         // per-stroke preview texture and composite that instead of the raw
         // layer. This way the stroke is non-destructive until `endStroke`
         // bakes it in.
-        let composite_src = if engine.stroke_dodge_textures.contains_key(layer_id) {
-            render_dodge_burn_preview(engine, layer_id, effect_tex_handle, tw, th)
+        let composite_src = if engine.stroke_dodge_textures.contains_key(&layer_id) {
+            render_dodge_burn_preview(engine, &layer_id, effect_tex_handle, tw, th)
                 .map(|h| (h, tw, th))
         } else if merged_handle.is_some() {
             Some((effect_tex_handle, tw, th))
@@ -109,38 +131,34 @@ pub fn composite(engine: &mut EngineInner) {
         };
         let (src_handle, src_w, src_h) = composite_src.unwrap_or((tex_handle, tw, th));
         if let Some(src_tex) = engine.texture_pool.get(src_handle).cloned() {
-            blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+            blend_onto_composite(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
         }
 
         // --- Active stroke texture ---
         // Skipped when we merged the stroke into effect_tex_handle above —
         // it's already in the composite source.
         if merged_handle.is_none() {
-            if let Some(&stroke_handle) = engine.stroke_textures.get(layer_id) {
+            if let Some(&stroke_handle) = engine.stroke_textures.get(&layer_id) {
                 if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
                     let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
-                    blend_onto_composite(engine, &stroke_tex, *opacity, 0, *layer_x, *layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                    blend_onto_composite(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
                 }
             }
         }
 
         // --- Mask edit overlay: translucent blue showing mask coverage ---
-        if *is_mask_editing {
-            if let Some((mask_gl, mw, mh, _)) = mask_info {
-                render_mask_overlay(engine, mask_gl, *mw, *mh, *layer_x, *layer_y);
+        if is_mask_editing {
+            if let Some((mask_gl, mw, mh, _)) = &mask_info {
+                render_mask_overlay(engine, mask_gl, *mw, *mh, layer_x, layer_y);
             }
         }
 
         // --- "On top" effects: inner glow, stroke effect ---
-        if let Some(ref glow) = effects.inner_glow {
-            if glow.enabled {
-                render_glow(engine, effect_tex_handle, tw, th, glow, 1, *layer_x, *layer_y);
-            }
+        if let Some(ref glow) = inner_glow {
+            render_glow(engine, effect_tex_handle, tw, th, glow, 1, layer_x, layer_y);
         }
-        if let Some(ref stroke) = effects.stroke {
-            if stroke.enabled {
-                render_stroke(engine, effect_tex_handle, tw, th, stroke, *layer_x, *layer_y);
-            }
+        if let Some(ref stroke) = stroke_eff {
+            render_stroke(engine, effect_tex_handle, tw, th, stroke, layer_x, layer_y);
         }
 
         if let Some(merged) = merged_handle {
