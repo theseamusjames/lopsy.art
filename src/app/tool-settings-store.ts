@@ -359,6 +359,7 @@ interface ToolSettings {
   activeBrushTip: BrushTipData | null;
   symmetryHorizontal: boolean;
   symmetryVertical: boolean;
+  symmetryRadialSegments: number;
   foregroundColor: Color;
   backgroundColor: Color;
   recentColors: readonly Color[];
@@ -435,6 +436,7 @@ interface ToolSettings {
   updateGradientStop: (index: number, stop: Partial<GradientStop>) => void;
   setSymmetryHorizontal: (enabled: boolean) => void;
   setSymmetryVertical: (enabled: boolean) => void;
+  setSymmetryRadialSegments: (segments: number) => void;
   setForegroundColor: (color: Color) => void;
   setBackgroundColor: (color: Color) => void;
   swapColors: () => void;
@@ -506,6 +508,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   activeBrushTip: null,
   symmetryHorizontal: false,
   symmetryVertical: false,
+  symmetryRadialSegments: 0,
   foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
   backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
   recentColors: [
@@ -620,6 +623,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   }),
   setSymmetryHorizontal: (enabled) => set({ symmetryHorizontal: enabled }),
   setSymmetryVertical: (enabled) => set({ symmetryVertical: enabled }),
+  setSymmetryRadialSegments: (segments) => set({ symmetryRadialSegments: Math.max(0, Math.min(32, Math.round(segments))) }),
   setStampSize: (size) => set({ stampSize: Math.max(1, Math.min(5000, size)) }),
   setHealingSize: (size) => set({ healingSize: Math.max(1, Math.min(5000, size)) }),
   setHealingOpacity: (opacity) => {

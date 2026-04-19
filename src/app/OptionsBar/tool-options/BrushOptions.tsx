@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
+import { FlipHorizontal2, FlipVertical2, Snowflake } from 'lucide-react';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { useUIStore } from '../../ui-store';
 import { useEditorStore } from '../../editor-store';
@@ -22,6 +22,8 @@ export function BrushOptions() {
   const symmetryV = useToolSettingsStore((s) => s.symmetryVertical);
   const setSymH = useToolSettingsStore((s) => s.setSymmetryHorizontal);
   const setSymV = useToolSettingsStore((s) => s.setSymmetryVertical);
+  const radialSegments = useToolSettingsStore((s) => s.symmetryRadialSegments);
+  const setRadialSegments = useToolSettingsStore((s) => s.setSymmetryRadialSegments);
 
   const presets = useToolSettingsStore((s) => s.presets);
   const activePresetId = useToolSettingsStore((s) => s.activePresetId);
@@ -34,6 +36,8 @@ export function BrushOptions() {
   const handleOpenBrushModal = useCallback(() => {
     useUIStore.getState().setShowBrushModal(true);
   }, []);
+
+  const isRadialActive = radialSegments >= 2;
 
   return (
     <>
@@ -59,6 +63,15 @@ export function BrushOptions() {
           isActive={symmetryV}
           onClick={() => setSymV(!symmetryV)}
         />
+        <IconButton
+          icon={<Snowflake size={16} />}
+          label="Radial Symmetry"
+          isActive={isRadialActive}
+          onClick={() => setRadialSegments(isRadialActive ? 0 : 8)}
+        />
+        {isRadialActive && (
+          <Slider label="Segments" value={radialSegments} min={2} max={32} onChange={setRadialSegments} />
+        )}
       </div>
     </>
   );
