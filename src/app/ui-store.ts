@@ -128,6 +128,8 @@ interface UIState {
   setEditingAnchorIndex: (index: number | null) => void;
   convertingAnchorToSpline: boolean;
   setConvertingAnchorToSpline: (converting: boolean) => void;
+  draggingHandle: { anchorIndex: number; handle: 'in' | 'out' } | null;
+  setDraggingHandle: (handle: { anchorIndex: number; handle: 'in' | 'out' } | null) => void;
   guides: Guide[];
   selectedGuideId: string | null;
   hoveredGuideId: string | null;
@@ -258,6 +260,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   setEditingAnchorIndex: (index) => set({ editingAnchorIndex: index }),
   convertingAnchorToSpline: false,
   setConvertingAnchorToSpline: (converting) => set({ convertingAnchorToSpline: converting }),
+  draggingHandle: null,
+  setDraggingHandle: (handle) => set({ draggingHandle: handle }),
   guides: [],
   selectedGuideId: null,
   hoveredGuideId: null,

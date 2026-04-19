@@ -31,6 +31,39 @@ export function hitTestAnchor(
   return closest;
 }
 
+export interface HandleHit {
+  anchorIndex: number;
+  handle: 'in' | 'out';
+}
+
+/** Returns the anchor index and handle type nearest to `pt` within `threshold`, or null. */
+export function hitTestHandle(
+  anchors: readonly PathAnchor[],
+  pt: Point,
+  threshold: number,
+): HandleHit | null {
+  let best: HandleHit | null = null;
+  let bestDist = threshold;
+  for (let i = 0; i < anchors.length; i++) {
+    const anchor = anchors[i]!;
+    if (anchor.handleIn) {
+      const d = dist(pt, anchor.handleIn);
+      if (d < bestDist) {
+        bestDist = d;
+        best = { anchorIndex: i, handle: 'in' };
+      }
+    }
+    if (anchor.handleOut) {
+      const d = dist(pt, anchor.handleOut);
+      if (d < bestDist) {
+        bestDist = d;
+        best = { anchorIndex: i, handle: 'out' };
+      }
+    }
+  }
+  return best;
+}
+
 function bezierPoint(p0: Point, p1: Point, p2: Point, p3: Point, t: number): Point {
   const u = 1 - t;
   return {

@@ -4,7 +4,30 @@ import type { Point } from '../../types';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { commitCurrentPath } from '../../app/interactions/path-stroke';
-import { hitTestAnchor, hitTestSegment, splitSegmentAt } from './path';
+import { hitTestAnchor, hitTestHandle, hitTestSegment, splitSegmentAt } from './path';
+
+let lastAnchorClickTime = 0;
+let lastAnchorClickIndex = -1;
+const DOUBLE_CLICK_MS = 400;
+
+function toggleAnchorSpline(
+  anchorIdx: number,
+  selectedPathId: string,
+): boolean {
+  const editorState = useEditorStore.getState();
+  const path = editorState.paths.find((p) => p.id === selectedPathId);
+  if (!path) return false;
+
+  const anchor = path.anchors[anchorIdx]!;
+  if (anchor.handleIn || anchor.handleOut) {
+    const updated = [...path.anchors];
+    updated[anchorIdx] = { point: anchor.point, handleIn: null, handleOut: null };
+    editorState.updatePathAnchors(selectedPathId, updated, path.closed);
+    editorState.notifyRender();
+    return true;
+  }
+  return false;
+}
 
 export function handlePathDown(ctx: InteractionContext): InteractionState | undefined {
   const { layerPos, canvasPos, activeLayerId, activeLayer, metaKey } = ctx;
@@ -19,20 +42,40 @@ export function handlePathDown(ctx: InteractionContext): InteractionState | unde
     if (!path) return undefined;
 
     const hitThreshold = 8 / editorState.viewport.zoom;
-    // Path anchors are in document space; use canvasPos.
+
+    // Check handle hit first (handles are smaller targets drawn on top)
+    const handleHit = hitTestHandle(path.anchors, canvasPos, hitThreshold);
+    if (handleHit) {
+      uiState.setDraggingHandle(handleHit);
+      uiState.setEditingAnchorIndex(handleHit.anchorIndex);
+      return {
+        drawing: true,
+        lastPoint: canvasPos,
+        pixelBuffer: null,
+        originalPixelBuffer: null,
+        layerId: activeLayerId,
+        tool: 'path',
+        startPoint: canvasPos,
+        layerStartX: activeLayer.x,
+        layerStartY: activeLayer.y,
+        ...DEFAULT_TRANSFORM_FIELDS,
+      };
+    }
+
     const anchorIdx = hitTestAnchor(path.anchors, canvasPos, hitThreshold);
     if (anchorIdx >= 0) {
-      if (metaKey) {
-        const anchor = path.anchors[anchorIdx]!;
-        // If already a spline, strip handles immediately (revert to corner).
-        if (anchor.handleIn || anchor.handleOut) {
-          const updated = [...path.anchors];
-          updated[anchorIdx] = { point: anchor.point, handleIn: null, handleOut: null };
-          editorState.updatePathAnchors(selectedPathId, updated, path.closed);
-          editorState.notifyRender();
-        }
+      const now = Date.now();
+      const isDoubleClick = anchorIdx === lastAnchorClickIndex
+        && (now - lastAnchorClickTime) < DOUBLE_CLICK_MS;
+      lastAnchorClickTime = now;
+      lastAnchorClickIndex = anchorIdx;
+
+      const shouldConvert = metaKey || isDoubleClick;
+
+      if (shouldConvert) {
+        toggleAnchorSpline(anchorIdx, selectedPathId);
       }
-      uiState.setConvertingAnchorToSpline(metaKey);
+      uiState.setConvertingAnchorToSpline(shouldConvert);
       uiState.setEditingAnchorIndex(anchorIdx);
       return {
         drawing: true,
@@ -50,7 +93,6 @@ export function handlePathDown(ctx: InteractionContext): InteractionState | unde
 
     const segIdx = hitTestSegment(path.anchors, path.closed, canvasPos, hitThreshold);
     if (segIdx >= 0) {
-      // Insert anchor at segment midpoint.
       const newAnchors = splitSegmentAt(path.anchors, segIdx);
       editorState.updatePathAnchors(selectedPathId, newAnchors, path.closed);
       editorState.notifyRender();
@@ -100,14 +142,27 @@ export function handlePathMove(state: InteractionState, layerLocalPos: Point): v
   const editorState = useEditorStore.getState();
   const editIdx = uiState.editingAnchorIndex;
 
-  // --- Edit mode: dragging an anchor ---
+  // --- Edit mode: dragging an anchor or handle ---
   if (editIdx !== null && editorState.selectedPathId) {
     const path = editorState.paths.find((p) => p.id === editorState.selectedPathId);
     if (!path) return;
-    // In edit mode, startPoint and layerLocalPos are in canvas/doc space.
     const canvasPos = { x: layerLocalPos.x + state.layerStartX, y: layerLocalPos.y + state.layerStartY };
     const anchor = path.anchors[editIdx];
     if (!anchor) return;
+
+    // Dragging a handle independently
+    const draggingHandle = uiState.draggingHandle;
+    if (draggingHandle && draggingHandle.anchorIndex === editIdx) {
+      const updated = [...path.anchors];
+      if (draggingHandle.handle === 'in') {
+        updated[editIdx] = { ...anchor, handleIn: { x: canvasPos.x, y: canvasPos.y } };
+      } else {
+        updated[editIdx] = { ...anchor, handleOut: { x: canvasPos.x, y: canvasPos.y } };
+      }
+      editorState.updatePathAnchors(editorState.selectedPathId, updated, path.closed);
+      editorState.notifyRender();
+      return;
+    }
 
     // Convert-to-spline mode: pull out symmetric handles from the anchor point.
     if (uiState.convertingAnchorToSpline) {
@@ -167,5 +222,8 @@ export function handlePathUp(): void {
   }
   if (uiState.convertingAnchorToSpline) {
     uiState.setConvertingAnchorToSpline(false);
+  }
+  if (uiState.draggingHandle !== null) {
+    uiState.setDraggingHandle(null);
   }
 }
