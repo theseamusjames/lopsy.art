@@ -115,6 +115,28 @@ pub fn decode_and_upload_image(
     }
 }
 
+/// Decode a DNG (raw) file and upload to a layer texture as f32 RGBA.
+/// Returns [width, height] on success, or an error.
+#[wasm_bindgen(js_name = "decodeAndUploadDng")]
+pub fn decode_and_upload_dng(
+    engine: &mut Engine,
+    layer_id: &str,
+    data: &[u8],
+) -> Result<Vec<u32>, JsError> {
+    let dng = lopsy_core::dng::read_dng(data)
+        .map_err(|e| JsError::new(&format!("DNG decode failed: {e}")))?;
+
+    layer_manager::upload_pixels_f32(
+        &mut engine.inner,
+        layer_id,
+        &dng.pixels,
+        dng.width,
+        dng.height,
+    ).map_err(|e| JsError::new(&e))?;
+
+    Ok(vec![dng.width, dng.height])
+}
+
 #[wasm_bindgen(js_name = "uploadLayerSparsePixels")]
 pub fn upload_layer_sparse_pixels(
     engine: &mut Engine,

@@ -1,0 +1,318 @@
+mod tiff;
+mod ljpeg;
+mod demosaic;
+mod color;
+
+use tiff::{TiffReader, IfdEntry, TagId};
+
+pub struct DngImage {
+    pub width: u32,
+    pub height: u32,
+    /// f32 RGBA in [0, 1] linear sRGB, ready for GPU upload.
+    pub pixels: Vec<f32>,
+}
+
+pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
+    let reader = TiffReader::new(data)?;
+
+    // Find the main image IFD (largest SubIFD, or IFD0 if no SubIFDs)
+    let main_ifd = find_main_image_ifd(&reader)?;
+
+    let width = get_tag_u32(&main_ifd, TagId::ImageWidth)?;
+    let height = get_tag_u32(&main_ifd, TagId::ImageLength)?;
+    let bps = get_tag_u16_vec(&main_ifd, TagId::BitsPerSample).unwrap_or_else(|_| vec![16]);
+    let bits = bps[0] as u32;
+    let compression = get_tag_u16(&main_ifd, TagId::Compression).unwrap_or(1);
+    let photo_interp = get_tag_u16(&main_ifd, TagId::PhotometricInterpretation).unwrap_or(32803);
+    let samples = get_tag_u16(&main_ifd, TagId::SamplesPerPixel).unwrap_or(1) as u32;
+
+    let is_linear = photo_interp == 34892;
+    let is_cfa = photo_interp == 32803;
+
+    let strip_offsets = get_tag_u32_vec(&main_ifd, TagId::StripOffsets)
+        .or_else(|_| get_tag_u32_vec(&main_ifd, TagId::TileOffsets))?;
+    let strip_counts = get_tag_u32_vec(&main_ifd, TagId::StripByteCounts)
+        .or_else(|_| get_tag_u32_vec(&main_ifd, TagId::TileByteCounts))?;
+
+    let tile_width = get_tag_u32(&main_ifd, TagId::TileWidth).ok();
+    let tile_height = get_tag_u32(&main_ifd, TagId::TileLength).ok();
+
+    // Collect raw compressed/uncompressed data
+    let mut raw_bytes = Vec::new();
+    for (off, count) in strip_offsets.iter().zip(strip_counts.iter()) {
+        let start = *off as usize;
+        let end = start + *count as usize;
+        if end > data.len() {
+            return Err("Strip/tile data out of bounds".into());
+        }
+        raw_bytes.extend_from_slice(&data[start..end]);
+    }
+
+    // Decompress
+    let pixel_data: Vec<u16> = match compression {
+        1 => decode_uncompressed(&raw_bytes, bits)?,
+        7 => {
+            if let (Some(tw), Some(th)) = (tile_width, tile_height) {
+                decode_ljpeg_tiled(data, &strip_offsets, &strip_counts, width, height, tw, th, samples)?
+            } else {
+                ljpeg::decode_lossless_jpeg(&raw_bytes)?
+            }
+        }
+        8 | 32946 => decode_deflate(&raw_bytes, bits)?,
+        _ => return Err(format!("Unsupported DNG compression: {compression}")),
+    };
+
+    // Determine output pixel count
+    let expected_pixels = if is_linear {
+        (width * height * samples) as usize
+    } else {
+        (width * height) as usize
+    };
+
+    if pixel_data.len() < expected_pixels {
+        return Err(format!(
+            "Decoded pixel count mismatch: got {} values, expected {} ({}x{}x{})",
+            pixel_data.len(), expected_pixels, width, height, samples
+        ));
+    }
+
+    // Parse DNG color metadata
+    let color_matrix = get_rational_array(&main_ifd, TagId::ColorMatrix1);
+    let forward_matrix = get_rational_array(&main_ifd, TagId::ForwardMatrix1);
+    let as_shot_neutral = get_rational_array(&main_ifd, TagId::AsShotNeutral);
+    let baseline_exposure = get_rational(&main_ifd, TagId::BaselineExposure);
+    let white_level = get_tag_u32(&main_ifd, TagId::WhiteLevel).unwrap_or((1u32 << bits) - 1);
+    let black_level = get_rational_array(&main_ifd, TagId::BlackLevel);
+
+    let max_val = white_level as f64;
+    let black = if !black_level.is_empty() { black_level[0] } else { 0.0 };
+
+    let mut rgb_f32: Vec<f32>;
+
+    if is_linear && samples >= 3 {
+        // Linear DNG — already RGB, just normalize
+        rgb_f32 = Vec::with_capacity((width * height * 3) as usize);
+        for i in 0..(width * height) as usize {
+            let r = ((pixel_data[i * samples as usize] as f64 - black) / (max_val - black)).max(0.0) as f32;
+            let g = ((pixel_data[i * samples as usize + 1] as f64 - black) / (max_val - black)).max(0.0) as f32;
+            let b = ((pixel_data[i * samples as usize + 2] as f64 - black) / (max_val - black)).max(0.0) as f32;
+            rgb_f32.push(r);
+            rgb_f32.push(g);
+            rgb_f32.push(b);
+        }
+    } else if is_cfa {
+        // Bayer CFA — needs demosaic
+        let cfa_pattern = get_tag_u8_vec(&main_ifd, TagId::CfaPattern)
+            .unwrap_or_else(|_| vec![0, 1, 1, 2]); // RGGB default
+
+        let normalized: Vec<f32> = pixel_data[..expected_pixels]
+            .iter()
+            .map(|&v| ((v as f64 - black) / (max_val - black)).max(0.0) as f32)
+            .collect();
+
+        rgb_f32 = demosaic::bilinear(&normalized, width, height, &cfa_pattern);
+    } else {
+        return Err(format!("Unsupported PhotometricInterpretation: {photo_interp}"));
+    }
+
+    // Apply white balance
+    if as_shot_neutral.len() >= 3 {
+        let wb = color::white_balance_multipliers(&as_shot_neutral);
+        color::apply_white_balance(&mut rgb_f32, &wb);
+    }
+
+    // Apply color matrix (camera RGB → XYZ → sRGB)
+    if !forward_matrix.is_empty() && forward_matrix.len() >= 9 {
+        let mat = color::forward_matrix_to_srgb(&forward_matrix);
+        color::apply_matrix(&mut rgb_f32, &mat);
+    } else if !color_matrix.is_empty() && color_matrix.len() >= 9 {
+        let mat = color::color_matrix_to_srgb(&color_matrix);
+        color::apply_matrix(&mut rgb_f32, &mat);
+    }
+
+    // Apply baseline exposure
+    if let Some(ev) = baseline_exposure {
+        let scale = (2.0f64).powf(ev) as f32;
+        for v in &mut rgb_f32 {
+            *v *= scale;
+        }
+    }
+
+    // Apply sRGB gamma curve
+    color::apply_srgb_gamma(&mut rgb_f32);
+
+    // Convert RGB → RGBA f32
+    let pixel_count = (width * height) as usize;
+    let mut rgba = Vec::with_capacity(pixel_count * 4);
+    for i in 0..pixel_count {
+        rgba.push(rgb_f32[i * 3]);
+        rgba.push(rgb_f32[i * 3 + 1]);
+        rgba.push(rgb_f32[i * 3 + 2]);
+        rgba.push(1.0);
+    }
+
+    Ok(DngImage { width, height, pixels: rgba })
+}
+
+fn find_main_image_ifd(reader: &TiffReader) -> Result<Vec<IfdEntry>, String> {
+    let ifd0 = reader.read_ifd(0)?;
+
+    // Check for SubIFDs (DNG stores the full-res image in a SubIFD)
+    if let Ok(sub_offsets) = get_tag_u32_vec(&ifd0, TagId::SubIFDs) {
+        let mut best_ifd = None;
+        let mut best_pixels = 0u64;
+
+        for &offset in &sub_offsets {
+            if let Ok(sub_ifd) = reader.read_ifd_at(offset) {
+                let w = get_tag_u32(&sub_ifd, TagId::ImageWidth).unwrap_or(0) as u64;
+                let h = get_tag_u32(&sub_ifd, TagId::ImageLength).unwrap_or(0) as u64;
+                if w * h > best_pixels {
+                    best_pixels = w * h;
+                    best_ifd = Some(sub_ifd);
+                }
+            }
+        }
+
+        if let Some(ifd) = best_ifd {
+            return Ok(ifd);
+        }
+    }
+
+    Ok(ifd0)
+}
+
+fn decode_uncompressed(data: &[u8], bits: u32) -> Result<Vec<u16>, String> {
+    match bits {
+        8 => Ok(data.iter().map(|&b| (b as u16) << 8).collect()),
+        16 => {
+            if data.len() % 2 != 0 {
+                return Err("Odd byte count for 16-bit data".into());
+            }
+            Ok(data.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect())
+        }
+        _ => Err(format!("Unsupported bit depth for uncompressed: {bits}")),
+    }
+}
+
+fn decode_deflate(data: &[u8], bits: u32) -> Result<Vec<u16>, String> {
+    use flate2::read::ZlibDecoder;
+    use std::io::Read;
+
+    let mut decoder = ZlibDecoder::new(data);
+    let mut decompressed = Vec::new();
+    decoder.read_to_end(&mut decompressed)
+        .map_err(|e| format!("Deflate decompression failed: {e}"))?;
+
+    decode_uncompressed(&decompressed, bits)
+}
+
+fn decode_ljpeg_tiled(
+    file_data: &[u8],
+    offsets: &[u32],
+    byte_counts: &[u32],
+    image_w: u32,
+    image_h: u32,
+    tile_w: u32,
+    tile_h: u32,
+    samples: u32,
+) -> Result<Vec<u16>, String> {
+    let tiles_across = (image_w + tile_w - 1) / tile_w;
+    let tiles_down = (image_h + tile_h - 1) / tile_h;
+    let total_tiles = (tiles_across * tiles_down) as usize;
+
+    if offsets.len() < total_tiles {
+        return Err(format!("Not enough tile offsets: {} < {}", offsets.len(), total_tiles));
+    }
+
+    let mut image = vec![0u16; (image_w * image_h * samples) as usize];
+
+    for tile_idx in 0..total_tiles {
+        let tx = (tile_idx as u32) % tiles_across;
+        let ty = (tile_idx as u32) / tiles_across;
+        let start = offsets[tile_idx] as usize;
+        let count = byte_counts[tile_idx] as usize;
+
+        if start + count > file_data.len() {
+            return Err("Tile data out of bounds".into());
+        }
+
+        let tile_data = &file_data[start..start + count];
+        let decoded = ljpeg::decode_lossless_jpeg(tile_data)?;
+
+        let actual_tw = tile_w.min(image_w - tx * tile_w);
+        let actual_th = tile_h.min(image_h - ty * tile_h);
+
+        for row in 0..actual_th {
+            let dst_y = ty * tile_h + row;
+            if dst_y >= image_h { break; }
+
+            for col in 0..actual_tw {
+                let dst_x = tx * tile_w + col;
+                if dst_x >= image_w { continue; }
+
+                for s in 0..samples {
+                    let src_idx = ((row * tile_w + col) * samples + s) as usize;
+                    let dst_idx = ((dst_y * image_w + dst_x) * samples + s) as usize;
+                    if src_idx < decoded.len() {
+                        image[dst_idx] = decoded[src_idx];
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(image)
+}
+
+// Tag value extraction helpers
+
+fn get_tag_u16(entries: &[IfdEntry], tag: TagId) -> Result<u16, String> {
+    entries.iter()
+        .find(|e| e.tag == tag as u16)
+        .and_then(|e| e.as_u16())
+        .ok_or_else(|| format!("Tag {:?} not found", tag))
+}
+
+fn get_tag_u32(entries: &[IfdEntry], tag: TagId) -> Result<u32, String> {
+    entries.iter()
+        .find(|e| e.tag == tag as u16)
+        .and_then(|e| e.as_u32())
+        .ok_or_else(|| format!("Tag {:?} not found", tag))
+}
+
+fn get_tag_u16_vec(entries: &[IfdEntry], tag: TagId) -> Result<Vec<u16>, String> {
+    entries.iter()
+        .find(|e| e.tag == tag as u16)
+        .and_then(|e| e.as_u16_vec())
+        .ok_or_else(|| format!("Tag {:?} not found", tag))
+}
+
+fn get_tag_u32_vec(entries: &[IfdEntry], tag: TagId) -> Result<Vec<u32>, String> {
+    entries.iter()
+        .find(|e| e.tag == tag as u16)
+        .and_then(|e| e.as_u32_vec())
+        .ok_or_else(|| format!("Tag {:?} not found", tag))
+}
+
+fn get_tag_u8_vec(entries: &[IfdEntry], tag: TagId) -> Result<Vec<u8>, String> {
+    entries.iter()
+        .find(|e| e.tag == tag as u16)
+        .and_then(|e| Some(e.raw_bytes.clone()))
+        .ok_or_else(|| format!("Tag {:?} not found", tag))
+}
+
+fn get_rational_array(entries: &[IfdEntry], tag: TagId) -> Vec<f64> {
+    entries.iter()
+        .find(|e| e.tag == tag as u16)
+        .map(|e| e.as_rational_vec())
+        .unwrap_or_default()
+}
+
+fn get_rational(entries: &[IfdEntry], tag: TagId) -> Option<f64> {
+    entries.iter()
+        .find(|e| e.tag == tag as u16)
+        .and_then(|e| {
+            let v = e.as_rational_vec();
+            if v.is_empty() { None } else { Some(v[0]) }
+        })
+}

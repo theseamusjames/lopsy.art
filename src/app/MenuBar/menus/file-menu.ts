@@ -10,6 +10,7 @@ import {
   compositeForExport,
   exportPng16,
   getCompositeSize,
+  decodeAndUploadDng,
 } from '../../../engine-wasm/wasm-bridge';
 import type { MenuDef } from './types';
 import { exportPsdFile, importPsdFile } from '../../../io/psd';
@@ -18,7 +19,56 @@ import { describeError, notifyError } from '../../notifications-store';
 // Re-export so existing callers (App.tsx, e2e tests) keep working.
 export { importPsdFile, exportPsdFile };
 
+import { getEngine as getEngineRef } from '../../../engine-wasm/engine-state';
+import { resetTrackedState } from '../../../engine-wasm/engine-sync';
+
 const METADATA_NOTE = 'Made with Lopsy — http://lopsy.art';
+
+function importDngFile(data: Uint8Array, name: string): void {
+  // DNG decode happens entirely in WASM. We need to know the dimensions first
+  // so we can create a document at the right size.
+  // Strategy: create a temporary 1x1 doc, decode+upload, then patch dimensions.
+
+  const edStore = useEditorStore.getState();
+  edStore.createDocument(1, 1, false);
+
+  const engine = getEngineRef();
+  if (!engine) {
+    notifyError('Engine not ready');
+    return;
+  }
+
+  const activeLayerId = useEditorStore.getState().document.activeLayerId;
+  if (!activeLayerId) {
+    notifyError('No active layer');
+    return;
+  }
+
+  const dims = decodeAndUploadDng(engine, activeLayerId, data);
+  const width = dims[0] ?? 0;
+  const height = dims[1] ?? 0;
+
+  if (width === 0 || height === 0) {
+    notifyError('DNG decode returned empty image');
+    return;
+  }
+
+  // Patch document and layer dimensions to match the decoded DNG
+  useEditorStore.setState((s) => {
+    const layers = s.document.layers.map((l) => {
+      if (l.id === activeLayerId && l.type === 'raster') {
+        return { ...l, width, height, name };
+      }
+      return l;
+    });
+    return {
+      document: { ...s.document, width, height, layers, name },
+    };
+  });
+
+  resetTrackedState(engine);
+  useEditorStore.getState().fitToView();
+}
 
 function confirmIfDirty(): boolean {
   if (!useEditorStore.getState().isDirty) return true;
@@ -29,7 +79,7 @@ export function openFileFromDisk(): void {
   if (!confirmIfDirty()) return;
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/*,.psd';
+  input.accept = 'image/*,.psd,.dng';
   input.onchange = () => {
     const file = input.files?.[0];
     if (!file) return;
@@ -40,6 +90,15 @@ export function openFileFromDisk(): void {
         .arrayBuffer()
         .then((buffer) => importPsdFile(new Uint8Array(buffer), file.name.replace(/\.psd$/i, '')))
         .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
+      return;
+    }
+
+    // Route DNG (raw) files to the WASM DNG decoder
+    if (/\.dng$/i.test(file.name)) {
+      file
+        .arrayBuffer()
+        .then((buffer) => importDngFile(new Uint8Array(buffer), file.name.replace(/\.dng$/i, '')))
+        .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
       return;
     }
 
