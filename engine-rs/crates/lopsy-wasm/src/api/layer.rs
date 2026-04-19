@@ -134,6 +134,11 @@ pub fn decode_and_upload_dng(
         dng.height,
     ).map_err(|e| JsError::new(&e))?;
 
+    web_sys::console::log_1(&format!(
+        "[Lopsy DNG] {}x{} baselineExposure={:.3} toneCurvePoints={}",
+        dng.width, dng.height, dng.baseline_exposure, dng.tone_curve.len()
+    ).into());
+
     #[derive(serde::Serialize)]
     #[serde(rename_all = "camelCase")]
     struct DngMeta {

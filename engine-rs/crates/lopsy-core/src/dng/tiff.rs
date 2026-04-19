@@ -28,6 +28,7 @@ pub enum TagId {
     ForwardMatrix1 = 50964,
     ForwardMatrix2 = 50965,
     ProfileToneCurve = 50940,
+    BaselineExposureOffset = 50731,
     CfaRepeatPatternDim = 33421,
 }
 

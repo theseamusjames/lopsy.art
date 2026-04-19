@@ -63,12 +63,12 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
   });
 
   const rootGroupId = useEditorStore.getState().document.rootGroupId;
-  if (rootGroupId && (meta.baselineExposure !== 0 || meta.toneCurve.length > 0)) {
+  if (rootGroupId) {
     const curves = buildCurvesFromToneCurve(meta.toneCurve);
     const adjustments = {
       ...DEFAULT_ADJUSTMENTS,
       exposure: meta.baselineExposure,
-      ...(curves ? { curves } : {}),
+      curves: curves ?? DEFAULT_RAW_CURVES,
     };
     const store = useEditorStore.getState();
     store.setGroupAdjustments(rootGroupId, adjustments);
@@ -87,6 +87,17 @@ async function waitForEngine(maxFrames = 60): Promise<ReturnType<typeof getEngin
   }
   return getEngine();
 }
+
+const DEFAULT_RAW_CURVES: Curves = {
+  ...IDENTITY_CURVES,
+  rgb: [
+    { x: 0, y: 0 },
+    { x: 0.25, y: 0.20 },
+    { x: 0.50, y: 0.55 },
+    { x: 0.75, y: 0.82 },
+    { x: 1, y: 1 },
+  ],
+};
 
 function buildCurvesFromToneCurve(toneCurve: [number, number][]): Curves | null {
   if (toneCurve.length < 2) return null;

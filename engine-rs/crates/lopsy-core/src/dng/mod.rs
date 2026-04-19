@@ -20,6 +20,9 @@ pub struct DngImage {
 pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let reader = TiffReader::new(data)?;
 
+    // IFD0 holds document-level metadata (color matrices, tone curves, etc.)
+    let ifd0 = reader.read_ifd(0)?;
+
     // Find the main image IFD (largest SubIFD, or IFD0 if no SubIFDs)
     let main_ifd = find_main_image_ifd(&reader)?;
 
@@ -81,13 +84,17 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         ));
     }
 
-    // Parse DNG color metadata
-    let color_matrix = get_rational_array(&main_ifd, TagId::ColorMatrix1);
-    let forward_matrix = get_rational_array(&main_ifd, TagId::ForwardMatrix1);
-    let as_shot_neutral = get_rational_array(&main_ifd, TagId::AsShotNeutral);
-    let baseline_exposure = get_rational(&main_ifd, TagId::BaselineExposure);
-    let white_level = get_tag_u32(&main_ifd, TagId::WhiteLevel).unwrap_or((1u32 << bits) - 1);
-    let black_level = get_rational_array(&main_ifd, TagId::BlackLevel);
+    // DNG stores document-level color metadata in IFD0, image data tags in SubIFDs.
+    // Fall back to main_ifd if not found in ifd0.
+    let color_matrix = get_rational_array_either(&ifd0, &main_ifd, TagId::ColorMatrix1);
+    let forward_matrix = get_rational_array_either(&ifd0, &main_ifd, TagId::ForwardMatrix1);
+    let as_shot_neutral = get_rational_array_either(&ifd0, &main_ifd, TagId::AsShotNeutral);
+    let baseline_exposure = get_rational(&ifd0, TagId::BaselineExposure)
+        .or_else(|| get_rational(&main_ifd, TagId::BaselineExposure));
+    let white_level = get_tag_u32(&main_ifd, TagId::WhiteLevel)
+        .or_else(|_| get_tag_u32(&ifd0, TagId::WhiteLevel))
+        .unwrap_or((1u32 << bits) - 1);
+    let black_level = get_rational_array_either(&ifd0, &main_ifd, TagId::BlackLevel);
 
     let max_val = white_level as f64;
     let black = if !black_level.is_empty() { black_level[0] } else { 0.0 };
@@ -139,8 +146,9 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     // curve are left to group adjustments so the user can edit them)
     color::apply_srgb_gamma(&mut rgb_f32);
 
-    // Parse ProfileToneCurve (tag 50940): interleaved (in, out) float pairs
-    let tone_curve_raw = get_rational_array(&main_ifd, TagId::ProfileToneCurve);
+    // Parse ProfileToneCurve (tag 50940): interleaved (in, out) float pairs.
+    // Usually in IFD0 alongside other profile tags.
+    let tone_curve_raw = get_rational_array_either(&ifd0, &main_ifd, TagId::ProfileToneCurve);
     let tone_curve: Vec<(f64, f64)> = tone_curve_raw
         .chunks_exact(2)
         .map(|pair| (pair[0], pair[1]))
@@ -310,6 +318,11 @@ fn get_tag_u8_vec(entries: &[IfdEntry], tag: TagId) -> Result<Vec<u8>, String> {
         .find(|e| e.tag == tag as u16)
         .and_then(|e| Some(e.raw_bytes.clone()))
         .ok_or_else(|| format!("Tag {:?} not found", tag))
+}
+
+fn get_rational_array_either(primary: &[IfdEntry], fallback: &[IfdEntry], tag: TagId) -> Vec<f64> {
+    let v = get_rational_array(primary, tag);
+    if !v.is_empty() { v } else { get_rational_array(fallback, tag) }
 }
 
 fn get_rational_array(entries: &[IfdEntry], tag: TagId) -> Vec<f64> {
