@@ -161,12 +161,14 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         .map(|pair| (pair[0], pair[1]))
         .collect();
 
+    // ProfileToneCurve is a scene-to-display tone mapping in linear space.
+    // sRGB gamma is still needed after for display encoding.
     if tone_curve.len() >= 2 {
         let lut = build_tone_lut(&tone_curve);
         color::apply_lut(&mut rgb_f32, &lut);
-    } else {
-        color::apply_srgb_gamma(&mut rgb_f32);
     }
+
+    color::apply_srgb_gamma(&mut rgb_f32);
 
     // Convert RGB → RGBA f32
     let pixel_count = (width * height) as usize;
