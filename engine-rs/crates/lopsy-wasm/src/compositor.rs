@@ -239,6 +239,10 @@ fn blend_onto_composite(
     if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
+    // Explicit viewport: earlier passes (e.g. render_layer_plus_stroke) may
+    // have left the viewport at an oversized layer texture size, and
+    // scratch_texture_a / composite_texture are both doc-sized.
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     engine.draw_fullscreen_quad();
 
     // Break the feedback loop: composite_texture is still bound to TEXTURE1
@@ -249,6 +253,7 @@ fn blend_onto_composite(
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     engine.gl.use_program(Some(&engine.shaders.blit.program));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
@@ -292,6 +297,7 @@ fn render_mask_overlay(
     if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 1); }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     engine.draw_fullscreen_quad();
 
     // Break feedback loop and blit back to composite
@@ -299,6 +305,7 @@ fn render_mask_overlay(
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     engine.gl.use_program(Some(&engine.shaders.blit.program));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
@@ -351,6 +358,7 @@ fn blend_effect_onto_composite(engine: &mut EngineInner) {
 
     // Copy scratch_b → composite
     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     engine.gl.use_program(Some(&engine.shaders.blit.program));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b) {

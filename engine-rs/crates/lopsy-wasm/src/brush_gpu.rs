@@ -317,64 +317,87 @@ pub fn apply_eraser_dab_batch(
 }
 
 pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
-    let gl = &engine.gl;
-
     // Opacity is already baked into the stroke texture via the clamp pass,
     // so composite at full strength.
     let _stroke_opacity = engine.stroke_opacity.remove(layer_id).unwrap_or(1.0);
 
-    if let Some(stroke_tex) = engine.stroke_textures.remove(layer_id) {
-        // Composite stroke texture onto layer texture using normal compositing
-        if let Some(&layer_tex_handle) = engine.layer_textures.get(layer_id) {
-            if let (Some(stroke_gl_tex), Some(layer_gl_tex)) = (
-                engine.texture_pool.get(stroke_tex),
-                engine.texture_pool.get(layer_tex_handle),
-            ) {
-                let stroke_gl_tex = stroke_gl_tex.clone();
-                let layer_gl_tex = layer_gl_tex.clone();
-                let (w, h) = engine.texture_pool.get_size(layer_tex_handle).unwrap_or((1, 1));
+    let Some(stroke_tex) = engine.stroke_textures.remove(layer_id) else {
+        engine.mark_layer_dirty(layer_id);
+        return;
+    };
 
-                // Use composite shader (source-over) to blend stroke onto layer
-                // Apply brush opacity here so individual dabs only used flow
-                gl.disable(WebGl2RenderingContext::BLEND);
-                engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-                gl.viewport(0, 0, w as i32, h as i32);
+    if let Some(&layer_tex_handle) = engine.layer_textures.get(layer_id) {
+        let stroke_gl_tex_opt = engine.texture_pool.get(stroke_tex).cloned();
+        let layer_gl_tex_opt = engine.texture_pool.get(layer_tex_handle).cloned();
+        if let (Some(stroke_gl_tex), Some(layer_gl_tex)) = (stroke_gl_tex_opt, layer_gl_tex_opt) {
+            let (w, h) = engine.texture_pool.get_size(layer_tex_handle).unwrap_or((1, 1));
 
-                gl.use_program(Some(&engine.shaders.composite.program));
-                gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&stroke_gl_tex));
-                if let Some(loc) = engine.shaders.composite.location(gl, "u_srcTex") {
-                    gl.uniform1i(Some(&loc), 0);
+            // The composite → blit round-trip needs an intermediate texture at
+            // least as large as the layer. The shared scratch texture is only
+            // doc-sized, so allocate a temporary when the layer has been
+            // expanded beyond the doc (e.g. after alignment of a layer that
+            // had been expanded to full doc size).
+            let scratch_size = engine.texture_pool.get_size(engine.scratch_texture_a).unwrap_or((1, 1));
+            let needs_temp = scratch_size.0 < w || scratch_size.1 < h;
+            let intermediate_tex = if needs_temp {
+                match engine.texture_pool.acquire(&engine.gl, w, h) {
+                    Ok(t) => {
+                        engine.texture_pool.set_nearest_filter(&engine.gl, t);
+                        t
+                    }
+                    Err(_) => {
+                        engine.texture_pool.release(stroke_tex);
+                        engine.mark_layer_dirty(layer_id);
+                        return;
+                    }
                 }
-                gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_gl_tex));
-                if let Some(loc) = engine.shaders.composite.location(gl, "u_dstTex") {
-                    gl.uniform1i(Some(&loc), 1);
-                }
-                if let Some(loc) = engine.shaders.composite.location(gl, "u_opacity") {
-                    gl.uniform1f(Some(&loc), 1.0);
-                }
-                engine.draw_fullscreen_quad();
+            } else {
+                engine.scratch_texture_a
+            };
 
-                // Copy scratch A -> layer texture
-                let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
+            if let Some(int_gl_tex) = engine.texture_pool.get(intermediate_tex).cloned() {
+                // Composite: stroke OVER layer → intermediate
+                let stroke_cl = stroke_gl_tex.clone();
+                let layer_cl = layer_gl_tex.clone();
+                engine.render_to_texture(&int_gl_tex, w as i32, h as i32, |engine| {
+                    let gl = &engine.gl;
+                    gl.disable(WebGl2RenderingContext::BLEND);
+                    gl.use_program(Some(&engine.shaders.composite.program));
+                    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+                    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&stroke_cl));
+                    if let Some(loc) = engine.shaders.composite.location(gl, "u_srcTex") {
+                        gl.uniform1i(Some(&loc), 0);
+                    }
+                    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+                    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_cl));
+                    if let Some(loc) = engine.shaders.composite.location(gl, "u_dstTex") {
+                        gl.uniform1i(Some(&loc), 1);
+                    }
+                    if let Some(loc) = engine.shaders.composite.location(gl, "u_opacity") {
+                        gl.uniform1f(Some(&loc), 1.0);
+                    }
+                    engine.draw_fullscreen_quad();
+                });
+
+                // Blit intermediate → layer
                 engine.render_to_texture(&layer_gl_tex, w as i32, h as i32, |engine| {
                     let gl = &engine.gl;
                     gl.use_program(Some(&engine.shaders.blit.program));
                     gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-                    if let Some(s) = &scratch_a_tex {
-                        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-                    }
+                    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&int_gl_tex));
                     if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
                         gl.uniform1i(Some(&loc), 0);
                     }
                     engine.draw_fullscreen_quad();
                 });
             }
-        }
 
-        engine.texture_pool.release(stroke_tex);
+            if needs_temp {
+                engine.texture_pool.release(intermediate_tex);
+            }
+        }
     }
 
+    engine.texture_pool.release(stroke_tex);
     engine.mark_layer_dirty(layer_id);
 }

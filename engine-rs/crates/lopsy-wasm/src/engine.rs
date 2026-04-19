@@ -331,9 +331,6 @@ impl EngineInner {
             None => return Ok(()),
         };
         let (lw, lh) = self.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
-        if lw >= self.doc_width && lh >= self.doc_height {
-            return Ok(());
-        }
 
         // Get the layer's current position so we can place the old content
         // correctly in the new full-size texture.
@@ -341,6 +338,21 @@ impl EngineInner {
             .find(|l| l.id == layer_id)
             .map(|l| (l.x, l.y))
             .unwrap_or((0, 0));
+
+        // Skip only when the layer already fully contains the document area.
+        // Checking size alone (lw >= doc_width && lh >= doc_height) is wrong
+        // when the layer has been offset (e.g. aligned right): a 1920-wide
+        // texture at x=1820 covers doc columns 1820..3740, leaving 0..1820
+        // uncovered. JS-side expansion logic would then desync from WASM.
+        let doc_w = self.doc_width as i32;
+        let doc_h = self.doc_height as i32;
+        let fully_contains_doc = layer_x <= 0
+            && layer_y <= 0
+            && layer_x + lw as i32 >= doc_w
+            && layer_y + lh as i32 >= doc_h;
+        if fully_contains_doc {
+            return Ok(());
+        }
 
         // Read old texture pixels via CPU readback (handles float textures).
         let old_tex_gl = self.texture_pool.get(layer_tex).cloned();
