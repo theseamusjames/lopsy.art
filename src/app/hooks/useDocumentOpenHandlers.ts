@@ -33,7 +33,7 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
     if (/\.dng$/i.test(file.name)) {
       file
         .arrayBuffer()
-        .then((buffer) => { importDngFile(new Uint8Array(buffer), name); closeModalOfKind('newDocument'); })
+        .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(() => closeModalOfKind('newDocument')))
         .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
       return;
     }
@@ -66,7 +66,7 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
     if (/\.dng$/i.test(file.name)) {
       file
         .arrayBuffer()
-        .then((buffer) => { importDngFile(new Uint8Array(buffer), name); closeModal(); })
+        .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(() => closeModal()))
         .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
       return;
     }

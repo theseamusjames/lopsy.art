@@ -1,6 +1,6 @@
 import { useEditorStore } from '../app/editor-store';
 import { getEngine } from '../engine-wasm/engine-state';
-import { decodeAndUploadDng } from '../engine-wasm/wasm-bridge';
+import { decodeAndUploadDng, initWasm } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../engine-wasm/engine-sync';
 import { notifyError } from '../app/notifications-store';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
@@ -13,11 +13,12 @@ interface DngMeta {
   toneCurve: [number, number][];
 }
 
-export function importDngFile(data: Uint8Array, name: string): void {
-  const edStore = useEditorStore.getState();
-  edStore.createDocument(1, 1, false);
+export async function importDngFile(data: Uint8Array, name: string): Promise<void> {
+  await initWasm();
 
-  const engine = getEngine();
+  useEditorStore.getState().createDocument(1, 1, false);
+
+  const engine = await waitForEngine();
   if (!engine) {
     notifyError('Engine not ready');
     return;
@@ -37,7 +38,6 @@ export function importDngFile(data: Uint8Array, name: string): void {
     return;
   }
 
-  // Patch document and layer dimensions
   useEditorStore.setState((s) => {
     const layers = s.document.layers.map((l) => {
       if (l.id === activeLayerId && l.type === 'raster') {
@@ -50,7 +50,6 @@ export function importDngFile(data: Uint8Array, name: string): void {
     };
   });
 
-  // Apply DNG tone mapping metadata as group adjustments on the root group
   const rootGroupId = useEditorStore.getState().document.rootGroupId;
   if (rootGroupId && (meta.baselineExposure !== 0 || meta.toneCurve.length > 0)) {
     const curves = buildCurvesFromToneCurve(meta.toneCurve);
@@ -66,6 +65,15 @@ export function importDngFile(data: Uint8Array, name: string): void {
   useEditorStore.getState().fitToView();
 }
 
+async function waitForEngine(maxFrames = 60): Promise<ReturnType<typeof getEngine>> {
+  for (let i = 0; i < maxFrames; i++) {
+    const engine = getEngine();
+    if (engine) return engine;
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+  return getEngine();
+}
+
 function buildCurvesFromToneCurve(toneCurve: [number, number][]): Curves | null {
   if (toneCurve.length < 2) return null;
 
@@ -74,7 +82,6 @@ function buildCurvesFromToneCurve(toneCurve: [number, number][]): Curves | null 
     y: Math.max(0, Math.min(1, y)),
   }));
 
-  // Ensure endpoints exist
   if (points[0]!.x > 0.001) {
     points.unshift({ x: 0, y: 0 });
   }
