@@ -340,7 +340,11 @@ Applied globally or per-group. All default to 0.
 
 ## Symmetry
 
-- **Axes**: horizontal, vertical, or both (4-way)
+- **Mirror axes**: horizontal, vertical, or both (4-way)
+- **Radial/Mandala symmetry**: N-fold rotational symmetry (2–32 segments)
+  - Creates N-1 rotated copies of each stroke at evenly spaced angles around the center
+  - Toggle with snowflake icon; segment count adjustable via slider
+  - When active, overrides mirror axes; disable radial to use mirror mode
 - **Center**: configurable (defaults to canvas center)
 - Available on brush, pencil, and eraser
 
