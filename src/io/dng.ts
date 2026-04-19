@@ -1,4 +1,5 @@
 import { useEditorStore } from '../app/editor-store';
+import { useUIStore } from '../app/ui-store';
 import { getEngine } from '../engine-wasm/engine-state';
 import { decodeAndUploadDng, initWasm } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../engine-wasm/engine-sync';
@@ -14,6 +15,17 @@ interface DngMeta {
 }
 
 export async function importDngFile(data: Uint8Array, name: string): Promise<void> {
+  const ui = useUIStore.getState();
+  ui.openModal({ kind: 'loading', message: 'Opening DNG…' });
+
+  try {
+    await importDngFileInner(data, name);
+  } finally {
+    useUIStore.getState().closeModalOfKind('loading');
+  }
+}
+
+async function importDngFileInner(data: Uint8Array, name: string): Promise<void> {
   await initWasm();
 
   useEditorStore.getState().createDocument(1, 1, false);
@@ -58,7 +70,9 @@ export async function importDngFile(data: Uint8Array, name: string): Promise<voi
       exposure: meta.baselineExposure,
       ...(curves ? { curves } : {}),
     };
-    useEditorStore.getState().setGroupAdjustments(rootGroupId, adjustments);
+    const store = useEditorStore.getState();
+    store.setGroupAdjustments(rootGroupId, adjustments);
+    store.setGroupAdjustmentsEnabled(rootGroupId, true);
   }
 
   resetTrackedState(engine);

@@ -9,6 +9,7 @@
  */
 
 import { useEditorStore } from '../app/editor-store';
+import { useUIStore } from '../app/ui-store';
 import { getEngine } from '../engine-wasm/engine-state';
 import {
   exportPsd,
@@ -179,6 +180,8 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
 // ─── PSD Import ────────────────────────────────────────────────────────
 
 export async function importPsdFile(data: Uint8Array, name: string): Promise<void> {
+  useUIStore.getState().openModal({ kind: 'loading', message: 'Opening PSD…' });
+
   // Ensure the WASM module is initialized — when opening from the initial
   // modal before any document exists, the engine hasn't been created yet.
   await initWasm();
@@ -342,6 +345,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
   }
 
   store.getState().fitToView();
+  useUIStore.getState().closeModalOfKind('loading');
 }
 
 async function waitForEngine(maxFrames = 60): Promise<ReturnType<typeof getEngine>> {

@@ -58,7 +58,8 @@ export type ModalState =
   | { kind: 'shapeSize'; click: ShapeSizeClick }
   | { kind: 'strokePath'; pathId: string }
   | { kind: 'guideColor' }
-  | { kind: 'brush' };
+  | { kind: 'brush' }
+  | { kind: 'loading'; message: string };
 
 interface UIState {
   activeTool: ToolId;
