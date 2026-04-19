@@ -21,15 +21,19 @@ if (typeof globalThis.ImageData === 'undefined') {
   (globalThis as Record<string, unknown>).ImageData = ImageDataPolyfill;
 }
 
-// Mock getContext('2d') for HTMLCanvasElement in jsdom
+// Mock getContext('2d') for HTMLCanvasElement in jsdom.
+// Overwriting an overloaded prototype method can't be expressed in TS without
+// a cast — so we type the mock function precisely, then cast once at the
+// assignment site to the prototype's overloaded signature.
+type GetContextFn = typeof HTMLCanvasElement.prototype.getContext;
 const originalGetContext = HTMLCanvasElement.prototype.getContext;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(HTMLCanvasElement.prototype as any).getContext = function (
+const mockGetContext = function (
   this: HTMLCanvasElement,
   contextId: string,
   ...args: unknown[]
 ): RenderingContext | null {
   if (contextId === '2d') {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const canvas = this;
     return {
       canvas,
@@ -103,3 +107,4 @@ const originalGetContext = HTMLCanvasElement.prototype.getContext;
   }
   return originalGetContext.call(this, contextId, ...args);
 };
+HTMLCanvasElement.prototype.getContext = mockGetContext as GetContextFn;

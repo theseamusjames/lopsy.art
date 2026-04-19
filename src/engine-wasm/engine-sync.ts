@@ -3,14 +3,16 @@
  *
  * Tracks what has already been sent to the engine and only pushes
  * deltas each frame to avoid redundant GPU uploads.
+ *
+ * The hot path (syncLayers + descriptor serialization) lives in
+ * ./sync-layers.ts, and the shared per-engine tracked state lives in
+ * ./sync-state.ts. This file re-exports their public surface so
+ * consumers only need to import from `engine-sync`.
  */
 
 import type { Engine } from './wasm-bridge';
 import { getEngine } from './engine-state';
 import type { Layer } from '../types';
-import type { SparseLayerEntry } from '../app/store/types';
-import { pixelDataManager } from '../engine/pixel-data-manager';
-import { buildLayerIndex, isEffectivelyVisible, type LayerIndex } from '../layers/layer-index';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
@@ -18,14 +20,6 @@ import {
   setDocumentSize,
   setViewport,
   setBackgroundColor,
-  addLayer,
-  removeLayer,
-  updateLayer,
-  setLayerOrder,
-  uploadLayerPixels,
-  uploadLayerSparsePixels,
-  uploadLayerMask,
-  removeLayerMask,
   render,
   markAllDirty,
   setSelectionMask,
@@ -65,224 +59,11 @@ import {
 import type { PathAnchor } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
 import type { BrushTipData } from '../types/brush';
+import { getTracked } from './sync-state';
+import { syncLayers } from './sync-layers';
 
-// ---------------------------------------------------------------------------
-// Blend mode mapping: TypeScript union → Rust serde enum variant
-// Canonical table lives in src/types/blend-mode-tables.ts.
-// ---------------------------------------------------------------------------
-
-import { BLEND_MODE_TO_PASCAL as BLEND_MODE_MAP } from '../types/blend-mode-tables';
-
-const LAYER_TYPE_MAP: Record<string, string> = {
-  'raster': 'Raster',
-  'text': 'Text',
-  'shape': 'Shape',
-  'group': 'Group',
-  'adjustment': 'Adjustment',
-};
-
-function layerToDescJson(layer: Layer, effectiveVisible: boolean): string {
-  const effects: Record<string, unknown> = {};
-
-  const eff = layer.effects;
-
-  if (eff.outerGlow.enabled) {
-    const c = eff.outerGlow.color;
-    effects.outer_glow = {
-      enabled: true,
-      color: [c.r / 255, c.g / 255, c.b / 255, c.a],
-      size: eff.outerGlow.size,
-      spread: eff.outerGlow.spread,
-      opacity: eff.outerGlow.opacity,
-    };
-  }
-  if (eff.innerGlow.enabled) {
-    const c = eff.innerGlow.color;
-    effects.inner_glow = {
-      enabled: true,
-      color: [c.r / 255, c.g / 255, c.b / 255, c.a],
-      size: eff.innerGlow.size,
-      spread: eff.innerGlow.spread,
-      opacity: eff.innerGlow.opacity,
-    };
-  }
-  if (eff.dropShadow.enabled) {
-    const c = eff.dropShadow.color;
-    effects.drop_shadow = {
-      enabled: true,
-      color: [c.r / 255, c.g / 255, c.b / 255, c.a],
-      offset_x: eff.dropShadow.offsetX,
-      offset_y: eff.dropShadow.offsetY,
-      blur: eff.dropShadow.blur,
-      spread: eff.dropShadow.spread,
-      opacity: eff.dropShadow.opacity ?? c.a,
-    };
-  }
-  if (eff.stroke.enabled) {
-    const c = eff.stroke.color;
-    const posMap: Record<string, string> = {
-      'outside': 'Outside',
-      'inside': 'Inside',
-      'center': 'Center',
-    };
-    effects.stroke = {
-      enabled: true,
-      color: [c.r / 255, c.g / 255, c.b / 255, c.a],
-      width: eff.stroke.width,
-      position: posMap[eff.stroke.position] ?? 'Outside',
-      opacity: 1.0,
-    };
-  }
-  if (eff.colorOverlay.enabled) {
-    const c = eff.colorOverlay.color;
-    effects.color_overlay = {
-      enabled: true,
-      color: [c.r / 255, c.g / 255, c.b / 255, c.a],
-      opacity: 1.0,
-    };
-  }
-
-  const width = 'width' in layer ? (layer.width ?? 0) : 0;
-  const height = 'height' in layer ? (layer.height ?? 0) : 0;
-
-  const desc: Record<string, unknown> = {
-    id: layer.id,
-    name: layer.name,
-    layer_type: LAYER_TYPE_MAP[layer.type] ?? 'Raster',
-    visible: effectiveVisible,
-    locked: layer.locked,
-    opacity: layer.opacity,
-    blend_mode: BLEND_MODE_MAP[layer.blendMode] ?? 'Normal',
-    x: layer.x,
-    y: layer.y,
-    width,
-    height,
-    clip_to_below: layer.clipToBelow,
-    effects,
-    mask: layer.mask ? {
-      enabled: layer.mask.enabled,
-      linked: true,
-      width: layer.mask.width,
-      height: layer.mask.height,
-    } : null,
-  };
-
-  if (layer.type === 'group' && 'children' in layer) {
-    desc.children = (layer as import('../types').GroupLayer).children;
-  }
-
-  return JSON.stringify(desc);
-}
-
-// ---------------------------------------------------------------------------
-// Tracked state — what the engine currently knows
-// ---------------------------------------------------------------------------
-
-interface TrackedState {
-  docWidth: number;
-  docHeight: number;
-  bgColor: string;
-  viewportZoom: number;
-  viewportPanX: number;
-  viewportPanY: number;
-  viewportWidth: number;
-  viewportHeight: number;
-  layerIds: Set<string>;
-  layerVersions: Map<string, string>;
-  /** Layer reference that produced the cached descriptor. If the reference
-   *  and the effective visibility are both unchanged, the descriptor is
-   *  also unchanged and we can skip JSON.stringify entirely. */
-  layerRefs: Map<string, Layer>;
-  layerEffectiveVisible: Map<string, boolean>;
-  /** Layer ids currently known to have a mask on the engine side. Used to
-   *  decide whether a removeLayerMask call is needed — previously done by
-   *  substring-sniffing the cached descriptor JSON, which was fragile. */
-  masksOnEngine: Set<string>;
-  pixelDataVersions: Map<string, ImageData | undefined>;
-  sparseVersions: Map<string, SparseLayerEntry | undefined>;
-  layerOrder: string;
-  selectionActive: boolean;
-  selectionMask: Uint8ClampedArray | null;
-  showGrid: boolean;
-  gridSize: number;
-  showRulers: boolean;
-  brushTipData: BrushTipData | null;
-  brushAngle: number;
-  brushHasTip: boolean;
-  /** Reference equality on the active Curves object so we only re-upload
-   *  the LUT texture when the user actually edited a control point. */
-  curvesRef: unknown;
-  /** True when the engine is in "no curves" mode; null on first frame. */
-  curvesIdentity: boolean | null;
-  /** Reference equality on the active Levels object so we only re-upload
-   *  the LUT texture when the user actually edited a control point. */
-  levelsRef: unknown;
-  /** True when the engine is in "no levels" mode; null on first frame. */
-  levelsIdentity: boolean | null;
-}
-
-function createTrackedState(): TrackedState {
-  return {
-    docWidth: 0,
-    docHeight: 0,
-    bgColor: '',
-    viewportZoom: 0,
-    viewportPanX: 0,
-    viewportPanY: 0,
-    viewportWidth: 0,
-    viewportHeight: 0,
-    layerIds: new Set(),
-    layerVersions: new Map(),
-    layerRefs: new Map(),
-    layerEffectiveVisible: new Map(),
-    masksOnEngine: new Set(),
-    pixelDataVersions: new Map(),
-    sparseVersions: new Map(),
-    layerOrder: '',
-    selectionActive: false,
-    selectionMask: null,
-    showGrid: false,
-    gridSize: 0,
-    showRulers: false,
-    brushTipData: null,
-    brushAngle: 0,
-    brushHasTip: false,
-    curvesRef: null,
-    curvesIdentity: null,
-    levelsRef: null,
-    levelsIdentity: null,
-  };
-}
-
-// Tracked state is keyed by Engine instance so it lives and dies with the
-// engine — no module-level singleton, no HMR pollution, no test cross-talk.
-const trackedByEngine = new WeakMap<Engine, TrackedState>();
-
-function getTracked(engine: Engine): TrackedState {
-  let t = trackedByEngine.get(engine);
-  if (!t) {
-    t = createTrackedState();
-    trackedByEngine.set(engine, t);
-  }
-  return t;
-}
-
-export function resetTrackedState(engine: Engine): void {
-  trackedByEngine.set(engine, createTrackedState());
-}
-
-/**
- * Mark a layer's pixel data as already synced to the GPU.
- * Use this when uploading via a non-standard path (e.g. canvas upload)
- * to prevent syncLayers from re-uploading stale byte data.
- */
-export function markPixelDataSynced(engine: Engine, layerId: string, data: ImageData): void {
-  getTracked(engine).pixelDataVersions.set(layerId, data);
-}
-
-// ---------------------------------------------------------------------------
-// Sync functions — called before each render
-// ---------------------------------------------------------------------------
+export { resetTrackedState, markPixelDataSynced } from './sync-state';
+export { syncLayers } from './sync-layers';
 
 export function syncDocumentSize(engine: Engine, width: number, height: number): void {
   const tracked = getTracked(engine);
@@ -322,150 +103,6 @@ export function syncViewport(
   tracked.viewportPanY = panY;
   tracked.viewportWidth = screenW;
   tracked.viewportHeight = screenH;
-}
-
-export function syncLayers(
-  engine: Engine,
-  layers: readonly Layer[],
-  layerOrder: readonly string[],
-  dirtyLayerIds: Set<string>,
-): void {
-  const tracked = getTracked(engine);
-  const currentIds = new Set(layers.map((l) => l.id));
-
-  // Build a per-sync LayerIndex so ancestor-visibility checks are O(depth)
-  // per layer instead of the O(n²) nested walk this used to do.
-  const index: LayerIndex = buildLayerIndex(layers);
-
-  // Remove layers no longer present
-  for (const id of tracked.layerIds) {
-    if (!currentIds.has(id)) {
-      try {
-        removeLayer(engine, id);
-      } catch (e) {
-        console.error('[syncLayers] removeLayer failed:', id, e);
-      }
-      tracked.layerVersions.delete(id);
-      tracked.layerRefs.delete(id);
-      tracked.layerEffectiveVisible.delete(id);
-      tracked.masksOnEngine.delete(id);
-      tracked.pixelDataVersions.delete(id);
-      tracked.sparseVersions.delete(id);
-    }
-  }
-
-  // Track which layers were successfully added so we don't mark failed
-  // adds as tracked (which would prevent retry on the next frame).
-  const failedAdds = new Set<string>();
-
-  // Add or update layers
-  for (const layer of layers) {
-    const effectiveVisible = isEffectivelyVisible(index, layer.id);
-
-    // Fast path: if both the layer reference and its effective visibility
-    // are unchanged since last sync, the descriptor JSON is also unchanged.
-    // Skip the serialization entirely. This is the common case — most
-    // frames re-render without any layer mutation.
-    const refUnchanged = tracked.layerRefs.get(layer.id) === layer;
-    const visUnchanged = tracked.layerEffectiveVisible.get(layer.id) === effectiveVisible;
-    const isKnown = tracked.layerIds.has(layer.id);
-
-    let descJson: string | undefined;
-    if (!isKnown || !refUnchanged || !visUnchanged) {
-      descJson = layerToDescJson(layer, effectiveVisible);
-    }
-
-    if (!isKnown) {
-      try {
-        addLayer(engine, descJson!);
-        tracked.layerVersions.set(layer.id, descJson!);
-        tracked.layerRefs.set(layer.id, layer);
-        tracked.layerEffectiveVisible.set(layer.id, effectiveVisible);
-      } catch (e) {
-        console.error('[syncLayers] addLayer failed:', layer.id, e);
-        failedAdds.add(layer.id);
-      }
-    } else if (descJson !== undefined && tracked.layerVersions.get(layer.id) !== descJson) {
-      try {
-        updateLayer(engine, descJson);
-        tracked.layerVersions.set(layer.id, descJson);
-      } catch (e) {
-        console.error('[syncLayers] updateLayer failed:', layer.id, e);
-      }
-      tracked.layerRefs.set(layer.id, layer);
-      tracked.layerEffectiveVisible.set(layer.id, effectiveVisible);
-    } else if (descJson !== undefined) {
-      tracked.layerRefs.set(layer.id, layer);
-      tracked.layerEffectiveVisible.set(layer.id, effectiveVisible);
-    }
-
-    // Upload pixel data if changed or marked dirty (including GPU paint dirty).
-    // When no JS data exists AND no sparse data, the GPU texture is source of truth
-    // (e.g. after a GPU paint stroke or undo restore) — skip upload.
-    const data = pixelDataManager.get(layer.id);
-    const sparseEntry = pixelDataManager.getSparse(layer.id);
-    const isDirty = dirtyLayerIds.has(layer.id);
-    const pixelChanged = tracked.pixelDataVersions.get(layer.id) !== data;
-    const sparseChanged = tracked.sparseVersions.get(layer.id) !== sparseEntry;
-
-    if (data && (pixelChanged || isDirty)) {
-      const rawBytes = new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength);
-      uploadLayerPixels(engine, layer.id, rawBytes, data.width, data.height, layer.x, layer.y);
-      tracked.pixelDataVersions.set(layer.id, data);
-      tracked.sparseVersions.set(layer.id, undefined);
-    } else if (!data && sparseEntry && (sparseChanged || isDirty)) {
-      const indices = new Uint32Array(sparseEntry.sparse.indices);
-      const rgba = new Uint8Array(sparseEntry.sparse.rgba.buffer, sparseEntry.sparse.rgba.byteOffset, sparseEntry.sparse.rgba.byteLength);
-      // Use layer.x/y as authoritative position — sparse offsets may be
-      // stale after updateLayerPosition() (move tool).
-      uploadLayerSparsePixels(
-        engine,
-        layer.id,
-        indices,
-        rgba,
-        sparseEntry.sparse.width,
-        sparseEntry.sparse.height,
-        layer.x,
-        layer.y,
-      );
-      tracked.sparseVersions.set(layer.id, sparseEntry);
-      tracked.pixelDataVersions.set(layer.id, undefined);
-    } else if (!data && !sparseEntry) {
-      // No JS data — GPU texture is source of truth (GPU paint or undo restore).
-      // Only clear the GPU texture if we previously had JS data AND the layer is dirty
-      // (meaning JS data was explicitly removed, not just never set).
-      if (isDirty && (tracked.pixelDataVersions.get(layer.id) !== undefined || tracked.sparseVersions.get(layer.id) !== undefined)) {
-        // JS data was cleared but layer is dirty — GPU already has the correct data
-        // from uploadCompressed or GPU stroke. Just update tracking.
-        tracked.pixelDataVersions.set(layer.id, undefined);
-        tracked.sparseVersions.set(layer.id, undefined);
-      }
-    }
-
-    // Upload mask
-    if (layer.mask) {
-      const maskBytes = new Uint8Array(layer.mask.data.buffer, layer.mask.data.byteOffset, layer.mask.data.byteLength);
-      uploadLayerMask(engine, layer.id, maskBytes, layer.mask.width, layer.mask.height);
-      tracked.masksOnEngine.add(layer.id);
-    } else if (tracked.masksOnEngine.has(layer.id)) {
-      removeLayerMask(engine, layer.id);
-      tracked.masksOnEngine.delete(layer.id);
-    }
-  }
-
-  // Exclude layers that failed to add — they stay out of tracking so
-  // syncLayers retries addLayer on the next frame.
-  for (const id of failedAdds) {
-    currentIds.delete(id);
-  }
-  tracked.layerIds = currentIds;
-
-  // Sync layer order
-  const orderJson = JSON.stringify(layerOrder);
-  if (tracked.layerOrder !== orderJson) {
-    setLayerOrder(engine, orderJson);
-    tracked.layerOrder = orderJson;
-  }
 }
 
 export function syncSelection(engine: Engine, selection: SelectionData): void {

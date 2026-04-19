@@ -26,8 +26,8 @@ export function parseABR(buffer: ArrayBuffer): AbrBrush[] {
     } else if (version === 6 || version === 7 || version === 10) {
       parseV6Plus(view, brushes);
     }
-  } catch {
-    // Return whatever was successfully parsed
+  } catch (err) {
+    console.warn('[abr-parser] aborted parsing after error; returning partial results', err);
   }
 
   return brushes;
@@ -68,8 +68,8 @@ function parseV1V2(
       if (result !== null) {
         brushes.push(result);
       }
-    } catch {
-      // Skip corrupted brush, continue with next
+    } catch (err) {
+      console.warn(`[abr-parser] skipped corrupted v${version} brush at index ${brushIndex}`, err);
     }
 
     offset = chunkEnd;
@@ -191,8 +191,8 @@ function parseV6Plus(view: DataView, brushes: AbrBrush[]): void {
     if (blockType === 'samp') {
       try {
         parseSampBlockV6(view, offset, blockEnd, brushes);
-      } catch {
-        // Continue with next block
+      } catch (err) {
+        console.warn('[abr-parser] skipped corrupted samp block', err);
       }
     }
 
@@ -232,8 +232,8 @@ function parseSampBlockV6(
       if (brush !== null) {
         brushes.push(brush);
       }
-    } catch {
-      // Skip corrupted sample
+    } catch (err) {
+      console.warn(`[abr-parser] skipped corrupted v6+ sample at index ${brushIndex}`, err);
     }
 
     offset = sampleEnd;
