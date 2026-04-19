@@ -94,6 +94,18 @@ pub fn apply_matrix(rgb: &mut [f32], mat: &[f32; 9]) {
     }
 }
 
+/// Apply a precomputed LUT (4096 entries) to each RGB channel.
+pub fn apply_lut(rgb: &mut [f32], lut: &[f32]) {
+    let max_idx = (lut.len() - 1) as f32;
+    for v in rgb.iter_mut() {
+        let idx = (*v * max_idx).clamp(0.0, max_idx);
+        let lo = idx as usize;
+        let hi = (lo + 1).min(lut.len() - 1);
+        let frac = idx - lo as f32;
+        *v = lut[lo] * (1.0 - frac) + lut[hi] * frac;
+    }
+}
+
 pub fn apply_srgb_gamma(rgb: &mut [f32]) {
     for v in rgb.iter_mut() {
         *v = linear_to_srgb(*v);

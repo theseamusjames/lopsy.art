@@ -142,9 +142,7 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         color::apply_matrix(&mut rgb_f32, &mat);
     }
 
-    // Apply BaselineExposure — this is a camera calibration value, not
-    // a creative adjustment. Bake it into the pixels so the raw data
-    // starts at the intended brightness.
+    // Apply BaselineExposure — camera calibration, not a creative adjustment.
     if let Some(ev) = baseline_exposure {
         if ev.abs() > 0.001 {
             let scale = (2.0f64).powf(ev) as f32;
@@ -154,15 +152,21 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         }
     }
 
-    // Apply sRGB gamma curve
-    color::apply_srgb_gamma(&mut rgb_f32);
-
-    // Parse ProfileToneCurve (tag 50940)
+    // Parse ProfileToneCurve (tag 50940): maps linear scene values to
+    // perceptual output. When present it replaces sRGB gamma — applying
+    // both would double-encode.
     let tone_curve_raw = get_rational_array_either(&ifd0, &main_ifd, TagId::ProfileToneCurve);
     let tone_curve: Vec<(f64, f64)> = tone_curve_raw
         .chunks_exact(2)
         .map(|pair| (pair[0], pair[1]))
         .collect();
+
+    if tone_curve.len() >= 2 {
+        let lut = build_tone_lut(&tone_curve);
+        color::apply_lut(&mut rgb_f32, &lut);
+    } else {
+        color::apply_srgb_gamma(&mut rgb_f32);
+    }
 
     // Convert RGB → RGBA f32
     let pixel_count = (width * height) as usize;
@@ -181,6 +185,28 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         baseline_exposure: baseline_exposure.unwrap_or(0.0),
         tone_curve,
     })
+}
+
+/// Build a 4096-entry LUT from ProfileToneCurve control points via linear interpolation.
+fn build_tone_lut(curve: &[(f64, f64)]) -> Vec<f32> {
+    let size = 4096usize;
+    let mut lut = vec![0.0f32; size];
+    for i in 0..size {
+        let x = i as f64 / (size - 1) as f64;
+        // Find the segment containing x
+        let mut y = curve.last().map(|&(_, v)| v).unwrap_or(x);
+        for w in curve.windows(2) {
+            let (x0, y0) = w[0];
+            let (x1, y1) = w[1];
+            if x <= x1 {
+                let t = if (x1 - x0).abs() < 1e-10 { 0.0 } else { (x - x0) / (x1 - x0) };
+                y = y0 + t * (y1 - y0);
+                break;
+            }
+        }
+        lut[i] = y.clamp(0.0, 1.0) as f32;
+    }
+    lut
 }
 
 fn find_main_image_ifd(reader: &TiffReader) -> Result<Vec<IfdEntry>, String> {

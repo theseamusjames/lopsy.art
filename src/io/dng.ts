@@ -5,7 +5,7 @@ import { decodeAndUploadDng, initWasm } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../engine-wasm/engine-sync';
 import { notifyError } from '../app/notifications-store';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
-import { IDENTITY_CURVES, type CurvePoint, type Curves } from '../filters/curves';
+import { IDENTITY_CURVES, type Curves } from '../filters/curves';
 
 interface DngMeta {
   width: number;
@@ -62,15 +62,17 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
     };
   });
 
+  // When no DNG tone curve was found, the Rust pipeline applies sRGB gamma
+  // instead — but the result still benefits from a gentle contrast curve.
+  // When a tone curve IS found, it's baked into the pixels (it replaces
+  // sRGB gamma), so we don't need a group adjustment for it.
   const rootGroupId = useEditorStore.getState().document.rootGroupId;
-  if (rootGroupId) {
-    const curves = buildCurvesFromToneCurve(meta.toneCurve);
-    const adjustments = {
-      ...DEFAULT_ADJUSTMENTS,
-      curves: curves ?? DEFAULT_RAW_CURVES,
-    };
+  if (rootGroupId && meta.toneCurve.length === 0) {
     const store = useEditorStore.getState();
-    store.setGroupAdjustments(rootGroupId, adjustments);
+    store.setGroupAdjustments(rootGroupId, {
+      ...DEFAULT_ADJUSTMENTS,
+      curves: DEFAULT_RAW_CURVES,
+    });
     store.setGroupAdjustmentsEnabled(rootGroupId, true);
   }
 
@@ -98,23 +100,3 @@ const DEFAULT_RAW_CURVES: Curves = {
   ],
 };
 
-function buildCurvesFromToneCurve(toneCurve: [number, number][]): Curves | null {
-  if (toneCurve.length < 2) return null;
-
-  const points: CurvePoint[] = toneCurve.map(([x, y]) => ({
-    x: Math.max(0, Math.min(1, x)),
-    y: Math.max(0, Math.min(1, y)),
-  }));
-
-  if (points[0]!.x > 0.001) {
-    points.unshift({ x: 0, y: 0 });
-  }
-  if (points[points.length - 1]!.x < 0.999) {
-    points.push({ x: 1, y: 1 });
-  }
-
-  return {
-    ...IDENTITY_CURVES,
-    rgb: points,
-  };
-}
