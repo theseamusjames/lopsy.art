@@ -306,6 +306,84 @@ impl TexturePool {
         Ok(())
     }
 
+    /// Read pixels from the currently-bound FBO as u16 RGBA.
+    /// Preserves 16-bit precision from RGBA16F textures; losslessly
+    /// upscales u8 data on RGBA8 textures.
+    pub fn read_rgba_u16(
+        &self,
+        gl: &WebGl2RenderingContext,
+        x: i32,
+        y: i32,
+        w: u32,
+        h: u32,
+    ) -> Result<Vec<u16>, String> {
+        let count = (w * h * 4) as usize;
+
+        if self.use_float {
+            let f32_buf = js_sys::Float32Array::new_with_length(count as u32);
+            gl.read_pixels_with_opt_array_buffer_view(
+                x, y,
+                w as i32, h as i32,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::FLOAT,
+                Some(&f32_buf),
+            ).map_err(|e| format!("readPixels float failed: {:?}", e))?;
+            let mut f32_data = vec![0f32; count];
+            f32_buf.copy_to(&mut f32_data);
+            let pixels: Vec<u16> = f32_data
+                .iter()
+                .map(|&v| (v.clamp(0.0, 1.0) * 65535.0 + 0.5) as u16)
+                .collect();
+            Ok(pixels)
+        } else {
+            let mut u8_pixels = vec![0u8; count];
+            gl.read_pixels_with_opt_u8_array(
+                x, y,
+                w as i32, h as i32,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::UNSIGNED_BYTE,
+                Some(&mut u8_pixels),
+            ).map_err(|e| format!("readPixels failed: {:?}", e))?;
+            let pixels: Vec<u16> = u8_pixels
+                .iter()
+                .map(|&v| (v as u16) << 8 | v as u16)
+                .collect();
+            Ok(pixels)
+        }
+    }
+
+    /// Upload u16 RGBA pixel data, converting to the pool's native format.
+    pub fn upload_rgba_u16(
+        &self,
+        gl: &WebGl2RenderingContext,
+        handle: TextureHandle,
+        x: i32,
+        y: i32,
+        w: u32,
+        h: u32,
+        data: &[u16],
+    ) -> Result<(), String> {
+        let texture = self.get(handle).ok_or("Texture not found")?;
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
+
+        if self.use_float {
+            let f32_data: Vec<f32> = data.iter().map(|&v| v as f32 / 65535.0).collect();
+            tex_sub_image_2d_f32(gl, x, y, w, h, &f32_data)?;
+        } else {
+            let u8_data: Vec<u8> = data.iter().map(|&v| (v >> 8) as u8).collect();
+            gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
+                WebGl2RenderingContext::TEXTURE_2D,
+                0, x, y,
+                w as i32, h as i32,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::UNSIGNED_BYTE,
+                Some(&u8_data),
+            ).map_err(|e| format!("tex_sub_image_2d failed: {:?}", e))?;
+        }
+
+        Ok(())
+    }
+
     /// Read pixels from the currently-bound FBO as u8 RGBA.
     /// Handles float→u8 conversion when using RGBA16F textures.
     pub fn read_rgba(

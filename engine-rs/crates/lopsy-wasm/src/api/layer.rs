@@ -495,6 +495,98 @@ pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compr
     Ok(())
 }
 
+#[wasm_bindgen(js_name = "readLayerPixelsCompressedU16")]
+pub fn read_layer_pixels_compressed_u16(engine: &Engine, layer_id: &str) -> Vec<u8> {
+    let pixels = match layer_manager::read_pixels_u16(&engine.inner, layer_id) {
+        Ok(p) => p,
+        Err(_) => return Vec::new(),
+    };
+    let tex = match engine.inner.layer_textures.get(layer_id) {
+        Some(&t) => t,
+        None => return Vec::new(),
+    };
+    let (w, h) = engine.inner.texture_pool.get_size(tex).unwrap_or((0, 0));
+    if w == 0 || h == 0 {
+        return Vec::new();
+    }
+
+    let (cropped, rect) = lopsy_core::pixel_buffer::crop_to_content_bounds_u16(&pixels, w, h);
+    if cropped.is_empty() {
+        return Vec::new();
+    }
+
+    // 24-byte header (same layout as u8 variant) + u16 pixel data as LE bytes
+    let pixel_bytes = cropped.len() * 2;
+    let mut result = Vec::with_capacity(24 + pixel_bytes);
+    result.extend_from_slice(&rect.x.to_le_bytes());
+    result.extend_from_slice(&rect.y.to_le_bytes());
+    result.extend_from_slice(&(rect.width as i32).to_le_bytes());
+    result.extend_from_slice(&(rect.height as i32).to_le_bytes());
+    result.extend_from_slice(&(w as i32).to_le_bytes());
+    result.extend_from_slice(&(h as i32).to_le_bytes());
+    for &val in &cropped {
+        result.extend_from_slice(&val.to_le_bytes());
+    }
+    result
+}
+
+#[wasm_bindgen(js_name = "uploadLayerPixelsCompressedU16")]
+pub fn upload_layer_pixels_compressed_u16(engine: &mut Engine, layer_id: &str, compressed: &[u8]) -> Result<(), JsError> {
+    if compressed.len() < 24 {
+        return Err(JsError::new("Compressed data too short (need at least 24-byte header)"));
+    }
+
+    let crop_x = i32::from_le_bytes([compressed[0], compressed[1], compressed[2], compressed[3]]);
+    let crop_y = i32::from_le_bytes([compressed[4], compressed[5], compressed[6], compressed[7]]);
+    let crop_w = i32::from_le_bytes([compressed[8], compressed[9], compressed[10], compressed[11]]);
+    let crop_h = i32::from_le_bytes([compressed[12], compressed[13], compressed[14], compressed[15]]);
+    let full_w = i32::from_le_bytes([compressed[16], compressed[17], compressed[18], compressed[19]]);
+    let full_h = i32::from_le_bytes([compressed[20], compressed[21], compressed[22], compressed[23]]);
+
+    if crop_w <= 0 || crop_h <= 0 || full_w <= 0 || full_h <= 0 {
+        return Err(JsError::new("Invalid dimensions in compressed header"));
+    }
+
+    let pixel_bytes = &compressed[24..];
+    let expected_u16_count = (crop_w as usize) * (crop_h as usize) * 4;
+    let expected_byte_len = expected_u16_count * 2;
+    if pixel_bytes.len() < expected_byte_len {
+        return Err(JsError::new("Snapshot pixel data shorter than header dimensions"));
+    }
+
+    // Decode LE u16 values
+    let cropped: Vec<u16> = pixel_bytes[..expected_byte_len]
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect();
+
+    // Reconstruct full-size u16 buffer
+    let fw = full_w as usize;
+    let fh = full_h as usize;
+    let mut full_pixels = vec![0u16; fw * fh * 4];
+    let cw = crop_w as usize;
+    let cx = crop_x as usize;
+    let cy = crop_y as usize;
+    let ch = crop_h as usize;
+    for row in 0..ch {
+        let src_start = row * cw * 4;
+        let dst_start = ((cy + row) * fw + cx) * 4;
+        let len = cw * 4;
+        full_pixels[dst_start..dst_start + len]
+            .copy_from_slice(&cropped[src_start..src_start + len]);
+    }
+
+    layer_manager::upload_pixels_u16(
+        &mut engine.inner,
+        layer_id,
+        &full_pixels,
+        full_w as u32,
+        full_h as u32,
+    ).map_err(|e| JsError::new(&e))?;
+
+    Ok(())
+}
+
 #[wasm_bindgen(js_name = "readLayerThumbnail")]
 pub fn read_layer_thumbnail(engine: &Engine, layer_id: &str, max_size: u32) -> Vec<u8> {
     let pixels = match layer_manager::read_pixels(&engine.inner, layer_id) {
