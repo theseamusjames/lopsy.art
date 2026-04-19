@@ -26,6 +26,9 @@ export interface InteractionState {
   symmetryCenter?: Point;
   /** Raw stroke points recorded for hold-to-smooth (layer-space). */
   strokePoints?: Array<{ x: number; y: number }>;
+  /** Color captured at stroke start. Colors don't change mid-stroke, so we
+   *  avoid `useUIStore.getState()` on every pointermove. */
+  strokeColor?: { r: number; g: number; b: number; a: number };
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
 }

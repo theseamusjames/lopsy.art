@@ -1,7 +1,7 @@
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 import type { Point } from '../../types';
-import { useUIStore } from '../../app/ui-store';
+import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { sampleColor as wasmSampleColor } from '../../engine-wasm/wasm-bridge';
 
@@ -19,7 +19,7 @@ export function handleEyedropperDown(ctx: InteractionContext): InteractionState 
 
   const gpuColor = gpuSampleColorAt(canvasPos.x, canvasPos.y);
   if (gpuColor) {
-    useUIStore.getState().setForegroundColor(gpuColor);
+    useToolSettingsStore.getState().setForegroundColor(gpuColor);
   }
 
   return {
@@ -41,6 +41,6 @@ export function handleEyedropperMove(state: InteractionState, layerLocalPos: Poi
   const canvasY = layerLocalPos.y + state.layerStartY;
   const gpuColor = gpuSampleColorAt(canvasX, canvasY);
   if (gpuColor) {
-    useUIStore.getState().setForegroundColor(gpuColor);
+    useToolSettingsStore.getState().setForegroundColor(gpuColor);
   }
 }

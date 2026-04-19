@@ -124,31 +124,20 @@ pub fn upload_layer_from_image_bitmap(
             gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MAG_FILTER, WebGl2RenderingContext::LINEAR as i32);
 
             // Blit from temp to float texture via the blit shader
-            if let Some(dest_tex) = engine.inner.texture_pool.get(tex_handle) {
-                let fbo = gl.create_framebuffer();
-                gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, fbo.as_ref());
-                gl.framebuffer_texture_2d(
-                    WebGl2RenderingContext::FRAMEBUFFER,
-                    WebGl2RenderingContext::COLOR_ATTACHMENT0,
-                    WebGl2RenderingContext::TEXTURE_2D,
-                    Some(dest_tex),
-                    0,
-                );
-                gl.viewport(0, 0, width as i32, height as i32);
-
-                gl.use_program(Some(&engine.inner.shaders.blit.program));
-                gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&temp_tex));
-                if let Some(loc) = gl.get_uniform_location(&engine.inner.shaders.blit.program, "u_tex") {
-                    gl.uniform1i(Some(&loc), 0);
-                }
-                engine.inner.draw_fullscreen_quad();
-
-                gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-                gl.delete_framebuffer(fbo.as_ref());
+            if let Some(dest_tex) = engine.inner.texture_pool.get(tex_handle).cloned() {
+                engine.inner.render_to_texture(&dest_tex, width as i32, height as i32, |eng| {
+                    let gl = &eng.gl;
+                    gl.use_program(Some(&eng.shaders.blit.program));
+                    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+                    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&temp_tex));
+                    if let Some(loc) = eng.shaders.blit.location(gl, "u_tex") {
+                        gl.uniform1i(Some(&loc), 0);
+                    }
+                    eng.draw_fullscreen_quad();
+                });
             }
 
-            gl.delete_texture(Some(&temp_tex));
+            engine.inner.gl.delete_texture(Some(&temp_tex));
         } else {
             if let Some(texture) = engine.inner.texture_pool.get(tex_handle) {
                 gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));

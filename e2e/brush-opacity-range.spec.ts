@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,7 +66,9 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
 
 async function setUIState(page: Page, setter: string, value: unknown) {
   await page.evaluate(({ setter, value }) => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
+    const colorSetters = new Set(['setForegroundColor', 'setBackgroundColor', 'swapColors', 'resetColors', 'addRecentColor']);
+    const storeKey = colorSetters.has(setter) ? '__toolSettingsStore' : '__uiStore';
+    const store = (window as unknown as Record<string, unknown>)[storeKey] as {
       getState: () => Record<string, (v: unknown) => void>;
     };
     store.getState()[setter]!(value);

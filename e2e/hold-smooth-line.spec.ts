@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 // ---------------------------------------------------------------------------
 // Helpers (same pattern as other e2e tests)
@@ -138,7 +138,7 @@ test.describe('Hold to smooth line (#94)', () => {
     await setToolSetting(page, 'setBrushFade', 0);
     // Set foreground color to black
     await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
       };
       store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
@@ -235,7 +235,7 @@ test.describe('Hold to smooth line (#94)', () => {
     await setToolSetting(page, 'setBrushScatter', 0);
     await setToolSetting(page, 'setBrushFade', 0);
     await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
       };
       store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });

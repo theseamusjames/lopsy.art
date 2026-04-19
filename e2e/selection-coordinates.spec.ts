@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page } from './fixtures';
 import {
   createDocument,
   waitForStore,
@@ -48,10 +48,10 @@ async function setActiveTool(page: Page, tool: string): Promise<void> {
 
 async function setForegroundColor(page: Page, color: { r: number; g: number; b: number; a: number }): Promise<void> {
   await page.evaluate((c) => {
-    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+    const tool = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
       getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
     };
-    ui.getState().setForegroundColor(c);
+    tool.getState().setForegroundColor(c);
   }, color);
 }
 

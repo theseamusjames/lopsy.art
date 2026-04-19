@@ -87,6 +87,9 @@ pub struct EngineInner {
     pub composite_fbo: FramebufferHandle,
     pub scratch_fbo_a: FramebufferHandle,
     pub scratch_fbo_b: FramebufferHandle,
+    /// Reusable FBO for `render_to_texture` — re-attaches to the caller's
+    /// destination texture each call so we don't create/delete an FBO per blit.
+    pub render_fbo: FramebufferHandle,
     pub composite_texture: TextureHandle,
     pub scratch_texture_a: TextureHandle,
     pub scratch_texture_b: TextureHandle,
@@ -100,6 +103,19 @@ pub struct EngineInner {
     pub stroke_textures: HashMap<String, TextureHandle>,
     pub stroke_opacity: HashMap<String, f32>,
     pub stroke_fbo: Option<FramebufferHandle>,
+    /// Dodge/burn per-stroke coverage texture: a scalar strength field
+    /// (RGBA, all four channels equal) MAX-accumulated across dabs so
+    /// overlapping dabs within one stroke don't compound. Baked into the
+    /// layer on `end_dodge_burn_stroke` via the dodge_burn shader with
+    /// `u_exposure = 1.0`.
+    pub stroke_dodge_textures: HashMap<String, TextureHandle>,
+    /// Per-frame compositor preview: the result of applying the coverage
+    /// texture to the layer, so the user sees their in-progress stroke
+    /// without touching the source pixels.
+    pub stroke_dodge_preview_textures: HashMap<String, TextureHandle>,
+    /// 0 = dodge, 1 = burn — captured on `begin_dodge_burn_stroke` so the
+    /// compositor preview and bake share the mode.
+    pub stroke_dodge_modes: HashMap<String, u32>,
     // Custom brush tip
     pub brush_tip_texture: Option<TextureHandle>,
     pub brush_tip_width: u32,
@@ -179,6 +195,7 @@ impl EngineInner {
         let composite_fbo = fbo_pool.create(&gl)?;
         let scratch_fbo_a = fbo_pool.create(&gl)?;
         let scratch_fbo_b = fbo_pool.create(&gl)?;
+        let render_fbo = fbo_pool.create(&gl)?;
 
         fbo_pool.attach_texture(&gl, composite_fbo, texture_pool.get(composite_texture).unwrap());
         fbo_pool.attach_texture(&gl, scratch_fbo_a, texture_pool.get(scratch_texture_a).unwrap());
@@ -196,6 +213,7 @@ impl EngineInner {
             composite_fbo,
             scratch_fbo_a,
             scratch_fbo_b,
+            render_fbo,
             composite_texture,
             scratch_texture_a,
             scratch_texture_b,
@@ -208,6 +226,9 @@ impl EngineInner {
             stroke_textures: HashMap::new(),
             stroke_opacity: HashMap::new(),
             stroke_fbo: None,
+            stroke_dodge_textures: HashMap::new(),
+            stroke_dodge_preview_textures: HashMap::new(),
+            stroke_dodge_modes: HashMap::new(),
             brush_tip_texture: None,
             brush_tip_width: 0,
             brush_tip_height: 0,
@@ -310,9 +331,6 @@ impl EngineInner {
             None => return Ok(()),
         };
         let (lw, lh) = self.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
-        if lw >= self.doc_width && lh >= self.doc_height {
-            return Ok(());
-        }
 
         // Get the layer's current position so we can place the old content
         // correctly in the new full-size texture.
@@ -320,6 +338,21 @@ impl EngineInner {
             .find(|l| l.id == layer_id)
             .map(|l| (l.x, l.y))
             .unwrap_or((0, 0));
+
+        // Skip only when the layer already fully contains the document area.
+        // Checking size alone (lw >= doc_width && lh >= doc_height) is wrong
+        // when the layer has been offset (e.g. aligned right): a 1920-wide
+        // texture at x=1820 covers doc columns 1820..3740, leaving 0..1820
+        // uncovered. JS-side expansion logic would then desync from WASM.
+        let doc_w = self.doc_width as i32;
+        let doc_h = self.doc_height as i32;
+        let fully_contains_doc = layer_x <= 0
+            && layer_y <= 0
+            && layer_x + lw as i32 >= doc_w
+            && layer_y + lh as i32 >= doc_h;
+        if fully_contains_doc {
+            return Ok(());
+        }
 
         // Read old texture pixels via CPU readback (handles float textures).
         let old_tex_gl = self.texture_pool.get(layer_tex).cloned();
@@ -403,6 +436,14 @@ impl EngineInner {
         if let Some(fbo) = self.stroke_fbo.take() {
             self.fbo_pool.release(&self.gl, fbo);
         }
+        // Dodge/burn stroke state
+        for (_, tex) in self.stroke_dodge_textures.drain() {
+            self.texture_pool.release(tex);
+        }
+        for (_, tex) in self.stroke_dodge_preview_textures.drain() {
+            self.texture_pool.release(tex);
+        }
+        self.stroke_dodge_modes.clear();
         // Brush tip
         if let Some(tex) = self.brush_tip_texture.take() {
             self.texture_pool.release(tex);
@@ -483,6 +524,28 @@ impl EngineInner {
     /// Draw a fullscreen quad (3 vertices, no VBO needed)
     pub fn draw_fullscreen_quad(&self) {
         self.gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
+    }
+
+    /// Binds the reusable `render_fbo` with `dst_tex` attached, sets the
+    /// viewport, and calls `setup_and_draw` (which should bind the shader,
+    /// upload uniforms, and call `draw_fullscreen_quad`). Unbinds the FBO on
+    /// return. Replaces the `create_framebuffer → bind → attach → viewport →
+    /// ... → unbind → delete_framebuffer` boilerplate.
+    pub fn render_to_texture<F>(
+        &self,
+        dst_tex: &web_sys::WebGlTexture,
+        viewport_w: i32,
+        viewport_h: i32,
+        setup_and_draw: F,
+    )
+    where
+        F: FnOnce(&Self),
+    {
+        self.fbo_pool.attach_texture(&self.gl, self.render_fbo, dst_tex);
+        self.fbo_pool.bind(&self.gl, self.render_fbo);
+        self.gl.viewport(0, 0, viewport_w, viewport_h);
+        setup_and_draw(self);
+        self.fbo_pool.unbind(&self.gl);
     }
 }
 

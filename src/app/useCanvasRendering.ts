@@ -4,6 +4,7 @@ import { useUIStore } from './ui-store';
 import { useToolSettingsStore } from './tool-settings-store';
 import { getBrushCursorInfo } from './useCanvasCursor';
 import { initEngine, getEngine, destroyEngine } from '../engine-wasm/engine-state';
+import { describeError, notifyError } from './notifications-store';
 import {
   syncDocumentSize,
   syncBackgroundColor,
@@ -99,7 +100,7 @@ function renderFrameGpu(
       fontFamily: ts.textFontFamily,
       fontWeight: ts.textFontWeight,
       fontStyle: ts.textFontStyle,
-      color: uiState.foregroundColor,
+      color: toolState.foregroundColor,
       lineHeight: 1.4,
       letterSpacing: 0,
       textAlign: ts.textAlign,
@@ -182,7 +183,7 @@ function renderFrameGpu(
         fontFamily: ts.textFontFamily,
         fontWeight: ts.textFontWeight,
         fontStyle: ts.textFontStyle,
-        color: uiState.foregroundColor,
+        color: toolState.foregroundColor,
         lineHeight: 1.4,
         letterSpacing: 0,
         textAlign: ts.textAlign,
@@ -253,29 +254,38 @@ export function useCanvasRendering(
     };
     const handleContextRestored = () => {
       console.warn('[Lopsy] WebGL context restored — reinitializing');
-      initEngine(canvas).then((engine) => {
-        engineReadyRef.current = true;
-        dirtyRef.current = true;
-        markAllLayersDirty(engine);
-      });
+      initEngine(canvas)
+        .then((engine) => {
+          engineReadyRef.current = true;
+          dirtyRef.current = true;
+          markAllLayersDirty(engine);
+        })
+        .catch((err) => {
+          notifyError(`Failed to restore WebGL: ${describeError(err)}`);
+        });
     };
     canvas.addEventListener('webglcontextlost', handleContextLost);
     canvas.addEventListener('webglcontextrestored', handleContextRestored);
 
-    initEngine(canvas).then((engine) => {
-      if (cancelled) {
-        // Only destroy if this engine is still the current global engine.
-        // In StrictMode, a second mount may have already replaced it.
-        if (getEngine() === engine) {
-          destroyEngine();
+    initEngine(canvas)
+      .then((engine) => {
+        if (cancelled) {
+          // Only destroy if this engine is still the current global engine.
+          // In StrictMode, a second mount may have already replaced it.
+          if (getEngine() === engine) {
+            destroyEngine();
+          }
+          return;
         }
-        return;
-      }
-      engineReadyRef.current = true;
-      dirtyRef.current = true;
-      // Force initial full sync
-      markAllLayersDirty(engine);
-    });
+        engineReadyRef.current = true;
+        dirtyRef.current = true;
+        // Force initial full sync
+        markAllLayersDirty(engine);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        notifyError(`Failed to initialize graphics engine: ${describeError(err)}`);
+      });
 
     return () => {
       cancelled = true;

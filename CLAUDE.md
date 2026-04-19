@@ -2,6 +2,9 @@
 
 Read SPEC.md for the full product specification.
 
+## Additional Guides
+e2e/GUIDE.md - Read this before writing any e2e tests.
+
 ## Language & Types
 
 - TypeScript only. No `.js` or `.jsx` files. All source is `.ts` or `.tsx`.

@@ -1,4 +1,6 @@
-use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlUniformLocation};
 
 pub const FULLSCREEN_QUAD_VERT: &str = r#"#version 300 es
 precision highp float;
@@ -60,6 +62,7 @@ pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/select
 pub const BRUSH_DAB_FRAG: &str = include_str!("shaders/brush/brush_dab.glsl");
 pub const ERASER_DAB_FRAG: &str = include_str!("shaders/brush/eraser_dab.glsl");
 pub const DODGE_BURN_FRAG: &str = include_str!("shaders/brush/dodge_burn.glsl");
+pub const DODGE_BURN_DAB_FRAG: &str = include_str!("shaders/brush/dodge_burn_dab.glsl");
 pub const SMUDGE_DAB_FRAG: &str = include_str!("shaders/brush/smudge_dab.glsl");
 pub const CLONE_STAMP_FRAG: &str = include_str!("shaders/brush/clone_stamp.glsl");
 pub const OPACITY_CLAMP_FRAG: &str = include_str!("shaders/brush/opacity_clamp.glsl");
@@ -81,6 +84,24 @@ pub const TONEMAP_FRAG: &str = include_str!("shaders/color/tonemap.glsl");
 
 pub struct ShaderProgram {
     pub program: WebGlProgram,
+    uniforms: RefCell<HashMap<String, Option<WebGlUniformLocation>>>,
+}
+
+impl ShaderProgram {
+    fn new(program: WebGlProgram) -> Self {
+        Self { program, uniforms: RefCell::new(HashMap::new()) }
+    }
+
+    /// Looks up a uniform location, caching the result so that subsequent calls
+    /// avoid the `gl.getUniformLocation` round trip. Safe to call per-draw.
+    pub fn location(&self, gl: &WebGl2RenderingContext, name: &str) -> Option<WebGlUniformLocation> {
+        if let Some(cached) = self.uniforms.borrow().get(name) {
+            return cached.clone();
+        }
+        let loc = gl.get_uniform_location(&self.program, name);
+        self.uniforms.borrow_mut().insert(name.to_string(), loc.clone());
+        loc
+    }
 }
 
 pub fn compile_shader(
@@ -136,7 +157,7 @@ pub fn compile_program(
     let program = link_program(gl, &vert, &frag)?;
     gl.delete_shader(Some(&vert));
     gl.delete_shader(Some(&frag));
-    Ok(ShaderProgram { program })
+    Ok(ShaderProgram::new(program))
 }
 
 pub struct ShaderPrograms {
@@ -186,6 +207,7 @@ pub struct ShaderPrograms {
     pub brush_dab: ShaderProgram,
     pub eraser_dab: ShaderProgram,
     pub dodge_burn: ShaderProgram,
+    pub dodge_burn_dab: ShaderProgram,
     pub smudge_dab: ShaderProgram,
     pub clone_stamp: ShaderProgram,
     pub opacity_clamp: ShaderProgram,
@@ -253,6 +275,7 @@ impl ShaderPrograms {
             brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,
             eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,
             dodge_burn: compile_program(gl, v, DODGE_BURN_FRAG)?,
+            dodge_burn_dab: compile_program(gl, v, DODGE_BURN_DAB_FRAG)?,
             smudge_dab: compile_program(gl, v, SMUDGE_DAB_FRAG)?,
             clone_stamp: compile_program(gl, v, CLONE_STAMP_FRAG)?,
             opacity_clamp: compile_program(gl, v, OPACITY_CLAMP_FRAG)?,

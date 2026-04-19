@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page } from './fixtures';
 import { waitForStore, createDocument, paintRect } from './helpers';
 
 // PNG magic bytes: 137 80 78 71 13 10 26 10

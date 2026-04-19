@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -465,16 +465,17 @@ test.describe('WASM/WebGL Rendering', () => {
     // Select brush tool with red color
     await page.evaluate(() => {
       const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => {
-          setActiveTool: (t: string) => void;
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
-        };
+        getState: () => { setActiveTool: (t: string) => void };
       };
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setBrushSize: (s: number) => void; setBrushHardness: (h: number) => void };
+        getState: () => {
+          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
+          setBrushSize: (s: number) => void;
+          setBrushHardness: (h: number) => void;
+        };
       };
       ui.getState().setActiveTool('brush');
-      ui.getState().setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
+      ts.getState().setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
       ts.getState().setBrushSize(50);
       ts.getState().setBrushHardness(100);
     });
@@ -619,15 +620,17 @@ test.describe('WASM/WebGL Rendering', () => {
     // Select gradient tool
     await page.evaluate(() => {
       const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { setActiveTool: (t: string) => void };
+      };
+      const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setActiveTool: (t: string) => void;
           setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
           setBackgroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
         };
       };
       ui.getState().setActiveTool('gradient');
-      ui.getState().setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
-      ui.getState().setBackgroundColor({ r: 0, g: 0, b: 255, a: 1 });
+      ts.getState().setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
+      ts.getState().setBackgroundColor({ r: 0, g: 0, b: 255, a: 1 });
     });
     await page.waitForTimeout(200);
 
@@ -1311,12 +1314,12 @@ test.describe('WASM/WebGL Rendering', () => {
 
     // Set foreground to green and fill the selection
     await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+      const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
           setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
         };
       };
-      ui.getState().setForegroundColor({ r: 0, g: 255, b: 0, a: 1 });
+      ts.getState().setForegroundColor({ r: 0, g: 255, b: 0, a: 1 });
     });
     await page.waitForTimeout(100);
 
@@ -1331,12 +1334,12 @@ test.describe('WASM/WebGL Rendering', () => {
           selection: { active: boolean; mask: Uint8ClampedArray | null; maskWidth: number; maskHeight: number };
         };
       };
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+      const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => { foregroundColor: { r: number; g: number; b: number; a: number } };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const color = ui.getState().foregroundColor;
+      const color = toolStore.getState().foregroundColor;
       state.pushHistory();
       const data = state.getOrCreateLayerPixelData(id);
       const sel = state.selection;
@@ -3222,9 +3225,12 @@ test.describe('WASM/WebGL Rendering', () => {
     // Step 1: Select bucket fill tool and fill background with black
     await page.evaluate(() => {
       const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void; setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+        getState: () => { setActiveTool: (t: string) => void };
       };
-      uiStore.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
+      const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+      };
+      toolStore.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
       uiStore.getState().setActiveTool('fill');
     });
     await page.waitForTimeout(100);

@@ -3,6 +3,7 @@ import type { PixelSurface } from '../fill/fill';
 import type { PathAnchor } from '../path/path';
 
 export type ShapeMode = 'ellipse' | 'polygon';
+export type ShapeOutput = 'pixels' | 'path';
 
 export interface ShapeOptions {
   readonly mode: ShapeMode;

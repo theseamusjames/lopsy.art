@@ -3,7 +3,7 @@ import type { Color, Point, ToolId } from '../types';
 import type { TransformHandle, TransformState } from '../tools/transform/transform';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
-import { colorEquals } from '../utils/color';
+import { toolRegistry } from '../tools/tool-registry';
 
 export interface TextEditingState {
   layerId: string;
@@ -60,13 +60,8 @@ export type ModalState =
   | { kind: 'guideColor' }
   | { kind: 'brush' };
 
-const MAX_RECENT_COLORS = 20;
-
 interface UIState {
   activeTool: ToolId;
-  foregroundColor: Color;
-  backgroundColor: Color;
-  recentColors: readonly Color[];
   showGrid: boolean;
   showRulers: boolean;
   showGuides: boolean;
@@ -97,18 +92,12 @@ interface UIState {
   closeModalOfKind: (kind: ModalState['kind']) => void;
   /** Backward-compat setter — use openModal/closeModalOfKind for new code. */
   setShowNewDocumentModal: (show: boolean) => void;
-  /** Backward-compat setter for the brush preset modal — the boolean lived on
-   *  brush-preset-store before the modal slot existed. */
+  /** Backward-compat setter — use openModal/closeModalOfKind for new code. */
   setShowBrushModal: (show: boolean) => void;
   setShowEffectsDrawer: (show: boolean) => void;
   togglePanel: (panelId: string) => void;
   setGradientPreview: (preview: { start: Point; end: Point } | null) => void;
-  addRecentColor: (color: Color) => void;
   setActiveTool: (tool: ToolId) => void;
-  setForegroundColor: (color: Color) => void;
-  setBackgroundColor: (color: Color) => void;
-  swapColors: () => void;
-  resetColors: () => void;
   toggleGrid: () => void;
   toggleRulers: () => void;
   toggleGuides: () => void;
@@ -139,6 +128,8 @@ interface UIState {
   setEditingAnchorIndex: (index: number | null) => void;
   convertingAnchorToSpline: boolean;
   setConvertingAnchorToSpline: (converting: boolean) => void;
+  draggingHandle: { anchorIndex: number; handle: 'in' | 'out' } | null;
+  setDraggingHandle: (handle: { anchorIndex: number; handle: 'in' | 'out' } | null) => void;
   guides: Guide[];
   selectedGuideId: string | null;
   hoveredGuideId: string | null;
@@ -161,9 +152,6 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set, get) => ({
   activeTool: 'move',
-  foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
-  backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
-  recentColors: Array.from({ length: MAX_RECENT_COLORS }, () => ({ r: 46, g: 46, b: 46, a: 1 })),
   showGrid: false,
   showRulers: true,
   showGuides: true,
@@ -226,12 +214,6 @@ export const useUIStore = create<UIState>((set, get) => ({
     }),
   setGradientPreview: (preview) => set({ gradientPreview: preview }),
 
-  addRecentColor: (color) =>
-    set((state) => {
-      const filtered = state.recentColors.filter((c) => !colorEquals(c, color));
-      return { recentColors: [color, ...filtered].slice(0, MAX_RECENT_COLORS) };
-    }),
-
   setActiveTool: (tool) => {
     const current = useUIStore.getState();
     // When switching away from text tool during editing, the editing session
@@ -246,26 +228,8 @@ export const useUIStore = create<UIState>((set, get) => ({
     } else {
       set({ activeTool: tool });
     }
-    // Tool-specific activation side effects live on the tool descriptor
-    // itself (src/tools/tool-registry.ts) so this function stays
-    // tool-agnostic. Import is lazy to avoid a ui-store ↔ tool-registry
-    // initialization cycle at module load time.
-    void import('../tools/tool-registry').then(({ toolRegistry }) => {
-      toolRegistry[tool]?.onActivate?.();
-    });
+    toolRegistry[tool]?.onActivate?.();
   },
-  setForegroundColor: (color) => set({ foregroundColor: color }),
-  setBackgroundColor: (color) => set({ backgroundColor: color }),
-  swapColors: () =>
-    set((state) => ({
-      foregroundColor: state.backgroundColor,
-      backgroundColor: state.foregroundColor,
-    })),
-  resetColors: () =>
-    set({
-      foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
-      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
-    }),
   toggleGrid: () => set((state) => {
     const showGrid = !state.showGrid;
     return showGrid ? { showGrid, snapToGrid: true } : { showGrid };
@@ -296,6 +260,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   setEditingAnchorIndex: (index) => set({ editingAnchorIndex: index }),
   convertingAnchorToSpline: false,
   setConvertingAnchorToSpline: (converting) => set({ convertingAnchorToSpline: converting }),
+  draggingHandle: null,
+  setDraggingHandle: (handle) => set({ draggingHandle: handle }),
   guides: [],
   selectedGuideId: null,
   hoveredGuideId: null,

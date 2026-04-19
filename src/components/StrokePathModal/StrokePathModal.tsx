@@ -9,7 +9,7 @@ import styles from './StrokePathModal.module.css';
 export function StrokePathModal() {
   const strokeModalPathId = useUIStore((s) => (s.modal?.kind === 'strokePath' ? s.modal.pathId : null));
   const setStrokeModalPathId = useUIStore((s) => s.setStrokeModalPathId);
-  const foregroundColor = useUIStore((s) => s.foregroundColor);
+  const foregroundColor = useToolSettingsStore((s) => s.foregroundColor);
   const defaultWidth = useToolSettingsStore((s) => s.pathStrokeWidth);
 
   const [width, setWidth] = useState('');

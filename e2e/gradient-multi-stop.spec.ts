@@ -8,7 +8,7 @@
  *
  * All tests use real UI interactions and GPU pixel readback.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 // ---------------------------------------------------------------------------
 // Helpers

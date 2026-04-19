@@ -100,7 +100,7 @@ export function useCanvasInteraction(
   const buildContext = useCallback(
     (e: React.MouseEvent, canvasPos: Point, layerPos: Point, activeLayerId: string, activeLayer: Layer, pixelBuffer: PixelBuffer, paintSurface: PixelBuffer | MaskedPixelBuffer): InteractionContext => ({
       canvasPos, layerPos,
-      shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey || e.ctrlKey,
+      shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
       clientX: e.clientX, clientY: e.clientY,
       activeLayerId, activeLayer, pixelBuffer, paintSurface,
       screenToCanvas, containerRef,
@@ -136,11 +136,11 @@ export function useCanvasInteraction(
 
       // Fall back to CPU when:
       // - mask edit mode (paints on mask surface)
-      // - active selection (GPU brush doesn't clip to selection mask yet)
       // - tool doesn't have a GPU path
-      const hasSelection = useEditorStore.getState().selection.active;
+      // GPU brush/eraser shaders clip to the selection mask, so an active
+      // selection does NOT force the CPU path.
       const isGpuTool = GPU_TOOLS.has(activeTool);
-      const useGpu = engine && isGpuTool && !maskEditMode && !hasSelection;
+      const useGpu = engine && isGpuTool && !maskEditMode;
       const useGpuStroke = useGpu && isPaintTool;
 
       let pixelBuffer: PixelBuffer;
@@ -153,6 +153,13 @@ export function useCanvasInteraction(
         // GPU path: no JS pixel data needed. The engine handles the
         // layer texture directly — no expand, no upload, no round-trip.
         // This preserves 16-bit float precision throughout.
+
+        // Finalize any pending brush stroke so it's baked into the layer
+        // texture before another GPU tool (e.g. shape) snapshots it.
+        if (!isPaintTool) {
+          finalizePendingStroke(pendingStrokeRef);
+        }
+
         if (isPaintTool) {
           const isShift = e.shiftKey && lastPaintPointRef.current?.layerId === activeLayerId;
           if (isShift && pendingStrokeRef.current?.layerId === activeLayerId) {
@@ -262,7 +269,7 @@ export function useCanvasInteraction(
 
       const ctx: InteractionContext = {
         canvasPos, layerPos: layerLocalPos,
-        shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey || e.ctrlKey,
+        shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
         clientX: e.clientX, clientY: e.clientY,
         activeLayerId: state.layerId,
         activeLayer: useEditorStore.getState().document.layers.find((l) => l.id === state.layerId)!,
@@ -300,13 +307,11 @@ export function useCanvasInteraction(
           const size = toolSettings.brushSize;
           const hardness = toolSettings.brushHardness / 100;
           const opacity = toolSettings.brushOpacity / 100;
-          const color = useUIStore.getState().foregroundColor;
+          const color = toolSettings.foregroundColor;
           const r = color.r / 255;
           const g = color.g / 255;
           const b = color.b / 255;
-          const spacing = toolSettings.brushSpacing > 0
-            ? Math.max(1, size * toolSettings.brushSpacing / 100)
-            : Math.max(1, size * 0.25);
+          const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
 
           const result = smoothStroke(strokePoints, spacing);
           if (result.sampledPoints.length < 2) return;
@@ -380,7 +385,7 @@ export function useCanvasInteraction(
 
     const ctx: InteractionContext = {
       canvasPos, layerPos: canvasPos,
-      shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey || e.ctrlKey,
+      shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
       clientX: e.clientX, clientY: e.clientY,
       activeLayerId: state.layerId ?? '',
       activeLayer: useEditorStore.getState().document.layers.find((l) => l.id === state.layerId)!,

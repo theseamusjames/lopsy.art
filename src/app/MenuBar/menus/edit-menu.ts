@@ -1,5 +1,6 @@
 import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
+import { useToolSettingsStore } from '../../tool-settings-store';
 import { clearJsPixelData } from '../../store/clear-js-pixel-data';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { fillWithColor } from '../../../engine-wasm/wasm-bridge';
@@ -14,7 +15,7 @@ export function fillSelection(): void {
   if (!engine) return;
 
   state.pushHistory();
-  const color = useUIStore.getState().foregroundColor;
+  const color = useToolSettingsStore.getState().foregroundColor;
 
   // GPU fill: uses the engine's selection mask if active
   fillWithColor(engine, activeId, color.r / 255, color.g / 255, color.b / 255, color.a);

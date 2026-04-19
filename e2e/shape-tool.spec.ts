@@ -5,7 +5,7 @@
  *
  * All tests use real UI interactions and GPU pixel readback.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -262,11 +262,11 @@ test.describe('Shape tool corner radius', () => {
     expect(center.a).toBeGreaterThan(0);
     expect(center.b).toBe(255);
 
-    // With a hexagon (flat-top after rotation), the top vertex is at the top-center.
-    // With corner radius, the very tip of a vertex should be cut off.
-    // The topmost point of an 80px-radius hexagon centered at (200,150)
-    // is at approximately (200, 70). With rounding, pixel at vertex tip should be transparent.
-    const vertexTip = await getPixelAt(page, 200, 71);
+    // Flat-top hexagon: vertices sit at (±circumR/2, ±faceR) where faceR=80
+    // and circumR=faceR/cos(π/6)≈92.4. So upper-right vertex tip is near
+    // (200+46, 150-80)=(246, 70). Corner radius 20 should round that tip,
+    // making the extreme-corner pixel transparent.
+    const vertexTip = await getPixelAt(page, 246, 71);
     expect(vertexTip.a).toBe(0);
   });
 

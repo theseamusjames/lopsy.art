@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -180,14 +180,18 @@ async function getEditorState(page: Page) {
 
 async function getUIState(page: Page) {
   return page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
+    const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
       getState: () => Record<string, unknown>;
     };
-    const state = store.getState();
+    const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => Record<string, unknown>;
+    };
+    const ui = uiStore.getState();
+    const tool = toolStore.getState();
     return {
-      activeTool: state.activeTool as string,
-      foregroundColor: state.foregroundColor as { r: number; g: number; b: number; a: number },
-      backgroundColor: state.backgroundColor as { r: number; g: number; b: number; a: number },
+      activeTool: ui.activeTool as string,
+      foregroundColor: tool.foregroundColor as { r: number; g: number; b: number; a: number },
+      backgroundColor: tool.backgroundColor as { r: number; g: number; b: number; a: number },
     };
   });
 }
@@ -228,7 +232,9 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
 async function setUIState(page: Page, setter: string, value: unknown) {
   await page.evaluate(
     ({ setter, value }) => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
+      const colorSetters = new Set(['setForegroundColor', 'setBackgroundColor', 'swapColors', 'resetColors', 'addRecentColor']);
+      const storeKey = colorSetters.has(setter) ? '__toolSettingsStore' : '__uiStore';
+      const store = (window as unknown as Record<string, unknown>)[storeKey] as {
         getState: () => Record<string, (v: unknown) => void>;
       };
       store.getState()[setter]!(value);
@@ -589,8 +595,10 @@ test.describe('Gradient Tool', () => {
       store.getState().setActiveTool('gradient');
     });
     await setToolSetting(page, 'setGradientType', 'linear');
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
-    await setUIState(page, 'setBackgroundColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setToolSetting(page, 'setGradientStops', [
+      { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+      { position: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+    ]);
 
     await drawStroke(page, { x: 0, y: 150 }, { x: 399, y: 150 }, 5);
 
@@ -609,8 +617,10 @@ test.describe('Gradient Tool', () => {
       store.getState().setActiveTool('gradient');
     });
     await setToolSetting(page, 'setGradientType', 'radial');
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
-    await setUIState(page, 'setBackgroundColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setToolSetting(page, 'setGradientStops', [
+      { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+      { position: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+    ]);
 
     await drawStroke(page, { x: 200, y: 150 }, { x: 350, y: 150 }, 5);
 
@@ -687,13 +697,14 @@ test.describe('Shape Tool', () => {
   });
 
   test('drawing ellipse creates filled pixels', async ({ page }) => {
-    await page.keyboard.press('u');
+    await setUIState(page, 'setActiveTool', 'shape');
     await setToolSetting(page, 'setShapeMode', 'ellipse');
     await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Center-outward: click center at 200,150, drag to 300,250 (100x100 radii)
     await drawStroke(page, { x: 200, y: 150 }, { x: 300, y: 250 }, 5);
+    await page.waitForTimeout(200);
 
     // Center of the ellipse should be filled
     const center = await getPixelAt(page, 200, 150);
@@ -702,7 +713,7 @@ test.describe('Shape Tool', () => {
   });
 
   test('shape tool with stroke only creates outline', async ({ page }) => {
-    await page.keyboard.press('u');
+    await setUIState(page, 'setActiveTool', 'shape');
     await setToolSetting(page, 'setShapeMode', 'ellipse');
     await setToolSetting(page, 'setShapeFillColor', null);
     await setToolSetting(page, 'setShapeStrokeColor', { r: 0, g: 255, b: 0, a: 1 });
@@ -1147,7 +1158,10 @@ test.describe('Undo/Redo', () => {
     await setToolSetting(page, 'setBrushSize', 20);
     await drawStroke(page, { x: 100, y: 100 }, { x: 200, y: 100 });
 
-    const afterDraw = await countOpaquePixels(page);
+    // Use composited pixels: brush-end leaves the stroke in a pending GPU
+    // buffer that only merges into the layer texture at undo/export time.
+    // __readLayerPixels sees 0 until then; compositing always reflects it.
+    const afterDraw = await countCompositedOpaquePixels(page);
 
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -1163,7 +1177,7 @@ test.describe('Undo/Redo', () => {
       store.getState().redo();
     });
 
-    const afterRedo = await countOpaquePixels(page);
+    const afterRedo = await countCompositedOpaquePixels(page);
     expect(afterRedo).toBe(afterDraw);
   });
 
@@ -2022,11 +2036,11 @@ test.describe('Comprehensive Scenarios', () => {
           pushHistory: () => void;
         };
       };
-      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
+      const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => { foregroundColor: { r: number; g: number; b: number; a: number } };
       };
       const state = edStore.getState();
-      const color = uiStore.getState().foregroundColor;
+      const color = toolStore.getState().foregroundColor;
       state.pushHistory();
       const data = state.getOrCreateLayerPixelData(state.document.activeLayerId);
       const sel = state.selection;
@@ -2088,8 +2102,10 @@ test.describe('Comprehensive Scenarios', () => {
       store.getState().setActiveTool('gradient');
     });
     await setToolSetting(page, 'setGradientType', 'linear');
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
-    await setUIState(page, 'setBackgroundColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setToolSetting(page, 'setGradientStops', [
+      { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
+      { position: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
+    ]);
 
     await drawStroke(page, { x: 0, y: 150 }, { x: 399, y: 150 }, 10);
 
@@ -2118,11 +2134,14 @@ test.describe('Mask Drawing', () => {
   test('add mask and draw with black foreground hides areas', async ({ page }) => {
     // Draw something on the layer first
     await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void; setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { setActiveTool: (t: string) => void };
       };
-      store.getState().setActiveTool('brush');
-      store.getState().setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
+      const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+      };
+      uiStore.getState().setActiveTool('brush');
+      toolStore.getState().setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
     });
     await setToolSetting(page, 'setBrushSize', 40);
     await drawStroke(page, { x: 100, y: 150 }, { x: 300, y: 150 }, 10);
@@ -2166,12 +2185,14 @@ test.describe('Mask Drawing', () => {
       const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
         getState: () => {
           setMaskEditMode: (m: boolean) => void;
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
           setActiveTool: (t: string) => void;
         };
       };
+      const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+      };
       uiStore.getState().setMaskEditMode(true);
-      uiStore.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
+      toolStore.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
       uiStore.getState().setActiveTool('brush');
     });
     await setToolSetting(page, 'setBrushSize', 30);
@@ -2219,16 +2240,21 @@ test.describe('Mask Drawing', () => {
       const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
         getState: () => {
           setMaskEditMode: (m: boolean) => void;
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
-          setBackgroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
           setActiveTool: (t: string) => void;
         };
       };
-      const state = uiStore.getState();
-      state.setMaskEditMode(true);
-      state.setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
-      state.setBackgroundColor({ r: 255, g: 255, b: 255, a: 1 });
-      state.setActiveTool('brush');
+      const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => {
+          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
+          setBackgroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
+        };
+      };
+      const ui = uiStore.getState();
+      const tool = toolStore.getState();
+      ui.setMaskEditMode(true);
+      tool.setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
+      tool.setBackgroundColor({ r: 255, g: 255, b: 255, a: 1 });
+      ui.setActiveTool('brush');
     });
     await setToolSetting(page, 'setBrushSize', 40);
     await setToolSetting(page, 'setBrushOpacity', 100);

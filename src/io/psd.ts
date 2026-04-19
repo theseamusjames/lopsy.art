@@ -13,7 +13,7 @@ import { getEngine } from '../engine-wasm/engine-state';
 import {
   exportPsd,
   parsePsd,
-  getPsdLayerPixels,
+  decodeAndUploadPsdLayer,
   getPsdLayerMask,
   initWasm,
 } from '../engine-wasm/wasm-bridge';
@@ -183,11 +183,6 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
   // modal before any document exists, the engine hasn't been created yet.
   await initWasm();
 
-  // Reset engine-sync tracking so it cleanly re-adds all layers on the next
-  // frame with the correct blend modes, opacities, and pixel data.
-  const eng = getEngine();
-  if (eng) resetTrackedState(eng);
-
   const manifestJson = parsePsd(data);
   const manifest = JSON.parse(manifestJson) as {
     width: number;
@@ -218,11 +213,12 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
   const edState = useEditorStore.getState();
   const store = useEditorStore;
 
-  // PSD layers are bottom-to-top; engine-sync handles the actual GPU upload
-  // on the next frame using the ImageData we stash in layerPixelData.
+  // PSD layers are bottom-to-top. Pixel data lives in the PSD bytes until we
+  // upload it straight to the GPU below — nothing transits JS as ImageData,
+  // so 16-bit precision is preserved end-to-end.
   const newLayers: Layer[] = [];
   const newLayerOrder: string[] = [];
-  const newPixelData = new Map<string, ImageData>();
+  const pixelUploads: Array<{ layerId: string; psdIndex: number }> = [];
   const groupStack: { groupLayer: GroupLayer; children: string[] }[] = [];
 
   for (let i = 0; i < manifest.layers.length; i++) {
@@ -269,27 +265,9 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
 
     // Normal raster layer.
     let mask: RasterLayer['mask'] = null;
-    let pixelImageData: ImageData | null = null;
 
     if (psdLayer.width > 0 && psdLayer.height > 0) {
-      const pixelData = getPsdLayerPixels(data, i);
-      // For 16-bit PSDs, pixel data is big-endian u16 pairs — downscale to 8-bit.
-      let rgba8: Uint8Array;
-      if (manifest.depth === 16) {
-        const pixelCount = psdLayer.width * psdLayer.height;
-        rgba8 = new Uint8Array(pixelCount * 4);
-        for (let p = 0; p < pixelCount * 4; p++) {
-          rgba8[p] = pixelData[p * 2]!; // Take high byte as 8-bit approximation.
-        }
-      } else {
-        rgba8 = pixelData;
-      }
-
-      // Stash pixels as ImageData so engine-sync uploads them with the right
-      // layer descriptor (correct blend mode, opacity, etc.) on the next frame.
-      const clamped = new Uint8ClampedArray(rgba8.length);
-      clamped.set(rgba8);
-      pixelImageData = new ImageData(clamped, psdLayer.width, psdLayer.height);
+      pixelUploads.push({ layerId, psdIndex: i });
 
       if (psdLayer.hasMask && psdLayer.maskWidth && psdLayer.maskHeight) {
         const maskData = getPsdLayerMask(data, i);
@@ -323,9 +301,6 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
     };
 
     newLayers.push(rasterLayer);
-    if (pixelImageData) {
-      newPixelData.set(layerId, pixelImageData);
-    }
     // Always push to the flat layerOrder (bottom-to-top render order).
     newLayerOrder.push(layerId);
     const topGroupForLayer = groupStack[groupStack.length - 1];
@@ -338,9 +313,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
     ? newLayerOrder[newLayerOrder.length - 1] ?? null
     : null;
 
-  const dirtyLayerIds = new Set<string>(newPixelData.keys());
-
-  pixelDataManager.replace(newPixelData, new Map());
+  pixelDataManager.replace(new Map(), new Map());
   store.setState({
     document: {
       ...edState.document,
@@ -351,14 +324,31 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
       layerOrder: newLayerOrder,
       activeLayerId,
     },
-    dirtyLayerIds,
+    dirtyLayerIds: new Set<string>(),
     isDirty: false,
     renderVersion: edState.renderVersion + 1,
   });
 
-  // Push the new state to the WASM engine immediately so the first frame
-  // renders with the correct blend modes, opacities, and pixel data.
-  flushLayerSync(store.getState());
+  // The engine may not exist yet (pre-document modal import): createDocument
+  // above flips documentReady, which mounts the canvas, which fires the
+  // async initEngine effect. Wait for it before pushing layers and pixels.
+  const engine = await waitForEngine();
+  if (engine) {
+    resetTrackedState(engine);
+    flushLayerSync(store.getState());
+    for (const { layerId, psdIndex } of pixelUploads) {
+      decodeAndUploadPsdLayer(engine, layerId, data, psdIndex);
+    }
+  }
 
   store.getState().fitToView();
+}
+
+async function waitForEngine(maxFrames = 60): Promise<ReturnType<typeof getEngine>> {
+  for (let i = 0; i < maxFrames; i++) {
+    const engine = getEngine();
+    if (engine) return engine;
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+  return getEngine();
 }

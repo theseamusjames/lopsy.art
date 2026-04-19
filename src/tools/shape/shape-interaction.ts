@@ -14,12 +14,12 @@ import {
 import { PixelBuffer } from '../../engine/pixel-data';
 import { wrapWithSelectionMask } from '../../app/interactions/selection-mask-wrap';
 import { drawShape, ellipseToPathAnchors, polygonToPathAnchors } from './shape';
+import type { ShapeMode } from './shape';
 import type { PathAnchor } from '../path/path';
 
 const CLICK_THRESHOLD = 4;
 
-/** Map shape mode string to the GPU enum (0 = ellipse, 1 = polygon). */
-function shapeModeToU32(mode: 'ellipse' | 'polygon'): number {
+function shapeModeToU32(mode: ShapeMode): number {
   return mode === 'ellipse' ? 0 : 1;
 }
 
@@ -47,8 +47,8 @@ export function handleShapeDown(ctx: InteractionContext): InteractionState {
   editorState.pushHistory();
 
   const ts = useToolSettingsStore.getState();
-  if (ts.shapeFillColor) useUIStore.getState().addRecentColor(ts.shapeFillColor);
-  if (ts.shapeStrokeColor) useUIStore.getState().addRecentColor(ts.shapeStrokeColor);
+  if (ts.shapeFillColor) ts.addRecentColor(ts.shapeFillColor);
+  if (ts.shapeStrokeColor) ts.addRecentColor(ts.shapeStrokeColor);
   const engine = getEngine();
   if (engine) gpuSaveShapePreview(engine, activeLayerId);
 
@@ -112,8 +112,8 @@ export function confirmShapeSize(width: number, height: number, click: ShapeSize
   const ts = useToolSettingsStore.getState();
 
   editorState.pushHistory();
-  if (ts.shapeFillColor) useUIStore.getState().addRecentColor(ts.shapeFillColor);
-  if (ts.shapeStrokeColor) useUIStore.getState().addRecentColor(ts.shapeStrokeColor);
+  if (ts.shapeFillColor) ts.addRecentColor(ts.shapeFillColor);
+  if (ts.shapeStrokeColor) ts.addRecentColor(ts.shapeStrokeColor);
 
   const edge = { x: click.center.x + width / 2, y: click.center.y + height / 2 };
   drawShape(surface, click.center, edge, {

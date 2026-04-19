@@ -40,6 +40,8 @@ All pixel data lives in FP16 (RGBA16F) GPU textures managed by the Rust engine. 
 
 Do not introduce `ImageData`, `Uint8ClampedArray`, `Float32Array` pixel buffers, or any per-pixel loops in TypeScript. If your feature needs to read or write pixels, add the operation to the Rust engine and expose it through the WASM bridge.
 
+A small set of known exceptions predates this rule and is tracked in [`docs/pixel-data-debt.md`](docs/pixel-data-debt.md). New code must not introduce new violations. When you remove a violation, update that doc in the same PR.
+
 ### Data flow
 
 1. User input hits tool logic, which updates the Zustand store.

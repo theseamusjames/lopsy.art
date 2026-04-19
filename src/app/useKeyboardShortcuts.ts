@@ -10,6 +10,7 @@ import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './s
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob } from './paste-or-open';
+import { describeError, notifyError } from './notifications-store';
 import { processTextKey } from '../tools/text/text-input';
 import { commitTextEditing } from '../tools/text/text-interaction';
 import { POINTER_IDLE, POINTER_SPACE_HELD, type PointerMode } from './pointer-mode';
@@ -166,7 +167,9 @@ export function useKeyboardShortcuts({
         if (file && file.type.startsWith('image/')) {
           e.preventDefault();
           const name = file.name.replace(/\.[^.]+$/, '') || 'Copied File';
-          pasteOrOpenBlob(file, name);
+          pasteOrOpenBlob(file, name).catch((err) =>
+            notifyError(`Failed to paste image: ${describeError(err)}`),
+          );
           return;
         }
       }
@@ -181,7 +184,9 @@ export function useKeyboardShortcuts({
             const blob = item.getAsFile();
             if (blob) {
               e.preventDefault();
-              pasteOrOpenBlob(blob, 'Copied File');
+              pasteOrOpenBlob(blob, 'Copied File').catch((err) =>
+                notifyError(`Failed to paste image: ${describeError(err)}`),
+              );
               return;
             }
           }

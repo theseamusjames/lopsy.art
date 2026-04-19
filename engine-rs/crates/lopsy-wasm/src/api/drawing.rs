@@ -6,7 +6,6 @@
 //! `layer_manager` implementation.
 
 use wasm_bindgen::prelude::*;
-use web_sys::WebGl2RenderingContext;
 
 use crate::{Engine, gradient_gpu, layer_manager, shape_gpu};
 

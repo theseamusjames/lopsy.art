@@ -3,7 +3,7 @@
  * Even-sided polygons should render with a flat top edge (squares, not diamonds).
  * Odd-sided polygons should still have a vertex pointing up (triangles).
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
 

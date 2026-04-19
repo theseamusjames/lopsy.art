@@ -58,7 +58,6 @@ function getCursorClassForTool(tool: ToolId): string {
     case 'marquee-rect':
     case 'marquee-ellipse':
     case 'lasso':
-    case 'lasso-poly':
     case 'lasso-magnetic':
     case 'wand':
     case 'fill':

@@ -1,22 +1,23 @@
 import { useCallback, useRef } from 'react';
-import { useBrushPresetStore, abrBrushToPreset } from '../../app/brush-preset-store';
-import { useToolSettingsStore } from '../../app/tool-settings-store';
+import { useToolSettingsStore, abrBrushToPreset } from '../../app/tool-settings-store';
+import { useUIStore } from '../../app/ui-store';
 import { Slider } from '../Slider/Slider';
 import { AngleControl } from './AngleControl';
 import { BrushPreview } from './BrushPreview';
 import { BrushThumbnail } from './BrushThumbnail';
 import type { BrushTipData } from '../../types/brush';
+import { describeError, notifyError } from '../../app/notifications-store';
 import styles from './BrushModal.module.css';
 
 export function BrushModal() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const presets = useBrushPresetStore((s) => s.presets);
-  const activePresetId = useBrushPresetStore((s) => s.activePresetId);
-  const setActivePreset = useBrushPresetStore((s) => s.setActivePreset);
-  const removePreset = useBrushPresetStore((s) => s.removePreset);
-  const addPresets = useBrushPresetStore((s) => s.addPresets);
-  const setShowBrushModal = useBrushPresetStore((s) => s.setShowBrushModal);
+  const presets = useToolSettingsStore((s) => s.presets);
+  const activePresetId = useToolSettingsStore((s) => s.activePresetId);
+  const setActivePreset = useToolSettingsStore((s) => s.setActivePreset);
+  const removePreset = useToolSettingsStore((s) => s.removePreset);
+  const addPresets = useToolSettingsStore((s) => s.addPresets);
+  const setShowBrushModal = useUIStore((s) => s.setShowBrushModal);
 
   const brushSize = useToolSettingsStore((s) => s.brushSize);
   const brushOpacity = useToolSettingsStore((s) => s.brushOpacity);
@@ -55,6 +56,9 @@ export function BrushModal() {
     if (!file) return;
 
     const reader = new FileReader();
+    reader.onerror = () => {
+      notifyError('Failed to read brush file.');
+    };
     reader.onload = () => {
       const buffer = reader.result as ArrayBuffer;
       const worker = new Worker(
@@ -72,6 +76,10 @@ export function BrushModal() {
           return abrBrushToPreset(b.name, tip, b.spacing);
         });
         addPresets(newPresets);
+        worker.terminate();
+      };
+      worker.onerror = (err) => {
+        notifyError(`Failed to parse brush file: ${describeError(err.message ?? err)}`);
         worker.terminate();
       };
       worker.postMessage(buffer, [buffer]);

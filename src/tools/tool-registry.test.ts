@@ -10,8 +10,8 @@ import type { ToolId } from '../types';
 
 const ALL_TOOL_IDS: ToolId[] = [
   'move', 'brush', 'pencil', 'eraser', 'fill', 'gradient', 'eyedropper',
-  'stamp', 'dodge', 'burn', 'smudge', 'marquee-rect', 'marquee-ellipse',
-  'lasso', 'lasso-poly', 'lasso-magnetic', 'wand', 'shape', 'text', 'crop', 'path',
+  'stamp', 'dodge', 'smudge', 'marquee-rect', 'marquee-ellipse',
+  'lasso', 'lasso-magnetic', 'wand', 'shape', 'text', 'crop', 'path',
 ];
 
 describe('tool registry', () => {

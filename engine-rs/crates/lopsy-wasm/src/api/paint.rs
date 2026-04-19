@@ -213,20 +213,33 @@ pub fn compute_shift_click_line(from_x: f64, from_y: f64, to_x: f64, to_y: f64) 
 // Dodge/Burn
 // ============================================================
 
+#[wasm_bindgen(js_name = "beginDodgeBurnStroke")]
+pub fn begin_dodge_burn_stroke(
+    engine: &mut Engine, layer_id: &str, mode: u32,
+) -> Result<(), JsError> {
+    dodge_burn_gpu::begin_dodge_burn_stroke(&mut engine.inner, layer_id, mode)
+        .map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "applyDodgeBurnDab")]
 pub fn apply_dodge_burn_dab(
     engine: &mut Engine, layer_id: &str,
-    cx: f64, cy: f64, size: f32, mode: u32, exposure: f32,
+    cx: f64, cy: f64, size: f32, hardness: f32, exposure: f32,
 ) {
-    dodge_burn_gpu::apply_dodge_burn_dab(&mut engine.inner, layer_id, cx, cy, size, mode, exposure);
+    dodge_burn_gpu::apply_dodge_burn_dab(&mut engine.inner, layer_id, cx, cy, size, hardness, exposure);
 }
 
 #[wasm_bindgen(js_name = "applyDodgeBurnDabBatch")]
 pub fn apply_dodge_burn_dab_batch(
     engine: &mut Engine, layer_id: &str,
-    points: &[f64], size: f32, mode: u32, exposure: f32,
+    points: &[f64], size: f32, hardness: f32, exposure: f32,
 ) {
-    dodge_burn_gpu::apply_dodge_burn_dab_batch(&mut engine.inner, layer_id, points, size, mode, exposure);
+    dodge_burn_gpu::apply_dodge_burn_dab_batch(&mut engine.inner, layer_id, points, size, hardness, exposure);
+}
+
+#[wasm_bindgen(js_name = "endDodgeBurnStroke")]
+pub fn end_dodge_burn_stroke(engine: &mut Engine, layer_id: &str) {
+    dodge_burn_gpu::end_dodge_burn_stroke(&mut engine.inner, layer_id);
 }
 
 // ============================================================

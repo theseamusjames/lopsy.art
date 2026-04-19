@@ -7,7 +7,7 @@ import { handlePaintDown, handlePaintMove } from '../app/interactions/paint-hand
 import { handleSelectionDown, handleSelectionMove, handleSelectionUp } from '../app/interactions/selection-handlers';
 import { handleFillDown } from './fill/fill-interaction';
 import { handleEyedropperDown, handleEyedropperMove } from './eyedropper/eyedropper-interaction';
-import { handleDodgeDown, handleDodgeMove } from './dodge/dodge-interaction';
+import { handleDodgeDown, handleDodgeMove, handleDodgeUp } from './dodge/dodge-interaction';
 import { handleSmudgeDown, handleSmudgeMove } from './smudge/smudge-interaction';
 import { handleStampDown, handleStampMove } from './stamp/stamp-interaction';
 import { handleTextDown, handleTextMove, handleTextUp } from './text/text-interaction';
@@ -33,7 +33,6 @@ import { TextOptions } from '../app/OptionsBar/tool-options/TextOptions';
 import { MagneticLassoOptions } from '../app/OptionsBar/tool-options/MagneticLassoOptions';
 import { CropOptions } from '../app/OptionsBar/tool-options/CropOptions';
 
-import { useUIStore } from '../app/ui-store';
 import { useToolSettingsStore } from '../app/tool-settings-store';
 
 /**
@@ -162,13 +161,8 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     handler: {
       down: (ctx) => handleDodgeDown(ctx),
       move: (ctx, state) => handleDodgeMove(state, ctx.layerPos),
+      up: (_ctx, state) => handleDodgeUp(state),
     },
-  },
-  // 'burn' is a leftover ToolId — actual burn behavior is selected via the
-  // dodge tool's mode setting. Kept so existing labels resolve.
-  burn: {
-    id: 'burn',
-    label: 'Dodge/Burn',
   },
   smudge: {
     id: 'smudge',
@@ -211,11 +205,6 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
       up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos, ctx.screenToCanvas!, ctx.containerRef!, ctx),
     },
   },
-  // 'lasso-poly' is a placeholder ToolId without an implementation.
-  'lasso-poly': {
-    id: 'lasso-poly',
-    label: 'Polygonal Lasso',
-  },
   'lasso-magnetic': {
     id: 'lasso-magnetic',
     label: 'Magnetic Lasso',
@@ -249,8 +238,8 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     // Seed the shape's fill color from the current foreground on activation —
     // users expect "pick a color, then click shape" to draw in that color.
     onActivate: () => {
-      const fg = useUIStore.getState().foregroundColor;
-      useToolSettingsStore.getState().setShapeFillColor(fg);
+      const ts = useToolSettingsStore.getState();
+      ts.setShapeFillColor(ts.foregroundColor);
     },
   },
   text: {

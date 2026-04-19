@@ -4,7 +4,6 @@ import { App } from './app/App';
 import { useEditorStore } from './app/editor-store';
 import { useUIStore } from './app/ui-store';
 import { useToolSettingsStore } from './app/tool-settings-store';
-import { useBrushPresetStore } from './app/brush-preset-store';
 import { pixelDataManager } from './engine/pixel-data-manager';
 import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
 import { render as renderWasm, readLayerPixels, getLayerTextureDimensions } from './engine-wasm/wasm-bridge';
@@ -15,6 +14,7 @@ import {
   syncLayers,
   syncSelection,
 } from './engine-wasm/engine-sync';
+import { finalizePendingStrokeGlobal } from './app/interactions/pending-stroke';
 import './styles/tokens.css';
 import './styles/reset.css';
 
@@ -23,7 +23,9 @@ if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__editorStore = useEditorStore;
   (window as unknown as Record<string, unknown>).__uiStore = useUIStore;
   (window as unknown as Record<string, unknown>).__toolSettingsStore = useToolSettingsStore;
-  (window as unknown as Record<string, unknown>).__brushPresetStore = useBrushPresetStore;
+  // Back-compat alias — e2e tests read presets via __brushPresetStore. The
+  // merged tool-settings store has the same shape for preset access.
+  (window as unknown as Record<string, unknown>).__brushPresetStore = useToolSettingsStore;
   // Pixel-data Maps used to live on the store; they live on the manager now.
   // E2e tests that read or mutate pixel state go through this singleton.
   (window as unknown as Record<string, unknown>).__pixelData = pixelDataManager;
@@ -66,6 +68,9 @@ if (import.meta.env.DEV) {
         const engine = getEngine();
         const canvas = getEngineCanvas();
         if (!engine || !canvas) { resolve(null); return; }
+        // Bake any deferred stroke into the layer texture so the readback
+        // reflects the user-visible state, not the pre-stroke layer.
+        finalizePendingStrokeGlobal();
         const state = useEditorStore.getState();
         const doc = state.document;
         const container = canvas.parentElement;

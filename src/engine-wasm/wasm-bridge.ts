@@ -43,8 +43,10 @@ import init, {
   generateBrushStamp,
   interpolatePoints,
   computeShiftClickLine,
+  beginDodgeBurnStroke,
   applyDodgeBurnDab,
   applyDodgeBurnDabBatch,
+  endDodgeBurnStroke,
   applySmudgeDab,
   applySmudgeDabBatch,
   applyStampDab,
@@ -173,17 +175,25 @@ import init, {
   clearAllLayers,
   exportPsd,
   parsePsd,
-  getPsdLayerPixels,
+  decodeAndUploadPsdLayer,
   getPsdLayerMask,
 } from './pkg/lopsy_wasm';
 
 export type { Engine };
 
 let initPromise: Promise<void> | null = null;
+let initError: unknown = null;
 
 export async function initWasm(): Promise<void> {
+  if (initError) throw initError;
   if (!initPromise) {
-    initPromise = init().then(() => {});
+    initPromise = init()
+      .then(() => {})
+      .catch((err) => {
+        initError = err;
+        initPromise = null;
+        throw err;
+      });
   }
   await initPromise;
 }
@@ -229,8 +239,10 @@ export {
   generateBrushStamp,
   interpolatePoints,
   computeShiftClickLine,
+  beginDodgeBurnStroke,
   applyDodgeBurnDab,
   applyDodgeBurnDabBatch,
+  endDodgeBurnStroke,
   applySmudgeDab,
   applySmudgeDabBatch,
   applyStampDab,
@@ -358,6 +370,6 @@ export {
   setBrushTipState,
   exportPsd,
   parsePsd,
-  getPsdLayerPixels,
+  decodeAndUploadPsdLayer,
   getPsdLayerMask,
 };

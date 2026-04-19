@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { waitForStore, createDocument, paintRect, addLayer, getEditorState } from './helpers';
 
 test.describe('New document clears engine resources (#124)', () => {

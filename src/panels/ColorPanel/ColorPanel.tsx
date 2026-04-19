@@ -5,7 +5,7 @@ import { ColorPicker } from '../../components/ColorPicker/ColorPicker';
 import { Slider } from '../../components/Slider/Slider';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { rgbToHex6, hexToRgb } from '../../utils/color';
-import { useUIStore } from '../../app/ui-store';
+import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { PanelContainer } from '../PanelContainer/PanelContainer';
 import { usePanelCollapse } from '../usePanelCollapse';
 import type { Color } from '../../types';
@@ -22,12 +22,12 @@ function hexToColor(hex: string): Color | null {
 
 export function ColorPanel() {
   const [collapsed, setCollapsed] = usePanelCollapse('color');
-  const foregroundColor = useUIStore((s) => s.foregroundColor);
-  const backgroundColor = useUIStore((s) => s.backgroundColor);
-  const recentColors = useUIStore((s) => s.recentColors);
-  const onForegroundChange = useUIStore((s) => s.setForegroundColor);
-  const onBackgroundChange = useUIStore((s) => s.setBackgroundColor);
-  const onSwap = useUIStore((s) => s.swapColors);
+  const foregroundColor = useToolSettingsStore((s) => s.foregroundColor);
+  const backgroundColor = useToolSettingsStore((s) => s.backgroundColor);
+  const recentColors = useToolSettingsStore((s) => s.recentColors);
+  const onForegroundChange = useToolSettingsStore((s) => s.setForegroundColor);
+  const onBackgroundChange = useToolSettingsStore((s) => s.setBackgroundColor);
+  const onSwap = useToolSettingsStore((s) => s.swapColors);
   const [hexInput, setHexInput] = useState(colorToHex(foregroundColor));
   const [editingBg, setEditingBg] = useState(false);
 

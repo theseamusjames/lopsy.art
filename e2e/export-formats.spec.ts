@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { waitForStore, createDocument, paintRect } from './helpers';
 
 test.describe('Export formats (#57)', () => {

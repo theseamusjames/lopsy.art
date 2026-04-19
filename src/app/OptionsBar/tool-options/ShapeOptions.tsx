@@ -6,6 +6,7 @@ import { ColorSwatch } from '../../../components/ColorSwatch/ColorSwatch';
 import { ColorPicker } from '../../../components/ColorPicker/ColorPicker';
 import { AspectRatioControl } from './AspectRatioControl';
 import type { Color } from '../../../types';
+import type { ShapeMode, ShapeOutput } from '../../../tools/shape/shape';
 import styles from '../OptionsBar.module.css';
 
 type PopoverTarget = 'fill' | 'stroke' | null;
@@ -82,7 +83,7 @@ export function ShapeOptions() {
       <select
         className={styles.select}
         value={shapeMode}
-        onChange={(e) => setShapeMode(e.target.value as 'ellipse' | 'polygon')}
+        onChange={(e) => setShapeMode(e.target.value as ShapeMode)}
       >
         <option value="ellipse">Ellipse</option>
         <option value="polygon">Polygon</option>
@@ -92,7 +93,7 @@ export function ShapeOptions() {
       <select
         className={styles.select}
         value={shapeOutput}
-        onChange={(e) => setShapeOutput(e.target.value as 'pixels' | 'path')}
+        onChange={(e) => setShapeOutput(e.target.value as ShapeOutput)}
       >
         <option value="pixels">Pixels</option>
         <option value="path">Path</option>

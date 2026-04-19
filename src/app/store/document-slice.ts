@@ -147,7 +147,7 @@ export interface DocumentSlice {
   mergeDown: () => void;
   flattenImage: () => void;
   rasterizeLayerStyle: () => void;
-  updateLayerEffects: (id: string, effects: LayerEffects) => void;
+  updateLayerEffects: (id: string, effects: Partial<LayerEffects>) => void;
   addLayerMask: (id: string) => void;
   removeLayerMask: (id: string) => void;
   toggleLayerMask: (id: string) => void;
@@ -327,6 +327,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   alignLayer: (edge) => {
+    finalizePendingStrokeGlobal();
     const s = get();
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
     const result = computeAlignLayer(

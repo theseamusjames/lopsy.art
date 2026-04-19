@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { waitForStore, createDocument, paintRect, getPixelAt } from './helpers';
 
 test.describe('Canvas renders visibly', () => {

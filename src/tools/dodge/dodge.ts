@@ -1,10 +1,12 @@
 import type { Point, PixelSurface } from '../../types';
 
+export type DodgeMode = 'dodge' | 'burn';
+
 export function applyDodgeBurn(
   buf: PixelSurface,
   pos: Point,
   size: number,
-  mode: 'dodge' | 'burn',
+  mode: DodgeMode,
   exposure: number,
 ): void {
   const radius = Math.floor(size / 2);

@@ -1,6 +1,7 @@
 import { PixelBuffer } from '../../engine/pixel-data';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
+import { useToolSettingsStore } from '../tool-settings-store';
 import { rasterizePath } from '../../tools/path/path';
 import type { PathAnchor } from '../../tools/path/path';
 import type { Color } from '../../types';
@@ -20,7 +21,7 @@ export function rasterizePathToLayer(
   editorState.pushHistory();
   const imageData = editorState.getOrCreateLayerPixelData(layerId);
   const buf = PixelBuffer.fromImageData(imageData);
-  useUIStore.getState().addRecentColor(color);
+  useToolSettingsStore.getState().addRecentColor(color);
 
   // Translate from document space to layer-local space
   const layer = editorState.document.layers.find((l) => l.id === layerId);

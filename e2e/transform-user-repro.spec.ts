@@ -2,7 +2,7 @@
  * Exact reproduction of the user's reported bugs.
  * Uses the actual shape tool, actual UI interactions, and GPU pixel readback.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 const isMac = process.platform === 'darwin';
 

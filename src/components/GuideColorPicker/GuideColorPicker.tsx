@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useUIStore } from '../../app/ui-store';
 import { ColorPicker } from '../ColorPicker/ColorPicker';
 import styles from './GuideColorPicker.module.css';
@@ -20,6 +20,7 @@ export function GuideColorPicker() {
   const guideColor = useUIStore((s) => s.guideColor);
   const setGuideColor = useUIStore((s) => s.setGuideColor);
   const closeModalOfKind = useUIStore((s) => s.closeModalOfKind);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   // ESC dismisses the picker. The modal slot lets us subscribe only while
   // open, so the keydown listener isn't attached to the document full-time.
@@ -32,15 +33,25 @@ export function GuideColorPicker() {
     return () => document.removeEventListener('keydown', onKey);
   }, [open, closeModalOfKind]);
 
+  // Stop pointerdowns that originate inside the picker from reaching the
+  // window-level handler in useCanvasPointerHandlers that closes the modal.
+  // Must be a native DOM listener: React's synthetic-event stopPropagation
+  // doesn't stop native listeners attached to window.
+  useEffect(() => {
+    if (!open) return;
+    const node = rootRef.current;
+    if (!node) return;
+    const stop = (e: PointerEvent) => e.stopPropagation();
+    node.addEventListener('pointerdown', stop);
+    return () => node.removeEventListener('pointerdown', stop);
+  }, [open]);
+
   // The picker is meaningless when rulers or guides are hidden — those UIs
   // are the only way to interact with guide color.
   if (!open || !showRulers || !showGuides) return null;
 
   return (
-    <div
-      className={styles.guideColorPicker}
-      onMouseDown={(e) => e.stopPropagation()}
-    >
+    <div ref={rootRef} className={styles.guideColorPicker}>
       <ColorPicker color={guideColor} onChange={setGuideColor} />
     </div>
   );
