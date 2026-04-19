@@ -67,7 +67,6 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
     const curves = buildCurvesFromToneCurve(meta.toneCurve);
     const adjustments = {
       ...DEFAULT_ADJUSTMENTS,
-      exposure: meta.baselineExposure,
       curves: curves ?? DEFAULT_RAW_CURVES,
     };
     const store = useEditorStore.getState();

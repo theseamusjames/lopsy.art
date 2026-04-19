@@ -20,10 +20,7 @@ pub struct DngImage {
 pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let reader = TiffReader::new(data)?;
 
-    // IFD0 holds document-level metadata (color matrices, tone curves, etc.)
     let ifd0 = reader.read_ifd(0)?;
-
-    // Find the main image IFD (largest SubIFD, or IFD0 if no SubIFDs)
     let main_ifd = find_main_image_ifd(&reader)?;
 
     let width = get_tag_u32(&main_ifd, TagId::ImageWidth)?;
@@ -45,7 +42,6 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let tile_width = get_tag_u32(&main_ifd, TagId::TileWidth).ok();
     let tile_height = get_tag_u32(&main_ifd, TagId::TileLength).ok();
 
-    // Collect raw compressed/uncompressed data
     let mut raw_bytes = Vec::new();
     for (off, count) in strip_offsets.iter().zip(strip_counts.iter()) {
         let start = *off as usize;
@@ -56,7 +52,6 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         raw_bytes.extend_from_slice(&data[start..end]);
     }
 
-    // Decompress
     let pixel_data: Vec<u16> = match compression {
         1 => decode_uncompressed(&raw_bytes, bits)?,
         7 => {
@@ -70,7 +65,6 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         _ => return Err(format!("Unsupported DNG compression: {compression}")),
     };
 
-    // Determine output pixel count
     let expected_pixels = if is_linear {
         (width * height * samples) as usize
     } else {
@@ -85,24 +79,31 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     }
 
     // DNG stores document-level color metadata in IFD0, image data tags in SubIFDs.
-    // Fall back to main_ifd if not found in ifd0.
     let color_matrix = get_rational_array_either(&ifd0, &main_ifd, TagId::ColorMatrix1);
     let forward_matrix = get_rational_array_either(&ifd0, &main_ifd, TagId::ForwardMatrix1);
     let as_shot_neutral = get_rational_array_either(&ifd0, &main_ifd, TagId::AsShotNeutral);
     let baseline_exposure = get_rational(&ifd0, TagId::BaselineExposure)
         .or_else(|| get_rational(&main_ifd, TagId::BaselineExposure));
+
+    // WhiteLevel: check SubIFD first (per-image), then IFD0, then compute from data.
     let white_level = get_tag_u32(&main_ifd, TagId::WhiteLevel)
         .or_else(|_| get_tag_u32(&ifd0, TagId::WhiteLevel))
-        .unwrap_or((1u32 << bits) - 1);
-    let black_level = get_rational_array_either(&ifd0, &main_ifd, TagId::BlackLevel);
+        .ok();
 
-    let max_val = white_level as f64;
+    let black_level = get_rational_array_either(&ifd0, &main_ifd, TagId::BlackLevel);
     let black = if !black_level.is_empty() { black_level[0] } else { 0.0 };
+
+    // Determine actual max value: use WhiteLevel if found, otherwise scan data.
+    let max_val = if let Some(wl) = white_level {
+        wl as f64
+    } else {
+        let measured = pixel_data[..expected_pixels].iter().copied().max().unwrap_or(1) as f64;
+        measured.max(1.0)
+    };
 
     let mut rgb_f32: Vec<f32>;
 
     if is_linear && samples >= 3 {
-        // Linear DNG — already RGB, just normalize
         rgb_f32 = Vec::with_capacity((width * height * 3) as usize);
         for i in 0..(width * height) as usize {
             let r = ((pixel_data[i * samples as usize] as f64 - black) / (max_val - black)).max(0.0) as f32;
@@ -113,9 +114,8 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
             rgb_f32.push(b);
         }
     } else if is_cfa {
-        // Bayer CFA — needs demosaic
         let cfa_pattern = get_tag_u8_vec(&main_ifd, TagId::CfaPattern)
-            .unwrap_or_else(|_| vec![0, 1, 1, 2]); // RGGB default
+            .unwrap_or_else(|_| vec![0, 1, 1, 2]);
 
         let normalized: Vec<f32> = pixel_data[..expected_pixels]
             .iter()
@@ -142,12 +142,22 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         color::apply_matrix(&mut rgb_f32, &mat);
     }
 
-    // Apply sRGB gamma curve (display encoding — BaselineExposure and tone
-    // curve are left to group adjustments so the user can edit them)
+    // Apply BaselineExposure — this is a camera calibration value, not
+    // a creative adjustment. Bake it into the pixels so the raw data
+    // starts at the intended brightness.
+    if let Some(ev) = baseline_exposure {
+        if ev.abs() > 0.001 {
+            let scale = (2.0f64).powf(ev) as f32;
+            for v in &mut rgb_f32 {
+                *v *= scale;
+            }
+        }
+    }
+
+    // Apply sRGB gamma curve
     color::apply_srgb_gamma(&mut rgb_f32);
 
-    // Parse ProfileToneCurve (tag 50940): interleaved (in, out) float pairs.
-    // Usually in IFD0 alongside other profile tags.
+    // Parse ProfileToneCurve (tag 50940)
     let tone_curve_raw = get_rational_array_either(&ifd0, &main_ifd, TagId::ProfileToneCurve);
     let tone_curve: Vec<(f64, f64)> = tone_curve_raw
         .chunks_exact(2)
@@ -176,7 +186,6 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
 fn find_main_image_ifd(reader: &TiffReader) -> Result<Vec<IfdEntry>, String> {
     let ifd0 = reader.read_ifd(0)?;
 
-    // Check for SubIFDs (DNG stores the full-res image in a SubIFD)
     if let Ok(sub_offsets) = get_tag_u32_vec(&ifd0, TagId::SubIFDs) {
         let mut best_ifd = None;
         let mut best_pixels = 0u64;
@@ -316,7 +325,7 @@ fn get_tag_u32_vec(entries: &[IfdEntry], tag: TagId) -> Result<Vec<u32>, String>
 fn get_tag_u8_vec(entries: &[IfdEntry], tag: TagId) -> Result<Vec<u8>, String> {
     entries.iter()
         .find(|e| e.tag == tag as u16)
-        .and_then(|e| Some(e.raw_bytes.clone()))
+        .map(|e| e.raw_bytes.clone())
         .ok_or_else(|| format!("Tag {:?} not found", tag))
 }
 
