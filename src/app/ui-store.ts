@@ -174,7 +174,11 @@ export const useUIStore = create<UIState>((set, get) => ({
   maskEditMode: false,
   modal: null,
   showEffectsDrawer: false,
-  visiblePanels: new Set(['color', 'layers']),
+  visiblePanels: new Set(
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+      ? []
+      : ['color', 'layers'],
+  ),
   cursorPosition: { x: 0, y: 0 },
   adjustments: { ...DEFAULT_ADJUSTMENTS },
   adjustmentsEnabled: true,

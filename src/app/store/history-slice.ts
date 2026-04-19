@@ -205,6 +205,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       redoStack: [],
       dirtyLayerIds: new Set(),
       isDirty: true,
+      renderVersion: state.renderVersion + 1,
     });
   },
 

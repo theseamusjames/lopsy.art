@@ -42,13 +42,13 @@ export function BrushOptions() {
       <Slider label="Fade" value={brushFade} min={0} max={2000} onChange={setBrushFade} suffix="px" />
       <div className={styles.symmetryGroup}>
         <IconButton
-          icon={<FlipHorizontal2 size={16} />}
+          icon={<FlipVertical2 size={16} />}
           label="Symmetry Horizontal"
           isActive={symmetryH}
           onClick={() => setSymH(!symmetryH)}
         />
         <IconButton
-          icon={<FlipVertical2 size={16} />}
+          icon={<FlipHorizontal2 size={16} />}
           label="Symmetry Vertical"
           isActive={symmetryV}
           onClick={() => setSymV(!symmetryV)}
