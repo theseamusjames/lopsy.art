@@ -21,7 +21,7 @@ export function computeAlign(
       x = -relX;
       break;
     case 'center-h':
-      x = (canvasWidth - contentBounds.width) / 2 - relX;
+      x = Math.round((canvasWidth - contentBounds.width) / 2) - relX;
       break;
     case 'right':
       x = canvasWidth - contentBounds.width - relX;
@@ -30,7 +30,7 @@ export function computeAlign(
       y = -relY;
       break;
     case 'center-v':
-      y = (canvasHeight - contentBounds.height) / 2 - relY;
+      y = Math.round((canvasHeight - contentBounds.height) / 2) - relY;
       break;
     case 'bottom':
       y = canvasHeight - contentBounds.height - relY;
