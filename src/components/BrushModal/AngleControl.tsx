@@ -52,6 +52,13 @@ export function AngleControl({ angle, onAngleChange }: AngleControlProps) {
         ref={svgRef}
         className={styles.circle}
         viewBox="0 0 64 64"
+        role="slider"
+        aria-label="Brush angle"
+        aria-valuemin={0}
+        aria-valuemax={360}
+        aria-valuenow={angle}
+        aria-valuetext={`${angle} degrees`}
+        tabIndex={0}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

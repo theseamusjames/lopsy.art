@@ -115,6 +115,9 @@ export function TransformControls() {
               key={id}
               className={`${styles.modeButton} ${currentMode === id ? styles.active : ''}`}
               onClick={() => handleModeChange(id)}
+              type="button"
+              aria-pressed={currentMode === id}
+              aria-label={`Transform mode: ${label}`}
             >
               {label}
             </button>

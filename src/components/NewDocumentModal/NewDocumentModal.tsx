@@ -145,8 +145,8 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
   }, [handleCreate, onCancel]);
 
   return (
-    <div className={styles.overlay}>
-      <div className={styles.modal} onKeyDown={handleKeyDown}>
+    <div className={styles.overlay} role="presentation">
+      <div className={styles.modal} role="dialog" aria-label="New Document" onKeyDown={handleKeyDown}>
         <div className={styles.header}>
           <h2>New Document</h2>
         </div>

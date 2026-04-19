@@ -13,11 +13,12 @@ export function DodgeOptions() {
 
   return (
     <>
-      <span className={styles.label}>Mode</span>
+      <label className={styles.label} id="dodge-mode-label">Mode</label>
       <select
         className={styles.select}
         value={dodgeMode}
         onChange={(e) => setDodgeMode(e.target.value as DodgeMode)}
+        aria-labelledby="dodge-mode-label"
       >
         <option value="dodge">Dodge</option>
         <option value="burn">Burn</option>

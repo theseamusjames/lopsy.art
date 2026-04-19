@@ -16,14 +16,14 @@ export function PanelContainer({
   onToggle,
 }: PanelContainerProps) {
   return (
-    <div className={styles.panel}>
-      <button className={styles.header} onClick={onToggle} type="button">
-        <span className={styles.chevron}>
+    <section className={styles.panel} aria-label={title}>
+      <button className={styles.header} onClick={onToggle} type="button" aria-expanded={!collapsed} aria-label={`${title} panel`}>
+        <span className={styles.chevron} aria-hidden="true">
           {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
         </span>
         <span className={styles.title}>{title}</span>
       </button>
       <div className={styles.content}>{children}</div>
-    </div>
+    </section>
   );
 }

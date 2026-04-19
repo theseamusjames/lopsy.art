@@ -18,6 +18,7 @@ export function StrokeForm({ stroke, onChange }: StrokeFormProps) {
             type="color"
             className={styles.colorInput}
             value={colorToHex(stroke.color)}
+            aria-label="Stroke color"
             onChange={(e) => onChange({ ...stroke, color: hexToColor(e.target.value, stroke.color.a) })}
           />
         </label>
@@ -37,6 +38,8 @@ export function StrokeForm({ stroke, onChange }: StrokeFormProps) {
               type="button"
               className={`${styles.positionBtn} ${stroke.position === pos ? styles.positionBtnActive : ''}`}
               onClick={() => onChange({ ...stroke, position: pos })}
+              aria-pressed={stroke.position === pos}
+              aria-label={`Stroke position: ${pos}`}
             >
               {pos}
             </button>

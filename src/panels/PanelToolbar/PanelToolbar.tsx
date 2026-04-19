@@ -24,7 +24,7 @@ export function PanelToolbar() {
   const togglePanel = useUIStore((s) => s.togglePanel);
 
   return (
-    <div className={styles.toolbar}>
+    <div className={styles.toolbar} role="toolbar" aria-label="Panel visibility">
       {panels.map((panel) => (
         <IconButton
           key={panel.id}

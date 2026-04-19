@@ -91,8 +91,8 @@ export function FilterDialog({ title, params, onApply, onCancel, onPreviewChange
   }, [handleApply, handleCancel]);
 
   return (
-    <div className={styles.overlay}>
-      <div className={styles.modal} onKeyDown={handleKeyDown}>
+    <div className={styles.overlay} role="presentation">
+      <div className={styles.modal} role="dialog" aria-label={title} onKeyDown={handleKeyDown}>
         <div className={styles.header}>
           <h2>{title}</h2>
         </div>

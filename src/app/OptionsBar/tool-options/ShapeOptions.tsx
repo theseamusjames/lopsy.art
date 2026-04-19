@@ -79,21 +79,23 @@ export function ShapeOptions() {
 
   return (
     <>
-      <span className={styles.label}>Shape</span>
+      <label className={styles.label} id="shape-mode-label">Shape</label>
       <select
         className={styles.select}
         value={shapeMode}
         onChange={(e) => setShapeMode(e.target.value as ShapeMode)}
+        aria-labelledby="shape-mode-label"
       >
         <option value="ellipse">Ellipse</option>
         <option value="polygon">Polygon</option>
       </select>
 
-      <span className={styles.label}>Output</span>
+      <label className={styles.label} id="shape-output-label">Output</label>
       <select
         className={styles.select}
         value={shapeOutput}
         onChange={(e) => setShapeOutput(e.target.value as ShapeOutput)}
+        aria-labelledby="shape-output-label"
       >
         <option value="pixels">Pixels</option>
         <option value="path">Path</option>
@@ -101,8 +103,9 @@ export function ShapeOptions() {
 
       {shapeMode === 'polygon' && (
         <>
-          <span className={styles.label}>Sides</span>
+          <label className={styles.label} htmlFor="polygon-sides">Sides</label>
           <input
+            id="polygon-sides"
             className={styles.numberInput}
             type="number"
             min={3}
@@ -131,6 +134,7 @@ export function ShapeOptions() {
           <button
             className={styles.noColor}
             type="button"
+            aria-label="Add fill color"
             onClick={() => {
               setShapeFillColor({ r: 255, g: 255, b: 255, a: 1 });
               setOpenPopover('fill');
@@ -163,6 +167,7 @@ export function ShapeOptions() {
           <button
             className={styles.noColor}
             type="button"
+            aria-label="Add stroke color"
             onClick={() => {
               setShapeStrokeColor({ r: 0, g: 0, b: 0, a: 1 });
               setOpenPopover('stroke');

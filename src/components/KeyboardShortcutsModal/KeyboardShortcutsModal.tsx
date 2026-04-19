@@ -77,7 +77,7 @@ const sections: ShortcutSection[] = [
 export function KeyboardShortcutsModal({ onClose }: KeyboardShortcutsModalProps) {
   return (
     <div className={styles.overlay} onMouseDown={onClose}>
-      <div className={styles.modal} onMouseDown={(e) => e.stopPropagation()}>
+      <div className={styles.modal} role="dialog" aria-label="Keyboard Shortcuts" onMouseDown={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h2>Keyboard Shortcuts</h2>
         </div>

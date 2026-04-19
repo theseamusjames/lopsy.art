@@ -13,10 +13,13 @@ export function StatusBar() {
   const cursorY = useUIStore((s) => s.cursorPosition.y);
 
   return (
-    <div className={styles.bar}>
+    <footer className={styles.bar} role="status" aria-label="Status bar">
       <span
         className={styles.item}
         onDoubleClick={() => useEditorStore.getState().setZoom(1)}
+        role="button"
+        tabIndex={0}
+        aria-label={`Zoom ${Math.round(zoom * 100)}%, double-click to reset`}
       >
         {Math.round(zoom * 100)}%
       </span>
@@ -32,6 +35,6 @@ export function StatusBar() {
       </span>
       <span className={styles.spacer} />
       <span className={styles.item}>{colorSpaceLabel}</span>
-    </div>
+    </footer>
   );
 }

@@ -26,11 +26,12 @@ export function GradientOptions() {
 
   return (
     <>
-      <span className={styles.label}>Type</span>
+      <label className={styles.label} id="gradient-type-label">Type</label>
       <select
         className={styles.select}
         value={gradientType}
         onChange={(e) => setGradientType(e.target.value as GradientType)}
+        aria-labelledby="gradient-type-label"
       >
         <option value="linear">Linear</option>
         <option value="radial">Radial</option>
@@ -42,6 +43,7 @@ export function GradientOptions() {
         className={gradientStyles.swatch}
         style={{ background: buildGradientCss(sorted) }}
         onClick={handleOpenModal}
+        aria-label="Edit gradient stops"
         title="Edit gradient stops"
         data-testid="gradient-swatch"
       />

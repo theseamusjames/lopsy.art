@@ -264,17 +264,17 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
   const alphaCursorX = `${color.a * 100}%`;
 
   return (
-    <div className={styles.picker}>
-      <div ref={svContainerRef} className={styles.svArea} onMouseDown={handleSVDown}>
-        <canvas ref={svCanvasRef} />
+    <div className={styles.picker} role="group" aria-label="Color picker">
+      <div ref={svContainerRef} className={styles.svArea} onMouseDown={handleSVDown} role="slider" aria-label="Saturation and brightness" aria-valuetext={`Saturation ${Math.round(hsv.s)}%, Brightness ${Math.round(hsv.v)}%`} tabIndex={0}>
+        <canvas ref={svCanvasRef} aria-hidden="true" />
         <div className={styles.svCursor} style={{ left: svCursorX, top: svCursorY }} />
       </div>
-      <div ref={hueContainerRef} className={styles.hueBar} onMouseDown={handleHueDown}>
-        <canvas ref={hueCanvasRef} />
+      <div ref={hueContainerRef} className={styles.hueBar} onMouseDown={handleHueDown} role="slider" aria-label="Hue" aria-valuemin={0} aria-valuemax={360} aria-valuenow={Math.round(hsv.h)} tabIndex={0}>
+        <canvas ref={hueCanvasRef} aria-hidden="true" />
         <div className={styles.hueCursor} style={{ left: hueCursorX }} />
       </div>
-      <div ref={alphaContainerRef} className={styles.alphaBar} onMouseDown={handleAlphaDown}>
-        <canvas ref={alphaCanvasRef} />
+      <div ref={alphaContainerRef} className={styles.alphaBar} onMouseDown={handleAlphaDown} role="slider" aria-label="Opacity" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(color.a * 100)} tabIndex={0}>
+        <canvas ref={alphaCanvasRef} aria-hidden="true" />
         <div className={styles.alphaCursor} style={{ left: alphaCursorX }} />
       </div>
     </div>

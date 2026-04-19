@@ -33,7 +33,7 @@ export function ShapeSizeModal({ onConfirm, onCancel }: ShapeSizeModalProps) {
 
   return (
     <div className={styles.overlay} onMouseDown={onCancel}>
-      <div className={styles.modal} onMouseDown={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+      <div className={styles.modal} role="dialog" aria-label="Shape Size" onMouseDown={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         <div className={styles.header}>
           <h2>Shape Size</h2>
         </div>

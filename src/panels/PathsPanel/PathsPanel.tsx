@@ -42,7 +42,7 @@ export function PathsPanel() {
   return (
     <PanelContainer title="Paths" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
       <div className={styles.panel}>
-        <div className={collapsed ? styles.listCollapsed : styles.list}>
+        <div className={collapsed ? styles.listCollapsed : styles.list} role="listbox" aria-label="Paths">
           {paths.length === 0 && (
             <div className={styles.empty}>No paths</div>
           )}
@@ -56,6 +56,9 @@ export function PathsPanel() {
                 .filter(Boolean)
                 .join(' ')}
               onClick={() => handleSelect(path.id)}
+              role="option"
+              aria-selected={path.id === selectedPathId}
+              tabIndex={0}
               data-testid={`path-item-${path.id}`}
             >
               <span className={styles.name}>{path.name}</span>

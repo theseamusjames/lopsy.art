@@ -93,6 +93,7 @@ export function Slider({
         min={min}
         max={max}
         step={step}
+        aria-label={label ?? 'Value'}
         onChange={(e) => {
           const iv = Number(e.target.value);
           const v = scale === 'log' ? valLog(iv, min, max) : iv;
@@ -105,6 +106,7 @@ export function Slider({
             type="text"
             className={styles.valueInput}
             value={isFocused ? localValue : String(value)}
+            aria-label={label ? `${label} value` : 'Value'}
             onChange={(e) => setLocalValue(e.target.value)}
             onFocus={(e) => {
               setIsFocused(true);

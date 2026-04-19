@@ -41,7 +41,7 @@ export function OptionsBar() {
   const hasTrailing = showGrid || showSeamlessPattern;
 
   return (
-    <div className={styles.bar}>
+    <div className={styles.bar} role="toolbar" aria-label={`${label} options`}>
       <span className={styles.toolName}>{label}</span>
       <div className={styles.separator} />
       <div className={styles.options}>
@@ -62,6 +62,8 @@ export function OptionsBar() {
                   ? gridStops.indexOf(gridSize)
                   : gridStops.reduce((best, s, i) =>
                       Math.abs(s - gridSize) < Math.abs(gridStops[best]! - gridSize) ? i : best, 0)}
+                aria-label="Grid size"
+                aria-valuetext={`${gridSize} pixels`}
                 onChange={(e) => setGridSize(gridStops[Number(e.target.value)]!)}
               />
               <span className={styles.gridValue}>{gridSize}px</span>

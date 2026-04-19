@@ -54,7 +54,7 @@ export function StrokePathModal() {
 
   return (
     <div className={styles.overlay} onMouseDown={handleCancel}>
-      <div className={styles.modal} onMouseDown={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+      <div className={styles.modal} role="dialog" aria-label="Stroke Path" onMouseDown={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         <div className={styles.header}>
           <h2>Stroke Path</h2>
         </div>

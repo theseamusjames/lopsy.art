@@ -32,7 +32,7 @@ export function BrushOptions() {
   return (
     <>
       {activePreset && (
-        <button className={styles.tipButton} onClick={handleOpenBrushModal} title="Open brush presets">
+        <button className={styles.tipButton} onClick={handleOpenBrushModal} aria-label="Open brush presets" title="Open brush presets">
           <BrushThumbnail preset={activePreset} size={24} />
         </button>
       )}

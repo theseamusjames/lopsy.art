@@ -122,7 +122,7 @@ export function ColorPanel() {
         </div>
         {!collapsed && <ColorPicker color={activeColor} onChange={handlePickerChange} />}
         {!collapsed && <div className={styles.hexRow}>
-          <span className={styles.hexLabel}>#</span>
+          <span className={styles.hexLabel} aria-hidden="true">#</span>
           <input
             className={styles.hexInput}
             value={hexInput}
@@ -130,6 +130,7 @@ export function ColorPanel() {
             onBlur={handleHexBlur}
             onKeyDown={handleHexKeyDown}
             maxLength={6}
+            aria-label="Hex color value"
           />
         </div>}
         {!collapsed && <div className={styles.sliders}>

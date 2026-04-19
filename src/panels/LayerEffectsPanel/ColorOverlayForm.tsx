@@ -16,6 +16,7 @@ export function ColorOverlayForm({ overlay, onChange }: ColorOverlayFormProps) {
           type="color"
           className={styles.colorInput}
           value={colorToHex(overlay.color)}
+          aria-label="Overlay color"
           onChange={(e) => onChange({ ...overlay, color: hexToColor(e.target.value, overlay.color.a) })}
         />
       </label>
