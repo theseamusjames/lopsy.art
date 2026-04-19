@@ -13,6 +13,7 @@ import {
   syncSelection,
   syncGrid,
   syncRulers,
+  syncSeamlessPattern,
   syncAdjustments,
   syncMaskEditMode,
   syncBrushTip,
@@ -128,6 +129,7 @@ function renderFrameGpu(
   syncSelection(engine, selection);
   syncGrid(engine, showGrid, gridSize);
   syncRulers(engine, showRulers);
+  syncSeamlessPattern(engine, uiState.showSeamlessPattern, uiState.dimSeamlessPattern);
   syncAdjustments(engine, adjustments, adjustmentsEnabled);
   syncMaskEditMode(engine, uiState.maskEditMode, doc.activeLayerId);
   syncBrushTip(engine, toolState.activeBrushTip, toolState.brushAngle * Math.PI / 180);

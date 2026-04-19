@@ -56,6 +56,12 @@ export function createViewMenu(): MenuDef {
         checked: ui.showGuides,
         action: () => useUIStore.getState().toggleGuides(),
       },
+      { separator: true, label: '' },
+      {
+        label: 'Show Seamless Pattern',
+        checked: ui.showSeamlessPattern,
+        action: () => useUIStore.getState().toggleSeamlessPattern(),
+      },
     ],
   };
 }

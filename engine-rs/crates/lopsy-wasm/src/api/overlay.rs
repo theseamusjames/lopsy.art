@@ -80,6 +80,13 @@ pub fn set_rulers_visible(engine: &mut Engine, visible: bool) {
     engine.inner.needs_recomposite = true;
 }
 
+#[wasm_bindgen(js_name = "setSeamlessPattern")]
+pub fn set_seamless_pattern(engine: &mut Engine, enabled: bool, dim: bool) {
+    engine.inner.seamless_pattern = enabled;
+    engine.inner.seamless_dim = dim;
+    engine.inner.needs_recomposite = true;
+}
+
 // ============================================================
 // ImageBitmap upload
 // ============================================================

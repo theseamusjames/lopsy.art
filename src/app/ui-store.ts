@@ -65,6 +65,8 @@ interface UIState {
   showGrid: boolean;
   showRulers: boolean;
   showGuides: boolean;
+  showSeamlessPattern: boolean;
+  dimSeamlessPattern: boolean;
   snapToGrid: boolean;
   gridSize: number;
   guideColor: Color;
@@ -101,6 +103,8 @@ interface UIState {
   toggleGrid: () => void;
   toggleRulers: () => void;
   toggleGuides: () => void;
+  toggleSeamlessPattern: () => void;
+  toggleDimSeamlessPattern: () => void;
   toggleSnapToGrid: () => void;
   setGridSize: (size: number) => void;
   setGuideColor: (color: Color) => void;
@@ -155,6 +159,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   showGrid: false,
   showRulers: true,
   showGuides: true,
+  showSeamlessPattern: false,
+  dimSeamlessPattern: true,
   snapToGrid: false,
   gridSize: 16,
   guideColor: { r: 0, g: 180, b: 255, a: 1 },
@@ -236,6 +242,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   }),
   toggleRulers: () => set((state) => ({ showRulers: !state.showRulers })),
   toggleGuides: () => set((state) => ({ showGuides: !state.showGuides })),
+  toggleSeamlessPattern: () => set((state) => ({ showSeamlessPattern: !state.showSeamlessPattern })),
+  toggleDimSeamlessPattern: () => set((state) => ({ dimSeamlessPattern: !state.dimSeamlessPattern })),
   toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),
   setGridSize: (size) => set({ gridSize: size }),
   setGuideColor: (color) => set({ guideColor: color }),

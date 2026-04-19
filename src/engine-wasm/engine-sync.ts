@@ -41,6 +41,7 @@ import {
   setImageLevelsLut,
   clearImageLevels,
   clearImageAdjustments,
+  setSeamlessPattern,
   setLassoPreview,
   setPathOverlay,
   setCropPreview,
@@ -138,6 +139,15 @@ export function syncRulers(engine: Engine, showRulers: boolean): void {
   if (tracked.showRulers !== showRulers) {
     setRulersVisible(engine, showRulers);
     tracked.showRulers = showRulers;
+  }
+}
+
+export function syncSeamlessPattern(engine: Engine, show: boolean, dim: boolean): void {
+  const tracked = getTracked(engine);
+  if (tracked.showSeamlessPattern !== show || tracked.dimSeamlessPattern !== dim) {
+    setSeamlessPattern(engine, show, dim);
+    tracked.showSeamlessPattern = show;
+    tracked.dimSeamlessPattern = dim;
   }
 }
 

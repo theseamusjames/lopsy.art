@@ -190,6 +190,8 @@ pub fn composite(engine: &mut EngineInner) {
     if let Some(loc) = shader.location(&engine.gl, "u_pan") { engine.gl.uniform2f(Some(&loc), vp_pan_x as f32, vp_pan_y as f32); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
     if let Some(loc) = shader.location(&engine.gl, "u_bgAlpha") { engine.gl.uniform1f(Some(&loc), bg[3]); }
+    if let Some(loc) = shader.location(&engine.gl, "u_seamlessEnabled") { engine.gl.uniform1f(Some(&loc), if engine.seamless_pattern { 1.0 } else { 0.0 }); }
+    if let Some(loc) = shader.location(&engine.gl, "u_seamlessDim") { engine.gl.uniform1f(Some(&loc), if engine.seamless_dim { 1.0 } else { 0.0 }); }
 
     engine.draw_fullscreen_quad();
 

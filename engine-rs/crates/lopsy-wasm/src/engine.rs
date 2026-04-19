@@ -160,6 +160,8 @@ pub struct EngineInner {
     pub crop_rect: Option<[f64; 4]>,
     pub brush_cursor: Option<[f64; 3]>,
     pub path_overlay: Option<String>,
+    pub seamless_pattern: bool,
+    pub seamless_dim: bool,
     pub selection_time: f64,
     /// Per-document image adjustments — exposure/contrast/highlights/
     /// shadows/whites/blacks/vignette/saturation/vibrance plus curves and
@@ -265,6 +267,8 @@ impl EngineInner {
             crop_rect: None,
             brush_cursor: None,
             path_overlay: None,
+            seamless_pattern: false,
+            seamless_dim: true,
             selection_time: 0.0,
             adjustments: ImageAdjustmentState::default(),
             mask_edit_layer_id: None,
