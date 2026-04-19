@@ -13,12 +13,13 @@ import {
 import { flushLayerSync, resetTrackedState } from '../engine-wasm/engine-sync';
 import { uploadCompressed } from '../engine-wasm/gpu-pixel-access';
 import { smoothStroke, HOLD_TIMEOUT_MS } from '../tools/smooth-line/smooth-line';
+import { mirrorBatchPoints } from '../tools/symmetry';
 import { useToolSettingsStore } from './tool-settings-store';
 
 import { clearActiveMaskEditBuffer } from './interactions/mask-buffer';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
-import { setPendingStroke, clearPendingStroke } from './interactions/pending-stroke';
+import { clearPendingStroke } from './interactions/pending-stroke';
 import type {
   InteractionState, InteractionContext,
   FloatingSelection, PersistentTransform, LastPaintPoint,
@@ -162,12 +163,10 @@ export function useCanvasInteraction(
 
         if (isPaintTool) {
           const isShift = e.shiftKey && lastPaintPointRef.current?.layerId === activeLayerId;
-          if (isShift && pendingStrokeRef.current?.layerId === activeLayerId) {
-            // Shift-click continuation: reuse the pending stroke texture so
-            // the shift-line doesn't double-composite over the previous stroke's endpoint.
+          if (isShift) {
             strokeContinuation = true;
-          } else {
-            // Finalize any pending stroke from a previous mouseup
+          }
+          {
             finalizePendingStroke(pendingStrokeRef);
             beginStroke(engine, activeLayerId);
 
@@ -296,6 +295,7 @@ export function useCanvasInteraction(
 
         const strokePoints = state.strokePoints;
         const layerId = state.layerId;
+        const symmetryCenter = state.symmetryCenter;
 
         holdTimerRef.current = setTimeout(() => {
           holdTimerRef.current = null;
@@ -355,6 +355,22 @@ export function useCanvasInteraction(
             arr[i * 2 + 1] = result.sampledPoints[i]!.y;
           }
           gpuBrushDabBatch(eng, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
+
+          if (symmetryCenter) {
+            const { symmetryHorizontal, symmetryVertical } = useToolSettingsStore.getState();
+            if (symmetryHorizontal || symmetryVertical) {
+              const sym = {
+                horizontal: symmetryHorizontal,
+                vertical: symmetryVertical,
+                centerX: symmetryCenter.x,
+                centerY: symmetryCenter.y,
+              };
+              for (const m of mirrorBatchPoints(arr, sym)) {
+                gpuBrushDabBatch(eng, layerId, m, size, hardness, r, g, b, color.a, opacity, 1);
+              }
+            }
+          }
+
           endStroke(eng, layerId);
 
           clearJsPixelData(layerId);
@@ -398,14 +414,14 @@ export function useCanvasInteraction(
 
     toolHandlers[state.tool]?.up?.(ctx, state);
 
-    // Finalize paint stroke — deferred so shift-click can continue the stroke
+    // Finalize paint stroke immediately so the layer texture is up-to-date
+    // (thumbnails, undo snapshots, etc. read the layer texture directly).
     if (PAINT_TOOLS.has(state.tool) && state.layerId && !state.maskMode) {
       const engine = getEngine();
       if (engine && state._usedGpuStroke) {
-        // Defer endStroke: if the next mousedown is a shift-click on the same
-        // layer, the stroke texture will be reused instead of double-compositing.
-        pendingStrokeRef.current = { layerId: state.layerId };
-        setPendingStroke(state.layerId);
+        endStroke(engine, state.layerId);
+        clearJsPixelData(state.layerId);
+        useEditorStore.getState().notifyRender();
       } else {
         // CPU fallback
         destroyPaintingCanvas(state.layerId);

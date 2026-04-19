@@ -15,13 +15,13 @@ export function PencilOptions() {
     <>
       <Slider label="Size" value={pencilSize} min={1} max={100} onChange={setPencilSize} />
       <IconButton
-        icon={<FlipHorizontal2 size={16} />}
+        icon={<FlipVertical2 size={16} />}
         label="Symmetry Horizontal"
         isActive={symmetryH}
         onClick={() => setSymH(!symmetryH)}
       />
       <IconButton
-        icon={<FlipVertical2 size={16} />}
+        icon={<FlipHorizontal2 size={16} />}
         label="Symmetry Vertical"
         isActive={symmetryV}
         onClick={() => setSymV(!symmetryV)}

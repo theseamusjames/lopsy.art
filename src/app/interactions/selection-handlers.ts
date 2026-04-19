@@ -8,6 +8,7 @@ import {
   createRectSelection as tsCreateRectSelection,
   createEllipseSelection as tsCreateEllipseSelection,
   selectionBounds as tsSelectionBounds,
+  getSelectionMaskValue,
 } from '../../selection/selection';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
@@ -17,6 +18,8 @@ import {
   magneticLassoSnap as wasmMagneticLassoSnap,
   magneticLassoSnapPoint as wasmMagneticLassoSnapPoint,
   magneticLassoEnd as wasmMagneticLassoEnd,
+  hasFloat,
+  dropFloat,
 } from '../../engine-wasm/wasm-bridge';
 import { createPolygonMask as tsCreatePolygonMask } from '../../tools/lasso/lasso';
 import {
@@ -143,6 +146,32 @@ export function handleSelectionDown(
   const { canvasPos, activeLayerId } = ctx;
 
   if (tool === 'marquee-rect' || tool === 'marquee-ellipse') {
+    const editorState = useEditorStore.getState();
+    const sel = editorState.selection;
+    const cx = Math.round(canvasPos.x);
+    const cy = Math.round(canvasPos.y);
+    if (sel.active && sel.mask && getSelectionMaskValue(sel, cx, cy) > 0) {
+      const engine = getEngine();
+      if (engine && hasFloat(engine)) {
+        dropFloat(engine);
+      }
+      ctx.floatingSelectionRef.current = null;
+      ctx.persistentTransformRef.current = null;
+      return {
+        drawing: true,
+        lastPoint: canvasPos,
+        pixelBuffer: null,
+        originalPixelBuffer: null,
+        layerId: activeLayerId,
+        tool,
+        startPoint: canvasPos,
+        layerStartX: 0,
+        layerStartY: 0,
+        ...DEFAULT_TRANSFORM_FIELDS,
+        moveOriginalMask: new Uint8ClampedArray(sel.mask),
+        moveOriginalBounds: sel.bounds ? { ...sel.bounds } : null,
+      };
+    }
     useUIStore.getState().setTransform(null);
     ctx.persistentTransformRef.current = null;
     ctx.floatingSelectionRef.current = null;
@@ -241,6 +270,30 @@ export function handleSelectionMove(
 ): void {
   if (state.tool === 'marquee-rect' || state.tool === 'marquee-ellipse') {
     if (!state.startPoint) return;
+
+    if (state.moveOriginalMask && state.moveOriginalBounds) {
+      const dx = Math.round(canvasPos.x - state.startPoint.x);
+      const dy = Math.round(canvasPos.y - state.startPoint.y);
+      const orig = state.moveOriginalBounds;
+      const editorState = useEditorStore.getState();
+      const { width: docW, height: docH } = editorState.document;
+      const srcMask = state.moveOriginalMask;
+      const newMask = new Uint8ClampedArray(srcMask.length);
+      for (let y = 0; y < docH; y++) {
+        for (let x = 0; x < docW; x++) {
+          const sx = x - dx;
+          const sy = y - dy;
+          if (sx >= 0 && sx < docW && sy >= 0 && sy < docH) {
+            newMask[y * docW + x] = srcMask[sy * docW + sx]!;
+          }
+        }
+      }
+      const newBounds = { x: orig.x + dx, y: orig.y + dy, width: orig.width, height: orig.height };
+      editorState.setSelection(newBounds, newMask, docW, docH);
+      useUIStore.getState().setTransform(createTransformState(newBounds));
+      return;
+    }
+
     const editorState = useEditorStore.getState();
     let mStart = state.startPoint;
     let mEnd = canvasPos;
@@ -315,6 +368,7 @@ export function handleSelectionUp(
   e: { clientX: number; clientY: number },
 ): void {
   if (state.tool === 'marquee-rect' || state.tool === 'marquee-ellipse') {
+    if (state.moveOriginalMask) return;
     if (state.startPoint) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {

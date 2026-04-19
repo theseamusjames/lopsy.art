@@ -25,6 +25,8 @@ export function useContextMenu() {
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
 
+    if (window.matchMedia('(pointer: coarse)').matches) return;
+
     const editorState = useEditorStore.getState();
     const selection = editorState.selection;
     const hasSelection = selection.active && selection.bounds !== null && selection.mask !== null;
