@@ -76,7 +76,7 @@ function renderFrameGpu(
   const groupAdjustments = aggregateGroupAdjustments(layers);
   const adjustments = groupAdjustments ?? uiState.adjustments;
   const adjustmentsEnabled = layers.some(
-    (l) => l.type === 'group' && 'adjustmentsEnabled' in l && (l as import('../types').GroupLayer).adjustmentsEnabled,
+    (l) => l.type === 'group' && (l as import('../types').GroupLayer).adjustmentsEnabled !== false && (l as import('../types').GroupLayer).adjustments != null,
   ) || uiState.adjustmentsEnabled;
   const pathAnchors = uiState.pathAnchors;
   const pathClosed = uiState.pathClosed;
