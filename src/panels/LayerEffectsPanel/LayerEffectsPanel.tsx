@@ -139,11 +139,12 @@ export function LayerEffectsPanel() {
         />
       </div>
       <div className={styles.blendModeRow}>
-        <span className={styles.fieldLabel}>Blend</span>
+        <label className={styles.fieldLabel} id="blend-mode-label">Blend</label>
         <select
           className={styles.blendModeSelect}
           value={activeLayer.blendMode}
           onChange={handleBlendModeChange}
+          aria-labelledby="blend-mode-label"
         >
           {BLEND_MODE_GROUPS.map((group) => (
             <optgroup key={group.label} label={group.label}>
@@ -157,7 +158,7 @@ export function LayerEffectsPanel() {
         </select>
       </div>
       <div className={styles.split}>
-        <div className={styles.effectList}>
+        <div className={styles.effectList} role="listbox" aria-label="Layer effects">
           {EFFECT_LIST.map(({ key, label }) => {
             const isEnabled = effects?.[key]?.enabled ?? false;
             const isSelected = selectedEffect === key;
@@ -166,11 +167,14 @@ export function LayerEffectsPanel() {
                 key={key}
                 className={`${styles.effectRow} ${isSelected ? styles.effectRowSelected : ''}`}
                 onClick={() => setSelectedEffect(key)}
+                role="option"
+                aria-selected={isSelected}
               >
                 <input
                   type="checkbox"
                   className={styles.checkbox}
                   checked={isEnabled}
+                  aria-label={`Enable ${label}`}
                   onChange={() => {
                     handleToggle(key);
                     setSelectedEffect(key);

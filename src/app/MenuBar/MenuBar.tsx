@@ -126,7 +126,7 @@ export function MenuBar() {
 
   return (
     <>
-      <div ref={barRef} className={styles.bar}>
+      <nav ref={barRef} className={styles.bar} aria-label="Application menu">
         {menus.map((menu, i) => (
           <div key={menu.label} className={styles.menuItem}>
             <button
@@ -134,28 +134,32 @@ export function MenuBar() {
               onClick={() => handleMenuClick(i)}
               onMouseEnter={() => handleMenuEnter(i)}
               type="button"
+              aria-haspopup="menu"
+              aria-expanded={openMenu === i}
             >
               {menu.label}
             </button>
             {openMenu === i && (
-              <div className={styles.dropdown}>
+              <div className={styles.dropdown} role="menu" aria-label={menu.label}>
                 {menu.items.map((item, j) =>
                   item.separator ? (
-                    <div key={j} className={styles.separator} />
+                    <div key={j} className={styles.separator} role="separator" />
                   ) : (
                     <button
                       key={j}
                       className={`${styles.dropdownItem} ${item.disabled ? styles.dropdownItemDisabled : ''}`}
                       onClick={() => handleItemClick(item)}
                       type="button"
+                      role="menuitem"
+                      aria-disabled={item.disabled}
                     >
                       <span>
                         {item.checked !== undefined && (
-                          <span className={styles.checkmark}>{item.checked ? '\u2713' : ''}</span>
+                          <span className={styles.checkmark} aria-hidden="true">{item.checked ? '\u2713' : ''}</span>
                         )}
                         {item.label}
                       </span>
-                      {item.shortcut && <span className={styles.shortcut}>{item.shortcut}</span>}
+                      {item.shortcut && <span className={styles.shortcut} aria-hidden="true">{item.shortcut}</span>}
                     </button>
                   ),
                 )}
@@ -163,8 +167,8 @@ export function MenuBar() {
             )}
           </div>
         ))}
-        <span className={styles.logo}>LOPSY</span>
-      </div>
+        <span className={styles.logo} aria-hidden="true">LOPSY</span>
+      </nav>
       {filterDef && (
         <FilterDialog
           title={filterDef.title}

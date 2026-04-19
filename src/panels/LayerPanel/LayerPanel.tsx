@@ -206,6 +206,9 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                 <span
                   className={styles.dragHandle}
                   onPointerDown={(e) => handleGripDown(e, ri)}
+                  role="button"
+                  aria-label={`Drag to reorder ${layer.name}`}
+                  tabIndex={0}
                 >
                   <GripVertical size={12} />
                 </span>
@@ -218,6 +221,8 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                     toggleGroupCollapsed(layer.id);
                   }}
                   type="button"
+                  aria-expanded={!layer.collapsed}
+                  aria-label={`${layer.collapsed ? 'Expand' : 'Collapse'} group ${layer.name}`}
                 >
                   {layer.collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                 </button>
@@ -236,6 +241,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                 <input
                   className={styles.nameInput}
                   value={renameValue}
+                  aria-label="Layer name"
                   onChange={(e) => setRenameValue(e.target.value)}
                   onBlur={() => {
                     if (renameValue.trim()) {
@@ -277,21 +283,24 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                   }
                 }}
                 type="button"
+                aria-label={isGroupLayer(layer) ? `Group effects for ${layer.name}` : `Layer effects for ${layer.name}`}
                 title={isGroupLayer(layer) ? 'Group effects' : 'Layer effects'}
               >
                 <Sparkles size={12} />
               </button>
               {!isRootGroup(layer.id) && (
-                <span
+                <button
                   className={styles.opacity}
                   onClick={(e) => {
                     e.stopPropagation();
                     setEditingOpacityId(editingOpacityId === layer.id ? null : layer.id);
                   }}
+                  type="button"
+                  aria-label={`Opacity ${Math.round(layer.opacity * 100)}% for ${layer.name}`}
                   title="Click to adjust opacity"
                 >
                   {Math.round(layer.opacity * 100)}%
-                </span>
+                </button>
               )}
               <button
                 className={`${styles.lockBtn} ${layer.locked ? styles.lockBtnActive : ''}`}
@@ -325,6 +334,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                   min={0}
                   max={100}
                   value={Math.round(layer.opacity * 100)}
+                  aria-label={`${layer.name} opacity`}
                   onPointerDown={() => useEditorStore.getState().pushHistory('Change Opacity')}
                   onChange={(e) => onUpdateOpacity(layer.id, Number(e.target.value) / 100)}
                 />
@@ -343,6 +353,9 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                     onSelectLayer(layer.id);
                     setMaskEditMode(!maskEditMode || layer.id !== activeLayerId);
                   }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Edit mask for ${layer.name}`}
                   title="Click to edit mask"
                 >
                   <MaskThumbnail layer={layer} />
@@ -355,6 +368,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                     handleConvertMaskToMarquee(layer.id);
                   }}
                   type="button"
+                  aria-label="Convert mask to selection"
                   title="Convert mask to selection"
                 >
                   <SquareDashed size={12} />
@@ -367,6 +381,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                     setMaskEditMode(false);
                   }}
                   type="button"
+                  aria-label="Delete mask"
                   title="Delete mask"
                 >
                   <X size={12} />

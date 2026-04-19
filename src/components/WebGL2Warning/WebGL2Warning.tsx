@@ -78,7 +78,7 @@ export function WebGL2Warning() {
 
   return (
     <div className={styles.overlay}>
-      <div className={styles.card}>
+      <div className={styles.card} role="alert">
         <div className={styles.heading}>
           <div className={styles.icon}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

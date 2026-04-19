@@ -43,8 +43,8 @@ export function CanvasSizeModal({ onClose }: CanvasSizeModalProps) {
   ];
 
   return (
-    <div className={styles.overlay}>
-      <div className={styles.modal} onKeyDown={handleKeyDown}>
+    <div className={styles.overlay} role="presentation">
+      <div className={styles.modal} role="dialog" aria-label="Canvas Size" onKeyDown={handleKeyDown}>
         <div className={styles.header}>
           <h2>Canvas Size</h2>
         </div>
@@ -85,6 +85,8 @@ export function CanvasSizeModal({ onClose }: CanvasSizeModalProps) {
                   type="button"
                   className={`${styles.anchorDot} ${anchorX === pos.x && anchorY === pos.y ? styles.anchorDotActive : ''}`}
                   onClick={() => { setAnchorX(pos.x); setAnchorY(pos.y); }}
+                  aria-label={`Anchor ${pos.x === 0 ? 'left' : pos.x === 0.5 ? 'center' : 'right'} ${pos.y === 0 ? 'top' : pos.y === 0.5 ? 'middle' : 'bottom'}`}
+                  aria-pressed={anchorX === pos.x && anchorY === pos.y}
                 />
               ))}
             </div>

@@ -14,10 +14,12 @@ export function DropShadowForm({ shadow, onChange }: DropShadowFormProps) {
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Color</span>
         <label className={styles.colorSwatch} style={{ backgroundColor: `rgb(${shadow.color.r}, ${shadow.color.g}, ${shadow.color.b})` }}>
+          <span className={styles.srOnly}>Shadow color</span>
           <input
             type="color"
             className={styles.colorInput}
             value={colorToHex(shadow.color)}
+            aria-label="Shadow color"
             onChange={(e) => onChange({ ...shadow, color: hexToColor(e.target.value, shadow.color.a) })}
           />
         </label>

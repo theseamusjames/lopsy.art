@@ -35,11 +35,12 @@ export function TextOptions() {
   return (
     <>
       <Slider label="Size" value={textFontSize} min={1} max={500} onChange={setTextFontSize} />
-      <span className={styles.label}>Font</span>
+      <label className={styles.label} id="text-font-label">Font</label>
       <select
         className={styles.select}
         value={textFontFamily}
         onChange={(e) => setTextFontFamily(e.target.value)}
+        aria-labelledby="text-font-label"
       >
         {FONT_OPTIONS.map((font) => (
           <option key={font.value} value={font.value}>
@@ -51,6 +52,7 @@ export function TextOptions() {
         className={styles.select}
         value={textFontWeight}
         onChange={(e) => setTextFontWeight(Number(e.target.value))}
+        aria-label="Font weight"
       >
         <option value={400}>Normal</option>
         <option value={700}>Bold</option>
@@ -59,15 +61,17 @@ export function TextOptions() {
         className={styles.select}
         value={textFontStyle}
         onChange={(e) => setTextFontStyle(e.target.value as FontStyle)}
+        aria-label="Font style"
       >
         <option value="normal">Normal</option>
         <option value="italic">Italic</option>
       </select>
-      <span className={styles.label}>Align</span>
+      <label className={styles.label} id="text-align-label">Align</label>
       <select
         className={styles.select}
         value={textAlign}
         onChange={(e) => setTextAlign(e.target.value as TextAlign)}
+        aria-labelledby="text-align-label"
       >
         <option value="left">Left</option>
         <option value="center">Center</option>

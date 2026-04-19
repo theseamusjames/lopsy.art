@@ -99,7 +99,7 @@ export function BrushModal() {
 
   return (
     <div className={styles.overlay} onMouseDown={handleOverlayClick}>
-      <div className={styles.modal}>
+      <div className={styles.modal} role="dialog" aria-label="Brushes">
         <div className={styles.header}>
           <h2>Brushes</h2>
         </div>
@@ -111,6 +111,8 @@ export function BrushModal() {
                   key={preset.id}
                   className={`${styles.presetItem}${preset.id === activePresetId ? ` ${styles.presetItemActive}` : ''}`}
                   onClick={() => setActivePreset(preset.id)}
+                  aria-label={`Brush preset: ${preset.name}`}
+                  aria-pressed={preset.id === activePresetId}
                   title={preset.name}
                 >
                   <BrushThumbnail preset={preset} size={44} />
@@ -134,6 +136,7 @@ export function BrushModal() {
               type="file"
               accept=".abr"
               className={styles.hiddenInput}
+              aria-label="Import ABR brush file"
               onChange={handleFileChange}
             />
           </div>

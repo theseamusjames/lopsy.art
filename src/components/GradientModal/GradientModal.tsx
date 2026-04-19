@@ -55,7 +55,7 @@ export function GradientModal({ onClose }: GradientModalProps) {
 
   return (
     <div className={styles.overlay} onClick={handleOverlayClick} onKeyDown={handleKeyDown}>
-      <div className={styles.modal}>
+      <div className={styles.modal} role="dialog" aria-label="Gradient Editor">
         <div className={styles.header}>
           <h2>Gradient Editor</h2>
         </div>

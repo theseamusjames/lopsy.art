@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { WebGL2Warning, checkWebGL2Support } from '../components/WebGL2Warning/WebGL2Warning';
 import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
@@ -58,7 +58,16 @@ export function App() {
   const setActiveLayer = useEditorStore((s) => s.setActiveLayer);
 
   const documentReady = useEditorStore((s) => s.documentReady);
+  const createDocument = useEditorStore((s) => s.createDocument);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
+
+  useEffect(() => {
+    if (documentReady) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('lighthouse')) {
+      createDocument(1080, 1080, false);
+    }
+  }, [documentReady, createDocument]);
   const visiblePanels = useUIStore((s) => s.visiblePanels);
 
   const [pointerMode, setPointerMode] = useState<PointerMode>(POINTER_IDLE);
@@ -155,7 +164,7 @@ export function App() {
       </div>
       <div className={styles.body}>
         <Toolbox />
-        <div
+        <main
           ref={containerRef}
           data-testid="canvas-container"
           className={styles.canvas}
@@ -163,11 +172,11 @@ export function App() {
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
-          <canvas ref={canvasRef} />
-          <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} />
+          <canvas ref={canvasRef} aria-label="Drawing canvas" />
+          <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} aria-hidden="true" />
           <TextActionButtons containerRef={containerRef} />
           <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
-        </div>
+        </main>
         {contextMenu.visible && (
           <ContextMenu
             items={contextMenu.items}

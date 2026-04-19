@@ -87,6 +87,8 @@ export function GradientEditor({ stops, selectedIndex, onStopsChange, onSelectSt
         ref={barRef}
         className={styles.barContainer}
         onClick={handleBarClick}
+        role="group"
+        aria-label="Gradient bar — click to add stops"
         data-testid="gradient-bar"
       >
         <div
@@ -103,6 +105,12 @@ export function GradientEditor({ stops, selectedIndex, onStopsChange, onSelectSt
               left: `${stop.position * 100}%`,
               backgroundColor: `rgb(${stop.color.r},${stop.color.g},${stop.color.b})`,
             }}
+            role="slider"
+            aria-label={`Gradient stop ${index + 1}`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(stop.position * 100)}
+            tabIndex={0}
             onMouseDown={(e) => handleHandleMouseDown(e, index)}
             data-testid={`gradient-stop-${index}`}
           />

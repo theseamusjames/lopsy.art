@@ -20,21 +20,25 @@ export function AspectRatioControl() {
           min={1}
           step={1}
           value={aspectRatioW}
+          aria-label="Aspect ratio width"
           onChange={(e) => setAspectRatioW(Number(e.target.value))}
         />
-        <span className={styles.ratioSeparator}>:</span>
+        <span className={styles.ratioSeparator} aria-hidden="true">:</span>
         <input
           className={styles.ratioInput}
           type="number"
           min={1}
           step={1}
           value={aspectRatioH}
+          aria-label="Aspect ratio height"
           onChange={(e) => setAspectRatioH(Number(e.target.value))}
         />
         <button
           className={`${styles.lockBtn} ${aspectRatioLocked ? styles.lockBtnActive : ''}`}
           type="button"
           onClick={() => setAspectRatioLocked(!aspectRatioLocked)}
+          aria-label={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+          aria-pressed={aspectRatioLocked}
           title={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
         >
           {aspectRatioLocked ? <Lock size={12} /> : <Unlock size={12} />}

@@ -72,6 +72,7 @@ export function NumberInput({
           type="text"
           className={styles.input}
           value={isFocused ? localValue : String(value)}
+          aria-label={label ?? 'Number value'}
           onChange={(e) => setLocalValue(e.target.value)}
           onFocus={() => {
             setIsFocused(true);

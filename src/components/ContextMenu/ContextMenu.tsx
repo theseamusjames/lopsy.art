@@ -51,6 +51,8 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
       <div
         ref={menuRef}
         className={styles.menu}
+        role="menu"
+        aria-label="Context menu"
       >
         {items.map((item, i) => {
           if (item.separator) {
@@ -61,6 +63,7 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
               key={i}
               className={styles.item}
               disabled={item.disabled}
+              role="menuitem"
               onClick={() => {
                 item.action();
                 onClose();

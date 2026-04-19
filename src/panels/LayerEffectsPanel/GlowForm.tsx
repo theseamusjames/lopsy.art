@@ -18,6 +18,7 @@ export function GlowForm({ glow, onChange }: GlowFormProps) {
             type="color"
             className={styles.colorInput}
             value={colorToHex(glow.color)}
+            aria-label="Glow color"
             onChange={(e) => onChange({ ...glow, color: hexToColor(e.target.value, glow.color.a) })}
           />
         </label>

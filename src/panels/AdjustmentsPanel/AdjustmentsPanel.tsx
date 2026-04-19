@@ -139,9 +139,11 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
           />
         </div>
       )}
-      <div className={styles.tabs}>
+      <div className={styles.tabs} role="tablist" aria-label="Adjustment type">
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'values'}
           className={`${styles.tab} ${activeTab === 'values' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('values')}
         >
@@ -149,6 +151,8 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'levels'}
           className={`${styles.tab} ${activeTab === 'levels' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('levels')}
         >
@@ -156,6 +160,8 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'colors'}
           className={`${styles.tab} ${activeTab === 'colors' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('colors')}
         >
@@ -218,6 +224,7 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
           type="button"
           className={`${styles.iconBtn} ${!adjustmentsEnabled ? styles.iconBtnOff : ''}`}
           onClick={() => setGroupAdjustmentsEnabled(group.id, !adjustmentsEnabled)}
+          aria-label={adjustmentsEnabled ? 'Disable adjustments' : 'Enable adjustments'}
         >
           {adjustmentsEnabled ? <Eye size={14} /> : <EyeOff size={14} />}
         </button>
