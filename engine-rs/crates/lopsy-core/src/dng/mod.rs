@@ -8,8 +8,13 @@ use tiff::{TiffReader, IfdEntry, TagId};
 pub struct DngImage {
     pub width: u32,
     pub height: u32,
-    /// f32 RGBA in [0, 1] linear sRGB, ready for GPU upload.
+    /// f32 RGBA in [0, 1] sRGB, ready for GPU upload.
     pub pixels: Vec<f32>,
+    /// BaselineExposure EV value from DNG metadata (0.0 if absent).
+    pub baseline_exposure: f64,
+    /// ProfileToneCurve control points as (input, output) pairs in [0, 1].
+    /// Empty if the DNG has no tone curve.
+    pub tone_curve: Vec<(f64, f64)>,
 }
 
 pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
@@ -130,16 +135,16 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         color::apply_matrix(&mut rgb_f32, &mat);
     }
 
-    // Apply baseline exposure
-    if let Some(ev) = baseline_exposure {
-        let scale = (2.0f64).powf(ev) as f32;
-        for v in &mut rgb_f32 {
-            *v *= scale;
-        }
-    }
-
-    // Apply sRGB gamma curve
+    // Apply sRGB gamma curve (display encoding — BaselineExposure and tone
+    // curve are left to group adjustments so the user can edit them)
     color::apply_srgb_gamma(&mut rgb_f32);
+
+    // Parse ProfileToneCurve (tag 50940): interleaved (in, out) float pairs
+    let tone_curve_raw = get_rational_array(&main_ifd, TagId::ProfileToneCurve);
+    let tone_curve: Vec<(f64, f64)> = tone_curve_raw
+        .chunks_exact(2)
+        .map(|pair| (pair[0], pair[1]))
+        .collect();
 
     // Convert RGB → RGBA f32
     let pixel_count = (width * height) as usize;
@@ -151,7 +156,13 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         rgba.push(1.0);
     }
 
-    Ok(DngImage { width, height, pixels: rgba })
+    Ok(DngImage {
+        width,
+        height,
+        pixels: rgba,
+        baseline_exposure: baseline_exposure.unwrap_or(0.0),
+        tone_curve,
+    })
 }
 
 fn find_main_image_ifd(reader: &TiffReader) -> Result<Vec<IfdEntry>, String> {

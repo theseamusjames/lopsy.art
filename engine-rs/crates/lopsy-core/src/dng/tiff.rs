@@ -27,6 +27,7 @@ pub enum TagId {
     BlackLevel = 50714,
     ForwardMatrix1 = 50964,
     ForwardMatrix2 = 50965,
+    ProfileToneCurve = 50940,
     CfaRepeatPatternDim = 33421,
 }
 

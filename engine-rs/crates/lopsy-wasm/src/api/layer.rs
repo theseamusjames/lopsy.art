@@ -116,13 +116,13 @@ pub fn decode_and_upload_image(
 }
 
 /// Decode a DNG (raw) file and upload to a layer texture as f32 RGBA.
-/// Returns [width, height] on success, or an error.
+/// Returns JSON: `{ width, height, baselineExposure, toneCurve: [[x,y], ...] }`
 #[wasm_bindgen(js_name = "decodeAndUploadDng")]
 pub fn decode_and_upload_dng(
     engine: &mut Engine,
     layer_id: &str,
     data: &[u8],
-) -> Result<Vec<u32>, JsError> {
+) -> Result<String, JsError> {
     let dng = lopsy_core::dng::read_dng(data)
         .map_err(|e| JsError::new(&format!("DNG decode failed: {e}")))?;
 
@@ -134,7 +134,24 @@ pub fn decode_and_upload_dng(
         dng.height,
     ).map_err(|e| JsError::new(&e))?;
 
-    Ok(vec![dng.width, dng.height])
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct DngMeta {
+        width: u32,
+        height: u32,
+        baseline_exposure: f64,
+        tone_curve: Vec<[f64; 2]>,
+    }
+
+    let meta = DngMeta {
+        width: dng.width,
+        height: dng.height,
+        baseline_exposure: dng.baseline_exposure,
+        tone_curve: dng.tone_curve.iter().map(|&(x, y)| [x, y]).collect(),
+    };
+
+    serde_json::to_string(&meta)
+        .map_err(|e| JsError::new(&format!("JSON serialize: {e}")))
 }
 
 #[wasm_bindgen(js_name = "uploadLayerSparsePixels")]

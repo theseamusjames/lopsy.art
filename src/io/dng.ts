@@ -3,6 +3,15 @@ import { getEngine } from '../engine-wasm/engine-state';
 import { decodeAndUploadDng } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../engine-wasm/engine-sync';
 import { notifyError } from '../app/notifications-store';
+import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
+import { IDENTITY_CURVES, type CurvePoint, type Curves } from '../filters/curves';
+
+interface DngMeta {
+  width: number;
+  height: number;
+  baselineExposure: number;
+  toneCurve: [number, number][];
+}
 
 export function importDngFile(data: Uint8Array, name: string): void {
   const edStore = useEditorStore.getState();
@@ -20,27 +29,61 @@ export function importDngFile(data: Uint8Array, name: string): void {
     return;
   }
 
-  const dims = decodeAndUploadDng(engine, activeLayerId, data);
-  const width = dims[0] ?? 0;
-  const height = dims[1] ?? 0;
+  const metaJson = decodeAndUploadDng(engine, activeLayerId, data);
+  const meta: DngMeta = JSON.parse(metaJson);
 
-  if (width === 0 || height === 0) {
+  if (meta.width === 0 || meta.height === 0) {
     notifyError('DNG decode returned empty image');
     return;
   }
 
+  // Patch document and layer dimensions
   useEditorStore.setState((s) => {
     const layers = s.document.layers.map((l) => {
       if (l.id === activeLayerId && l.type === 'raster') {
-        return { ...l, width, height, name };
+        return { ...l, width: meta.width, height: meta.height, name };
       }
       return l;
     });
     return {
-      document: { ...s.document, width, height, layers, name },
+      document: { ...s.document, width: meta.width, height: meta.height, layers, name },
     };
   });
 
+  // Apply DNG tone mapping metadata as group adjustments on the root group
+  const rootGroupId = useEditorStore.getState().document.rootGroupId;
+  if (rootGroupId && (meta.baselineExposure !== 0 || meta.toneCurve.length > 0)) {
+    const curves = buildCurvesFromToneCurve(meta.toneCurve);
+    const adjustments = {
+      ...DEFAULT_ADJUSTMENTS,
+      exposure: meta.baselineExposure,
+      ...(curves ? { curves } : {}),
+    };
+    useEditorStore.getState().setGroupAdjustments(rootGroupId, adjustments);
+  }
+
   resetTrackedState(engine);
   useEditorStore.getState().fitToView();
+}
+
+function buildCurvesFromToneCurve(toneCurve: [number, number][]): Curves | null {
+  if (toneCurve.length < 2) return null;
+
+  const points: CurvePoint[] = toneCurve.map(([x, y]) => ({
+    x: Math.max(0, Math.min(1, x)),
+    y: Math.max(0, Math.min(1, y)),
+  }));
+
+  // Ensure endpoints exist
+  if (points[0]!.x > 0.001) {
+    points.unshift({ x: 0, y: 0 });
+  }
+  if (points[points.length - 1]!.x < 0.999) {
+    points.push({ x: 1, y: 1 });
+  }
+
+  return {
+    ...IDENTITY_CURVES,
+    rgb: points,
+  };
 }
