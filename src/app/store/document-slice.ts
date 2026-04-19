@@ -327,6 +327,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   alignLayer: (edge) => {
+    finalizePendingStrokeGlobal();
     const s = get();
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
     const result = computeAlignLayer(

@@ -153,6 +153,13 @@ export function useCanvasInteraction(
         // GPU path: no JS pixel data needed. The engine handles the
         // layer texture directly — no expand, no upload, no round-trip.
         // This preserves 16-bit float precision throughout.
+
+        // Finalize any pending brush stroke so it's baked into the layer
+        // texture before another GPU tool (e.g. shape) snapshots it.
+        if (!isPaintTool) {
+          finalizePendingStroke(pendingStrokeRef);
+        }
+
         if (isPaintTool) {
           const isShift = e.shiftKey && lastPaintPointRef.current?.layerId === activeLayerId;
           if (isShift && pendingStrokeRef.current?.layerId === activeLayerId) {
@@ -304,9 +311,7 @@ export function useCanvasInteraction(
           const r = color.r / 255;
           const g = color.g / 255;
           const b = color.b / 255;
-          const spacing = toolSettings.brushSpacing > 0
-            ? Math.max(1, size * toolSettings.brushSpacing / 100)
-            : Math.max(1, size * 0.25);
+          const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
 
           const result = smoothStroke(strokePoints, spacing);
           if (result.sampledPoints.length < 2) return;

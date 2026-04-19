@@ -14,6 +14,7 @@ import {
   syncLayers,
   syncSelection,
 } from './engine-wasm/engine-sync';
+import { finalizePendingStrokeGlobal } from './app/interactions/pending-stroke';
 import './styles/tokens.css';
 import './styles/reset.css';
 
@@ -67,6 +68,9 @@ if (import.meta.env.DEV) {
         const engine = getEngine();
         const canvas = getEngineCanvas();
         if (!engine || !canvas) { resolve(null); return; }
+        // Bake any deferred stroke into the layer texture so the readback
+        // reflects the user-visible state, not the pre-stroke layer.
+        finalizePendingStrokeGlobal();
         const state = useEditorStore.getState();
         const doc = state.document;
         const container = canvas.parentElement;
