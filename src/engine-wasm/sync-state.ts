@@ -39,6 +39,8 @@ export interface TrackedState {
   showGrid: boolean;
   gridSize: number;
   showRulers: boolean;
+  showSeamlessPattern: boolean;
+  dimSeamlessPattern: boolean;
   brushTipData: BrushTipData | null;
   brushAngle: number;
   brushHasTip: boolean;
@@ -77,6 +79,8 @@ function createTrackedState(): TrackedState {
     showGrid: false,
     gridSize: 0,
     showRulers: false,
+    showSeamlessPattern: false,
+    dimSeamlessPattern: true,
     brushTipData: null,
     brushAngle: 0,
     brushHasTip: false,

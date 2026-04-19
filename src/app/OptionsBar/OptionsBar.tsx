@@ -23,6 +23,9 @@ export function OptionsBar() {
   const toggleSnapToGrid = useUIStore((s) => s.toggleSnapToGrid);
   const gridSize = useUIStore((s) => s.gridSize);
   const setGridSize = useUIStore((s) => s.setGridSize);
+  const showSeamlessPattern = useUIStore((s) => s.showSeamlessPattern);
+  const dimSeamlessPattern = useUIStore((s) => s.dimSeamlessPattern);
+  const toggleDimSeamlessPattern = useUIStore((s) => s.toggleDimSeamlessPattern);
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
 
@@ -35,6 +38,8 @@ export function OptionsBar() {
     [docWidth, docHeight],
   );
 
+  const hasTrailing = showGrid || showSeamlessPattern;
+
   return (
     <div className={styles.bar}>
       <span className={styles.toolName}>{label}</span>
@@ -42,31 +47,48 @@ export function OptionsBar() {
       <div className={styles.options}>
         {Options ? <Options /> : null}
       </div>
-      {showGrid && (
-        <>
-          <span className={styles.label}>Grid</span>
-          <input
-            type="range"
-            className={styles.gridSlider}
-            min={0}
-            max={gridStops.length - 1}
-            step={1}
-            value={gridStops.indexOf(gridSize) !== -1
-              ? gridStops.indexOf(gridSize)
-              : gridStops.reduce((best, s, i) =>
-                  Math.abs(s - gridSize) < Math.abs(gridStops[best]! - gridSize) ? i : best, 0)}
-            onChange={(e) => setGridSize(gridStops[Number(e.target.value)]!)}
-          />
-          <span className={styles.gridValue}>{gridSize}px</span>
-          <label className={styles.snapCheckbox}>
-            <input
-              type="checkbox"
-              checked={snapToGrid}
-              onChange={toggleSnapToGrid}
-            />
-            Snap
-          </label>
-        </>
+      {hasTrailing && (
+        <div className={styles.trailingControls}>
+          {showGrid && (
+            <>
+              <span className={styles.label}>Grid</span>
+              <input
+                type="range"
+                className={styles.gridSlider}
+                min={0}
+                max={gridStops.length - 1}
+                step={1}
+                value={gridStops.indexOf(gridSize) !== -1
+                  ? gridStops.indexOf(gridSize)
+                  : gridStops.reduce((best, s, i) =>
+                      Math.abs(s - gridSize) < Math.abs(gridStops[best]! - gridSize) ? i : best, 0)}
+                onChange={(e) => setGridSize(gridStops[Number(e.target.value)]!)}
+              />
+              <span className={styles.gridValue}>{gridSize}px</span>
+              <label className={styles.checkbox}>
+                <input
+                  type="checkbox"
+                  checked={snapToGrid}
+                  onChange={toggleSnapToGrid}
+                />
+                Snap
+              </label>
+            </>
+          )}
+          {showGrid && showSeamlessPattern && (
+            <div className={styles.separator} />
+          )}
+          {showSeamlessPattern && (
+            <label className={styles.checkbox}>
+              <input
+                type="checkbox"
+                checked={dimSeamlessPattern}
+                onChange={toggleDimSeamlessPattern}
+              />
+              Dim pattern
+            </label>
+          )}
+        </div>
       )}
     </div>
   );
