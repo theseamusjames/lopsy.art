@@ -30,6 +30,7 @@ const originalGetContext = HTMLCanvasElement.prototype.getContext;
   ...args: unknown[]
 ): RenderingContext | null {
   if (contextId === '2d') {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const canvas = this;
     return {
       canvas,

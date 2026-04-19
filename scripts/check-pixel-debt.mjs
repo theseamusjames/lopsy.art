@@ -77,7 +77,7 @@ const ALLOWLIST = {
   'src/engine/color-space.ts': 5,
 
   // Brush engine scaffolding — stamps, shape data, ABR parsing.
-  'src/app/brush-preset-store.ts': 7,
+  'src/app/tool-settings-store.ts': 7,
   'src/tools/brush/abr-parser.ts': 4,
   'src/tools/brush/brush-from-selection.ts': 4,
   'src/tools/brush/brush.ts': 1,

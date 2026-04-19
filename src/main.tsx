@@ -18,22 +18,37 @@ import { finalizePendingStrokeGlobal } from './app/interactions/pending-stroke';
 import './styles/tokens.css';
 import './styles/reset.css';
 
+// Dev-only debug hooks exposed on `window` for e2e tests.
+type ReadPixelsResult = { width: number; height: number; pixels: number[] } | null;
+
+declare global {
+  interface Window {
+    __editorStore?: typeof useEditorStore;
+    __uiStore?: typeof useUIStore;
+    __toolSettingsStore?: typeof useToolSettingsStore;
+    __brushPresetStore?: typeof useToolSettingsStore;
+    __pixelData?: typeof pixelDataManager;
+    __readCompositedPixels?: () => Promise<ReadPixelsResult>;
+    __readLayerPixels?: (layerId?: string) => Promise<ReadPixelsResult>;
+  }
+}
+
 // Expose stores for e2e tests
 if (import.meta.env.DEV) {
-  (window as unknown as Record<string, unknown>).__editorStore = useEditorStore;
-  (window as unknown as Record<string, unknown>).__uiStore = useUIStore;
-  (window as unknown as Record<string, unknown>).__toolSettingsStore = useToolSettingsStore;
+  window.__editorStore = useEditorStore;
+  window.__uiStore = useUIStore;
+  window.__toolSettingsStore = useToolSettingsStore;
   // Back-compat alias — e2e tests read presets via __brushPresetStore. The
   // merged tool-settings store has the same shape for preset access.
-  (window as unknown as Record<string, unknown>).__brushPresetStore = useToolSettingsStore;
+  window.__brushPresetStore = useToolSettingsStore;
   // Pixel-data Maps used to live on the store; they live on the manager now.
   // E2e tests that read or mutate pixel state go through this singleton.
-  (window as unknown as Record<string, unknown>).__pixelData = pixelDataManager;
+  window.__pixelData = pixelDataManager;
   // Read composited pixels from the WebGL canvas by triggering a render
   // inside requestAnimationFrame and reading before buffer swap.
   // Returns screen-sized pixels (includes workspace background).
-  (window as unknown as Record<string, unknown>).__readCompositedPixels = () => {
-    return new Promise<{ width: number; height: number; pixels: number[] } | null>((resolve) => {
+  window.__readCompositedPixels = () => {
+    return new Promise<ReadPixelsResult>((resolve) => {
       requestAnimationFrame(() => {
         const engine = getEngine();
         const canvas = getEngineCanvas();
@@ -62,8 +77,8 @@ if (import.meta.env.DEV) {
   };
   // Read a single layer's GPU texture as {width, height, pixels[]}.
   // Syncs layers first so newly created layers are known to the engine.
-  (window as unknown as Record<string, unknown>).__readLayerPixels = (layerId?: string) => {
-    return new Promise<{ width: number; height: number; pixels: number[] } | null>((resolve) => {
+  window.__readLayerPixels = (layerId?: string) => {
+    return new Promise<ReadPixelsResult>((resolve) => {
       requestAnimationFrame(() => {
         const engine = getEngine();
         const canvas = getEngineCanvas();
