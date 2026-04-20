@@ -134,12 +134,9 @@ pub fn decode_and_upload_dng(
         dng.height,
     ).map_err(|e| JsError::new(&e))?;
 
-    web_sys::console::log_1(&format!(
-        "[Lopsy DNG] {}x{} baselineExposure={:.3} toneCurvePoints={} pixelRange=[{:.4}, {:.4}]",
-        dng.width, dng.height, dng.baseline_exposure, dng.tone_curve.len(),
-        dng.pixels.iter().copied().fold(f32::MAX, f32::min),
-        dng.pixels.iter().copied().fold(f32::MIN, f32::max),
-    ).into());
+    for line in &dng.debug_log {
+        web_sys::console::log_1(&line.into());
+    }
 
     #[derive(serde::Serialize)]
     #[serde(rename_all = "camelCase")]

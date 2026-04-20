@@ -15,9 +15,15 @@ pub struct DngImage {
     /// ProfileToneCurve control points as (input, output) pairs in [0, 1].
     /// Empty if the DNG has no tone curve.
     pub tone_curve: Vec<(f64, f64)>,
+    /// Debug log lines from the processing pipeline.
+    pub debug_log: Vec<String>,
 }
 
 pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
+    let mut debug_log: Vec<String> = Vec::new();
+    macro_rules! dng_log {
+        ($($arg:tt)*) => { debug_log.push(format!($($arg)*)); };
+    }
     let reader = TiffReader::new(data)?;
 
     let ifd0 = reader.read_ifd(0)?;
@@ -93,13 +99,21 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let black_level = get_rational_array_either(&ifd0, &main_ifd, TagId::BlackLevel);
     let black = if !black_level.is_empty() { black_level[0] } else { 0.0 };
 
-    // Determine actual max value: use WhiteLevel if found, otherwise scan data.
+    // Determine normalization range. WhiteLevel may be 65535 even for 10/12/14-bit
+    // data (Apple ProRAW does this). If the actual data max is far below
+    // WhiteLevel, use the measured max so values span full [0, 1].
+    let measured_max = pixel_data[..expected_pixels].iter().copied().max().unwrap_or(1) as f64;
     let max_val = if let Some(wl) = white_level {
-        wl as f64
+        let wl_f = wl as f64;
+        if measured_max > 0.0 && measured_max < wl_f * 0.25 {
+            measured_max
+        } else {
+            wl_f
+        }
     } else {
-        let measured = pixel_data[..expected_pixels].iter().copied().max().unwrap_or(1) as f64;
-        measured.max(1.0)
+        measured_max.max(1.0)
     };
+    dng_log!("[DNG meta] measured data max={:.0}, using maxVal={:.0}", measured_max, max_val);
 
     let mut rgb_f32: Vec<f32>;
 
@@ -127,48 +141,91 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         return Err(format!("Unsupported PhotometricInterpretation: {photo_interp}"));
     }
 
+    let ci = ((height / 2) as usize * width as usize + (width / 2) as usize) * 3;
+    macro_rules! dbg_center {
+        ($label:expr, $data:expr) => {
+            if ci + 2 < $data.len() {
+                debug_log.push(format!("[DNG step] {}: r={:.5} g={:.5} b={:.5}", $label, $data[ci], $data[ci+1], $data[ci+2]));
+            }
+        };
+    }
+
+    dbg_center!("after normalize", rgb_f32);
+
+    dng_log!("[DNG meta] whiteLevel={:?} black={:.1} maxVal={:.1} bits={} samples={} linear={} cfa={}",
+        white_level, black, max_val, bits, samples, is_linear, is_cfa);
+    dng_log!("[DNG meta] asShotNeutral={:?}", &as_shot_neutral);
+    dng_log!("[DNG meta] forwardMatrix len={} colorMatrix len={}", forward_matrix.len(), color_matrix.len());
+    if forward_matrix.len() >= 9 {
+        dng_log!("[DNG meta] forwardMatrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
+            forward_matrix[0],forward_matrix[1],forward_matrix[2],
+            forward_matrix[3],forward_matrix[4],forward_matrix[5],
+            forward_matrix[6],forward_matrix[7],forward_matrix[8]);
+    }
+    if color_matrix.len() >= 9 {
+        dng_log!("[DNG meta] colorMatrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
+            color_matrix[0],color_matrix[1],color_matrix[2],
+            color_matrix[3],color_matrix[4],color_matrix[5],
+            color_matrix[6],color_matrix[7],color_matrix[8]);
+    }
+
     // Apply white balance
     if as_shot_neutral.len() >= 3 {
         let wb = color::white_balance_multipliers(&as_shot_neutral);
+        dng_log!("[DNG step] WB multipliers: [{:.4}, {:.4}, {:.4}]", wb[0], wb[1], wb[2]);
         color::apply_white_balance(&mut rgb_f32, &wb);
+        dbg_center!("after WB", rgb_f32);
     }
 
     // Apply color matrix (camera RGB → XYZ → sRGB)
     if !forward_matrix.is_empty() && forward_matrix.len() >= 9 {
         let mat = color::forward_matrix_to_srgb(&forward_matrix);
+        dng_log!("[DNG step] fwd→sRGB matrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
+            mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
         color::apply_matrix(&mut rgb_f32, &mat);
+        dbg_center!("after matrix", rgb_f32);
     } else if !color_matrix.is_empty() && color_matrix.len() >= 9 {
         let mat = color::color_matrix_to_srgb(&color_matrix);
+        dng_log!("[DNG step] cm→sRGB matrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
+            mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
         color::apply_matrix(&mut rgb_f32, &mat);
+        dbg_center!("after matrix", rgb_f32);
+    } else {
+        dng_log!("[DNG step] WARNING: no color matrix found");
     }
 
-    // Apply BaselineExposure — camera calibration, not a creative adjustment.
+    // Apply BaselineExposure
     if let Some(ev) = baseline_exposure {
         if ev.abs() > 0.001 {
             let scale = (2.0f64).powf(ev) as f32;
             for v in &mut rgb_f32 {
                 *v *= scale;
             }
+            dbg_center!("after baselineExposure", rgb_f32);
         }
     }
 
-    // Parse ProfileToneCurve (tag 50940): maps linear scene values to
-    // perceptual output. When present it replaces sRGB gamma — applying
-    // both would double-encode.
+    // ProfileToneCurve
     let tone_curve_raw = get_rational_array_either(&ifd0, &main_ifd, TagId::ProfileToneCurve);
     let tone_curve: Vec<(f64, f64)> = tone_curve_raw
         .chunks_exact(2)
         .map(|pair| (pair[0], pair[1]))
         .collect();
 
-    // ProfileToneCurve is a scene-to-display tone mapping in linear space.
-    // sRGB gamma is still needed after for display encoding.
     if tone_curve.len() >= 2 {
+        dng_log!("[DNG step] applying toneCurve ({} pts), first=({:.4},{:.4}) last=({:.4},{:.4})",
+            tone_curve.len(),
+            tone_curve[0].0, tone_curve[0].1,
+            tone_curve.last().unwrap().0, tone_curve.last().unwrap().1);
         let lut = build_tone_lut(&tone_curve);
+        dng_log!("[DNG step] LUT samples: [0]={:.4} [1024]={:.4} [2048]={:.4} [3072]={:.4} [4095]={:.4}",
+            lut[0], lut[1024], lut[2048], lut[3072], lut[4095]);
         color::apply_lut(&mut rgb_f32, &lut);
+        dbg_center!("after toneCurve", rgb_f32);
     }
 
     color::apply_srgb_gamma(&mut rgb_f32);
+    dbg_center!("after sRGB gamma (final)", rgb_f32);
 
     // Convert RGB → RGBA f32
     let pixel_count = (width * height) as usize;
@@ -186,6 +243,7 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         pixels: rgba,
         baseline_exposure: baseline_exposure.unwrap_or(0.0),
         tone_curve,
+        debug_log,
     })
 }
 
