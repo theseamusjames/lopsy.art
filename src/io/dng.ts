@@ -40,6 +40,11 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
     return;
   }
 
+  // Yield one frame so the render loop can sync the initial document size
+  // before we take a long &mut Engine borrow for the DNG decode. Without
+  // this, the render loop fires during decode and hits a recursive borrow.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
   const metaJson = decodeAndUploadDng(engine, activeLayerId, data);
   const meta: DngMeta = JSON.parse(metaJson);
 
@@ -59,11 +64,6 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
       document: { ...s.document, width: meta.width, height: meta.height, layers, name },
     };
   });
-
-  // The ProfileToneCurve and sRGB gamma are baked into the pixels.
-  // Apple Preview gets additional contrast from a proprietary local tone
-  // mapping blob (tag 52525) that we can't parse. The user can boost
-  // contrast/saturation via group adjustments if needed.
 
   resetTrackedState(engine);
   useEditorStore.getState().fitToView();
