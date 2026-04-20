@@ -6,7 +6,7 @@ import { generateSprayDots } from './spray';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 
-const SPRAY_INTERVAL_MS = 333;
+const SPRAY_INTERVAL_MS = 166;
 
 let sprayTimer: ReturnType<typeof setInterval> | null = null;
 
