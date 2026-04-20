@@ -35,7 +35,8 @@ export type FilterDialogId =
   | 'solarize'
   | 'kaleidoscope'
   | 'oil-paint'
-  | 'chromatic-aberration';
+  | 'chromatic-aberration'
+  | 'pixel-stretch';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;
