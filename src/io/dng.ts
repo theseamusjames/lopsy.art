@@ -95,11 +95,12 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
     return;
   }
 
-  // Yield one frame so the render loop can sync the initial document size
-  // before we take a long &mut Engine borrow for the DNG decode. Without
-  // this, the render loop fires during decode and hits a recursive borrow
-  // in wasm_bindgen's RefCell (setDocumentSize vs decodeAndUploadDng both
-  // need &mut Engine).
+  // Yield two frames: the first lets the render loop sync the initial
+  // document size (avoiding a recursive borrow in wasm_bindgen's RefCell),
+  // the second ensures the browser actually paints the loading modal before
+  // we block the main thread with the WASM decode. rAF callbacks run before
+  // paint, so a single yield would commit the DOM but never paint it.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
   const metaJson = decodeAndUploadDng(engine, activeLayerId, data);
