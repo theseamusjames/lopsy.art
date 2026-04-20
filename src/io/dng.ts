@@ -54,6 +54,7 @@ import { useUIStore } from '../app/ui-store';
 import { getEngine } from '../engine-wasm/engine-state';
 import { decodeAndUploadDng, initWasm } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../engine-wasm/engine-sync';
+import { pixelDataManager } from '../engine/pixel-data-manager';
 import { notifyError } from '../app/notifications-store';
 import { DEFAULT_ADJUSTMENTS, type ImageAdjustments } from '../filters/image-adjustments';
 import { IDENTITY_CURVES } from '../filters/curves';
@@ -129,6 +130,11 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
     store.setGroupAdjustments(rootGroupId, RAW_DEFAULT_ADJUSTMENTS);
     store.setGroupAdjustmentsEnabled(rootGroupId, true);
   }
+
+  // The DNG decoder uploaded pixels directly to the GPU texture. Clear the
+  // stale 1x1 placeholder from the JS pixel data store so that
+  // resetTrackedState doesn't cause engine-sync to overwrite the GPU texture.
+  pixelDataManager.remove(activeLayerId);
 
   resetTrackedState(engine);
   useEditorStore.getState().fitToView();
