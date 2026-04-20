@@ -1,3 +1,56 @@
+//! DNG raw image decoder with Apple ProRAW support.
+//!
+//! ## Architecture
+//!
+//! - `tiff.rs`    — TIFF IFD parser (both LE and BE), extracts all DNG-specific
+//!                  tags from IFD0 and SubIFDs.
+//! - `ljpeg.rs`   — Lossless JPEG decoder (SOF3, all 7 predictor modes). Apple
+//!                  ProRAW uses this for pixel data compression. Not the same as
+//!                  regular lossy JPEG.
+//! - `demosaic.rs` — Bilinear Bayer CFA demosaicing for standard raw DNG files.
+//!                  Not used for Linear DNG (Apple ProRAW) which is pre-demosaiced.
+//! - `color.rs`   — White balance, color matrix (camera RGB → XYZ → sRGB),
+//!                  sRGB gamma, and LUT application.
+//!
+//! ## Processing pipeline
+//!
+//! For Apple ProRAW (Linear DNG, AsShotNeutral=[1,1,1]):
+//!   normalize → ProfileGainTableMap → BaselineExposure → ProfileToneCurve → sRGB gamma
+//!
+//! For standard CFA DNG:
+//!   normalize → demosaic → white balance → ColorMatrix2 → BaselineExposure → toneCurve → gamma
+//!
+//! ## Key discoveries
+//!
+//! - Apple ProRAW sets WhiteLevel=65535 even for 10-bit data. We detect this by
+//!   comparing the measured data max against WhiteLevel and using the measured
+//!   max when WhiteLevel is clearly wrong (measured < 25% of WhiteLevel).
+//!
+//! - Apple ProRAW is a "Linear DNG" where the ISP has already applied white
+//!   balance and color processing. AsShotNeutral=[1,1,1] signals this.
+//!   Applying the ColorMatrix to pre-processed data produces a severe red cast
+//!   because the matrix describes raw sensor→XYZ, not the processing space.
+//!
+//! - ProfileGainTableMap (tag 52525, DNG 1.6) stores its data in big-endian
+//!   byte order regardless of the TIFF file's byte order. This is because the
+//!   DNG SDK's stream serialization always uses BE.
+//!
+//! - The ProfileToneCurve in Apple ProRAW is intentionally near-linear (barely
+//!   an S-curve). Apple wants maximum editing latitude. The "look" that camera
+//!   apps show comes from additional rendering, not the DNG metadata.
+//!
+//! - ColorMatrix1 is calibrated for illuminant A (tungsten), ColorMatrix2 for
+//!   D65 (daylight). Since our XYZ→sRGB matrix assumes D65, we prefer CM2.
+//!
+//! ## Future work
+//!
+//! - ProfileHueSatMapData (tags 50937/50938): per-hue color adjustments.
+//! - ProfileLookTable (tag 50981): 3D LUT for profile "look".
+//! - Move gain table map processing to a background thread/worker — it's
+//!   O(width × height) with 8 gain lookups per pixel, ~2-3s for 24MP.
+//! - Support additional compression formats (lossy JPEG, JPEG XL).
+//! - Test with non-Apple DNG files (Adobe DNG Converter output, other cameras).
+
 mod tiff;
 mod ljpeg;
 mod demosaic;
