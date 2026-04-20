@@ -27,7 +27,27 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let reader = TiffReader::new(data)?;
 
     let ifd0 = reader.read_ifd(0)?;
+
+    // Dump all IFD0 tags for diagnostics
+    let mut ifd0_tags: Vec<String> = Vec::new();
+    for entry in &ifd0 {
+        let val_preview = if entry.raw_bytes.len() <= 16 {
+            format!("{:?}", &entry.raw_bytes)
+        } else {
+            format!("[{} bytes]", entry.raw_bytes.len())
+        };
+        ifd0_tags.push(format!("{}(type={},n={},{})", entry.tag, entry.typ, entry.count, val_preview));
+    }
+    dng_log!("[DNG tags] IFD0 ({} entries): {}", ifd0.len(), ifd0_tags.join(", "));
+
     let main_ifd = find_main_image_ifd(&reader)?;
+
+    // Dump SubIFD tags too
+    let mut sub_tags: Vec<String> = Vec::new();
+    for entry in &main_ifd {
+        sub_tags.push(format!("{}(type={},n={})", entry.tag, entry.typ, entry.count));
+    }
+    dng_log!("[DNG tags] SubIFD ({} entries): {}", main_ifd.len(), sub_tags.join(", "));
 
     let width = get_tag_u32(&main_ifd, TagId::ImageWidth)?;
     let height = get_tag_u32(&main_ifd, TagId::ImageLength)?;
@@ -85,8 +105,14 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     }
 
     // DNG stores document-level color metadata in IFD0, image data tags in SubIFDs.
-    let color_matrix = get_rational_array_either(&ifd0, &main_ifd, TagId::ColorMatrix1);
-    let forward_matrix = get_rational_array_either(&ifd0, &main_ifd, TagId::ForwardMatrix1);
+    // Prefer ColorMatrix2/ForwardMatrix2 (D65 illuminant) over CM1/FM1 (illuminant A)
+    // since our XYZ→sRGB matrix assumes D65.
+    let color_matrix2 = get_rational_array_either(&ifd0, &main_ifd, TagId::ColorMatrix2);
+    let color_matrix1 = get_rational_array_either(&ifd0, &main_ifd, TagId::ColorMatrix1);
+    let color_matrix = if color_matrix2.len() >= 9 { color_matrix2 } else { color_matrix1 };
+    let forward_matrix2 = get_rational_array_either(&ifd0, &main_ifd, TagId::ForwardMatrix2);
+    let forward_matrix1 = get_rational_array_either(&ifd0, &main_ifd, TagId::ForwardMatrix1);
+    let forward_matrix = if forward_matrix2.len() >= 9 { forward_matrix2 } else { forward_matrix1 };
     let as_shot_neutral = get_rational_array_either(&ifd0, &main_ifd, TagId::AsShotNeutral);
     let baseline_exposure = get_rational(&ifd0, TagId::BaselineExposure)
         .or_else(|| get_rational(&main_ifd, TagId::BaselineExposure));
@@ -169,29 +195,45 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
             color_matrix[6],color_matrix[7],color_matrix[8]);
     }
 
-    // Apply white balance
-    if as_shot_neutral.len() >= 3 {
-        let wb = color::white_balance_multipliers(&as_shot_neutral);
-        dng_log!("[DNG step] WB multipliers: [{:.4}, {:.4}, {:.4}]", wb[0], wb[1], wb[2]);
-        color::apply_white_balance(&mut rgb_f32, &wb);
-        dbg_center!("after WB", rgb_f32);
-    }
+    // For Linear DNG with AsShotNeutral=[1,1,1], the data has WB and color
+    // processing already applied by the camera's ISP (Apple ProRAW).
+    // ColorMatrix describes the raw sensor→XYZ mapping, NOT the processing
+    // space→XYZ mapping. Applying it to pre-processed data produces wrong colors.
+    //
+    // For standard CFA DNG, apply the full pipeline: WB → ColorMatrix → sRGB.
+    let is_preprocessed = is_linear
+        && as_shot_neutral.len() >= 3
+        && (as_shot_neutral[0] - 1.0).abs() < 0.01
+        && (as_shot_neutral[1] - 1.0).abs() < 0.01
+        && (as_shot_neutral[2] - 1.0).abs() < 0.01;
 
-    // Apply color matrix (camera RGB → XYZ → sRGB)
-    if !forward_matrix.is_empty() && forward_matrix.len() >= 9 {
-        let mat = color::forward_matrix_to_srgb(&forward_matrix);
-        dng_log!("[DNG step] fwd→sRGB matrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
-            mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
-        color::apply_matrix(&mut rgb_f32, &mat);
-        dbg_center!("after matrix", rgb_f32);
-    } else if !color_matrix.is_empty() && color_matrix.len() >= 9 {
-        let mat = color::color_matrix_to_srgb(&color_matrix);
-        dng_log!("[DNG step] cm→sRGB matrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
-            mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
-        color::apply_matrix(&mut rgb_f32, &mat);
-        dbg_center!("after matrix", rgb_f32);
+    if is_preprocessed {
+        dng_log!("[DNG step] Linear DNG with AsShotNeutral≈[1,1,1] — skipping WB and color matrix (data is pre-processed)");
     } else {
-        dng_log!("[DNG step] WARNING: no color matrix found");
+        // Apply white balance
+        if as_shot_neutral.len() >= 3 {
+            let wb = color::white_balance_multipliers(&as_shot_neutral);
+            dng_log!("[DNG step] WB multipliers: [{:.4}, {:.4}, {:.4}]", wb[0], wb[1], wb[2]);
+            color::apply_white_balance(&mut rgb_f32, &wb);
+            dbg_center!("after WB", rgb_f32);
+        }
+
+        // Apply color matrix (camera RGB → XYZ → sRGB)
+        if !forward_matrix.is_empty() && forward_matrix.len() >= 9 {
+            let mat = color::forward_matrix_to_srgb(&forward_matrix);
+            dng_log!("[DNG step] fwd→sRGB matrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
+                mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
+            color::apply_matrix(&mut rgb_f32, &mat);
+            dbg_center!("after matrix", rgb_f32);
+        } else if !color_matrix.is_empty() && color_matrix.len() >= 9 {
+            let mat = color::color_matrix_to_srgb(&color_matrix);
+            dng_log!("[DNG step] cm→sRGB matrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
+                mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
+            color::apply_matrix(&mut rgb_f32, &mat);
+            dbg_center!("after matrix", rgb_f32);
+        } else {
+            dng_log!("[DNG step] WARNING: no color matrix found");
+        }
     }
 
     // Apply BaselineExposure
