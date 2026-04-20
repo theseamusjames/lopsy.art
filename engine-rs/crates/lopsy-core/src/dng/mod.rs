@@ -294,7 +294,6 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let exposure_gain = baseline_exposure.map(|ev| 2.0f64.powf(ev) as f32).unwrap_or(1.0);
 
     let gain_map_entry = main_ifd.iter().find(|e| e.tag == TagId::ProfileGainTableMap as u16);
-    let mut gain_map_applied = false;
     if let Some(entry) = gain_map_entry {
         dng_log!("[DNG step] found ProfileGainTableMap tag: {} raw bytes", entry.raw_bytes.len());
         match parse_gain_table_map(&entry.raw_bytes) {
@@ -318,7 +317,6 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
                     g0, g64, g128, g192, g256);
             }
             apply_gain_table_map(&mut rgb_f32, width, height, &gtm, exposure_gain);
-            gain_map_applied = true;
             dbg_center!("after gainTableMap", rgb_f32);
         }
         Err(e) => {
