@@ -6,6 +6,17 @@ import { generateSprayDots } from './spray';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 
+const SPRAY_INTERVAL_MS = 333;
+
+let sprayTimer: ReturnType<typeof setInterval> | null = null;
+
+function clearSprayTimer(): void {
+  if (sprayTimer !== null) {
+    clearInterval(sprayTimer);
+    sprayTimer = null;
+  }
+}
+
 function emitSprayDabs(
   engine: NonNullable<ReturnType<typeof getEngine>>,
   layerId: string,
@@ -24,6 +35,26 @@ function emitSprayDabs(
   for (const dot of dots) {
     gpuBrushDab(engine, layerId, dot.x, dot.y, dot.radius * 2, hardness, r, g, b, a, dot.opacity, 1);
   }
+}
+
+function sprayAtCurrentPosition(state: InteractionState): void {
+  if (!state.lastPoint || !state.layerId) return;
+
+  const engine = getEngine();
+  if (!engine) return;
+
+  const toolSettings = useToolSettingsStore.getState();
+  const size = toolSettings.spraySize;
+  const density = toolSettings.sprayDensity;
+  const opacity = toolSettings.sprayOpacity / 100;
+  const hardness = toolSettings.sprayHardness / 100;
+  const color = state.strokeColor ?? toolSettings.foregroundColor;
+  const r = color.r / 255;
+  const g = color.g / 255;
+  const b = color.b / 255;
+
+  emitSprayDabs(engine, state.layerId, state.lastPoint.x, state.lastPoint.y, size / 2, density, hardness, r, g, b, color.a, opacity);
+  useEditorStore.getState().notifyRender();
 }
 
 export function handleSprayDown(
@@ -66,6 +97,9 @@ export function handleSprayDown(
   emitSprayDabs(engine, activeLayerId, layerPos.x, layerPos.y, size / 2, density, hardness, r, g, b, color.a, opacity);
   editorState.notifyRender();
 
+  clearSprayTimer();
+  sprayTimer = setInterval(() => sprayAtCurrentPosition(state), SPRAY_INTERVAL_MS);
+
   return state;
 }
 
@@ -95,7 +129,10 @@ export function handleSprayMove(
   const dy = layerLocalPos.y - state.lastPoint.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
 
-  if (dist < spacing) return;
+  if (dist < spacing) {
+    state.lastPoint = layerLocalPos;
+    return;
+  }
 
   const steps = Math.max(1, Math.floor(dist / spacing));
   for (let i = 1; i <= steps; i++) {
@@ -107,4 +144,8 @@ export function handleSprayMove(
 
   state.lastPoint = layerLocalPos;
   useEditorStore.getState().notifyRender();
+}
+
+export function handleSprayUp(): void {
+  clearSprayTimer();
 }
