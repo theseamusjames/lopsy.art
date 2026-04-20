@@ -54,6 +54,7 @@ import { useUIStore } from '../app/ui-store';
 import { getEngine } from '../engine-wasm/engine-state';
 import { decodeAndUploadDng, initWasm } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../engine-wasm/engine-sync';
+import { pixelDataManager } from '../engine/pixel-data-manager';
 import { notifyError } from '../app/notifications-store';
 import { DEFAULT_ADJUSTMENTS, type ImageAdjustments } from '../filters/image-adjustments';
 import { IDENTITY_CURVES } from '../filters/curves';
@@ -80,7 +81,7 @@ export async function importDngFile(data: Uint8Array, name: string): Promise<voi
 async function importDngFileInner(data: Uint8Array, name: string): Promise<void> {
   await initWasm();
 
-  useEditorStore.getState().createDocument(1, 1, false);
+  useEditorStore.getState().createDocument(1, 1, true);
 
   const engine = await waitForEngine();
   if (!engine) {
@@ -94,11 +95,12 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
     return;
   }
 
-  // Yield one frame so the render loop can sync the initial document size
-  // before we take a long &mut Engine borrow for the DNG decode. Without
-  // this, the render loop fires during decode and hits a recursive borrow
-  // in wasm_bindgen's RefCell (setDocumentSize vs decodeAndUploadDng both
-  // need &mut Engine).
+  // Yield two frames: the first lets the render loop sync the initial
+  // document size (avoiding a recursive borrow in wasm_bindgen's RefCell),
+  // the second ensures the browser actually paints the loading modal before
+  // we block the main thread with the WASM decode. rAF callbacks run before
+  // paint, so a single yield would commit the DOM but never paint it.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
   const metaJson = decodeAndUploadDng(engine, activeLayerId, data);
@@ -129,6 +131,11 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
     store.setGroupAdjustments(rootGroupId, RAW_DEFAULT_ADJUSTMENTS);
     store.setGroupAdjustmentsEnabled(rootGroupId, true);
   }
+
+  // The DNG decoder uploaded pixels directly to the GPU texture. Clear the
+  // stale 1x1 placeholder from the JS pixel data store so that
+  // resetTrackedState doesn't cause engine-sync to overwrite the GPU texture.
+  pixelDataManager.remove(activeLayerId);
 
   resetTrackedState(engine);
   useEditorStore.getState().fitToView();

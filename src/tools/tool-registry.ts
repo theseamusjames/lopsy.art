@@ -15,6 +15,7 @@ import { handleCropDown, handleCropMove, handleCropUp } from './crop/crop-intera
 import { handlePathDown, handlePathMove, handlePathUp } from './path/path-interaction';
 import { handleShapeDown, handleShapeMove, handleShapeUp } from './shape/shape-interaction';
 import { handleGradientDown, handleGradientMove } from './gradient/gradient-interaction';
+import { handleSprayDown, handleSprayMove, handleSprayUp } from './spray/spray-interaction';
 
 import { MoveOptions } from '../app/OptionsBar/tool-options/MoveOptions';
 import { BrushOptions } from '../app/OptionsBar/tool-options/BrushOptions';
@@ -32,6 +33,7 @@ import { PathOptions } from '../app/OptionsBar/tool-options/PathOptions';
 import { TextOptions } from '../app/OptionsBar/tool-options/TextOptions';
 import { MagneticLassoOptions } from '../app/OptionsBar/tool-options/MagneticLassoOptions';
 import { CropOptions } from '../app/OptionsBar/tool-options/CropOptions';
+import { SprayOptions } from '../app/OptionsBar/tool-options/SprayOptions';
 
 import { useToolSettingsStore } from '../app/tool-settings-store';
 
@@ -273,6 +275,19 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
       down: (ctx) => handlePathDown(ctx),
       move: (ctx, state) => handlePathMove(state, ctx.layerPos),
       up: () => handlePathUp(),
+    },
+  },
+  spray: {
+    id: 'spray',
+    label: 'Spray',
+    shortcut: 'j',
+    optionsComponent: SprayOptions,
+    isPaint: true,
+    isGpu: true,
+    handler: {
+      down: (ctx) => handleSprayDown(ctx),
+      move: (ctx, state) => handleSprayMove(ctx, state),
+      up: () => handleSprayUp(),
     },
   },
 };
