@@ -689,6 +689,11 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
         if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, tex_handle, tw, th, stroke, *layer_x, *layer_y); } }
     }
 
+    // Apply image adjustments (exposure, contrast, curves, levels, etc.)
+    // The 8-bit export path applies these in JS; the 16-bit path must do it
+    // here since it encodes directly to PNG in Rust.
+    apply_image_adjustments(engine);
+
     let pixels = engine.texture_pool.read_rgba_u16(&engine.gl, 0, 0, doc_w, doc_h)?;
 
     engine.fbo_pool.unbind(&engine.gl);
