@@ -349,11 +349,14 @@ fn parse_gain_table_map(raw: &[u8]) -> Option<GainTableMap> {
     let origin_h = f64_at(32);
     let num_table_points = u32_at(40);
 
+    if points_v == 0 || points_h == 0 || num_table_points == 0 { return None; }
+    if points_v > 10000 || points_h > 10000 || num_table_points > 10000 { return None; }
+
     let weights = [
         f32_at(44), f32_at(48), f32_at(52), f32_at(56), f32_at(60),
     ];
 
-    let total = (points_v * points_h * num_table_points) as usize;
+    let total = (points_v as u64 * points_h as u64 * num_table_points as u64) as usize;
     let data_start = 64;
     let data_end = data_start + total * 4;
     if raw.len() < data_end { return None; }
@@ -418,7 +421,8 @@ fn apply_gain_table_map(rgb: &mut [f32], width: u32, height: u32, gtm: &GainTabl
             let wf = ws - w0 as f32;
 
             let entry = |r: usize, c: usize, t: usize| -> f32 {
-                gtm.data[r * row_step + c * col_step + t]
+                let idx = r * row_step + c * col_step + t;
+                if idx < gtm.data.len() { gtm.data[idx] } else { 1.0 }
             };
 
             let g000 = entry(y0, x0, w0); let g001 = entry(y0, x0, w1);
