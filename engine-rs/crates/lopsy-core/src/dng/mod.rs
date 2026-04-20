@@ -249,6 +249,21 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
             dng_log!("[DNG step] ProfileGainTableMap: {}x{} grid, {} table pts, weights=[{:.2},{:.2},{:.2},{:.2},{:.2}]",
                 gtm.points_v, gtm.points_h, gtm.num_table_points,
                 gtm.weights[0], gtm.weights[1], gtm.weights[2], gtm.weights[3], gtm.weights[4]);
+            // Log LUT at center grid point to see contrast range
+            let center_row = gtm.points_v as usize / 2;
+            let center_col = gtm.points_h as usize / 2;
+            let tp = gtm.num_table_points as usize;
+            let rs = gtm.points_h as usize * tp;
+            let base = center_row * rs + center_col * tp;
+            if base + tp <= gtm.data.len() {
+                let g0 = gtm.data[base];
+                let g64 = gtm.data[base + tp / 4];
+                let g128 = gtm.data[base + tp / 2];
+                let g192 = gtm.data[base + 3 * tp / 4];
+                let g256 = gtm.data[base + tp - 1];
+                dng_log!("[DNG step] center grid LUT: [0]={:.3} [1/4]={:.3} [1/2]={:.3} [3/4]={:.3} [end]={:.3}",
+                    g0, g64, g128, g192, g256);
+            }
             apply_gain_table_map(&mut rgb_f32, width, height, &gtm, exposure_gain);
             gain_map_applied = true;
             dbg_center!("after gainTableMap", rgb_f32);
@@ -270,17 +285,15 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         }
     }
 
-    // Apply BaselineExposure (only if no gain table map was applied — the gain
-    // table map already incorporates exposure via the weight scaling)
-    if !gain_map_applied {
-        if let Some(ev) = baseline_exposure {
-            if ev.abs() > 0.001 {
-                let scale = (2.0f64).powf(ev) as f32;
-                for v in &mut rgb_f32 {
-                    *v *= scale;
-                }
-                dbg_center!("after baselineExposure", rgb_f32);
+    // Apply BaselineExposure — always applied, even after gain table map.
+    // The gain map uses exposure only for LUT weight indexing, not brightness.
+    if let Some(ev) = baseline_exposure {
+        if ev.abs() > 0.001 {
+            let scale = (2.0f64).powf(ev) as f32;
+            for v in &mut rgb_f32 {
+                *v *= scale;
             }
+            dbg_center!("after baselineExposure", rgb_f32);
         }
     }
 

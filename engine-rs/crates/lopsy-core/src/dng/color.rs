@@ -94,15 +94,40 @@ pub fn apply_matrix(rgb: &mut [f32], mat: &[f32; 9]) {
     }
 }
 
-/// Apply a precomputed LUT (4096 entries) to each RGB channel.
+/// Apply a precomputed LUT to luminance, preserving hue and saturation.
+/// The DNG SDK applies ProfileToneCurve to the luminance channel in HCL
+/// space, then scales RGB proportionally. This prevents desaturation.
 pub fn apply_lut(rgb: &mut [f32], lut: &[f32]) {
     let max_idx = (lut.len() - 1) as f32;
-    for v in rgb.iter_mut() {
-        let idx = (*v * max_idx).clamp(0.0, max_idx);
+    let lookup = |v: f32| -> f32 {
+        let idx = (v * max_idx).clamp(0.0, max_idx);
         let lo = idx as usize;
         let hi = (lo + 1).min(lut.len() - 1);
         let frac = idx - lo as f32;
-        *v = lut[lo] * (1.0 - frac) + lut[hi] * frac;
+        lut[lo] * (1.0 - frac) + lut[hi] * frac
+    };
+
+    let len = rgb.len() / 3;
+    for i in 0..len {
+        let r = rgb[i * 3];
+        let g = rgb[i * 3 + 1];
+        let b = rgb[i * 3 + 2];
+
+        let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        if lum <= 0.0 {
+            let mapped = lookup(0.0);
+            rgb[i * 3] = mapped;
+            rgb[i * 3 + 1] = mapped;
+            rgb[i * 3 + 2] = mapped;
+            continue;
+        }
+
+        let mapped_lum = lookup(lum);
+        let scale = mapped_lum / lum;
+
+        rgb[i * 3]     = (r * scale).max(0.0);
+        rgb[i * 3 + 1] = (g * scale).max(0.0);
+        rgb[i * 3 + 2] = (b * scale).max(0.0);
     }
 }
 
