@@ -336,9 +336,17 @@ interface ToolSettings {
   foregroundColor: Color;
   backgroundColor: Color;
   recentColors: readonly Color[];
+  spraySize: number;
+  sprayDensity: number;
+  sprayOpacity: number;
+  sprayHardness: number;
   presets: BrushPreset[];
   activePresetId: string | null;
 
+  setSpraySize: (size: number) => void;
+  setSprayDensity: (density: number) => void;
+  setSprayOpacity: (opacity: number) => void;
+  setSprayHardness: (hardness: number) => void;
   setBrushSize: (size: number) => void;
   setBrushFade: (fade: number) => void;
   setBrushSpacing: (spacing: number) => void;
@@ -451,9 +459,17 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
   backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
   recentColors: Array.from({ length: MAX_RECENT_COLORS }, () => ({ r: 46, g: 46, b: 46, a: 1 })),
+  spraySize: 40,
+  sprayDensity: 20,
+  sprayOpacity: 60,
+  sprayHardness: 30,
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
 
+  setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(500, size)) }),
+  setSprayDensity: (density) => set({ sprayDensity: Math.max(1, Math.min(100, density)) }),
+  setSprayOpacity: (opacity) => set({ sprayOpacity: Math.max(1, Math.min(100, opacity)) }),
+  setSprayHardness: (hardness) => set({ sprayHardness: Math.max(0, Math.min(100, hardness)) }),
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(2000, size)) }),
   setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(2000, fade)) }),
   setBrushSpacing: (spacing) => set({ brushSpacing: Math.max(0, Math.min(200, spacing)) }),

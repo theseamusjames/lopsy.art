@@ -15,6 +15,7 @@ import {
   PenTool,
   Magnet,
   Pointer,
+  SprayCan,
 } from 'lucide-react';
 import { IconButton } from '../components/IconButton/IconButton';
 import { useUIStore } from '../app/ui-store';
@@ -74,6 +75,7 @@ const toolGroups: ToolDef[][] = [
   [
     { id: 'brush', icon: <Paintbrush size={ICON_SIZE} />, label: 'Brush (B)' },
     { id: 'pencil', icon: <Pen size={ICON_SIZE} />, label: 'Pencil (N)' },
+    { id: 'spray', icon: <SprayCan size={ICON_SIZE} />, label: 'Spray (J)' },
     { id: 'eraser', icon: <Eraser size={ICON_SIZE} />, label: 'Eraser (E)' },
   ],
   [
