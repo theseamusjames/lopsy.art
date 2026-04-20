@@ -46,6 +46,47 @@ pub fn crop_to_content_bounds(data: &[u8], width: u32, height: u32) -> (Vec<u8>,
     (cropped, Rect::new(min_x as i32, min_y as i32, cw, ch))
 }
 
+/// Find bounding box of non-transparent pixels in u16 RGBA data and crop to it.
+/// Alpha is the 4th channel of each u16 quad.
+pub fn crop_to_content_bounds_u16(data: &[u16], width: u32, height: u32) -> (Vec<u16>, Rect) {
+    let mut min_x = width;
+    let mut min_y = height;
+    let mut max_x = 0u32;
+    let mut max_y = 0u32;
+    let mut has_content = false;
+
+    for y in 0..height {
+        for x in 0..width {
+            let a = data[((y * width + x) * 4 + 3) as usize];
+            if a > 0 {
+                min_x = min_x.min(x);
+                min_y = min_y.min(y);
+                max_x = max_x.max(x);
+                max_y = max_y.max(y);
+                has_content = true;
+            }
+        }
+    }
+
+    if !has_content {
+        return (Vec::new(), Rect::new(0, 0, 0, 0));
+    }
+
+    let cw = max_x - min_x + 1;
+    let ch = max_y - min_y + 1;
+    let mut cropped = vec![0u16; (cw * ch * 4) as usize];
+
+    for y in 0..ch {
+        let src_offset = ((min_y + y) * width + min_x) as usize * 4;
+        let dst_offset = (y * cw) as usize * 4;
+        let row_len = (cw * 4) as usize;
+        cropped[dst_offset..dst_offset + row_len]
+            .copy_from_slice(&data[src_offset..src_offset + row_len]);
+    }
+
+    (cropped, Rect::new(min_x as i32, min_y as i32, cw, ch))
+}
+
 /// Expand cropped data back to full canvas size
 pub fn expand_from_crop(
     cropped: &[u8], cw: u32, ch: u32,

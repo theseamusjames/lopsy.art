@@ -3,6 +3,7 @@ import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { pasteOrOpenBlob } from '../paste-or-open';
 import { importPsdFile } from '../../io/psd';
+import { importDngFile } from '../../io/dng';
 import { describeError, notifyError } from '../notifications-store';
 
 export interface DocumentOpenHandlers {
@@ -25,11 +26,20 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!file) return;
 
     const name = file.name.replace(/\.[^.]+$/, '');
-    // Dropping an image while the new-document modal is open should dismiss
-    // it — the drop is effectively the answer to "what do you want to open?"
+
+    if (/\.dng$/i.test(file.name)) {
+      file
+        .arrayBuffer()
+        .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(() => closeModalOfKind('newDocument')))
+        .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) return;
+
     pasteOrOpenBlob(file, name)
       .then(() => closeModalOfKind('newDocument'))
       .catch((err) => notifyError(`Failed to open file: ${describeError(err)}`));
@@ -51,6 +61,13 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
         .then((buffer) => importPsdFile(new Uint8Array(buffer), name))
         .then(() => closeModal())
         .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
+      return;
+    }
+    if (/\.dng$/i.test(file.name)) {
+      file
+        .arrayBuffer()
+        .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(() => closeModal()))
+        .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
       return;
     }
     pasteOrOpenBlob(file, name)

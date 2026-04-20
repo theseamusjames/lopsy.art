@@ -3,11 +3,12 @@ import { useEditorStore } from '../../editor-store';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
 import { encodeBMP } from '../../../utils/bmp-encoder';
 import { hasActiveAdjustments, applyAdjustmentsToImageData, aggregateGroupAdjustments } from '../../../filters/image-adjustments';
-import { contextOptions, canvasColorSpace, createImageDataFromArray } from '../../../engine/color-space';
+import { contextOptions, canvasColorSpace, isWideGamut, createImageDataFromArray } from '../../../engine/color-space';
 import { seedBitmapFromBlob } from '../../../engine/bitmap-cache';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import {
   compositeForExport,
+  exportPng16,
   getCompositeSize,
 } from '../../../engine-wasm/wasm-bridge';
 import type { MenuDef } from './types';
@@ -16,6 +17,8 @@ import { describeError, notifyError } from '../../notifications-store';
 
 // Re-export so existing callers (App.tsx, e2e tests) keep working.
 export { importPsdFile, exportPsdFile };
+
+import { importDngFile } from '../../../io/dng';
 
 const METADATA_NOTE = 'Made with Lopsy — http://lopsy.art';
 
@@ -28,7 +31,7 @@ export function openFileFromDisk(): void {
   if (!confirmIfDirty()) return;
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/*,.psd';
+  input.accept = 'image/*,.psd,.dng';
   input.onchange = () => {
     const file = input.files?.[0];
     if (!file) return;
@@ -39,6 +42,15 @@ export function openFileFromDisk(): void {
         .arrayBuffer()
         .then((buffer) => importPsdFile(new Uint8Array(buffer), file.name.replace(/\.psd$/i, '')))
         .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
+      return;
+    }
+
+    // Route DNG (raw) files to the WASM DNG decoder
+    if (/\.dng$/i.test(file.name)) {
+      file
+        .arrayBuffer()
+        .then((buffer) => importDngFile(new Uint8Array(buffer), file.name.replace(/\.dng$/i, '')))
+        .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
       return;
     }
 
@@ -84,6 +96,22 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, form
   const height = sizeArr[1] ?? 0;
   if (width === 0 || height === 0) return;
 
+  // PNG uses the 16-bit WASM path — composites at full precision and encodes
+  // directly in Rust, bypassing the 8-bit canvas.toBlob pipeline.
+  if (format === 'png') {
+    try {
+      const colorSpace: number = isWideGamut() ? 1 : 0;
+      const pngBytes = exportPng16(engine, colorSpace);
+      const blob = new Blob([pngBytes as BlobPart], { type: 'image/png' });
+      addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE })
+        .then(downloadBlob)
+        .catch((err) => notifyError(`Failed to export: ${describeError(err)}`));
+    } catch (err) {
+      notifyError(`Failed to export PNG: ${describeError(err)}`);
+    }
+    return;
+  }
+
   const rawPixels = compositeForExport(engine);
   const clamped = new Uint8ClampedArray(width * height * 4);
   clamped.set(rawPixels);
@@ -123,26 +151,26 @@ const FORMAT_EXT: Record<ExportFormat, string> = {
   bmp: 'bmp',
 };
 
+function downloadBlob(blob: Blob, ext = 'png'): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `lopsy.${ext}`;
+  a.click();
+  URL.revokeObjectURL(url);
+  useEditorStore.getState().markClean();
+}
+
 function finishCanvasExport(canvas: HTMLCanvasElement, width: number, height: number, format: ExportFormat): void {
   const mimeType = FORMAT_MIME[format];
   const ext = FORMAT_EXT[format];
-
-  const downloadBlob = (blob: Blob) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `lopsy.${ext}`;
-    a.click();
-    URL.revokeObjectURL(url);
-    useEditorStore.getState().markClean();
-  };
 
   // BMP is encoded on the JS side — no canvas.toBlob support
   if (format === 'bmp') {
     const ctx = canvas.getContext('2d', contextOptions);
     if (!ctx) return;
     const imageData = ctx.getImageData(0, 0, width, height);
-    downloadBlob(encodeBMP(imageData));
+    downloadBlob(encodeBMP(imageData), ext);
     return;
   }
 
@@ -153,7 +181,7 @@ function finishCanvasExport(canvas: HTMLCanvasElement, width: number, height: nu
         : format === 'jpeg'
           ? await addJpegComment(blob, METADATA_NOTE)
           : blob;
-    downloadBlob(tagged);
+    downloadBlob(tagged, ext);
   };
 
   // Prefer OffscreenCanvas.convertToBlob which passes colorSpace to the

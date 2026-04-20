@@ -1289,6 +1289,47 @@ pub fn fill_with_color(
     Ok(())
 }
 
+pub fn read_pixels_u16(
+    engine: &EngineInner,
+    layer_id: &str,
+) -> Result<Vec<u16>, String> {
+    let tex_handle = engine.layer_textures.get(layer_id)
+        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
+    let (w, h) = engine.texture_pool.get_size(*tex_handle).unwrap_or((0, 0));
+    let texture = engine.texture_pool.get(*tex_handle)
+        .ok_or("Texture not found")?;
+
+    let fbo = engine.gl.create_framebuffer()
+        .ok_or("Failed to create temp FBO")?;
+    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+    engine.gl.framebuffer_texture_2d(
+        WebGl2RenderingContext::FRAMEBUFFER,
+        WebGl2RenderingContext::COLOR_ATTACHMENT0,
+        WebGl2RenderingContext::TEXTURE_2D,
+        Some(texture),
+        0,
+    );
+
+    let pixels = engine.texture_pool.read_rgba_u16(&engine.gl, 0, 0, w, h)?;
+
+    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+    engine.gl.delete_framebuffer(Some(&fbo));
+
+    Ok(pixels)
+}
+
+pub fn upload_pixels_u16(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    data: &[u16],
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    with_layer_texture(engine, layer_id, width, height, |eng, tex| {
+        eng.texture_pool.upload_rgba_u16(&eng.gl, tex, 0, 0, width, height, data)
+    })
+}
+
 pub fn read_pixels(
     engine: &EngineInner,
     layer_id: &str,

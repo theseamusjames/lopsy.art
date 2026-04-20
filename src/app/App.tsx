@@ -42,6 +42,26 @@ function CanvasRenderer({ canvasRef, containerRef, overlayCanvasRef }: {
   return null;
 }
 
+function LoadingOverlay({ message }: { message: string }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0, 0, 0, 0.6)', zIndex: 9999,
+    }} role="dialog" aria-label={message}>
+      <div style={{
+        background: 'var(--color-bg-secondary, #1e1e1e)',
+        borderRadius: 'var(--radius-lg, 8px)',
+        padding: '24px 32px',
+        color: 'var(--color-text-primary, #e0e0e0)',
+        fontSize: 'var(--font-size-sm, 13px)',
+      }}>
+        {message}
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [hasWebGL2] = useState(() => checkWebGL2Support());
 
@@ -60,6 +80,7 @@ export function App() {
   const documentReady = useEditorStore((s) => s.documentReady);
   const createDocument = useEditorStore((s) => s.createDocument);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
+  const loadingMessage = useUIStore((s) => s.modal?.kind === 'loading' ? s.modal.message : null);
 
   useEffect(() => {
     if (documentReady) return;
@@ -151,6 +172,7 @@ export function App() {
           onOpenFile={handlePreDocOpenFile}
           onPasteClipboard={handlePreDocPasteClipboard}
         />
+        {loadingMessage && <LoadingOverlay message={loadingMessage} />}
       </div>
     );
   }

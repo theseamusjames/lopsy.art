@@ -644,6 +644,62 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
     Ok(pixels)
 }
 
+/// Composite for export at 16-bit precision — same pipeline as
+/// `composite_for_export` but reads back as u16 RGBA.
+pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, String> {
+    let doc_w = engine.doc_width;
+    let doc_h = engine.doc_height;
+    let bg = engine.bg_color;
+
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+
+    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    engine.gl.clear_color(bg[0], bg[1], bg[2], bg[3]);
+    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+
+    let layer_info: Vec<_> = engine.layer_stack.iter().map(|layer| {
+        let mask_info = engine.layer_masks.get(&layer.id).and_then(|&mask_handle| {
+            let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
+            let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
+            let mask_enabled = layer.mask.as_ref().map_or(false, |m| m.enabled);
+            Some((mask_gl, mw, mh, mask_enabled))
+        });
+        (layer.id.clone(), layer.visible, layer.opacity, layer.blend_mode as i32, layer.x as f32, layer.y as f32, layer.width as f32, layer.height as f32, layer.effects.clone(), mask_info)
+    }).collect();
+
+    for (layer_id, visible, opacity, blend_mode, layer_x, layer_y, layer_w, layer_h, effects, mask_info) in &layer_info {
+        if !visible || *opacity < 1e-7 { continue; }
+        let tex_handle = match engine.layer_textures.get(layer_id) { Some(&h) => h, None => continue };
+        let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((*layer_w as u32, *layer_h as u32));
+
+        let mask_arg = mask_info.as_ref().and_then(|(tex, mw, mh, enabled)| {
+            if *enabled { Some((tex, *mw, *mh)) } else { None }
+        });
+
+        if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 0, *layer_x, *layer_y); } }
+        if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, tex_handle, tw, th, shadow, *layer_x, *layer_y); } }
+
+        let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
+        if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
+            blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+        }
+
+        if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 1, *layer_x, *layer_y); } }
+        if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, tex_handle, tw, th, stroke, *layer_x, *layer_y); } }
+    }
+
+    // Apply image adjustments (exposure, contrast, curves, levels, etc.)
+    // The 8-bit export path applies these in JS; the 16-bit path must do it
+    // here since it encodes directly to PNG in Rust.
+    apply_image_adjustments(engine);
+
+    let pixels = engine.texture_pool.read_rgba_u16(&engine.gl, 0, 0, doc_w, doc_h)?;
+
+    engine.fbo_pool.unbind(&engine.gl);
+    Ok(pixels)
+}
+
 /// Composite a single layer with its effects onto a transparent canvas.
 /// Returns (pixels, offsetX, offsetY, width, height) for the rasterized result.
 pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Result<Vec<u8>, String> {

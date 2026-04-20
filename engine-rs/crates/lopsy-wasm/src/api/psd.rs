@@ -80,19 +80,18 @@ pub fn export_psd(
             _ => GroupKind::Normal,
         };
 
-        // Read pixel data from GPU for content layers
         let pixel_data = if meta.width > 0 && meta.height > 0 && group_kind == GroupKind::Normal {
-            let gpu_pixels = layer_manager::read_pixels(&engine.inner, &meta.id)
-                .map_err(|e| JsError::new(&e))?;
-
             match psd_depth {
-                PsdDepth::Eight => gpu_pixels,
+                PsdDepth::Eight => {
+                    layer_manager::read_pixels(&engine.inner, &meta.id)
+                        .map_err(|e| JsError::new(&e))?
+                }
                 PsdDepth::Sixteen => {
-                    // Upscale 8-bit GPU pixels to 16-bit big-endian
-                    let mut data16 = Vec::with_capacity(gpu_pixels.len() * 2);
-                    for &byte in &gpu_pixels {
-                        let val16 = (byte as u16) * 257; // 0-255 -> 0-65535
-                        data16.extend_from_slice(&val16.to_be_bytes());
+                    let gpu_u16 = layer_manager::read_pixels_u16(&engine.inner, &meta.id)
+                        .map_err(|e| JsError::new(&e))?;
+                    let mut data16 = Vec::with_capacity(gpu_u16.len() * 2);
+                    for &val in &gpu_u16 {
+                        data16.extend_from_slice(&val.to_be_bytes());
                     }
                     data16
                 }

@@ -8,8 +8,8 @@
 import {
   readLayerPixels,
   getLayerTextureDimensions,
-  readLayerPixelsCompressed,
-  uploadLayerPixelsCompressed,
+  readLayerPixelsCompressedU16,
+  uploadLayerPixelsCompressedU16,
   readLayerThumbnail as wasmReadLayerThumbnail,
 } from './wasm-bridge';
 import type { Engine } from './wasm-bridge';
@@ -60,24 +60,25 @@ export function readLayerAsImageData(layerId: string): ImageData | null {
 }
 
 /**
- * Read layer pixels as a compressed blob (header + RLE data).
- * Not cached — used for undo snapshots, called once per pushHistory.
+ * Read layer pixels as a 16-bit compressed blob (header + u16 pixel data).
+ * Preserves RGBA16F precision from the GPU. Not cached — used for undo
+ * snapshots, called once per pushHistory.
  */
 export function readLayerCompressed(layerId: string): Uint8Array | null {
   if (!currentEngine) return null;
 
-  const data = readLayerPixelsCompressed(currentEngine, layerId);
+  const data = readLayerPixelsCompressedU16(currentEngine, layerId);
   if (!data || data.length === 0) return null;
 
   return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 }
 
 /**
- * Upload a compressed pixel blob to a layer's GPU texture.
+ * Upload a 16-bit compressed pixel blob to a layer's GPU texture.
  */
 export function uploadCompressed(layerId: string, data: Uint8Array): void {
   if (!currentEngine) return;
-  uploadLayerPixelsCompressed(currentEngine, layerId, data);
+  uploadLayerPixelsCompressedU16(currentEngine, layerId, data);
 }
 
 /**

@@ -278,6 +278,22 @@ pub fn composite_for_export(engine: &mut Engine) -> Result<Vec<u8>, JsError> {
     compositor::composite_for_export(&mut engine.inner).map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen(js_name = "exportPng16")]
+pub fn export_png_16(engine: &mut Engine, color_space: u8) -> Result<Vec<u8>, JsError> {
+    let pixels = compositor::composite_for_export_u16(&mut engine.inner)
+        .map_err(|e| JsError::new(&e))?;
+    let cs = match color_space {
+        1 => lopsy_core::color::ColorSpace::DisplayP3,
+        _ => lopsy_core::color::ColorSpace::Srgb,
+    };
+    lopsy_core::export::encode_png_16(
+        &pixels,
+        engine.inner.doc_width,
+        engine.inner.doc_height,
+        cs,
+    ).map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "getCompositeSize")]
 pub fn get_composite_size(engine: &Engine) -> Vec<u32> {
     vec![engine.inner.doc_width, engine.inner.doc_height]

@@ -209,6 +209,80 @@ fn build_desc_tag(name: &[u8; 4]) -> Vec<u8> {
     data
 }
 
+/// Encode u16 RGBA pixel data as a 16-bit PNG with an embedded ICC profile.
+pub fn encode_png_16(
+    pixels: &[u16],
+    width: u32,
+    height: u32,
+    color_space: ColorSpace,
+) -> Result<Vec<u8>, String> {
+    let expected = (width as usize) * (height as usize) * 4;
+    if pixels.len() < expected {
+        return Err(format!(
+            "pixel data too short: expected {} u16 values, got {}",
+            expected,
+            pixels.len()
+        ));
+    }
+
+    let mut buf = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut buf, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Sixteen);
+
+        match color_space {
+            ColorSpace::DisplayP3 => {
+                // P3 needs an iCCP chunk — written manually after header
+            }
+            _ => {
+                encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
+            }
+        }
+
+        let mut writer = encoder
+            .write_header()
+            .map_err(|e| format!("PNG header: {e}"))?;
+
+        // For Display P3, inject iCCP chunk before image data
+        if matches!(color_space, ColorSpace::DisplayP3) {
+            let icc_data = build_icc_profile(color_space);
+            let iccp_payload = build_iccp_chunk_payload(b"Display P3", &icc_data);
+            writer.write_chunk(png::chunk::iCCP, &iccp_payload)
+                .map_err(|e| format!("PNG iCCP: {e}"))?;
+        }
+
+        let mut be_bytes = Vec::with_capacity(expected * 2);
+        for &val in &pixels[..expected] {
+            be_bytes.extend_from_slice(&val.to_be_bytes());
+        }
+
+        writer
+            .write_image_data(&be_bytes)
+            .map_err(|e| format!("PNG write: {e}"))?;
+    }
+
+    Ok(buf)
+}
+
+/// Build the raw payload for a PNG iCCP chunk: profile name + null + compression method + zlib(icc_data).
+fn build_iccp_chunk_payload(name: &[u8], icc_data: &[u8]) -> Vec<u8> {
+    use flate2::write::ZlibEncoder;
+    use flate2::Compression;
+    use std::io::Write;
+
+    let mut payload = Vec::with_capacity(name.len() + 2 + icc_data.len());
+    payload.extend_from_slice(name);
+    payload.push(0); // null separator
+    payload.push(0); // compression method (0 = zlib/deflate)
+
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(icc_data).unwrap();
+    let compressed = encoder.finish().unwrap();
+    payload.extend_from_slice(&compressed);
+    payload
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
