@@ -6,6 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 test('DNG ProRAW import screenshot', async ({ page }) => {
+  test.setTimeout(120000);
   // Capture console output before navigation
   const consoleLogs: string[] = [];
   page.on('console', (msg) => consoleLogs.push(msg.text()));

@@ -236,14 +236,43 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         }
     }
 
-    // Apply BaselineExposure
-    if let Some(ev) = baseline_exposure {
-        if ev.abs() > 0.001 {
-            let scale = (2.0f64).powf(ev) as f32;
-            for v in &mut rgb_f32 {
-                *v *= scale;
+    // ProfileGainTableMap — DNG 1.6 per-pixel local tone mapping.
+    // Applied before tone curve, with BaselineExposure as weight scale.
+    let exposure_gain = baseline_exposure.map(|ev| 2.0f64.powf(ev) as f32).unwrap_or(1.0);
+
+    let gain_map_entry = main_ifd.iter().find(|e| e.tag == TagId::ProfileGainTableMap as u16);
+    if let Some(entry) = gain_map_entry {
+        if let Some(gtm) = parse_gain_table_map(&entry.raw_bytes) {
+            dng_log!("[DNG step] ProfileGainTableMap: {}x{} grid, {} table pts, weights=[{:.2},{:.2},{:.2},{:.2},{:.2}]",
+                gtm.points_v, gtm.points_h, gtm.num_table_points,
+                gtm.weights[0], gtm.weights[1], gtm.weights[2], gtm.weights[3], gtm.weights[4]);
+            apply_gain_table_map(&mut rgb_f32, width, height, &gtm, exposure_gain);
+            dbg_center!("after gainTableMap", rgb_f32);
+        }
+    } else {
+        // Fall back: check IFD0
+        let gain_map_entry_ifd0 = ifd0.iter().find(|e| e.tag == TagId::ProfileGainTableMap as u16);
+        if let Some(entry) = gain_map_entry_ifd0 {
+            if let Some(gtm) = parse_gain_table_map(&entry.raw_bytes) {
+                dng_log!("[DNG step] ProfileGainTableMap (IFD0): {}x{} grid, {} table pts",
+                    gtm.points_v, gtm.points_h, gtm.num_table_points);
+                apply_gain_table_map(&mut rgb_f32, width, height, &gtm, exposure_gain);
+                dbg_center!("after gainTableMap", rgb_f32);
             }
-            dbg_center!("after baselineExposure", rgb_f32);
+        }
+    }
+
+    // Apply BaselineExposure (only if no gain table map was applied — the gain
+    // table map already incorporates exposure via the weight scaling)
+    if gain_map_entry.is_none() {
+        if let Some(ev) = baseline_exposure {
+            if ev.abs() > 0.001 {
+                let scale = (2.0f64).powf(ev) as f32;
+                for v in &mut rgb_f32 {
+                    *v *= scale;
+                }
+                dbg_center!("after baselineExposure", rgb_f32);
+            }
         }
     }
 
@@ -287,6 +316,131 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         tone_curve,
         debug_log,
     })
+}
+
+struct GainTableMap {
+    points_v: u32,
+    points_h: u32,
+    spacing_v: f64,
+    spacing_h: f64,
+    origin_v: f64,
+    origin_h: f64,
+    num_table_points: u32,
+    weights: [f32; 5],
+    data: Vec<f32>,
+}
+
+fn parse_gain_table_map(raw: &[u8]) -> Option<GainTableMap> {
+    // Header: 4+4+8+8+8+8+4+20 = 64 bytes
+    if raw.len() < 64 { return None; }
+
+    let u32_at = |off: usize| u32::from_le_bytes([raw[off], raw[off+1], raw[off+2], raw[off+3]]);
+    let f64_at = |off: usize| f64::from_le_bytes([
+        raw[off], raw[off+1], raw[off+2], raw[off+3],
+        raw[off+4], raw[off+5], raw[off+6], raw[off+7],
+    ]);
+    let f32_at = |off: usize| f32::from_le_bytes([raw[off], raw[off+1], raw[off+2], raw[off+3]]);
+
+    let points_v = u32_at(0);
+    let points_h = u32_at(4);
+    let spacing_v = f64_at(8);
+    let spacing_h = f64_at(16);
+    let origin_v = f64_at(24);
+    let origin_h = f64_at(32);
+    let num_table_points = u32_at(40);
+
+    let weights = [
+        f32_at(44), f32_at(48), f32_at(52), f32_at(56), f32_at(60),
+    ];
+
+    let total = (points_v * points_h * num_table_points) as usize;
+    let data_start = 64;
+    let data_end = data_start + total * 4;
+    if raw.len() < data_end { return None; }
+
+    let data: Vec<f32> = raw[data_start..data_end]
+        .chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect();
+
+    Some(GainTableMap { points_v, points_h, spacing_v, spacing_h, origin_v, origin_h, num_table_points, weights, data })
+}
+
+fn apply_gain_table_map(rgb: &mut [f32], width: u32, height: u32, gtm: &GainTableMap, exposure_gain: f32) {
+    let w = width as usize;
+    let h = height as usize;
+    let map_pv = gtm.points_v as f32;
+    let map_ph = gtm.points_h as f32;
+    let origin_v = gtm.origin_v as f32;
+    let origin_h = gtm.origin_h as f32;
+    let spacing_v = (gtm.spacing_v as f32).max(1e-10);
+    let spacing_h = (gtm.spacing_h as f32).max(1e-10);
+    let rel_size_v = spacing_v * (map_pv - 1.0);
+    let rel_size_h = spacing_h * (map_ph - 1.0);
+    let table_pts = gtm.num_table_points as usize;
+    let table_size = (table_pts - 1) as f32;
+    let col_step = table_pts;
+    let row_step = gtm.points_h as usize * table_pts;
+    let x_limit = (gtm.points_h as i32 - 2).max(0);
+    let y_limit = (gtm.points_v as i32 - 2).max(0);
+
+    let [miw0, miw1, miw2, miw3, miw4] = gtm.weights;
+
+    for row in 0..h {
+        let v_image = (row as f32 + 0.5) / h as f32;
+        let v_map = (v_image - origin_v) / rel_size_v;
+        let y_map = (v_map * (map_pv - 1.0) - 0.5).clamp(0.0, y_limit as f32);
+        let y0 = (y_map as i32).min(y_limit) as usize;
+        let y1 = (y0 + 1).min(gtm.points_v as usize - 1);
+        let yf = y_map - y0 as f32;
+
+        for col in 0..w {
+            let idx = (row * w + col) * 3;
+            let r = rgb[idx];
+            let g = rgb[idx + 1];
+            let b = rgb[idx + 2];
+
+            let min_v = r.min(g.min(b));
+            let max_v = r.max(g.max(b));
+            let weight = (miw0 * r + miw1 * g + miw2 * b + miw3 * min_v + miw4 * max_v) * exposure_gain;
+            let weight = weight.clamp(0.0, 1.0);
+
+            let u_image = (col as f32 + 0.5) / w as f32;
+            let u_map = (u_image - origin_h) / rel_size_h;
+            let x_map = (u_map * (map_ph - 1.0) - 0.5).clamp(0.0, x_limit as f32);
+            let x0 = (x_map as i32).min(x_limit) as usize;
+            let x1 = (x0 + 1).min(gtm.points_h as usize - 1);
+            let xf = x_map - x0 as f32;
+
+            let ws = weight * table_size;
+            let w0 = (ws as usize).min(table_pts - 1);
+            let w1 = (w0 + 1).min(table_pts - 1);
+            let wf = ws - w0 as f32;
+
+            let entry = |r: usize, c: usize, t: usize| -> f32 {
+                gtm.data[r * row_step + c * col_step + t]
+            };
+
+            let g000 = entry(y0, x0, w0); let g001 = entry(y0, x0, w1);
+            let g010 = entry(y0, x1, w0); let g011 = entry(y0, x1, w1);
+            let g100 = entry(y1, x0, w0); let g101 = entry(y1, x0, w1);
+            let g110 = entry(y1, x1, w0); let g111 = entry(y1, x1, w1);
+
+            let g00 = g000 + (g001 - g000) * wf;
+            let g01 = g010 + (g011 - g010) * wf;
+            let g10 = g100 + (g101 - g100) * wf;
+            let g11 = g110 + (g111 - g110) * wf;
+
+            let g0 = g00 + (g01 - g00) * xf;
+            let g1 = g10 + (g11 - g10) * xf;
+
+            let gain = g0 + (g1 - g0) * yf;
+
+            rgb[idx]     = (r * gain).clamp(0.0, 1.0);
+            rgb[idx + 1] = (g * gain).clamp(0.0, 1.0);
+            rgb[idx + 2] = (b * gain).clamp(0.0, 1.0);
+        }
+    }
 }
 
 /// Build a 4096-entry LUT from ProfileToneCurve control points via linear interpolation.
