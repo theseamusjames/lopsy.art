@@ -178,9 +178,12 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     if (!layer || layer.type !== 'raster') {
       const existing = pixelDataManager.get(layerId);
       if (existing) return existing;
-      const imageData = createImageData(state.document.width, state.document.height);
-      pixelDataManager.setDense(layerId, imageData);
-      return imageData;
+      // Return a temporary empty buffer without persisting it.
+      // The GPU is the source of truth for non-raster layers that have no
+      // JS pixel data (e.g. a freshly duplicated text layer whose texture
+      // was copied via duplicateLayerTexture). Storing empty data here
+      // would cause syncLayers to overwrite the valid GPU texture.
+      return createImageData(state.document.width, state.document.height);
     }
 
     const docW = state.document.width;
