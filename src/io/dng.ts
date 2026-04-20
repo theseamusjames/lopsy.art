@@ -80,7 +80,7 @@ export async function importDngFile(data: Uint8Array, name: string): Promise<voi
 async function importDngFileInner(data: Uint8Array, name: string): Promise<void> {
   await initWasm();
 
-  useEditorStore.getState().createDocument(1, 1, false);
+  useEditorStore.getState().createDocument(1, 1, true);
 
   const engine = await waitForEngine();
   if (!engine) {
