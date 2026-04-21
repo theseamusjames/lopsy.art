@@ -375,6 +375,12 @@ pub fn float_selection(engine: &mut Engine, layer_id: &str) -> Result<(), JsErro
         .map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen(js_name = "restoreFloatBase")]
+pub fn restore_float_base(engine: &mut Engine, src_id: &str) -> Result<(), JsError> {
+    layer_manager::restore_float_base(&mut engine.inner, src_id)
+        .map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "compositeFloat")]
 pub fn composite_float(engine: &mut Engine, dx: i32, dy: i32) -> Result<(), JsError> {
     layer_manager::composite_float(&mut engine.inner, dx, dy)
