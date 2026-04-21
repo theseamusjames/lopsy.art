@@ -159,7 +159,7 @@ function renderFrameGpu(
       renderGrid(overlayCtx, doc.width, doc.height, gridSize, viewport.zoom);
     }
 
-    renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhaseRef.current);
+    renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhaseRef.current, transform);
     renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
     const selectedPath = editorState.selectedPathId
       ? editorState.paths.find((p) => p.id === editorState.selectedPathId)
