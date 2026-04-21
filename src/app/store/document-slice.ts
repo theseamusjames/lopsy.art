@@ -103,6 +103,14 @@ function syncPixelDataToGpu(
     const rawBytes = new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength);
     uploadLayerPixels(engine, layerId, rawBytes, data.width, data.height, lx, ly);
   }
+  // Bump pixel versions after GPU upload so thumbnail reads happen after
+  // data is on the GPU. The initial bump from pixelDataManager.replace()
+  // fires before the upload, causing thumbnails to read empty textures.
+  requestAnimationFrame(() => {
+    for (const layerId of pixelData.keys()) {
+      pixelDataManager.bumpVersion(layerId);
+    }
+  });
 }
 
 function createInitialDocument() {

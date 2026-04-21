@@ -133,6 +133,10 @@ export class PixelDataManager {
     };
   }
 
+  bumpVersion(layerId: string): void {
+    this.bump(layerId);
+  }
+
   private bump(layerId: string): void {
     this.layerVersions.set(layerId, (this.layerVersions.get(layerId) ?? 0) + 1);
     this.globalVersion++;

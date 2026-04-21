@@ -14,11 +14,23 @@ export function renderSelectionAnts(
   selection: SelectionData,
   zoom: number,
   antPhase: number,
+  transform?: TransformState | null,
 ): void {
   if (!selection.active || !selection.mask) return;
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;
+
+  if (transform) {
+    const ob = transform.originalBounds;
+    const cx = ob.x + ob.width / 2;
+    const cy = ob.y + ob.height / 2;
+    ctx.translate(cx + transform.translateX, cy + transform.translateY);
+    ctx.rotate(transform.rotation);
+    ctx.scale(transform.scaleX, transform.scaleY);
+    ctx.translate(-cx, -cy);
+  }
+
   const lw = 1.5 / zoom;
   ctx.lineWidth = lw;
   const dashLen = 8 / zoom;
