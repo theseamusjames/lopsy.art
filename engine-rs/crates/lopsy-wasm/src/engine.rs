@@ -28,9 +28,17 @@ impl MagneticLassoState {
     }
 }
 
+/// Per-group adjustment state: the same scalar adjustments as the global
+/// pipeline, scoped to a specific group's content during compositing.
+pub struct GroupAdjustment {
+    pub adjustments: ImageAdjustmentState,
+    pub child_ids: Vec<String>,
+}
+
 /// Per-document image adjustments applied on the compositor's final pass.
 /// Scalars plus optional LUT textures for curves and levels. Values here
 /// don't touch pixel data — they're read by the compositor each frame.
+#[derive(Clone)]
 pub struct ImageAdjustmentState {
     pub exposure: f32,
     pub contrast: f32,
@@ -168,6 +176,13 @@ pub struct EngineInner {
     /// levels LUTs. Applied on the compositor's final pass, not baked into
     /// pixels.
     pub adjustments: ImageAdjustmentState,
+    /// Per-group adjustments — keyed by group layer ID. Each entry holds the
+    /// adjustment scalars/LUTs plus a list of child layer IDs (in stack order)
+    /// so the compositor can scope the adjustment pass to only those layers.
+    pub group_adjustments: HashMap<String, GroupAdjustment>,
+    /// Scratch FBO/texture for group-scoped adjustments. Allocated on demand.
+    pub group_scratch_fbo: Option<FramebufferHandle>,
+    pub group_scratch_texture: Option<TextureHandle>,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -271,6 +286,9 @@ impl EngineInner {
             seamless_dim: true,
             selection_time: 0.0,
             adjustments: ImageAdjustmentState::default(),
+            group_adjustments: HashMap::new(),
+            group_scratch_fbo: None,
+            group_scratch_texture: None,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
         })
@@ -501,6 +519,7 @@ impl EngineInner {
         self.mlasso.edges = None;
         self.mlasso.width = 0;
         self.mlasso.height = 0;
+        self.group_adjustments.clear();
         // Image adjustments
         self.adjustments.exposure = 0.0;
         self.adjustments.contrast = 0.0;

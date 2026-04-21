@@ -1,5 +1,5 @@
 import { createRasterLayer } from '../../layers/layer-model';
-import { getInsertionGroupId, addToGroup } from '../../layers/group-utils';
+import { getInsertionGroupId, getInsertionOrderIndex, addToGroup } from '../../layers/group-utils';
 import { clearJsPixelData } from './clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { syncSelection } from '../../engine-wasm/engine-sync';
@@ -110,9 +110,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
       y: clip.offsetY,
     };
 
-    const orderIdx = state.document.activeLayerId
-      ? state.document.layerOrder.indexOf(state.document.activeLayerId) + 1
-      : state.document.layerOrder.length;
+    const orderIdx = getInsertionOrderIndex(state.document.layerOrder, state.document.activeLayerId, state.document.rootGroupId, state.document.layers);
     const newOrder = [...state.document.layerOrder];
     newOrder.splice(orderIdx, 0, newLayer.id);
 
@@ -140,9 +138,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     const newLayer = createRasterLayer({ name: 'Pasted Layer', width: imageData.width, height: imageData.height });
 
-    const orderIdx = state.document.activeLayerId
-      ? state.document.layerOrder.indexOf(state.document.activeLayerId) + 1
-      : state.document.layerOrder.length;
+    const orderIdx = getInsertionOrderIndex(state.document.layerOrder, state.document.activeLayerId, state.document.rootGroupId, state.document.layers);
     const newOrder = [...state.document.layerOrder];
     newOrder.splice(orderIdx, 0, newLayer.id);
 
@@ -174,9 +170,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     const newLayer = { ...createRasterLayer({ name: 'Pasted Layer', width, height }), id: layerId };
 
-    const orderIdx = state.document.activeLayerId
-      ? state.document.layerOrder.indexOf(state.document.activeLayerId) + 1
-      : state.document.layerOrder.length;
+    const orderIdx = getInsertionOrderIndex(state.document.layerOrder, state.document.activeLayerId, state.document.rootGroupId, state.document.layers);
     const newOrder = [...state.document.layerOrder];
     newOrder.splice(orderIdx, 0, newLayer.id);
 

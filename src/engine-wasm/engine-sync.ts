@@ -41,6 +41,8 @@ import {
   setImageLevelsLut,
   clearImageLevels,
   clearImageAdjustments,
+  setGroupAdjustments,
+  clearGroupAdjustments,
   setSeamlessPattern,
   setLassoPreview,
   setPathOverlay,
@@ -202,6 +204,39 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
     setImageCurvesLut(engine, lut);
     tracked.curvesRef = curves;
     tracked.curvesIdentity = false;
+  }
+}
+
+export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): void {
+  clearGroupAdjustments(engine);
+  for (const layer of layers) {
+    if (layer.type !== 'group') continue;
+    const group = layer as import('../types').GroupLayer;
+    if (!group.adjustmentsEnabled || !group.adjustments) continue;
+    const adj = group.adjustments;
+    const hasAny =
+      Math.abs(adj.exposure) > 1e-6 ||
+      Math.abs(adj.contrast) > 1e-6 ||
+      Math.abs(adj.highlights) > 1e-6 ||
+      Math.abs(adj.shadows) > 1e-6 ||
+      Math.abs(adj.whites) > 1e-6 ||
+      Math.abs(adj.blacks) > 1e-6 ||
+      Math.abs(adj.saturation) > 1e-6 ||
+      Math.abs(adj.vibrance) > 1e-6;
+    if (!hasAny) continue;
+    setGroupAdjustments(
+      engine,
+      group.id,
+      JSON.stringify(group.children),
+      adj.exposure,
+      adj.contrast,
+      adj.highlights,
+      adj.shadows,
+      adj.whites,
+      adj.blacks,
+      adj.saturation,
+      adj.vibrance,
+    );
   }
 }
 

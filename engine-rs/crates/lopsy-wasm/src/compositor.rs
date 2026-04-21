@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::framebuffer::FramebufferHandle;
 use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc};
 
 /// Main compositing pipeline — called every frame
@@ -33,9 +35,17 @@ pub fn composite(engine: &mut EngineInner) {
     let mask_edit_id = engine.mask_edit_layer_id.clone();
     let n = engine.layer_stack.len();
 
+    // Pre-compute group adjustment routing: for each child layer, which group
+    // (if any) owns it for adjustment purposes.
+    let child_to_group: HashMap<String, String> = engine.group_adjustments.iter()
+        .flat_map(|(gid, ga)| ga.child_ids.iter().map(move |cid| (cid.clone(), gid.clone())))
+        .collect();
+    let mut active_group_id: Option<String> = None;
+
     for idx in 0..n {
         let (
             layer_id,
+            layer_type,
             visible,
             opacity,
             blend_mode,
@@ -54,6 +64,7 @@ pub fn composite(engine: &mut EngineInner) {
             let is_editing = mask_edit_id.as_deref() == Some(layer.id.as_str());
             (
                 layer.id.clone(),
+                layer.layer_type,
                 layer.visible,
                 layer.opacity,
                 layer.blend_mode as i32,
@@ -71,8 +82,85 @@ pub fn composite(engine: &mut EngineInner) {
         };
 
         if !visible || opacity < 1e-7 {
+            // If this is a group layer with adjustments but invisible, close
+            // out the group so children don't keep routing to scratch.
+            if layer_type == lopsy_core::layer::LayerType::Group && active_group_id.as_ref() == Some(&layer_id) {
+                active_group_id = None;
+            }
             continue;
         }
+
+        // --- Group adjustment handling ---
+        // When we encounter a Group layer that has adjustments, finalize the
+        // group scratch: apply adjustments, blend onto composite, then skip
+        // the normal per-layer compositing (groups have no texture).
+        if layer_type == lopsy_core::layer::LayerType::Group {
+            if let Some(ref agid) = active_group_id {
+                if *agid == layer_id {
+                    // This is the group marker — finalize its children
+                    let gs_fbo = engine.group_scratch_fbo.unwrap();
+                    let gs_tex = engine.group_scratch_texture.unwrap();
+                    if let Some(ga) = engine.group_adjustments.get(&layer_id) {
+                        let adj = ga.adjustments.clone();
+                        apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
+                    }
+                    // Blend the adjusted group scratch onto composite
+                    if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
+                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None);
+                    }
+                    active_group_id = None;
+                    // Re-bind composite FBO for subsequent layers
+                    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+                    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+                    continue;
+                }
+            }
+            continue;
+        }
+
+        // Check if this layer is a child of a group with adjustments.
+        // If so, ensure the group scratch is set up and redirect compositing.
+        let is_group_child = if let Some(gid) = child_to_group.get(&layer_id) {
+            if active_group_id.is_none() {
+                // First child of this group — allocate/clear scratch
+                let gs_tex = match engine.group_scratch_texture {
+                    Some(t) => {
+                        let (sw, sh) = engine.texture_pool.get_size(t).unwrap_or((0, 0));
+                        if sw != doc_w || sh != doc_h {
+                            engine.texture_pool.release(t);
+                            let nt = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).unwrap();
+                            engine.group_scratch_texture = Some(nt);
+                            nt
+                        } else { t }
+                    }
+                    None => {
+                        let t = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).unwrap();
+                        engine.group_scratch_texture = Some(t);
+                        t
+                    }
+                };
+                let gs_fbo = match engine.group_scratch_fbo {
+                    Some(f) => f,
+                    None => {
+                        let f = engine.fbo_pool.create(&engine.gl).unwrap();
+                        engine.group_scratch_fbo = Some(f);
+                        f
+                    }
+                };
+                if let Some(gs_gl) = engine.texture_pool.get(gs_tex) {
+                    let gs_gl = gs_gl.clone();
+                    engine.fbo_pool.attach_texture(&engine.gl, gs_fbo, &gs_gl);
+                }
+                engine.fbo_pool.bind(&engine.gl, gs_fbo);
+                engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+                engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+                engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+                active_group_id = Some(gid.clone());
+            }
+            true
+        } else {
+            false
+        };
 
         let mask_info = engine.layer_masks.get(&layer_id).copied().and_then(|mask_handle| {
             let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
@@ -131,7 +219,13 @@ pub fn composite(engine: &mut EngineInner) {
         };
         let (src_handle, src_w, src_h) = composite_src.unwrap_or((tex_handle, tw, th));
         if let Some(src_tex) = engine.texture_pool.get(src_handle).cloned() {
-            blend_onto_composite(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+            if is_group_child {
+                let gs_tex = engine.group_scratch_texture.unwrap();
+                let gs_fbo = engine.group_scratch_fbo.unwrap();
+                blend_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+            } else {
+                blend_onto_composite(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+            }
         }
 
         // --- Active stroke texture ---
@@ -141,7 +235,13 @@ pub fn composite(engine: &mut EngineInner) {
             if let Some(&stroke_handle) = engine.stroke_textures.get(&layer_id) {
                 if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
                     let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
-                    blend_onto_composite(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                    if is_group_child {
+                        let gs_tex = engine.group_scratch_texture.unwrap();
+                        let gs_fbo = engine.group_scratch_fbo.unwrap();
+                        blend_onto_target(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+                    } else {
+                        blend_onto_composite(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                    }
                 }
             }
         }
@@ -273,6 +373,81 @@ fn blend_onto_composite(
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    engine.gl.use_program(Some(&engine.shaders.blit.program));
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex));
+    }
+    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+    engine.draw_fullscreen_quad();
+}
+
+/// Same as `blend_onto_composite` but blits to an arbitrary target FBO/texture
+/// instead of the main composite. Used to composite group children into a
+/// scratch buffer for per-group adjustments.
+fn blend_onto_target(
+    engine: &mut EngineInner,
+    src_tex: &web_sys::WebGlTexture,
+    opacity: f32,
+    blend_mode: i32,
+    layer_x: f32,
+    layer_y: f32,
+    tw: u32,
+    th: u32,
+    premultiplied: bool,
+    overlay: Option<&ColorOverlayDesc>,
+    mask_tex: Option<(&web_sys::WebGlTexture, u32, u32)>,
+    dst_texture: TextureHandle,
+    dst_fbo: FramebufferHandle,
+) {
+    let doc_w = engine.doc_width as f32;
+    let doc_h = engine.doc_height as f32;
+
+    engine.gl.use_program(Some(&engine.shaders.blend.program));
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src_tex));
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    if let Some(dst_tex) = engine.texture_pool.get(dst_texture) {
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(dst_tex));
+    }
+    let shader = &engine.shaders.blend;
+    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
+    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), opacity); }
+    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), blend_mode); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), if premultiplied { 1 } else { 0 }); }
+
+    if let Some(ov) = overlay {
+        if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(&engine.gl, "u_overlayColor") { engine.gl.uniform3f(Some(&loc), ov.color[0], ov.color[1], ov.color[2]); }
+        if let Some(loc) = shader.location(&engine.gl, "u_overlayOpacity") { engine.gl.uniform1f(Some(&loc), ov.opacity); }
+    } else {
+        if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
+    }
+
+    if let Some((mask_gl_tex, mask_w, mask_h)) = mask_tex {
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_gl_tex));
+        if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 2); }
+        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(&engine.gl, "u_maskSize") { engine.gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
+    } else {
+        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+    }
+    if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
+
+    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    engine.draw_fullscreen_quad();
+
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+
+    engine.fbo_pool.bind(&engine.gl, dst_fbo);
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     engine.gl.use_program(Some(&engine.shaders.blit.program));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
@@ -1169,6 +1344,57 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
         engine.draw_fullscreen_quad();
     }
+}
+
+/// Apply adjustment scalars to a specific texture in-place.
+/// Renders src_tex → scratch_a via the adjustments shader, then copies
+/// scratch_a → dst_fbo. Used for per-group adjustments where the source
+/// is the group scratch (transparent background) rather than the composite.
+fn apply_adjustments_to_texture(
+    engine: &mut EngineInner,
+    src_texture: TextureHandle,
+    dst_fbo: FramebufferHandle,
+    adj: &crate::engine::ImageAdjustmentState,
+) {
+    let doc_w = engine.doc_width as i32;
+    let doc_h = engine.doc_height as i32;
+
+    let src_tex = match engine.texture_pool.get(src_texture) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
+    engine.gl.viewport(0, 0, doc_w, doc_h);
+
+    let shader = &engine.shaders.adjustments;
+    engine.gl.use_program(Some(&shader.program));
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+    if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_brightness") { engine.gl.uniform1f(Some(&loc), 0.0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_contrast") { engine.gl.uniform1f(Some(&loc), adj.contrast / 100.0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_exposure") { engine.gl.uniform1f(Some(&loc), adj.exposure); }
+    if let Some(loc) = shader.location(&engine.gl, "u_highlights") { engine.gl.uniform1f(Some(&loc), adj.highlights); }
+    if let Some(loc) = shader.location(&engine.gl, "u_shadows") { engine.gl.uniform1f(Some(&loc), adj.shadows); }
+    if let Some(loc) = shader.location(&engine.gl, "u_whites") { engine.gl.uniform1f(Some(&loc), adj.whites); }
+    if let Some(loc) = shader.location(&engine.gl, "u_blacks") { engine.gl.uniform1f(Some(&loc), adj.blacks); }
+    if let Some(loc) = shader.location(&engine.gl, "u_saturation") { engine.gl.uniform1f(Some(&loc), adj.saturation / 100.0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_vibrance") { engine.gl.uniform1f(Some(&loc), adj.vibrance / 100.0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasLevels") { engine.gl.uniform1f(Some(&loc), 0.0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasCurves") { engine.gl.uniform1f(Some(&loc), 0.0); }
+    engine.draw_fullscreen_quad();
+
+    // Copy scratch_a → dst
+    engine.fbo_pool.bind(&engine.gl, dst_fbo);
+    engine.gl.viewport(0, 0, doc_w, doc_h);
+    engine.gl.use_program(Some(&engine.shaders.blit.program));
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
+    }
+    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+    engine.draw_fullscreen_quad();
 }
 
 use wasm_bindgen::JsCast;

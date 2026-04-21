@@ -155,6 +155,51 @@ pub fn clear_image_levels(engine: &mut Engine) {
 }
 
 // ============================================================
+// Group Adjustments
+// ============================================================
+
+#[wasm_bindgen(js_name = "setGroupAdjustments")]
+pub fn set_group_adjustments(
+    engine: &mut Engine,
+    group_id: &str,
+    child_ids_json: &str,
+    exposure: f32,
+    contrast: f32,
+    highlights: f32,
+    shadows: f32,
+    whites: f32,
+    blacks: f32,
+    saturation: f32,
+    vibrance: f32,
+) -> Result<(), JsError> {
+    let child_ids: Vec<String> = serde_json::from_str(child_ids_json)
+        .map_err(|e| JsError::new(&format!("Invalid child IDs JSON: {e}")))?;
+    let adj = crate::engine::ImageAdjustmentState {
+        exposure,
+        contrast,
+        highlights,
+        shadows,
+        whites,
+        blacks,
+        saturation,
+        vibrance,
+        ..Default::default()
+    };
+    engine.inner.group_adjustments.insert(
+        group_id.to_string(),
+        crate::engine::GroupAdjustment { adjustments: adj, child_ids },
+    );
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "clearGroupAdjustments")]
+pub fn clear_group_adjustments(engine: &mut Engine) {
+    engine.inner.group_adjustments.clear();
+    engine.inner.needs_recomposite = true;
+}
+
+// ============================================================
 // Mask Edit Mode
 // ============================================================
 
