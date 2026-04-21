@@ -1,6 +1,7 @@
 import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
+import { createImageData } from '../../engine/color-space';
 import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
@@ -107,6 +108,14 @@ function syncPixelDataToGpu(
 function createInitialDocument() {
   const bg = createRasterLayer({ name: 'Background', width: 800, height: 600 });
   const rootGroup = createGroupLayer({ name: 'Project', children: [bg.id] });
+  const imgData = createImageData(800, 600);
+  for (let i = 0; i < imgData.data.length; i += 4) {
+    imgData.data[i] = 255;
+    imgData.data[i + 1] = 255;
+    imgData.data[i + 2] = 255;
+    imgData.data[i + 3] = 255;
+  }
+  pixelDataManager.setDense(bg.id, imgData);
   return {
     id: crypto.randomUUID(),
     name: 'Untitled' as const,

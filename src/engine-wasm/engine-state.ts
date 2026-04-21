@@ -7,6 +7,7 @@
 
 import type { Engine } from './wasm-bridge';
 import { initWasm, createEngine, clearAllLayers } from './wasm-bridge';
+import { resetTrackedState } from './engine-sync';
 import { setEngine as setGpuPixelEngine } from './gpu-pixel-access';
 import { canvasColorSpace } from '../engine/color-space';
 
@@ -55,6 +56,7 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
 export function clearEngine(): void {
   if (engine) {
     clearAllLayers(engine);
+    resetTrackedState(engine);
   }
 }
 

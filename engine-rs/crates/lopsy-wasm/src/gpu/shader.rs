@@ -31,6 +31,8 @@ pub const TRANSFORM_PERSPECTIVE_FRAG: &str = include_str!("shaders/transform_per
 pub const GLOW_FRAG: &str = include_str!("shaders/effects/glow.glsl");
 pub const SHADOW_FRAG: &str = include_str!("shaders/effects/shadow.glsl");
 pub const STROKE_EDT_FRAG: &str = include_str!("shaders/effects/stroke_edt.glsl");
+pub const SEPARABLE_DILATE_FRAG: &str = include_str!("shaders/effects/separable_dilate.glsl");
+pub const STROKE_APPLY_FRAG: &str = include_str!("shaders/effects/stroke_apply.glsl");
 pub const COLOR_OVERLAY_FRAG: &str = include_str!("shaders/effects/color_overlay.glsl");
 
 // Filters
@@ -178,6 +180,8 @@ pub struct ShaderPrograms {
     pub glow: ShaderProgram,
     pub shadow: ShaderProgram,
     pub stroke_edt: ShaderProgram,
+    pub separable_dilate: ShaderProgram,
+    pub stroke_apply: ShaderProgram,
     pub color_overlay: ShaderProgram,
     // Filters
     pub gaussian_blur: ShaderProgram,
@@ -246,6 +250,8 @@ impl ShaderPrograms {
             glow: compile_program(gl, v, GLOW_FRAG)?,
             shadow: compile_program(gl, v, SHADOW_FRAG)?,
             stroke_edt: compile_program(gl, v, STROKE_EDT_FRAG)?,
+            separable_dilate: compile_program(gl, v, SEPARABLE_DILATE_FRAG)?,
+            stroke_apply: compile_program(gl, v, STROKE_APPLY_FRAG)?,
             color_overlay: compile_program(gl, v, COLOR_OVERLAY_FRAG)?,
             // Filters
             gaussian_blur: compile_program(gl, v, GAUSSIAN_BLUR_FRAG)?,
