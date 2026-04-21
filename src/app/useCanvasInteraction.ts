@@ -357,11 +357,13 @@ export function useCanvasInteraction(
           gpuBrushDabBatch(eng, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
 
           if (symmetryCenter) {
-            const { symmetryHorizontal, symmetryVertical } = useToolSettingsStore.getState();
-            if (symmetryHorizontal || symmetryVertical) {
+            const { symmetryHorizontal, symmetryVertical, symmetryRadial, symmetrySegments } = useToolSettingsStore.getState();
+            if (symmetryHorizontal || symmetryVertical || (symmetryRadial && symmetrySegments > 1)) {
               const sym = {
                 horizontal: symmetryHorizontal,
                 vertical: symmetryVertical,
+                radial: symmetryRadial,
+                segments: symmetrySegments,
                 centerX: symmetryCenter.x,
                 centerY: symmetryCenter.y,
               };

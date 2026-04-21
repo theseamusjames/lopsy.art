@@ -344,6 +344,7 @@ Applied globally or per-group. All default to 0.
 ## Symmetry
 
 - **Axes**: horizontal, vertical, or both (4-way)
+- **Radial / Mandala mode**: N-fold rotational symmetry (2 - 32 segments)
 - **Center**: configurable (defaults to canvas center)
 - Available on brush, pencil, and eraser
 

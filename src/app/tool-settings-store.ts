@@ -333,6 +333,8 @@ interface ToolSettings {
   activeBrushTip: BrushTipData | null;
   symmetryHorizontal: boolean;
   symmetryVertical: boolean;
+  symmetryRadial: boolean;
+  symmetrySegments: number;
   foregroundColor: Color;
   backgroundColor: Color;
   recentColors: readonly Color[];
@@ -395,6 +397,8 @@ interface ToolSettings {
   updateGradientStop: (index: number, stop: Partial<GradientStop>) => void;
   setSymmetryHorizontal: (enabled: boolean) => void;
   setSymmetryVertical: (enabled: boolean) => void;
+  setSymmetryRadial: (enabled: boolean) => void;
+  setSymmetrySegments: (segments: number) => void;
   setForegroundColor: (color: Color) => void;
   setBackgroundColor: (color: Color) => void;
   swapColors: () => void;
@@ -456,6 +460,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   activeBrushTip: null,
   symmetryHorizontal: false,
   symmetryVertical: false,
+  symmetryRadial: false,
+  symmetrySegments: 6,
   foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
   backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
   recentColors: Array.from({ length: MAX_RECENT_COLORS }, () => ({ r: 46, g: 46, b: 46, a: 1 })),
@@ -525,6 +531,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   }),
   setSymmetryHorizontal: (enabled) => set({ symmetryHorizontal: enabled }),
   setSymmetryVertical: (enabled) => set({ symmetryVertical: enabled }),
+  setSymmetryRadial: (enabled) => set({ symmetryRadial: enabled }),
+  setSymmetrySegments: (segments) => set({ symmetrySegments: Math.max(2, Math.min(32, segments)) }),
   setStampSize: (size) => set({ stampSize: Math.max(1, Math.min(200, size)) }),
   setPathStrokeWidth: (width) => set({ pathStrokeWidth: Math.max(1, Math.min(50, width)) }),
   setDodgeExposure: (exposure) => set({ dodgeExposure: Math.max(1, Math.min(100, exposure)) }),

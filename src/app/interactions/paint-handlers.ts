@@ -21,10 +21,12 @@ import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from '../../to
 type PaintTool = 'brush' | 'pencil' | 'eraser';
 
 function getSymmetryConfig(center: { x: number; y: number }): SymmetryConfig {
-  const { symmetryHorizontal, symmetryVertical } = useToolSettingsStore.getState();
+  const { symmetryHorizontal, symmetryVertical, symmetryRadial, symmetrySegments } = useToolSettingsStore.getState();
   return {
     horizontal: symmetryHorizontal,
     vertical: symmetryVertical,
+    radial: symmetryRadial,
+    segments: symmetrySegments,
     centerX: center.x,
     centerY: center.y,
   };

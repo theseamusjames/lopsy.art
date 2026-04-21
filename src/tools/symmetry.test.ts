@@ -5,6 +5,8 @@ import type { SymmetryConfig } from './symmetry';
 const config = (h: boolean, v: boolean): SymmetryConfig => ({
   horizontal: h,
   vertical: v,
+  radial: false,
+  segments: 6,
   centerX: 100,
   centerY: 50,
 });
@@ -33,6 +35,52 @@ describe('getMirroredPoints', () => {
   });
 });
 
+describe('radial symmetry', () => {
+  const radialConfig = (segments: number): SymmetryConfig => ({
+    horizontal: false,
+    vertical: false,
+    radial: true,
+    segments,
+    centerX: 100,
+    centerY: 100,
+  });
+
+  it('returns n-1 copies for n segments', () => {
+    const pts = getMirroredPoints(150, 100, radialConfig(6));
+    expect(pts).toHaveLength(5);
+  });
+
+  it('rotates 180° for 2 segments', () => {
+    const pts = getMirroredPoints(150, 100, radialConfig(2));
+    expect(pts).toHaveLength(1);
+    expect(pts[0]!.x).toBeCloseTo(50);
+    expect(pts[0]!.y).toBeCloseTo(100);
+  });
+
+  it('rotates 120° for 3 segments', () => {
+    const pts = getMirroredPoints(150, 100, radialConfig(3));
+    expect(pts).toHaveLength(2);
+    expect(pts[0]!.x).toBeCloseTo(75);
+    expect(pts[0]!.y).toBeCloseTo(100 + 25 * Math.sqrt(3));
+  });
+
+  it('radial batch mirrors all points', () => {
+    const flat = new Float64Array([150, 100, 130, 110]);
+    const result = mirrorBatchPoints(flat, radialConfig(4));
+    expect(result).toHaveLength(3);
+    expect(result[0]![0]).toBeCloseTo(100);
+    expect(result[0]![1]).toBeCloseTo(150);
+  });
+
+  it('isSymmetryActive returns true for radial', () => {
+    expect(isSymmetryActive(radialConfig(6))).toBe(true);
+  });
+
+  it('isSymmetryActive returns false for radial with 1 segment', () => {
+    expect(isSymmetryActive(radialConfig(1))).toBe(false);
+  });
+});
+
 describe('mirrorBatchPoints', () => {
   it('mirrors a flat point array vertically', () => {
     const pts = new Float64Array([30, 20, 60, 40]);
@@ -50,12 +98,11 @@ describe('mirrorBatchPoints', () => {
 
 describe('stroke-start centering', () => {
   it('mirrors around the stroke start point, not document center', () => {
-    // Stroke starts at (50, 30), cursor moves to (70, 30)
-    // With vertical symmetry, the mirror should be at (30, 30)
-    // i.e., 2*50 - 70 = 30
     const startConfig: SymmetryConfig = {
       horizontal: false,
       vertical: true,
+      radial: false,
+      segments: 6,
       centerX: 50,
       centerY: 30,
     };
