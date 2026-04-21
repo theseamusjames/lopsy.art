@@ -820,6 +820,36 @@ pub fn float_selection(
     Ok(())
 }
 
+/// Replace the float base texture with a copy of a source texture.
+/// Used by option+drag (copy-move): after floatSelection cuts the selected
+/// pixels, this restores the base so the original pixels remain visible.
+pub fn restore_float_base(
+    engine: &mut EngineInner,
+    src_id: &str,
+) -> Result<(), String> {
+    let base_handle = engine.float_base_texture
+        .ok_or("No float base")?;
+    let src_handle = *engine.layer_textures.get(src_id)
+        .ok_or_else(|| format!("Source {src_id} not found"))?;
+    let src_tex = engine.texture_pool.get(src_handle).cloned()
+        .ok_or("Source texture not found")?;
+    let base_tex = engine.texture_pool.get(base_handle).cloned()
+        .ok_or("Base texture not found")?;
+    let (bw, bh) = engine.texture_pool.get_size(base_handle).unwrap_or((1, 1));
+
+    engine.render_to_texture(&base_tex, bw as i32, bh as i32, |engine| {
+        engine.gl.use_program(Some(&engine.shaders.blit.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
+            engine.gl.uniform1i(Some(&loc), 0);
+        }
+        engine.draw_fullscreen_quad();
+    });
+
+    Ok(())
+}
+
 /// Composite the float texture at (dx, dy) offset onto the base, writing the
 /// result to the layer texture. Called on every mousemove.
 pub fn composite_float(

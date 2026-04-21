@@ -8,6 +8,7 @@ import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   floatSelection,
+  restoreFloatBase,
   compositeFloat,
   hasFloat,
   setSelectionMask,
@@ -28,11 +29,19 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   const sel = editorState.selection;
   const {
     canvasPos,
-    activeLayerId,
+    altKey,
     activeLayer,
     floatingSelectionRef,
     persistentTransformRef,
   } = ctx;
+  let { activeLayerId } = ctx;
+
+  // Option+drag with no selection: duplicate layer first, then move the copy
+  if (altKey && !(sel.active && sel.mask)) {
+    editorState.duplicateLayer();
+    const newState = useEditorStore.getState();
+    activeLayerId = newState.document.activeLayerId ?? activeLayerId;
+  }
 
   if (sel.active && sel.mask) {
     const engine = getEngine();
@@ -75,6 +84,12 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
 
       // First move: float the selection on the GPU
       floatSelection(engine, activeLayerId);
+
+      // Option+drag: restore the float base so selected pixels remain in
+      // place — floatSelection cuts them, but option means "copy, don't cut".
+      if (altKey) {
+        restoreFloatBase(engine, activeLayerId);
+      }
 
       clearJsPixelData(activeLayerId);
 
