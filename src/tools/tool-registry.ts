@@ -129,7 +129,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     isGpu: true,
     handler: {
       down: (ctx) => handleGradientDown(ctx),
-      move: (ctx, state) => handleGradientMove(state, ctx.layerPos),
+      move: (ctx, state) => handleGradientMove(state, ctx.layerPos, ctx.metaKey),
     },
   },
   eyedropper: {

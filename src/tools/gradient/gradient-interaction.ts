@@ -33,7 +33,7 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   };
 }
 
-export function handleGradientMove(state: InteractionState, layerLocalPos: Point): void {
+export function handleGradientMove(state: InteractionState, layerLocalPos: Point, metaKey = false): void {
   if (!state.startPoint || !state.layerId) return;
 
   const toolSettings = useToolSettingsStore.getState();
@@ -55,8 +55,19 @@ export function handleGradientMove(state: InteractionState, layerLocalPos: Point
 
   const startX = state.startPoint.x + state.layerStartX;
   const startY = state.startPoint.y + state.layerStartY;
-  const endX = layerLocalPos.x + state.layerStartX;
-  const endY = layerLocalPos.y + state.layerStartY;
+  let endX = layerLocalPos.x + state.layerStartX;
+  let endY = layerLocalPos.y + state.layerStartY;
+
+  if (metaKey) {
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const rawAngle = Math.atan2(dy, dx);
+    const snapRad = Math.PI / 12; // 15 degrees
+    const snappedAngle = Math.round(rawAngle / snapRad) * snapRad;
+    endX = startX + dist * Math.cos(snappedAngle);
+    endY = startY + dist * Math.sin(snappedAngle);
+  }
 
   if (gradType === 'linear') {
     gpuRenderLinearGradient(engine, state.layerId, startX, startY, endX, endY, stopsJson);
