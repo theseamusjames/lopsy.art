@@ -11,7 +11,7 @@ export function computeAddTextLayer(
   if (groupId) {
     layers = addToGroup(layers, textLayer.id, groupId);
   }
-  const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId, doc.rootGroupId);
+  const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId, doc.rootGroupId, doc.layers);
   const layerOrder = [...doc.layerOrder];
   layerOrder.splice(orderIdx, 0, textLayer.id);
   return {

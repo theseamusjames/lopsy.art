@@ -283,7 +283,10 @@ export function useCanvasPointerHandlers({
       const isPan = deps.pointerMode.kind === 'panning';
 
       // Outside canvas and not driving any active interaction — ignore.
-      if (!inside && !isToolPointer && !isPan) return;
+      if (!inside && !isToolPointer && !isPan) {
+        deps.setRulerHover(null);
+        return;
+      }
 
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;

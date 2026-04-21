@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Slider } from '../Slider/Slider';
+import { useDraggablePanel } from '../../app/hooks/useDraggablePanel';
 import styles from './NoiseDialog.module.css';
 
 interface NoiseDialogProps {
@@ -20,6 +21,7 @@ export function NoiseDialog({ title, onApply, onCancel }: NoiseDialogProps) {
   const [amount, setAmount] = useState(25);
   const [noiseType, setNoiseType] = useState<'gaussian' | 'uniform'>('gaussian');
   const [isMonochromatic, setIsMonochromatic] = useState(false);
+  const { offset, dragProps } = useDraggablePanel();
 
   const handleApply = useCallback(() => {
     onApply({ amount, type: noiseType, monochromatic: isMonochromatic });
@@ -37,7 +39,14 @@ export function NoiseDialog({ title, onApply, onCancel }: NoiseDialogProps) {
 
   return (
     <div className={styles.overlay} role="presentation">
-      <div className={styles.modal} role="dialog" aria-label={title} onKeyDown={handleKeyDown}>
+      <div
+        className={styles.modal}
+        role="dialog"
+        aria-label={title}
+        onKeyDown={handleKeyDown}
+        style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+        {...dragProps}
+      >
         <div className={styles.header}>
           <h2>{title}</h2>
         </div>
@@ -98,6 +107,7 @@ export function NoiseDialog({ title, onApply, onCancel }: NoiseDialogProps) {
 export function FillNoiseDialog({ title, onApply, onCancel }: FillNoiseDialogProps) {
   const [noiseType, setNoiseType] = useState<'gaussian' | 'uniform'>('gaussian');
   const [isMonochromatic, setIsMonochromatic] = useState(false);
+  const { offset, dragProps } = useDraggablePanel();
 
   const handleApply = useCallback(() => {
     onApply({ type: noiseType, monochromatic: isMonochromatic });
@@ -115,7 +125,14 @@ export function FillNoiseDialog({ title, onApply, onCancel }: FillNoiseDialogPro
 
   return (
     <div className={styles.overlay} role="presentation">
-      <div className={styles.modal} role="dialog" aria-label={title} onKeyDown={handleKeyDown}>
+      <div
+        className={styles.modal}
+        role="dialog"
+        aria-label={title}
+        onKeyDown={handleKeyDown}
+        style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+        {...dragProps}
+      >
         <div className={styles.header}>
           <h2>{title}</h2>
         </div>

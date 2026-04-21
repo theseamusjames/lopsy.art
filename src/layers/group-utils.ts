@@ -197,6 +197,8 @@ export function getInsertionGroupId(
 /**
  * Compute the layerOrder insertion index for a new layer.
  * Inserts just above the active layer in layerOrder.
+ * When the active layer is a group, inserts just before it so the new
+ * layer falls inside the group's range in layerOrder.
  * Never inserts above the root group — the root group must remain the
  * topmost item in the visual stack (last in layerOrder).
  */
@@ -204,11 +206,13 @@ export function getInsertionOrderIndex(
   layerOrder: readonly string[],
   activeLayerId: string | null,
   rootGroupId?: string | null,
+  layers?: readonly Layer[],
 ): number {
   if (!activeLayerId) return layerOrder.length;
   const idx = layerOrder.indexOf(activeLayerId);
   if (idx === -1) return layerOrder.length;
-  let insertIdx = idx + 1;
+  const activeIsGroup = layers?.find((l) => l.id === activeLayerId)?.type === 'group';
+  let insertIdx = activeIsGroup ? idx : idx + 1;
   if (rootGroupId) {
     const rootIdx = layerOrder.indexOf(rootGroupId);
     if (rootIdx !== -1 && insertIdx > rootIdx) {

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Slider } from '../Slider/Slider';
+import { useDraggablePanel } from '../../app/hooks/useDraggablePanel';
 import styles from './FilterDialog.module.css';
 
 interface FilterParam {
@@ -90,9 +91,18 @@ export function FilterDialog({ title, params, onApply, onCancel, onPreviewChange
     }
   }, [handleApply, handleCancel]);
 
+  const { offset, dragProps } = useDraggablePanel();
+
   return (
     <div className={styles.overlay} role="presentation">
-      <div className={styles.modal} role="dialog" aria-label={title} onKeyDown={handleKeyDown}>
+      <div
+        className={styles.modal}
+        role="dialog"
+        aria-label={title}
+        onKeyDown={handleKeyDown}
+        style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+        {...dragProps}
+      >
         <div className={styles.header}>
           <h2>{title}</h2>
         </div>

@@ -2,7 +2,6 @@ import { useUIStore } from '../../ui-store';
 import { useEditorStore } from '../../editor-store';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
 import { encodeBMP } from '../../../utils/bmp-encoder';
-import { hasActiveAdjustments, applyAdjustmentsToImageData, aggregateGroupAdjustments } from '../../../filters/image-adjustments';
 import { contextOptions, canvasColorSpace, isWideGamut, createImageDataFromArray } from '../../../engine/color-space';
 import { seedBitmapFromBlob } from '../../../engine/bitmap-cache';
 import { getEngine } from '../../../engine-wasm/engine-state';
@@ -117,12 +116,8 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, form
   clamped.set(rawPixels);
   const imageData = createImageDataFromArray(clamped, width, height);
 
-  // Apply post-composite image adjustments aggregated from all groups
-  const edState = useEditorStore.getState();
-  const adj = aggregateGroupAdjustments(edState.document.layers);
-  if (adj && hasActiveAdjustments(adj)) {
-    applyAdjustmentsToImageData(imageData, adj);
-  }
+  // Group adjustments are applied by the compositor during compositing,
+  // so no post-composite JS-side adjustment is needed here.
 
   // GPU output is in the working color space (P3 on capable displays).
   // Create the export canvas in the same color space and putImageData

@@ -15,6 +15,7 @@ import {
   syncRulers,
   syncSeamlessPattern,
   syncAdjustments,
+  syncGroupAdjustments,
   syncMaskEditMode,
   syncBrushTip,
   renderEngine,
@@ -23,7 +24,6 @@ import {
 import { renderGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
-import { aggregateGroupAdjustments } from '../filters/image-adjustments';
 import { renderTextDragOverlay, renderTextEditOverlay } from './rendering/render-text-overlay';
 import { renderTextToCanvas } from '../tools/text/text';
 import type { TextStyle } from '../tools/text/text';
@@ -71,13 +71,8 @@ function renderFrameGpu(
   const showGrid = uiState.showGrid;
   const showRulers = uiState.showRulers;
   const gridSize = uiState.gridSize;
-  // Aggregate adjustments from all visible groups (delegates to the shared
-  // helper so curves and any future fields stay in one place).
-  const groupAdjustments = aggregateGroupAdjustments(layers);
-  const adjustments = groupAdjustments ?? uiState.adjustments;
-  const adjustmentsEnabled = layers.some(
-    (l) => l.type === 'group' && (l as import('../types').GroupLayer).adjustmentsEnabled !== false && (l as import('../types').GroupLayer).adjustments != null,
-  ) || uiState.adjustmentsEnabled;
+  const adjustments = uiState.adjustments;
+  const adjustmentsEnabled = uiState.adjustmentsEnabled;
   const pathAnchors = uiState.pathAnchors;
   const pathClosed = uiState.pathClosed;
   const lassoPoints = uiState.lassoPoints;
@@ -131,6 +126,7 @@ function renderFrameGpu(
   syncRulers(engine, showRulers);
   syncSeamlessPattern(engine, uiState.showSeamlessPattern, uiState.dimSeamlessPattern);
   syncAdjustments(engine, adjustments, adjustmentsEnabled);
+  syncGroupAdjustments(engine, layers);
   syncMaskEditMode(engine, uiState.maskEditMode, doc.activeLayerId);
   syncBrushTip(engine, toolState.activeBrushTip, toolState.brushAngle * Math.PI / 180);
 
