@@ -17,4 +17,5 @@ pub mod adjust;
 pub mod blur;
 pub mod noise;
 pub mod preview;
+pub mod render;
 pub mod stylize;
