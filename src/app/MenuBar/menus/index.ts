@@ -1,7 +1,7 @@
 import type { MenuDef } from './types';
 import type { FilterDialogId } from '../filter-actions';
 import { fileMenu } from './file-menu';
-import { editMenu } from './edit-menu';
+import { createEditMenu } from './edit-menu';
 import { createImageMenu, type ImageDialogId } from './image-menu';
 import { layerMenu } from './layer-menu';
 import { selectMenu } from './select-menu';
@@ -20,7 +20,7 @@ export function getMenus(
 ): MenuDef[] {
   return [
     fileMenu,
-    editMenu,
+    createEditMenu(showFilterDialog),
     createImageMenu(showImageDialog),
     layerMenu,
     selectMenu,

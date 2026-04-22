@@ -26,7 +26,6 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { separator: true, label: '' },
       { label: 'Clouds...', action: () => showFilterDialog('clouds') },
       { label: 'Smoke...', action: () => showFilterDialog('smoke') },
-      { label: 'Pattern Fill...', action: () => showFilterDialog('pattern-fill') },
       { separator: true, label: '' },
       { label: 'Brightness/Contrast...', action: () => showFilterDialog('brightness-contrast') },
       { label: 'Hue/Saturation...', action: () => showFilterDialog('hue-saturation') },

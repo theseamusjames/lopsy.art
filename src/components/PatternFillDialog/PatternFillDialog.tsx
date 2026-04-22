@@ -134,7 +134,7 @@ export function PatternFillDialog({ onApply, onCancel, onPreviewChange, onPrevie
                 onChange={setScale}
               />
               <Slider
-                label="Offset X"
+                label="Column Offset"
                 value={offsetX}
                 min={0}
                 max={100}
@@ -142,7 +142,7 @@ export function PatternFillDialog({ onApply, onCancel, onPreviewChange, onPrevie
                 onChange={setOffsetX}
               />
               <Slider
-                label="Offset Y"
+                label="Row Offset"
                 value={offsetY}
                 min={0}
                 max={100}
