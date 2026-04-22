@@ -137,6 +137,35 @@ pub fn filter_pixel_stretch(
     );
 }
 
+#[wasm_bindgen(js_name = "filterLensDistortion")]
+pub fn filter_lens_distortion(
+    engine: &mut Engine,
+    layer_id: &str,
+    strength: f32,
+    zoom: f32,
+    fringing: f32,
+) {
+    let strength = strength.clamp(-1.0, 1.0);
+    let zoom = zoom.clamp(0.5, 2.0);
+    let fringing = fringing.clamp(0.0, 1.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.lens_distortion,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_strength") {
+                gl.uniform1f(Some(&loc), strength);
+            }
+            if let Some(loc) = shader.location(gl, "u_zoom") {
+                gl.uniform1f(Some(&loc), zoom);
+            }
+            if let Some(loc) = shader.location(gl, "u_fringing") {
+                gl.uniform1f(Some(&loc), fringing);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterFindEdges")]
 pub fn filter_find_edges(engine: &mut Engine, layer_id: &str) {
     filter_gpu::apply_filter(
