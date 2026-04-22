@@ -59,6 +59,7 @@ pub const KALEIDOSCOPE_FRAG: &str = include_str!("shaders/filters/kaleidoscope.g
 pub const OIL_PAINT_FRAG: &str = include_str!("shaders/filters/oil_paint.glsl");
 pub const CHROMATIC_ABERRATION_FRAG: &str = include_str!("shaders/filters/chromatic_aberration.glsl");
 pub const PIXEL_STRETCH_FRAG: &str = include_str!("shaders/filters/pixel_stretch.glsl");
+pub const PATTERN_FILL_FRAG: &str = include_str!("shaders/filters/pattern_fill.glsl");
 pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
 
 // Brush
@@ -208,6 +209,7 @@ pub struct ShaderPrograms {
     pub oil_paint: ShaderProgram,
     pub chromatic_aberration: ShaderProgram,
     pub pixel_stretch: ShaderProgram,
+    pub pattern_fill: ShaderProgram,
     pub selection_mask_blend: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab: ShaderProgram,
@@ -279,6 +281,7 @@ impl ShaderPrograms {
             oil_paint: compile_program(gl, v, OIL_PAINT_FRAG)?,
             chromatic_aberration: compile_program(gl, v, CHROMATIC_ABERRATION_FRAG)?,
             pixel_stretch: compile_program(gl, v, PIXEL_STRETCH_FRAG)?,
+            pattern_fill: compile_program(gl, v, PATTERN_FILL_FRAG)?,
             selection_mask_blend: compile_program(gl, v, SELECTION_MASK_BLEND_FRAG)?,
             // Brush — use standard fullscreen quad vert; dab positioning via fragment shader
             brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,

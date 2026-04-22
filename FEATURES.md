@@ -241,6 +241,13 @@ Applied globally or per-group. All default to 0.
 ### Render
 - **Clouds**: scale, seed
 - **Smoke**: scale, seed, turbulence
+- **Pattern Fill**: tiles a user-defined pattern across the active layer
+  - **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern
+  - **Scale**: 10 - 1000% (tile size relative to original pattern dimensions)
+  - **Offset X / Y**: 0 - 100% (shifts the tiling origin)
+  - Pattern selector grid with thumbnails
+  - Live preview support
+  - Selection mask support (fills only the selected area)
 
 ---
 

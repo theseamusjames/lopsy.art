@@ -4,6 +4,7 @@ import { useToolSettingsStore } from '../../tool-settings-store';
 import { clearJsPixelData } from '../../store/clear-js-pixel-data';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { fillWithColor } from '../../../engine-wasm/wasm-bridge';
+import { definePattern } from '../pattern-actions';
 import type { MenuDef } from './types';
 
 export function fillSelection(): void {
@@ -35,6 +36,8 @@ export const editMenu: MenuDef = {
     { label: 'Paste', shortcut: '\u2318V', action: () => useEditorStore.getState().paste() },
     { separator: true, label: '' },
     { label: 'Fill', shortcut: '\u21E7F5', action: () => fillSelection() },
+    { separator: true, label: '' },
+    { label: 'Define Pattern', action: () => definePattern() },
     { separator: true, label: '' },
     { label: 'Clear Guides', action: () => useUIStore.getState().clearGuides() },
   ],
