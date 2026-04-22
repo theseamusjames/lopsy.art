@@ -8,6 +8,10 @@ import { pixelDataManager } from '../../engine/pixel-data-manager';
  */
 export function clearJsPixelData(layerId: string): void {
   pixelDataManager.remove(layerId);
+  // Always bump the pixel version so thumbnails re-read the GPU texture.
+  // remove() only bumps when data existed, but GPU-painted layers (brush,
+  // shape, fill) may never have had JS-side data.
+  pixelDataManager.bumpVersion(layerId);
   useEditorStore.setState((state) => ({
     dirtyLayerIds: new Set(state.dirtyLayerIds).add(layerId),
   }));
