@@ -15,9 +15,9 @@ pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), Stri
             engine.stroke_fbo = Some(fbo);
         }
 
-        // Attach stroke texture to FBO
         if let (Some(fbo), Some(tex)) = (engine.stroke_fbo, engine.texture_pool.get(stroke_tex)) {
             engine.fbo_pool.attach_texture(&engine.gl, fbo, tex);
+            engine.fbo_pool.unbind(&engine.gl);
         }
     }
     Ok(())
@@ -76,6 +76,15 @@ pub fn apply_dab_batch(
         }
     }
     gl.viewport(0, 0, w as i32, h as i32);
+
+    // Break any accidental feedback loop: the stroke texture may still be
+    // bound to a texture unit from acquire() or attach_texture(). If it's
+    // simultaneously attached as the FBO color target AND bound to a
+    // sampler unit, the WebGL implementation can silently discard the draw.
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
     // MAX blending for dab accumulation on the stroke texture.
     // Each pixel takes the maximum of the existing value and the new dab value.

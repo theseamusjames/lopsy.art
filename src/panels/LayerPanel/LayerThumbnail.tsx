@@ -6,6 +6,7 @@ import type { Layer } from '../../types';
 import styles from './LayerPanel.module.css';
 
 const THUMB_SIZE = 24;
+const MAX_RETRIES = 10;
 
 export function LayerThumbnail({ layer }: { layer: Layer }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -20,18 +21,26 @@ export function LayerThumbnail({ layer }: { layer: Layer }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const rafId = requestAnimationFrame(() => {
+    let cancelled = false;
+    let retries = 0;
+    let rafId = 0;
+
+    const tryRead = () => {
+      if (cancelled) return;
+
       const ctx = canvas.getContext('2d', contextOptions);
       if (!ctx) return;
 
       canvas.width = THUMB_SIZE;
       canvas.height = THUMB_SIZE;
 
-      // GPU-downscaled readback — returns a small ImageData (at most
-      // THUMB_SIZE on the longest edge) instead of the full layer texture.
       const thumb = readLayerThumbnail(layer.id, THUMB_SIZE);
       if (!thumb) {
         ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE);
+        if (retries < MAX_RETRIES) {
+          retries++;
+          rafId = requestAnimationFrame(tryRead);
+        }
         return;
       }
 
@@ -47,9 +56,14 @@ export function LayerThumbnail({ layer }: { layer: Layer }) {
       const w = thumb.width * scale;
       const h = thumb.height * scale;
       ctx.drawImage(tempCanvas, (THUMB_SIZE - w) / 2, (THUMB_SIZE - h) / 2, w, h);
-    });
+    };
 
-    return () => cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tryRead);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+    };
   }, [layer.id, pixelVersion]);
 
   return <canvas ref={canvasRef} className={styles.thumbnailCanvas} />;
