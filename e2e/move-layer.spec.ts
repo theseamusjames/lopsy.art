@@ -462,7 +462,7 @@ test.describe('Move Layer — content only', () => {
       {
         lid: layerId,
         movedX: Math.round(boundsAfterMove.x + boundsAfterMove.width / 2),
-        movedY: Math.round(boundsAfterMove.y + boundsAfterMove.height / 2),
+        movedY: Math.round(boundsAfterMove.y + 4),
       },
     );
 
