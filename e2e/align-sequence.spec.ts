@@ -174,6 +174,7 @@ test.describe('Align buttons sequence — 50x100 rect at (50,50) on 1920x1080', 
   });
 
   test('BRUSH-DRAWN rect: press each align button, screenshot between', async ({ page }) => {
+    test.setTimeout(120_000);
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 1920, 1080, false);

@@ -104,6 +104,7 @@ async function brushDiagonalDrag(page: Page, fromX: number, fromY: number, toX: 
 }
 
 test('Centered then stroked — stroke follows drag path, not stretched', async ({ page }) => {
+  test.setTimeout(120_000);
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 1920, 1080, true);

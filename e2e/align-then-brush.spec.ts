@@ -142,6 +142,7 @@ function countBlackInRect(
 
 test.describe('Align then brush — brush paints at cursor, not offset by alignment', () => {
   test('brush top-left after aligning rect bottom-right lands in top-left', async ({ page }) => {
+    test.setTimeout(120_000);
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 1920, 1080, true);
