@@ -9,7 +9,6 @@ import {
   beginStroke, endStroke, hasFloat, dropFloat,
   applyBrushDabBatch as gpuBrushDabBatch,
   uploadLayerPixels,
-  getLayerTextureDimensions,
 } from '../engine-wasm/wasm-bridge';
 import { flushLayerSync, resetTrackedState, syncDocumentSize } from '../engine-wasm/engine-sync';
 import { uploadCompressed } from '../engine-wasm/gpu-pixel-access';
@@ -172,19 +171,6 @@ export function useCanvasInteraction(
             const currentState = useEditorStore.getState();
             syncDocumentSize(engine, currentState.document.width, currentState.document.height);
             flushLayerSync(currentState);
-
-            // New empty layers only have a 1x1 placeholder GPU texture
-            // (created by addLayer). Upload an empty doc-sized buffer so
-            // beginStroke can create a matching stroke texture. Layers
-            // with real content (even if cropped smaller than the doc)
-            // are handled by ensure_layer_full_size inside beginStroke.
-            const dims = getLayerTextureDimensions(engine, activeLayerId);
-            if ((dims[0] ?? 0) <= 1 && (dims[1] ?? 0) <= 1) {
-              const doc = useEditorStore.getState().document;
-              const emptyPixels = new Uint8Array(doc.width * doc.height * 4);
-              uploadLayerPixels(engine, activeLayerId, emptyPixels, doc.width, doc.height, 0, 0);
-            }
-
             beginStroke(engine, activeLayerId);
 
             // beginStroke calls ensure_layer_full_size on the WASM side,
