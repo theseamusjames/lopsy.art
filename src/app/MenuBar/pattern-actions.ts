@@ -21,14 +21,53 @@ export function definePattern(): void {
   } catch {
     return;
   }
-  const width = dims[0] ?? 0;
-  const height = dims[1] ?? 0;
-  if (width === 0 || height === 0) return;
+  const layerW = dims[0] ?? 0;
+  const layerH = dims[1] ?? 0;
+  if (layerW === 0 || layerH === 0) return;
 
   const pixels = readLayerPixels(engine, activeId);
   if (!pixels || pixels.length === 0) return;
 
-  const data = new Uint8Array(pixels);
+  const { selection } = state;
+  let data: Uint8Array;
+  let width: number;
+  let height: number;
+
+  if (selection.active && selection.bounds && selection.mask) {
+    const { bounds, mask, maskWidth, maskHeight } = selection;
+    const x0 = Math.max(0, Math.round(bounds.x));
+    const y0 = Math.max(0, Math.round(bounds.y));
+    const x1 = Math.min(layerW, Math.round(bounds.x + bounds.width));
+    const y1 = Math.min(layerH, Math.round(bounds.y + bounds.height));
+    width = x1 - x0;
+    height = y1 - y0;
+    if (width <= 0 || height <= 0) return;
+
+    data = new Uint8Array(width * height * 4);
+    for (let row = 0; row < height; row++) {
+      for (let col = 0; col < width; col++) {
+        const srcX = x0 + col;
+        const srcY = y0 + row;
+        const srcIdx = (srcY * layerW + srcX) * 4;
+        const dstIdx = (row * width + col) * 4;
+
+        let maskVal = 0;
+        if (srcX >= 0 && srcX < maskWidth && srcY >= 0 && srcY < maskHeight) {
+          maskVal = (mask[srcY * maskWidth + srcX] ?? 0) / 255;
+        }
+
+        data[dstIdx] = pixels[srcIdx] ?? 0;
+        data[dstIdx + 1] = pixels[srcIdx + 1] ?? 0;
+        data[dstIdx + 2] = pixels[srcIdx + 2] ?? 0;
+        data[dstIdx + 3] = Math.round((pixels[srcIdx + 3] ?? 0) * maskVal);
+      }
+    }
+  } else {
+    data = new Uint8Array(pixels);
+    width = layerW;
+    height = layerH;
+  }
+
   const thumbnail = generateThumbnail(data, width, height);
   patternCounter++;
 
