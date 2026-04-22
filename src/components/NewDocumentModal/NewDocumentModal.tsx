@@ -35,7 +35,7 @@ const TIPS = [
   'Lopsy supports raw image formats like DNG and TIF.',
   'Load custom brushes with ABR files.',
   'New features added almost every day!',
-  'Lopsy is fully open source. Check our <a href="https://github.com/lopsy-art/lopsy" target="_blank" rel="noopener noreferrer">github</a>.',
+  'Lopsy is fully open source. Check our <a href="https://github.com/theseamusjames/lopsy.art" target="_blank" rel="noopener noreferrer">github</a>.',
 ];
 
 function toPixels(value: number, unit: Unit, dpi: number): number {
