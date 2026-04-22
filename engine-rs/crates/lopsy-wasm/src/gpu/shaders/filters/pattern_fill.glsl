@@ -12,7 +12,10 @@ uniform float u_scale;
 uniform vec2 u_offset;
 
 void main() {
-    vec2 tileUv = v_uv * u_layerSize / (u_patternSize * u_scale) + u_offset;
-    tileUv = fract(tileUv);
-    fragColor = texture(u_pattern, tileUv);
+    vec2 tileCoord = v_uv * u_layerSize / (u_patternSize * u_scale);
+    float col = floor(tileCoord.x);
+    float row = floor(tileCoord.y);
+    tileCoord.x += row * u_offset.x;
+    tileCoord.y += col * u_offset.y;
+    fragColor = texture(u_pattern, fract(tileCoord));
 }
