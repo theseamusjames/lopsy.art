@@ -35,6 +35,7 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
       isDirty: false,
       document: { ...doc, name: fallbackName },
     });
+    useEditorStore.getState().fitToView();
   } else if (store.documentReady) {
     const layerId = crypto.randomUUID();
     const result = await decodeImageBlob(blob, layerId);
