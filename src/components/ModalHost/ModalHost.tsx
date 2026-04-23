@@ -56,7 +56,7 @@ export function ModalHost() {
           .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
         return;
       }
-      pasteOrOpenBlob(file, name)
+      pasteOrOpenBlob(file, name, true)
         .then(() => closeModal())
         .catch((err) => notifyError(`Failed to open file: ${describeError(err)}`));
     },
@@ -65,7 +65,7 @@ export function ModalHost() {
 
   const handlePasteClipboard = useCallback(
     (blob: Blob) => {
-      pasteOrOpenBlob(blob, 'Copied File')
+      pasteOrOpenBlob(blob, 'Copied File', true)
         .then(() => closeModal())
         .catch((err) => notifyError(`Failed to paste image: ${describeError(err)}`));
     },

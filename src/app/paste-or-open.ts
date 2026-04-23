@@ -11,7 +11,7 @@ import { useEditorStore } from './editor-store';
 import { seedBitmapFromBlob } from '../engine/bitmap-cache';
 import { decodeImageBlob } from './decode-image';
 
-export async function pasteOrOpenBlob(blob: Blob, fallbackName: string): Promise<void> {
+export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNewDocument = false): Promise<void> {
   const store = useEditorStore.getState();
 
   // Generate a layer ID up front so the WASM decoder can upload directly to it
@@ -19,7 +19,7 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string): Promise
 
   const result = await decodeImageBlob(blob, layerId);
 
-  if (store.documentReady) {
+  if (store.documentReady && !forceNewDocument) {
     // Add as a new layer
     if (result.gpuUploaded) {
       store.pasteGpuLayer(layerId, result.width, result.height);
