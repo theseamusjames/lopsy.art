@@ -6,6 +6,7 @@ import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInser
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
+import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
@@ -376,6 +377,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   mergeDown: () => {
     const s = get();
+    flushLayerSync(s);
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
     const result = computeMergeDown(
       s.document,
@@ -392,6 +394,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   flattenImage: () => {
     const s = get();
+    flushLayerSync(s);
     const result = computeFlattenImage(
       s.document,
       resolveAllPixelData(s.document.layerOrder, s.document.layers),
@@ -406,6 +409,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   rasterizeLayerStyle: () => {
     const s = get();
+    flushLayerSync(s);
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
     const result = computeRasterizeStyle(
       s.document,
