@@ -9,6 +9,7 @@ import {
   beginStroke, endStroke, hasFloat, dropFloat,
   applyBrushDabBatch as gpuBrushDabBatch,
   uploadLayerPixels,
+  getLayerTextureDimensions,
 } from '../engine-wasm/wasm-bridge';
 import { flushLayerSync, resetTrackedState, syncDocumentSize } from '../engine-wasm/engine-sync';
 import { uploadCompressed } from '../engine-wasm/gpu-pixel-access';
@@ -179,19 +180,31 @@ export function useCanvasInteraction(
             // offscreen content). Sync the JS store to match.
             const docState = useEditorStore.getState().document;
             const currentLayer = docState.layers.find((l) => l.id === activeLayerId);
-            if (currentLayer && currentLayer.type === 'raster') {
+            if (currentLayer && currentLayer.type !== 'group') {
+              let layerW: number;
+              let layerH: number;
+              if (currentLayer.type === 'raster') {
+                layerW = currentLayer.width;
+                layerH = currentLayer.height;
+              } else {
+                const dims = getLayerTextureDimensions(engine, activeLayerId);
+                layerW = dims?.[0] ?? docState.width;
+                layerH = dims?.[1] ?? docState.height;
+              }
               const newX = Math.min(0, currentLayer.x);
               const newY = Math.min(0, currentLayer.y);
-              const newW = Math.max(docState.width, currentLayer.x + currentLayer.width) - newX;
-              const newH = Math.max(docState.height, currentLayer.y + currentLayer.height) - newY;
+              const newW = Math.max(docState.width, currentLayer.x + layerW) - newX;
+              const newH = Math.max(docState.height, currentLayer.y + layerH) - newY;
               const needsSync = currentLayer.x !== newX || currentLayer.y !== newY
-                || currentLayer.width !== newW || currentLayer.height !== newH;
+                || (currentLayer.type === 'raster' && (currentLayer.width !== newW || currentLayer.height !== newH));
               if (needsSync) {
-              const updatedLayers = docState.layers.map((l) =>
-                l.id === activeLayerId
-                  ? { ...l, x: newX, y: newY, width: newW, height: newH } as Layer
-                  : l,
-              );
+              const updatedLayers = docState.layers.map((l) => {
+                if (l.id !== activeLayerId) return l;
+                if (l.type === 'raster') {
+                  return { ...l, x: newX, y: newY, width: newW, height: newH } as Layer;
+                }
+                return { ...l, x: newX, y: newY } as Layer;
+              });
               pixelDataManager.remove(activeLayerId);
               const dirtyIds = new Set(useEditorStore.getState().dirtyLayerIds);
               dirtyIds.add(activeLayerId);

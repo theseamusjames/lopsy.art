@@ -1,7 +1,7 @@
 import type { DocumentState } from '../../../types';
 import type { ActionResult } from '../types';
 import { getEngine } from '../../../engine-wasm/engine-state';
-import { mergeLayers, rasterizeLayerEffects, updateLayer, uploadLayerPixels } from '../../../engine-wasm/wasm-bridge';
+import { mergeLayers, rasterizeLayerEffects, updateLayer, uploadLayerPixels, getLayerTextureDimensions } from '../../../engine-wasm/wasm-bridge';
 import { DEFAULT_EFFECTS, hasEnabledEffects } from '../../../layers/layer-model';
 import { removeFromParentGroup } from '../../../layers/group-utils';
 import { BLEND_MODE_TO_PASCAL } from '../../../types/blend-mode-tables';
@@ -73,7 +73,9 @@ export function computeMergeDown(
       }
     }
 
-    // GPU-side merge: composite top onto bottom
+    // GPU-side merge: composite top onto bottom.
+    // mergeLayers calls ensure_layer_full_size on both layers, which may
+    // expand their textures and update positions to (0, 0).
     mergeLayers(engine, activeId, belowId);
   }
 
@@ -85,14 +87,30 @@ export function computeMergeDown(
   // Remove merged layer from its parent group's children
   let layers = removeFromParentGroup(doc.layers, activeId);
   layers = layers.filter((l) => l.id !== activeId);
-  // Clear effects on the merged result and update position if bottom was
-  // rasterized to a document-sized buffer at absolute coordinates.
+  // Update the merged result's position and dimensions to match what the
+  // engine computed (ensure_layer_full_size may have expanded/repositioned).
+  let mergedX = bottomLayer.x;
+  let mergedY = bottomLayer.y;
+  let mergedW = 'width' in bottomLayer ? (bottomLayer as { width: number }).width : doc.width;
+  let mergedH = 'height' in bottomLayer ? (bottomLayer as { height: number }).height : doc.height;
+  if (engine) {
+    const dims = getLayerTextureDimensions(engine, belowId);
+    if (dims && (dims[0] ?? 0) > 0 && (dims[1] ?? 0) > 0) {
+      mergedW = dims[0]!;
+      mergedH = dims[1]!;
+    }
+    mergedX = Math.min(0, bottomLayer.x);
+    mergedY = Math.min(0, bottomLayer.y);
+  }
+  if (bottomRasterized) {
+    mergedX = 0;
+    mergedY = 0;
+    mergedW = doc.width;
+    mergedH = doc.height;
+  }
   layers = layers.map((l) => {
     if (l.id !== belowId) return l;
-    if (bottomRasterized) {
-      return { ...l, effects: DEFAULT_EFFECTS, x: 0, y: 0, width: doc.width, height: doc.height } as typeof l;
-    }
-    return { ...l, effects: DEFAULT_EFFECTS } as typeof l;
+    return { ...l, effects: DEFAULT_EFFECTS, x: mergedX, y: mergedY, width: mergedW, height: mergedH } as typeof l;
   });
 
   return {
