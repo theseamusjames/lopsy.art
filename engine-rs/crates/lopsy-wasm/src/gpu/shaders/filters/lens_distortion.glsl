@@ -20,6 +20,9 @@ bool inBounds(vec2 uv) {
 
 void main() {
     float k = u_strength;
+    if (k > 0.0) {
+        k *= 1.0 + 2.0 * k;
+    }
 
     if (abs(u_fringing) > 0.001) {
         float spread = u_fringing * 0.3;
