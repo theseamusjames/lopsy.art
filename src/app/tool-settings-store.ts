@@ -340,6 +340,9 @@ interface ToolSettings {
   sprayDensity: number;
   sprayOpacity: number;
   sprayHardness: number;
+  liquifySize: number;
+  liquifyStrength: number;
+  liquifyMode: 'push' | 'pinch' | 'twirl';
   presets: BrushPreset[];
   activePresetId: string | null;
 
@@ -400,6 +403,9 @@ interface ToolSettings {
   swapColors: () => void;
   resetColors: () => void;
   addRecentColor: (color: Color) => void;
+  setLiquifySize: (size: number) => void;
+  setLiquifyStrength: (strength: number) => void;
+  setLiquifyMode: (mode: 'push' | 'pinch' | 'twirl') => void;
   addPreset: (preset: BrushPreset) => void;
   addPresets: (presets: BrushPreset[]) => void;
   removePreset: (id: string) => void;
@@ -463,6 +469,9 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   sprayDensity: 20,
   sprayOpacity: 60,
   sprayHardness: 30,
+  liquifySize: 40,
+  liquifyStrength: 50,
+  liquifyMode: 'push',
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
 
@@ -561,6 +570,9 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       return { recentColors: [color, ...filtered].slice(0, MAX_RECENT_COLORS) };
     }),
 
+  setLiquifySize: (size) => set({ liquifySize: Math.max(5, Math.min(200, size)) }),
+  setLiquifyStrength: (strength) => set({ liquifyStrength: Math.max(1, Math.min(100, strength)) }),
+  setLiquifyMode: (mode) => set({ liquifyMode: mode }),
   addPreset: (preset) => set((s) => ({ presets: [...s.presets, preset] })),
   addPresets: (presets) => set((s) => ({ presets: [...s.presets, ...presets] })),
   removePreset: (id) =>

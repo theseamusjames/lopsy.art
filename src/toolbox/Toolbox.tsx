@@ -16,6 +16,7 @@ import {
   Magnet,
   Pointer,
   SprayCan,
+  Waves,
 } from 'lucide-react';
 import { IconButton } from '../components/IconButton/IconButton';
 import { useUIStore } from '../app/ui-store';
@@ -86,6 +87,7 @@ const toolGroups: ToolDef[][] = [
   [
     { id: 'dodge', icon: <Sun size={ICON_SIZE} />, label: 'Dodge/Burn (O)' },
     { id: 'smudge', icon: <Pointer size={ICON_SIZE} />, label: 'Smudge (R)' },
+    { id: 'liquify', icon: <Waves size={ICON_SIZE} />, label: 'Liquify' },
     { id: 'eyedropper', icon: <Pipette size={ICON_SIZE} />, label: 'Eyedropper (I)' },
   ],
   [

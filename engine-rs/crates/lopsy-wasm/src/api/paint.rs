@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
-use crate::{brush_gpu, clone_stamp_gpu, dodge_burn_gpu, smudge_gpu};
+use crate::{brush_gpu, clone_stamp_gpu, dodge_burn_gpu, liquify_gpu, smudge_gpu};
 
 // ============================================================
 // Brush / Paint Operations
@@ -282,4 +282,27 @@ pub fn apply_stamp_dab_batch(
     points: &[f64], source_offset_x: f64, source_offset_y: f64, size: f32,
 ) {
     clone_stamp_gpu::apply_clone_stamp_dab_batch(&mut engine.inner, layer_id, points, source_offset_x, source_offset_y, size);
+}
+
+// ============================================================
+// Liquify
+// ============================================================
+
+#[wasm_bindgen(js_name = "applyLiquifyDab")]
+pub fn apply_liquify_dab(
+    engine: &mut Engine, layer_id: &str,
+    cx: f64, cy: f64,
+    size: f32, strength: f32, mode: u32,
+    dir_x: f32, dir_y: f32,
+) {
+    liquify_gpu::apply_liquify_dab(&mut engine.inner, layer_id, cx, cy, size, strength, mode, dir_x, dir_y);
+}
+
+#[wasm_bindgen(js_name = "applyLiquifyDabBatch")]
+pub fn apply_liquify_dab_batch(
+    engine: &mut Engine, layer_id: &str,
+    points: &[f64], size: f32, strength: f32, mode: u32,
+    dir_x: f32, dir_y: f32,
+) {
+    liquify_gpu::apply_liquify_dab_batch(&mut engine.inner, layer_id, points, size, strength, mode, dir_x, dir_y);
 }

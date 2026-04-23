@@ -9,6 +9,7 @@ pub mod shape_gpu;
 pub mod selection_gpu;
 pub mod dodge_burn_gpu;
 pub mod smudge_gpu;
+pub mod liquify_gpu;
 pub mod clone_stamp_gpu;
 pub mod overlay_renderer;
 pub mod color_mgmt;

@@ -16,6 +16,7 @@ import { handlePathDown, handlePathMove, handlePathUp } from './path/path-intera
 import { handleShapeDown, handleShapeMove, handleShapeUp } from './shape/shape-interaction';
 import { handleGradientDown, handleGradientMove } from './gradient/gradient-interaction';
 import { handleSprayDown, handleSprayMove, handleSprayUp } from './spray/spray-interaction';
+import { handleLiquifyDown, handleLiquifyMove } from './liquify/liquify-interaction';
 
 import { MoveOptions } from '../app/OptionsBar/tool-options/MoveOptions';
 import { BrushOptions } from '../app/OptionsBar/tool-options/BrushOptions';
@@ -34,6 +35,7 @@ import { TextOptions } from '../app/OptionsBar/tool-options/TextOptions';
 import { MagneticLassoOptions } from '../app/OptionsBar/tool-options/MagneticLassoOptions';
 import { CropOptions } from '../app/OptionsBar/tool-options/CropOptions';
 import { SprayOptions } from '../app/OptionsBar/tool-options/SprayOptions';
+import { LiquifyOptions } from '../app/OptionsBar/tool-options/LiquifyOptions';
 
 import { useToolSettingsStore } from '../app/tool-settings-store';
 
@@ -288,6 +290,17 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
       down: (ctx) => handleSprayDown(ctx),
       move: (ctx, state) => handleSprayMove(ctx, state),
       up: () => handleSprayUp(),
+    },
+  },
+  liquify: {
+    id: 'liquify',
+    label: 'Liquify',
+    optionsComponent: LiquifyOptions,
+    isPaint: true,
+    isGpu: true,
+    handler: {
+      down: (ctx) => handleLiquifyDown(ctx),
+      move: (ctx, state) => handleLiquifyMove(state, ctx.layerPos),
     },
   },
 };

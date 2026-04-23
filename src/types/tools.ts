@@ -20,7 +20,8 @@ export type ToolId =
   | 'text'
   | 'crop'
   | 'path'
-  | 'spray';
+  | 'spray'
+  | 'liquify';
 
 export interface PixelSurface {
   readonly width: number;

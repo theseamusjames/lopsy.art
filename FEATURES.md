@@ -40,6 +40,17 @@
 - Shortcut: `R`
 - Pulls colors along the stroke direction, blending neighbouring pixels.
 
+### Liquify
+- **Size**: 5 - 200 px (brush radius)
+- **Strength**: 1 - 100% (displacement intensity)
+- **Mode**: Push Forward, Pinch, Twirl
+  - **Push Forward**: displaces pixels in the drag direction, creating organic flowing distortions
+  - **Pinch**: pulls pixels toward the brush center, shrinking features
+  - **Twirl**: rotates pixels clockwise around the brush center, creating spiral effects
+- GPU-accelerated per-dab displacement rendering via GLSL shader
+- Quadratic falloff with smooth edge feathering for natural-looking warps
+- Interactive: drag to warp pixels in real time, with dab interpolation for smooth strokes
+
 ---
 
 ## Shape & Vector Tools
