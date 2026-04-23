@@ -142,7 +142,8 @@ async function dragRotate(page: Page, angleRadians: number) {
 }
 
 test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'requires Chromium WebGL (SwiftShader)');
     await page.goto('/');
     await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
     // Create 600x600 doc with white background (matches default editor setup)
@@ -280,7 +281,8 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
 });
 
 test.describe('Perspective mode', { tag: '@chromium' }, () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'requires Chromium WebGL (SwiftShader)');
     await page.goto('/');
     await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
     await page.evaluate(() => {

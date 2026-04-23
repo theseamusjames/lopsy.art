@@ -185,7 +185,8 @@ async function snapshot(page: Page, label: string) {
   };
 }
 
-test('memory profile: sparse layers should be tiny', async ({ page }) => {
+test('memory profile: sparse layers should be tiny', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'CDP heap profiling requires Chromium');
   test.setTimeout(120000);
 
   await page.goto('/');
@@ -309,6 +310,7 @@ test('memory profile: sparse layers should be tiny', async ({ page }) => {
   console.log(`\nCDP heap growth: ${formatMB(cdpGrowth)} (should be < 5 MB)`);
   console.log(`Undo stack total: ${formatMB(s4.storeInfo.undoBytes)} (compressed GPU snapshots)`);
   expect(cdpGrowth).toBeLessThan(5 * 1024 * 1024);
-  // Undo stack stores compressed GPU snapshots; size depends on undo format and layer count
-  expect(s4.storeInfo.undoBytes).toBeLessThan(200 * 1024 * 1024);
+  // Undo stack stores compressed GPU snapshots; size depends on undo format,
+  // layer count, and the baseline snapshot pushed after first render.
+  expect(s4.storeInfo.undoBytes).toBeLessThan(300 * 1024 * 1024);
 });

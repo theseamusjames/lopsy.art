@@ -31,7 +31,7 @@ test.describe('Transparency export roundtrip', () => {
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Export PNG' }).click();
+    await page.getByRole('menuitem', { name: 'Export PNG' }).click();
 
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe('lopsy.png');

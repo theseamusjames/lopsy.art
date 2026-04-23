@@ -152,7 +152,7 @@ function downloadBlob(blob: Blob, ext = 'png'): void {
   a.href = url;
   a.download = `lopsy.${ext}`;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
   useEditorStore.getState().markClean();
 }
 

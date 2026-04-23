@@ -582,13 +582,16 @@ test.describe('History - Complex Sequences', () => {
   test('rapid undo/redo cycles preserve data integrity', async ({ page }) => {
     await createDocument(page, 100, 100, true);
 
+    const s0 = await getEditorState(page);
+    const baseline = s0.undoStackLength;
+
     // Build up 5 history entries
     for (let i = 0; i < 5; i++) {
       await paintRect(page, i * 20, 0, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
     }
 
     const s1 = await getEditorState(page);
-    expect(s1.undoStackLength).toBe(5);
+    expect(s1.undoStackLength).toBe(baseline + 5);
 
     // Undo all 5
     for (let i = 0; i < 5; i++) {
@@ -596,7 +599,7 @@ test.describe('History - Complex Sequences', () => {
     }
 
     const s2 = await getEditorState(page);
-    expect(s2.undoStackLength).toBe(0);
+    expect(s2.undoStackLength).toBe(baseline);
     expect(s2.redoStackLength).toBe(5);
 
     // Redo all 5
@@ -605,7 +608,7 @@ test.describe('History - Complex Sequences', () => {
     }
 
     const s3 = await getEditorState(page);
-    expect(s3.undoStackLength).toBe(5);
+    expect(s3.undoStackLength).toBe(baseline + 5);
     expect(s3.redoStackLength).toBe(0);
   });
 
@@ -647,8 +650,17 @@ test.describe('History - Complex Sequences', () => {
   test('undo does nothing with empty undo stack', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const before = await getEditorState(page);
-    expect(before.undoStackLength).toBe(0);
+    const baseline = before.undoStackLength;
 
+    // Undo past any baseline snapshots to reach true empty
+    for (let i = 0; i < baseline; i++) {
+      await undo(page);
+    }
+
+    const empty = await getEditorState(page);
+    expect(empty.undoStackLength).toBe(0);
+
+    // Undo on empty stack should be a no-op
     await undo(page);
 
     const after = await getEditorState(page);
