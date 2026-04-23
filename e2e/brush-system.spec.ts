@@ -272,6 +272,7 @@ test.describe('Brush System', () => {
     await page.waitForTimeout(300);
 
     await setToolSetting(page, 'setBrushAngle', 90);
+    await page.waitForTimeout(200);
     const base90 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 500, y: 200 }, 20);
     const snap90 = await snapshot(page);

@@ -226,7 +226,7 @@ async function exportAndDecodePixel(
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'File' }).click();
   await page.waitForTimeout(150);
-  await page.getByRole('button', { name: 'Export PNG' }).click();
+  await page.getByRole('menuitem', { name: 'Export PNG' }).click();
   const download = await downloadPromise;
 
   const stream = await download.createReadStream();

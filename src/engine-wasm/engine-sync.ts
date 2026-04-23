@@ -42,6 +42,8 @@ import {
   clearImageLevels,
   clearImageAdjustments,
   setGroupAdjustments,
+  setGroupCurvesLut,
+  setGroupLevelsLut,
   clearGroupAdjustments,
   setSeamlessPattern,
   setLassoPreview,
@@ -214,6 +216,8 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     const group = layer as import('../types').GroupLayer;
     if (!group.adjustmentsEnabled || !group.adjustments) continue;
     const adj = group.adjustments;
+    const hasCurves = adj.curves && !isIdentityCurves(adj.curves);
+    const hasLevels = adj.levels && !isIdentityLevels(adj.levels);
     const hasAny =
       Math.abs(adj.exposure) > 1e-6 ||
       Math.abs(adj.contrast) > 1e-6 ||
@@ -222,7 +226,9 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       Math.abs(adj.whites) > 1e-6 ||
       Math.abs(adj.blacks) > 1e-6 ||
       Math.abs(adj.saturation) > 1e-6 ||
-      Math.abs(adj.vibrance) > 1e-6;
+      Math.abs(adj.vibrance) > 1e-6 ||
+      hasCurves ||
+      hasLevels;
     if (!hasAny) continue;
     setGroupAdjustments(
       engine,
@@ -237,6 +243,14 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       adj.saturation,
       adj.vibrance,
     );
+    if (hasCurves) {
+      const lut = buildCurvesLutRgba(adj.curves!);
+      setGroupCurvesLut(engine, group.id, lut);
+    }
+    if (hasLevels) {
+      const lut = buildLevelsLutRgba(adj.levels!);
+      setGroupLevelsLut(engine, group.id, lut);
+    }
   }
 }
 

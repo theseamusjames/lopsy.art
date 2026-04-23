@@ -27,13 +27,11 @@ void main() {
 
     if (u_hasBrushTip == 1) {
         // Custom brush tip texture mode
-        // Scale UV by aspect ratio so non-square tips aren't squished
         vec2 uv = (fragPos - u_center) / u_size;
-        // Apply tip aspect ratio: u_tipAspect = (w/max, h/max)
-        uv /= u_tipAspect;
         float ca = cos(u_angle);
         float sa = sin(u_angle);
         uv = mat2(ca, sa, -sa, ca) * uv;
+        uv /= u_tipAspect;
         uv = uv + 0.5;
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;
 

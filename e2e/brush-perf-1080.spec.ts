@@ -22,7 +22,8 @@ test.describe('Brush perf — 1080x1080 profile', () => {
     await waitForStore(page);
   });
 
-  test('profile sustained spiral on 1080x1080', async ({ page }) => {
+  test('profile sustained spiral on 1080x1080', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'CDP profiler requires Chromium');
     test.setTimeout(300_000);
 
     await page.evaluate(() => {

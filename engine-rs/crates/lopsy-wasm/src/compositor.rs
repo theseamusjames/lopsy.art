@@ -1075,18 +1075,18 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
     let doc_h = engine.doc_height;
     let bg = engine.bg_color;
 
-    // Reset GL state — brush/shape/selection tools may have left blending enabled.
-    // If BLEND is on, the blit passes in blend_onto_composite would blend
-    // instead of overwrite, corrupting alpha.
     engine.gl.disable(WebGl2RenderingContext::BLEND);
 
-    // Render composite (same as display but without viewport transform)
     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     engine.gl.clear_color(bg[0], bg[1], bg[2], bg[3]);
     engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
-    // Collect layer info
+    let child_to_group: HashMap<String, String> = engine.group_adjustments.iter()
+        .flat_map(|(gid, ga)| ga.child_ids.iter().map(move |cid| (cid.clone(), gid.clone())))
+        .collect();
+    let mut active_group_id: Option<String> = None;
+
     let layer_info: Vec<_> = engine.layer_stack.iter().map(|layer| {
         let mask_info = engine.layer_masks.get(&layer.id).and_then(|&mask_handle| {
             let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
@@ -1094,11 +1094,75 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
             let mask_enabled = layer.mask.as_ref().map_or(false, |m| m.enabled);
             Some((mask_gl, mw, mh, mask_enabled))
         });
-        (layer.id.clone(), layer.visible, layer.opacity, layer.blend_mode as i32, layer.x as f32, layer.y as f32, layer.width as f32, layer.height as f32, layer.effects.clone(), mask_info)
+        (layer.id.clone(), layer.layer_type, layer.visible, layer.opacity, layer.blend_mode as i32, layer.x as f32, layer.y as f32, layer.width as f32, layer.height as f32, layer.effects.clone(), mask_info)
     }).collect();
 
-    for (layer_id, visible, opacity, blend_mode, layer_x, layer_y, layer_w, layer_h, effects, mask_info) in &layer_info {
-        if !visible || *opacity < 1e-7 { continue; }
+    for (layer_id, layer_type, visible, opacity, blend_mode, layer_x, layer_y, layer_w, layer_h, effects, mask_info) in &layer_info {
+        if !visible || *opacity < 1e-7 {
+            if *layer_type == lopsy_core::layer::LayerType::Group && active_group_id.as_ref() == Some(layer_id) {
+                active_group_id = None;
+            }
+            continue;
+        }
+
+        if *layer_type == lopsy_core::layer::LayerType::Group {
+            if let Some(ref agid) = active_group_id {
+                if agid == layer_id {
+                    let gs_fbo = engine.group_scratch_fbo.unwrap();
+                    let gs_tex = engine.group_scratch_texture.unwrap();
+                    if let Some(ga) = engine.group_adjustments.get(layer_id) {
+                        let adj = ga.adjustments.clone();
+                        apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
+                    }
+                    if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
+                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None);
+                    }
+                    active_group_id = None;
+                    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+                    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+                }
+            }
+            continue;
+        }
+
+        if let Some(gid) = child_to_group.get(layer_id) {
+            if active_group_id.is_none() {
+                let gs_tex = match engine.group_scratch_texture {
+                    Some(t) => {
+                        let (sw, sh) = engine.texture_pool.get_size(t).unwrap_or((0, 0));
+                        if sw != doc_w || sh != doc_h {
+                            engine.texture_pool.release(t);
+                            let nt = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).unwrap();
+                            engine.group_scratch_texture = Some(nt);
+                            nt
+                        } else { t }
+                    }
+                    None => {
+                        let t = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).unwrap();
+                        engine.group_scratch_texture = Some(t);
+                        t
+                    }
+                };
+                let gs_fbo = match engine.group_scratch_fbo {
+                    Some(f) => f,
+                    None => {
+                        let f = engine.fbo_pool.create(&engine.gl).unwrap();
+                        engine.group_scratch_fbo = Some(f);
+                        f
+                    }
+                };
+                if let Some(gs_gl) = engine.texture_pool.get(gs_tex) {
+                    let gs_gl = gs_gl.clone();
+                    engine.fbo_pool.attach_texture(&engine.gl, gs_fbo, &gs_gl);
+                }
+                engine.fbo_pool.bind(&engine.gl, gs_fbo);
+                engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+                engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+                engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+                active_group_id = Some(gid.clone());
+            }
+        }
+
         let tex_handle = match engine.layer_textures.get(layer_id) { Some(&h) => h, None => continue };
         let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((*layer_w as u32, *layer_h as u32));
 
@@ -1106,22 +1170,25 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
             if *enabled { Some((tex, *mw, *mh)) } else { None }
         });
 
-        // Behind effects
         if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 0, *layer_x, *layer_y); } }
         if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, tex_handle, tw, th, shadow, *layer_x, *layer_y); } }
 
-        // Color overlay + blend layer
         let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
+        let is_group_child = active_group_id.is_some();
         if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
-            blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+            if is_group_child {
+                let gs_tex = engine.group_scratch_texture.unwrap();
+                let gs_fbo = engine.group_scratch_fbo.unwrap();
+                blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+            } else {
+                blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+            }
         }
 
-        // On-top effects
         if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 1, *layer_x, *layer_y); } }
         if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, tex_handle, tw, th, stroke, *layer_x, *layer_y); } }
     }
 
-    // Read pixels
     let pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, doc_w, doc_h)?;
 
     engine.fbo_pool.unbind(&engine.gl);
@@ -1142,6 +1209,11 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
     engine.gl.clear_color(bg[0], bg[1], bg[2], bg[3]);
     engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
+    let child_to_group: HashMap<String, String> = engine.group_adjustments.iter()
+        .flat_map(|(gid, ga)| ga.child_ids.iter().map(move |cid| (cid.clone(), gid.clone())))
+        .collect();
+    let mut active_group_id: Option<String> = None;
+
     let layer_info: Vec<_> = engine.layer_stack.iter().map(|layer| {
         let mask_info = engine.layer_masks.get(&layer.id).and_then(|&mask_handle| {
             let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
@@ -1149,11 +1221,75 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
             let mask_enabled = layer.mask.as_ref().map_or(false, |m| m.enabled);
             Some((mask_gl, mw, mh, mask_enabled))
         });
-        (layer.id.clone(), layer.visible, layer.opacity, layer.blend_mode as i32, layer.x as f32, layer.y as f32, layer.width as f32, layer.height as f32, layer.effects.clone(), mask_info)
+        (layer.id.clone(), layer.layer_type, layer.visible, layer.opacity, layer.blend_mode as i32, layer.x as f32, layer.y as f32, layer.width as f32, layer.height as f32, layer.effects.clone(), mask_info)
     }).collect();
 
-    for (layer_id, visible, opacity, blend_mode, layer_x, layer_y, layer_w, layer_h, effects, mask_info) in &layer_info {
-        if !visible || *opacity < 1e-7 { continue; }
+    for (layer_id, layer_type, visible, opacity, blend_mode, layer_x, layer_y, layer_w, layer_h, effects, mask_info) in &layer_info {
+        if !visible || *opacity < 1e-7 {
+            if *layer_type == lopsy_core::layer::LayerType::Group && active_group_id.as_ref() == Some(layer_id) {
+                active_group_id = None;
+            }
+            continue;
+        }
+
+        if *layer_type == lopsy_core::layer::LayerType::Group {
+            if let Some(ref agid) = active_group_id {
+                if agid == layer_id {
+                    let gs_fbo = engine.group_scratch_fbo.unwrap();
+                    let gs_tex = engine.group_scratch_texture.unwrap();
+                    if let Some(ga) = engine.group_adjustments.get(layer_id) {
+                        let adj = ga.adjustments.clone();
+                        apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
+                    }
+                    if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
+                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None);
+                    }
+                    active_group_id = None;
+                    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+                    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+                }
+            }
+            continue;
+        }
+
+        if let Some(gid) = child_to_group.get(layer_id) {
+            if active_group_id.is_none() {
+                let gs_tex = match engine.group_scratch_texture {
+                    Some(t) => {
+                        let (sw, sh) = engine.texture_pool.get_size(t).unwrap_or((0, 0));
+                        if sw != doc_w || sh != doc_h {
+                            engine.texture_pool.release(t);
+                            let nt = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).unwrap();
+                            engine.group_scratch_texture = Some(nt);
+                            nt
+                        } else { t }
+                    }
+                    None => {
+                        let t = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).unwrap();
+                        engine.group_scratch_texture = Some(t);
+                        t
+                    }
+                };
+                let gs_fbo = match engine.group_scratch_fbo {
+                    Some(f) => f,
+                    None => {
+                        let f = engine.fbo_pool.create(&engine.gl).unwrap();
+                        engine.group_scratch_fbo = Some(f);
+                        f
+                    }
+                };
+                if let Some(gs_gl) = engine.texture_pool.get(gs_tex) {
+                    let gs_gl = gs_gl.clone();
+                    engine.fbo_pool.attach_texture(&engine.gl, gs_fbo, &gs_gl);
+                }
+                engine.fbo_pool.bind(&engine.gl, gs_fbo);
+                engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+                engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+                engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+                active_group_id = Some(gid.clone());
+            }
+        }
+
         let tex_handle = match engine.layer_textures.get(layer_id) { Some(&h) => h, None => continue };
         let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((*layer_w as u32, *layer_h as u32));
 
@@ -1165,17 +1301,21 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
         if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, tex_handle, tw, th, shadow, *layer_x, *layer_y); } }
 
         let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
+        let is_group_child = active_group_id.is_some();
         if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
-            blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+            if is_group_child {
+                let gs_tex = engine.group_scratch_texture.unwrap();
+                let gs_fbo = engine.group_scratch_fbo.unwrap();
+                blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+            } else {
+                blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+            }
         }
 
         if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 1, *layer_x, *layer_y); } }
         if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, tex_handle, tw, th, stroke, *layer_x, *layer_y); } }
     }
 
-    // Apply image adjustments (exposure, contrast, curves, levels, etc.)
-    // The 8-bit export path applies these in JS; the 16-bit path must do it
-    // here since it encodes directly to PNG in Rust.
     apply_image_adjustments(engine);
 
     let pixels = engine.texture_pool.read_rgba_u16(&engine.gl, 0, 0, doc_w, doc_h)?;
@@ -1381,8 +1521,35 @@ fn apply_adjustments_to_texture(
     if let Some(loc) = shader.location(&engine.gl, "u_blacks") { engine.gl.uniform1f(Some(&loc), adj.blacks); }
     if let Some(loc) = shader.location(&engine.gl, "u_saturation") { engine.gl.uniform1f(Some(&loc), adj.saturation / 100.0); }
     if let Some(loc) = shader.location(&engine.gl, "u_vibrance") { engine.gl.uniform1f(Some(&loc), adj.vibrance / 100.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasLevels") { engine.gl.uniform1f(Some(&loc), 0.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasCurves") { engine.gl.uniform1f(Some(&loc), 0.0); }
+
+    let has_levels = adj.has_levels && adj.levels_texture.is_some();
+    if has_levels {
+        if let Some(levels_tex) = adj.levels_texture.and_then(|h| engine.texture_pool.get(h)) {
+            let levels_tex = levels_tex.clone();
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&levels_tex));
+            if let Some(loc) = shader.location(&engine.gl, "u_levelsLut") { engine.gl.uniform1i(Some(&loc), 2); }
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        }
+    }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasLevels") {
+        engine.gl.uniform1f(Some(&loc), if has_levels { 1.0 } else { 0.0 });
+    }
+
+    let has_curves = adj.has_curves && adj.curves_texture.is_some();
+    if has_curves {
+        if let Some(curve_tex) = adj.curves_texture.and_then(|h| engine.texture_pool.get(h)) {
+            let curve_tex = curve_tex.clone();
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&curve_tex));
+            if let Some(loc) = shader.location(&engine.gl, "u_curveLut") { engine.gl.uniform1i(Some(&loc), 1); }
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        }
+    }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasCurves") {
+        engine.gl.uniform1f(Some(&loc), if has_curves { 1.0 } else { 0.0 });
+    }
+
     engine.draw_fullscreen_quad();
 
     // Copy scratch_a → dst

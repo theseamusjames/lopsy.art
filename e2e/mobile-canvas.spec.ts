@@ -7,7 +7,8 @@ test.describe('Mobile canvas', () => {
     viewport: { width: 390, height: 844 },
   });
 
-  test('canvas container is visible on mobile', async ({ page }) => {
+  test('canvas container is visible on mobile', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'mobile emulation requires Chromium');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);

@@ -1,4 +1,5 @@
 import { test } from '@playwright/test';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -6,6 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 test('DNG ProRAW import screenshot', async ({ page }) => {
+  const filePath = path.resolve(__dirname, 'sample_images/proraw.dng');
+  test.skip(!fs.existsSync(filePath), 'sample DNG file not present');
   test.setTimeout(120000);
   // Capture console output before navigation
   const consoleLogs: string[] = [];
@@ -17,8 +20,6 @@ test('DNG ProRAW import screenshot', async ({ page }) => {
   await page.waitForSelector('h2:has-text("New Document")', { timeout: 15000 });
 
   // Use the file chooser to open the DNG
-  const filePath = path.resolve(__dirname, 'sample_images/proraw.dng');
-
   const [fileChooser] = await Promise.all([
     page.waitForEvent('filechooser'),
     page.click('button:has-text("Open File")'),

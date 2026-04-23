@@ -183,9 +183,9 @@ test.describe('Pattern Fill', () => {
     await page.click('button:has-text("Edit")');
     await page.click('button[role="menuitem"]:has-text("Define Pattern")');
 
-    // Open Filter > Pattern Fill... — should show the pattern swatch
-    await page.click('button:has-text("Filter")');
-    await page.click('button[role="menuitem"]:has-text("Pattern Fill")');
+    // Open Edit > Fill with Pattern... — should show the pattern swatch
+    await page.click('button:has-text("Edit")');
+    await page.click('button[role="menuitem"]:has-text("Fill with Pattern")');
 
     const dialog = page.locator('[role="dialog"][aria-label="Pattern Fill"]');
     await expect(dialog).toBeVisible();

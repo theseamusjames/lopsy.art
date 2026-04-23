@@ -15,10 +15,10 @@ test.describe('Export formats (#57)', () => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
 
-    await expect(page.getByRole('button', { name: 'Export PNG' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Export JPEG' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Export WebP' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Export BMP' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export PNG' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export JPEG' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export WebP' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export BMP' })).toBeVisible();
 
     await page.screenshot({ path: 'test-results/screenshots/export-formats-menu.png' });
   });
@@ -28,7 +28,7 @@ test.describe('Export formats (#57)', () => {
 
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Export WebP' }).click();
+    await page.getByRole('menuitem', { name: 'Export WebP' }).click();
 
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe('lopsy.webp');
@@ -41,7 +41,7 @@ test.describe('Export formats (#57)', () => {
 
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Export BMP' }).click();
+    await page.getByRole('menuitem', { name: 'Export BMP' }).click();
 
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe('lopsy.bmp');
@@ -54,7 +54,7 @@ test.describe('Export formats (#57)', () => {
 
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Export BMP' }).click();
+    await page.getByRole('menuitem', { name: 'Export BMP' }).click();
 
     const download = await downloadPromise;
     const readable = await download.createReadStream();
@@ -92,7 +92,7 @@ test.describe('Export formats (#57)', () => {
 
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Export WebP' }).click();
+    await page.getByRole('menuitem', { name: 'Export WebP' }).click();
 
     const download = await downloadPromise;
     const readable = await download.createReadStream();
