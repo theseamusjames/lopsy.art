@@ -87,17 +87,10 @@ export function computeMergeDown(
   let layers = removeFromParentGroup(doc.layers, activeId);
   layers = layers.filter((l) => l.id !== activeId);
 
-  // The engine's ensure_layer_full_size repositions the bottom layer to
-  // cover the full document area. Sync the JS position to match so
-  // syncLayers doesn't overwrite the engine's position on the next frame.
-  const expandedX = Math.min(0, bottomLayer.x);
-  const expandedY = Math.min(0, bottomLayer.y);
+  // mergeLayers always produces a doc-sized result at (0, 0).
   layers = layers.map((l) => {
     if (l.id !== belowId) return l;
-    if (bottomRasterized) {
-      return { ...l, effects: DEFAULT_EFFECTS, x: 0, y: 0, width: doc.width, height: doc.height } as typeof l;
-    }
-    return { ...l, effects: DEFAULT_EFFECTS, x: expandedX, y: expandedY } as typeof l;
+    return { ...l, effects: DEFAULT_EFFECTS, x: 0, y: 0, width: doc.width, height: doc.height } as typeof l;
   });
 
   return {
