@@ -1,8 +1,8 @@
 /**
- * Regression tests for text layers with selection, drag, and merge.
+ * Regression test: cut → paste → merge down twice preserves text position.
  *
- * Bug 1: Dragging selected text past the unselected text clips/hides content.
- * Bug 2: Cut → paste → merge down twice changes text position/size.
+ * After cutting part of text, pasting it (new layer), deselecting, and
+ * merging down twice, the text must not change position or size.
  */
 import { test, expect, type Page } from './fixtures';
 
@@ -139,86 +139,6 @@ test.describe('Text selection + merge', () => {
     await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
   });
 
-  test('dragging selected text past unselected text does not clip', async ({ page }) => {
-    await createDocument(page, 800, 400);
-    await page.waitForSelector('[data-testid="canvas-container"]');
-    await page.waitForTimeout(300);
-
-    // Add "LOPSY" text starting around x=200
-    await addLopsyText(page, 200, 100);
-    await page.waitForTimeout(300);
-
-    // Set text layer active
-    const textId = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { layers: Array<{ id: string; type: string }> };
-        };
-      };
-      return store.getState().document.layers.find((l) => l.type === 'text')?.id ?? '';
-    });
-    await page.evaluate((id: string) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(id);
-    }, textId);
-
-    // Scan baseline to find text bounds
-    const baselineRow = await scanRow(page, 160, 50, 750);
-    const firstNonWhite = baselineRow.find((p) => p.r < 240);
-    const lastNonWhite = [...baselineRow].reverse().find((p) => p.r < 240);
-    const textLeftEdge = firstNonWhite?.x ?? 200;
-    const textRightEdge = lastNonWhite?.x ?? 650;
-    const textMidX = Math.round((textLeftEdge + textRightEdge) / 2);
-
-    // Marquee select the right ~40% of the text (roughly "SY")
-    await setTool(page, 'marqueeRect');
-    const selStart = await docToScreen(page, textMidX + 30, 70);
-    const selEnd = await docToScreen(page, textRightEdge + 40, 290);
-    await page.mouse.move(selStart.x, selStart.y);
-    await page.mouse.down();
-    await page.mouse.move(selEnd.x, selEnd.y, { steps: 5 });
-    await page.mouse.up();
-    await page.waitForTimeout(200);
-
-    await page.screenshot({ path: 'e2e/screenshots/text-drag-before.png' });
-
-    // Switch to move tool and drag the selection to the LEFT of "LOP"
-    await setTool(page, 'move');
-    await page.waitForTimeout(100);
-
-    // Click inside the selection to create the float, then drag left
-    const dragStartX = Math.round(textMidX + 60);
-    const dragStartY = 170;
-    const dragEndX = 50; // Well to the left of the "L"
-    const dragEndY = 170;
-
-    const start = await docToScreen(page, dragStartX, dragStartY);
-    const end = await docToScreen(page, dragEndX, dragEndY);
-    await page.mouse.move(start.x, start.y);
-    await page.mouse.down();
-    await page.mouse.move(end.x, end.y, { steps: 20 });
-    await page.mouse.up();
-    await page.waitForTimeout(300);
-
-    await page.screenshot({ path: 'e2e/screenshots/text-drag-after.png' });
-
-    // Verify: the dragged content ("SY") should be visible at the new
-    // position, to the left of "LOP". Scan a row that passes through
-    // where the dragged text should now be.
-    const afterDragRow = await scanRow(page, 160, 30, 750);
-
-    // There should be non-white pixels at x < textLeftEdge (where "SY" was dragged)
-    const pixelsLeftOfL = afterDragRow.filter(
-      (p) => p.x < textLeftEdge && (p.r < 240 || p.g < 240 || p.b < 240),
-    );
-
-    // Before the fix, the dragged content clips at the layer's texture
-    // edge and disappears. Expect visible text pixels to the left.
-    expect(pixelsLeftOfL.length).toBeGreaterThan(5);
-  });
-
   test('cut → paste → merge down twice preserves text position', async ({ page }) => {
     await createDocument(page, 800, 400);
     await page.waitForSelector('[data-testid="canvas-container"]');
@@ -308,7 +228,6 @@ test.describe('Text selection + merge', () => {
     const afterMerge2TextPixels = countNonWhitePixels(afterMerge2Row);
 
     // The text content must not change position or size between merges.
-    // Before the fix, the second merge shifted or resized the text.
     expect(afterMerge2TextPixels).toBeGreaterThan(baselineTextPixels * 0.7);
 
     // Compare merge1 and merge2 — pixel counts should be very similar

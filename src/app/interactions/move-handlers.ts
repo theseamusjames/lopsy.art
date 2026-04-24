@@ -13,7 +13,6 @@ import {
   hasFloat,
   setSelectionMask,
 } from '../../engine-wasm/wasm-bridge';
-import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import type {
   InteractionState,
@@ -83,31 +82,8 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       const maskBytes = new Uint8Array(selNow.mask.buffer, selNow.mask.byteOffset, selNow.mask.byteLength);
       setSelectionMask(engine, maskBytes, selNow.maskWidth, selNow.maskHeight);
 
-      // Sync layer state to the engine before floating so
-      // ensure_layer_full_size (called inside floatSelection) sees
-      // the correct position.
-      flushLayerSync(useEditorStore.getState());
-
-      // First move: float the selection on the GPU.
-      // floatSelection calls ensure_layer_full_size internally, which
-      // may expand the layer texture and update its position to (0, 0).
+      // First move: float the selection on the GPU
       floatSelection(engine, activeLayerId);
-
-      // Sync JS layer position to match what the engine computed.
-      const docState = useEditorStore.getState().document;
-      const floatedLayer = docState.layers.find((l) => l.id === activeLayerId);
-      if (floatedLayer && floatedLayer.type !== 'raster') {
-        const newX = Math.min(0, floatedLayer.x);
-        const newY = Math.min(0, floatedLayer.y);
-        if (floatedLayer.x !== newX || floatedLayer.y !== newY) {
-          const updatedLayers = docState.layers.map((l) =>
-            l.id === activeLayerId ? { ...l, x: newX, y: newY } as typeof l : l,
-          );
-          useEditorStore.setState({
-            document: { ...docState, layers: updatedLayers },
-          });
-        }
-      }
 
       // Option+drag: restore the float base so selected pixels remain in
       // place — floatSelection cuts them, but option means "copy, don't cut".
