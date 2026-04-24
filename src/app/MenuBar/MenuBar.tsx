@@ -20,11 +20,15 @@ import {
   cancelPatternPreview,
   applyPatternFillWithPreview,
 } from './pattern-actions';
-import { getMenus, type MenuItem, type ImageDialogId, type HelpDialogId } from './menus';
+import { getMenus, type MenuItem, type ImageDialogId, type HelpDialogId, type SelectDialogId } from './menus';
 import { CanvasSizeModal } from '../../components/CanvasSizeModal/CanvasSizeModal';
 import { ImageSizeModal } from '../../components/ImageSizeModal/ImageSizeModal';
 import { KeyboardShortcutsModal } from '../../components/KeyboardShortcutsModal/KeyboardShortcutsModal';
 import { AboutModal } from '../../components/AboutModal/AboutModal';
+import { useEditorStore } from '../editor-store';
+import { growSelection, shrinkSelection, selectionBounds } from '../../selection/selection';
+import { createTransformState } from '../../tools/transform/transform';
+import { useUIStore } from '../ui-store';
 import styles from './MenuBar.module.css';
 
 export function MenuBar() {
@@ -32,6 +36,7 @@ export function MenuBar() {
   const [activeDialog, setActiveDialog] = useState<FilterDialogId | null>(null);
   const [imageDialog, setImageDialog] = useState<ImageDialogId | null>(null);
   const [helpDialog, setHelpDialog] = useState<HelpDialogId | null>(null);
+  const [selectDialog, setSelectDialog] = useState<SelectDialogId | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const previewActiveRef = useRef(false);
 
@@ -50,7 +55,12 @@ export function MenuBar() {
     setHelpDialog(id);
   }, []);
 
-  const menus = getMenus(showFilterDialog, showImageDialog, showHelpDialog);
+  const showSelectDialog = useCallback((id: SelectDialogId) => {
+    setOpenMenu(null);
+    setSelectDialog(id);
+  }, []);
+
+  const menus = getMenus(showFilterDialog, showImageDialog, showHelpDialog, showSelectDialog);
 
   const handleMenuClick = useCallback((index: number) => {
     setOpenMenu((prev) => (prev === index ? null : index));
@@ -155,6 +165,27 @@ export function MenuBar() {
     previewPatternFill(patternId, scale, offsetX, offsetY);
   }, []);
 
+  const handleSelectDialogApply = useCallback((values: Record<string, number>) => {
+    if (!selectDialog) return;
+    const amount = values['amount'] ?? 1;
+    const editor = useEditorStore.getState();
+    const sel = editor.selection;
+    if (!sel.active || !sel.mask) { setSelectDialog(null); return; }
+    const { width: docW, height: docH } = editor.document;
+    const newMask = selectDialog === 'grow'
+      ? growSelection(sel.mask, docW, docH, amount)
+      : shrinkSelection(sel.mask, docW, docH, amount);
+    const newBounds = selectionBounds(newMask, docW, docH);
+    if (newBounds) {
+      editor.setSelection(newBounds, newMask, docW, docH);
+      useUIStore.getState().setTransform(createTransformState(newBounds));
+    } else {
+      editor.clearSelection();
+      useUIStore.getState().setTransform(null);
+    }
+    setSelectDialog(null);
+  }, [selectDialog]);
+
   const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill'
     ? getFilterDialogConfig(activeDialog)
     : null;
@@ -249,6 +280,14 @@ export function MenuBar() {
       )}
       {helpDialog === 'about' && (
         <AboutModal onClose={() => setHelpDialog(null)} />
+      )}
+      {selectDialog && (
+        <FilterDialog
+          title={selectDialog === 'grow' ? 'Grow Selection' : 'Shrink Selection'}
+          params={[{ key: 'amount', label: 'Amount (px)', min: 1, max: 100, step: 1, defaultValue: 1 }]}
+          onApply={handleSelectDialogApply}
+          onCancel={() => setSelectDialog(null)}
+        />
       )}
     </>
   );

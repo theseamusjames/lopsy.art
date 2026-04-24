@@ -109,6 +109,7 @@ export interface EditorState {
 
   // Clipboard
   copy: () => void;
+  copyMerged: () => void;
   cut: () => void;
   paste: () => void;
   pasteImageData: (imageData: ImageData) => void;

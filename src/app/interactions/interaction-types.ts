@@ -31,6 +31,7 @@ export interface InteractionState {
   strokeColor?: { r: number; g: number; b: number; a: number };
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
+  selectionOnlyTransform?: boolean;
 }
 
 export const DEFAULT_TRANSFORM_FIELDS = {

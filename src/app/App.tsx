@@ -137,7 +137,7 @@ export function App() {
   );
 
   // Canvas interaction (drawing tools)
-  const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove } = useCanvasInteraction(screenToCanvas, containerRef);
+  const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove, nudgeSelection } = useCanvasInteraction(screenToCanvas, containerRef);
 
   // Cursor management
   const { updateHoveredHandle } = useCanvasCursor(containerRef, pointerMode);
@@ -151,6 +151,7 @@ export function App() {
     setPointerMode,
     clearPersistentTransform,
     nudgeMove,
+    nudgeSelection,
   });
 
   useCanvasPointerHandlers({

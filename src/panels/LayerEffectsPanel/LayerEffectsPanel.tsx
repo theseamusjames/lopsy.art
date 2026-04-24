@@ -166,7 +166,10 @@ export function LayerEffectsPanel() {
               <div
                 key={key}
                 className={`${styles.effectRow} ${isSelected ? styles.effectRowSelected : ''}`}
-                onClick={() => setSelectedEffect(key)}
+                onClick={() => {
+                  setSelectedEffect(key);
+                  if (!isEnabled) handleToggle(key);
+                }}
                 role="option"
                 aria-selected={isSelected}
               >

@@ -9,6 +9,8 @@ import {
   computePerspective,
   getCornerPositions,
   computeInverseAffineMatrix,
+  getTransformedBounds,
+  createTransformState,
 } from '../../tools/transform/transform';
 import type { TransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
@@ -19,12 +21,23 @@ import {
   floatSelection,
   hasFloat,
   setSelectionMask,
+  compositeFloat,
   compositeFloatAffine,
   compositeFloatPerspective,
+  dropFloat,
 } from '../../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import type { InteractionState, InteractionContext } from './interaction-types';
 import type { Point } from '../../types';
+import {
+  createRectSelection,
+  createEllipseSelection,
+  selectionBounds,
+} from '../../selection/selection';
+
+const SELECTION_TOOLS = new Set([
+  'marquee-rect', 'marquee-ellipse', 'lasso', 'lasso-magnetic', 'wand',
+]);
 
 /**
  * Hit-test transform handles on mousedown and set up interaction state.
@@ -40,6 +53,12 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
 
   if (!currentTransform || !editorState.selection.active) {
     return null;
+  }
+
+  const activeTool = uiState.activeTool;
+
+  if (SELECTION_TOOLS.has(activeTool)) {
+    return handleSelectionTransformDown(ctx, currentTransform);
   }
 
   const handleRadius = 8 / editorState.viewport.zoom;
@@ -90,6 +109,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
       setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
 
       floatSelection(engine, activeLayerId);
+      compositeFloat(engine, 0, 0);
 
       clearJsPixelData(activeLayerId);
     }
@@ -102,7 +122,6 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
   }
 
   const persistent = persistentTransformRef.current;
-  const activeTool = uiState.activeTool;
 
   const newState: InteractionState = {
     drawing: true,
@@ -130,6 +149,55 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
   return newState;
 }
 
+function handleSelectionTransformDown(
+  ctx: InteractionContext,
+  currentTransform: TransformState,
+): InteractionState | null {
+  const { canvasPos, activeLayerId, floatingSelectionRef, persistentTransformRef } = ctx;
+  const editorState = useEditorStore.getState();
+  const uiState = useUIStore.getState();
+
+  const handleRadius = 8 / editorState.viewport.zoom;
+  const hit = hitTestHandle(canvasPos, currentTransform, handleRadius);
+
+  if (!hit || !isScaleHandle(hit)) {
+    return null;
+  }
+
+  // Drop any existing GPU float — selection-only transforms don't touch content
+  const engine = getEngine();
+  if (engine && hasFloat(engine)) {
+    dropFloat(engine);
+  }
+  floatingSelectionRef.current = null;
+  persistentTransformRef.current = null;
+
+  const newState: InteractionState = {
+    drawing: true,
+    lastPoint: canvasPos,
+    pixelBuffer: null,
+    originalPixelBuffer: null,
+    layerId: activeLayerId,
+    tool: uiState.activeTool,
+    startPoint: canvasPos,
+    layerStartX: 0,
+    layerStartY: 0,
+    maskMode: false,
+    transformHandle: hit,
+    transformStartState: { ...currentTransform },
+    transformStartAngle: 0,
+    originalSelectionMask: null,
+    originalSelectionMaskWidth: 0,
+    originalSelectionMaskHeight: 0,
+    moveOriginalMask: null,
+    moveOriginalBounds: null,
+    selectionOnlyTransform: true,
+  };
+
+  uiState.setActiveTransformHandle(hit);
+  return newState;
+}
+
 /**
  * Handle transform drag (scale / rotate / skew / distort / perspective)
  * during mousemove. Computes the new transform, updates the UI store,
@@ -141,6 +209,11 @@ export function handleTransformMove(
   shiftKey: boolean,
 ): void {
   if (!state.transformHandle || !state.transformStartState || !state.startPoint) {
+    return;
+  }
+
+  if (state.selectionOnlyTransform) {
+    handleSelectionTransformMove(state, canvasPos, shiftKey);
     return;
   }
 
@@ -225,6 +298,49 @@ export function handleTransformMove(
       const invMatrix = computeInverseAffineMatrix(newTransform);
       compositeFloatAffine(engine, invMatrix, srcCx, srcCy, dstCx, dstCy);
     }
+  }
+
+  editorState.notifyRender();
+}
+
+function handleSelectionTransformMove(
+  state: InteractionState,
+  canvasPos: Point,
+  shiftKey: boolean,
+): void {
+  const handle = state.transformHandle!;
+  const startState = state.transformStartState!;
+
+  const uiSnap = useUIStore.getState();
+  const snapEnabled = uiSnap.showGrid && uiSnap.snapToGrid;
+  const snappedInput = snapEnabled
+    ? { x: Math.round(canvasPos.x / uiSnap.gridSize) * uiSnap.gridSize, y: Math.round(canvasPos.y / uiSnap.gridSize) * uiSnap.gridSize }
+    : canvasPos;
+
+  const result = computeScale(handle, state.startPoint!, snappedInput, startState, shiftKey);
+  const newTransform: TransformState = {
+    ...startState,
+    scaleX: result.scaleX,
+    scaleY: result.scaleY,
+    translateX: result.translateX,
+    translateY: result.translateY,
+  };
+
+  const newBounds = getTransformedBounds(newTransform);
+  if (newBounds.width < 1 || newBounds.height < 1) return;
+
+  const editorState = useEditorStore.getState();
+  const { width: docW, height: docH } = editorState.document;
+  const activeTool = useUIStore.getState().activeTool;
+
+  const mask = activeTool === 'marquee-ellipse'
+    ? createEllipseSelection(newBounds, docW, docH)
+    : createRectSelection(newBounds, docW, docH);
+
+  const bounds = selectionBounds(mask, docW, docH);
+  if (bounds) {
+    editorState.setSelection(bounds, mask, docW, docH);
+    useUIStore.getState().setTransform(createTransformState(bounds));
   }
 
   editorState.notifyRender();

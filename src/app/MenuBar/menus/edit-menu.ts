@@ -42,6 +42,7 @@ export function createEditMenu(showFilterDialog: (id: FilterDialogId) => void): 
       { separator: true, label: '' },
       { label: 'Cut', shortcut: '⌘X', action: () => useEditorStore.getState().cut() },
       { label: 'Copy', shortcut: '⌘C', action: () => useEditorStore.getState().copy() },
+      { label: 'Copy Merged', shortcut: '⇧⌘C', action: () => useEditorStore.getState().copyMerged() },
       { label: 'Paste', shortcut: '⌘V', action: () => useEditorStore.getState().paste() },
       { separator: true, label: '' },
       { label: 'Fill', shortcut: '⇧F5', action: () => fillSelection() },

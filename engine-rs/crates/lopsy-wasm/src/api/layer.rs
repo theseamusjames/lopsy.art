@@ -365,6 +365,25 @@ pub fn clipboard_get_info(engine: &Engine) -> Vec<i32> {
     }
 }
 
+#[wasm_bindgen(js_name = "readClipboardPixels")]
+pub fn read_clipboard_pixels(engine: &Engine) -> Result<Vec<u8>, JsError> {
+    layer_manager::read_clipboard_pixels(&engine.inner)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "uploadClipboardPixels")]
+pub fn upload_clipboard_pixels(
+    engine: &mut Engine,
+    data: &[u8],
+    width: u32,
+    height: u32,
+    offset_x: i32,
+    offset_y: i32,
+) -> Result<(), JsError> {
+    layer_manager::upload_clipboard_pixels(&mut engine.inner, data, width, height, offset_x, offset_y)
+        .map_err(|e| JsError::new(&e))
+}
+
 // ============================================================
 // Floating Selection (Phase 5)
 // ============================================================

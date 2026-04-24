@@ -9,9 +9,6 @@ export function computeCreateDocument(
   transparentBg: boolean,
 ): ActionResult {
   const bgLayer = createRasterLayer({ name: 'Background', width, height });
-  const bgColor = transparentBg
-    ? { r: 0, g: 0, b: 0, a: 0 }
-    : { r: 255, g: 255, b: 255, a: 1 };
   const pixelData = new Map<string, ImageData>();
   const imgData = createImageData(width, height);
   if (!transparentBg) {
@@ -51,7 +48,7 @@ export function computeCreateDocument(
       layers,
       layerOrder,
       activeLayerId,
-      backgroundColor: bgColor,
+      backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
       rootGroupId: rootGroup.id,
     },
     layerPixelData: pixelData,

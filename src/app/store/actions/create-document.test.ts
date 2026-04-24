@@ -26,7 +26,7 @@ describe('computeCreateDocument', () => {
       expect(imgData.data[i + 2]).toBe(255);
       expect(imgData.data[i + 3]).toBe(255);
     }
-    expect(result.document!.backgroundColor).toEqual({ r: 255, g: 255, b: 255, a: 1 });
+    expect(result.document!.backgroundColor).toEqual({ r: 0, g: 0, b: 0, a: 0 });
   });
 
   it('creates empty pixel data for transparent background', () => {

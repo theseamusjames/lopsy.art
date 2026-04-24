@@ -133,6 +133,88 @@ export function isEmptySelection(mask: Uint8ClampedArray): boolean {
   return true;
 }
 
+export function growSelection(
+  mask: Uint8ClampedArray,
+  width: number,
+  height: number,
+  amount: number,
+): Uint8ClampedArray {
+  if (amount <= 0) return new Uint8ClampedArray(mask);
+  const result = new Uint8ClampedArray(mask);
+  const amountSq = amount * amount;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (mask[y * width + x]! > 0) {
+        const isBorder =
+          x === 0 || x === width - 1 || y === 0 || y === height - 1 ||
+          mask[y * width + x - 1] === 0 ||
+          mask[y * width + x + 1] === 0 ||
+          mask[(y - 1) * width + x] === 0 ||
+          mask[(y + 1) * width + x] === 0;
+        if (!isBorder) continue;
+
+        const x0 = Math.max(0, x - amount);
+        const x1 = Math.min(width - 1, x + amount);
+        const y0 = Math.max(0, y - amount);
+        const y1 = Math.min(height - 1, y + amount);
+        for (let cy = y0; cy <= y1; cy++) {
+          for (let cx = x0; cx <= x1; cx++) {
+            const dx = cx - x;
+            const dy = cy - y;
+            if (dx * dx + dy * dy <= amountSq) {
+              result[cy * width + cx] = 255;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+export function shrinkSelection(
+  mask: Uint8ClampedArray,
+  width: number,
+  height: number,
+  amount: number,
+): Uint8ClampedArray {
+  if (amount <= 0) return new Uint8ClampedArray(mask);
+  const result = new Uint8ClampedArray(mask);
+  const amountSq = amount * amount;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (mask[y * width + x]! > 0) {
+        const isBorder =
+          x === 0 || x === width - 1 || y === 0 || y === height - 1 ||
+          mask[y * width + x - 1] === 0 ||
+          mask[y * width + x + 1] === 0 ||
+          mask[(y - 1) * width + x] === 0 ||
+          mask[(y + 1) * width + x] === 0;
+        if (!isBorder) continue;
+
+        const x0 = Math.max(0, x - amount);
+        const x1 = Math.min(width - 1, x + amount);
+        const y0 = Math.max(0, y - amount);
+        const y1 = Math.min(height - 1, y + amount);
+        for (let cy = y0; cy <= y1; cy++) {
+          for (let cx = x0; cx <= x1; cx++) {
+            const dx = cx - x;
+            const dy = cy - y;
+            if (dx * dx + dy * dy <= amountSq) {
+              result[cy * width + cx] = 0;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
 /**
  * Extract edge segments from a selection mask for marching ants rendering.
  * Returns arrays of horizontal and vertical line segments at pixel boundaries
