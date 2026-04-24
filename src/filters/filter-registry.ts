@@ -20,6 +20,7 @@ import { oilPaint } from './oil-paint';
 import { chromaticAberration } from './chromatic-aberration';
 import { pixelStretch } from './pixel-stretch';
 import { lensDistortion } from './lens-distortion';
+import { rippleWave } from './ripple-wave';
 
 export type { FilterDefinition };
 
@@ -45,6 +46,7 @@ const allFilters: FilterDefinition[] = [
   chromaticAberration,
   pixelStretch,
   lensDistortion,
+  rippleWave,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(

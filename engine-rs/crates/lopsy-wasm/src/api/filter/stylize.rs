@@ -1,5 +1,6 @@
 //! Stylize filters: pixelate, halftone, kaleidoscope, oil paint, chromatic
-//! aberration, pixel stretch, find edges, cel shading.
+//! aberration, pixel stretch, lens distortion, ripple wave, find edges, cel
+//! shading.
 
 use wasm_bindgen::prelude::*;
 
@@ -161,6 +162,38 @@ pub fn filter_lens_distortion(
             }
             if let Some(loc) = shader.location(gl, "u_fringing") {
                 gl.uniform1f(Some(&loc), fringing);
+            }
+        },
+    );
+}
+
+#[wasm_bindgen(js_name = "filterRippleWave")]
+pub fn filter_ripple_wave(
+    engine: &mut Engine,
+    layer_id: &str,
+    amplitude: f32,
+    wavelength: f32,
+    angle: f32,
+    phase: f32,
+) {
+    let amplitude = amplitude.clamp(0.0, 200.0);
+    let wavelength = wavelength.clamp(1.0, 500.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.ripple_wave,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_amplitude") {
+                gl.uniform1f(Some(&loc), amplitude);
+            }
+            if let Some(loc) = shader.location(gl, "u_wavelength") {
+                gl.uniform1f(Some(&loc), wavelength);
+            }
+            if let Some(loc) = shader.location(gl, "u_phase") {
+                gl.uniform1f(Some(&loc), phase);
+            }
+            if let Some(loc) = shader.location(gl, "u_angle") {
+                gl.uniform1f(Some(&loc), angle);
             }
         },
     );

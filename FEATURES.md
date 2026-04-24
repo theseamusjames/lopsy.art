@@ -238,6 +238,7 @@ Applied globally or per-group. All default to 0.
 ### Distort
 - **Pixel Stretch**: amount 1 - 200 px, bands 2 - 50, seed 0 - 999, RGB split 0 - 1.0 (shifts horizontal scan-line bands by random offsets with per-channel separation, creating glitch / VHS corruption effects)
 - **Lens Distortion**: strength -100 to +100 (negative = pincushion, positive = barrel), zoom 50 - 200%, chromatic fringing 0 - 100% (applies barrel or pincushion radial distortion with optional per-channel color separation at edges, simulating real camera lens effects)
+- **Ripple / Wave**: amplitude 1 - 200 px, wavelength 5 - 500 px, direction 0 - 360 degrees, phase 0 - 360 degrees (sinusoidal UV displacement that creates water ripple, flag-waving, and heat-haze distortion effects; displacement runs perpendicular to the wave propagation direction)
 
 ### Render
 - **Clouds**: scale, seed
