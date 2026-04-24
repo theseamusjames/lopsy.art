@@ -44,6 +44,21 @@ export function computeMoveLayer(
       insertAt = restEntries.length;
     }
 
+    // Ensure we don't insert inside a sibling group's block.
+    // Find the moved group's parent, then check if both neighbors at the
+    // insertion point belong to the same sibling group — if so, skip past it.
+    if (insertAt > 0 && insertAt < restEntries.length) {
+      const movedParentId = findParentGroup(doc.layers, movedId)?.id;
+      const prevSibling = findContainingSiblingGroup(doc.layers, restEntries[insertAt - 1]!, movedParentId);
+      const nextSibling = findContainingSiblingGroup(doc.layers, restEntries[insertAt]!, movedParentId);
+      if (prevSibling && nextSibling && prevSibling === nextSibling) {
+        const foreignIds = new Set([prevSibling, ...getDescendantIds(doc.layers, prevSibling)]);
+        while (insertAt < restEntries.length && foreignIds.has(restEntries[insertAt]!)) {
+          insertAt++;
+        }
+      }
+    }
+
     restEntries.splice(insertAt, 0, ...blockEntries);
     const newLayers = restEntries.map((id) => layerMap.get(id)!);
 
@@ -79,4 +94,28 @@ export function computeMoveLayer(
     document: { ...doc, layers: newLayers, layerOrder: order },
     renderVersion: renderVersion + 1,
   };
+}
+
+import type { Layer } from '../../../types/layers';
+
+/**
+ * Walk up from layerId to find which sibling group (a group that is a direct
+ * child of parentGroupId) contains it. Returns the sibling group's ID, or
+ * null if layerId is a direct non-group child of parentGroupId.
+ */
+function findContainingSiblingGroup(
+  layers: readonly Layer[],
+  layerId: string,
+  parentGroupId: string | undefined,
+): string | null {
+  let current = layerId;
+  for (;;) {
+    const parent = findParentGroup(layers, current);
+    if (!parent) return null;
+    if (parent.id === parentGroupId) {
+      const layer = layers.find((l) => l.id === current);
+      return layer && isGroupLayer(layer) ? current : null;
+    }
+    current = parent.id;
+  }
 }
