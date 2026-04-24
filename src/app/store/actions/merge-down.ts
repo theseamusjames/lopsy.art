@@ -28,8 +28,6 @@ export function computeMergeDown(
       const rasterized = rasterizeLayerEffects(engine, activeId);
       if (rasterized && rasterized.length > 0) {
         uploadLayerPixels(engine, activeId, rasterized, doc.width, doc.height, 0, 0);
-        // Rasterization produces a document-sized buffer at absolute coordinates.
-        // Update the engine descriptor so mergeLayers uses position (0,0).
         updateLayer(engine, JSON.stringify({
           id: topLayer.id,
           name: topLayer.name,
@@ -73,7 +71,10 @@ export function computeMergeDown(
       }
     }
 
-    // GPU-side merge: composite top onto bottom
+    // GPU-side merge: composite top onto bottom.
+    // mergeLayers calls ensure_layer_full_size on the bottom layer,
+    // which may reposition it to (0, 0). The JS position update below
+    // keeps the store in sync.
     mergeLayers(engine, activeId, belowId);
   }
 
@@ -85,14 +86,18 @@ export function computeMergeDown(
   // Remove merged layer from its parent group's children
   let layers = removeFromParentGroup(doc.layers, activeId);
   layers = layers.filter((l) => l.id !== activeId);
-  // Clear effects on the merged result and update position if bottom was
-  // rasterized to a document-sized buffer at absolute coordinates.
+
+  // The engine's ensure_layer_full_size repositions the bottom layer to
+  // cover the full document area. Sync the JS position to match so
+  // syncLayers doesn't overwrite the engine's position on the next frame.
+  const expandedX = Math.min(0, bottomLayer.x);
+  const expandedY = Math.min(0, bottomLayer.y);
   layers = layers.map((l) => {
     if (l.id !== belowId) return l;
     if (bottomRasterized) {
       return { ...l, effects: DEFAULT_EFFECTS, x: 0, y: 0, width: doc.width, height: doc.height } as typeof l;
     }
-    return { ...l, effects: DEFAULT_EFFECTS } as typeof l;
+    return { ...l, effects: DEFAULT_EFFECTS, x: expandedX, y: expandedY } as typeof l;
   });
 
   return {

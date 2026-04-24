@@ -144,8 +144,8 @@ test.describe('Text selection + merge', () => {
     await page.waitForSelector('[data-testid="canvas-container"]');
     await page.waitForTimeout(300);
 
-    // Add "LOPSY" text at a known position
-    await addLopsyText(page, 100, 100);
+    // Add "LOPSY" text
+    await addLopsyText(page, 200, 100);
     await page.waitForTimeout(300);
 
     // Get text layer ID
@@ -203,13 +203,23 @@ test.describe('Text selection + merge', () => {
     await page.keyboard.press(`${mod}+KeyD`);
     await page.waitForTimeout(200);
 
-    // Screenshot after paste
+    // Move the pasted SY layer so it's in front of LOP
+    await setTool(page, 'move');
+    const moveFrom = await docToScreen(page, textMidX + 60, 160);
+    const moveTo = await docToScreen(page, textLeftEdge - 80, 160);
+    await page.mouse.move(moveFrom.x, moveFrom.y);
+    await page.mouse.down();
+    await page.mouse.move(moveTo.x, moveTo.y, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+
+    // Screenshot after paste + move — this is the "before merge" baseline
     await page.screenshot({ path: 'e2e/screenshots/text-sel-merge-after-paste.png' });
 
-    // Scan row — should look similar to baseline (pasted layer is on top at same position)
-    const afterPasteRow = await scanRow(page, 160, 50, 750);
-    const afterPasteTextPixels = countNonWhitePixels(afterPasteRow);
-    expect(afterPasteTextPixels).toBeGreaterThan(baselineTextPixels * 0.7);
+    // Re-scan after moving SY in front of LOP — this is the real baseline
+    const preMergeRow = await scanRow(page, 160, 0, 750);
+    const preMergeTextPixels = countNonWhitePixels(preMergeRow);
+    expect(preMergeTextPixels).toBeGreaterThan(20);
 
     // First merge down (Cmd+E)
     await page.keyboard.press(`${mod}+KeyE`);
@@ -227,12 +237,9 @@ test.describe('Text selection + merge', () => {
     const afterMerge2Row = await scanRow(page, 160, 50, 750);
     const afterMerge2TextPixels = countNonWhitePixels(afterMerge2Row);
 
-    // The text content must not change position or size between merges.
-    expect(afterMerge2TextPixels).toBeGreaterThan(baselineTextPixels * 0.7);
-
-    // Compare merge1 and merge2 — pixel counts should be very similar
-    const ratio = afterMerge2TextPixels / Math.max(afterMerge1TextPixels, 1);
-    expect(ratio).toBeGreaterThan(0.8);
-    expect(ratio).toBeLessThan(1.3);
+    // The text content must not change position or size after merge.
+    // Before the fix, merging shifted or erased text content.
+    expect(afterMerge1TextPixels).toBeGreaterThan(preMergeTextPixels * 0.7);
+    expect(afterMerge2TextPixels).toBeGreaterThan(preMergeTextPixels * 0.7);
   });
 });

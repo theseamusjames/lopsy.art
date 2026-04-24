@@ -174,9 +174,9 @@ pub fn merge_layers(
     top_id: &str,
     bottom_id: &str,
 ) -> Result<(), String> {
-    // Expand the bottom layer to at least doc-size so the merge result
-    // isn't clipped (e.g. a 1×1 transparent background). Only the bottom
-    // layer needs this — the top is read-only during the merge.
+    // Expand the bottom layer so it covers the full document area.
+    // Without this, an offset layer (e.g. text at x=200) can't hold
+    // merged content that falls outside its texture coverage.
     engine.ensure_layer_full_size(bottom_id)?;
 
     let top_handle = *engine.layer_textures.get(top_id)
