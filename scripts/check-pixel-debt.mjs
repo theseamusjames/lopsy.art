@@ -57,7 +57,7 @@ const ALLOWLIST = {
   'src/engine/mask-utils.ts': 1,
 
   // Selection mask — explicitly OK per the policy table.
-  'src/app/interactions/selection-handlers.ts': 4,
+  'src/app/interactions/selection-handlers.ts': 6,
   'src/panels/LayerPanel/layer-selection.ts': 2,
   'src/panels/PathsPanel/path-to-selection.ts': 1,
   'src/selection/selection.ts': 4,
@@ -75,6 +75,9 @@ const ALLOWLIST = {
   // Wide-gamut ImageData plumbing — engine infrastructure.
   'src/engine/canvas-ops.ts': 1,
   'src/engine/color-space.ts': 5,
+
+  // Pattern thumbnail generation — UI preview for the patterns panel.
+  'src/app/pattern-store.ts': 2,
 
   // Brush engine scaffolding — stamps, shape data, ABR parsing.
   'src/app/tool-settings-store.ts': 7,
