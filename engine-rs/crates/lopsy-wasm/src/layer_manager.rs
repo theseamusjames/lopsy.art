@@ -734,6 +734,11 @@ pub fn float_selection(
     // Release any existing float
     drop_float(engine);
 
+    // Expand the layer to at least doc-size so the float covers the full
+    // document area. Without this, dragging the float beyond the layer's
+    // original texture edge clips the content.
+    engine.ensure_layer_full_size(layer_id)?;
+
     let layer_tex_handle = *engine.layer_textures.get(layer_id)
         .ok_or_else(|| format!("Layer {layer_id} not found"))?;
     let (lw, lh) = engine.texture_pool.get_size(layer_tex_handle).unwrap_or((1, 1));
