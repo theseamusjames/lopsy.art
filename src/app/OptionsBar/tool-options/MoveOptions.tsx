@@ -7,8 +7,11 @@ import {
   AlignVerticalJustifyStart,
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd,
+  RotateCw,
+  RotateCcw,
 } from 'lucide-react';
 import type { AlignEdge } from '../../../tools/move/move';
+import { rotateActiveLayer } from '../../MenuBar/menus/image-menu';
 import { TransformControls } from './TransformControls';
 import styles from '../OptionsBar.module.css';
 
@@ -33,6 +36,19 @@ export function MoveOptions() {
             onClick={() => alignLayer(edge as AlignEdge)}
           />
         ))}
+      </div>
+      <div className={styles.separator} />
+      <div className={styles.alignGroup}>
+        <IconButton
+          icon={<RotateCcw size={16} />}
+          label="Rotate 90° CCW"
+          onClick={() => rotateActiveLayer('ccw')}
+        />
+        <IconButton
+          icon={<RotateCw size={16} />}
+          label="Rotate 90° CW"
+          onClick={() => rotateActiveLayer('cw')}
+        />
       </div>
       <TransformControls />
     </>
