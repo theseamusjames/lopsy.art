@@ -28,6 +28,38 @@ export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
   state.notifyRender();
 }
 
+export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
+  const state = useEditorStore.getState();
+  const activeId = state.document.activeLayerId;
+  if (!activeId) return;
+
+  const engine = getEngine();
+  if (!engine) return;
+
+  const layer = state.document.layers.find((l) => l.id === activeId);
+  if (!layer || layer.type !== 'raster') return;
+
+  state.pushHistory();
+  rotateLayer90(engine, activeId, direction === 'cw');
+
+  const cx = layer.x + layer.width / 2;
+  const cy = layer.y + layer.height / 2;
+  const newLayers = state.document.layers.map((l) =>
+    l.id === activeId && l.type === 'raster'
+      ? { ...l, x: cx - l.height / 2, y: cy - l.width / 2, width: l.height, height: l.width } as Layer
+      : l,
+  );
+
+  pixelDataManager.remove(activeId);
+  const dirtyIds = new Set(state.dirtyLayerIds);
+  dirtyIds.add(activeId);
+  useEditorStore.setState({
+    document: { ...state.document, layers: newLayers },
+    dirtyLayerIds: dirtyIds,
+    renderVersion: state.renderVersion + 1,
+  });
+}
+
 export function rotateImage(direction: 'cw' | 'ccw'): void {
   const state = useEditorStore.getState();
   const doc = state.document;

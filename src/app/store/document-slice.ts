@@ -2,7 +2,7 @@ import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
 import { createImageData } from '../../engine/color-space';
-import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil } from '../../layers/group-utils';
+import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
@@ -293,14 +293,24 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   moveLayerToGroup: (layerId, targetGroupId, insertIndex) => {
     const doc = get().document;
     const newLayers = moveLayerToGroupUtil(doc.layers, layerId, targetGroupId, insertIndex);
-    // Reposition in layerOrder: place just before the target group
-    // so the layer renders within the group's range
-    const newOrder = doc.layerOrder.filter((id) => id !== layerId);
+
+    // Collect all IDs to reposition (the layer + descendants if it's a group)
+    const movedLayer = doc.layers.find((l) => l.id === layerId);
+    const idsToMove = new Set([layerId]);
+    if (movedLayer && movedLayer.type === 'group') {
+      for (const id of getDescendantIdsUtil(doc.layers, layerId)) {
+        idsToMove.add(id);
+      }
+    }
+
+    // Preserve relative order of moved entries
+    const movedEntries = doc.layerOrder.filter((id) => idsToMove.has(id));
+    const newOrder = doc.layerOrder.filter((id) => !idsToMove.has(id));
     const groupIdx = newOrder.indexOf(targetGroupId);
     if (groupIdx !== -1) {
-      newOrder.splice(groupIdx, 0, layerId);
+      newOrder.splice(groupIdx, 0, ...movedEntries);
     } else {
-      newOrder.push(layerId);
+      newOrder.push(...movedEntries);
     }
     set({ document: { ...doc, layers: newLayers, layerOrder: newOrder } });
   },

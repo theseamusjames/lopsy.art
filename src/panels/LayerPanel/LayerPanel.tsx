@@ -137,8 +137,10 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       const { from, gap } = drag;
       if (gap === from || gap === from + 1) return;
 
-      // Determine the target parent group from the gap position.
-      const neighborIdx = gap > 0 ? gap - 1 : 0;
+      // Use the item BELOW the gap to determine which group the drop
+      // position belongs to. This prevents layers from being pulled into
+      // a group when dropped at its lower boundary.
+      const neighborIdx = gap < displayList.length ? gap : gap - 1;
       const neighbor = displayList[neighborIdx];
       const draggedParent = findParentGroup(layers, draggedLayer.id);
 
