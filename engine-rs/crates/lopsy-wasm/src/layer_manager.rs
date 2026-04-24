@@ -1439,6 +1439,27 @@ pub fn read_pixels(
     Ok(pixels)
 }
 
+pub fn upload_clipboard_pixels(
+    engine: &mut EngineInner,
+    data: &[u8],
+    width: u32,
+    height: u32,
+    offset_x: i32,
+    offset_y: i32,
+) -> Result<(), String> {
+    if let Some(old) = engine.clipboard_texture.take() {
+        engine.texture_pool.release(old);
+    }
+    let tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
+    engine.texture_pool.upload_rgba(&engine.gl, tex, 0, 0, width, height, data)?;
+    engine.clipboard_texture = Some(tex);
+    engine.clipboard_width = width;
+    engine.clipboard_height = height;
+    engine.clipboard_offset_x = offset_x;
+    engine.clipboard_offset_y = offset_y;
+    Ok(())
+}
+
 pub fn read_clipboard_pixels(engine: &EngineInner) -> Result<Vec<u8>, String> {
     let tex_handle = engine.clipboard_texture
         .ok_or("No clipboard texture")?;

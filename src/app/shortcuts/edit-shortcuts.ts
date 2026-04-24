@@ -7,9 +7,13 @@ export function handleEditShortcut(
   e: KeyboardEvent,
   clearPersistentTransform: () => void,
 ): boolean {
-  if (e.key === 'c') {
+  if (e.key === 'c' || e.key === 'C') {
     e.preventDefault();
-    useEditorStore.getState().copy();
+    if (e.shiftKey) {
+      useEditorStore.getState().copyMerged();
+    } else {
+      useEditorStore.getState().copy();
+    }
     return true;
   }
   if (e.key === 'x') {

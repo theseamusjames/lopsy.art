@@ -9,6 +9,8 @@ import {
   clipboardPaste,
   uploadLayerPixels,
   readClipboardPixels,
+  uploadClipboardPixels,
+  compositeForExport,
 } from '../../engine-wasm/wasm-bridge';
 import type { ClipboardData, SliceCreator } from './types';
 
@@ -38,6 +40,7 @@ function writeToSystemClipboard(width: number, height: number): void {
 export interface ClipboardSlice {
   clipboard: ClipboardData | null;
   copy: () => void;
+  copyMerged: () => void;
   cut: () => void;
   paste: () => void;
   pasteImageData: (imageData: ImageData) => void;
@@ -83,6 +86,57 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
       });
       writeToSystemClipboard(clipW, clipH);
     }
+  },
+
+  copyMerged: () => {
+    const engine = getEngine();
+    if (!engine) return;
+    const state = get();
+    const { width: docW, height: docH } = state.document;
+
+    const rawPixels = compositeForExport(engine);
+
+    const sel = state.selection;
+    const hasSelection = sel.active && sel.bounds !== null && sel.mask !== null;
+    const bx = hasSelection ? Math.round(sel.bounds!.x) : 0;
+    const by = hasSelection ? Math.round(sel.bounds!.y) : 0;
+    const bw = hasSelection ? Math.round(sel.bounds!.width) : docW;
+    const bh = hasSelection ? Math.round(sel.bounds!.height) : docH;
+
+    const cropped = new Uint8Array(bw * bh * 4);
+    for (let y = 0; y < bh; y++) {
+      const srcOffset = ((by + y) * docW + bx) * 4;
+      const dstOffset = y * bw * 4;
+      cropped.set(rawPixels.subarray(srcOffset, srcOffset + bw * 4), dstOffset);
+    }
+
+    if (hasSelection && sel.mask) {
+      for (let y = 0; y < bh; y++) {
+        for (let x = 0; x < bw; x++) {
+          const maskVal = sel.mask[(by + y) * sel.maskWidth + (bx + x)] ?? 0;
+          if (maskVal === 0) {
+            const i = (y * bw + x) * 4;
+            cropped[i] = 0;
+            cropped[i + 1] = 0;
+            cropped[i + 2] = 0;
+            cropped[i + 3] = 0;
+          }
+        }
+      }
+    }
+
+    uploadClipboardPixels(engine, cropped, bw, bh, bx, by);
+
+    set({
+      clipboard: {
+        width: bw,
+        height: bh,
+        offsetX: bx,
+        offsetY: by,
+        gpuResident: true,
+      },
+    });
+    writeToSystemClipboard(bw, bh);
   },
 
   cut: () => {
