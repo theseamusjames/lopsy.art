@@ -54,16 +54,22 @@ export function handleSizeShortcut(e: KeyboardEvent): boolean {
   return true;
 }
 
+const SELECTION_TOOLS = new Set([
+  'marquee-rect', 'marquee-ellipse', 'lasso', 'lasso-magnetic', 'wand',
+]);
+
 export function handleNudgeShortcut(
   e: KeyboardEvent,
   nudgeMove: (dx: number, dy: number) => void,
+  nudgeSelection: (dx: number, dy: number) => void,
 ): boolean {
   if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
     return false;
   }
 
   const tool = useUIStore.getState().activeTool;
-  if (tool !== 'move') return false;
+  const isSelection = SELECTION_TOOLS.has(tool);
+  if (tool !== 'move' && !isSelection) return false;
 
   e.preventDefault();
   const ui = useUIStore.getState();
@@ -74,6 +80,11 @@ export function handleNudgeShortcut(
   else if (e.key === 'ArrowDown') dy = amount;
   else if (e.key === 'ArrowLeft') dx = -amount;
   else if (e.key === 'ArrowRight') dx = amount;
-  nudgeMove(dx, dy);
+
+  if (isSelection) {
+    nudgeSelection(dx, dy);
+  } else {
+    nudgeMove(dx, dy);
+  }
   return true;
 }

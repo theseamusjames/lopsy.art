@@ -84,6 +84,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
 
       // First move: float the selection on the GPU
       floatSelection(engine, activeLayerId);
+      compositeFloat(engine, 0, 0);
 
       // Option+drag: restore the float base so selected pixels remain in
       // place — floatSelection cuts them, but option means "copy, don't cut".
@@ -257,6 +258,7 @@ export function handleNudgeMove(
       setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
 
       floatSelection(engine, activeId);
+      compositeFloat(engine, 0, 0);
 
       clearJsPixelData(activeId);
 

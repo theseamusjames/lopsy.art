@@ -45,6 +45,7 @@ interface KeyboardShortcutDeps {
   setPointerMode: (next: PointerMode | ((prev: PointerMode) => PointerMode)) => void;
   clearPersistentTransform: () => void;
   nudgeMove: (dx: number, dy: number) => void;
+  nudgeSelection: (dx: number, dy: number) => void;
 }
 
 export function useKeyboardShortcuts({
@@ -52,6 +53,7 @@ export function useKeyboardShortcuts({
   setPointerMode,
   clearPersistentTransform,
   nudgeMove,
+  nudgeSelection,
 }: KeyboardShortcutDeps): void {
   const setZoom = useEditorStore((s) => s.setZoom);
   const setPan = useEditorStore((s) => s.setPan);
@@ -134,7 +136,7 @@ export function useKeyboardShortcuts({
 
       if (!e.metaKey && !e.ctrlKey && !e.altKey) {
         if (handleToolShortcut(e)) return;
-        if (handleNudgeShortcut(e, nudgeMove)) return;
+        if (handleNudgeShortcut(e, nudgeMove, nudgeSelection)) return;
         if (handleSizeShortcut(e)) return;
       }
 
@@ -225,7 +227,7 @@ export function useKeyboardShortcuts({
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('paste', handlePaste);
     };
-  }, [setZoom, setPan, viewport.zoom, docWidth, docHeight, canvasRef, setPointerMode, clearPersistentTransform, nudgeMove]);
+  }, [setZoom, setPan, viewport.zoom, docWidth, docHeight, canvasRef, setPointerMode, clearPersistentTransform, nudgeMove, nudgeSelection]);
 }
 
 function handleDeleteKey(): void {

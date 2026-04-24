@@ -365,6 +365,12 @@ pub fn clipboard_get_info(engine: &Engine) -> Vec<i32> {
     }
 }
 
+#[wasm_bindgen(js_name = "readClipboardPixels")]
+pub fn read_clipboard_pixels(engine: &Engine) -> Result<Vec<u8>, JsError> {
+    layer_manager::read_clipboard_pixels(&engine.inner)
+        .map_err(|e| JsError::new(&e))
+}
+
 // ============================================================
 // Floating Selection (Phase 5)
 // ============================================================

@@ -133,7 +133,7 @@ function createInitialDocument() {
     layers: [bg, rootGroup] as readonly Layer[],
     layerOrder: [bg.id, rootGroup.id] as readonly string[],
     activeLayerId: bg.id as string | null,
-    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
     rootGroupId: rootGroup.id as string | null,
   };
 }

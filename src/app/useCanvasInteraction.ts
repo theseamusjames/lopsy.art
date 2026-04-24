@@ -27,6 +27,7 @@ import type {
 } from './interactions/interaction-types';
 import { handleTransformDown } from './interactions/transform-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
+import { createTransformState } from '../tools/transform/transform';
 import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 // PAINT_TOOLS / GPU_TOOLS are derived from the tool registry, so adding a
 // new paint or GPU tool is a single-file change at the descriptor.
@@ -501,5 +502,33 @@ export function useCanvasInteraction(
     handleNudgeMove(dx, dy, floatingSelectionRef, persistentTransformRef);
   }, []);
 
-  return { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove };
+  const nudgeSelection = useCallback((dx: number, dy: number) => {
+    const editor = useEditorStore.getState();
+    const sel = editor.selection;
+    if (!sel.active || !sel.mask || !sel.bounds) return;
+
+    const { width: docW, height: docH } = editor.document;
+    const origMask = sel.mask;
+    const newMask = new Uint8ClampedArray(docW * docH);
+    for (let y = 0; y < docH; y++) {
+      for (let x = 0; x < docW; x++) {
+        const sx = x - dx;
+        const sy = y - dy;
+        if (sx >= 0 && sx < docW && sy >= 0 && sy < docH) {
+          newMask[y * docW + x] = origMask[sy * docW + sx]!;
+        }
+      }
+    }
+    const newBounds = {
+      x: sel.bounds.x + dx,
+      y: sel.bounds.y + dy,
+      width: sel.bounds.width,
+      height: sel.bounds.height,
+    };
+    editor.setSelection(newBounds, newMask, docW, docH);
+    useUIStore.getState().setTransform(createTransformState(newBounds));
+    editor.notifyRender();
+  }, []);
+
+  return { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove, nudgeSelection };
 }

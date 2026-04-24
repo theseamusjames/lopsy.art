@@ -1438,3 +1438,29 @@ pub fn read_pixels(
 
     Ok(pixels)
 }
+
+pub fn read_clipboard_pixels(engine: &EngineInner) -> Result<Vec<u8>, String> {
+    let tex_handle = engine.clipboard_texture
+        .ok_or("No clipboard texture")?;
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
+    let texture = engine.texture_pool.get(tex_handle)
+        .ok_or("Clipboard texture not found")?;
+
+    let fbo = engine.gl.create_framebuffer()
+        .ok_or("Failed to create temp FBO")?;
+    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+    engine.gl.framebuffer_texture_2d(
+        WebGl2RenderingContext::FRAMEBUFFER,
+        WebGl2RenderingContext::COLOR_ATTACHMENT0,
+        WebGl2RenderingContext::TEXTURE_2D,
+        Some(texture),
+        0,
+    );
+
+    let pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h)?;
+
+    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+    engine.gl.delete_framebuffer(Some(&fbo));
+
+    Ok(pixels)
+}

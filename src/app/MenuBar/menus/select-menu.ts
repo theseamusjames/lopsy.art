@@ -2,6 +2,8 @@ import { useEditorStore } from '../../editor-store';
 import { createRectSelection, invertSelection } from '../../../selection/selection';
 import type { MenuDef } from './types';
 
+export type SelectDialogId = 'grow' | 'shrink';
+
 export function selectAll(): void {
   const state = useEditorStore.getState();
   const { width, height } = state.document;
@@ -19,11 +21,16 @@ export function invertSelectionAction(): void {
   state.setSelection({ x: 0, y: 0, width, height }, inverted, sel.maskWidth, sel.maskHeight);
 }
 
-export const selectMenu: MenuDef = {
-  label: 'Select',
-  items: [
-    { label: 'All', shortcut: '\u2318A', action: () => selectAll() },
-    { label: 'Deselect', shortcut: '\u2318D', action: () => useEditorStore.getState().clearSelection() },
-    { label: 'Inverse', shortcut: '\u21E7\u2318I', action: () => invertSelectionAction() },
-  ],
-};
+export function createSelectMenu(showDialog: (id: SelectDialogId) => void): MenuDef {
+  return {
+    label: 'Select',
+    items: [
+      { label: 'All', shortcut: '⌘A', action: () => selectAll() },
+      { label: 'Deselect', shortcut: '⌘D', action: () => useEditorStore.getState().clearSelection() },
+      { label: 'Inverse', shortcut: '⇧⌘I', action: () => invertSelectionAction() },
+      { separator: true, label: '' },
+      { label: 'Grow…', action: () => showDialog('grow') },
+      { label: 'Shrink…', action: () => showDialog('shrink') },
+    ],
+  };
+}

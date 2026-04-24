@@ -8,8 +8,32 @@ import {
   clipboardCut,
   clipboardPaste,
   uploadLayerPixels,
+  readClipboardPixels,
 } from '../../engine-wasm/wasm-bridge';
 import type { ClipboardData, SliceCreator } from './types';
+
+function writeToSystemClipboard(width: number, height: number): void {
+  try {
+    const engine = getEngine();
+    if (!engine) return;
+    const pixels = readClipboardPixels(engine);
+    const buf = new ArrayBuffer(pixels.byteLength);
+    new Uint8Array(buf).set(pixels);
+    const clamped = new Uint8ClampedArray(buf);
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const imageData = new ImageData(clamped, width, height);
+    ctx.putImageData(imageData, 0, 0);
+    canvas.convertToBlob({ type: 'image/png' }).then((blob) => {
+      if (typeof navigator.clipboard?.write !== 'function') return;
+      const item = new ClipboardItem({ 'image/png': blob });
+      navigator.clipboard.write([item]).catch(() => {});
+    }).catch(() => {});
+  } catch {
+    // System clipboard write is best-effort
+  }
+}
 
 export interface ClipboardSlice {
   clipboard: ClipboardData | null;
@@ -46,15 +70,18 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     const result = clipboardCopy(engine, activeId, hasSelection, bx, by, bw, bh);
     if (result.length >= 4) {
+      const clipW = result[0]!;
+      const clipH = result[1]!;
       set({
         clipboard: {
-          width: result[0]!,
-          height: result[1]!,
+          width: clipW,
+          height: clipH,
           offsetX: result[2]!,
           offsetY: result[3]!,
           gpuResident: true,
         },
       });
+      writeToSystemClipboard(clipW, clipH);
     }
   },
 
@@ -81,17 +108,20 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     state.pushHistory('Cut');
     const result = clipboardCut(engine, activeId, hasSelection, bx, by, bw, bh);
     if (result.length >= 4) {
+      const clipW = result[0]!;
+      const clipH = result[1]!;
       clearJsPixelData(activeId);
       set({
         clipboard: {
-          width: result[0]!,
-          height: result[1]!,
+          width: clipW,
+          height: clipH,
           offsetX: result[2]!,
           offsetY: result[3]!,
           gpuResident: true,
         },
         renderVersion: state.renderVersion + 1,
       });
+      writeToSystemClipboard(clipW, clipH);
     }
   },
 
