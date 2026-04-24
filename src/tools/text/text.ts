@@ -155,11 +155,20 @@ export function renderText(
   }
 }
 
+export interface TextRenderResult {
+  canvas: HTMLCanvasElement;
+  leftPadding: number;
+}
+
 /**
  * Render text to a standalone canvas (for text layer commit).
  * Returns the canvas element directly to avoid the getImageData
  * unpremultiply round-trip that causes alpha precision loss on
  * antialiased text edges.
+ *
+ * `leftPadding` reports how many pixels the rendering was shifted
+ * right to avoid clipping glyph overhang on italic/script fonts.
+ * Callers should subtract this from the layer's x position.
  */
 export function renderTextToCanvas(
   width: number,
@@ -168,12 +177,12 @@ export function renderTextToCanvas(
   text: string,
   style: TextStyle,
   areaWidth: number | null = null,
-): HTMLCanvasElement {
+): TextRenderResult {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d', contextOptions);
-  if (!ctx) return canvas;
+  if (!ctx) return { canvas, leftPadding: 0 };
 
   const font = buildFontString(style);
   ctx.font = font;
@@ -188,12 +197,20 @@ export function renderTextToCanvas(
   const lines = wrapText(text, areaWidth, measureWidth);
   const lineH = style.fontSize * style.lineHeight;
 
+  let maxLeftOverhang = 0;
+  for (const line of lines) {
+    const metrics = ctx.measureText(line);
+    if (metrics.actualBoundingBoxLeft > 0) {
+      maxLeftOverhang = Math.max(maxLeftOverhang, Math.ceil(metrics.actualBoundingBoxLeft));
+    }
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     const lineWidth = measureWidth(line);
     const xOffset = alignLineX(lineWidth, areaWidth, style.textAlign);
-    ctx.fillText(line, pos.x + xOffset, pos.y + i * lineH);
+    ctx.fillText(line, pos.x + xOffset + maxLeftOverhang, pos.y + i * lineH);
   }
 
-  return canvas;
+  return { canvas, leftPadding: maxLeftOverhang };
 }
