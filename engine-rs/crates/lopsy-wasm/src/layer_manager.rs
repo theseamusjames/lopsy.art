@@ -174,9 +174,9 @@ pub fn merge_layers(
     top_id: &str,
     bottom_id: &str,
 ) -> Result<(), String> {
-    // Expand both layers to at least doc-size so small textures (e.g. a
-    // 1x1 transparent background) don't clip the merge result.
-    engine.ensure_layer_full_size(top_id)?;
+    // Expand the bottom layer to at least doc-size so the merge result
+    // isn't clipped (e.g. a 1×1 transparent background). Only the bottom
+    // layer needs this — the top is read-only during the merge.
     engine.ensure_layer_full_size(bottom_id)?;
 
     let top_handle = *engine.layer_textures.get(top_id)
