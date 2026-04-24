@@ -58,8 +58,7 @@ export function commitTextEditing(): void {
   const doc = editorState.document;
   const areaWidth = editing.bounds.width;
 
-  // Render text at (0,0) on a canvas — the layer's x/y positions it in document space.
-  const textCanvas = renderTextToCanvas(
+  const { canvas: textCanvas, leftPadding } = renderTextToCanvas(
     doc.width,
     doc.height,
     { x: 0, y: 0 },
@@ -77,12 +76,11 @@ export function commitTextEditing(): void {
     color: textColor,
     textAlign: toolSettings.textAlign,
     width: areaWidth,
-    x: editing.bounds.x,
+    x: editing.bounds.x - leftPadding,
     y: editing.bounds.y,
     visible: true,
   });
 
-  // Upload pixel data through the standard pipeline.
   const textCtx = textCanvas.getContext('2d');
   if (textCtx) {
     const imageData = textCtx.getImageData(0, 0, doc.width, doc.height);

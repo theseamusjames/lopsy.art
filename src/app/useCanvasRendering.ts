@@ -101,7 +101,7 @@ function renderFrameGpu(
       letterSpacing: 0,
       textAlign: ts.textAlign,
     };
-    const textCanvas = renderTextToCanvas(
+    const { canvas: textCanvas, leftPadding } = renderTextToCanvas(
       doc.width, doc.height,
       { x: 0, y: 0 },
       textEditing.text,
@@ -113,7 +113,7 @@ function renderFrameGpu(
       const imgData = textCtx.getImageData(0, 0, doc.width, doc.height);
       const rawBytes = new Uint8Array(imgData.data.buffer, imgData.data.byteOffset, imgData.data.byteLength);
       const layer = layers.find((l) => l.id === textEditing.layerId);
-      uploadLayerPixels(engine, textEditing.layerId, rawBytes, doc.width, doc.height, layer?.x ?? 0, layer?.y ?? 0);
+      uploadLayerPixels(engine, textEditing.layerId, rawBytes, doc.width, doc.height, (layer?.x ?? 0) - leftPadding, layer?.y ?? 0);
     }
   }
 
