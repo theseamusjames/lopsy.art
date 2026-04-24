@@ -59,10 +59,12 @@ function flattenLayerTreeForPsd(
 
     if (layer.type === 'group') {
       const group = layer as GroupLayer;
-      // PSD convention: bottom-to-top with group-end marker first,
-      // then children (bottom-to-top), then group-open marker.
+      const childSet = new Set(group.children);
+      // group.children tracks membership but not visual order — use
+      // layerOrder (bottom-to-top) as the source of truth for stacking.
+      const sortedChildren = layerOrder.filter((cid) => childSet.has(cid));
       result.push({ layer: group, groupKind: 3 }); // GroupEnd
-      for (const childId of group.children) {
+      for (const childId of sortedChildren) {
         emitLayer(childId);
       }
       result.push({ layer: group, groupKind: 1 }); // GroupOpen
@@ -85,11 +87,15 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
   const engine = getEngine();
   if (!engine) return;
 
-  // Commit any in-progress brush stroke so its pixels are in the GPU texture
-  // before we read layer data.
+  // Commit any in-progress brush stroke and flush all pending JS pixel
+  // data to the GPU before the synchronous WASM export call.  Without this
+  // the rAF render loop may try to upload pending data (mutable borrow)
+  // while exportPsd holds an immutable borrow, triggering a RefCell panic.
   finalizePendingStrokeGlobal();
 
   const edState = useEditorStore.getState();
+  flushLayerSync(edState);
+
   const { document: doc } = edState;
 
   const flatLayers = flattenLayerTreeForPsd(doc.layers, doc.layerOrder);
@@ -128,8 +134,12 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
       blendMode: BLEND_MODE_TO_U8[layer.blendMode] ?? 0,
       x: layer.x,
       y: layer.y,
-      width: (layer.type === 'raster' || layer.type === 'shape') ? (layer as RasterLayer).width : 0,
-      height: (layer.type === 'raster' || layer.type === 'shape') ? (layer as RasterLayer).height : 0,
+      width: (layer.type === 'raster' || layer.type === 'shape')
+        ? (layer as RasterLayer).width
+        : (layer.type === 'text') ? doc.width : 0,
+      height: (layer.type === 'raster' || layer.type === 'shape')
+        ? (layer as RasterLayer).height
+        : (layer.type === 'text') ? doc.height : 0,
       clipToBelow: layer.clipToBelow,
       groupKind,
     };

@@ -13,6 +13,8 @@ import {
 import type { MenuDef } from './types';
 import { exportPsdFile, importPsdFile } from '../../../io/psd';
 import { describeError, notifyError } from '../../notifications-store';
+import { finalizePendingStrokeGlobal } from '../../interactions/pending-stroke';
+import { flushLayerSync } from '../../../engine-wasm/engine-sync';
 
 // Re-export so existing callers (App.tsx, e2e tests) keep working.
 export { importPsdFile, exportPsdFile };
@@ -86,6 +88,8 @@ export type ExportFormat = 'png' | 'jpeg' | 'webp' | 'bmp';
 export function exportCanvas(format: ExportFormat): void {
   const engine = getEngine();
   if (!engine) return;
+  finalizePendingStrokeGlobal();
+  flushLayerSync(useEditorStore.getState());
   exportViaEngine(engine, format);
 }
 
