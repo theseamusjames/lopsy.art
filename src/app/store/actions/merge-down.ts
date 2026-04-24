@@ -21,7 +21,6 @@ export function computeMergeDown(
   const bottomLayer = doc.layers.find((l) => l.id === belowId);
   if (!topLayer || !bottomLayer) return undefined;
 
-  let bottomRasterized = false;
   const engine = getEngine();
   if (engine) {
     if (hasEnabledEffects(topLayer.effects)) {
@@ -67,7 +66,6 @@ export function computeMergeDown(
           effects: {},
           mask: null,
         }));
-        bottomRasterized = true;
       }
     }
 
