@@ -93,6 +93,7 @@ additive/subtractive mask coverage. A proper migration wants:
 | Brush/eraser touching a JS pixel buffer                | **Debt**    |
 | Selection mask built by `selection-ops.ts`             | OK          |
 | Font rasterizer in JS (text only)                      | OK (§2)     |
+| Pattern thumbnail preview (`pattern-store.ts`)         | OK          |
 
 Anything in the **Debt** column needs a GitHub issue and a GPU
 implementation plan, or it does not land.
