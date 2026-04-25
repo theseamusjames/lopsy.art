@@ -334,9 +334,10 @@ test.describe('Free Transform', () => {
     const afterScalePixels = await countAllOpaquePixels(page);
     expect(afterScalePixels).toBeGreaterThan(initialPixels * 0.9);
 
-    // Verify transform state shows scale change
-    const afterScale = await getUIState(page);
-    expect(afterScale.transform?.scaleX).toBeGreaterThan(1.0);
+    // Selection-only transforms update the selection bounds, not transform.scaleX
+    const afterSel = await getEditorState(page);
+    expect(afterSel.selection.bounds).not.toBeNull();
+    expect(afterSel.selection.bounds!.width).toBeGreaterThan(140);
   });
 
   test('move tool shifts selection marquee with content', async ({ page }) => {
@@ -871,8 +872,8 @@ test.describe('Free Transform', () => {
     await page.waitForTimeout(100);
 
     // 6. Rotate the selection 90 degrees
-    //    First need to switch back to marquee so transform handles are visible
-    await selectTool(page, 'm');
+    //    Selection tools only support scaling, so use the move tool for rotation
+    await selectTool(page, 'v');
     await page.waitForTimeout(50);
 
     const handleInfo = await page.evaluate(() => {

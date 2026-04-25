@@ -14,7 +14,14 @@ async function createDocument(page: Page, w: number, h: number, transparent: boo
     },
     { w, h, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -57,7 +64,8 @@ async function drawSpiral(page: Page, cx: number, cy: number, maxR: number) {
   await page.waitForTimeout(300);
 }
 
-test('align bottom, then fill center — spiral stays visible', async ({ page }) => {
+test('align bottom, then fill center — spiral stays visible', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'compositing precision test requires larger viewport');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 1920, 1080, true);

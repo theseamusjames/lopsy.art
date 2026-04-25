@@ -30,6 +30,7 @@ import { pixelDataManager } from '../../engine/pixel-data-manager';
 export interface PixelDataSlice {
   dirtyLayerIds: Set<string>;
   renderVersion: number;
+  documentVersion: number;
   getOrCreateLayerPixelData: (layerId: string) => ImageData;
   updateLayerPixelData: (layerId: string, data: ImageData) => void;
   notifyRender: () => void;
@@ -68,6 +69,7 @@ function unionBounds(
 export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => ({
   dirtyLayerIds: new Set(),
   renderVersion: 0,
+  documentVersion: 0,
 
   getOrCreateLayerPixelData: (layerId: string) => {
     // Always returns a full-canvas-size ImageData, expanding cropped/sparse layers.

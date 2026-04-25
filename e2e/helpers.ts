@@ -40,9 +40,11 @@ export async function createDocument(page: Page, width = 400, height = 300, tran
   );
   await page.waitForFunction(() => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { document: { layers: unknown[] } };
-    };
-    return store.getState().document.layers.length > 0;
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
   });
 }
 

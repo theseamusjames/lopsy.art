@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 import { waitForStore, createDocument } from './helpers';
 
 test.describe('Effects drawer drag', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'effects drawer requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 400, 300, false);

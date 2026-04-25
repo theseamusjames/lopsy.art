@@ -231,7 +231,7 @@ async function moveViaMouse(page: Page, fromX: number, fromY: number, toX: numbe
 
 /** Click the Rotate 90° CW button in the options bar */
 async function clickRotate90CW(page: Page) {
-  const btn = page.locator('button[aria-label="Rotate 90° CW"]');
+  const btn = page.locator('button[aria-label="Rotate 90° CW"]').first();
   await btn.click();
   await page.waitForTimeout(300);
 }

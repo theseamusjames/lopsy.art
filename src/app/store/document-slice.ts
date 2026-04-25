@@ -183,6 +183,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     clearEngine();
     const result = computeCreateDocument(width, height, transparentBg);
     applyActionResult(set, result);
+    set({ documentVersion: get().documentVersion + 1 });
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
@@ -193,6 +194,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     clearEngine();
     const result = computeOpenImage(imageData, name);
     applyActionResult(set, result);
+    set({ documentVersion: get().documentVersion + 1 });
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }

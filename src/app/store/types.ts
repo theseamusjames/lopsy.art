@@ -56,6 +56,7 @@ export interface EditorState {
   redoStack: HistorySnapshot[];
   dirtyLayerIds: Set<string>;
   renderVersion: number;
+  documentVersion: number;
   selection: SelectionData;
   documentReady: boolean;
   isDirty: boolean;

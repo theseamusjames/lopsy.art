@@ -20,7 +20,14 @@ async function createDocument(page: Page, width = 400, height = 300) {
     },
     { w: width, h: height },
   );
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 test('clicking inside the guide color picker keeps it open', async ({ page }) => {

@@ -14,7 +14,14 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function getEditorState(page: Page) {
@@ -82,7 +89,8 @@ async function addMaskViaStore(page: Page, layerId: string) {
 // Setup
 // ---------------------------------------------------------------------------
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, isMobile }) => {
+  test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
   await page.goto('/');
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
   await createDocument(page);
