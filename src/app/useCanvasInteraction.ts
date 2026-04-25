@@ -231,14 +231,25 @@ export function useCanvasInteraction(
         // before we read pixel data back for non-GPU tools (e.g. move).
         finalizePendingStroke(pendingStrokeRef);
 
-        // CPU fallback: expand layer to full canvas for pixel manipulation
-        const imageData = editorState.expandLayerForEditing(activeLayerId);
-        expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
-        layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
-        pixelBuffer = PixelBuffer.wrapImageData(imageData);
-        invalidateBitmapCache(activeLayerId);
-        createPaintingCanvas(activeLayerId, imageData);
-        paintSurface = wrapWithSelectionMask(pixelBuffer, expandedLayer.x, expandedLayer.y);
+        // Only expand the active layer's pixel data for tools that actually
+        // read/write it (move, smudge, fill). Tools like text, crop, path,
+        // eyedropper, and selection tools don't need pixel data and expanding
+        // would destructively change layer bounds before pushHistory captures
+        // them — causing undo to restore the wrong positions.
+        const needsPixelData = isPaintTool || activeTool === 'move' || activeTool === 'fill';
+        if (needsPixelData) {
+          const imageData = editorState.expandLayerForEditing(activeLayerId);
+          expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
+          layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
+          pixelBuffer = PixelBuffer.wrapImageData(imageData);
+          invalidateBitmapCache(activeLayerId);
+          createPaintingCanvas(activeLayerId, imageData);
+          paintSurface = wrapWithSelectionMask(pixelBuffer, expandedLayer.x, expandedLayer.y);
+        } else {
+          const dummyData = new ImageData(1, 1);
+          pixelBuffer = PixelBuffer.wrapImageData(dummyData);
+          paintSurface = pixelBuffer;
+        }
       }
       const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer, pixelBuffer, paintSurface);
       if (useGpu) {
