@@ -1,7 +1,7 @@
 import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { IconButton } from '../../../components/IconButton/IconButton';
-import { FlipHorizontal2, FlipVertical2, RotateCw, RotateCcw } from 'lucide-react';
+import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
 import type { TransformMode } from '../../../tools/transform/transform';
 import { createTransformState } from '../../../tools/transform/transform';
 import { getEngine } from '../../../engine-wasm/engine-state';
@@ -21,7 +21,7 @@ import styles from './TransformControls.module.css';
  * 3. Drop float (commits to layer texture)
  * 4. Re-select from committed alpha (rebuilds mask cleanly)
  */
-function applyGpuTransform(invMatrix: Float32Array): void {
+export function applyGpuTransform(invMatrix: Float32Array): void {
   const engine = getEngine();
   if (!engine) return;
 
@@ -49,6 +49,13 @@ function applyGpuTransform(invMatrix: Float32Array): void {
 
   // Re-select from committed pixel alpha (handles JS data clearing + mask rebuild)
   selectLayerAlpha(activeLayerId);
+}
+
+export function rotateSelection(dir: 'cw' | 'ccw'): void {
+  const matrix = dir === 'cw'
+    ? new Float32Array([0, -1, 0, 1, 0, 0, 0, 0, 1])
+    : new Float32Array([0, 1, 0, -1, 0, 0, 0, 0, 1]);
+  applyGpuTransform(matrix);
 }
 
 const MODES: { id: TransformMode; label: string }[] = [
@@ -96,16 +103,6 @@ export function TransformControls() {
           icon={<FlipVertical2 size={16} />}
           label="Flip Vertical"
           onClick={() => applyGpuTransform(new Float32Array([1, 0, 0, 0, -1, 0, 0, 0, 1]))}
-        />
-        <IconButton
-          icon={<RotateCw size={16} />}
-          label="Rotate 90° CW"
-          onClick={() => applyGpuTransform(new Float32Array([0, -1, 0, 1, 0, 0, 0, 0, 1]))}
-        />
-        <IconButton
-          icon={<RotateCcw size={16} />}
-          label="Rotate 90° CCW"
-          onClick={() => applyGpuTransform(new Float32Array([0, 1, 0, -1, 0, 0, 0, 0, 1]))}
         />
       </div>
       {transform && (

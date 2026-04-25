@@ -12,11 +12,20 @@ import {
 } from 'lucide-react';
 import type { AlignEdge } from '../../../tools/move/move';
 import { rotateActiveLayer } from '../../MenuBar/menus/image-menu';
-import { TransformControls } from './TransformControls';
+import { TransformControls, rotateSelection } from './TransformControls';
 import styles from '../OptionsBar.module.css';
 
 export function MoveOptions() {
   const alignLayer = useEditorStore((s) => s.alignLayer);
+  const selectionActive = useEditorStore((s) => s.selection.active);
+
+  const handleRotate = (dir: 'cw' | 'ccw') => {
+    if (selectionActive) {
+      rotateSelection(dir);
+    } else {
+      rotateActiveLayer(dir);
+    }
+  };
 
   return (
     <>
@@ -42,12 +51,12 @@ export function MoveOptions() {
         <IconButton
           icon={<RotateCcw size={16} />}
           label="Rotate 90° CCW"
-          onClick={() => rotateActiveLayer('ccw')}
+          onClick={() => handleRotate('ccw')}
         />
         <IconButton
           icon={<RotateCw size={16} />}
           label="Rotate 90° CW"
-          onClick={() => rotateActiveLayer('cw')}
+          onClick={() => handleRotate('cw')}
         />
       </div>
       <TransformControls />

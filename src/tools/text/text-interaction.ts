@@ -1,6 +1,6 @@
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
-import type { Point } from '../../types';
+import type { Layer, Point, RasterLayer } from '../../types';
 import { useUIStore, type TextEditingState } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
@@ -9,6 +9,7 @@ import { hitTestTextLayer } from './text-hit-test';
 import { createTextLayer } from '../../layers/layer-model';
 
 const TEXT_DRAG_THRESHOLD = 4;
+
 
 /** Commit the current text editing session: render text to pixels and update the layer. */
 export function commitTextEditing(): void {
@@ -58,27 +59,48 @@ export function commitTextEditing(): void {
   const doc = editorState.document;
   const areaWidth = editing.bounds.width;
 
-  const { canvas: textCanvas, leftPadding } = renderTextToCanvas(
+  // Render text at its document position so the layer can sit at (0, 0)
+  // and cover the full document. This avoids coordinate mismatches during
+  // transforms (rotation, scale) where the layer offset would shift content
+  // outside the texture's coverage area.
+  const { canvas: textCanvas } = renderTextToCanvas(
     doc.width,
     doc.height,
-    { x: 0, y: 0 },
+    { x: editing.bounds.x, y: editing.bounds.y },
     editing.text,
     style,
     areaWidth,
   );
 
-  editorState.updateTextLayerProperties(editing.layerId, {
-    text: editing.text,
-    fontFamily: toolSettings.textFontFamily,
-    fontSize: toolSettings.textFontSize,
-    fontWeight: toolSettings.textFontWeight,
-    fontStyle: toolSettings.textFontStyle,
-    color: textColor,
-    textAlign: toolSettings.textAlign,
-    width: areaWidth,
-    x: editing.bounds.x - leftPadding,
-    y: editing.bounds.y,
+  // Rasterize: convert the text layer to a raster layer so it gets proper
+  // pixel dimensions and behaves like any other raster layer (crop, expand,
+  // transform, rotation all work correctly).
+  const textLayer = doc.layers.find((l) => l.id === editing.layerId);
+  if (!textLayer) return;
+
+  const rasterized: RasterLayer = {
+    id: textLayer.id,
+    name: textLayer.name,
+    type: 'raster',
     visible: true,
+    locked: textLayer.locked,
+    opacity: textLayer.opacity,
+    blendMode: textLayer.blendMode,
+    x: 0,
+    y: 0,
+    width: doc.width,
+    height: doc.height,
+    clipToBelow: textLayer.clipToBelow,
+    effects: textLayer.effects,
+    mask: textLayer.mask,
+  };
+
+  const updatedLayers = doc.layers.map((l): Layer =>
+    l.id === editing.layerId ? rasterized : l,
+  );
+  useEditorStore.setState({
+    document: { ...doc, layers: updatedLayers },
+    renderVersion: editorState.renderVersion + 1,
   });
 
   const textCtx = textCanvas.getContext('2d');

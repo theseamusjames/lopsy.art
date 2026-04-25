@@ -227,11 +227,8 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setActiveTool: (tool) => {
     const current = useUIStore.getState();
-    // When switching away from text tool during editing, the editing session
-    // is committed by the interaction handler (commitTextEditing) before
-    // the tool switch occurs. Clear any stale editing state as a safety net.
-    if (current.activeTool === 'text' && tool !== 'text' && current.textEditing) {
-      set({ textEditing: null });
+    if (current.activeTool !== tool) {
+      toolRegistry[current.activeTool]?.onDeactivate?.();
     }
     // Clear path when switching away from path tool
     if (current.activeTool === 'path' && tool !== 'path') {
