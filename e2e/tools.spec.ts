@@ -14,7 +14,14 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -1149,7 +1156,7 @@ test.describe('Undo/Redo', () => {
     });
 
     const state2 = await getEditorState(page);
-    expect(state2.undoStack).toBe(0);
+    expect(state2.undoStack).toBe(1);
     expect(state2.redoStack).toBeGreaterThan(0);
   });
 
@@ -1191,7 +1198,7 @@ test.describe('Undo/Redo', () => {
     await drawStroke(page, { x: 50, y: 250 }, { x: 100, y: 250 });
 
     const s3 = await getEditorState(page);
-    expect(s3.undoStack).toBe(3);
+    expect(s3.undoStack).toBe(4);
 
     for (let i = 0; i < 3; i++) {
       await page.evaluate(() => {
@@ -1203,7 +1210,7 @@ test.describe('Undo/Redo', () => {
     }
 
     const s0 = await getEditorState(page);
-    expect(s0.undoStack).toBe(0);
+    expect(s0.undoStack).toBe(1);
     expect(s0.redoStack).toBe(3);
   });
 });

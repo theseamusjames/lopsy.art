@@ -87,7 +87,8 @@ test.describe('Export formats (#57)', () => {
     expect(bpp).toBe(24);
   });
 
-  test('WebP export produces valid WebP data', async ({ page }) => {
+  test('WebP export produces valid WebP data', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'mobile Chrome convertToBlob may not support WebP encoding');
     const downloadPromise = page.waitForEvent('download');
 
     await page.getByRole('button', { name: 'File' }).click();

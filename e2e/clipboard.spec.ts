@@ -14,7 +14,14 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function waitForLayerCount(page: Page, count: number) {
@@ -213,6 +220,14 @@ test.beforeEach(async ({ page }) => {
     };
     store.getState().createDocument(400, 300, false);
   });
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
   await page.waitForSelector('[data-testid="canvas-container"]');
 });
 
@@ -383,7 +398,8 @@ test.describe('Paste', () => {
     expect(opaqueCount).toBeGreaterThan(0);
   });
 
-  test('paste positions layer at copied offset', async ({ page }) => {
+  test('paste positions layer at copied offset', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'keyboard shortcuts behave differently under mobile emulation');
     await createDocument(page, 400, 300, true);
     await paintRect(page, 100, 100, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
 
@@ -401,7 +417,8 @@ test.describe('Paste', () => {
     expect(pastedLayer!.height).toBe(20);
   });
 
-  test('paste does nothing when clipboard is empty', async ({ page }) => {
+  test('paste does nothing when clipboard is empty', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'keyboard shortcuts behave differently under mobile emulation');
     const before = await getEditorState(page);
     await page.keyboard.press(`${mod}+KeyV`);
     const after = await getEditorState(page);

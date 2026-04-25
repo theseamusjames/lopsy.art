@@ -14,7 +14,14 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function getEditorState(page: Page) {
@@ -296,6 +303,14 @@ test.beforeEach(async ({ page }) => {
     };
     store.getState().createDocument(400, 300, false);
   });
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
   await page.waitForSelector('[data-testid="canvas-container"]');
 });
 
@@ -304,6 +319,10 @@ test.beforeEach(async ({ page }) => {
 // ===========================================================================
 
 test.describe('Rasterize Layer Style', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'effects drawer requires sidebar, hidden on touch devices');
+  });
+
   test('rasterize button is visible in effects drawer', async ({ page }) => {
     await page.locator('button[title="Layer effects"]').first().click();
     await page.waitForTimeout(100);
@@ -516,6 +535,9 @@ test.describe('Merge Down with Effects', () => {
 // ===========================================================================
 
 test.describe('Cmd+Click Thumbnail', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'layer panel hidden on touch devices');
+  });
   test('cmd+click on layer thumbnail creates selection from alpha', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const state = await getEditorState(page);

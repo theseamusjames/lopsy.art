@@ -18,7 +18,14 @@ async function createDocument(page: Page, width = 400, height = 300) {
     },
     { w: width, h: height },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 interface LayerInfo {
@@ -231,8 +238,9 @@ test.describe('Layer Groups', () => {
     await callStore(page, 'addLayer');
     const doc2 = await getDocInfo(page);
     const childCount = doc2.layers.find((l) => l.id === groupId)!.children!.length;
-    // Select the group and duplicate
+    // Select the group and duplicate — wait for engine sync first
     await callStore(page, 'setActiveLayer', groupId);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
     await callStore(page, 'duplicateLayer');
     const doc3 = await getDocInfo(page);
     const dupGroup = doc3.layers.find((l) => l.name === 'DupMe copy');
@@ -620,7 +628,7 @@ test.describe('Layer moved out of group is not affected by group visibility', ()
 
     // Simulate a flat reorder that moves the layer out of the group's range
     // by calling moveLayer directly (this is what the drag handler calls)
-    const fromIdx = doc2.layers.findIndex((l) => l.id === layerId);
+    const fromIdx = doc2.layerOrder.indexOf(layerId);
     // Move it to the end (next to Background, which is in Project)
     await page.evaluate(
       ({ fromIdx }) => {

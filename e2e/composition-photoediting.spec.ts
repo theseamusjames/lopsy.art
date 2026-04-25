@@ -37,7 +37,14 @@ async function createDocument(page: Page, width = 500, height = 400, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -523,7 +530,8 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
           updateLayerOpacity: (id: string, opacity: number) => void;
         };
       };
-      const s = store.getState();
+      if (!store) return false;
+    const s = store.getState();
       s.updateLayerBlendMode(lid, 'softLight');
       s.updateLayerOpacity(lid, 0.5);
     }, cloudLayerId);
@@ -615,7 +623,8 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
           addLayerMask: (id: string) => void;
         };
       };
-      const s = store.getState();
+      if (!store) return false;
+    const s = store.getState();
       s.setActiveLayer(lid);
       s.addLayerMask(lid);
     }, cloudLayerId);
@@ -707,7 +716,8 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
           setAdjustments: (adj: Record<string, number>) => void;
         };
       };
-      const s = store.getState();
+      if (!store) return false;
+    const s = store.getState();
       s.setAdjustments({
         ...s.adjustments,
         highlights: 20,

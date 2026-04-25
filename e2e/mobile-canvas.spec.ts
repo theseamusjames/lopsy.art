@@ -2,13 +2,14 @@ import { test, expect } from './fixtures';
 import { waitForStore, createDocument, getEditorState } from './helpers';
 
 test.describe('Mobile canvas', () => {
+  test.skip(({ browserName }) => browserName !== 'chromium', 'mobile emulation requires Chromium');
+
   test.use({
     ...({ isMobile: true } as Record<string, unknown>),
     viewport: { width: 390, height: 844 },
   });
 
-  test('canvas container is visible on mobile', async ({ page, browserName }) => {
-    test.skip(browserName !== 'chromium', 'mobile emulation requires Chromium');
+  test('canvas container is visible on mobile', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);
@@ -21,8 +22,7 @@ test.describe('Mobile canvas', () => {
     expect(box!.height).toBeGreaterThan(0);
   });
 
-  test('two-finger pinch-to-zoom changes the zoom level', async ({ page, browserName }) => {
-    test.skip(browserName !== 'chromium', 'CDP touch only works in Chromium');
+  test('two-finger pinch-to-zoom changes the zoom level', async ({ page }) => {
 
     await page.goto('/');
     await waitForStore(page);
@@ -82,8 +82,7 @@ test.describe('Mobile canvas', () => {
     expect(finalZoom).toBeGreaterThan(initialZoom * 1.1);
   });
 
-  test('single-finger touch draws instead of panning', async ({ page, browserName }) => {
-    test.skip(browserName !== 'chromium', 'CDP touch only works in Chromium');
+  test('single-finger touch draws instead of panning', async ({ page }) => {
 
     await page.goto('/');
     await waitForStore(page);
@@ -142,8 +141,7 @@ test.describe('Mobile canvas', () => {
     expect(state.undoStackLength).toBeGreaterThan(0);
   });
 
-  test('two-finger gesture pans the canvas', async ({ page, browserName }) => {
-    test.skip(browserName !== 'chromium', 'CDP touch only works in Chromium');
+  test('two-finger gesture pans the canvas', async ({ page }) => {
 
     await page.goto('/');
     await waitForStore(page);

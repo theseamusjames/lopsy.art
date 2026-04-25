@@ -312,6 +312,7 @@ export function useCanvasRendering(
     let antAnimId = 0;
     let selectionActive = false;
     let hasBaselineSnapshot = false;
+    let baselinedDocVersion = -1;
 
     const loop = () => {
       if (!running) return;
@@ -330,6 +331,11 @@ export function useCanvasRendering(
         dirtyRef.current = true;
       }
 
+      const currentDocVersion = useEditorStore.getState().documentVersion;
+      if (currentDocVersion !== baselinedDocVersion) {
+        hasBaselineSnapshot = false;
+      }
+
       if (dirtyRef.current && engineReadyRef.current) {
         dirtyRef.current = false;
         const overlay = overlayCanvasRef.current;
@@ -341,12 +347,9 @@ export function useCanvasRendering(
             console.error('[Lopsy] Render error (recovering):', e);
           }
 
-          // After the first successful render, push a baseline undo
-          // snapshot so the first brush stroke's pushHistory can reuse
-          // non-dirty layer snapshots instead of reading every layer
-          // texture from the GPU (~33MB per layer on large documents).
           if (!hasBaselineSnapshot) {
             hasBaselineSnapshot = true;
+            baselinedDocVersion = currentDocVersion;
             const state = useEditorStore.getState();
             if (state.undoStack.length === 0) {
               state.pushHistory('New Document');

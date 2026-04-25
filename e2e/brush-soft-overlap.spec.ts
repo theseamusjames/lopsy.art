@@ -11,7 +11,14 @@ async function createDocument(page: Page, width = 400, height = 300) {
     };
     store.getState().createDocument(w, h, true);
   }, { w: width, h: height });
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -85,9 +92,8 @@ async function readCompositedPixelAt(page: Page, docX: number, docY: number) {
     const cy = rect.height / 2;
     const screenX = (docX - state.document.width / 2) * state.viewport.zoom + state.viewport.panX + cx;
     const screenY = (docY - state.document.height / 2) * state.viewport.zoom + state.viewport.panY + cy;
-    const dpr = window.devicePixelRatio || 1;
-    const px = Math.round(screenX * dpr);
-    const py = result.height - 1 - Math.round(screenY * dpr);
+    const px = Math.round(screenX);
+    const py = result.height - 1 - Math.round(screenY);
     if (px < 0 || px >= result.width || py < 0 || py >= result.height) return { r: 0, g: 0, b: 0, a: 0 };
     const idx = (py * result.width + px) * 4;
     return { r: result.pixels[idx] ?? 0, g: result.pixels[idx + 1] ?? 0, b: result.pixels[idx + 2] ?? 0, a: result.pixels[idx + 3] ?? 0 };
