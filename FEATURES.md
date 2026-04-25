@@ -238,6 +238,7 @@ Applied globally or per-group. All default to 0.
 ### Distort
 - **Pixel Stretch**: amount 1 - 200 px, bands 2 - 50, seed 0 - 999, RGB split 0 - 1.0 (shifts horizontal scan-line bands by random offsets with per-channel separation, creating glitch / VHS corruption effects)
 - **Lens Distortion**: strength -100 to +100 (negative = pincushion, positive = barrel), zoom 50 - 200%, chromatic fringing 0 - 100% (applies barrel or pincushion radial distortion with optional per-channel color separation at edges, simulating real camera lens effects)
+- **Mesh Warp**: interactive grid-based image distortion with draggable control points. Grid sizes 3×3 to 6×6, GPU-accelerated bilinear interpolation between grid points. Displacement encoded in RGBA8 bias format, decoded on GPU. Includes live preview, reset, and undo support.
 
 ### Render
 - **Clouds**: scale, seed
