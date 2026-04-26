@@ -19,6 +19,14 @@ If the answer to any of these is "yes (still passes)", rewrite the test.
 
 ---
 
+## Test with the UI
+
+When possible, manipulate the UI directly to simulate real user interaction. Avoid calling UI functions directly as much as you can. The goal is to test how a real user will experience the website and when you call functions directly, you'll miss bugs that are caused by the UI interactions which the real users will find.
+
+- Interact with the UI directly with mouse clicks, mouse movement, etc. 
+- Use the website the way a real user would 
+- Don't import and call JS functions directly
+
 ## Screenshots are the source of truth
 
 **Always write tests by screenshot first, assertion second.** The
