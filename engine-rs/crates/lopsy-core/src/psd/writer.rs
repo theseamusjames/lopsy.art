@@ -252,6 +252,11 @@ fn write_layer_record(
         write_section_divider(out, layer);
     }
 
+    // Additional layer info: Lopsy effects JSON (custom block)
+    if let Some(ref effects) = layer.effects_json {
+        write_effects_json(out, effects);
+    }
+
     // Backpatch extra data length
     backpatch_u32(out, extra_start);
 }
@@ -329,6 +334,17 @@ fn write_section_divider(out: &mut Cursor<Vec<u8>>, layer: &PsdLayer) {
     } else {
         write_u32(out, 4); // length: just the type
         write_u32(out, divider_type);
+    }
+}
+
+fn write_effects_json(out: &mut Cursor<Vec<u8>>, json: &str) {
+    let bytes = json.as_bytes();
+    out.write_all(b"8BIM").unwrap();
+    out.write_all(b"lyEf").unwrap();
+    write_u32(out, bytes.len() as u32);
+    out.write_all(bytes).unwrap();
+    if bytes.len() % 2 != 0 {
+        out.write_all(&[0]).unwrap();
     }
 }
 
@@ -593,6 +609,7 @@ mod tests {
             pixel_data: data,
             mask: None,
             group_kind: GroupKind::Normal,
+            effects_json: None,
         }
     }
 
@@ -665,6 +682,7 @@ mod tests {
             pixel_data: Vec::new(),
             mask: None,
             group_kind: GroupKind::GroupEnd,
+            effects_json: None,
         };
         let child = make_red_layer(4, 4);
         let group_open = PsdLayer {
@@ -677,6 +695,7 @@ mod tests {
             pixel_data: Vec::new(),
             mask: None,
             group_kind: GroupKind::GroupOpen,
+            effects_json: None,
         };
 
         let doc = PsdDocument {

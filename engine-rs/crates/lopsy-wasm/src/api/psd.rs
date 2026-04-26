@@ -62,6 +62,7 @@ pub fn export_psd(
         mask_offset: Option<usize>,
         mask_length: Option<usize>,
         mask_default_color: Option<u8>,
+        effects_json: Option<String>,
     }
 
     let layer_metas: Vec<LayerMeta> = serde_json::from_str(layers_json)
@@ -166,6 +167,7 @@ pub fn export_psd(
             pixel_data,
             mask,
             group_kind,
+            effects_json: meta.effects_json.clone(),
         });
     }
 
@@ -209,6 +211,7 @@ pub fn parse_psd(data: &[u8]) -> Result<String, JsError> {
         mask_y: Option<i32>,
         mask_width: Option<u32>,
         mask_height: Option<u32>,
+        effects_json: Option<String>,
     }
 
     #[derive(serde::Serialize)]
@@ -244,6 +247,7 @@ pub fn parse_psd(data: &[u8]) -> Result<String, JsError> {
             mask_y: l.mask.as_ref().map(|m| m.rect.top),
             mask_width: l.mask.as_ref().map(|m| m.rect.width()),
             mask_height: l.mask.as_ref().map(|m| m.rect.height()),
+            effects_json: l.effects_json.clone(),
         }
     }).collect();
 

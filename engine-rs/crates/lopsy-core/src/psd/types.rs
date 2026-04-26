@@ -98,6 +98,9 @@ pub struct PsdLayer {
     pub pixel_data: Vec<u8>,
     pub mask: Option<PsdMask>,
     pub group_kind: GroupKind,
+    /// Opaque JSON blob for layer effects (Lopsy-specific).
+    /// Stored in a custom ALI block (`lyEf`) so it survives PSD round-trips.
+    pub effects_json: Option<String>,
 }
 
 /// A PSD document ready to be written or just read.
