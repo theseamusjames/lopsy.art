@@ -1,0 +1,94 @@
+.toggleButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px var(--space-2);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.toggleButton:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+}
+
+.activeRow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+}
+
+.activeIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.gridSelect {
+  font-size: var(--font-size-xs);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 2px 4px;
+}
+
+.secondaryButton {
+  font-size: var(--font-size-xs);
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.secondaryButton:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+}
+
+.primaryButton {
+  font-size: var(--font-size-xs);
+  background: var(--color-accent);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-accent);
+  border-radius: 3px;
+  padding: 2px 10px;
+  cursor: pointer;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.primaryButton:hover {
+  filter: brightness(1.1);
+}
+
+.previewLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.previewLabel input {
+  cursor: pointer;
+  accent-color: var(--color-accent);
+}

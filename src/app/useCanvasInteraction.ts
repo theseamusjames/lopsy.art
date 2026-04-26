@@ -26,6 +26,11 @@ import type {
   FloatingSelection, PersistentTransform, LastPaintPoint,
 } from './interactions/interaction-types';
 import { handleTransformDown } from './interactions/transform-handlers';
+import {
+  handleMeshWarpDown,
+  handleMeshWarpMove,
+  handleMeshWarpUp,
+} from './interactions/mesh-warp-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
 import { createTransformState } from '../tools/transform/transform';
 import { toolHandlers, handleTransformMove } from './interactions/tool-router';
@@ -132,6 +137,19 @@ export function useCanvasInteraction(
       if (!rect) return;
 
       const canvasPos = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
+
+      // Pre-tool: mesh warp handle drag. Captures the click before the
+      // expensive GPU stroke / pixel-buffer setup runs, so dragging a
+      // mesh handle is cheap and doesn't disturb the active layer texture.
+      if (handleMeshWarpDown(canvasPos)) {
+        stateRef.current = {
+          ...INITIAL_STATE,
+          drawing: true,
+          layerId: activeLayerId,
+          meshWarpDragging: true,
+        };
+        return;
+      }
 
       const engine = getEngine();
       const isPaintTool = PAINT_TOOLS.has(activeTool);
@@ -276,6 +294,12 @@ export function useCanvasInteraction(
         y: canvasPos.y - state.layerStartY,
       };
 
+      // Mesh warp drag (not tool-routed)
+      if (state.meshWarpDragging) {
+        handleMeshWarpMove(canvasPos);
+        return;
+      }
+
       // Transform handle drag (not tool-routed)
       if (state.transformHandle && state.transformStartState && state.startPoint) {
         handleTransformMove(state, canvasPos, e.shiftKey);
@@ -409,6 +433,14 @@ export function useCanvasInteraction(
     cancelHoldTimer();
 
     const state = stateRef.current;
+
+    // Mesh warp drag end — short-circuit before regular tool teardown.
+    if (state.meshWarpDragging) {
+      handleMeshWarpUp();
+      stateRef.current = { ...INITIAL_STATE };
+      return;
+    }
+
     if (!state.tool) {
       stateRef.current = { ...INITIAL_STATE };
       return;

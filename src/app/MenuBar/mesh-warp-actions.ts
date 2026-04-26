@@ -4,15 +4,22 @@ import { saveFilterPreview, restoreFilterPreview, clearFilterPreview } from '../
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { applyMeshWarpGpu } from '../../filters/mesh-warp';
 import type { MeshWarpGrid } from '../../filters/mesh-warp';
+import type { Rect } from '../../types';
 
-export function applyMeshWarp(grid: MeshWarpGrid): void {
+function getDocSize(): { w: number; h: number } {
+  const doc = useEditorStore.getState().document;
+  return { w: doc.width, h: doc.height };
+}
+
+export function applyMeshWarp(grid: MeshWarpGrid, bounds: Rect): void {
   const activeId = useEditorStore.getState().document.activeLayerId;
   if (!activeId) return;
   const engine = getEngine();
   if (!engine) return;
+  const { w, h } = getDocSize();
 
-  useEditorStore.getState().pushHistory();
-  applyMeshWarpGpu(engine, activeId, grid);
+  useEditorStore.getState().pushHistory('Mesh Warp');
+  applyMeshWarpGpu(engine, activeId, grid, bounds, w, h);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
@@ -25,14 +32,15 @@ export function beginMeshWarpPreview(): void {
   saveFilterPreview(engine, activeId);
 }
 
-export function previewMeshWarp(grid: MeshWarpGrid): void {
+export function previewMeshWarp(grid: MeshWarpGrid, bounds: Rect): void {
   const activeId = useEditorStore.getState().document.activeLayerId;
   if (!activeId) return;
   const engine = getEngine();
   if (!engine) return;
+  const { w, h } = getDocSize();
 
   restoreFilterPreview(engine);
-  applyMeshWarpGpu(engine, activeId, grid);
+  applyMeshWarpGpu(engine, activeId, grid, bounds, w, h);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
@@ -49,17 +57,18 @@ export function cancelMeshWarpPreview(): void {
   useEditorStore.getState().notifyRender();
 }
 
-export function applyMeshWarpWithPreview(grid: MeshWarpGrid): void {
+export function applyMeshWarpWithPreview(grid: MeshWarpGrid, bounds: Rect): void {
   const activeId = useEditorStore.getState().document.activeLayerId;
   if (!activeId) return;
   const engine = getEngine();
   if (!engine) return;
+  const { w, h } = getDocSize();
 
   restoreFilterPreview(engine);
   clearFilterPreview(engine);
 
-  useEditorStore.getState().pushHistory();
-  applyMeshWarpGpu(engine, activeId, grid);
+  useEditorStore.getState().pushHistory('Mesh Warp');
+  applyMeshWarpGpu(engine, activeId, grid, bounds, w, h);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }

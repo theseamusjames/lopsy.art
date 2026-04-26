@@ -7,7 +7,11 @@ const __dirname = path.dirname(__filename);
 const SCREENSHOT_DIR = path.resolve(__dirname, 'screenshots');
 
 async function waitForStore(page: Page) {
-  await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore, { timeout: 30000 });
+  await page.waitForFunction(
+    () => !!(window as unknown as Record<string, unknown>).__editorStore
+      && !!(window as unknown as Record<string, unknown>).__uiStore,
+    { timeout: 30000 },
+  );
 }
 
 async function createDocument(page: Page, width = 400, height = 400, transparent = false) {
@@ -31,6 +35,16 @@ async function fitToView(page: Page) {
     store.getState().fitToView();
   });
   await page.waitForTimeout(300);
+}
+
+async function setActiveTool(page: Page, tool: string) {
+  await page.evaluate((t) => {
+    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+      getState: () => { setActiveTool: (t: string) => void };
+    };
+    ui.getState().setActiveTool(t);
+  }, tool);
+  await page.waitForTimeout(100);
 }
 
 async function readPixel(page: Page, x: number, y: number) {
@@ -87,22 +101,58 @@ function paintRedBlueSplit(page: Page) {
   });
 }
 
-async function openMeshWarpDialog(page: Page) {
-  await page.click('button:has-text("Filter")');
-  await page.waitForTimeout(200);
-  await page.click('button[role="menuitem"]:has-text("Mesh Warp")');
-  await page.waitForTimeout(300);
-  const heading = page.locator('h2:has-text("Mesh Warp")');
-  await expect(heading).toBeVisible({ timeout: 3000 });
+/**
+ * Returns a function that maps document-space coords to client-screen coords,
+ * using the same math as `screenToCanvas` in App.tsx (inverted).
+ */
+async function getDocToScreenMapper(page: Page) {
+  const t = await page.evaluate(() => {
+    const editorStore = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { viewport: { panX: number; panY: number; zoom: number }; document: { width: number; height: number } };
+    };
+    const state = editorStore.getState();
+    const container = document.querySelector('[data-testid="canvas-container"]');
+    const rect = (container as HTMLElement).getBoundingClientRect();
+    const canvas = container?.querySelector('canvas') as HTMLCanvasElement;
+    return {
+      panX: state.viewport.panX,
+      panY: state.viewport.panY,
+      zoom: state.viewport.zoom,
+      docW: state.document.width,
+      docH: state.document.height,
+      cw: canvas.width,
+      ch: canvas.height,
+      rectX: rect.left,
+      rectY: rect.top,
+    };
+  });
+  return (docX: number, docY: number) => ({
+    x: (docX - t.docW / 2) * t.zoom + t.cw / 2 + t.panX + t.rectX,
+    y: (docY - t.docH / 2) * t.zoom + t.ch / 2 + t.panY + t.rectY,
+  });
 }
 
-test.describe('Mesh Warp Filter', () => {
+async function activateMeshWarp(page: Page) {
+  await setActiveTool(page, 'move');
+  await page.locator('button:has-text("Mesh Warp")').click();
+  await page.waitForTimeout(200);
+  // Confirm session is active in the store
+  const active = await page.evaluate(() => {
+    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+      getState: () => { meshWarp: unknown };
+    };
+    return ui.getState().meshWarp !== null;
+  });
+  expect(active).toBe(true);
+}
+
+test.describe('Mesh Warp Inline Overlay', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
   });
 
-  test('mesh warp displaces pixels when grid points are dragged', async ({ page }) => {
+  test('drag a grid handle on the canvas warps the layer pixels', async ({ page }) => {
     await createDocument(page, 400, 400, true);
     await paintRedBlueSplit(page);
     await page.waitForTimeout(300);
@@ -116,39 +166,49 @@ test.describe('Mesh Warp Filter', () => {
     expect(beforeLeft.r).toBeGreaterThan(200);
     expect(beforeRight.b).toBeGreaterThan(200);
 
-    await openMeshWarpDialog(page);
+    await activateMeshWarp(page);
 
-    const gridCanvas = page.locator('[role="dialog"] canvas');
-    await expect(gridCanvas).toBeVisible({ timeout: 2000 });
+    // After activation the toolbar shows the active row (Apply/Cancel/Reset).
+    await expect(page.locator('button:has-text("Apply")')).toBeVisible({ timeout: 2000 });
+    await expect(page.locator('button:has-text("Cancel")')).toBeVisible({ timeout: 2000 });
 
-    const box = await gridCanvas.boundingBox();
-    if (!box) throw new Error('Canvas not found');
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'mesh-warp-active.png') });
 
-    const canvasW = box.width;
-    const canvasH = box.height;
-    const pad = 20 * (canvasW / 360);
-    const drawW = canvasW - pad * 2;
-    const drawH = canvasH - pad * 2;
+    // The 4×4 default grid for a 400×400 doc has handles at (133, 133), (266, 133),
+    // (133, 266), (266, 266) for the inner control points.
+    // Drag the (266, 133) handle ~60px to the left in document space.
+    const docToScreen = await getDocToScreenMapper(page);
+    const handleStart = docToScreen(400 * (2 / 3), 400 * (1 / 3));
+    const handleEnd = docToScreen(400 * (2 / 3) - 60, 400 * (1 / 3));
 
-    const col2x = box.x + pad + (2 / 3) * drawW;
-    const row1y = box.y + pad + (1 / 3) * drawH;
-
-    await page.mouse.move(col2x, row1y);
+    await page.mouse.move(handleStart.x, handleStart.y);
     await page.mouse.down();
-    await page.mouse.move(col2x - drawW * 0.15, row1y, { steps: 10 });
+    await page.mouse.move(handleEnd.x, handleEnd.y, { steps: 12 });
     await page.mouse.up();
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(150);
 
-    const col1x = box.x + pad + (1 / 3) * drawW;
-    const row2y = box.y + pad + (2 / 3) * drawH;
-    await page.mouse.move(col1x, row2y);
+    // Drag a second handle the opposite direction for asymmetry.
+    const handle2Start = docToScreen(400 * (1 / 3), 400 * (2 / 3));
+    const handle2End = docToScreen(400 * (1 / 3) + 60, 400 * (2 / 3));
+    await page.mouse.move(handle2Start.x, handle2Start.y);
     await page.mouse.down();
-    await page.mouse.move(col1x + drawW * 0.15, row2y, { steps: 10 });
+    await page.mouse.move(handle2End.x, handle2End.y, { steps: 12 });
     await page.mouse.up();
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(150);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'mesh-warp-dragging.png') });
 
     await page.locator('button:has-text("Apply")').click();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(400);
+
+    // After applying, the inline session is cleared.
+    const sessionAfter = await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { meshWarp: unknown };
+      };
+      return ui.getState().meshWarp;
+    });
+    expect(sessionAfter).toBe(null);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'mesh-warp-after.png') });
 
@@ -180,61 +240,140 @@ test.describe('Mesh Warp Filter', () => {
     expect(scanResults.totalDiff).toBeGreaterThan(100);
   });
 
-  test('mesh warp dialog opens with grid controls and closes on cancel', async ({ page }) => {
+  test('cancel restores the original layer and clears the session', async ({ page }) => {
     await createDocument(page, 400, 400, true);
     await paintRedBlueSplit(page);
     await page.waitForTimeout(300);
     await fitToView(page);
 
-    await openMeshWarpDialog(page);
+    await activateMeshWarp(page);
 
-    const gridSelect = page.locator('select');
-    await expect(gridSelect).toBeVisible({ timeout: 2000 });
+    const cancelBtn = page.locator('button:has-text("Cancel")');
+    await expect(cancelBtn).toBeVisible({ timeout: 2000 });
+    await cancelBtn.click();
+    await page.waitForTimeout(200);
 
-    const resetButton = page.locator('button:has-text("Reset")');
-    await expect(resetButton).toBeVisible({ timeout: 2000 });
+    const session = await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { meshWarp: unknown };
+      };
+      return ui.getState().meshWarp;
+    });
+    expect(session).toBe(null);
 
-    const applyButton = page.locator('button:has-text("Apply")');
-    await expect(applyButton).toBeVisible({ timeout: 2000 });
-
-    const cancelButton = page.locator('button:has-text("Cancel")');
-    await expect(cancelButton).toBeVisible({ timeout: 2000 });
-
-    const gridCanvas = page.locator('[role="dialog"] canvas');
-    await expect(gridCanvas).toBeVisible({ timeout: 2000 });
-
-    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'mesh-warp-dialog.png') });
-
-    await cancelButton.click();
-    await page.waitForTimeout(300);
-
-    const heading = page.locator('h2:has-text("Mesh Warp")');
-    await expect(heading).not.toBeVisible({ timeout: 2000 });
+    // Pixels untouched
+    const left = await readPixel(page, 100, 200);
+    const right = await readPixel(page, 300, 200);
+    expect(left.r).toBeGreaterThan(200);
+    expect(right.b).toBeGreaterThan(200);
   });
 
-  test('identity warp with undo restores pixels', async ({ page }) => {
+  test('mesh bounds match selection bounding box when activated with a marquee', async ({ page }) => {
     await createDocument(page, 400, 400, true);
     await paintRedBlueSplit(page);
     await page.waitForTimeout(300);
     await fitToView(page);
+
+    // Programmatically create a rectangular selection over a sub-region.
+    await page.evaluate(() => {
+      const editorStore = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          setSelection: (
+            bounds: { x: number; y: number; width: number; height: number },
+            mask: Uint8ClampedArray,
+            w: number,
+            h: number,
+          ) => void;
+          document: { width: number; height: number };
+        };
+      };
+      const state = editorStore.getState();
+      const W = state.document.width;
+      const H = state.document.height;
+      const sx = 80, sy = 100, sw = 220, sh = 180;
+      const mask = new Uint8ClampedArray(W * H);
+      for (let y = sy; y < sy + sh; y++) {
+        for (let x = sx; x < sx + sw; x++) {
+          mask[y * W + x] = 255;
+        }
+      }
+      state.setSelection({ x: sx, y: sy, width: sw, height: sh }, mask, W, H);
+    });
+
+    await activateMeshWarp(page);
+
+    // The mesh warp session's bounds should match the selection bounding box.
+    const bounds = await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { meshWarp: { bounds: { x: number; y: number; width: number; height: number } } | null };
+      };
+      return ui.getState().meshWarp?.bounds ?? null;
+    });
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBe(80);
+    expect(bounds!.y).toBe(100);
+    expect(bounds!.width).toBe(220);
+    expect(bounds!.height).toBe(180);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'mesh-warp-selection-bounds.png') });
+  });
+
+  test('reset returns the grid to identity', async ({ page }) => {
+    await createDocument(page, 400, 400, true);
+    await paintRedBlueSplit(page);
     await page.waitForTimeout(300);
+    await fitToView(page);
 
-    const beforePixel = await readPixel(page, 100, 200);
-    expect(beforePixel.r).toBeGreaterThan(200);
+    await activateMeshWarp(page);
 
-    await openMeshWarpDialog(page);
+    // Drag a handle to make the grid non-identity.
+    const docToScreen = await getDocToScreenMapper(page);
+    const handleStart = docToScreen(400 * (2 / 3), 400 * (1 / 3));
+    const handleEnd = docToScreen(400 * (2 / 3) - 60, 400 * (1 / 3));
+    await page.mouse.move(handleStart.x, handleStart.y);
+    await page.mouse.down();
+    await page.mouse.move(handleEnd.x, handleEnd.y, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(100);
 
-    await page.locator('button:has-text("Apply")').click();
-    await page.waitForTimeout(500);
+    const draggedGrid = await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { meshWarp: { grid: { points: { x: number; y: number }[] } } | null };
+      };
+      return ui.getState().meshWarp?.grid.points ?? null;
+    });
+    expect(draggedGrid).not.toBeNull();
+    // At least one point should differ from its identity position.
+    const anyMoved = draggedGrid!.some((p, i) => {
+      const cols = 4;
+      const c = i % cols;
+      const r = Math.floor(i / cols);
+      const ox = c / (cols - 1);
+      const oy = r / (cols - 1);
+      return Math.abs(p.x - ox) > 0.01 || Math.abs(p.y - oy) > 0.01;
+    });
+    expect(anyMoved).toBe(true);
 
-    const afterApply = await readPixel(page, 100, 200);
-    expect(afterApply.r).toBeGreaterThan(200);
+    await page.locator('button:has-text("Reset")').click();
+    await page.waitForTimeout(100);
 
-    await page.keyboard.press('Control+z');
-    await page.waitForTimeout(500);
-
-    const afterUndo = await readPixel(page, 100, 200);
-    expect(afterUndo.r).toBeGreaterThan(200);
-    expect(afterUndo.b).toBeLessThan(50);
+    const resetGrid = await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { meshWarp: { grid: { points: { x: number; y: number }[] } } | null };
+      };
+      return ui.getState().meshWarp?.grid.points ?? null;
+    });
+    expect(resetGrid).not.toBeNull();
+    // All points should now be at identity.
+    for (let i = 0; i < resetGrid!.length; i++) {
+      const cols = 4;
+      const c = i % cols;
+      const r = Math.floor(i / cols);
+      const ox = c / (cols - 1);
+      const oy = r / (cols - 1);
+      const p = resetGrid![i]!;
+      expect(Math.abs(p.x - ox)).toBeLessThan(0.001);
+      expect(Math.abs(p.y - oy)).toBeLessThan(0.001);
+    }
   });
 });

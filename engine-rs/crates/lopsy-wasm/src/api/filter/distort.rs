@@ -13,6 +13,10 @@ pub fn filter_mesh_warp(
     grid_data: &[u8],
     grid_width: u32,
     grid_height: u32,
+    bounds_min_u: f32,
+    bounds_min_v: f32,
+    bounds_max_u: f32,
+    bounds_max_v: f32,
 ) {
     if grid_width < 2 || grid_height < 2 || grid_data.is_empty() {
         return;
@@ -73,6 +77,12 @@ pub fn filter_mesh_warp(
             }
             if let Some(loc) = shader.location(gl, "u_gridSize") {
                 gl.uniform2f(Some(&loc), gw, gh);
+            }
+            if let Some(loc) = shader.location(gl, "u_boundsMin") {
+                gl.uniform2f(Some(&loc), bounds_min_u, bounds_min_v);
+            }
+            if let Some(loc) = shader.location(gl, "u_boundsMax") {
+                gl.uniform2f(Some(&loc), bounds_max_u, bounds_max_v);
             }
         },
     );

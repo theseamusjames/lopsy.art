@@ -21,7 +21,6 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Chromatic Aberration...', action: () => showFilterDialog('chromatic-aberration') },
       { label: 'Pixel Stretch...', action: () => showFilterDialog('pixel-stretch') },
       { label: 'Lens Distortion...', action: () => showFilterDialog('lens-distortion') },
-      { label: 'Mesh Warp...', action: () => showFilterDialog('mesh-warp') },
       { separator: true, label: '' },
       { label: 'Add Noise...', action: () => showFilterDialog('add-noise') },
       { label: 'Fill with Noise...', action: () => showFilterDialog('fill-noise') },

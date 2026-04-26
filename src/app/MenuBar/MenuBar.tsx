@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilterDialog } from '../../components/FilterDialog/FilterDialog';
 import { NoiseDialog, FillNoiseDialog } from '../../components/FilterDialog/NoiseDialog';
 import { PatternFillDialog } from '../../components/PatternFillDialog/PatternFillDialog';
-import { MeshWarpDialog } from '../../components/MeshWarpDialog/MeshWarpDialog';
 import {
   type FilterDialogId,
   getFilterDialogConfig,
@@ -21,14 +20,6 @@ import {
   cancelPatternPreview,
   applyPatternFillWithPreview,
 } from './pattern-actions';
-import {
-  applyMeshWarp,
-  beginMeshWarpPreview,
-  previewMeshWarp,
-  cancelMeshWarpPreview,
-  applyMeshWarpWithPreview,
-} from './mesh-warp-actions';
-import type { MeshWarpGrid } from '../../filters/mesh-warp';
 import { getMenus, type MenuItem, type ImageDialogId, type HelpDialogId, type SelectDialogId } from './menus';
 import { CanvasSizeModal } from '../../components/CanvasSizeModal/CanvasSizeModal';
 import { ImageSizeModal } from '../../components/ImageSizeModal/ImageSizeModal';
@@ -174,33 +165,6 @@ export function MenuBar() {
     previewPatternFill(patternId, scale, offsetX, offsetY);
   }, []);
 
-  const handleMeshWarpApply = useCallback((grid: MeshWarpGrid) => {
-    if (previewActiveRef.current) {
-      applyMeshWarpWithPreview(grid);
-      previewActiveRef.current = false;
-    } else {
-      applyMeshWarp(grid);
-    }
-    setActiveDialog(null);
-  }, []);
-
-  const handleMeshWarpPreviewStart = useCallback(() => {
-    previewActiveRef.current = true;
-    beginMeshWarpPreview();
-  }, []);
-
-  const handleMeshWarpPreviewStop = useCallback(() => {
-    if (previewActiveRef.current) {
-      cancelMeshWarpPreview();
-      previewActiveRef.current = false;
-    }
-  }, []);
-
-  const handleMeshWarpPreviewChange = useCallback((grid: MeshWarpGrid) => {
-    if (!previewActiveRef.current) return;
-    previewMeshWarp(grid);
-  }, []);
-
   const handleSelectDialogApply = useCallback((values: Record<string, number>) => {
     if (!selectDialog) return;
     const amount = values['amount'] ?? 1;
@@ -222,7 +186,7 @@ export function MenuBar() {
     setSelectDialog(null);
   }, [selectDialog]);
 
-  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill' && activeDialog !== 'mesh-warp'
+  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill'
     ? getFilterDialogConfig(activeDialog)
     : null;
 
@@ -303,15 +267,6 @@ export function MenuBar() {
           onPreviewStart={handlePatternPreviewStart}
           onPreviewStop={handlePatternPreviewStop}
           onPreviewChange={handlePatternPreviewChange}
-        />
-      )}
-      {activeDialog === 'mesh-warp' && (
-        <MeshWarpDialog
-          onApply={handleMeshWarpApply}
-          onCancel={handleDialogCancel}
-          onPreviewStart={handleMeshWarpPreviewStart}
-          onPreviewStop={handleMeshWarpPreviewStop}
-          onPreviewChange={handleMeshWarpPreviewChange}
         />
       )}
       {imageDialog === 'canvas-size' && (
