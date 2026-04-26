@@ -665,59 +665,63 @@ pub fn clipboard_clear_selected(
     let layer_tex = engine.texture_pool.get(layer_tex_handle).cloned()
         .ok_or("Layer texture not found")?;
 
-    // Render cleared result into scratch_a
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, lw as i32, lh as i32);
+    let has_mask = has_selection && engine.selection_mask_texture.is_some();
+    let mask_tex_opt = if has_mask {
+        engine.selection_mask_texture
+            .and_then(|h| engine.texture_pool.get(h).cloned())
+    } else {
+        None
+    };
+
+    let tmp_tex_h = engine.texture_pool.acquire(&engine.gl, lw, lh)?;
+    let tmp_gl_tex = engine.texture_pool.get(tmp_tex_h).cloned()
+        .ok_or("Temp texture not found")?;
 
     engine.gl.disable(WebGl2RenderingContext::BLEND);
-    let shader = &engine.shaders.clipboard_clear;
-    engine.gl.use_program(Some(&shader.program));
+    engine.render_to_texture(&tmp_gl_tex, lw as i32, lh as i32, |engine| {
+        let shader = &engine.shaders.clipboard_clear;
+        engine.gl.use_program(Some(&shader.program));
 
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = shader.location(&engine.gl, "u_layerTex") {
-        engine.gl.uniform1i(Some(&loc), 0);
-    }
-
-    let has_mask = has_selection && engine.selection_mask_texture.is_some();
-    if has_mask {
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        if let Some(mask_handle) = engine.selection_mask_texture {
-            if let Some(mask_tex) = engine.texture_pool.get(mask_handle) {
-                engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
-            }
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        if let Some(loc) = shader.location(&engine.gl, "u_layerTex") {
+            engine.gl.uniform1i(Some(&loc), 0);
         }
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_maskTex") {
-        engine.gl.uniform1i(Some(&loc), 1);
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasMask") {
-        engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") {
-        engine.gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") {
-        engine.gl.uniform2f(Some(&loc), layer_x, layer_y);
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_layerSize") {
-        engine.gl.uniform2f(Some(&loc), lw as f32, lh as f32);
-    }
 
-    engine.draw_fullscreen_quad();
+        if let Some(m) = &mask_tex_opt {
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_maskTex") {
+            engine.gl.uniform1i(Some(&loc), 1);
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") {
+            engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_docSize") {
+            engine.gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") {
+            engine.gl.uniform2f(Some(&loc), layer_x, layer_y);
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_layerSize") {
+            engine.gl.uniform2f(Some(&loc), lw as f32, lh as f32);
+        }
 
-    // Copy scratch_a → layer texture
-    let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned()
-        .ok_or("scratch_a not found")?;
+        engine.draw_fullscreen_quad();
+    });
+
     engine.render_to_texture(&layer_tex, lw as i32, lh as i32, |engine| {
         engine.gl.use_program(Some(&engine.shaders.blit.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_a_tex));
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tmp_gl_tex));
         if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
             engine.gl.uniform1i(Some(&loc), 0);
         }
         engine.draw_fullscreen_quad();
     });
+
+    engine.texture_pool.release(tmp_tex_h);
 
     engine.mark_layer_dirty(layer_id);
     Ok(())
