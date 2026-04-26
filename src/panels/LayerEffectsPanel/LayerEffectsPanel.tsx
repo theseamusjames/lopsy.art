@@ -115,8 +115,6 @@ export function LayerEffectsPanel() {
 
   function renderForm() {
     if (!effects) return null;
-    const selected = effects[selectedEffect];
-    if (!selected.enabled) return null;
     switch (selectedEffect) {
       case 'dropShadow':
         return shadow ? (
@@ -181,10 +179,7 @@ export function LayerEffectsPanel() {
               <div
                 key={key}
                 className={`${styles.effectRow} ${isSelected ? styles.effectRowSelected : ''}`}
-                onClick={() => {
-                  setSelectedEffect(key);
-                  if (!isEnabled) handleToggle(key);
-                }}
+                onClick={() => setSelectedEffect(key)}
                 role="option"
                 aria-selected={isSelected}
               >

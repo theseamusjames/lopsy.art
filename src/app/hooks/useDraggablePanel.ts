@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 
-const INTERACTIVE_SELECTORS = 'input, button, select, textarea, [role="slider"], label';
+const INTERACTIVE_SELECTORS = 'input, button, select, textarea, [role="slider"], [role="option"], label';
 
 export function useDraggablePanel() {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
