@@ -198,6 +198,7 @@ mod tests {
             pixel_data: data,
             mask: None,
             group_kind: GroupKind::Normal,
+            effects_json: None,
         }
     }
 

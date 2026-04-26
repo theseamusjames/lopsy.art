@@ -92,6 +92,7 @@ fn roundtrip_with_mask() {
             default_color: 0,
         }),
         group_kind: GroupKind::Normal,
+        effects_json: None,
     };
 
     let doc = PsdDocument {
@@ -181,6 +182,7 @@ fn roundtrip_16bit_gradient() {
             pixel_data: data.clone(),
             mask: None,
             group_kind: GroupKind::Normal,
+            effects_json: None,
         }],
         icc_profile: None,
     };
@@ -211,6 +213,7 @@ fn build_test_doc_8bit() -> PsdDocument {
         pixel_data: Vec::new(),
         mask: None,
         group_kind: GroupKind::GroupEnd,
+        effects_json: None,
     };
 
     let gradient = gradient_layer_8bit("Gradient", 0, 0, w, h);
@@ -225,6 +228,7 @@ fn build_test_doc_8bit() -> PsdDocument {
         pixel_data: Vec::new(),
         mask: None,
         group_kind: GroupKind::GroupOpen,
+        effects_json: None,
     };
 
     PsdDocument {
@@ -272,6 +276,7 @@ fn solid_layer_8bit(
         pixel_data: data,
         mask: None,
         group_kind: GroupKind::Normal,
+        effects_json: None,
     }
 }
 
@@ -298,6 +303,7 @@ fn solid_layer_16bit(
         pixel_data: data,
         mask: None,
         group_kind: GroupKind::Normal,
+        effects_json: None,
     }
 }
 
@@ -322,5 +328,6 @@ fn gradient_layer_8bit(name: &str, x: i32, y: i32, w: u32, h: u32) -> PsdLayer {
         pixel_data: data,
         mask: None,
         group_kind: GroupKind::Normal,
+        effects_json: None,
     }
 }

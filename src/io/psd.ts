@@ -21,7 +21,8 @@ import {
 import { resetTrackedState, flushLayerSync } from '../engine-wasm/engine-sync';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import type { Layer, GroupLayer, RasterLayer } from '../types/layers';
-import { DEFAULT_EFFECTS } from '../layers/layer-model';
+import type { LayerEffects } from '../types/effects';
+import { DEFAULT_EFFECTS, hasEnabledEffects } from '../layers/layer-model';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
 import { BLEND_MODE_TO_PSD_INDEX, BLEND_MODES_BY_PSD_INDEX } from '../types/blend-mode-tables';
@@ -123,6 +124,7 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
     maskOffset?: number;
     maskLength?: number;
     maskDefaultColor?: number;
+    effectsJson?: string;
   }
 
   const layerMetas: LayerMeta[] = flatLayers.map(({ layer, groupKind }) => {
@@ -142,6 +144,9 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
         : (layer.type === 'text') ? doc.height : 0,
       clipToBelow: layer.clipToBelow,
       groupKind,
+      effectsJson: hasEnabledEffects(layer.effects)
+        ? JSON.stringify(layer.effects)
+        : undefined,
     };
 
     // For group markers, zero out dimensions.
@@ -187,6 +192,22 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
   useEditorStore.getState().markClean();
 }
 
+function parseEffectsJson(json: string | undefined): LayerEffects {
+  if (!json) return DEFAULT_EFFECTS;
+  try {
+    const parsed = JSON.parse(json) as Partial<LayerEffects>;
+    return {
+      stroke: parsed.stroke ?? DEFAULT_EFFECTS.stroke,
+      dropShadow: parsed.dropShadow ?? DEFAULT_EFFECTS.dropShadow,
+      outerGlow: parsed.outerGlow ?? DEFAULT_EFFECTS.outerGlow,
+      innerGlow: parsed.innerGlow ?? DEFAULT_EFFECTS.innerGlow,
+      colorOverlay: parsed.colorOverlay ?? DEFAULT_EFFECTS.colorOverlay,
+    };
+  } catch {
+    return DEFAULT_EFFECTS;
+  }
+}
+
 // ─── PSD Import ────────────────────────────────────────────────────────
 
 export async function importPsdFile(data: Uint8Array, name: string): Promise<void> {
@@ -217,6 +238,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
       maskY?: number;
       maskWidth?: number;
       maskHeight?: number;
+      effectsJson?: string;
     }>;
   };
 
@@ -258,7 +280,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
         x: 0,
         y: 0,
         clipToBelow: false,
-        effects: DEFAULT_EFFECTS,
+        effects: parseEffectsJson(psdLayer.effectsJson),
         mask: null,
         children: groupInfo?.children ?? [],
         collapsed: psdLayer.groupKind === 2,
@@ -307,7 +329,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
       x: psdLayer.x,
       y: psdLayer.y,
       clipToBelow: psdLayer.clipToBelow,
-      effects: DEFAULT_EFFECTS,
+      effects: parseEffectsJson(psdLayer.effectsJson),
       mask,
       width: psdLayer.width,
       height: psdLayer.height,
