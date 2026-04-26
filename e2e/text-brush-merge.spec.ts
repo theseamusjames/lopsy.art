@@ -122,14 +122,15 @@ test.describe('Text + brush + merge down', () => {
     await page.keyboard.press('Shift+Enter');
     await page.waitForTimeout(300);
 
-    // Get the text layer ID and verify it has content
+    // Get the rasterized text layer ID and verify it has content
     const textId = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          document: { layers: Array<{ id: string; type: string }> };
+          document: { layers: Array<{ id: string; type: string; name: string }> };
         };
       };
-      return store.getState().document.layers.find((l) => l.type === 'text')?.id ?? '';
+      // Text layers are rasterized on commit — find by name
+      return store.getState().document.layers.find((l) => l.type === 'raster' && l.name.startsWith('Text'))?.id ?? '';
     });
     expect(textId).not.toBe('');
 
@@ -189,14 +190,14 @@ test.describe('Text + brush + merge down', () => {
     await page.screenshot({ path: 'e2e/screenshots/text-brush-merge-after.png' });
 
     // Text layer should be gone (merged into background)
-    const textLayerGone = await page.evaluate(() => {
+    const textLayerGone = await page.evaluate((tid: string) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          document: { layers: Array<{ type: string }> };
+          document: { layers: Array<{ id: string }> };
         };
       };
-      return !store.getState().document.layers.some((l) => l.type === 'text');
-    });
+      return !store.getState().document.layers.some((l) => l.id === tid);
+    }, textId);
     expect(textLayerGone).toBe(true);
 
     // The background layer must contain the merged text content.

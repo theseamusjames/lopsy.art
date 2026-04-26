@@ -130,10 +130,11 @@ test.describe('Text selection + merge', () => {
     const textId = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          document: { layers: Array<{ id: string; type: string }> };
+          document: { layers: Array<{ id: string; type: string; name: string }> };
         };
       };
-      return store.getState().document.layers.find((l) => l.type === 'text')?.id ?? '';
+      // Text layers are rasterized on commit — find by name
+      return store.getState().document.layers.find((l) => l.type === 'raster' && l.name.startsWith('Text'))?.id ?? '';
     });
     await page.evaluate((id: string) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
