@@ -486,14 +486,14 @@ async function createTextLayer(
   await page.keyboard.press('Shift+Enter');
   await page.waitForTimeout(300);
 
-  // Return the text layer ID
+  // Return the rasterized text layer ID (text layers become 'raster' on commit)
   return page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
-        document: { layers: Array<{ id: string; type: string }> };
+        document: { layers: Array<{ id: string; type: string; name: string }> };
       };
     };
-    const textLayers = store.getState().document.layers.filter((l) => l.type === 'text');
+    const textLayers = store.getState().document.layers.filter((l) => l.name.startsWith('Text'));
     return textLayers[textLayers.length - 1]?.id ?? '';
   });
 }
@@ -890,7 +890,8 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
     // Root group + Buildings + Neon Signs = at least 3
     expect(groups.length).toBeGreaterThanOrEqual(3);
 
-    const textLayers = finalDoc.layers.filter((l) => l.type === 'text');
+    // Text layers are rasterized on commit — find by name prefix
+    const textLayers = finalDoc.layers.filter((l) => l.name.startsWith('Text'));
     expect(textLayers.length).toBeGreaterThanOrEqual(3);
 
     await page.screenshot({ path: 'e2e/screenshots/comp-neon-city-final.png' });

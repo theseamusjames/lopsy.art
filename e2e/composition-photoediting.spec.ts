@@ -570,7 +570,8 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     await page.waitForTimeout(300);
 
     const stateWithText = await getEditorState(page);
-    const textLayer = stateWithText.document.layers.find((l) => l.type === 'text');
+    // Text layers are rasterized on commit �� find by name
+    const textLayer = stateWithText.document.layers.find((l) => l.type === 'raster' && l.name.startsWith('Text'));
     expect(textLayer).toBeTruthy();
 
     await page.screenshot({ path: 'e2e/screenshots/comp3-21-text.png' });
