@@ -959,7 +959,9 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, do_inside && !do_outside);
 
         // Separable dilation: scratch_b → scratch_a → scratch_b
-        render_stroke_dilate(engine, radius, if do_inside && !do_outside { 1 } else { 0 });
+        // For inverted alpha (inner stroke), OOB samples represent "outside the layer" = 1.0
+        let oob_alpha = if do_inside && !do_outside { 1.0 } else { 0.0 };
+        render_stroke_dilate(engine, radius, 0, oob_alpha);
 
         // Apply stroke: read dilated (scratch_b) + original → scratch_a
         render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y,
@@ -972,7 +974,7 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
 
             // Now do inside half: extract inverted alpha, dilate, apply
             render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, true);
-            render_stroke_dilate(engine, radius, 0);
+            render_stroke_dilate(engine, radius, 0, 1.0);
             render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y, 1);
         }
     }
@@ -1004,13 +1006,14 @@ fn render_stroke_extract_alpha(engine: &mut EngineInner, layer_tex: &web_sys::We
     engine.draw_fullscreen_quad();
 }
 
-fn render_stroke_dilate(engine: &mut EngineInner, radius: i32, mode: i32) {
+fn render_stroke_dilate(engine: &mut EngineInner, radius: i32, mode: i32, oob_alpha: f32) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
     let shader = &engine.shaders.separable_dilate;
     engine.gl.use_program(Some(&shader.program));
     if let Some(loc) = shader.location(&engine.gl, "u_radius") { engine.gl.uniform1i(Some(&loc), radius); }
     if let Some(loc) = shader.location(&engine.gl, "u_mode") { engine.gl.uniform1i(Some(&loc), mode); }
+    if let Some(loc) = shader.location(&engine.gl, "u_oobAlpha") { engine.gl.uniform1f(Some(&loc), oob_alpha); }
 
     // Horizontal: scratch_b → scratch_a
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
