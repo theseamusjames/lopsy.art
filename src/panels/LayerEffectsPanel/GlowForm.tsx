@@ -6,9 +6,10 @@ import styles from './LayerEffectsPanel.module.css';
 interface GlowFormProps {
   glow: GlowEffect;
   onChange: (g: GlowEffect) => void;
+  onCommit?: () => void;
 }
 
-export function GlowForm({ glow, onChange }: GlowFormProps) {
+export function GlowForm({ glow, onChange, onCommit }: GlowFormProps) {
   return (
     <>
       <div className={styles.row}>
@@ -26,13 +27,13 @@ export function GlowForm({ glow, onChange }: GlowFormProps) {
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Size</span>
         <div className={styles.sliderWrap}>
-          <Slider value={glow.size} min={0} max={100} onChange={(v) => onChange({ ...glow, size: v })} />
+          <Slider value={glow.size} min={0} max={100} onChange={(v) => onChange({ ...glow, size: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Spread</span>
         <div className={styles.sliderWrap}>
-          <Slider value={glow.spread} min={0} max={100} onChange={(v) => onChange({ ...glow, spread: v })} />
+          <Slider value={glow.spread} min={0} max={100} onChange={(v) => onChange({ ...glow, spread: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
@@ -43,6 +44,7 @@ export function GlowForm({ glow, onChange }: GlowFormProps) {
             min={0}
             max={100}
             onChange={(v) => onChange({ ...glow, opacity: v / 100 })}
+            onCommit={onCommit}
           />
         </div>
       </div>
