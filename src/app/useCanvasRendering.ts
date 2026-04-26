@@ -23,6 +23,7 @@ import {
 } from '../engine-wasm/engine-sync';
 import { renderGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
+import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay } from './rendering/render-text-overlay';
 import { renderTextToCanvas } from '../tools/text/text';
@@ -161,6 +162,11 @@ function renderFrameGpu(
 
     renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhaseRef.current, transform);
     renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
+
+    const meshWarp = uiState.meshWarp;
+    if (meshWarp) {
+      renderMeshWarpOverlay(overlayCtx, meshWarp, viewport.zoom);
+    }
     const selectedPath = editorState.selectedPathId
       ? editorState.paths.find((p) => p.id === editorState.selectedPathId)
       : undefined;

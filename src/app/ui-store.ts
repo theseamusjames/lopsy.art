@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import type { Color, Point, ToolId } from '../types';
+import type { Color, Point, Rect, ToolId } from '../types';
 import type { TransformHandle, TransformState } from '../tools/transform/transform';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
+import type { MeshWarpGrid } from '../filters/mesh-warp';
 import { toolRegistry } from '../tools/tool-registry';
 
 export interface TextEditingState {
@@ -48,6 +49,23 @@ export interface ShapeSizeClick {
 }
 
 /**
+ * Active inline mesh warp session. The grid lives on the canvas as an overlay
+ * (no modal). `bounds` is the document-space rect the grid covers — set from
+ * the selection bounding box on activation, or the whole document.
+ */
+export interface MeshWarpSession {
+  grid: MeshWarpGrid;
+  gridSize: number;
+  bounds: Rect;
+  /** Index of the grid point currently being dragged, or null. */
+  dragging: number | null;
+  /** Index of the grid point currently hovered, or null. */
+  hovered: number | null;
+  /** Whether the user has armed live preview. */
+  previewActive: boolean;
+}
+
+/**
  * One-at-a-time modal slot. Only one kind can be open; opening a new kind
  * replaces whatever was there. Payloads ride on the variant so data and
  * visibility can't drift apart (the old pattern had parallel booleans +
@@ -78,6 +96,7 @@ interface UIState {
   cropRect: { x: number; y: number; width: number; height: number } | null;
   transform: TransformState | null;
   activeTransformHandle: TransformHandle | null;
+  meshWarp: MeshWarpSession | null;
   maskEditMode: boolean;
   /** Active modal, or null when nothing is open. Only one at a time. */
   modal: ModalState | null;
@@ -119,6 +138,11 @@ interface UIState {
   setCropRect: (rect: { x: number; y: number; width: number; height: number } | null) => void;
   setTransform: (transform: TransformState | null) => void;
   setActiveTransformHandle: (handle: TransformHandle | null) => void;
+  setMeshWarp: (session: MeshWarpSession | null) => void;
+  updateMeshWarpGrid: (grid: MeshWarpGrid) => void;
+  setMeshWarpDragging: (idx: number | null) => void;
+  setMeshWarpHovered: (idx: number | null) => void;
+  setMeshWarpPreview: (active: boolean) => void;
   /** Backward-compat setter. Reads should use modal directly:
    *  `modal?.kind === 'shapeSize' ? modal.click : null` */
   setPendingShapeClick: (pending: ShapeSizeClick | null) => void;
@@ -172,6 +196,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   cropRect: null,
   transform: null,
   activeTransformHandle: null,
+  meshWarp: null,
   maskEditMode: false,
   modal: null,
   showEffectsDrawer: false,
@@ -266,6 +291,15 @@ export const useUIStore = create<UIState>((set, get) => ({
   setCropRect: (rect) => set({ cropRect: rect }),
   setTransform: (transform) => set({ transform }),
   setActiveTransformHandle: (handle) => set({ activeTransformHandle: handle }),
+  setMeshWarp: (session) => set({ meshWarp: session }),
+  updateMeshWarpGrid: (grid) =>
+    set((s) => (s.meshWarp ? { meshWarp: { ...s.meshWarp, grid } } : {})),
+  setMeshWarpDragging: (idx) =>
+    set((s) => (s.meshWarp ? { meshWarp: { ...s.meshWarp, dragging: idx } } : {})),
+  setMeshWarpHovered: (idx) =>
+    set((s) => (s.meshWarp ? { meshWarp: { ...s.meshWarp, hovered: idx } } : {})),
+  setMeshWarpPreview: (active) =>
+    set((s) => (s.meshWarp ? { meshWarp: { ...s.meshWarp, previewActive: active } } : {})),
   editingAnchorIndex: null,
   setEditingAnchorIndex: (index) => set({ editingAnchorIndex: index }),
   convertingAnchorToSpline: false,

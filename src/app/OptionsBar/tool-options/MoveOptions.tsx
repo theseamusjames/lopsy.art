@@ -13,6 +13,7 @@ import {
 import type { AlignEdge } from '../../../tools/move/move';
 import { rotateActiveLayer } from '../../MenuBar/menus/image-menu';
 import { TransformControls, rotateSelection } from './TransformControls';
+import { MeshWarpControls } from './MeshWarpControls';
 import styles from '../OptionsBar.module.css';
 
 export function MoveOptions() {
@@ -60,6 +61,8 @@ export function MoveOptions() {
         />
       </div>
       <TransformControls />
+      <div className={styles.separator} />
+      <MeshWarpControls />
     </>
   );
 }
