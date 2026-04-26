@@ -97,7 +97,7 @@ export interface EditorState {
   mergeDown: () => void;
   flattenImage: () => void;
   rasterizeLayerStyle: () => void;
-  updateLayerEffects: (id: string, effects: Partial<LayerEffects>) => void;
+  updateLayerEffects: (id: string, effects: Partial<LayerEffects>, skipHistory?: boolean) => void;
   addLayerMask: (id: string) => void;
   removeLayerMask: (id: string) => void;
   toggleLayerMask: (id: string) => void;

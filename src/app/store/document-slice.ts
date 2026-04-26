@@ -434,10 +434,10 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
-  updateLayerEffects: (id, effects) => {
+  updateLayerEffects: (id: string, effects, skipHistory?: boolean) => {
     finalizePendingStrokeGlobal();
     const s = get();
-    s.pushHistory('Update Effects');
+    if (!skipHistory) s.pushHistory('Update Effects');
     set(computeUpdateEffects(s.document, s.renderVersion, id, effects));
   },
 
