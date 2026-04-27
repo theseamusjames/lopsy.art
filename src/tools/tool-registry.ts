@@ -10,7 +10,7 @@ import { handleEyedropperDown, handleEyedropperMove } from './eyedropper/eyedrop
 import { handleDodgeDown, handleDodgeMove, handleDodgeUp } from './dodge/dodge-interaction';
 import { handleSmudgeDown, handleSmudgeMove } from './smudge/smudge-interaction';
 import { handleStampDown, handleStampMove } from './stamp/stamp-interaction';
-import { handleTextDown, handleTextMove, handleTextUp } from './text/text-interaction';
+import { handleTextDown, handleTextMove, handleTextUp, commitTextEditing } from './text/text-interaction';
 import { handleCropDown, handleCropMove, handleCropUp } from './crop/crop-interaction';
 import { handlePathDown, handlePathMove, handlePathUp } from './path/path-interaction';
 import { handleShapeDown, handleShapeMove, handleShapeUp } from './shape/shape-interaction';
@@ -63,6 +63,7 @@ export interface ToolDescriptor {
    *  foreground) so those side effects live with the tool rather than
    *  leaking into generic setActiveTool code. */
   onActivate?: () => void;
+  onDeactivate?: () => void;
 }
 
 export const toolRegistry: Record<ToolId, ToolDescriptor> = {
@@ -129,7 +130,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     isGpu: true,
     handler: {
       down: (ctx) => handleGradientDown(ctx),
-      move: (ctx, state) => handleGradientMove(state, ctx.layerPos),
+      move: (ctx, state) => handleGradientMove(state, ctx.layerPos, ctx.metaKey),
     },
   },
   eyedropper: {
@@ -254,6 +255,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
       move: (ctx, state) => handleTextMove(state, ctx.canvasPos),
       up: (ctx, state) => handleTextUp(state, ctx.canvasPos),
     },
+    onDeactivate: () => commitTextEditing(),
   },
   crop: {
     id: 'crop',

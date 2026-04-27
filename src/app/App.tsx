@@ -29,6 +29,7 @@ import { POINTER_IDLE, type PointerMode } from './pointer-mode';
 import { useCanvasPointerHandlers } from './hooks/useCanvasPointerHandlers';
 import { useAppEffects } from './hooks/useAppEffects';
 import { useDocumentOpenHandlers } from './hooks/useDocumentOpenHandlers';
+import { useDraggablePanel } from './hooks/useDraggablePanel';
 import styles from './App.module.css';
 
 // Isolated component for canvas rendering — prevents renderVersion and
@@ -89,7 +90,19 @@ export function App() {
       createDocument(1080, 1080, false);
     }
   }, [documentReady, createDocument]);
+  useEffect(() => {
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+    if (!isPWA) return;
+    const name = doc.name;
+    document.title = name === 'Untitled' ? 'Lopsy' : `Lopsy — ${name}`;
+  }, [doc.name]);
+
   const visiblePanels = useUIStore((s) => s.visiblePanels);
+
+  const { offset: drawerOffset, reset: resetDrawerOffset, dragProps: drawerDragProps } = useDraggablePanel();
+  useEffect(() => {
+    if (!showEffectsDrawer) resetDrawerOffset();
+  }, [showEffectsDrawer, resetDrawerOffset]);
 
   const [pointerMode, setPointerMode] = useState<PointerMode>(POINTER_IDLE);
 
@@ -124,7 +137,7 @@ export function App() {
   );
 
   // Canvas interaction (drawing tools)
-  const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove } = useCanvasInteraction(screenToCanvas, containerRef);
+  const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove, nudgeSelection } = useCanvasInteraction(screenToCanvas, containerRef);
 
   // Cursor management
   const { updateHoveredHandle } = useCanvasCursor(containerRef, pointerMode);
@@ -138,6 +151,7 @@ export function App() {
     setPointerMode,
     clearPersistentTransform,
     nudgeMove,
+    nudgeSelection,
   });
 
   useCanvasPointerHandlers({
@@ -210,7 +224,13 @@ export function App() {
         <GuideColorPicker />
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
-            <div className={styles.effectsDrawer} ref={effectsDrawerRef}>
+            <div
+              className={styles.effectsDrawer}
+              ref={effectsDrawerRef}
+              data-testid="effects-drawer"
+              style={{ transform: `translate(${drawerOffset.x}px, ${drawerOffset.y}px)` }}
+              {...drawerDragProps}
+            >
               {activeLayerId && layers.find((l) => l.id === activeLayerId)?.type === 'group'
                 ? <AdjustmentsPanel showHeader />
                 : <LayerEffectsPanel />

@@ -1,5 +1,5 @@
 //! Stylize filters: pixelate, halftone, kaleidoscope, oil paint, chromatic
-//! aberration, find edges, cel shading.
+//! aberration, pixel stretch, find edges, cel shading.
 
 use wasm_bindgen::prelude::*;
 
@@ -99,6 +99,68 @@ pub fn filter_chromatic_aberration(engine: &mut Engine, layer_id: &str, amount: 
             }
             if let Some(loc) = shader.location(gl, "u_angle") {
                 gl.uniform1f(Some(&loc), angle_degrees.to_radians());
+            }
+        },
+    );
+}
+
+#[wasm_bindgen(js_name = "filterPixelStretch")]
+pub fn filter_pixel_stretch(
+    engine: &mut Engine,
+    layer_id: &str,
+    amount: f32,
+    bands: f32,
+    seed: f32,
+    rgb_split: f32,
+) {
+    let amount = amount.clamp(0.0, 200.0);
+    let bands = bands.clamp(2.0, 50.0);
+    let rgb_split = rgb_split.clamp(0.0, 1.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.pixel_stretch,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_amount") {
+                gl.uniform1f(Some(&loc), amount);
+            }
+            if let Some(loc) = shader.location(gl, "u_bands") {
+                gl.uniform1f(Some(&loc), bands);
+            }
+            if let Some(loc) = shader.location(gl, "u_seed") {
+                gl.uniform1f(Some(&loc), seed);
+            }
+            if let Some(loc) = shader.location(gl, "u_rgbSplit") {
+                gl.uniform1f(Some(&loc), rgb_split);
+            }
+        },
+    );
+}
+
+#[wasm_bindgen(js_name = "filterLensDistortion")]
+pub fn filter_lens_distortion(
+    engine: &mut Engine,
+    layer_id: &str,
+    strength: f32,
+    zoom: f32,
+    fringing: f32,
+) {
+    let strength = strength.clamp(-1.0, 1.0);
+    let zoom = zoom.clamp(0.5, 2.0);
+    let fringing = fringing.clamp(0.0, 1.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.lens_distortion,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_strength") {
+                gl.uniform1f(Some(&loc), strength);
+            }
+            if let Some(loc) = shader.location(gl, "u_zoom") {
+                gl.uniform1f(Some(&loc), zoom);
+            }
+            if let Some(loc) = shader.location(gl, "u_fringing") {
+                gl.uniform1f(Some(&loc), fringing);
             }
         },
     );

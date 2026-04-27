@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import styles from './NewDocumentModal.module.css';
 
 type Unit = 'px' | 'in';
@@ -27,6 +27,17 @@ const PRESETS: Preset[] = [
   { name: '4K UHD', width: 3840, height: 2160, unit: 'px', dpi: 72 },
 ];
 
+const TIPS = [
+  'Try out symmetric drawing on brush tools to draw in multiple directions at the same time.',
+  'Use the seamless pattern tool in the view menu.',
+  'Group adjustments allow for value, levels, and color curve adjustments.',
+  'Use the guide color adjustment to adjust visibility for different backgrounds.',
+  'Lopsy supports raw image formats like DNG and TIF.',
+  'Load custom brushes with ABR files.',
+  'New features added almost every day!',
+  'Lopsy is fully open source. Check our <a href="https://github.com/theseamusjames/lopsy.art" target="_blank" rel="noopener noreferrer">github</a>.',
+];
+
 function toPixels(value: number, unit: Unit, dpi: number): number {
   if (unit === 'in') return Math.round(value * dpi);
   return Math.round(value);
@@ -47,6 +58,7 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
   const [background, setBackground] = useState<BackgroundType>('white');
   const [activePreset, setActivePreset] = useState<number | 'clipboard' | null>(0);
   const [clipboardImage, setClipboardImage] = useState<ClipboardImageInfo | null>(null);
+  const tip = useMemo(() => TIPS[Math.floor(Math.random() * TIPS.length)], []);
 
   // Probe clipboard for image data when the modal mounts
   useEffect(() => {
@@ -276,6 +288,10 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
             </button>
           </div>
         </div>
+      </div>
+      <div className={styles.tip}>
+        <span className={styles.tipIcon}>💡</span>
+        <p className={styles.tipText} dangerouslySetInnerHTML={{ __html: `Tip: ${tip}` }} />
       </div>
     </div>
   );

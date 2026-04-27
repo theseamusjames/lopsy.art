@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { waitForStore, createDocument, paintRect } from './helpers';
+import { waitForStore, createDocument, drawRect } from './helpers';
 
 test.describe('Export formats (#57)', () => {
   test.beforeEach(async ({ page }) => {
@@ -7,7 +7,7 @@ test.describe('Export formats (#57)', () => {
     await waitForStore(page);
     await createDocument(page, 100, 100, false);
     await page.waitForTimeout(300);
-    await paintRect(page, 10, 10, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 10, 10, 20, 20, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(200);
   });
 
@@ -15,10 +15,10 @@ test.describe('Export formats (#57)', () => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
 
-    await expect(page.getByRole('button', { name: 'Export PNG' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Export JPEG' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Export WebP' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Export BMP' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export PNG' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export JPEG' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export WebP' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export BMP' })).toBeVisible();
 
     await page.screenshot({ path: 'test-results/screenshots/export-formats-menu.png' });
   });
@@ -28,7 +28,7 @@ test.describe('Export formats (#57)', () => {
 
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Export WebP' }).click();
+    await page.getByRole('menuitem', { name: 'Export WebP' }).click();
 
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe('lopsy.webp');
@@ -41,7 +41,7 @@ test.describe('Export formats (#57)', () => {
 
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Export BMP' }).click();
+    await page.getByRole('menuitem', { name: 'Export BMP' }).click();
 
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe('lopsy.bmp');
@@ -54,7 +54,7 @@ test.describe('Export formats (#57)', () => {
 
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Export BMP' }).click();
+    await page.getByRole('menuitem', { name: 'Export BMP' }).click();
 
     const download = await downloadPromise;
     const readable = await download.createReadStream();
@@ -87,12 +87,13 @@ test.describe('Export formats (#57)', () => {
     expect(bpp).toBe(24);
   });
 
-  test('WebP export produces valid WebP data', async ({ page }) => {
+  test('WebP export produces valid WebP data', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'mobile Chrome convertToBlob may not support WebP encoding');
     const downloadPromise = page.waitForEvent('download');
 
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Export WebP' }).click();
+    await page.getByRole('menuitem', { name: 'Export WebP' }).click();
 
     const download = await downloadPromise;
     const readable = await download.createReadStream();

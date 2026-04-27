@@ -30,7 +30,14 @@ async function createDocument(page: Page, width = 200, height = 200, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -63,12 +70,7 @@ async function docToScreen(page: Page, docX: number, docY: number) {
 }
 
 async function activateGradientTool(page: Page) {
-  await page.evaluate(() => {
-    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    ui.getState().setActiveTool('gradient');
-  });
+  await page.locator('[data-tool-id="gradient"]').click();
   await page.waitForTimeout(100);
 }
 

@@ -2,11 +2,14 @@ import { test, expect, type Page } from './fixtures';
 import {
   createDocument,
   waitForStore,
-  paintCircle,
-  paintRect,
+  drawRect,
+  drawEllipse,
+  setActiveLayer,
   getEditorState,
   addLayer,
   withEditorStore,
+  selectTool,
+  setToolOption,
 } from './helpers';
 
 // ---------------------------------------------------------------------------
@@ -175,18 +178,6 @@ async function drawStroke(
   await page.waitForTimeout(100);
 }
 
-async function setToolSetting(page: Page, setter: string, value: unknown) {
-  await page.evaluate(
-    ({ setter, value }) => {
-      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => Record<string, (v: unknown) => void>;
-      };
-      store.getState()[setter]!(value);
-    },
-    { setter, value },
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -208,7 +199,8 @@ test.describe('Move Layer — content only', () => {
     const layerId = state.document.activeLayerId;
 
     // Paint a circle in the center (radius 50)
-    await paintCircle(page, 200, 150, 50, { r: 255, g: 0, b: 0, a: 255 }, layerId);
+    await setActiveLayer(page, layerId);
+    await drawEllipse(page, 200, 150, 50, 50, { r: 255, g: 0, b: 0 });
 
     // Move the layer 100px south-east (simulating the move tool)
     await moveLayerContent(page, layerId, 100, 100);
@@ -250,7 +242,8 @@ test.describe('Move Layer — content only', () => {
     const layerId = state.document.activeLayerId;
 
     // Paint a circle near the right edge
-    await paintCircle(page, 350, 150, 40, { r: 0, g: 255, b: 0, a: 255 }, layerId);
+    await setActiveLayer(page, layerId);
+    await drawEllipse(page, 350, 150, 40, 40, { r: 0, g: 255, b: 0 });
 
     // Move 100px right — pushes part of the circle off-canvas
     await moveLayerContent(page, layerId, 100, 0);
@@ -300,8 +293,9 @@ test.describe('Move Layer — content only', () => {
     const state = await getEditorState(page);
     const layerId = state.document.activeLayerId;
 
-    // Paint a 100×100 square in the center
-    await paintRect(page, 150, 100, 100, 100, { r: 255, g: 0, b: 0, a: 255 }, layerId);
+    // Paint a 100x100 square in the center
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 150, 100, 100, 100, { r: 255, g: 0, b: 0 });
 
     // Move the square so only 1×1 px is visible at the top-left corner.
     // Content bounds after crop are roughly (150,100)–(249,199).
@@ -345,9 +339,9 @@ test.describe('Move Layer — content only', () => {
     // Draw a spiral-like shape in the center using the brush tool (GPU path).
     // This is the critical difference from the paintRect test: brush strokes
     // live on the GPU, so JS has no pixel data until readback.
-    await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 10);
-    await setToolSetting(page, 'setBrushOpacity', 100);
+    await selectTool(page, 'brush');
+    await setToolOption(page, 'Size', 10);
+    await setToolOption(page, 'Opacity', 100);
     await drawStroke(page, { x: 200, y: 100 }, { x: 250, y: 150 }, 15);
     await drawStroke(page, { x: 250, y: 150 }, { x: 200, y: 200 }, 15);
     await drawStroke(page, { x: 200, y: 200 }, { x: 150, y: 150 }, 15);
@@ -388,9 +382,9 @@ test.describe('Move Layer — content only', () => {
     const layerId = state.document.activeLayerId;
 
     // 1. Draw a square with the brush tool (GPU path)
-    await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 8);
-    await setToolSetting(page, 'setBrushOpacity', 100);
+    await selectTool(page, 'brush');
+    await setToolOption(page, 'Size', 8);
+    await setToolOption(page, 'Opacity', 100);
     await drawStroke(page, { x: 150, y: 100 }, { x: 250, y: 100 }, 15);
     await drawStroke(page, { x: 250, y: 100 }, { x: 250, y: 200 }, 15);
     await drawStroke(page, { x: 250, y: 200 }, { x: 150, y: 200 }, 15);
@@ -408,7 +402,7 @@ test.describe('Move Layer — content only', () => {
     //    This triggers beginStroke → ensure_layer_full_size on the GPU.
     //    BUG: ensure_layer_full_size used to discard the cropped texture
     //    and reset position to (0,0), causing content to jump.
-    await page.keyboard.press('b');
+    await selectTool(page, 'brush');
     await page.waitForTimeout(50);
 
     const clickPos = await docToScreen(page, 380, 280);
@@ -462,7 +456,7 @@ test.describe('Move Layer — content only', () => {
       {
         lid: layerId,
         movedX: Math.round(boundsAfterMove.x + boundsAfterMove.width / 2),
-        movedY: Math.round(boundsAfterMove.y + boundsAfterMove.height / 2),
+        movedY: Math.round(boundsAfterMove.y + 4),
       },
     );
 

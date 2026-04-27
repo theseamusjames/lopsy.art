@@ -30,6 +30,7 @@ import { pixelDataManager } from '../../engine/pixel-data-manager';
 export interface PixelDataSlice {
   dirtyLayerIds: Set<string>;
   renderVersion: number;
+  documentVersion: number;
   getOrCreateLayerPixelData: (layerId: string) => ImageData;
   updateLayerPixelData: (layerId: string, data: ImageData) => void;
   notifyRender: () => void;
@@ -68,6 +69,7 @@ function unionBounds(
 export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => ({
   dirtyLayerIds: new Set(),
   renderVersion: 0,
+  documentVersion: 0,
 
   getOrCreateLayerPixelData: (layerId: string) => {
     // Always returns a full-canvas-size ImageData, expanding cropped/sparse layers.
@@ -178,9 +180,12 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     if (!layer || layer.type !== 'raster') {
       const existing = pixelDataManager.get(layerId);
       if (existing) return existing;
-      const imageData = createImageData(state.document.width, state.document.height);
-      pixelDataManager.setDense(layerId, imageData);
-      return imageData;
+      // Return a temporary empty buffer without persisting it.
+      // The GPU is the source of truth for non-raster layers that have no
+      // JS pixel data (e.g. a freshly duplicated text layer whose texture
+      // was copied via duplicateLayerTexture). Storing empty data here
+      // would cause syncLayers to overwrite the valid GPU texture.
+      return createImageData(state.document.width, state.document.height);
     }
 
     const docW = state.document.width;

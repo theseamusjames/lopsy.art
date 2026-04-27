@@ -1,63 +1,11 @@
 import { test, expect, type Page } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { waitForStore, createDocument, drawRect } from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SCREENSHOT_DIR = path.resolve(__dirname, '../test-results/screenshots');
-
-async function waitForStore(page: Page) {
-  await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
-}
-
-async function createDocument(page: Page, width = 400, height = 300, transparent = false) {
-  await page.evaluate(
-    ({ w, h, t }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { createDocument: (w: number, h: number, t: boolean) => void };
-      };
-      store.getState().createDocument(w, h, t);
-    },
-    { w: width, h: height, t: transparent },
-  );
-  await page.waitForTimeout(500);
-}
-
-async function paintRect(
-  page: Page,
-  x: number, y: number, w: number, h: number,
-  color: { r: number; g: number; b: number; a: number },
-) {
-  await page.evaluate(
-    ({ x, y, w, h, color }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
-          updateLayerPixelData: (id: string, data: ImageData) => void;
-          pushHistory: (label?: string) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      state.pushHistory('Paint');
-      const data = state.getOrCreateLayerPixelData(id);
-      for (let py = y; py < y + h; py++) {
-        for (let px = x; px < x + w; px++) {
-          if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
-          const idx = (py * data.width + px) * 4;
-          data.data[idx] = color.r;
-          data.data[idx + 1] = color.g;
-          data.data[idx + 2] = color.b;
-          data.data[idx + 3] = color.a;
-        }
-      }
-      state.updateLayerPixelData(id, data);
-    },
-    { x, y, w, h, color },
-  );
-  await page.waitForTimeout(200);
-}
 
 async function fitToView(page: Page) {
   await page.evaluate(() => {
@@ -83,7 +31,7 @@ test.describe('Solarize Filter', () => {
     for (let i = 0; i < 20; i++) {
       const t = i / 19;
       const v = Math.round(255 * t);
-      await paintRect(page, i * 20, 0, 20, 300, { r: v, g: v, b: v, a: 255 });
+      await drawRect(page, i * 20, 0, 20, 300, { r: v, g: v, b: v });
     }
 
     await fitToView(page);
@@ -134,8 +82,8 @@ test.describe('Solarize Filter', () => {
     await createDocument(page, 200, 200, false);
 
     // Paint a simple pattern
-    await paintRect(page, 0, 0, 100, 200, { r: 255, g: 255, b: 255, a: 255 });
-    await paintRect(page, 100, 0, 100, 200, { r: 40, g: 40, b: 40, a: 255 });
+    await drawRect(page, 0, 0, 100, 200, { r: 255, g: 255, b: 255 });
+    await drawRect(page, 100, 0, 100, 200, { r: 40, g: 40, b: 40 });
     await fitToView(page);
 
     // Apply solarize via store API directly

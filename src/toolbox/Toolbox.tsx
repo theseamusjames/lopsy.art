@@ -114,6 +114,7 @@ export function Toolbox() {
                 label={tool.label}
                 isActive={activeTool === tool.id}
                 onClick={() => setActiveTool(tool.id)}
+                data-tool-id={tool.id}
               />
             ))}
           </div>

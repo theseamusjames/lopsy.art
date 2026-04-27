@@ -18,7 +18,14 @@ async function createDocument(page: Page, width = 400, height = 300) {
     },
     { w: width, h: height },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function callStore(page: Page, method: string, ...args: unknown[]) {
@@ -71,7 +78,8 @@ async function getDocInfo(page: Page): Promise<DocInfo> {
 // ---------------------------------------------------------------------------
 
 test.describe('Root group controls (#59)', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page);

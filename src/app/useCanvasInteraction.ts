@@ -9,8 +9,10 @@ import {
   beginStroke, endStroke, hasFloat, dropFloat,
   applyBrushDabBatch as gpuBrushDabBatch,
   uploadLayerPixels,
+  getLayerTextureDimensions,
+  setSelectionMask,
 } from '../engine-wasm/wasm-bridge';
-import { flushLayerSync, resetTrackedState } from '../engine-wasm/engine-sync';
+import { flushLayerSync, resetTrackedState, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
 import { uploadCompressed } from '../engine-wasm/gpu-pixel-access';
 import { smoothStroke, HOLD_TIMEOUT_MS } from '../tools/smooth-line/smooth-line';
 import { mirrorBatchPoints } from '../tools/symmetry';
@@ -25,7 +27,14 @@ import type {
   FloatingSelection, PersistentTransform, LastPaintPoint,
 } from './interactions/interaction-types';
 import { handleTransformDown } from './interactions/transform-handlers';
+import {
+  handleMeshWarpDown,
+  handleMeshWarpMove,
+  handleMeshWarpUp,
+} from './interactions/mesh-warp-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
+import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
+import { createTransformState } from '../tools/transform/transform';
 import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 // PAINT_TOOLS / GPU_TOOLS are derived from the tool registry, so adding a
 // new paint or GPU tool is a single-file change at the descriptor.
@@ -131,6 +140,19 @@ export function useCanvasInteraction(
 
       const canvasPos = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
 
+      // Pre-tool: mesh warp handle drag. Captures the click before the
+      // expensive GPU stroke / pixel-buffer setup runs, so dragging a
+      // mesh handle is cheap and doesn't disturb the active layer texture.
+      if (handleMeshWarpDown(canvasPos)) {
+        stateRef.current = {
+          ...INITIAL_STATE,
+          drawing: true,
+          layerId: activeLayerId,
+          meshWarpDragging: true,
+        };
+        return;
+      }
+
       const engine = getEngine();
       const isPaintTool = PAINT_TOOLS.has(activeTool);
       const maskEditMode = useUIStore.getState().maskEditMode;
@@ -168,6 +190,10 @@ export function useCanvasInteraction(
           }
           {
             finalizePendingStroke(pendingStrokeRef);
+            const currentState = useEditorStore.getState();
+            syncDocumentSize(engine, currentState.document.width, currentState.document.height);
+            flushLayerSync(currentState);
+            syncSelection(engine, currentState.selection);
             beginStroke(engine, activeLayerId);
 
             // beginStroke calls ensure_layer_full_size on the WASM side,
@@ -176,19 +202,31 @@ export function useCanvasInteraction(
             // offscreen content). Sync the JS store to match.
             const docState = useEditorStore.getState().document;
             const currentLayer = docState.layers.find((l) => l.id === activeLayerId);
-            if (currentLayer && currentLayer.type === 'raster') {
+            if (currentLayer && currentLayer.type !== 'group') {
+              let layerW: number;
+              let layerH: number;
+              if (currentLayer.type === 'raster') {
+                layerW = currentLayer.width;
+                layerH = currentLayer.height;
+              } else {
+                const dims = getLayerTextureDimensions(engine, activeLayerId);
+                layerW = dims?.[0] ?? docState.width;
+                layerH = dims?.[1] ?? docState.height;
+              }
               const newX = Math.min(0, currentLayer.x);
               const newY = Math.min(0, currentLayer.y);
-              const newW = Math.max(docState.width, currentLayer.x + currentLayer.width) - newX;
-              const newH = Math.max(docState.height, currentLayer.y + currentLayer.height) - newY;
+              const newW = Math.max(docState.width, currentLayer.x + layerW) - newX;
+              const newH = Math.max(docState.height, currentLayer.y + layerH) - newY;
               const needsSync = currentLayer.x !== newX || currentLayer.y !== newY
-                || currentLayer.width !== newW || currentLayer.height !== newH;
+                || (currentLayer.type === 'raster' && (currentLayer.width !== newW || currentLayer.height !== newH));
               if (needsSync) {
-              const updatedLayers = docState.layers.map((l) =>
-                l.id === activeLayerId
-                  ? { ...l, x: newX, y: newY, width: newW, height: newH } as Layer
-                  : l,
-              );
+              const updatedLayers = docState.layers.map((l) => {
+                if (l.id !== activeLayerId) return l;
+                if (l.type === 'raster') {
+                  return { ...l, x: newX, y: newY, width: newW, height: newH } as Layer;
+                }
+                return { ...l, x: newX, y: newY } as Layer;
+              });
               pixelDataManager.remove(activeLayerId);
               const dirtyIds = new Set(useEditorStore.getState().dirtyLayerIds);
               dirtyIds.add(activeLayerId);
@@ -213,14 +251,25 @@ export function useCanvasInteraction(
         // before we read pixel data back for non-GPU tools (e.g. move).
         finalizePendingStroke(pendingStrokeRef);
 
-        // CPU fallback: expand layer to full canvas for pixel manipulation
-        const imageData = editorState.expandLayerForEditing(activeLayerId);
-        expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
-        layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
-        pixelBuffer = PixelBuffer.wrapImageData(imageData);
-        invalidateBitmapCache(activeLayerId);
-        createPaintingCanvas(activeLayerId, imageData);
-        paintSurface = wrapWithSelectionMask(pixelBuffer, expandedLayer.x, expandedLayer.y);
+        // Only expand the active layer's pixel data for tools that actually
+        // read/write it (move, smudge, fill). Tools like text, crop, path,
+        // eyedropper, and selection tools don't need pixel data and expanding
+        // would destructively change layer bounds before pushHistory captures
+        // them — causing undo to restore the wrong positions.
+        const needsPixelData = isPaintTool || activeTool === 'move' || activeTool === 'fill';
+        if (needsPixelData) {
+          const imageData = editorState.expandLayerForEditing(activeLayerId);
+          expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
+          layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
+          pixelBuffer = PixelBuffer.wrapImageData(imageData);
+          invalidateBitmapCache(activeLayerId);
+          createPaintingCanvas(activeLayerId, imageData);
+          paintSurface = wrapWithSelectionMask(pixelBuffer, expandedLayer.x, expandedLayer.y);
+        } else {
+          const dummyData = new ImageData(1, 1);
+          pixelBuffer = PixelBuffer.wrapImageData(dummyData);
+          paintSurface = pixelBuffer;
+        }
       }
       const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer, pixelBuffer, paintSurface);
       if (useGpu) {
@@ -232,6 +281,21 @@ export function useCanvasInteraction(
       if (transformResult) {
         stateRef.current = transformResult;
         return;
+      }
+
+      // Commit any active GPU float (from transform or move) before dispatching
+      // to other tools. Without this, tools like gradient read the stale
+      // pre-transform selection mask from the GPU.
+      // Move handles this itself in handleMoveDown.
+      if (activeTool !== 'move' && engine && hasFloat(engine)) {
+        persistentTransformRef.current = null;
+        floatingSelectionRef.current = null;
+        selectLayerAlpha(activeLayerId);
+        const selAfter = useEditorStore.getState().selection;
+        if (selAfter.active && selAfter.mask) {
+          const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
+          setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
+        }
       }
 
       const handler = toolHandlers[activeTool];
@@ -257,6 +321,12 @@ export function useCanvasInteraction(
         x: canvasPos.x - state.layerStartX,
         y: canvasPos.y - state.layerStartY,
       };
+
+      // Mesh warp drag (not tool-routed)
+      if (state.meshWarpDragging) {
+        handleMeshWarpMove(canvasPos);
+        return;
+      }
 
       // Transform handle drag (not tool-routed)
       if (state.transformHandle && state.transformStartState && state.startPoint) {
@@ -346,7 +416,9 @@ export function useCanvasInteraction(
           const eng = getEngine();
           if (!eng) return;
           resetTrackedState(eng);
-          flushLayerSync(useEditorStore.getState());
+          const smoothState = useEditorStore.getState();
+          flushLayerSync(smoothState);
+          syncSelection(eng, smoothState.selection);
 
           beginStroke(eng, layerId);
           const arr = new Float64Array(result.sampledPoints.length * 2);
@@ -389,6 +461,14 @@ export function useCanvasInteraction(
     cancelHoldTimer();
 
     const state = stateRef.current;
+
+    // Mesh warp drag end — short-circuit before regular tool teardown.
+    if (state.meshWarpDragging) {
+      handleMeshWarpUp();
+      stateRef.current = { ...INITIAL_STATE };
+      return;
+    }
+
     if (!state.tool) {
       stateRef.current = { ...INITIAL_STATE };
       return;
@@ -485,5 +565,33 @@ export function useCanvasInteraction(
     handleNudgeMove(dx, dy, floatingSelectionRef, persistentTransformRef);
   }, []);
 
-  return { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove };
+  const nudgeSelection = useCallback((dx: number, dy: number) => {
+    const editor = useEditorStore.getState();
+    const sel = editor.selection;
+    if (!sel.active || !sel.mask || !sel.bounds) return;
+
+    const { width: docW, height: docH } = editor.document;
+    const origMask = sel.mask;
+    const newMask = new Uint8ClampedArray(docW * docH);
+    for (let y = 0; y < docH; y++) {
+      for (let x = 0; x < docW; x++) {
+        const sx = x - dx;
+        const sy = y - dy;
+        if (sx >= 0 && sx < docW && sy >= 0 && sy < docH) {
+          newMask[y * docW + x] = origMask[sy * docW + sx]!;
+        }
+      }
+    }
+    const newBounds = {
+      x: sel.bounds.x + dx,
+      y: sel.bounds.y + dy,
+      width: sel.bounds.width,
+      height: sel.bounds.height,
+    };
+    editor.setSelection(newBounds, newMask, docW, docH);
+    useUIStore.getState().setTransform(createTransformState(newBounds));
+    editor.notifyRender();
+  }, []);
+
+  return { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove, nudgeSelection };
 }

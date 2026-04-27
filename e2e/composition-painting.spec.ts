@@ -10,6 +10,19 @@
  * Undo/redo, keyboard shortcuts, brush presets.
  */
 import { test, expect, type Page } from './fixtures';
+import {
+  setToolOption,
+  setForegroundColor as setForegroundColorUI,
+  setBlendMode,
+  setLayerOpacity,
+  setAdjustment,
+  closeEffectsPanel,
+  configureEffect,
+  setEffectColor,
+  enableEffect,
+  setBrushModalOption,
+  closeBrushModal,
+} from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,7 +42,14 @@ async function createDocument(page: Page, width = 600, height = 400, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -71,6 +91,7 @@ async function drawStroke(
   await page.waitForTimeout(200);
 }
 
+/** Thin wrapper: delegates to UI helpers where possible, falls back to store. */
 async function setToolSetting(page: Page, setter: string, value: unknown) {
   await page.evaluate(({ setter, value }) => {
     const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
@@ -80,22 +101,19 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   }, { setter, value });
 }
 
-async function setForegroundColor(page: Page, color: { r: number; g: number; b: number; a: number }) {
-  await page.evaluate((c) => {
-    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-    };
-    store.getState().setForegroundColor(c);
-  }, color);
-}
+const toolKeyMap: Record<string, string> = {
+  move: 'v', brush: 'b', fill: 'g', shape: 'u', text: 't', eraser: 'e',
+  'marquee-rect': 'm', wand: 'w', lasso: 'l', stamp: 's', dodge: 'o',
+  smudge: 'r', eyedropper: 'i', pencil: 'n', crop: 'c', path: 'p', spray: 'j',
+};
 
 async function setActiveTool(page: Page, tool: string) {
-  await page.evaluate((t) => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    store.getState().setActiveTool(t);
-  }, tool);
+  const key = toolKeyMap[tool];
+  if (key) {
+    await page.keyboard.press(key);
+  } else {
+    await page.locator(`[data-tool-id="${tool}"]`).click();
+  }
   await page.waitForTimeout(100);
 }
 
@@ -303,12 +321,8 @@ test.describe('Composition 1: Painted Landscape', () => {
     expect(sunPixel.r).toBeGreaterThan(200);
 
     // Set sun layer to Screen blend mode
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { updateLayerBlendMode: (id: string, mode: string) => void };
-      };
-      store.getState().updateLayerBlendMode(lid, 'screen');
-    }, sunLayerId);
+    await page.locator(`[data-layer-id="${sunLayerId}"]`).click();
+    await setBlendMode(page, 'screen');
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-02-sun-radial.png' });
 
@@ -320,11 +334,12 @@ test.describe('Composition 1: Painted Landscape', () => {
     await page.keyboard.press('b');
     expect(await getActiveTool(page)).toBe('brush');
 
-    await setToolSetting(page, 'setBrushSize', 60);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 15);
+    await setToolOption(page, 'Size', 60);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 15);
+    await closeBrushModal(page);
 
-    await setForegroundColor(page, { r: 50, g: 60, b: 80, a: 1 });
+    await setForegroundColorUI(page, 50, 60, 80);
 
     // Draw mountain silhouette
     await drawStroke(page, { x: 0, y: 280 }, { x: 100, y: 200 }, 8);
@@ -336,7 +351,7 @@ test.describe('Composition 1: Painted Landscape', () => {
     await drawStroke(page, { x: 550, y: 180 }, { x: 600, y: 250 }, 8);
 
     // Fill below mountains
-    await setToolSetting(page, 'setBrushSize', 120);
+    await setToolOption(page, 'Size', 120);
     for (let y = 250; y < 400; y += 60) {
       await drawStroke(page, { x: 0, y }, { x: 600, y }, 6);
     }
@@ -349,8 +364,8 @@ test.describe('Composition 1: Painted Landscape', () => {
     await page.keyboard.press('n');
     expect(await getActiveTool(page)).toBe('pencil');
 
-    await setToolSetting(page, 'setPencilSize', 4);
-    await setForegroundColor(page, { r: 240, g: 240, b: 255, a: 1 });
+    await setToolOption(page, 'Size', 4);
+    await setForegroundColorUI(page, 240, 240, 255);
 
     await drawStroke(page, { x: 170, y: 162 }, { x: 190, y: 170 }, 5);
     await drawStroke(page, { x: 340, y: 142 }, { x: 360, y: 150 }, 5);
@@ -363,8 +378,8 @@ test.describe('Composition 1: Painted Landscape', () => {
     await page.keyboard.press('e');
     expect(await getActiveTool(page)).toBe('eraser');
 
-    await setToolSetting(page, 'setEraserSize', 20);
-    await setToolSetting(page, 'setEraserOpacity', 80);
+    await setToolOption(page, 'Size', 20);
+    await setToolOption(page, 'Opacity', 80);
 
     const beforeErase = await snapshot(page);
     await drawStroke(page, { x: 580, y: 180 }, { x: 600, y: 200 }, 5);
@@ -380,42 +395,34 @@ test.describe('Composition 1: Painted Landscape', () => {
     const groundLayerId = await addLayer(page);
 
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 100);
-    await setToolSetting(page, 'setBrushHardness', 0);
-    await setToolSetting(page, 'setBrushOpacity', 60);
-    await setToolSetting(page, 'setBrushSpacing', 20);
+    await setToolOption(page, 'Size', 100);
+    await setToolOption(page, 'Hardness', 0);
+    await setToolOption(page, 'Opacity', 60);
+    await setBrushModalOption(page, 'Spacing', 20);
+    await closeBrushModal(page);
 
-    await setForegroundColor(page, { r: 34, g: 80, b: 34, a: 1 });
+    await setForegroundColorUI(page, 34, 80, 34);
 
     for (let y = 300; y < 400; y += 50) {
       await drawStroke(page, { x: 0, y }, { x: 600, y }, 6);
     }
 
     // Set ground to Multiply blend mode
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { updateLayerBlendMode: (id: string, mode: string) => void };
-      };
-      store.getState().updateLayerBlendMode(lid, 'multiply');
-    }, groundLayerId);
+    await page.locator(`[data-layer-id="${groundLayerId}"]`).click();
+    await setBlendMode(page, 'multiply');
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-06-ground.png' });
 
     // =====================================================================
     // PHASE 7: SMUDGE — Blend mountain edges
     // =====================================================================
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(lid);
-    }, mountainLayerId);
+    await page.locator(`[data-layer-id="${mountainLayerId}"]`).click();
 
     await page.keyboard.press('r');
     expect(await getActiveTool(page)).toBe('smudge');
 
-    await setToolSetting(page, 'setSmudgeSize', 40);
-    await setToolSetting(page, 'setSmudgeStrength', 70);
+    await setToolOption(page, 'Size', 40);
+    await setToolOption(page, 'Strength', 70);
 
     const beforeSmudge = await snapshot(page);
     await drawStroke(page, { x: 180, y: 170 }, { x: 220, y: 200 }, 10);
@@ -433,8 +440,8 @@ test.describe('Composition 1: Painted Landscape', () => {
     expect(await getActiveTool(page)).toBe('dodge');
 
     // Dodge (lighten) the left side of mountains
-    await setToolSetting(page, 'setBrushSize', 50);
-    await setToolSetting(page, 'setDodgeExposure', 60);
+    await setToolOption(page, 'Size', 50);
+    await setToolOption(page, 'Exposure', 60);
     await setToolSetting(page, 'setDodgeMode', 'dodge');
 
     const beforeDodge = await snapshot(page);
@@ -459,7 +466,7 @@ test.describe('Composition 1: Painted Landscape', () => {
     await page.keyboard.press('s');
     expect(await getActiveTool(page)).toBe('stamp');
 
-    await setToolSetting(page, 'setStampSize', 30);
+    await setToolOption(page, 'Size', 30);
 
     // Alt+click to set source
     const sourceScreen = await docToScreen(page, 180, 200);
@@ -498,89 +505,29 @@ test.describe('Composition 1: Painted Landscape', () => {
     // =====================================================================
     // PHASE 11: LAYER EFFECTS — Drop shadow, outer glow, stroke
     // =====================================================================
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-          document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-        };
-      };
-      const state = store.getState();
-      const layer = state.document.layers.find((l) => l.id === lid);
-      if (!layer) return;
-      state.updateLayerEffects(lid, {
-        ...layer.effects,
-        dropShadow: {
-          enabled: true,
-          color: { r: 0, g: 0, b: 0, a: 1 },
-          offsetX: 4,
-          offsetY: 6,
-          blur: 8,
-          spread: 0,
-          opacity: 0.5,
-        },
-        outerGlow: {
-          enabled: true,
-          color: { r: 255, g: 200, b: 100, a: 1 },
-          size: 10,
-          spread: 0,
-          opacity: 0.3,
-        },
-      });
-    }, mountainLayerId);
+    await page.locator(`[data-layer-id="${mountainLayerId}"]`).click();
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 4, 'Offset Y': 6, 'Blur': 8, 'Spread': 0, 'Opacity': 50 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await configureEffect(page, 'Outer Glow', { 'Size': 10, 'Spread': 0, 'Opacity': 30 });
+    await setEffectColor(page, 'Glow color', 255, 200, 100);
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-10-mountain-effects.png' });
 
-    // Inner glow and color overlay on ground
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-          document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-        };
-      };
-      const state = store.getState();
-      const layer = state.document.layers.find((l) => l.id === lid);
-      if (!layer) return;
-      state.updateLayerEffects(lid, {
-        ...layer.effects,
-        innerGlow: {
-          enabled: true,
-          color: { r: 200, g: 255, b: 200, a: 1 },
-          size: 6,
-          spread: 0,
-          opacity: 0.4,
-        },
-        stroke: {
-          enabled: true,
-          color: { r: 20, g: 60, b: 20, a: 1 },
-          width: 2,
-          position: 'outside',
-        },
-      });
-    }, groundLayerId);
+    // Inner glow and stroke on ground
+    await page.locator(`[data-layer-id="${groundLayerId}"]`).click();
+    await configureEffect(page, 'Inner Glow', { 'Size': 6, 'Spread': 0, 'Opacity': 40 });
+    await setEffectColor(page, 'Glow color', 200, 255, 200);
+    await configureEffect(page, 'Stroke', { 'Width': 2 });
+    await setEffectColor(page, 'Stroke color', 20, 60, 20);
+    await page.locator('[aria-label="Stroke position: outside"]').click();
     await page.waitForTimeout(300);
 
     // Color overlay on sun layer
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-          document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-        };
-      };
-      const state = store.getState();
-      const layer = state.document.layers.find((l) => l.id === lid);
-      if (!layer) return;
-      state.updateLayerEffects(lid, {
-        ...layer.effects,
-        colorOverlay: {
-          enabled: true,
-          color: { r: 255, g: 230, b: 150, a: 0.2 },
-        },
-      });
-    }, sunLayerId);
+    await page.locator(`[data-layer-id="${sunLayerId}"]`).click();
+    await enableEffect(page, 'Color Overlay');
+    await setEffectColor(page, 'Overlay color', 255, 230, 150);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-11-all-effects.png' });
@@ -597,24 +544,16 @@ test.describe('Composition 1: Painted Landscape', () => {
     const overlayLayerId = await addLayer(page);
 
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 200);
-    await setToolSetting(page, 'setBrushHardness', 0);
-    await setToolSetting(page, 'setBrushOpacity', 100);
+    await setToolOption(page, 'Size', 200);
+    await setToolOption(page, 'Hardness', 0);
+    await setToolOption(page, 'Opacity', 100);
 
-    await setForegroundColor(page, { r: 255, g: 220, b: 100, a: 1 });
+    await setForegroundColorUI(page, 255, 220, 100);
     await drawStroke(page, { x: 400, y: 100 }, { x: 500, y: 150 }, 5);
 
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          updateLayerBlendMode: (id: string, mode: string) => void;
-          updateLayerOpacity: (id: string, opacity: number) => void;
-        };
-      };
-      const s = store.getState();
-      s.updateLayerBlendMode(lid, 'overlay');
-      s.updateLayerOpacity(lid, 0.6);
-    }, overlayLayerId);
+    await page.locator(`[data-layer-id="${overlayLayerId}"]`).click();
+    await setBlendMode(page, 'overlay');
+    await setLayerOpacity(page, overlayLayerId, 60);
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-12-blend-modes.png' });
 
@@ -642,12 +581,7 @@ test.describe('Composition 1: Painted Landscape', () => {
     expect(dupeLayer).toBeTruthy();
 
     // Toggle visibility on duplicate
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { toggleLayerVisibility: (id: string) => void };
-      };
-      store.getState().toggleLayerVisibility(lid);
-    }, dupeLayer!.id);
+    await page.locator(`[data-layer-id="${dupeLayer!.id}"]`).locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]').click();
 
     const dupLayerState = await page.evaluate((lid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -660,39 +594,18 @@ test.describe('Composition 1: Painted Landscape', () => {
     expect(dupLayerState).toBe(false);
 
     // Turn it back on and set low opacity
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          toggleLayerVisibility: (id: string) => void;
-          updateLayerOpacity: (id: string, opacity: number) => void;
-        };
-      };
-      const s = store.getState();
-      s.toggleLayerVisibility(lid);
-      s.updateLayerOpacity(lid, 0.3);
-    }, dupeLayer!.id);
+    await page.locator(`[data-layer-id="${dupeLayer!.id}"]`).locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]').click();
+    await setLayerOpacity(page, dupeLayer!.id, 30);
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-13-layer-ops.png' });
 
     // =====================================================================
     // PHASE 14: IMAGE ADJUSTMENTS — Exposure, contrast, saturation, vignette
     // =====================================================================
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => {
-          adjustments: Record<string, number>;
-          setAdjustments: (adj: Record<string, number>) => void;
-        };
-      };
-      const s = store.getState();
-      s.setAdjustments({
-        ...s.adjustments,
-        exposure: 0.15,
-        contrast: 20,
-        saturation: 15,
-        vignette: 30,
-      });
-    });
+    await setAdjustment(page, 'Exposure', 0.15);
+    await setAdjustment(page, 'Contrast', 20);
+    await setAdjustment(page, 'Saturation', 15);
+    await setAdjustment(page, 'Vignette', 30);
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-14-adjustments.png' });
@@ -703,24 +616,21 @@ test.describe('Composition 1: Painted Landscape', () => {
     const starsLayerId = await addLayer(page);
 
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 4);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 150);
-    await setToolSetting(page, 'setBrushScatter', 100);
-    await setToolSetting(page, 'setBrushOpacity', 100);
+    await setToolOption(page, 'Size', 4);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 150);
+    await setBrushModalOption(page, 'Scatter', 100);
+    await closeBrushModal(page);
+    await setToolOption(page, 'Opacity', 100);
 
-    await setForegroundColor(page, { r: 255, g: 255, b: 240, a: 1 });
+    await setForegroundColorUI(page, 255, 255, 240);
 
     for (let y = 20; y < 150; y += 30) {
       await drawStroke(page, { x: 20, y }, { x: 400, y }, 8);
     }
 
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { updateLayerBlendMode: (id: string, mode: string) => void };
-      };
-      store.getState().updateLayerBlendMode(lid, 'screen');
-    }, starsLayerId);
+    await page.locator(`[data-layer-id="${starsLayerId}"]`).click();
+    await setBlendMode(page, 'screen');
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-15-stars.png' });
 
@@ -765,7 +675,7 @@ test.describe('Composition 1: Painted Landscape', () => {
     // =====================================================================
     // PHASE 18: KEYBOARD SHORTCUTS — Color swap, default colors
     // =====================================================================
-    await setForegroundColor(page, { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColorUI(page, 255, 0, 0);
 
     await page.keyboard.press('x');
     await page.waitForTimeout(100);

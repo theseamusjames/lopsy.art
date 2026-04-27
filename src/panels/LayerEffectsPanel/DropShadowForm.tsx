@@ -6,15 +6,15 @@ import styles from './LayerEffectsPanel.module.css';
 interface DropShadowFormProps {
   shadow: ShadowEffect;
   onChange: (s: ShadowEffect) => void;
+  onCommit?: () => void;
 }
 
-export function DropShadowForm({ shadow, onChange }: DropShadowFormProps) {
+export function DropShadowForm({ shadow, onChange, onCommit }: DropShadowFormProps) {
   return (
     <>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Color</span>
         <label className={styles.colorSwatch} style={{ backgroundColor: `rgb(${shadow.color.r}, ${shadow.color.g}, ${shadow.color.b})` }}>
-          <span className={styles.srOnly}>Shadow color</span>
           <input
             type="color"
             className={styles.colorInput}
@@ -27,25 +27,25 @@ export function DropShadowForm({ shadow, onChange }: DropShadowFormProps) {
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Offset X</span>
         <div className={styles.sliderWrap}>
-          <Slider value={shadow.offsetX} min={-100} max={100} onChange={(v) => onChange({ ...shadow, offsetX: v })} />
+          <Slider value={shadow.offsetX} min={-100} max={100} onChange={(v) => onChange({ ...shadow, offsetX: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Offset Y</span>
         <div className={styles.sliderWrap}>
-          <Slider value={shadow.offsetY} min={-100} max={100} onChange={(v) => onChange({ ...shadow, offsetY: v })} />
+          <Slider value={shadow.offsetY} min={-100} max={100} onChange={(v) => onChange({ ...shadow, offsetY: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Blur</span>
         <div className={styles.sliderWrap}>
-          <Slider value={shadow.blur} min={0} max={100} onChange={(v) => onChange({ ...shadow, blur: v })} />
+          <Slider value={shadow.blur} min={0} max={100} onChange={(v) => onChange({ ...shadow, blur: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Spread</span>
         <div className={styles.sliderWrap}>
-          <Slider value={shadow.spread} min={0} max={100} onChange={(v) => onChange({ ...shadow, spread: v })} />
+          <Slider value={shadow.spread} min={0} max={100} onChange={(v) => onChange({ ...shadow, spread: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
@@ -56,6 +56,7 @@ export function DropShadowForm({ shadow, onChange }: DropShadowFormProps) {
             min={0}
             max={100}
             onChange={(v) => onChange({ ...shadow, opacity: v / 100 })}
+            onCommit={onCommit}
           />
         </div>
       </div>

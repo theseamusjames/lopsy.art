@@ -3,6 +3,7 @@
  * Uses the actual shape tool, actual UI interactions, and GPU pixel readback.
  */
 import { test, expect, type Page } from './fixtures';
+import { createDocument, waitForStore, selectTool, setForegroundColor } from './helpers';
 
 const isMac = process.platform === 'darwin';
 
@@ -36,6 +37,16 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
     },
     { setter, value },
   );
+}
+
+async function setShapeMode(page: Page, mode: string) {
+  const select = page.locator('[aria-labelledby="shape-mode-label"]');
+  await select.selectOption(mode);
+}
+
+async function setPolygonSides(page: Page, sides: number) {
+  const input = page.locator('#polygon-sides');
+  await input.fill(String(sides));
 }
 
 /** Count opaque pixels on the active layer only (not the full composite) */
@@ -142,26 +153,21 @@ async function dragRotate(page: Page, angleRadians: number) {
 }
 
 test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'requires Chromium WebGL (SwiftShader)');
     await page.goto('/');
-    await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
-    // Create 600x600 doc with white background (matches default editor setup)
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { createDocument: (w: number, h: number, t: boolean) => void };
-      };
-      store.getState().createDocument(600, 600, false);
-    });
+    await waitForStore(page);
+    await createDocument(page, 600, 600);
     await page.waitForSelector('[data-testid="canvas-container"]');
     await page.waitForTimeout(200);
   });
 
   test('shape tool polygon → cmd+click select → rotate 45° → commit → should have content', async ({ page }) => {
     // Draw a 200x200 polygon (4 sides = diamond)
-    await page.keyboard.press('u'); // Shape tool
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 4);
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 0, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 4);
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Draw from center outward
@@ -202,10 +208,10 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
 
   test('shape tool polygon → select → rotate → re-select → move → delete → canvas empty', async ({ page }) => {
     // Draw diamond
-    await page.keyboard.press('u');
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 4);
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 0, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 4);
     await setToolSetting(page, 'setShapeStrokeColor', null);
     await drawShape(page, 300, 300, 400, 400);
 
@@ -222,7 +228,7 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
     await cmdClickThumbnail(page);
 
     // Move
-    await page.keyboard.press('v');
+    await selectTool(page, 'move');
     await page.waitForTimeout(100);
     const start = await docToScreen(page, 300, 300);
     const end = await docToScreen(page, 400, 200);
@@ -243,10 +249,10 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
 
   test('select → rotate → move immediately (no commit) → delete → canvas empty', async ({ page }) => {
     // User's repro: rotate then move without pressing Escape first
-    await page.keyboard.press('u');
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 4);
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 0, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 4);
     await setToolSetting(page, 'setShapeStrokeColor', null);
     await drawShape(page, 300, 300, 400, 400);
 
@@ -260,7 +266,7 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
     await dragRotate(page, Math.PI / 4);
 
     // Immediately move (no Escape, no re-select)
-    await page.keyboard.press('v');
+    await selectTool(page, 'move');
     await page.waitForTimeout(100);
     const start = await docToScreen(page, 300, 300);
     const end = await docToScreen(page, 400, 200);
@@ -280,29 +286,25 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
 });
 
 test.describe('Perspective mode', { tag: '@chromium' }, () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'requires Chromium WebGL (SwiftShader)');
     await page.goto('/');
-    await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { createDocument: (w: number, h: number, t: boolean) => void };
-      };
-      store.getState().createDocument(600, 600, false);
-    });
+    await waitForStore(page);
+    await createDocument(page, 600, 600);
     await page.waitForSelector('[data-testid="canvas-container"]');
     await page.waitForTimeout(200);
   });
 
   test('perspective mode is set correctly after clicking button', async ({ page }) => {
-    await page.keyboard.press('u');
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 4);
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 0, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 4);
     await setToolSetting(page, 'setShapeStrokeColor', null);
     await drawShape(page, 300, 300, 400, 400);
 
     await cmdClickThumbnail(page);
-    await page.keyboard.press('v');
+    await selectTool(page, 'move');
     await page.waitForTimeout(100);
 
     // Click Perspective button

@@ -155,6 +155,112 @@ pub fn clear_image_levels(engine: &mut Engine) {
 }
 
 // ============================================================
+// Group Adjustments
+// ============================================================
+
+#[wasm_bindgen(js_name = "setGroupAdjustments")]
+pub fn set_group_adjustments(
+    engine: &mut Engine,
+    group_id: &str,
+    child_ids_json: &str,
+    exposure: f32,
+    contrast: f32,
+    highlights: f32,
+    shadows: f32,
+    whites: f32,
+    blacks: f32,
+    saturation: f32,
+    vibrance: f32,
+) -> Result<(), JsError> {
+    let child_ids: Vec<String> = serde_json::from_str(child_ids_json)
+        .map_err(|e| JsError::new(&format!("Invalid child IDs JSON: {e}")))?;
+    let adj = crate::engine::ImageAdjustmentState {
+        exposure,
+        contrast,
+        highlights,
+        shadows,
+        whites,
+        blacks,
+        saturation,
+        vibrance,
+        ..Default::default()
+    };
+    engine.inner.group_adjustments.insert(
+        group_id.to_string(),
+        crate::engine::GroupAdjustment { adjustments: adj, child_ids },
+    );
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "setGroupCurvesLut")]
+pub fn set_group_curves_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> Result<(), JsError> {
+    if lut.len() != 256 * 4 {
+        return Err(JsError::new("Group curves LUT must be exactly 256 * 4 bytes"));
+    }
+    if !engine.inner.group_adjustments.contains_key(group_id) {
+        return Err(JsError::new("Group not found — call setGroupAdjustments first"));
+    }
+    let existing = engine.inner.group_adjustments.get(group_id).unwrap().adjustments.curves_texture;
+    let tex = match existing {
+        Some(t) => t,
+        None => {
+            let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
+                .map_err(|e| JsError::new(&e))?;
+            engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.curves_texture = Some(t);
+            t
+        }
+    };
+    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.has_curves = true;
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "setGroupLevelsLut")]
+pub fn set_group_levels_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> Result<(), JsError> {
+    if lut.len() != 256 * 4 {
+        return Err(JsError::new("Group levels LUT must be exactly 256 * 4 bytes"));
+    }
+    if !engine.inner.group_adjustments.contains_key(group_id) {
+        return Err(JsError::new("Group not found — call setGroupAdjustments first"));
+    }
+    let existing = engine.inner.group_adjustments.get(group_id).unwrap().adjustments.levels_texture;
+    let tex = match existing {
+        Some(t) => t,
+        None => {
+            let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
+                .map_err(|e| JsError::new(&e))?;
+            engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.levels_texture = Some(t);
+            t
+        }
+    };
+    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.has_levels = true;
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "clearGroupAdjustments")]
+pub fn clear_group_adjustments(engine: &mut Engine) {
+    let textures_to_release: Vec<_> = engine.inner.group_adjustments.values()
+        .flat_map(|ga| {
+            let mut v = Vec::new();
+            if let Some(t) = ga.adjustments.curves_texture { v.push(t); }
+            if let Some(t) = ga.adjustments.levels_texture { v.push(t); }
+            v
+        })
+        .collect();
+    for tex in textures_to_release {
+        engine.inner.texture_pool.release(tex);
+    }
+    engine.inner.group_adjustments.clear();
+    engine.inner.needs_recomposite = true;
+}
+
+// ============================================================
 // Mask Edit Mode
 // ============================================================
 

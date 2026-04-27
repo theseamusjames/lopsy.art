@@ -1,4 +1,9 @@
 import { test, expect, type Page } from './fixtures';
+import {
+  configureEffect,
+  setEffectColor,
+  closeEffectsPanel,
+} from './helpers';
 
 async function waitForStore(page: Page) {
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
@@ -14,7 +19,14 @@ async function createDocument(page: Page, width = 600, height = 400) {
     },
     { w: width, h: height },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -101,21 +113,10 @@ test.describe('Stroke effect on in-progress brush stroke', () => {
     await drawStroke(page, { x: 120, y: 200 }, { x: 200, y: 200 });
 
     // Enable red stroke effect on the active layer
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string | null; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const { document: doc, updateLayerEffects } = store.getState();
-      const id = doc.activeLayerId!;
-      const layer = doc.layers.find((l) => l.id === id)!;
-      updateLayerEffects(id, {
-        ...layer.effects,
-        stroke: { enabled: true, color: { r: 255, g: 0, b: 0, a: 1 }, width: 6, position: 'outside' },
-      });
-    });
+    await configureEffect(page, 'Stroke', { 'Width': 6 });
+    await setEffectColor(page, 'Stroke color', 255, 0, 0);
+    await page.locator('[aria-label="Stroke position: outside"]').click();
+    await closeEffectsPanel(page);
     await page.waitForTimeout(200);
 
     // Stroke 2 on the right (far from stroke 1 so their effects don't overlap)

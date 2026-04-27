@@ -6,29 +6,11 @@
  * All tests use real UI interactions and GPU pixel readback.
  */
 import { test, expect, type Page } from './fixtures';
+import { createDocument, waitForStore, getPixelAt, selectTool, setToolOption, setForegroundColor } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-async function waitForStore(page: Page) {
-  await page.waitForFunction(
-    () => !!(window as unknown as Record<string, unknown>).__editorStore,
-  );
-}
-
-async function createDocument(page: Page, width = 400, height = 300, transparent = false) {
-  await page.evaluate(
-    ({ w, h, t }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { createDocument: (w: number, h: number, t: boolean) => void };
-      };
-      store.getState().createDocument(w, h, t);
-    },
-    { w: width, h: height, t: transparent },
-  );
-  await page.waitForTimeout(200);
-}
 
 async function docToScreen(page: Page, docX: number, docY: number) {
   return page.evaluate(
@@ -86,52 +68,14 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   );
 }
 
-async function activateShapeTool(page: Page) {
-  await page.evaluate(() => {
-    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    ui.getState().setActiveTool('shape');
-  });
-  await page.waitForTimeout(100);
+async function setShapeMode(page: Page, mode: string) {
+  const select = page.locator('[aria-labelledby="shape-mode-label"]');
+  await select.selectOption(mode);
 }
 
-async function getPixelAt(page: Page, x: number, y: number, layerId?: string) {
-  return page.evaluate(
-    async ({ x, y, lid }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: {
-            activeLayerId: string;
-            layers: Array<{ id: string; x: number; y: number }>;
-          };
-        };
-      };
-      const state = store.getState();
-      const id = lid ?? state.document.activeLayerId;
-      const layer = state.document.layers.find((l) => l.id === id);
-      const lx = layer?.x ?? 0;
-      const ly = layer?.y ?? 0;
-      const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as (
-        id?: string,
-      ) => Promise<{ width: number; height: number; pixels: number[] } | null>;
-      const result = await readFn(id);
-      if (!result || result.width === 0) return { r: 0, g: 0, b: 0, a: 0 };
-      const localX = x - lx;
-      const localY = y - ly;
-      if (localX < 0 || localX >= result.width || localY < 0 || localY >= result.height) {
-        return { r: 0, g: 0, b: 0, a: 0 };
-      }
-      const idx = (localY * result.width + localX) * 4;
-      return {
-        r: result.pixels[idx] ?? 0,
-        g: result.pixels[idx + 1] ?? 0,
-        b: result.pixels[idx + 2] ?? 0,
-        a: result.pixels[idx + 3] ?? 0,
-      };
-    },
-    { x, y, lid: layerId ?? null },
-  );
+async function setPolygonSides(page: Page, sides: number) {
+  const input = page.locator('#polygon-sides');
+  await input.fill(String(sides));
 }
 
 /** Count opaque pixels on the active layer via GPU readback. */
@@ -201,7 +145,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await waitForStore(page);
   // Non-transparent creates Background (white) + Layer 1 (empty) — 2 raster layers + root group
-  await createDocument(page, 400, 300, false);
+  await createDocument(page, 400, 300);
   await page.waitForSelector('[data-testid="canvas-container"]');
 });
 
@@ -212,11 +156,11 @@ test.beforeEach(async ({ page }) => {
 test.describe('Shape tool corner radius', () => {
   test('polygon with corner radius should have rounded corners (GPU pixel check)', async ({ page }) => {
     // Set up shape tool: polygon, 4 sides, corner radius 30, red fill, no stroke
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 4);
-    await setToolSetting(page, 'setShapeCornerRadius', 30);
-    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 4);
+    await setToolOption(page, 'Corner Radius', 30);
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Draw rectangle: center at (200,150), drag to (300,250)
@@ -244,11 +188,11 @@ test.describe('Shape tool corner radius', () => {
   });
 
   test('hexagon with corner radius should have rounded vertices', async ({ page }) => {
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 6);
-    await setToolSetting(page, 'setShapeCornerRadius', 20);
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setForegroundColor(page, 0, 0, 255);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 6);
+    await setToolOption(page, 'Corner Radius', 20);
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Draw hexagon: center at (200,150), drag to (280,230)
@@ -271,11 +215,11 @@ test.describe('Shape tool corner radius', () => {
   });
 
   test('triangle with corner radius should have rounded vertices', async ({ page }) => {
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 3);
-    await setToolSetting(page, 'setShapeCornerRadius', 15);
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 255, b: 0, a: 1 });
+    await setForegroundColor(page, 0, 255, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 3);
+    await setToolOption(page, 'Corner Radius', 15);
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Draw triangle: center at (200,150), drag to (280,230)
@@ -314,9 +258,9 @@ test.describe('Shape tool click-and-drag', () => {
     expect(beforeCount).toBe(0);
 
     // Set up shape tool: ellipse, red fill
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'ellipse');
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Draw an ellipse from center (200,150) to edge (280,220)
@@ -347,11 +291,11 @@ test.describe('Shape tool click-and-drag', () => {
     // && instead of ||, so it lets through (rx>=1, ry=0). Once the first
     // frame corrupts the layer, subsequent frames render on top and the
     // damage is permanent.
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 4);
-    await setToolSetting(page, 'setShapeCornerRadius', 0);
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 0, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 4);
+    await setToolOption(page, 'Corner Radius', 0);
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Simulate a realistic drag where the first mousemove is axis-aligned.
@@ -396,11 +340,11 @@ test.describe('Shape tool click-and-drag', () => {
     // When dragging horizontally, ry stays 0 for many frames. This causes
     // division by zero in the polygon SDF shader (p / halfSize where halfSize.y = 0),
     // which can fill the entire texture.
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 6);
-    await setToolSetting(page, 'setShapeCornerRadius', 0);
-    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 6);
+    await setToolOption(page, 'Corner Radius', 0);
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Drag purely horizontally — height dimension is 0 throughout
@@ -424,8 +368,8 @@ test.describe('Shape tool click-and-drag', () => {
     // Each mousemove renders the shape onto the layer texture with blending.
     // Without clearing between frames, semi-transparent fills accumulate
     // to full opacity after a few frames.
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'ellipse');
     await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 0.5 });
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
@@ -450,9 +394,9 @@ test.describe('Shape tool click-and-drag', () => {
     const bgLayer = rasterLayers.find((l) => l.name === 'Background');
     expect(bgLayer).toBeDefined();
 
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'ellipse');
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Draw on the active layer (Layer 1)
@@ -472,9 +416,9 @@ test.describe('Shape tool click-and-drag', () => {
   });
 
   test('small drag below threshold does not create a shape', async ({ page }) => {
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'ellipse');
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Drag only 2 pixels — below the 4px click threshold
@@ -489,11 +433,11 @@ test.describe('Shape tool click-and-drag', () => {
   });
 
   test('shape with stroke only creates visible outline', async ({ page }) => {
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'ellipse');
     await setToolSetting(page, 'setShapeFillColor', null);
     await setToolSetting(page, 'setShapeStrokeColor', { r: 0, g: 0, b: 255, a: 1 });
-    await setToolSetting(page, 'setShapeStrokeWidth', 4);
+    await setToolOption(page, 'Width', 4);
 
     // Draw an ellipse from center (200,150) to edge (280,220)
     await dragShape(page, { x: 200, y: 150 }, { x: 280, y: 220 });
@@ -510,9 +454,9 @@ test.describe('Shape tool click-and-drag', () => {
   });
 
   test('successive shapes can be drawn without errors', async ({ page }) => {
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'ellipse');
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Draw first shape

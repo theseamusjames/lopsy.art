@@ -46,6 +46,16 @@ export function LayerEffectsPanel() {
   const activeLayer = layers.find((l) => l.id === activeLayerId);
   const effects: LayerEffects | null = activeLayer?.effects ?? null;
 
+  // Live preview: update effects without creating undo entries (for slider drags)
+  const updateLive = useCallback(
+    (partial: Partial<LayerEffects>) => {
+      if (!activeLayerId || !effects) return;
+      updateLayerEffects(activeLayerId, { ...effects, ...partial }, true);
+    },
+    [activeLayerId, effects, updateLayerEffects],
+  );
+
+  // Committed update: push a single undo entry (for toggles, color picks, dropdowns)
   const update = useCallback(
     (partial: Partial<LayerEffects>) => {
       if (!activeLayerId || !effects) return;
@@ -53,6 +63,11 @@ export function LayerEffectsPanel() {
     },
     [activeLayerId, effects, updateLayerEffects],
   );
+
+  // Push one undo entry to cover the entire slider drag
+  const commitEffects = useCallback(() => {
+    useEditorStore.getState().pushHistory('Update Effects');
+  }, []);
 
   const handleToggle = useCallback(
     (key: EffectKey) => {
@@ -100,24 +115,22 @@ export function LayerEffectsPanel() {
 
   function renderForm() {
     if (!effects) return null;
-    const selected = effects[selectedEffect];
-    if (!selected.enabled) return null;
     switch (selectedEffect) {
       case 'dropShadow':
         return shadow ? (
-          <DropShadowForm shadow={shadow} onChange={(s) => update({ dropShadow: s })} />
+          <DropShadowForm shadow={shadow} onChange={(s) => updateLive({ dropShadow: s })} onCommit={commitEffects} />
         ) : null;
       case 'stroke':
         return stroke ? (
-          <StrokeForm stroke={stroke} onChange={(s) => update({ stroke: s })} />
+          <StrokeForm stroke={stroke} onChange={(s) => updateLive({ stroke: s })} onCommit={commitEffects} />
         ) : null;
       case 'outerGlow':
         return outerGlow ? (
-          <GlowForm glow={outerGlow} onChange={(g) => update({ outerGlow: g })} />
+          <GlowForm glow={outerGlow} onChange={(g) => updateLive({ outerGlow: g })} onCommit={commitEffects} />
         ) : null;
       case 'innerGlow':
         return innerGlow ? (
-          <GlowForm glow={innerGlow} onChange={(g) => update({ innerGlow: g })} />
+          <GlowForm glow={innerGlow} onChange={(g) => updateLive({ innerGlow: g })} onCommit={commitEffects} />
         ) : null;
       case 'colorOverlay':
         return colorOverlay ? (

@@ -1,50 +1,70 @@
 import { useEffect, useRef } from 'react';
-import { useEditorStore } from '../../app/editor-store';
 import { contextOptions } from '../../engine/color-space';
 import { usePixelDataVersion } from '../../engine/usePixelDataVersion';
+import { readLayerThumbnail } from '../../engine-wasm/gpu-pixel-access';
 import type { Layer } from '../../types';
 import styles from './LayerPanel.module.css';
+
+const THUMB_SIZE = 24;
+const MAX_RETRIES = 10;
 
 export function LayerThumbnail({ layer }: { layer: Layer }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Subscribe only to this layer's pixel version — bumps on actual pixel
+  // mutation (including stroke-end when clearJsPixelData() removes the
+  // JS cache). Subscribing to store-wide renderVersion here used to fire
+  // on every brush dab, triggering a full-layer glReadPixels per dab.
   const pixelVersion = usePixelDataVersion(layer.id);
-  const renderVersion = useEditorStore((s) => s.renderVersion);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const rafId = requestAnimationFrame(() => {
+    let cancelled = false;
+    let retries = 0;
+    let rafId = 0;
+
+    const tryRead = () => {
+      if (cancelled) return;
+
       const ctx = canvas.getContext('2d', contextOptions);
       if (!ctx) return;
 
-      const thumbSize = 24;
-      canvas.width = thumbSize;
-      canvas.height = thumbSize;
+      canvas.width = THUMB_SIZE;
+      canvas.height = THUMB_SIZE;
 
-      const pixelData = useEditorStore.getState().resolvePixelData(layer.id);
-      if (!pixelData) {
-        ctx.clearRect(0, 0, thumbSize, thumbSize);
+      const thumb = readLayerThumbnail(layer.id, THUMB_SIZE);
+      if (!thumb) {
+        ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE);
+        if (retries < MAX_RETRIES) {
+          retries++;
+          rafId = requestAnimationFrame(tryRead);
+        }
         return;
       }
 
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = pixelData.width;
-      tempCanvas.height = pixelData.height;
+      tempCanvas.width = thumb.width;
+      tempCanvas.height = thumb.height;
       const tempCtx = tempCanvas.getContext('2d', contextOptions);
       if (!tempCtx) return;
-      tempCtx.putImageData(pixelData, 0, 0);
+      tempCtx.putImageData(thumb, 0, 0);
 
-      ctx.clearRect(0, 0, thumbSize, thumbSize);
-      const scale = Math.min(thumbSize / pixelData.width, thumbSize / pixelData.height);
-      const w = pixelData.width * scale;
-      const h = pixelData.height * scale;
-      ctx.drawImage(tempCanvas, (thumbSize - w) / 2, (thumbSize - h) / 2, w, h);
-    });
+      ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE);
+      const scale = Math.min(THUMB_SIZE / thumb.width, THUMB_SIZE / thumb.height);
+      const w = thumb.width * scale;
+      const h = thumb.height * scale;
+      ctx.drawImage(tempCanvas, (THUMB_SIZE - w) / 2, (THUMB_SIZE - h) / 2, w, h);
+    };
 
-    return () => cancelAnimationFrame(rafId);
-  }, [layer.id, pixelVersion, renderVersion]);
+    rafId = requestAnimationFrame(tryRead);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+    };
+  }, [layer.id, pixelVersion]);
 
   return <canvas ref={canvasRef} className={styles.thumbnailCanvas} />;
 }

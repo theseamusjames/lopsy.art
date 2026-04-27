@@ -26,7 +26,14 @@ async function createDocument(page: Page, width: number, height: number, transpa
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function fillActiveLayerBlack(page: Page) {
@@ -81,12 +88,7 @@ test.describe('FilterDialog pointer isolation', () => {
   test('dragging the pixelate slider does not move the active layer', async ({ page }) => {
     // Switch to the move tool — this is the tool that was getting kicked
     // off by the leaked events.
-    await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('move');
-    });
+    await page.keyboard.press('v');
     await page.waitForTimeout(50);
 
     const posBefore = await getActiveLayerPosition(page);
@@ -135,12 +137,7 @@ test.describe('FilterDialog pointer isolation', () => {
   });
 
   test('clicking the dialog backdrop does not move the active layer', async ({ page }) => {
-    await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('move');
-    });
+    await page.keyboard.press('v');
     await page.waitForTimeout(50);
 
     const posBefore = await getActiveLayerPosition(page);

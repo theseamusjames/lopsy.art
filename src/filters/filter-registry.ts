@@ -18,6 +18,8 @@ import { solarize } from './solarize';
 import { kaleidoscope } from './kaleidoscope';
 import { oilPaint } from './oil-paint';
 import { chromaticAberration } from './chromatic-aberration';
+import { pixelStretch } from './pixel-stretch';
+import { lensDistortion } from './lens-distortion';
 
 export type { FilterDefinition };
 
@@ -41,6 +43,8 @@ const allFilters: FilterDefinition[] = [
   kaleidoscope,
   oilPaint,
   chromaticAberration,
+  pixelStretch,
+  lensDistortion,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(

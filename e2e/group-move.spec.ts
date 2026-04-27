@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { waitForStore, createDocument, paintRect, addLayer } from './helpers';
+import { waitForStore, createDocument, drawRect, setActiveLayer, addLayer } from './helpers';
 
 test.describe('Group move moves all children (#121)', () => {
   test.beforeEach(async ({ page }) => {
@@ -55,8 +55,10 @@ test.describe('Group move moves all children (#121)', () => {
     // Paint content on both layers so they're visible.
     // Note: updateLayerPixelData auto-crops to content bounds and shifts layer.x/y
     // accordingly, so we capture the post-paint positions as our baseline.
-    await paintRect(page, 10, 20, 50, 50, { r: 255, g: 0, b: 0, a: 255 }, setup.layer1Id);
-    await paintRect(page, 100, 150, 50, 50, { r: 0, g: 0, b: 255, a: 255 }, setup.layer2Id);
+    await setActiveLayer(page, setup.layer1Id);
+    await drawRect(page, 10, 20, 50, 50, { r: 255, g: 0, b: 0 });
+    await setActiveLayer(page, setup.layer2Id);
+    await drawRect(page, 100, 150, 50, 50, { r: 0, g: 0, b: 255 });
     await page.waitForTimeout(200);
 
     const before = await page.evaluate(

@@ -6,9 +6,10 @@ import styles from './LayerEffectsPanel.module.css';
 interface StrokeFormProps {
   stroke: StrokeEffect;
   onChange: (s: StrokeEffect) => void;
+  onCommit?: () => void;
 }
 
-export function StrokeForm({ stroke, onChange }: StrokeFormProps) {
+export function StrokeForm({ stroke, onChange, onCommit }: StrokeFormProps) {
   return (
     <>
       <div className={styles.row}>
@@ -26,7 +27,7 @@ export function StrokeForm({ stroke, onChange }: StrokeFormProps) {
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Width</span>
         <div className={styles.sliderWrap}>
-          <Slider value={stroke.width} min={1} max={50} onChange={(v) => onChange({ ...stroke, width: v })} />
+          <Slider value={stroke.width} min={1} max={50} onChange={(v) => onChange({ ...stroke, width: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>

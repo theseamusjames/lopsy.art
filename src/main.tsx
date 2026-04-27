@@ -4,6 +4,7 @@ import { App } from './app/App';
 import { useEditorStore } from './app/editor-store';
 import { useUIStore } from './app/ui-store';
 import { useToolSettingsStore } from './app/tool-settings-store';
+import { usePatternStore } from './app/pattern-store';
 import { pixelDataManager } from './engine/pixel-data-manager';
 import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
 import { render as renderWasm, readLayerPixels, getLayerTextureDimensions } from './engine-wasm/wasm-bridge';
@@ -27,6 +28,7 @@ declare global {
     __uiStore?: typeof useUIStore;
     __toolSettingsStore?: typeof useToolSettingsStore;
     __brushPresetStore?: typeof useToolSettingsStore;
+    __patternStore?: typeof usePatternStore;
     __pixelData?: typeof pixelDataManager;
     __readCompositedPixels?: () => Promise<ReadPixelsResult>;
     __readLayerPixels?: (layerId?: string) => Promise<ReadPixelsResult>;
@@ -41,6 +43,7 @@ if (import.meta.env.DEV) {
   // Back-compat alias — e2e tests read presets via __brushPresetStore. The
   // merged tool-settings store has the same shape for preset access.
   window.__brushPresetStore = useToolSettingsStore;
+  window.__patternStore = usePatternStore;
   // Pixel-data Maps used to live on the store; they live on the manager now.
   // E2e tests that read or mutate pixel state go through this singleton.
   window.__pixelData = pixelDataManager;

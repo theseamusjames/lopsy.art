@@ -62,6 +62,7 @@ pub fn export_psd(
         mask_offset: Option<usize>,
         mask_length: Option<usize>,
         mask_default_color: Option<u8>,
+        effects_json: Option<String>,
     }
 
     let layer_metas: Vec<LayerMeta> = serde_json::from_str(layers_json)
@@ -80,24 +81,61 @@ pub fn export_psd(
             _ => GroupKind::Normal,
         };
 
-        let pixel_data = if meta.width > 0 && meta.height > 0 && group_kind == GroupKind::Normal {
+        // Resolve layer pixel dimensions.  For text layers the JS metadata
+        // reports 0x0 (TextLayer has no height field); fall back to the GPU
+        // texture size.  read_pixels always reads at the texture's actual
+        // dimensions, so we derive the rect from the texture too — this
+        // guarantees the rect and pixel_data are always consistent.
+        let tex_dims = if group_kind == GroupKind::Normal {
+            engine.inner.layer_textures.get(&meta.id)
+                .and_then(|h| engine.inner.texture_pool.get_size(*h))
+                .unwrap_or((0, 0))
+        } else {
+            (0, 0)
+        };
+
+        let (final_w, final_h) = if meta.width > 0 && meta.height > 0 {
+            (meta.width, meta.height)
+        } else {
+            tex_dims
+        };
+
+        let pixel_data = if final_w > 0 && final_h > 0 && tex_dims.0 > 0 {
             match psd_depth {
                 PsdDepth::Eight => {
                     layer_manager::read_pixels(&engine.inner, &meta.id)
-                        .map_err(|e| JsError::new(&e))?
+                        .unwrap_or_default()
                 }
                 PsdDepth::Sixteen => {
-                    let gpu_u16 = layer_manager::read_pixels_u16(&engine.inner, &meta.id)
-                        .map_err(|e| JsError::new(&e))?;
-                    let mut data16 = Vec::with_capacity(gpu_u16.len() * 2);
-                    for &val in &gpu_u16 {
-                        data16.extend_from_slice(&val.to_be_bytes());
+                    match layer_manager::read_pixels_u16(&engine.inner, &meta.id) {
+                        Ok(gpu_u16) => {
+                            let mut data16 = Vec::with_capacity(gpu_u16.len() * 2);
+                            for &val in &gpu_u16 {
+                                data16.extend_from_slice(&val.to_be_bytes());
+                            }
+                            data16
+                        }
+                        Err(_) => Vec::new(),
                     }
-                    data16
                 }
             }
         } else {
             Vec::new()
+        };
+
+        // If texture dimensions differ from metadata (e.g. after undo/redo),
+        // use the texture dimensions so rect matches pixel_data exactly.
+        let (final_w, final_h) = if !pixel_data.is_empty() && tex_dims.0 > 0 {
+            let bpp = psd_depth.bytes_per_channel() * 4;
+            if pixel_data.len() == (final_w as usize) * (final_h as usize) * bpp {
+                (final_w, final_h)
+            } else {
+                tex_dims
+            }
+        } else if pixel_data.is_empty() {
+            (0, 0)
+        } else {
+            (final_w, final_h)
         };
 
         // Extract mask data
@@ -125,10 +163,11 @@ pub fn export_psd(
             opacity: meta.opacity,
             blend_mode,
             clip_to_below: meta.clip_to_below,
-            rect: PsdRect::from_xywh(meta.x, meta.y, meta.width, meta.height),
+            rect: PsdRect::from_xywh(meta.x, meta.y, final_w, final_h),
             pixel_data,
             mask,
             group_kind,
+            effects_json: meta.effects_json.clone(),
         });
     }
 
@@ -172,6 +211,7 @@ pub fn parse_psd(data: &[u8]) -> Result<String, JsError> {
         mask_y: Option<i32>,
         mask_width: Option<u32>,
         mask_height: Option<u32>,
+        effects_json: Option<String>,
     }
 
     #[derive(serde::Serialize)]
@@ -207,6 +247,7 @@ pub fn parse_psd(data: &[u8]) -> Result<String, JsError> {
             mask_y: l.mask.as_ref().map(|m| m.rect.top),
             mask_width: l.mask.as_ref().map(|m| m.rect.width()),
             mask_height: l.mask.as_ref().map(|m| m.rect.height()),
+            effects_json: l.effects_json.clone(),
         }
     }).collect();
 

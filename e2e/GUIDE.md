@@ -19,6 +19,139 @@ If the answer to any of these is "yes (still passes)", rewrite the test.
 
 ---
 
+## Test with the UI
+
+When possible, manipulate the UI directly to simulate real user interaction.
+Avoid calling store functions directly as much as you can. The goal is to
+test how a real user will experience the website — when you call functions
+directly, you miss bugs caused by UI interactions that real users will find.
+
+- Interact with the UI directly with mouse clicks, mouse movement, etc.
+- Use the website the way a real user would
+- Don't call store actions when a UI equivalent exists
+
+### How to select tools
+
+Use keyboard shortcuts for tools that have them, or click the toolbar
+button via its `data-tool-id` attribute:
+
+```ts
+// Keyboard shortcut (preferred when one exists)
+await page.keyboard.press('b');  // brush
+
+// Toolbar click (works for every tool, required for tools without shortcuts)
+await page.locator('[data-tool-id="gradient"]').click();
+```
+
+| Tool | Shortcut | Tool | Shortcut |
+|---|---|---|---|
+| Move | `v` | Fill | `g` |
+| Brush | `b` | Clone Stamp | `s` |
+| Pencil | `n` | Dodge/Burn | `o` |
+| Eraser | `e` | Smudge | `r` |
+| Spray | `j` | Eyedropper | `i` |
+| Shape | `u` | Text | `t` |
+| Pen Tool | `p` | Crop | `c` |
+| Marquee Rect | `m` | Lasso | `l` |
+| Magic Wand | `w` | | |
+
+Gradient, Elliptical Marquee, and Magnetic Lasso have **no** keyboard
+shortcut — use `[data-tool-id="..."]` for these.
+
+### How to perform common UI actions
+
+**Undo / Redo:**
+```ts
+await page.keyboard.press('Control+z');        // undo
+await page.keyboard.press('Control+Shift+z');  // redo
+```
+
+**Layer operations (layers panel buttons):**
+```ts
+await page.locator('[aria-label="Add Layer"]').click();
+await page.locator('[aria-label="Duplicate Layer"]').click();
+await page.locator('[aria-label="Delete Layer"]').click();
+await page.locator('[aria-label="Add Mask"]').click();  // adds mask to active layer
+```
+
+**Select a layer:**
+```ts
+await page.locator(`[data-layer-id="${layerId}"]`).click();
+```
+
+**Toggle layer visibility (eye icon):**
+```ts
+await page.locator(`[data-layer-id="${layerId}"]`)
+  .locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]')
+  .click();
+```
+
+### Drawing content on the canvas
+
+Use `drawRect` / `drawEllipse` to create filled shapes via the shape
+tool. These use real mouse drags on the canvas — exactly what a user
+does:
+
+```ts
+await drawRect(page, 50, 50, 100, 80, { r: 255, g: 0, b: 0 });
+await drawEllipse(page, 200, 150, 60, 40, { r: 0, g: 0, b: 255 });
+```
+
+To draw on a specific layer, select it first:
+
+```ts
+await setActiveLayer(page, layerId);
+await drawRect(page, 0, 0, 50, 50, { r: 0, g: 255, b: 0 });
+```
+
+### Moving layers
+
+Use `moveLayerTo` — it selects the move tool and performs a real mouse
+drag:
+
+```ts
+await moveLayerTo(page, layerId, 80, 80);  // target doc position
+```
+
+### Layer effects
+
+Use the effects panel helpers to configure effects the way a user would:
+
+```ts
+await configureEffect(page, 'Drop Shadow', {
+  'Offset X': 4, 'Offset Y': 6, 'Blur': 8, 'Opacity': 50,
+});
+await setEffectColor(page, 'Shadow color', 0, 0, 0);
+await closeEffectsPanel(page);
+```
+
+Effect names: `'Drop Shadow'`, `'Stroke'`, `'Outer Glow'`,
+`'Inner Glow'`, `'Color Overlay'`.
+
+### Filters
+
+Use `applyFilter` to open the Filter menu, configure sliders, and
+click Apply:
+
+```ts
+await applyFilter(page, 'Pixelate...', { 'Block Size': 10 });
+```
+
+### When store calls are acceptable
+
+The bar is high — only use store calls when there is genuinely no UI
+path:
+
+- **`createDocument()`** — parameterised document creation.
+- **`getEditorState()` / `getPixelAt()`** — reading state for assertions.
+- **`pushHistory()`** — flushing pending GPU strokes before pixel reads.
+- **Layer masks** (`addLayerMask` on a non-active layer, mask pixel
+  data) — the "Add Mask" button operates on the active layer only.
+
+Everything else has a UI path and must go through it. If you think
+something doesn't, check the helpers table — there's probably a helper
+you missed.
+
 ## Screenshots are the source of truth
 
 **Always write tests by screenshot first, assertion second.** The
@@ -143,19 +276,43 @@ Prefer these over local copies. If you're redefining `createDocument`,
 `waitForStore`, or `getEditorState` in your spec file, stop and import
 them instead.
 
+**Setup & state inspection (store calls — acceptable):**
+
 | Helper | Notes |
 |---|---|
-| `waitForStore(page)` | Polls until `window.__editorStore` exists. First call on a fresh `page.goto('/')` must wait for vite to compile — budget 10+ seconds on cold start. |
-| `createDocument(page, w, h, transparent)` | Creates a new doc. For `transparent=true` the single raster layer is the Background; for `transparent=false` a second empty "Layer 1" is added and activated. |
-| `getEditorState(page)` | Returns `{document, undoStackLength, redoStackLength}`. Does NOT return selection — read `__editorStore.getState().selection` directly if you need it. |
-| `getPixelAt(page, x, y, layerId?)` | Reads a single pixel from `__readLayerPixels`. Converts doc coords to layer-local automatically. Returns `{r:0, g:0, b:0, a:0}` for out-of-bounds reads — don't mistake that for "assertion passed". |
-| `paintRect(page, x, y, w, h, color, layerId?)` | Paints into `layerPixelData`, then calls `updateLayerPixelData` which triggers auto-crop. See the auto-crop gotcha below. |
-| `paintCircle(page, cx, cy, radius, color, layerId?)` | Same auto-crop behaviour as `paintRect`. |
-| `addLayer(page)`, `setActiveLayer(page, id)`, `moveLayer(page, id, x, y)` | Direct store actions; do NOT exercise real tool flow. |
-| `undo(page)`, `redo(page)` | Direct store actions. |
+| `waitForStore(page)` | Polls until `window.__editorStore` exists. Budget 10+ seconds on cold start. |
+| `createDocument(page, w, h, transparent)` | Creates a new doc via store. No UI equivalent for parameterised creation. |
+| `getEditorState(page)` | Returns `{document, undoStackLength, redoStackLength}`. Does NOT return selection. |
+| `getPixelAt(page, x, y, layerId?)` | Reads a single pixel from `__readLayerPixels`. Returns `{r:0, g:0, b:0, a:0}` for out-of-bounds. |
+| `paintRect` / `paintCircle` | **Deprecated.** Use `drawRect` / `drawEllipse` instead (supports alpha via `a` field, 0–1). |
+| `docToScreen(page, docX, docY)` | Projects doc coords to screen coords for mouse events. |
+
+**UI interaction helpers (all drive real UI):**
+
+| Helper | How it works |
+|---|---|
+| `selectTool(page, toolId)` | Keyboard shortcut if one exists, otherwise clicks `[data-tool-id]` in the toolbar. |
+| `setToolOption(page, label, value)` | Types into the options bar value input. Labels: `"Size"`, `"Opacity"`, `"Hardness"`, `"Fade"`, `"Strength"`, `"Tolerance"`, `"Corner Radius"`, `"Width"`, etc. |
+| `setForegroundColor(page, r, g, b)` | Types a hex value into the color panel input. |
+| `drawRect(page, x, y, w, h, {r,g,b,a?})` | Draws a filled rectangle via the shape tool. Optional `a` (0–1) sets fill alpha. |
+| `drawEllipse(page, cx, cy, rx, ry, {r,g,b,a?})` | Draws a filled ellipse via the shape tool. Same alpha support. |
+| `moveLayerTo(page, layerId, x, y)` | Selects the layer, switches to move tool, performs a real mouse drag to the target position. |
+| `setBlendMode(page, mode)` | Opens the effects panel if needed, selects from the blend mode dropdown. |
+| `setLayerOpacity(page, layerId, percent)` | Clicks the opacity button on the layer row, fills the range slider (0–100). |
+| `configureEffect(page, name, settings)` | Opens effects panel, enables the effect, sets slider values. |
+| `setEffectColor(page, ariaLabel, r, g, b)` | Sets an effect color input (e.g., `'Shadow color'`, `'Stroke color'`, `'Glow color'`). |
+| `openEffectsPanel(page)` / `closeEffectsPanel(page)` | Open/close the effects drawer. |
+| `setBrushModalOption(page, label, value)` | Opens the brush presets modal if needed, sets a slider. Labels: `"Spacing"`, `"Scatter"`, `"Size"`, `"Hardness"`, `"Opacity"`. |
+| `openBrushModal(page)` / `closeBrushModal(page)` | Open/close the brush presets modal. |
+| `applyFilter(page, filterName, params?)` | Opens the Filter menu, clicks the filter, sets slider params, clicks Apply. |
+| `setAdjustment(page, label, value)` | Switches to the correct Adjustments tab and fills the slider value input. |
+| `addLayer(page)` | Clicks `[aria-label="Add Layer"]`. |
+| `setActiveLayer(page, id)` | Clicks `[data-layer-id="${id}"]`. |
+| `undo(page)` / `redo(page)` | Sends `Control+z` / `Control+Shift+z`. |
 
 ### Useful selectors
 
+**Canvas:**
 - Canvas container: `[data-testid="canvas-container"]`. Mouse events
   (`onMouseDown/Move/Up`) are bound here.
 - Overlay canvas: `canvas` with `/overlayCanvas/.test(className)`. This
@@ -165,6 +322,24 @@ them instead.
 - Main WebGL canvas: the other `<canvas>` inside the canvas container.
   Read composited pixels via `__readCompositedPixels`, not by grabbing
   this element directly.
+
+**Toolbox:**
+- Tool button: `[data-tool-id="brush"]` — every tool in the toolbar
+  has this attribute matching its `ToolId`.
+
+**Layers panel:**
+- Layer row: `[data-layer-id="${id}"]` — click to select a layer.
+- Visibility toggle: within a layer row,
+  `button[aria-label="Hide layer"]` or `button[aria-label="Show layer"]`.
+- Add layer: `[aria-label="Add Layer"]`.
+- Duplicate layer: `[aria-label="Duplicate Layer"]`.
+- Delete layer: `[aria-label="Delete Layer"]`.
+- Add mask: `[aria-label="Add Mask"]`.
+- Delete mask: `[aria-label="Delete mask"]`.
+- Layer effects: `[aria-label="Layer effects for ${name}"]`.
+- Opacity: `[aria-label="${name} opacity"]` (range input).
+
+**Other UI:**
 - Grid slider: `input[type="range"][class*="gridSlider"]`. The
   `[class*="..."]` trick matches CSS-module-hashed class names.
 - Filter dialog slider: scope by title, e.g.
@@ -217,12 +392,12 @@ active tool.
 **Fix:** after a wand selection, clear the transform with
 `__uiStore.getState().setTransform(null)` before firing the next click.
 
-### 4. Auto-crop makes `addLayer` + `setActiveTool('move')` fragile
+### 4. Auto-crop makes `addLayer` + move tool fragile
 
 `addLayer` creates a new layer but does not necessarily activate it for
 subsequent tool interactions in a test. After calling `addLayer`,
-explicitly call `setActiveLayer` to the desired layer before setting
-the move tool and dragging. Without it, the drag may act on the
+explicitly call `setActiveLayer` to the desired layer before pressing
+`v` (move tool) and dragging. Without it, the drag may act on the
 previous active layer (or a cropped one) and produce surprising
 results.
 

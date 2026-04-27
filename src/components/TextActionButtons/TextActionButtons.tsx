@@ -32,7 +32,7 @@ export function TextActionButtons({ containerRef }: TextActionButtonsProps) {
     editorState.notifyRender();
   }, []);
 
-  const stopPropagation = useCallback((e: React.MouseEvent) => {
+  const stopPropagation = useCallback((e: React.PointerEvent | React.MouseEvent) => {
     e.stopPropagation();
   }, []);
 
@@ -59,6 +59,7 @@ export function TextActionButtons({ containerRef }: TextActionButtonsProps) {
     <div
       className={styles.container}
       style={{ left: buttonX, top: buttonY }}
+      onPointerDown={stopPropagation}
       onMouseDown={stopPropagation}
       onMouseUp={stopPropagation}
       onMouseMove={stopPropagation}

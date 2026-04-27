@@ -26,6 +26,7 @@ pub fn read_psd(data: &[u8]) -> Result<PsdDocument, PsdError> {
             pixel_data: composite,
             mask: None,
             group_kind: GroupKind::Normal,
+            effects_json: None,
         }]
     } else {
         layers
@@ -211,6 +212,7 @@ struct LayerRecord {
     name: String,
     group_kind: GroupKind,
     mask: Option<MaskRecord>,
+    effects_json: Option<String>,
 }
 
 struct ChannelInfo {
@@ -323,6 +325,7 @@ fn read_layer_info_body(c: &mut PsdCursor, header: &PsdHeader, end: usize) -> Re
             pixel_data,
             mask,
             group_kind: record.group_kind,
+            effects_json: record.effects_json,
         });
     }
 
@@ -401,9 +404,10 @@ fn read_layer_record(c: &mut PsdCursor) -> Result<LayerRecord, PsdError> {
     let padding = (4 - (total % 4)) % 4;
     c.skip(padding)?;
 
-    // Scan additional layer info for luni and lsct
+    // Scan additional layer info for luni, lsct, lyEf
     let mut unicode_name: Option<String> = None;
     let mut group_kind = GroupKind::Normal;
+    let mut effects_json: Option<String> = None;
 
     while c.position() + 12 <= extra_end {
         let ali_sig = c.read_bytes(4)?;
@@ -433,6 +437,12 @@ fn read_layer_record(c: &mut PsdCursor) -> Result<LayerRecord, PsdError> {
                     3 => GroupKind::GroupEnd,
                     _ => GroupKind::Normal,
                 };
+            }
+            b"lyEf" => {
+                let json_bytes = c.read_bytes(ali_len)?;
+                if let Ok(s) = std::str::from_utf8(json_bytes) {
+                    effects_json = Some(s.to_string());
+                }
             }
             _ => {}
         }
@@ -474,6 +484,7 @@ fn read_layer_record(c: &mut PsdCursor) -> Result<LayerRecord, PsdError> {
         name: final_name,
         group_kind,
         mask,
+        effects_json,
     })
 }
 
@@ -828,6 +839,7 @@ mod tests {
                 pixel_data: data,
                 mask: None,
                 group_kind: GroupKind::Normal,
+                effects_json: None,
             }],
             icc_profile: None,
         }
@@ -857,6 +869,7 @@ mod tests {
                 pixel_data: data,
                 mask: None,
                 group_kind: GroupKind::Normal,
+                effects_json: None,
             }],
             icc_profile: None,
         }
@@ -919,6 +932,7 @@ mod tests {
                     pixel_data: vec![0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255],
                     mask: None,
                     group_kind: GroupKind::Normal,
+                    effects_json: None,
                 },
                 PsdLayer {
                     name: "".to_string(),
@@ -930,6 +944,7 @@ mod tests {
                     pixel_data: Vec::new(),
                     mask: None,
                     group_kind: GroupKind::GroupEnd,
+                    effects_json: None,
                 },
                 PsdLayer {
                     name: "Child".to_string(),
@@ -941,6 +956,7 @@ mod tests {
                     pixel_data: vec![255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255],
                     mask: None,
                     group_kind: GroupKind::Normal,
+                    effects_json: None,
                 },
                 PsdLayer {
                     name: "My Group".to_string(),
@@ -952,6 +968,7 @@ mod tests {
                     pixel_data: Vec::new(),
                     mask: None,
                     group_kind: GroupKind::GroupOpen,
+                    effects_json: None,
                 },
             ],
             icc_profile: None,

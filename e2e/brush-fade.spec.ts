@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { setToolOption, setForegroundColor, setBrushModalOption, closeBrushModal } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers (same pattern as brush-opacity-range.spec.ts)
@@ -18,7 +19,14 @@ async function createDocument(page: Page, width = 400, height = 200, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -55,26 +63,6 @@ async function drawStroke(page: Page, from: { x: number; y: number }, to: { x: n
   await page.waitForTimeout(400);
 }
 
-async function setToolSetting(page: Page, setter: string, value: unknown) {
-  await page.evaluate(({ setter, value }) => {
-    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => Record<string, (v: unknown) => void>;
-    };
-    store.getState()[setter]!(value);
-  }, { setter, value });
-}
-
-async function setUIState(page: Page, setter: string, value: unknown) {
-  await page.evaluate(({ setter, value }) => {
-    const colorSetters = new Set(['setForegroundColor', 'setBackgroundColor', 'swapColors', 'resetColors', 'addRecentColor']);
-    const storeKey = colorSetters.has(setter) ? '__toolSettingsStore' : '__uiStore';
-    const store = (window as unknown as Record<string, unknown>)[storeKey] as {
-      getState: () => Record<string, (v: unknown) => void>;
-    };
-    store.getState()[setter]!(value);
-  }, { setter, value });
-}
-
 async function readCompositedPixelAt(page: Page, docX: number, docY: number): Promise<{ r: number; g: number; b: number; a: number }> {
   return page.evaluate(
     async ({ docX, docY }) => {
@@ -99,9 +87,8 @@ async function readCompositedPixelAt(page: Page, docX: number, docY: number): Pr
       const screenX = (docX - state.document.width / 2) * state.viewport.zoom + state.viewport.panX + cx;
       const screenY = (docY - state.document.height / 2) * state.viewport.zoom + state.viewport.panY + cy;
 
-      const dpr = window.devicePixelRatio || 1;
-      const px = Math.round(screenX * dpr);
-      const py = result.height - 1 - Math.round(screenY * dpr);
+      const px = Math.round(screenX);
+      const py = result.height - 1 - Math.round(screenY);
 
       if (px < 0 || px >= result.width || py < 0 || py >= result.height) {
         return { r: 0, g: 0, b: 0, a: 0 };
@@ -122,12 +109,13 @@ async function readCompositedPixelAt(page: Page, docX: number, docY: number): Pr
 async function setupBrush(page: Page, opts: { size: number; opacity: number; hardness: number; fade: number }) {
   await page.keyboard.press('b');
   await page.waitForTimeout(100);
-  await setToolSetting(page, 'setBrushSize', opts.size);
-  await setToolSetting(page, 'setBrushOpacity', opts.opacity);
-  await setToolSetting(page, 'setBrushHardness', opts.hardness);
-  await setToolSetting(page, 'setBrushSpacing', 0);
-  await setToolSetting(page, 'setBrushFade', opts.fade);
-  await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+  await setToolOption(page, 'Size', opts.size);
+  await setToolOption(page, 'Opacity', opts.opacity);
+  await setToolOption(page, 'Hardness', opts.hardness);
+  await setBrushModalOption(page, 'Spacing', 0);
+  await closeBrushModal(page);
+  await setToolOption(page, 'Fade', opts.fade);
+  await setForegroundColor(page, 255, 0, 0);
 }
 
 // ---------------------------------------------------------------------------

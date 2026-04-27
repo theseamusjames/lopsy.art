@@ -10,7 +10,8 @@ async function getJSHeapUsedMB(page: import('@playwright/test').Page): Promise<n
 }
 
 test.describe('Layer memory (realistic 4K scenario)', () => {
-  test('user scenario: load image, add layers, paint dots, add more layers', async ({ page }) => {
+  test('user scenario: load image, add layers, paint dots, add more layers', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'CDP heap profiling requires Chromium');
     await page.goto('/');
     await waitForStore(page);
 
@@ -45,17 +46,15 @@ test.describe('Layer memory (realistic 4K scenario)', () => {
     console.log(`After 2 empty layers: ${after2Empty.toFixed(1)}MB (+${empty2Cost.toFixed(1)}MB)`);
 
     // Step 3: Select the background layer
-    await page.evaluate(() => {
+    const bgId = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { layers: { id: string }[] };
-          setActiveLayer: (id: string) => void;
         };
       };
-      const state = store.getState();
-      const bgId = state.document.layers[0]!.id;
-      state.setActiveLayer(bgId);
+      return store.getState().document.layers[0]!.id;
     });
+    await page.locator(`[data-layer-id="${bgId}"]`).click();
     await page.waitForTimeout(200);
     const afterSelectBg = await getJSHeapUsedMB(page);
     console.log(`After selecting bg: ${afterSelectBg.toFixed(1)}MB`);

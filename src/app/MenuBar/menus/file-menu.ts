@@ -2,7 +2,6 @@ import { useUIStore } from '../../ui-store';
 import { useEditorStore } from '../../editor-store';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
 import { encodeBMP } from '../../../utils/bmp-encoder';
-import { hasActiveAdjustments, applyAdjustmentsToImageData, aggregateGroupAdjustments } from '../../../filters/image-adjustments';
 import { contextOptions, canvasColorSpace, isWideGamut, createImageDataFromArray } from '../../../engine/color-space';
 import { seedBitmapFromBlob } from '../../../engine/bitmap-cache';
 import { getEngine } from '../../../engine-wasm/engine-state';
@@ -14,6 +13,8 @@ import {
 import type { MenuDef } from './types';
 import { exportPsdFile, importPsdFile } from '../../../io/psd';
 import { describeError, notifyError } from '../../notifications-store';
+import { finalizePendingStrokeGlobal } from '../../interactions/pending-stroke';
+import { flushLayerSync } from '../../../engine-wasm/engine-sync';
 
 // Re-export so existing callers (App.tsx, e2e tests) keep working.
 export { importPsdFile, exportPsdFile };
@@ -87,6 +88,8 @@ export type ExportFormat = 'png' | 'jpeg' | 'webp' | 'bmp';
 export function exportCanvas(format: ExportFormat): void {
   const engine = getEngine();
   if (!engine) return;
+  finalizePendingStrokeGlobal();
+  flushLayerSync(useEditorStore.getState());
   exportViaEngine(engine, format);
 }
 
@@ -117,12 +120,8 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, form
   clamped.set(rawPixels);
   const imageData = createImageDataFromArray(clamped, width, height);
 
-  // Apply post-composite image adjustments aggregated from all groups
-  const edState = useEditorStore.getState();
-  const adj = aggregateGroupAdjustments(edState.document.layers);
-  if (adj && hasActiveAdjustments(adj)) {
-    applyAdjustmentsToImageData(imageData, adj);
-  }
+  // Group adjustments are applied by the compositor during compositing,
+  // so no post-composite JS-side adjustment is needed here.
 
   // GPU output is in the working color space (P3 on capable displays).
   // Create the export canvas in the same color space and putImageData
@@ -157,7 +156,7 @@ function downloadBlob(blob: Blob, ext = 'png'): void {
   a.href = url;
   a.download = `lopsy.${ext}`;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
   useEditorStore.getState().markClean();
 }
 

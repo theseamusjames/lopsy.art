@@ -1,10 +1,12 @@
 import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
-import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil } from '../../layers/group-utils';
+import { createImageData } from '../../engine/color-space';
+import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
+import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
@@ -102,11 +104,27 @@ function syncPixelDataToGpu(
     const rawBytes = new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength);
     uploadLayerPixels(engine, layerId, rawBytes, data.width, data.height, lx, ly);
   }
+  // Bump pixel versions after GPU upload so thumbnail reads happen after
+  // data is on the GPU. The initial bump from pixelDataManager.replace()
+  // fires before the upload, causing thumbnails to read empty textures.
+  requestAnimationFrame(() => {
+    for (const layerId of pixelData.keys()) {
+      pixelDataManager.bumpVersion(layerId);
+    }
+  });
 }
 
 function createInitialDocument() {
   const bg = createRasterLayer({ name: 'Background', width: 800, height: 600 });
   const rootGroup = createGroupLayer({ name: 'Project', children: [bg.id] });
+  const imgData = createImageData(800, 600);
+  for (let i = 0; i < imgData.data.length; i += 4) {
+    imgData.data[i] = 255;
+    imgData.data[i + 1] = 255;
+    imgData.data[i + 2] = 255;
+    imgData.data[i + 3] = 255;
+  }
+  pixelDataManager.setDense(bg.id, imgData);
   return {
     id: crypto.randomUUID(),
     name: 'Untitled' as const,
@@ -115,7 +133,7 @@ function createInitialDocument() {
     layers: [bg, rootGroup] as readonly Layer[],
     layerOrder: [bg.id, rootGroup.id] as readonly string[],
     activeLayerId: bg.id as string | null,
-    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
     rootGroupId: rootGroup.id as string | null,
   };
 }
@@ -165,6 +183,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     clearEngine();
     const result = computeCreateDocument(width, height, transparentBg);
     applyActionResult(set, result);
+    set({ documentVersion: get().documentVersion + 1 });
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
@@ -175,6 +194,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     clearEngine();
     const result = computeOpenImage(imageData, name);
     applyActionResult(set, result);
+    set({ documentVersion: get().documentVersion + 1 });
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
@@ -253,7 +273,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (targetGroupId) {
       layers = addToGroupUtil(layers, group.id, targetGroupId);
     }
-    const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId, doc.rootGroupId);
+    const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId, doc.rootGroupId, doc.layers);
     const layerOrder = [...doc.layerOrder];
     layerOrder.splice(orderIdx, 0, group.id);
     set({
@@ -275,14 +295,24 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   moveLayerToGroup: (layerId, targetGroupId, insertIndex) => {
     const doc = get().document;
     const newLayers = moveLayerToGroupUtil(doc.layers, layerId, targetGroupId, insertIndex);
-    // Reposition in layerOrder: place just before the target group
-    // so the layer renders within the group's range
-    const newOrder = doc.layerOrder.filter((id) => id !== layerId);
+
+    // Collect all IDs to reposition (the layer + descendants if it's a group)
+    const movedLayer = doc.layers.find((l) => l.id === layerId);
+    const idsToMove = new Set([layerId]);
+    if (movedLayer && movedLayer.type === 'group') {
+      for (const id of getDescendantIdsUtil(doc.layers, layerId)) {
+        idsToMove.add(id);
+      }
+    }
+
+    // Preserve relative order of moved entries
+    const movedEntries = doc.layerOrder.filter((id) => idsToMove.has(id));
+    const newOrder = doc.layerOrder.filter((id) => !idsToMove.has(id));
     const groupIdx = newOrder.indexOf(targetGroupId);
     if (groupIdx !== -1) {
-      newOrder.splice(groupIdx, 0, layerId);
+      newOrder.splice(groupIdx, 0, ...movedEntries);
     } else {
-      newOrder.push(layerId);
+      newOrder.push(...movedEntries);
     }
     set({ document: { ...doc, layers: newLayers, layerOrder: newOrder } });
   },
@@ -359,6 +389,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   mergeDown: () => {
     const s = get();
+    flushLayerSync(s);
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
     const result = computeMergeDown(
       s.document,
@@ -375,6 +406,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   flattenImage: () => {
     const s = get();
+    flushLayerSync(s);
     const result = computeFlattenImage(
       s.document,
       resolveAllPixelData(s.document.layerOrder, s.document.layers),
@@ -389,6 +421,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   rasterizeLayerStyle: () => {
     const s = get();
+    flushLayerSync(s);
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
     const result = computeRasterizeStyle(
       s.document,
@@ -403,10 +436,10 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
-  updateLayerEffects: (id, effects) => {
+  updateLayerEffects: (id: string, effects, skipHistory?: boolean) => {
     finalizePendingStrokeGlobal();
     const s = get();
-    s.pushHistory('Update Effects');
+    if (!skipHistory) s.pushHistory('Update Effects');
     set(computeUpdateEffects(s.document, s.renderVersion, id, effects));
   },
 

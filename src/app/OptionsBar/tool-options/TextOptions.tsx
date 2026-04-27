@@ -1,24 +1,24 @@
+import { useCallback, useMemo } from 'react';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { Slider } from '../../../components/Slider/Slider';
+import { FontPicker } from '../../../components/FontPicker/FontPicker';
+import { fontsByFamily } from '../../../utils/font-catalog';
+import { extractFamilyName, loadGoogleFont } from '../../../utils/font-loader';
 import type { FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
 
-const FONT_OPTIONS = [
-  { value: 'Inter, sans-serif', label: 'Inter' },
-  { value: 'Arial, sans-serif', label: 'Arial' },
-  { value: 'Helvetica, Arial, sans-serif', label: 'Helvetica' },
-  { value: 'Georgia, serif', label: 'Georgia' },
-  { value: 'Times New Roman, serif', label: 'Times New Roman' },
-  { value: 'Courier New, monospace', label: 'Courier New' },
-  { value: 'JetBrains Mono, monospace', label: 'JetBrains Mono' },
-  { value: 'Verdana, sans-serif', label: 'Verdana' },
-  { value: 'Trebuchet MS, sans-serif', label: 'Trebuchet MS' },
-  { value: 'Impact, sans-serif', label: 'Impact' },
-  { value: 'Comic Sans MS, cursive', label: 'Comic Sans MS' },
-  { value: 'Palatino, serif', label: 'Palatino' },
-  { value: 'Garamond, serif', label: 'Garamond' },
-  { value: 'Brush Script MT, cursive', label: 'Brush Script' },
-];
+const WEIGHT_LABELS: Record<number, string> = {
+  100: 'Thin',
+  200: 'ExtraLight',
+  300: 'Light',
+  400: 'Regular',
+  500: 'Medium',
+  600: 'SemiBold',
+  700: 'Bold',
+  800: 'ExtraBold',
+  900: 'Black',
+  1000: 'UltraBlack',
+};
 
 export function TextOptions() {
   const textFontSize = useToolSettingsStore((s) => s.textFontSize);
@@ -32,30 +32,47 @@ export function TextOptions() {
   const setTextFontStyle = useToolSettingsStore((s) => s.setTextFontStyle);
   const setTextAlign = useToolSettingsStore((s) => s.setTextAlign);
 
+  const fontEntry = useMemo(() => {
+    const family = extractFamilyName(textFontFamily);
+    return fontsByFamily.get(family);
+  }, [textFontFamily]);
+
+  const availableWeights = fontEntry?.weights ?? [400, 700];
+
+  const handleFontChange = useCallback(
+    (value: string) => {
+      setTextFontFamily(value);
+      const family = extractFamilyName(value);
+      const entry = fontsByFamily.get(family);
+      if (entry) {
+        if (!entry.weights.includes(textFontWeight)) {
+          const nearest = entry.weights.reduce((prev, curr) =>
+            Math.abs(curr - textFontWeight) < Math.abs(prev - textFontWeight) ? curr : prev,
+          );
+          setTextFontWeight(nearest);
+        }
+        if (entry.source === 'google') {
+          loadGoogleFont(family, entry.weights);
+        }
+      }
+    },
+    [textFontWeight, setTextFontFamily, setTextFontWeight],
+  );
+
   return (
     <>
       <Slider label="Size" value={textFontSize} min={1} max={500} onChange={setTextFontSize} />
       <label className={styles.label} id="text-font-label">Font</label>
-      <select
-        className={styles.select}
-        value={textFontFamily}
-        onChange={(e) => setTextFontFamily(e.target.value)}
-        aria-labelledby="text-font-label"
-      >
-        {FONT_OPTIONS.map((font) => (
-          <option key={font.value} value={font.value}>
-            {font.label}
-          </option>
-        ))}
-      </select>
+      <FontPicker value={textFontFamily} onChange={handleFontChange} />
       <select
         className={styles.select}
         value={textFontWeight}
         onChange={(e) => setTextFontWeight(Number(e.target.value))}
         aria-label="Font weight"
       >
-        <option value={400}>Normal</option>
-        <option value={700}>Bold</option>
+        {availableWeights.map((w) => (
+          <option key={w} value={w}>{WEIGHT_LABELS[w] ?? String(w)}</option>
+        ))}
       </select>
       <select
         className={styles.select}

@@ -283,7 +283,10 @@ export function useCanvasPointerHandlers({
       const isPan = deps.pointerMode.kind === 'panning';
 
       // Outside canvas and not driving any active interaction — ignore.
-      if (!inside && !isToolPointer && !isPan) return;
+      if (!inside && !isToolPointer && !isPan) {
+        deps.setRulerHover(null);
+        return;
+      }
 
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
@@ -317,7 +320,20 @@ export function useCanvasPointerHandlers({
         deps.setPan(deps.pointerMode.startPanX + dx, deps.pointerMode.startPanY + dy);
       } else if (isToolPointer) {
         deps.updateHoveredHandle(canvasPos);
-        deps.handleToolMove(e as unknown as React.PointerEvent);
+        // Feed every hardware sample to the tool. Browsers cap pointermove
+        // delivery at display refresh (~60 Hz) but stylus/high-polling-rate
+        // input reports at 120–240 Hz; the intermediate samples live on
+        // event.getCoalescedEvents(). Without them, brush interpolation
+        // connects coarse positions with straight lines, producing the
+        // visible polygonal segments on fast strokes.
+        const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
+        if (coalesced.length > 1) {
+          for (const ce of coalesced) {
+            deps.handleToolMove(ce as unknown as React.PointerEvent);
+          }
+        } else {
+          deps.handleToolMove(e as unknown as React.PointerEvent);
+        }
       } else if (toolPointerIdRef.current === null && inside) {
         deps.updateHoveredHandle(canvasPos);
       }

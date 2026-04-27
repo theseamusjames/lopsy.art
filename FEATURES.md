@@ -235,9 +235,21 @@ Applied globally or per-group. All default to 0.
 - **Oil Paint**: radius 1 - 10, sharpness 0.1 - 5.0 (Kuwahara filter that smooths color regions while preserving edges, creating a painterly look)
 - **Chromatic Aberration**: amount 1 - 50 px, direction 0 - 360 degrees (splits RGB channels along a configurable axis, creating retro lens fringing and glitch effects)
 
+### Distort
+- **Pixel Stretch**: amount 1 - 200 px, bands 2 - 50, seed 0 - 999, RGB split 0 - 1.0 (shifts horizontal scan-line bands by random offsets with per-channel separation, creating glitch / VHS corruption effects)
+- **Lens Distortion**: strength -100 to +100 (negative = pincushion, positive = barrel), zoom 50 - 200%, chromatic fringing 0 - 100% (applies barrel or pincushion radial distortion with optional per-channel color separation at edges, simulating real camera lens effects)
+- **Mesh Warp**: interactive grid-based distortion overlaid directly on the canvas. Activated from the Move tool's options bar; grid handles are draggable in document space, with bilinear interpolation between points handled on the GPU. When a marquee selection is active, the warp is constrained to the selection's bounding box (pixels outside pass through unchanged); otherwise the warp covers the whole layer. Grid sizes 3×3 to 6×6 with live preview, reset, and undo support.
+
 ### Render
 - **Clouds**: scale, seed
 - **Smoke**: scale, seed, turbulence
+- **Pattern Fill**: tiles a user-defined pattern across the active layer
+  - **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern
+  - **Scale**: 10 - 1000% (tile size relative to original pattern dimensions)
+  - **Offset X / Y**: 0 - 100% (shifts the tiling origin)
+  - Pattern selector grid with thumbnails
+  - Live preview support
+  - Selection mask support (fills only the selected area)
 
 ---
 

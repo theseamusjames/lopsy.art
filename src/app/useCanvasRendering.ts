@@ -15,6 +15,7 @@ import {
   syncRulers,
   syncSeamlessPattern,
   syncAdjustments,
+  syncGroupAdjustments,
   syncMaskEditMode,
   syncBrushTip,
   renderEngine,
@@ -22,8 +23,8 @@ import {
 } from '../engine-wasm/engine-sync';
 import { renderGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
+import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
-import { aggregateGroupAdjustments } from '../filters/image-adjustments';
 import { renderTextDragOverlay, renderTextEditOverlay } from './rendering/render-text-overlay';
 import { rasterizeText } from '../tools/text/text';
 import type { TextStyle } from '../tools/text/text';
@@ -71,13 +72,8 @@ function renderFrameGpu(
   const showGrid = uiState.showGrid;
   const showRulers = uiState.showRulers;
   const gridSize = uiState.gridSize;
-  // Aggregate adjustments from all visible groups (delegates to the shared
-  // helper so curves and any future fields stay in one place).
-  const groupAdjustments = aggregateGroupAdjustments(layers);
-  const adjustments = groupAdjustments ?? uiState.adjustments;
-  const adjustmentsEnabled = layers.some(
-    (l) => l.type === 'group' && (l as import('../types').GroupLayer).adjustmentsEnabled !== false && (l as import('../types').GroupLayer).adjustments != null,
-  ) || uiState.adjustmentsEnabled;
+  const adjustments = uiState.adjustments;
+  const adjustmentsEnabled = uiState.adjustmentsEnabled;
   const pathAnchors = uiState.pathAnchors;
   const pathClosed = uiState.pathClosed;
   const lassoPoints = uiState.lassoPoints;
@@ -136,6 +132,7 @@ function renderFrameGpu(
   syncRulers(engine, showRulers);
   syncSeamlessPattern(engine, uiState.showSeamlessPattern, uiState.dimSeamlessPattern);
   syncAdjustments(engine, adjustments, adjustmentsEnabled);
+  syncGroupAdjustments(engine, layers);
   syncMaskEditMode(engine, uiState.maskEditMode, doc.activeLayerId);
   syncBrushTip(engine, toolState.activeBrushTip, toolState.brushAngle * Math.PI / 180);
 
@@ -168,8 +165,13 @@ function renderFrameGpu(
       renderGrid(overlayCtx, doc.width, doc.height, gridSize, viewport.zoom);
     }
 
-    renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhaseRef.current);
+    renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhaseRef.current, transform);
     renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
+
+    const meshWarp = uiState.meshWarp;
+    if (meshWarp) {
+      renderMeshWarpOverlay(overlayCtx, meshWarp, viewport.zoom);
+    }
     const selectedPath = editorState.selectedPathId
       ? editorState.paths.find((p) => p.id === editorState.selectedPathId)
       : undefined;
@@ -320,6 +322,8 @@ export function useCanvasRendering(
     let running = true;
     let antAnimId = 0;
     let selectionActive = false;
+    let hasBaselineSnapshot = false;
+    let baselinedDocVersion = -1;
 
     const loop = () => {
       if (!running) return;
@@ -338,6 +342,11 @@ export function useCanvasRendering(
         dirtyRef.current = true;
       }
 
+      const currentDocVersion = useEditorStore.getState().documentVersion;
+      if (currentDocVersion !== baselinedDocVersion) {
+        hasBaselineSnapshot = false;
+      }
+
       if (dirtyRef.current && engineReadyRef.current) {
         dirtyRef.current = false;
         const overlay = overlayCanvasRef.current;
@@ -347,6 +356,15 @@ export function useCanvasRendering(
             renderFrame(overlay, container, antPhaseRef);
           } catch (e) {
             console.error('[Lopsy] Render error (recovering):', e);
+          }
+
+          if (!hasBaselineSnapshot) {
+            hasBaselineSnapshot = true;
+            baselinedDocVersion = currentDocVersion;
+            const state = useEditorStore.getState();
+            if (state.undoStack.length === 0) {
+              state.pushHistory('New Document');
+            }
           }
         }
       }

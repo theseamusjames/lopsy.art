@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { waitForStore, createDocument, paintRect, getPixelAt } from './helpers';
+import { waitForStore, createDocument, drawRect, getPixelAt } from './helpers';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -16,7 +16,7 @@ test.describe('Transparency export roundtrip', () => {
     await page.waitForTimeout(300);
 
     // Paint a fully opaque red rectangle, leaving the rest transparent
-    await paintRect(page, 10, 10, 30, 30, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 10, 10, 30, 30, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(200);
 
     // Sanity-check before export: transparent area vs painted area
@@ -31,7 +31,7 @@ test.describe('Transparency export roundtrip', () => {
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Export PNG' }).click();
+    await page.getByRole('menuitem', { name: 'Export PNG' }).click();
 
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe('lopsy.png');

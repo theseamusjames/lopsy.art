@@ -6,31 +6,11 @@
 import { test, expect, type Page } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createDocument, waitForStore, selectTool, setForegroundColor } from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SCREENSHOT_DIR = path.resolve(__dirname, '../test-results/screenshots');
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function waitForStore(page: Page) {
-  await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
-}
-
-async function createDocument(page: Page, width = 400, height = 400, transparent = true) {
-  await page.evaluate(
-    ({ w, h, t }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { createDocument: (w: number, h: number, t: boolean) => void };
-      };
-      store.getState().createDocument(w, h, t);
-    },
-    { w: width, h: height, t: transparent },
-  );
-  await page.waitForTimeout(500);
-}
 
 async function docToScreen(page: Page, docX: number, docY: number) {
   return page.evaluate(
@@ -71,6 +51,16 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
     },
     { setter, value },
   );
+}
+
+async function setShapeMode(page: Page, mode: string) {
+  const select = page.locator('[aria-labelledby="shape-mode-label"]');
+  await select.selectOption(mode);
+}
+
+async function setPolygonSides(page: Page, sides: number) {
+  const input = page.locator('#polygon-sides');
+  await input.fill(String(sides));
 }
 
 async function drawShape(page: Page, fromX: number, fromY: number, toX: number, toY: number) {
@@ -139,19 +129,14 @@ test.describe('Polygon rotation fix (#60)', () => {
     await createDocument(page, 400, 400, true);
 
     // Select shape tool in polygon mode with solid fill
-    await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('shape');
-    });
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setForegroundColor(page, 0, 0, 255);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
     await setToolSetting(page, 'setShapeStrokeColor', null);
   });
 
   test('4-sided polygon renders as square with flat top edge', async ({ page }) => {
-    await setToolSetting(page, 'setShapePolygonSides', 4);
+    await setPolygonSides(page, 4);
 
     // Draw from center (200,200) outward to (300,300) — radius ~100px
     await drawShape(page, 200, 200, 300, 300);
@@ -183,7 +168,7 @@ test.describe('Polygon rotation fix (#60)', () => {
   });
 
   test('6-sided polygon renders as flat-top hexagon', async ({ page }) => {
-    await setToolSetting(page, 'setShapePolygonSides', 6);
+    await setPolygonSides(page, 6);
 
     await drawShape(page, 200, 200, 300, 300);
 
@@ -210,7 +195,7 @@ test.describe('Polygon rotation fix (#60)', () => {
   });
 
   test('odd-sided polygons still point up (triangle)', async ({ page }) => {
-    await setToolSetting(page, 'setShapePolygonSides', 3);
+    await setPolygonSides(page, 3);
 
     await drawShape(page, 200, 200, 300, 300);
 

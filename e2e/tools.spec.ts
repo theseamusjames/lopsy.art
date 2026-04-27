@@ -1,4 +1,13 @@
 import { test, expect, type Page } from './fixtures';
+import {
+  setToolOption,
+  setForegroundColor as setFgColor,
+  openEffectsPanel,
+  closeEffectsPanel,
+  enableEffect,
+  configureEffect,
+  setEffectColor,
+} from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,7 +23,14 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -315,7 +331,7 @@ test.describe('Brush Tool', () => {
     await page.keyboard.press('b');
 
     const baseline = await readComposited(page);
-    await setToolSetting(page, 'setBrushSize', 5);
+    await setToolOption(page, 'Size', 5);
     await drawStroke(page, { x: 50, y: 50 }, { x: 150, y: 50 });
     const smallDiff = pixelDiff(baseline, await readComposited(page));
 
@@ -324,7 +340,7 @@ test.describe('Brush Tool', () => {
 
     const baseline2 = await readComposited(page);
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 40);
+    await setToolOption(page, 'Size', 40);
     await drawStroke(page, { x: 50, y: 50 }, { x: 150, y: 50 });
     const largeDiff = pixelDiff(baseline2, await readComposited(page));
 
@@ -333,20 +349,20 @@ test.describe('Brush Tool', () => {
 
   test('brush respects opacity setting', async ({ page }) => {
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 20);
+    await setToolOption(page, 'Size', 20);
 
     // Full opacity stroke
-    await setToolSetting(page, 'setBrushOpacity', 100);
+    await setToolOption(page, 'Opacity', 100);
     await drawStroke(page, { x: 100, y: 50 }, { x: 200, y: 50 });
     const fullPixel = await getCompositedPixelAt(page, 150, 50);
 
     // Reset
     await createDocument(page, 400, 300, true);
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 20);
+    await setToolOption(page, 'Size', 20);
 
     // Half opacity stroke
-    await setToolSetting(page, 'setBrushOpacity', 50);
+    await setToolOption(page, 'Opacity', 50);
     await drawStroke(page, { x: 100, y: 50 }, { x: 200, y: 50 });
     const halfPixel = await getCompositedPixelAt(page, 150, 50);
 
@@ -356,8 +372,8 @@ test.describe('Brush Tool', () => {
 
   test('drawing a stroke from A to B covers the path', async ({ page }) => {
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 10);
-    await setToolSetting(page, 'setBrushOpacity', 100);
+    await setToolOption(page, 'Size', 10);
+    await setToolOption(page, 'Opacity', 100);
     await drawStroke(page, { x: 50, y: 150 }, { x: 350, y: 150 }, 20);
 
     // Check several points along the path are opaque
@@ -415,21 +431,21 @@ test.describe('Eraser Tool', () => {
   test.beforeEach(async ({ page }) => {
     await createDocument(page, 400, 300, false);
     // Select the Background layer (which has the white fill) for erasing
-    await page.evaluate(() => {
+    const bgLayerId = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { layers: Array<{ id: string }> }; setActiveLayer: (id: string) => void };
+        getState: () => { document: { layers: Array<{ id: string }> } };
       };
-      const state = store.getState();
-      state.setActiveLayer(state.document.layers[0]!.id);
+      return store.getState().document.layers[0]!.id;
     });
+    await page.locator(`[data-layer-id="${bgLayerId}"]`).click();
   });
 
   test('eraser removes pixels from a previously drawn area', async ({ page }) => {
     const beforeErase = await countOpaquePixels(page);
 
     await page.keyboard.press('e');
-    await setToolSetting(page, 'setEraserSize', 20);
-    await setToolSetting(page, 'setEraserOpacity', 100);
+    await setToolOption(page, 'Size', 20);
+    await setToolOption(page, 'Opacity', 100);
     await drawStroke(page, { x: 100, y: 100 }, { x: 300, y: 100 });
 
     const afterErase = await countOpaquePixels(page);
@@ -438,8 +454,8 @@ test.describe('Eraser Tool', () => {
 
   test('eraser respects opacity (partial erase)', async ({ page }) => {
     await page.keyboard.press('e');
-    await setToolSetting(page, 'setEraserSize', 10);
-    await setToolSetting(page, 'setEraserOpacity', 30);
+    await setToolOption(page, 'Size', 10);
+    await setToolOption(page, 'Opacity', 30);
     // Single click rather than stroke to avoid multiple overlapping dabs
     const pos = await docToScreen(page, 200, 150);
     await page.mouse.click(pos.x, pos.y);
@@ -478,7 +494,7 @@ test.describe('Fill Tool', () => {
 
   test('fill bucket fills connected area', async ({ page }) => {
     await page.keyboard.press('g');
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setFgColor(page, 255, 0, 0);
     await clickAtDoc(page, 200, 150);
 
     const pixel = await getPixelAt(page, 200, 150);
@@ -518,7 +534,7 @@ test.describe('Fill Tool', () => {
     });
 
     await page.keyboard.press('g');
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setFgColor(page, 0, 0, 255);
 
     // Low tolerance: should only fill the left half
     await setToolSetting(page, 'setFillTolerance', 10);
@@ -565,7 +581,7 @@ test.describe('Fill Tool', () => {
     });
 
     await page.keyboard.press('g');
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setFgColor(page, 0, 0, 255);
     await setToolSetting(page, 'setFillTolerance', 10);
     await setToolSetting(page, 'setFillContiguous', false);
     await clickAtDoc(page, 100, 150);
@@ -588,12 +604,7 @@ test.describe('Gradient Tool', () => {
   });
 
   test('linear gradient creates smooth transition', async ({ page }) => {
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      store.getState().setActiveTool('gradient');
-    });
+    await page.locator('[data-tool-id="gradient"]').click();
     await setToolSetting(page, 'setGradientType', 'linear');
     await setToolSetting(page, 'setGradientStops', [
       { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
@@ -610,12 +621,7 @@ test.describe('Gradient Tool', () => {
   });
 
   test('radial gradient creates circular pattern', async ({ page }) => {
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      store.getState().setActiveTool('gradient');
-    });
+    await page.locator('[data-tool-id="gradient"]').click();
     await setToolSetting(page, 'setGradientType', 'radial');
     await setToolSetting(page, 'setGradientStops', [
       { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
@@ -642,11 +648,11 @@ test.describe('Eyedropper Tool', () => {
 
     // Fill with red first
     await page.keyboard.press('g');
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setFgColor(page, 255, 0, 0);
     await clickAtDoc(page, 200, 150);
 
     // Now switch foreground to something else
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 255, b: 0, a: 1 });
+    await setFgColor(page, 0, 255, 0);
 
     // Use eyedropper
     await page.keyboard.press('i');
@@ -697,7 +703,7 @@ test.describe('Shape Tool', () => {
   });
 
   test('drawing ellipse creates filled pixels', async ({ page }) => {
-    await setUIState(page, 'setActiveTool', 'shape');
+    await page.keyboard.press('u');
     await setToolSetting(page, 'setShapeMode', 'ellipse');
     await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
     await setToolSetting(page, 'setShapeStrokeColor', null);
@@ -713,7 +719,7 @@ test.describe('Shape Tool', () => {
   });
 
   test('shape tool with stroke only creates outline', async ({ page }) => {
-    await setUIState(page, 'setActiveTool', 'shape');
+    await page.keyboard.press('u');
     await setToolSetting(page, 'setShapeMode', 'ellipse');
     await setToolSetting(page, 'setShapeFillColor', null);
     await setToolSetting(page, 'setShapeStrokeColor', { r: 0, g: 255, b: 0, a: 1 });
@@ -977,7 +983,7 @@ test.describe('Move Tool', () => {
 
     // Draw something first
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 20);
+    await setToolOption(page, 'Size', 20);
     await drawStroke(page, { x: 100, y: 100 }, { x: 200, y: 100 });
 
     const beforeState = await getEditorState(page);
@@ -1029,12 +1035,7 @@ test.describe('Layer Operations', () => {
   });
 
   test('add layer creates new layer', async ({ page }) => {
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { addLayer: () => void };
-      };
-      store.getState().addLayer();
-    });
+    await page.locator('[aria-label="Add Layer"]').click();
 
     const state = await getEditorState(page);
     expect(state.document.layers).toHaveLength(4);
@@ -1043,26 +1044,12 @@ test.describe('Layer Operations', () => {
 
   test('delete layer removes it', async ({ page }) => {
     // Add a third layer then delete it
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { addLayer: () => void };
-      };
-      store.getState().addLayer();
-    });
+    await page.locator('[aria-label="Add Layer"]').click();
 
     let state = await getEditorState(page);
     expect(state.document.layers).toHaveLength(4);
-    const thirdLayerId = state.document.layers[3]!.id;
 
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { removeLayer: (id: string) => void };
-        };
-        store.getState().removeLayer(id);
-      },
-      thirdLayerId,
-    );
+    await page.locator('[aria-label="Delete Layer"]').click();
 
     state = await getEditorState(page);
     expect(state.document.layers).toHaveLength(3);
@@ -1072,15 +1059,7 @@ test.describe('Layer Operations', () => {
     const state = await getEditorState(page);
     const layerId = state.document.layers[0]!.id;
 
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { toggleLayerVisibility: (id: string) => void };
-        };
-        store.getState().toggleLayerVisibility(id);
-      },
-      layerId,
-    );
+    await page.locator(`[data-layer-id="${layerId}"]`).locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]').click();
 
     const updated = await getEditorState(page);
     expect(updated.document.layers[0]!.visible).toBe(false);
@@ -1089,12 +1068,7 @@ test.describe('Layer Operations', () => {
   test('duplicate layer copies pixel data', async ({ page }) => {
     const beforeOpaque = await countOpaquePixels(page);
 
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { duplicateLayer: () => void };
-      };
-      store.getState().duplicateLayer();
-    });
+    await page.locator('[aria-label="Duplicate Layer"]').click();
 
     const state = await getEditorState(page);
     expect(state.document.layers).toHaveLength(4);
@@ -1135,27 +1109,23 @@ test.describe('Undo/Redo', () => {
 
   test('undo reverses last action', async ({ page }) => {
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 20);
+    await setToolOption(page, 'Size', 20);
     await drawStroke(page, { x: 100, y: 100 }, { x: 200, y: 100 });
 
     const state1 = await getEditorState(page);
     expect(state1.undoStack).toBeGreaterThan(0);
 
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      };
-      store.getState().undo();
-    });
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(100);
 
     const state2 = await getEditorState(page);
-    expect(state2.undoStack).toBe(0);
+    expect(state2.undoStack).toBe(1);
     expect(state2.redoStack).toBeGreaterThan(0);
   });
 
   test('redo re-applies undone action', async ({ page }) => {
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 20);
+    await setToolOption(page, 'Size', 20);
     await drawStroke(page, { x: 100, y: 100 }, { x: 200, y: 100 });
 
     // Use composited pixels: brush-end leaves the stroke in a pending GPU
@@ -1163,19 +1133,11 @@ test.describe('Undo/Redo', () => {
     // __readLayerPixels sees 0 until then; compositing always reflects it.
     const afterDraw = await countCompositedOpaquePixels(page);
 
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      };
-      store.getState().undo();
-    });
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(100);
 
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { redo: () => void };
-      };
-      store.getState().redo();
-    });
+    await page.keyboard.press('Control+Shift+z');
+    await page.waitForTimeout(100);
 
     const afterRedo = await countCompositedOpaquePixels(page);
     expect(afterRedo).toBe(afterDraw);
@@ -1183,7 +1145,7 @@ test.describe('Undo/Redo', () => {
 
   test('multiple undos work in sequence', async ({ page }) => {
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 10);
+    await setToolOption(page, 'Size', 10);
 
     // Three separate strokes
     await drawStroke(page, { x: 50, y: 50 }, { x: 100, y: 50 });
@@ -1191,19 +1153,15 @@ test.describe('Undo/Redo', () => {
     await drawStroke(page, { x: 50, y: 250 }, { x: 100, y: 250 });
 
     const s3 = await getEditorState(page);
-    expect(s3.undoStack).toBe(3);
+    expect(s3.undoStack).toBe(4);
 
     for (let i = 0; i < 3; i++) {
-      await page.evaluate(() => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { undo: () => void };
-        };
-        store.getState().undo();
-      });
+      await page.keyboard.press('Control+z');
+      await page.waitForTimeout(100);
     }
 
     const s0 = await getEditorState(page);
-    expect(s0.undoStack).toBe(0);
+    expect(s0.undoStack).toBe(1);
     expect(s0.redoStack).toBe(3);
   });
 });
@@ -1277,7 +1235,7 @@ test.describe('Keyboard Shortcuts', () => {
   });
 
   test('color swap (x key) swaps foreground and background', async ({ page }) => {
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setFgColor(page, 255, 0, 0);
     await setUIState(page, 'setBackgroundColor', { r: 0, g: 0, b: 255, a: 1 });
 
     await page.keyboard.press('x');
@@ -1685,35 +1643,11 @@ test.describe('Layer Effects', () => {
   });
 
   test('setting drop shadow on layer', async ({ page }) => {
-    const state = await getEditorState(page);
-    const layerId = state.document.layers[0]!.id;
-
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            updateLayerEffects: (
-              id: string,
-              effects: Record<string, unknown>,
-            ) => void;
-          };
-        };
-        store.getState().updateLayerEffects(id, {
-          stroke: { enabled: false, color: { r: 0, g: 0, b: 0, a: 1 }, width: 2, position: 'outside' },
-          dropShadow: {
-            enabled: true,
-            color: { r: 0, g: 0, b: 0, a: 0.5 },
-            offsetX: 4,
-            offsetY: 4,
-            blur: 8,
-            spread: 0,
-          },
-          outerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
-          innerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
-        });
-      },
-      layerId,
-    );
+    await configureEffect(page, 'Drop Shadow', {
+      'Offset X': 4, 'Offset Y': 4, 'Blur': 8, 'Spread': 0,
+    });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
 
     const updated = await getEditorState(page);
     const effects = updated.document.layers[0]!.effects;
@@ -1721,33 +1655,10 @@ test.describe('Layer Effects', () => {
   });
 
   test('setting stroke on layer', async ({ page }) => {
-    const state = await getEditorState(page);
-    const layerId = state.document.layers[0]!.id;
-
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            updateLayerEffects: (
-              id: string,
-              effects: Record<string, unknown>,
-            ) => void;
-          };
-        };
-        store.getState().updateLayerEffects(id, {
-          stroke: {
-            enabled: true,
-            color: { r: 255, g: 0, b: 0, a: 1 },
-            width: 2,
-            position: 'outside',
-          },
-          dropShadow: { enabled: false, color: { r: 0, g: 0, b: 0, a: 0.75 }, offsetX: 4, offsetY: 4, blur: 8, spread: 0 },
-          outerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
-          innerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
-        });
-      },
-      layerId,
-    );
+    await configureEffect(page, 'Stroke', { 'Width': 2 });
+    await setEffectColor(page, 'Stroke color', 255, 0, 0);
+    await page.locator('[aria-label="Stroke position: outside"]').click();
+    await closeEffectsPanel(page);
 
     const updated = await getEditorState(page);
     const effects = updated.document.layers[0]!.effects;
@@ -1755,57 +1666,23 @@ test.describe('Layer Effects', () => {
   });
 
   test('effects persist after undo/redo', async ({ page }) => {
-    const state = await getEditorState(page);
-    const layerId = state.document.layers[0]!.id;
-
-    // Push history, then set effects
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            pushHistory: () => void;
-            updateLayerEffects: (
-              id: string,
-              effects: Record<string, unknown>,
-            ) => void;
-          };
-        };
-        store.getState().pushHistory();
-        store.getState().updateLayerEffects(id, {
-          stroke: { enabled: false, color: { r: 0, g: 0, b: 0, a: 1 }, width: 2, position: 'outside' },
-          dropShadow: {
-            enabled: true,
-            color: { r: 0, g: 0, b: 0, a: 0.5 },
-            offsetX: 4,
-            offsetY: 4,
-            blur: 8,
-            spread: 0,
-          },
-          outerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
-          innerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
-        });
-      },
-      layerId,
-    );
+    // Set effects via the UI (enableEffect pushes history internally)
+    await configureEffect(page, 'Drop Shadow', {
+      'Offset X': 4, 'Offset Y': 4, 'Blur': 8, 'Spread': 0,
+    });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
 
     // Undo
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      };
-      store.getState().undo();
-    });
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(100);
 
     const afterUndo = await getEditorState(page);
     expect(afterUndo.document.layers[0]!.effects.dropShadow.enabled).toBe(false);
 
     // Redo
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { redo: () => void };
-      };
-      store.getState().redo();
-    });
+    await page.keyboard.press('Control+Shift+z');
+    await page.waitForTimeout(100);
 
     const afterRedo = await getEditorState(page);
     expect(afterRedo.document.layers[0]!.effects.dropShadow.enabled).toBe(true);
@@ -1912,14 +1789,14 @@ test.describe('Comprehensive Scenarios', () => {
 
     // Switch to move tool and move mouse off canvas to avoid cursor overlay
     const switchToMove = async () => {
-      await setUIState(page, 'setActiveTool', 'move');
+      await page.keyboard.press('v');
       await page.mouse.move(0, 0);
       await page.waitForTimeout(100);
     };
 
     // Paint a brush stroke
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 20);
+    await setToolOption(page, 'Size', 20);
     await drawStroke(page, { x: 100, y: 150 }, { x: 300, y: 150 });
 
     const s1 = await getEditorState(page);
@@ -1938,12 +1815,8 @@ test.describe('Comprehensive Scenarios', () => {
     // Undo everything back to empty
     const totalUndos = (await getEditorState(page)).undoStack;
     for (let i = 0; i < totalUndos; i++) {
-      await page.evaluate(() => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { undo: () => void };
-        };
-        store.getState().undo();
-      });
+      await page.keyboard.press('Control+z');
+      await page.waitForTimeout(100);
     }
 
     const s0 = await getEditorState(page);
@@ -1965,12 +1838,8 @@ test.describe('Comprehensive Scenarios', () => {
     expect(pixelDiff(beforeShape, afterShape)).toBeGreaterThan(0);
 
     // Undo should restore the blank canvas
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      };
-      store.getState().undo();
-    });
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(100);
     const afterUndo = await readComposited(page);
     expect(pixelDiff(beforeShape, afterUndo)).toBe(0);
   });
@@ -1980,20 +1849,15 @@ test.describe('Comprehensive Scenarios', () => {
 
     // Draw red on first layer
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 30);
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setToolOption(page, 'Size', 30);
+    await setFgColor(page, 255, 0, 0);
     await drawStroke(page, { x: 50, y: 100 }, { x: 150, y: 100 });
 
     // Add second layer and draw blue
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { addLayer: () => void };
-      };
-      store.getState().addLayer();
-    });
+    await page.locator('[aria-label="Add Layer"]').click();
 
     await page.keyboard.press('b');
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setFgColor(page, 0, 0, 255);
     await drawStroke(page, { x: 50, y: 100 }, { x: 150, y: 100 });
 
     let state = await getEditorState(page);
@@ -2095,12 +1959,7 @@ test.describe('Comprehensive Scenarios', () => {
     await createDocument(page, 400, 300, true);
 
     // Apply gradient across the canvas (no selection needed)
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      store.getState().setActiveTool('gradient');
-    });
+    await page.locator('[data-tool-id="gradient"]').click();
     await setToolSetting(page, 'setGradientType', 'linear');
     await setToolSetting(page, 'setGradientStops', [
       { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
@@ -2133,17 +1992,14 @@ test.describe('Mask Drawing', () => {
 
   test('add mask and draw with black foreground hides areas', async ({ page }) => {
     // Draw something on the layer first
+    await page.keyboard.press('b');
     await page.evaluate(() => {
-      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
       const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
       };
-      uiStore.getState().setActiveTool('brush');
       toolStore.getState().setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
     });
-    await setToolSetting(page, 'setBrushSize', 40);
+    await setToolOption(page, 'Size', 40);
     await drawStroke(page, { x: 100, y: 150 }, { x: 300, y: 150 }, 10);
 
     // Add a mask to the active layer
@@ -2185,7 +2041,6 @@ test.describe('Mask Drawing', () => {
       const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
         getState: () => {
           setMaskEditMode: (m: boolean) => void;
-          setActiveTool: (t: string) => void;
         };
       };
       const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
@@ -2193,11 +2048,11 @@ test.describe('Mask Drawing', () => {
       };
       uiStore.getState().setMaskEditMode(true);
       toolStore.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
-      uiStore.getState().setActiveTool('brush');
     });
-    await setToolSetting(page, 'setBrushSize', 30);
-    await setToolSetting(page, 'setBrushOpacity', 100);
-    await setToolSetting(page, 'setBrushHardness', 100);
+    await page.keyboard.press('b');
+    await setToolOption(page, 'Size', 30);
+    await setToolOption(page, 'Opacity', 100);
+    await setToolOption(page, 'Hardness', 100);
 
     // Draw across the mask
     await drawStroke(page, { x: 150, y: 150 }, { x: 250, y: 150 }, 10);
@@ -2224,23 +2079,13 @@ test.describe('Mask Drawing', () => {
 
   test('eraser on mask uses background color to paint', async ({ page }) => {
     // Add a mask
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string };
-          addLayerMask: (id: string) => void;
-        };
-      };
-      const state = store.getState();
-      state.addLayerMask(state.document.activeLayerId);
-    });
+    await page.locator('[aria-label="Add Mask"]').click();
 
     // Set mask edit mode, black foreground, white background
     await page.evaluate(() => {
       const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
         getState: () => {
           setMaskEditMode: (m: boolean) => void;
-          setActiveTool: (t: string) => void;
         };
       };
       const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
@@ -2254,11 +2099,11 @@ test.describe('Mask Drawing', () => {
       ui.setMaskEditMode(true);
       tool.setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
       tool.setBackgroundColor({ r: 255, g: 255, b: 255, a: 1 });
-      ui.setActiveTool('brush');
     });
-    await setToolSetting(page, 'setBrushSize', 40);
-    await setToolSetting(page, 'setBrushOpacity', 100);
-    await setToolSetting(page, 'setBrushHardness', 100);
+    await page.keyboard.press('b');
+    await setToolOption(page, 'Size', 40);
+    await setToolOption(page, 'Opacity', 100);
+    await setToolOption(page, 'Hardness', 100);
 
     // First draw black to hide an area
     await drawStroke(page, { x: 100, y: 150 }, { x: 300, y: 150 }, 10);
@@ -2289,14 +2134,9 @@ test.describe('Mask Drawing', () => {
     expect(darkBefore).toBeGreaterThan(0);
 
     // Now switch to eraser and paint back (white background = reveal)
-    await page.evaluate(() => {
-      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      uiStore.getState().setActiveTool('eraser');
-    });
-    await setToolSetting(page, 'setEraserSize', 40);
-    await setToolSetting(page, 'setEraserOpacity', 100);
+    await page.keyboard.press('e');
+    await setToolOption(page, 'Size', 40);
+    await setToolOption(page, 'Opacity', 100);
 
     await drawStroke(page, { x: 100, y: 150 }, { x: 300, y: 150 }, 10);
 

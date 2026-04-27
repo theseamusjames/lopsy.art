@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Page } from './fixtures';
-import { waitForStore, createDocument, paintRect } from './helpers';
+import { waitForStore, createDocument, drawRect } from './helpers';
 
 // PNG magic bytes: 137 80 78 71 13 10 26 10
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -104,7 +104,7 @@ test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
     // The AdjustmentsPanel slider produces values in -100..100 (see
     // src/panels/AdjustmentsPanel/AdjustmentsPanel.tsx). The GPU compositor
     // divides by 100 internally, so -100 → full desaturation in the shader.
-    await paintRect(page, 20, 20, 60, 60, { r: 255, g: 80, b: 80, a: 255 });
+    await drawRect(page, 20, 20, 60, 60, { r: 255, g: 80, b: 80 });
     await page.waitForTimeout(200);
 
     const before = await readCompositedAtDoc(page, 50, 50);
@@ -142,7 +142,7 @@ test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
 
   test('PNG export reflects active group adjustments', async ({ page }) => {
     // Paint a partially-saturated red so adjustments have a visible effect.
-    await paintRect(page, 20, 20, 60, 60, { r: 255, g: 80, b: 80, a: 255 });
+    await drawRect(page, 20, 20, 60, 60, { r: 255, g: 80, b: 80 });
     await page.waitForTimeout(200);
 
     // First export — no adjustments — to capture a baseline pixel value.
@@ -185,7 +185,7 @@ test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
     // negative saturation. Both the live composite and the exported PNG
     // should show the painted region desaturated to roughly the same
     // gray value.
-    await paintRect(page, 20, 20, 60, 60, { r: 255, g: 80, b: 80, a: 255 });
+    await drawRect(page, 20, 20, 60, 60, { r: 255, g: 80, b: 80 });
     await page.waitForTimeout(200);
 
     await setGroupAdjustments(page, -100, 0);
@@ -226,7 +226,7 @@ async function exportAndDecodePixel(
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'File' }).click();
   await page.waitForTimeout(150);
-  await page.getByRole('button', { name: 'Export PNG' }).click();
+  await page.getByRole('menuitem', { name: 'Export PNG' }).click();
   const download = await downloadPromise;
 
   const stream = await download.createReadStream();

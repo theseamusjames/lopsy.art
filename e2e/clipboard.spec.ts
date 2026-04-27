@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { drawRect } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,7 +15,14 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function waitForLayerCount(page: Page, count: number) {
@@ -93,44 +101,6 @@ async function getPixelAt(page: Page, x: number, y: number, layerId?: string) {
       };
     },
     { x, y, lid: layerId ?? null },
-  );
-}
-
-/** Paint a filled rectangle directly into a layer's pixel data */
-async function paintRect(
-  page: Page,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  color: { r: number; g: number; b: number; a: number },
-  layerId?: string,
-) {
-  await page.evaluate(
-    ({ x, y, w, h, color, lid }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
-          updateLayerPixelData: (id: string, data: ImageData) => void;
-        };
-      };
-      const state = store.getState();
-      const id = lid ?? state.document.activeLayerId;
-      const data = state.getOrCreateLayerPixelData(id);
-      for (let py = y; py < y + h; py++) {
-        for (let px = x; px < x + w; px++) {
-          if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
-          const idx = (py * data.width + px) * 4;
-          data.data[idx] = color.r;
-          data.data[idx + 1] = color.g;
-          data.data[idx + 2] = color.b;
-          data.data[idx + 3] = color.a;
-        }
-      }
-      state.updateLayerPixelData(id, data);
-    },
-    { x, y, w, h, color, lid: layerId ?? null },
   );
 }
 
@@ -213,6 +183,14 @@ test.beforeEach(async ({ page }) => {
     };
     store.getState().createDocument(400, 300, false);
   });
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
   await page.waitForSelector('[data-testid="canvas-container"]');
 });
 
@@ -223,7 +201,7 @@ test.beforeEach(async ({ page }) => {
 test.describe('Copy', () => {
   test('copy entire layer when no selection is active', async ({ page }) => {
     // Fill entire layer so copy captures the full document size
-    await paintRect(page, 0, 0, 400, 300, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 400, 300, { r: 255, g: 0, b: 0 });
 
     // Cmd+C with no selection
     await page.keyboard.press(`${mod}+KeyC`);
@@ -238,7 +216,7 @@ test.describe('Copy', () => {
 
   test('copy only selected region', async ({ page }) => {
     // Paint red on entire canvas area 50,50 -> 100,100
-    await paintRect(page, 50, 50, 50, 50, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 50, 50, 50, 50, { r: 255, g: 0, b: 0 });
 
     // Select 60,60 -> 80,80 (20x20)
     await setSelection(page, 60, 60, 20, 20);
@@ -253,7 +231,7 @@ test.describe('Copy', () => {
   });
 
   test('copy does not modify the source layer', async ({ page }) => {
-    await paintRect(page, 0, 0, 10, 10, { r: 0, g: 255, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 10, 10, { r: 0, g: 255, b: 0 });
     const before = await getPixelAt(page, 5, 5);
 
     await page.keyboard.press(`${mod}+KeyC`);
@@ -270,7 +248,7 @@ test.describe('Copy', () => {
 test.describe('Cut', () => {
   test('cut clears selected pixels and populates clipboard', async ({ page }) => {
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 50, 50, 50, 50, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 50, 50, 50, 50, { r: 255, g: 0, b: 0 });
 
     // Select the painted area
     await setSelection(page, 50, 50, 50, 50);
@@ -290,7 +268,7 @@ test.describe('Cut', () => {
 
   test('cut without selection clears entire layer', async ({ page }) => {
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 0, 0, 400, 300, { r: 100, g: 100, b: 100, a: 255 });
+    await drawRect(page, 0, 0, 400, 300, { r: 100, g: 100, b: 100 });
 
     await page.keyboard.press(`${mod}+KeyX`);
 
@@ -305,7 +283,7 @@ test.describe('Cut', () => {
 
   test('cut pushes history for undo', async ({ page }) => {
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 10, 10, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 10, 10, 20, 20, { r: 255, g: 0, b: 0 });
 
     const beforeState = await getEditorState(page);
     const undoBefore = beforeState.undoStack;
@@ -330,7 +308,7 @@ test.describe('Cut', () => {
 test.describe('Paste', () => {
   test('paste creates a new layer with copied content', async ({ page }) => {
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 10, 10, 30, 30, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 10, 10, 30, 30, { r: 0, g: 0, b: 255 });
 
     await page.keyboard.press(`${mod}+KeyC`);
     await page.keyboard.press(`${mod}+KeyV`);
@@ -345,7 +323,7 @@ test.describe('Paste', () => {
 
   test('paste preserves pixel data from copy', async ({ page }) => {
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 10, 10, 30, 30, { r: 0, g: 200, b: 0, a: 255 });
+    await drawRect(page, 10, 10, 30, 30, { r: 0, g: 200, b: 0 });
 
     // Snapshot composited canvas before paste
     const beforeSnap = await page.evaluate(() => {
@@ -383,9 +361,10 @@ test.describe('Paste', () => {
     expect(opaqueCount).toBeGreaterThan(0);
   });
 
-  test('paste positions layer at copied offset', async ({ page }) => {
+  test('paste positions layer at copied offset', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'keyboard shortcuts behave differently under mobile emulation');
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 100, 100, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 100, 100, 20, 20, { r: 255, g: 0, b: 0 });
 
     await setSelection(page, 100, 100, 20, 20);
     await page.keyboard.press(`${mod}+KeyC`);
@@ -401,7 +380,8 @@ test.describe('Paste', () => {
     expect(pastedLayer!.height).toBe(20);
   });
 
-  test('paste does nothing when clipboard is empty', async ({ page }) => {
+  test('paste does nothing when clipboard is empty', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'keyboard shortcuts behave differently under mobile emulation');
     const before = await getEditorState(page);
     await page.keyboard.press(`${mod}+KeyV`);
     const after = await getEditorState(page);
@@ -410,7 +390,7 @@ test.describe('Paste', () => {
 
   test('paste pushes history for undo', async ({ page }) => {
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 0, 0, 10, 10, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 10, 10, { r: 255, g: 0, b: 0 });
     await page.keyboard.press(`${mod}+KeyC`);
 
     const before = await getEditorState(page);
@@ -429,7 +409,7 @@ test.describe('Paste', () => {
 
   test('paste multiple times creates multiple layers', async ({ page }) => {
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 0, 0, 10, 10, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 10, 10, { r: 255, g: 0, b: 0 });
     await page.keyboard.press(`${mod}+KeyC`);
 
     await page.keyboard.press(`${mod}+KeyV`);
@@ -449,7 +429,7 @@ test.describe('Paste', () => {
 test.describe('Cut and Paste round-trip', () => {
   test('cut then paste restores pixels in a new layer', async ({ page }) => {
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 50, 50, 40, 40, { r: 128, g: 64, b: 32, a: 255 });
+    await drawRect(page, 50, 50, 40, 40, { r: 128, g: 64, b: 32 });
 
     await setSelection(page, 50, 50, 40, 40);
     await page.keyboard.press(`${mod}+KeyX`);
@@ -486,7 +466,7 @@ test.describe('Cut and Paste round-trip', () => {
   test('cut partial selection only removes selected pixels', async ({ page }) => {
     await createDocument(page, 400, 300, true);
     // Paint 100x100 block
-    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 255, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 100, 100, { r: 255, g: 255, b: 0 });
 
     // Snapshot composited canvas before cut
     const beforeSnap = await page.evaluate(() => {

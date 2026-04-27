@@ -95,14 +95,19 @@ test.describe('Centered grid with edge snapping (#126)', () => {
     await createDocument(page, 501, 501, false);
     await page.waitForTimeout(200);
 
-    // Enable grid + snap and set a known size.
+    // Enable grid + snap via keyboard shortcut, then set a known size.
+    const showGrid1 = await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { showGrid: boolean };
+      };
+      return ui.getState().showGrid;
+    });
+    if (!showGrid1) await page.keyboard.press("Control+'");
     await page.evaluate(() => {
       const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { toggleGrid: () => void; setGridSize: (n: number) => void; showGrid: boolean };
+        getState: () => { setGridSize: (n: number) => void };
       };
-      const s = ui.getState();
-      if (!s.showGrid) s.toggleGrid();
-      s.setGridSize(50);
+      ui.getState().setGridSize(50);
     });
     await page.waitForTimeout(300);
 
@@ -169,14 +174,19 @@ test.describe('Centered grid with edge snapping (#126)', () => {
     await createDocument(page, 500, 400, false);
     await page.waitForTimeout(200);
 
-    // Enable grid + snap with a coarse size so snap moves are large.
+    // Enable grid + snap via keyboard shortcut, then set a coarse size so snap moves are large.
+    const showGrid2 = await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { showGrid: boolean };
+      };
+      return ui.getState().showGrid;
+    });
+    if (!showGrid2) await page.keyboard.press("Control+'");
     await page.evaluate(() => {
       const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { toggleGrid: () => void; setGridSize: (n: number) => void; showGrid: boolean };
+        getState: () => { setGridSize: (n: number) => void };
       };
-      const s = ui.getState();
-      if (!s.showGrid) s.toggleGrid();
-      s.setGridSize(50);
+      ui.getState().setGridSize(50);
     });
     await page.waitForTimeout(100);
 
@@ -216,16 +226,8 @@ test.describe('Centered grid with edge snapping (#126)', () => {
     // Make the painted layer the active layer (it already is, but make
     // it explicit). Switch to the move tool. The move tool drags whatever
     // is currently the active layer.
-    await page.evaluate(({ id }) => {
-      const ed = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      ed.getState().setActiveLayer(id);
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('move');
-    }, { id: layerId });
+    await page.locator(`[data-layer-id="${layerId}"]`).click();
+    await page.keyboard.press('v');
     await page.waitForTimeout(100);
 
     // Use the same docToScreen pattern as other working e2e tests

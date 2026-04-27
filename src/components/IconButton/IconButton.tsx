@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, ButtonHTMLAttributes } from 'react';
 import styles from './IconButton.module.css';
 
-interface IconButtonProps {
+interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'type'> {
   icon: ReactNode;
   label: string;
   isActive?: boolean;
@@ -17,6 +17,7 @@ export function IconButton({
   onClick,
   size = 'sm',
   disabled = false,
+  ...rest
 }: IconButtonProps) {
   const className = [
     styles.button,
@@ -35,6 +36,7 @@ export function IconButton({
       title={label}
       disabled={disabled}
       type="button"
+      {...rest}
     >
       {icon}
     </button>

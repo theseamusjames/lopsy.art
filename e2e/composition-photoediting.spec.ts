@@ -17,7 +17,19 @@
  * Magnetic lasso.
  */
 import { test, expect, type Page } from './fixtures';
-import { paintRect, paintCircle } from './helpers';
+import {
+  setToolOption,
+  setForegroundColor as setForegroundColorUI,
+  setBlendMode,
+  setLayerOpacity,
+  setAdjustment,
+  setActiveLayer,
+  configureEffect,
+  setEffectColor,
+  closeEffectsPanel,
+  setBrushModalOption,
+  closeBrushModal,
+} from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -37,7 +49,14 @@ async function createDocument(page: Page, width = 500, height = 400, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -85,6 +104,7 @@ async function clickAtDoc(page: Page, docX: number, docY: number) {
   await page.waitForTimeout(100);
 }
 
+/** Thin wrapper: delegates to UI helpers where possible, falls back to store. */
 async function setToolSetting(page: Page, setter: string, value: unknown) {
   await page.evaluate(({ setter, value }) => {
     const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
@@ -94,22 +114,19 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   }, { setter, value });
 }
 
-async function setForegroundColor(page: Page, color: { r: number; g: number; b: number; a: number }) {
-  await page.evaluate((c) => {
-    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-    };
-    store.getState().setForegroundColor(c);
-  }, color);
-}
+const toolKeyMap: Record<string, string> = {
+  move: 'v', brush: 'b', fill: 'g', shape: 'u', text: 't', eraser: 'e',
+  'marquee-rect': 'm', wand: 'w', lasso: 'l', stamp: 's', dodge: 'o',
+  smudge: 'r', eyedropper: 'i', pencil: 'n', crop: 'c', path: 'p', spray: 'j',
+};
 
 async function setActiveTool(page: Page, tool: string) {
-  await page.evaluate((t) => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    store.getState().setActiveTool(t);
-  }, tool);
+  const key = toolKeyMap[tool];
+  if (key) {
+    await page.keyboard.press(key);
+  } else {
+    await page.locator(`[data-tool-id="${tool}"]`).click();
+  }
   await page.waitForTimeout(100);
 }
 
@@ -336,33 +353,34 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     // Paint the test image using the brush tool via real UI interaction.
     // This ensures the GPU pipeline has the data correctly.
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 120);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 15);
+    await setToolOption(page, 'Size', 120);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 15);
+    await closeBrushModal(page);
 
     // Red quadrant (top-left)
-    await setForegroundColor(page, { r: 200, g: 50, b: 50, a: 1 });
+    await setForegroundColorUI(page, 200, 50, 50);
     for (let y = 40; y < 200; y += 60) {
       await dragAtDoc(page, { x: 0, y }, { x: 250, y });
     }
     // Blue quadrant (top-right)
-    await setForegroundColor(page, { r: 50, g: 50, b: 200, a: 1 });
+    await setForegroundColorUI(page, 50, 50, 200);
     for (let y = 40; y < 200; y += 60) {
       await dragAtDoc(page, { x: 250, y }, { x: 500, y });
     }
     // Green quadrant (bottom-left)
-    await setForegroundColor(page, { r: 50, g: 200, b: 50, a: 1 });
+    await setForegroundColorUI(page, 50, 200, 50);
     for (let y = 200; y < 400; y += 60) {
       await dragAtDoc(page, { x: 0, y }, { x: 250, y });
     }
     // Yellow quadrant (bottom-right)
-    await setForegroundColor(page, { r: 200, g: 200, b: 50, a: 1 });
+    await setForegroundColorUI(page, 200, 200, 50);
     for (let y = 200; y < 400; y += 60) {
       await dragAtDoc(page, { x: 250, y }, { x: 500, y });
     }
     // White circle in center
-    await setForegroundColor(page, { r: 255, g: 255, b: 255, a: 1 });
-    await setToolSetting(page, 'setBrushSize', 80);
+    await setForegroundColorUI(page, 255, 255, 255);
+    await setToolOption(page, 'Size', 80);
     await dragAtDoc(page, { x: 250, y: 200 }, { x: 252, y: 200 }, 2);
 
     // Switch back to move tool
@@ -515,18 +533,10 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     await applyFilterViaMenu(page, 'Smoke...');
     await page.screenshot({ path: 'e2e/screenshots/comp3-20-smoke.png' });
 
-    // Keep smoke for atmosphere — set to Screen blend mode
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          updateLayerBlendMode: (id: string, mode: string) => void;
-          updateLayerOpacity: (id: string, opacity: number) => void;
-        };
-      };
-      const s = store.getState();
-      s.updateLayerBlendMode(lid, 'softLight');
-      s.updateLayerOpacity(lid, 0.5);
-    }, cloudLayerId);
+    // Keep smoke for atmosphere — set to Soft Light blend mode
+    await page.locator(`[data-layer-id="${cloudLayerId}"]`).click();
+    await setBlendMode(page, 'softLight');
+    await setLayerOpacity(page, cloudLayerId, 50);
 
     // =====================================================================
     // PHASE 4: TEXT TOOL
@@ -562,7 +572,8 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     await page.waitForTimeout(300);
 
     const stateWithText = await getEditorState(page);
-    const textLayer = stateWithText.document.layers.find((l) => l.type === 'text');
+    // Text layers are rasterized on commit �� find by name
+    const textLayer = stateWithText.document.layers.find((l) => l.type === 'raster' && l.name.startsWith('Text'));
     expect(textLayer).toBeTruthy();
 
     await page.screenshot({ path: 'e2e/screenshots/comp3-21-text.png' });
@@ -585,23 +596,14 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
       'color', 'luminosity',
     ];
 
+    await page.locator(`[data-layer-id="${cloudLayerId}"]`).click();
     for (const mode of blendModes) {
-      await page.evaluate(({ lid, mode }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { updateLayerBlendMode: (id: string, mode: string) => void };
-        };
-        store.getState().updateLayerBlendMode(lid, mode);
-      }, { lid: cloudLayerId, mode });
+      await setBlendMode(page, mode);
       await page.waitForTimeout(100);
     }
 
     // Set final mode
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { updateLayerBlendMode: (id: string, mode: string) => void };
-      };
-      store.getState().updateLayerBlendMode(lid, 'softLight');
-    }, cloudLayerId);
+    await setBlendMode(page, 'softLight');
 
     await page.screenshot({ path: 'e2e/screenshots/comp3-23-blend-modes.png' });
 
@@ -615,7 +617,8 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
           addLayerMask: (id: string) => void;
         };
       };
-      const s = store.getState();
+      if (!store) return false;
+    const s = store.getState();
       s.setActiveLayer(lid);
       s.addLayerMask(lid);
     }, cloudLayerId);
@@ -700,23 +703,11 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     // =====================================================================
     // PHASE 8: REMAINING IMAGE ADJUSTMENTS
     // =====================================================================
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => {
-          adjustments: Record<string, number>;
-          setAdjustments: (adj: Record<string, number>) => void;
-        };
-      };
-      const s = store.getState();
-      s.setAdjustments({
-        ...s.adjustments,
-        highlights: 20,
-        shadows: -15,
-        whites: 10,
-        blacks: -10,
-        vibrance: 25,
-      });
-    });
+    await setAdjustment(page, 'Highlights', 20);
+    await setAdjustment(page, 'Shadows', -15);
+    await setAdjustment(page, 'Whites', 10);
+    await setAdjustment(page, 'Blacks', -10);
+    await setAdjustment(page, 'Vibrance', 25);
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: 'e2e/screenshots/comp3-26-adjustments.png' });
@@ -725,12 +716,7 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     // PHASE 9: MAGNETIC LASSO
     // =====================================================================
     // Ensure we're on the background layer with the color regions
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(lid);
-    }, bgLayerId);
+    await page.locator(`[data-layer-id="${bgLayerId}"]`).click();
 
     await setActiveTool(page, 'lasso-magnetic');
     expect(await getActiveTool(page)).toBe('lasso-magnetic');
@@ -791,37 +777,13 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     // PHASE 11: LAYER EFFECTS on text layer
     // =====================================================================
     if (textLayer) {
-      await page.evaluate((lid) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            setActiveLayer: (id: string) => void;
-            updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-            document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          };
-        };
-        const state = store.getState();
-        state.setActiveLayer(lid);
-        const layer = state.document.layers.find((l) => l.id === lid);
-        if (!layer) return;
-        state.updateLayerEffects(lid, {
-          ...layer.effects,
-          dropShadow: {
-            enabled: true,
-            color: { r: 0, g: 0, b: 0, a: 1 },
-            offsetX: 3,
-            offsetY: 3,
-            blur: 5,
-            spread: 0,
-            opacity: 0.7,
-          },
-          stroke: {
-            enabled: true,
-            color: { r: 255, g: 255, b: 255, a: 1 },
-            width: 2,
-            position: 'outside',
-          },
-        });
-      }, textLayer.id);
+      await setActiveLayer(page, textLayer.id);
+      await configureEffect(page, 'Drop Shadow', { 'Offset X': 3, 'Offset Y': 3, 'Blur': 5, 'Spread': 0, 'Opacity': 70 });
+      await setEffectColor(page, 'Shadow color', 0, 0, 0);
+      await configureEffect(page, 'Stroke', { 'Width': 2 });
+      await setEffectColor(page, 'Stroke color', 255, 255, 255);
+      await page.locator('[aria-label="Stroke position: outside"]').click();
+      await closeEffectsPanel(page);
       await page.waitForTimeout(300);
 
       await page.screenshot({ path: 'e2e/screenshots/comp3-29-text-effects.png' });

@@ -4,6 +4,8 @@ import { useToolSettingsStore } from '../../tool-settings-store';
 import { clearJsPixelData } from '../../store/clear-js-pixel-data';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { fillWithColor } from '../../../engine-wasm/wasm-bridge';
+import { definePattern } from '../pattern-actions';
+import type { FilterDialogId } from '../filter-actions';
 import type { MenuDef } from './types';
 
 export function fillSelection(): void {
@@ -24,18 +26,33 @@ export function fillSelection(): void {
   state.notifyRender();
 }
 
-export const editMenu: MenuDef = {
-  label: 'Edit',
-  items: [
-    { label: 'Undo', shortcut: '\u2318Z', action: () => useEditorStore.getState().undo() },
-    { label: 'Redo', shortcut: '\u21E7\u2318Z', action: () => useEditorStore.getState().redo() },
-    { separator: true, label: '' },
-    { label: 'Cut', shortcut: '\u2318X', action: () => useEditorStore.getState().cut() },
-    { label: 'Copy', shortcut: '\u2318C', action: () => useEditorStore.getState().copy() },
-    { label: 'Paste', shortcut: '\u2318V', action: () => useEditorStore.getState().paste() },
-    { separator: true, label: '' },
-    { label: 'Fill', shortcut: '\u21E7F5', action: () => fillSelection() },
-    { separator: true, label: '' },
-    { label: 'Clear Guides', action: () => useUIStore.getState().clearGuides() },
-  ],
-};
+export function cropToSelection(): void {
+  const { selection } = useEditorStore.getState();
+  if (!selection.active || !selection.bounds) return;
+  useEditorStore.getState().cropCanvas(selection.bounds);
+}
+
+export function createEditMenu(showFilterDialog: (id: FilterDialogId) => void): MenuDef {
+  const hasSelection = useEditorStore.getState().selection.active;
+  return {
+    label: 'Edit',
+    items: [
+      { label: 'Undo', shortcut: '⌘Z', action: () => useEditorStore.getState().undo() },
+      { label: 'Redo', shortcut: '⇧⌘Z', action: () => useEditorStore.getState().redo() },
+      { separator: true, label: '' },
+      { label: 'Cut', shortcut: '⌘X', action: () => useEditorStore.getState().cut() },
+      { label: 'Copy', shortcut: '⌘C', action: () => useEditorStore.getState().copy() },
+      { label: 'Copy Merged', shortcut: '⇧⌘C', action: () => useEditorStore.getState().copyMerged() },
+      { label: 'Paste', shortcut: '⌘V', action: () => useEditorStore.getState().paste() },
+      { separator: true, label: '' },
+      { label: 'Fill', shortcut: '⇧F5', action: () => fillSelection() },
+      { label: 'Fill with Pattern...', action: () => showFilterDialog('pattern-fill') },
+      { separator: true, label: '' },
+      { label: 'Crop', action: () => cropToSelection(), disabled: !hasSelection },
+      { separator: true, label: '' },
+      { label: 'Define Pattern', action: () => definePattern() },
+      { separator: true, label: '' },
+      { label: 'Clear Guides', action: () => useUIStore.getState().clearGuides() },
+    ],
+  };
+}

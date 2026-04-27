@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { waitForStore, createDocument, paintRect } from './helpers';
+import { waitForStore, createDocument, drawRect } from './helpers';
 
 interface PixelSnap {
   width: number;
@@ -82,7 +82,7 @@ test.describe('Curves adjustment', () => {
   });
 
   test('inverting the master curve flips midtones in the live composite', async ({ page }) => {
-    await paintRect(page, 0, 0, 100, 100, { r: 100, g: 100, b: 100, a: 255 });
+    await drawRect(page, 0, 0, 100, 100, { r: 100, g: 100, b: 100 });
     await page.waitForTimeout(200);
 
     const before = await readCompositedAtDoc(page, 50, 50);
@@ -106,7 +106,7 @@ test.describe('Curves adjustment', () => {
 
   test('per-channel curve crushes only the targeted channel', async ({ page }) => {
     // Solid yellow: full red + full green, no blue.
-    await paintRect(page, 0, 0, 100, 100, { r: 200, g: 200, b: 50, a: 255 });
+    await drawRect(page, 0, 0, 100, 100, { r: 200, g: 200, b: 50 });
     await page.waitForTimeout(200);
 
     await page.screenshot({
@@ -191,7 +191,7 @@ test.describe('Curves adjustment', () => {
   });
 
   test('clearing curves restores the original pixels', async ({ page }) => {
-    await paintRect(page, 0, 0, 100, 100, { r: 100, g: 100, b: 100, a: 255 });
+    await drawRect(page, 0, 0, 100, 100, { r: 100, g: 100, b: 100 });
     await page.waitForTimeout(200);
 
     await setGroupCurves(page, {

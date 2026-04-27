@@ -56,6 +56,7 @@ export interface EditorState {
   redoStack: HistorySnapshot[];
   dirtyLayerIds: Set<string>;
   renderVersion: number;
+  documentVersion: number;
   selection: SelectionData;
   documentReady: boolean;
   isDirty: boolean;
@@ -97,7 +98,7 @@ export interface EditorState {
   mergeDown: () => void;
   flattenImage: () => void;
   rasterizeLayerStyle: () => void;
-  updateLayerEffects: (id: string, effects: Partial<LayerEffects>) => void;
+  updateLayerEffects: (id: string, effects: Partial<LayerEffects>, skipHistory?: boolean) => void;
   addLayerMask: (id: string) => void;
   removeLayerMask: (id: string) => void;
   toggleLayerMask: (id: string) => void;
@@ -109,6 +110,7 @@ export interface EditorState {
 
   // Clipboard
   copy: () => void;
+  copyMerged: () => void;
   cut: () => void;
   paste: () => void;
   pasteImageData: (imageData: ImageData) => void;

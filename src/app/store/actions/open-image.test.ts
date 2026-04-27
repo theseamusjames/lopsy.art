@@ -34,12 +34,12 @@ describe('computeOpenImage', () => {
     expect(result.document!.backgroundColor).toEqual({ r: 0, g: 0, b: 0, a: 0 });
   });
 
-  it('sets white background when image is fully opaque', () => {
+  it('sets transparent background for opaque images too', () => {
     const imgData = new ImageData(2, 2);
     for (let i = 3; i < imgData.data.length; i += 4) {
       imgData.data[i] = 255;
     }
     const result = computeOpenImage(imgData, 'opaque.png');
-    expect(result.document!.backgroundColor).toEqual({ r: 255, g: 255, b: 255, a: 1 });
+    expect(result.document!.backgroundColor).toEqual({ r: 0, g: 0, b: 0, a: 0 });
   });
 });

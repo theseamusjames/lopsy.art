@@ -11,6 +11,7 @@ import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 
 const TEXT_DRAG_THRESHOLD = 4;
 
+
 /** Commit the current text editing session: render text to pixels and update the layer. */
 export function commitTextEditing(): void {
   const uiState = useUIStore.getState();

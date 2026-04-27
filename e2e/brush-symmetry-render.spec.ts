@@ -1,5 +1,14 @@
 import { test, expect } from './fixtures';
-import { waitForStore, createDocument, getPixelAt, getEditorState } from './helpers';
+import {
+  waitForStore,
+  createDocument,
+  getPixelAt,
+  getEditorState,
+  openEffectsPanel,
+  closeEffectsPanel,
+  configureEffect,
+  setEffectColor,
+} from './helpers';
 
 test.describe('Brush symmetry renders immediately (#119)', () => {
   test.beforeEach(async ({ page }) => {
@@ -10,19 +19,17 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
   });
 
   test('symmetry strokes are committed when switching layers', async ({ page }) => {
-    // Enable both symmetry axes
+    // Enable both symmetry axes via toolbar buttons
+    await page.locator('[aria-label="Symmetry Horizontal"]').click();
+    await page.locator('[aria-label="Symmetry Vertical"]').click();
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setSymmetryHorizontal: (v: boolean) => void;
-          setSymmetryVertical: (v: boolean) => void;
           setBrushSize: (v: number) => void;
           setBrushOpacity: (v: number) => void;
         };
       };
       const state = store.getState();
-      state.setSymmetryHorizontal(true);
-      state.setSymmetryVertical(true);
       state.setBrushSize(20);
       state.setBrushOpacity(100);
     });
@@ -71,15 +78,7 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
     await page.screenshot({ path: 'e2e/screenshots/brush-symmetry-render.png' });
 
     // Now switch to a different layer — this should finalize the pending stroke
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { layers: Array<{ id: string; type: string }>; activeLayerId: string };
-          addLayer: () => void;
-        };
-      };
-      store.getState().addLayer();
-    });
+    await page.locator('[aria-label="Add Layer"]').click();
     await page.waitForTimeout(300);
 
     // Switch back to the original layer
@@ -95,15 +94,7 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
       return rasterLayers[0]?.id ?? '';
     });
 
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { setActiveLayer: (id: string) => void };
-        };
-        store.getState().setActiveLayer(id);
-      },
-      originalLayerId,
-    );
+    await page.locator(`[data-layer-id="${originalLayerId}"]`).click();
     await page.waitForTimeout(200);
 
     // The stroke should be committed to the layer texture now
@@ -115,19 +106,17 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
   });
 
   test('effects apply to brush strokes after layer switch', async ({ page }) => {
-    // Enable symmetry
+    // Enable symmetry via toolbar buttons
+    await page.locator('[aria-label="Symmetry Horizontal"]').click();
+    await page.locator('[aria-label="Symmetry Vertical"]').click();
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setSymmetryHorizontal: (v: boolean) => void;
-          setSymmetryVertical: (v: boolean) => void;
           setBrushSize: (v: number) => void;
           setBrushOpacity: (v: number) => void;
         };
       };
       const state = store.getState();
-      state.setSymmetryHorizontal(true);
-      state.setSymmetryVertical(true);
       state.setBrushSize(20);
       state.setBrushOpacity(100);
     });
@@ -169,22 +158,11 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
     await page.waitForTimeout(200);
 
     // Apply effects — this should finalize the pending stroke first
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const layer = state.document.layers.find((l) => l.id === state.document.activeLayerId);
-      if (layer) {
-        state.updateLayerEffects(state.document.activeLayerId, {
-          ...layer.effects,
-          dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 0.75 }, offsetX: 4, offsetY: 4, blur: 8, spread: 0, opacity: 0.75 },
-        });
-      }
+    await configureEffect(page, 'Drop Shadow', {
+      'Offset X': 4, 'Offset Y': 4, 'Blur': 8, 'Spread': 0, 'Opacity': 75,
     });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: 'e2e/screenshots/brush-symmetry-effects.png' });

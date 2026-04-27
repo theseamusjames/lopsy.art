@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { setToolOption, setForegroundColor, setBrushModalOption, closeBrushModal } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers (same pattern as other e2e tests)
@@ -14,7 +15,14 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -43,18 +51,6 @@ async function docToScreen(page: Page, docX: number, docY: number) {
       return { x: rect.left + screenX, y: rect.top + screenY };
     },
     { docX, docY },
-  );
-}
-
-async function setToolSetting(page: Page, setter: string, value: unknown) {
-  await page.evaluate(
-    ({ setter, value }) => {
-      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => Record<string, (v: unknown) => void>;
-      };
-      store.getState()[setter]!(value);
-    },
-    { setter, value },
   );
 }
 
@@ -130,19 +126,15 @@ test.describe('Hold to smooth line (#94)', () => {
 
     // Select brush tool, set up a small black brush
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 8);
-    await setToolSetting(page, 'setBrushOpacity', 100);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 0);
-    await setToolSetting(page, 'setBrushScatter', 0);
-    await setToolSetting(page, 'setBrushFade', 0);
+    await setToolOption(page, 'Size', 8);
+    await setToolOption(page, 'Opacity', 100);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 0);
+    await setBrushModalOption(page, 'Scatter', 0);
+    await closeBrushModal(page);
+    await setToolOption(page, 'Fade', 0);
     // Set foreground color to black
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-      };
-      store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
-    });
+    await setForegroundColor(page, 0, 0, 0);
 
     // Draw a wobbly horizontal line from left to right across the middle.
     // Use document coordinates for precise wobble: draw at y=50 ± 12px
@@ -228,18 +220,14 @@ test.describe('Hold to smooth line (#94)', () => {
     await createDocument(page, 200, 100, true);
 
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 6);
-    await setToolSetting(page, 'setBrushOpacity', 100);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 0);
-    await setToolSetting(page, 'setBrushScatter', 0);
-    await setToolSetting(page, 'setBrushFade', 0);
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-      };
-      store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
-    });
+    await setToolOption(page, 'Size', 6);
+    await setToolOption(page, 'Opacity', 100);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 0);
+    await setBrushModalOption(page, 'Scatter', 0);
+    await closeBrushModal(page);
+    await setToolOption(page, 'Fade', 0);
+    await setForegroundColor(page, 0, 0, 0);
 
     // Draw a wobbly stroke using steps for realistic motion
     const start = await docToScreen(page, 20, 50);

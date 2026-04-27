@@ -4,6 +4,7 @@ import {
   waitForStore,
   getPixelAt,
   getEditorState as getEditorSnapshot,
+  setForegroundColor,
 } from './helpers';
 
 // ---------------------------------------------------------------------------
@@ -58,20 +59,6 @@ async function drawStroke(
   await page.mouse.move(end.x, end.y, { steps });
   await page.mouse.up();
   await page.waitForTimeout(100);
-}
-
-async function setUIState(page: Page, setter: string, value: unknown) {
-  await page.evaluate(
-    ({ setter, value }) => {
-      const colorSetters = new Set(['setForegroundColor', 'setBackgroundColor', 'swapColors', 'resetColors', 'addRecentColor']);
-      const storeKey = colorSetters.has(setter) ? '__toolSettingsStore' : '__uiStore';
-      const store = (window as unknown as Record<string, unknown>)[storeKey] as {
-        getState: () => Record<string, (v: unknown) => void>;
-      };
-      store.getState()[setter]!(value);
-    },
-    { setter, value },
-  );
 }
 
 async function getEditorState(page: Page) {
@@ -131,7 +118,7 @@ test.describe('Fill tool with selection (#63)', () => {
 
     // 2. Set fill tool active with bright red
     await page.keyboard.press('g');
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
 
     // Record undo stack length before fill to verify the fill actually runs
     const beforeFill = await getEditorSnapshot(page);
@@ -183,7 +170,7 @@ test.describe('Fill tool with selection (#63)', () => {
 
     // Fill with green
     await page.keyboard.press('g');
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 255, b: 0, a: 1 });
+    await setForegroundColor(page, 0, 255, 0);
 
     // Record undo stack length before fill to verify the fill actually runs
     const beforeFill = await getEditorSnapshot(page);
@@ -237,7 +224,7 @@ test.describe('Fill tool with selection (#63)', () => {
     // so the fill mask covers everything. After intersection with the
     // selection mask, only the selection area should receive color.
     await page.keyboard.press('g');
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setForegroundColor(page, 0, 0, 255);
 
     // Record undo stack length before fill to verify the fill actually runs
     const beforeFill = await getEditorSnapshot(page);

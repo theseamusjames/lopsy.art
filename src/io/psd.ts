@@ -21,7 +21,8 @@ import {
 import { resetTrackedState, flushLayerSync } from '../engine-wasm/engine-sync';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import type { Layer, GroupLayer, RasterLayer } from '../types/layers';
-import { DEFAULT_EFFECTS } from '../layers/layer-model';
+import type { LayerEffects } from '../types/effects';
+import { DEFAULT_EFFECTS, hasEnabledEffects } from '../layers/layer-model';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
 import { BLEND_MODE_TO_PSD_INDEX, BLEND_MODES_BY_PSD_INDEX } from '../types/blend-mode-tables';
@@ -59,10 +60,12 @@ function flattenLayerTreeForPsd(
 
     if (layer.type === 'group') {
       const group = layer as GroupLayer;
-      // PSD convention: bottom-to-top with group-end marker first,
-      // then children (bottom-to-top), then group-open marker.
+      const childSet = new Set(group.children);
+      // group.children tracks membership but not visual order — use
+      // layerOrder (bottom-to-top) as the source of truth for stacking.
+      const sortedChildren = layerOrder.filter((cid) => childSet.has(cid));
       result.push({ layer: group, groupKind: 3 }); // GroupEnd
-      for (const childId of group.children) {
+      for (const childId of sortedChildren) {
         emitLayer(childId);
       }
       result.push({ layer: group, groupKind: 1 }); // GroupOpen
@@ -85,11 +88,15 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
   const engine = getEngine();
   if (!engine) return;
 
-  // Commit any in-progress brush stroke so its pixels are in the GPU texture
-  // before we read layer data.
+  // Commit any in-progress brush stroke and flush all pending JS pixel
+  // data to the GPU before the synchronous WASM export call.  Without this
+  // the rAF render loop may try to upload pending data (mutable borrow)
+  // while exportPsd holds an immutable borrow, triggering a RefCell panic.
   finalizePendingStrokeGlobal();
 
   const edState = useEditorStore.getState();
+  flushLayerSync(edState);
+
   const { document: doc } = edState;
 
   const flatLayers = flattenLayerTreeForPsd(doc.layers, doc.layerOrder);
@@ -117,6 +124,7 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
     maskOffset?: number;
     maskLength?: number;
     maskDefaultColor?: number;
+    effectsJson?: string;
   }
 
   const layerMetas: LayerMeta[] = flatLayers.map(({ layer, groupKind }) => {
@@ -128,10 +136,17 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
       blendMode: BLEND_MODE_TO_U8[layer.blendMode] ?? 0,
       x: layer.x,
       y: layer.y,
-      width: (layer.type === 'raster' || layer.type === 'shape') ? (layer as RasterLayer).width : 0,
-      height: (layer.type === 'raster' || layer.type === 'shape') ? (layer as RasterLayer).height : 0,
+      width: (layer.type === 'raster' || layer.type === 'shape')
+        ? (layer as RasterLayer).width
+        : (layer.type === 'text') ? doc.width : 0,
+      height: (layer.type === 'raster' || layer.type === 'shape')
+        ? (layer as RasterLayer).height
+        : (layer.type === 'text') ? doc.height : 0,
       clipToBelow: layer.clipToBelow,
       groupKind,
+      effectsJson: hasEnabledEffects(layer.effects)
+        ? JSON.stringify(layer.effects)
+        : undefined,
     };
 
     // For group markers, zero out dimensions.
@@ -177,6 +192,22 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
   useEditorStore.getState().markClean();
 }
 
+function parseEffectsJson(json: string | undefined): LayerEffects {
+  if (!json) return DEFAULT_EFFECTS;
+  try {
+    const parsed = JSON.parse(json) as Partial<LayerEffects>;
+    return {
+      stroke: parsed.stroke ?? DEFAULT_EFFECTS.stroke,
+      dropShadow: parsed.dropShadow ?? DEFAULT_EFFECTS.dropShadow,
+      outerGlow: parsed.outerGlow ?? DEFAULT_EFFECTS.outerGlow,
+      innerGlow: parsed.innerGlow ?? DEFAULT_EFFECTS.innerGlow,
+      colorOverlay: parsed.colorOverlay ?? DEFAULT_EFFECTS.colorOverlay,
+    };
+  } catch {
+    return DEFAULT_EFFECTS;
+  }
+}
+
 // ─── PSD Import ────────────────────────────────────────────────────────
 
 export async function importPsdFile(data: Uint8Array, name: string): Promise<void> {
@@ -207,6 +238,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
       maskY?: number;
       maskWidth?: number;
       maskHeight?: number;
+      effectsJson?: string;
     }>;
   };
 
@@ -248,7 +280,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
         x: 0,
         y: 0,
         clipToBelow: false,
-        effects: DEFAULT_EFFECTS,
+        effects: parseEffectsJson(psdLayer.effectsJson),
         mask: null,
         children: groupInfo?.children ?? [],
         collapsed: psdLayer.groupKind === 2,
@@ -297,7 +329,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
       x: psdLayer.x,
       y: psdLayer.y,
       clipToBelow: psdLayer.clipToBelow,
-      effects: DEFAULT_EFFECTS,
+      effects: parseEffectsJson(psdLayer.effectsJson),
       mask,
       width: psdLayer.width,
       height: psdLayer.height,

@@ -1,4 +1,8 @@
 import { test, expect, type Page } from './fixtures';
+import {
+  drawRect,
+  setActiveLayer,
+} from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,7 +18,14 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function getEditorState(page: Page) {
@@ -120,83 +131,29 @@ async function getPixelAt(page: Page, x: number, y: number, layerId?: string) {
   );
 }
 
-async function paintRect(
-  page: Page,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  color: { r: number; g: number; b: number; a: number },
-  layerId?: string,
-) {
-  await page.evaluate(
-    ({ x, y, w, h, color, lid }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
-          updateLayerPixelData: (id: string, data: ImageData) => void;
-        };
-      };
-      const state = store.getState();
-      const id = lid ?? state.document.activeLayerId;
-      const data = state.getOrCreateLayerPixelData(id);
-      for (let py = y; py < y + h; py++) {
-        for (let px = x; px < x + w; px++) {
-          if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
-          const idx = (py * data.width + px) * 4;
-          data.data[idx] = color.r;
-          data.data[idx + 1] = color.g;
-          data.data[idx + 2] = color.b;
-          data.data[idx + 3] = color.a;
-        }
-      }
-      state.updateLayerPixelData(id, data);
-    },
-    { x, y, w, h, color, lid: layerId ?? null },
-  );
-}
-
 async function addLayer(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { addLayer: () => void };
-    };
-    store.getState().addLayer();
-  });
+  await page.locator('[aria-label="Add Layer"]').click();
 }
 
-async function setActiveLayer(page: Page, layerId: string) {
-  await page.evaluate(
-    (id) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(id);
-    },
-    layerId,
-  );
-}
+import {
+  enableEffect as enableEffectUI,
+  configureEffect as configureEffectUI,
+  setEffectColor as setEffectColorUI,
+  openEffectsPanel,
+  closeEffectsPanel,
+} from './helpers';
 
-async function enableEffect(page: Page, layerId: string, effectKey: string) {
-  await page.evaluate(
-    ({ lid, key }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const layer = state.document.layers.find((l) => l.id === lid);
-      if (!layer) return;
-      const effects = { ...layer.effects };
-      const effect = effects[key] as Record<string, unknown>;
-      effects[key] = { ...effect, enabled: true };
-      state.updateLayerEffects(lid, effects);
-    },
-    { lid: layerId, key: effectKey },
-  );
+async function enableEffectOnLayer(page: Page, layerId: string, effectKey: string) {
+  await setActiveLayer(page, layerId);
+  const effectNameMap: Record<string, string> = {
+    dropShadow: 'Drop Shadow',
+    stroke: 'Stroke',
+    outerGlow: 'Outer Glow',
+    innerGlow: 'Inner Glow',
+    colorOverlay: 'Color Overlay',
+  };
+  await enableEffectUI(page, effectNameMap[effectKey] ?? effectKey);
+  await closeEffectsPanel(page);
 }
 
 async function setEffectProps(
@@ -205,24 +162,57 @@ async function setEffectProps(
   effectKey: string,
   props: Record<string, unknown>,
 ) {
-  await page.evaluate(
-    ({ lid, key, props }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const layer = state.document.layers.find((l) => l.id === lid);
-      if (!layer) return;
-      const effects = { ...layer.effects };
-      const effect = effects[key] as Record<string, unknown>;
-      effects[key] = { ...effect, ...props, enabled: true };
-      state.updateLayerEffects(lid, effects);
-    },
-    { lid: layerId, key: effectKey, props },
-  );
+  await setActiveLayer(page, layerId);
+  const effectNameMap: Record<string, string> = {
+    dropShadow: 'Drop Shadow',
+    stroke: 'Stroke',
+    outerGlow: 'Outer Glow',
+    innerGlow: 'Inner Glow',
+    colorOverlay: 'Color Overlay',
+  };
+  const effectName = effectNameMap[effectKey] ?? effectKey;
+
+  if (effectKey === 'stroke') {
+    const settings: Record<string, number> = {};
+    if (props.width !== undefined) settings['Width'] = props.width as number;
+    await configureEffectUI(page, effectName, settings);
+    if (props.color) {
+      const c = props.color as { r: number; g: number; b: number };
+      await setEffectColorUI(page, 'Stroke color', c.r, c.g, c.b);
+    }
+    if (props.position) {
+      await page.locator(`[aria-label="Stroke position: ${props.position}"]`).click();
+    }
+  } else if (effectKey === 'dropShadow') {
+    const settings: Record<string, number> = {};
+    if (props.offsetX !== undefined) settings['Offset X'] = props.offsetX as number;
+    if (props.offsetY !== undefined) settings['Offset Y'] = props.offsetY as number;
+    if (props.blur !== undefined) settings['Blur'] = props.blur as number;
+    if (props.spread !== undefined) settings['Spread'] = props.spread as number;
+    if (props.opacity !== undefined) settings['Opacity'] = Math.round((props.opacity as number) * 100);
+    await configureEffectUI(page, effectName, settings);
+    if (props.color) {
+      const c = props.color as { r: number; g: number; b: number };
+      await setEffectColorUI(page, 'Shadow color', c.r, c.g, c.b);
+    }
+  } else if (effectKey === 'outerGlow' || effectKey === 'innerGlow') {
+    const settings: Record<string, number> = {};
+    if (props.size !== undefined) settings['Size'] = props.size as number;
+    if (props.spread !== undefined) settings['Spread'] = props.spread as number;
+    if (props.opacity !== undefined) settings['Opacity'] = Math.round((props.opacity as number) * 100);
+    await configureEffectUI(page, effectName, settings);
+    if (props.color) {
+      const c = props.color as { r: number; g: number; b: number };
+      await setEffectColorUI(page, 'Glow color', c.r, c.g, c.b);
+    }
+  } else if (effectKey === 'colorOverlay') {
+    await enableEffectUI(page, effectName);
+    if (props.color) {
+      const c = props.color as { r: number; g: number; b: number };
+      await setEffectColorUI(page, 'Overlay color', c.r, c.g, c.b);
+    }
+  }
+  await closeEffectsPanel(page);
 }
 
 async function getLayerPixelDataSize(page: Page, layerId: string) {
@@ -296,6 +286,14 @@ test.beforeEach(async ({ page }) => {
     };
     store.getState().createDocument(400, 300, false);
   });
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
   await page.waitForSelector('[data-testid="canvas-container"]');
 });
 
@@ -304,6 +302,10 @@ test.beforeEach(async ({ page }) => {
 // ===========================================================================
 
 test.describe('Rasterize Layer Style', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'effects drawer requires sidebar, hidden on touch devices');
+  });
+
   test('rasterize button is visible in effects drawer', async ({ page }) => {
     await page.locator('button[title="Layer effects"]').first().click();
     await page.waitForTimeout(100);
@@ -323,7 +325,7 @@ test.describe('Rasterize Layer Style', () => {
     const state = await getEditorState(page);
     const layerId = state.document.activeLayerId;
 
-    await enableEffect(page, layerId, 'stroke');
+    await enableEffectOnLayer(page, layerId, 'stroke');
 
     await page.locator('button[title="Layer effects"]').first().click();
     await page.waitForTimeout(100);
@@ -337,7 +339,8 @@ test.describe('Rasterize Layer Style', () => {
     const state = await getEditorState(page);
     const layerId = state.document.activeLayerId;
 
-    await paintRect(page, 20, 20, 60, 60, { r: 255, g: 0, b: 0, a: 255 }, layerId);
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 20, 20, 60, 60, { r: 255, g: 0, b: 0 });
 
     await setEffectProps(page, layerId, 'stroke', {
       width: 4,
@@ -382,8 +385,9 @@ test.describe('Rasterize Layer Style', () => {
     const state = await getEditorState(page);
     const layerId = state.document.activeLayerId;
 
-    await paintRect(page, 20, 20, 60, 60, { r: 255, g: 0, b: 0, a: 255 }, layerId);
-    await enableEffect(page, layerId, 'stroke');
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 20, 20, 60, 60, { r: 255, g: 0, b: 0 });
+    await enableEffectOnLayer(page, layerId, 'stroke');
 
     const sizeBefore = await getLayerPixelDataSize(page, layerId);
 
@@ -438,13 +442,15 @@ test.describe('Merge Down with Effects', () => {
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
 
-    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 255, b: 255, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 100, 100, { r: 255, g: 255, b: 255 });
 
     await addLayer(page);
     const s1 = await getEditorState(page);
     const topId = s1.document.activeLayerId;
 
-    await paintRect(page, 30, 30, 40, 40, { r: 255, g: 0, b: 0, a: 255 }, topId);
+    await setActiveLayer(page, topId);
+    await drawRect(page, 30, 30, 40, 40, { r: 255, g: 0, b: 0 });
 
     // Enable stroke on top layer
     await setEffectProps(page, topId, 'stroke', {
@@ -481,13 +487,15 @@ test.describe('Merge Down with Effects', () => {
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
 
-    await paintRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0 });
 
     await addLayer(page);
     const s1 = await getEditorState(page);
     const topId = s1.document.activeLayerId;
 
-    await paintRect(page, 25, 25, 50, 50, { r: 0, g: 0, b: 255, a: 255 }, topId);
+    await setActiveLayer(page, topId);
+    await drawRect(page, 25, 25, 50, 50, { r: 0, g: 0, b: 255 });
 
     await page.keyboard.press(`${mod}+KeyE`);
 
@@ -516,13 +524,17 @@ test.describe('Merge Down with Effects', () => {
 // ===========================================================================
 
 test.describe('Cmd+Click Thumbnail', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'layer panel hidden on touch devices');
+  });
   test('cmd+click on layer thumbnail creates selection from alpha', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const state = await getEditorState(page);
     const layerId = state.document.activeLayerId;
 
     // Paint a 40x40 rect at (30,30)
-    await paintRect(page, 30, 30, 40, 40, { r: 255, g: 0, b: 0, a: 255 }, layerId);
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 30, 30, 40, 40, { r: 255, g: 0, b: 0 });
 
     // Cmd+click on the thumbnail
     const thumbnail = page.locator('[class*="thumbnail"]').first();
@@ -550,7 +562,8 @@ test.describe('Cmd+Click Thumbnail', () => {
     const state = await getEditorState(page);
     const layerId = state.document.activeLayerId;
 
-    await paintRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0, a: 255 }, layerId);
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0 });
 
     const thumbnail = page.locator('[class*="thumbnail"]').first();
     await thumbnail.click();

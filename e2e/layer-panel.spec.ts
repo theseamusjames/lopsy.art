@@ -14,7 +14,14 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function getEditorState(page: Page) {
@@ -58,31 +65,19 @@ async function getUIState(page: Page) {
 }
 
 async function addLayer(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { addLayer: () => void };
-    };
-    store.getState().addLayer();
-  });
+  await page.locator('[aria-label="Add Layer"]').click();
 }
 
-async function addMaskViaStore(page: Page, layerId: string) {
-  await page.evaluate(
-    (id) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { addLayerMask: (id: string) => void };
-      };
-      store.getState().addLayerMask(id);
-    },
-    layerId,
-  );
+async function addMaskViaStore(page: Page, _layerId: string) {
+  await page.locator('[aria-label="Add Mask"]').click();
 }
 
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, isMobile }) => {
+  test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
   await page.goto('/');
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
   await createDocument(page);

@@ -181,74 +181,123 @@ pub fn merge_layers(
     let (tw, th) = engine.texture_pool.get_size(top_handle).unwrap_or((1, 1));
     let (bw, bh) = engine.texture_pool.get_size(bottom_handle).unwrap_or((1, 1));
 
-    let top_layer = engine.layer_stack.iter().find(|l| l.id == top_id).cloned();
-    let bottom_layer = engine.layer_stack.iter().find(|l| l.id == bottom_id).cloned();
-    let top_desc = top_layer.ok_or_else(|| format!("Top layer desc {top_id} not found"))?;
-    let bottom_desc = bottom_layer.ok_or_else(|| format!("Bottom layer desc {bottom_id} not found"))?;
+    let top_desc = engine.layer_stack.iter().find(|l| l.id == top_id).cloned()
+        .ok_or_else(|| format!("Top layer desc {top_id} not found"))?;
+    let bottom_desc = engine.layer_stack.iter().find(|l| l.id == bottom_id).cloned()
+        .ok_or_else(|| format!("Bottom layer desc {bottom_id} not found"))?;
 
     let top_tex = engine.texture_pool.get(top_handle).cloned()
         .ok_or("Top texture not found")?;
     let bottom_tex = engine.texture_pool.get(bottom_handle).cloned()
         .ok_or("Bottom texture not found")?;
 
-    // Render: blend top onto bottom, store in scratch_a
+    // Merge into a doc-sized result at position (0, 0).
+    // Both layers are mapped into document space via their positions.
+    // We use the doc-sized scratch buffers as intermediaries, ping-ponging
+    // to avoid read/write feedback on the same texture.
+    let doc_w = engine.doc_width;
+    let doc_h = engine.doc_height;
+
+    // Step 1: clear scratch_b, then blend bottom onto it in doc space.
+    // Render target = scratch_b, src = bottom_tex, dst = scratch_b (cleared).
+    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+    engine.fbo_pool.unbind(&engine.gl);
+
+    // Blend bottom into scratch_a (src=bottom, dst=scratch_b cleared → scratch_a)
+    let scratch_b_tex = engine.texture_pool.get(engine.scratch_texture_b).cloned()
+        .ok_or("scratch_b not found")?;
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, bw as i32, bh as i32);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    {
+        let shader = &engine.shaders.blend;
+        engine.gl.use_program(Some(&shader.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&bottom_tex));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_b_tex));
 
-    // First copy bottom into scratch_a
-    engine.gl.use_program(Some(&engine.shaders.blit.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&bottom_tex));
-    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
-        engine.gl.uniform1i(Some(&loc), 0);
+        if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") {
+            engine.gl.uniform2f(Some(&loc), bottom_desc.x as f32, bottom_desc.y as f32);
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), bw as f32, bh as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+        engine.draw_fullscreen_quad();
     }
-    engine.draw_fullscreen_quad();
 
-    // Now blend top onto scratch_a → scratch_b
+    // Step 2: blend top onto scratch_a → scratch_b
     let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned()
         .ok_or("scratch_a not found")?;
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-    engine.gl.viewport(0, 0, bw as i32, bh as i32);
-
-    engine.gl.use_program(Some(&engine.shaders.blend.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&top_tex));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_a_tex));
-
-    let shader = &engine.shaders.blend;
-    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), top_desc.opacity); }
-    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), top_desc.blend_mode as i32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") {
-        engine.gl.uniform2f(Some(&loc),
-            (top_desc.x - bottom_desc.x) as f32,
-            (top_desc.y - bottom_desc.y) as f32);
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), bw as f32, bh as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
-
-    engine.draw_fullscreen_quad();
-
-    // Unbind scratch_a from TEXTURE1 before we write to bottom's FBO
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
-    // Copy scratch_b → bottom texture
-    let scratch_b_tex = engine.texture_pool.get(engine.scratch_texture_b).cloned()
+    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    {
+        let shader = &engine.shaders.blend;
+        engine.gl.use_program(Some(&shader.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&top_tex));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_a_tex));
+
+        if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), top_desc.opacity); }
+        if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), top_desc.blend_mode as i32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") {
+            engine.gl.uniform2f(Some(&loc), top_desc.x as f32, top_desc.y as f32);
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+        engine.draw_fullscreen_quad();
+    }
+
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+
+    // Step 3: replace bottom texture with doc-sized result from scratch_b
+    let new_tex = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
+    let new_gl_tex = engine.texture_pool.get(new_tex).cloned()
+        .ok_or("new texture not found")?;
+    let scratch_b_tex2 = engine.texture_pool.get(engine.scratch_texture_b).cloned()
         .ok_or("scratch_b not found")?;
-    engine.render_to_texture(&bottom_tex, bw as i32, bh as i32, |engine| {
+    engine.render_to_texture(&new_gl_tex, doc_w as i32, doc_h as i32, |engine| {
         engine.gl.use_program(Some(&engine.shaders.blit.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_b_tex));
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_b_tex2));
         if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
             engine.gl.uniform1i(Some(&loc), 0);
         }
         engine.draw_fullscreen_quad();
     });
+
+    // Swap the bottom layer's texture to the new doc-sized one
+    let old_bottom = engine.layer_textures.insert(bottom_id.to_string(), new_tex);
+    if let Some(old) = old_bottom {
+        engine.texture_pool.release(old);
+    }
+
+    // Update the bottom layer's position to (0, 0) since the merged
+    // result is now in document coordinates.
+    if let Some(layer) = engine.layer_stack.iter_mut().find(|l| l.id == bottom_id) {
+        layer.x = 0;
+        layer.y = 0;
+        layer.width = doc_w;
+        layer.height = doc_h;
+    }
 
     engine.mark_layer_dirty(bottom_id);
     Ok(())
@@ -616,59 +665,63 @@ pub fn clipboard_clear_selected(
     let layer_tex = engine.texture_pool.get(layer_tex_handle).cloned()
         .ok_or("Layer texture not found")?;
 
-    // Render cleared result into scratch_a
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, lw as i32, lh as i32);
+    let has_mask = has_selection && engine.selection_mask_texture.is_some();
+    let mask_tex_opt = if has_mask {
+        engine.selection_mask_texture
+            .and_then(|h| engine.texture_pool.get(h).cloned())
+    } else {
+        None
+    };
+
+    let tmp_tex_h = engine.texture_pool.acquire(&engine.gl, lw, lh)?;
+    let tmp_gl_tex = engine.texture_pool.get(tmp_tex_h).cloned()
+        .ok_or("Temp texture not found")?;
 
     engine.gl.disable(WebGl2RenderingContext::BLEND);
-    let shader = &engine.shaders.clipboard_clear;
-    engine.gl.use_program(Some(&shader.program));
+    engine.render_to_texture(&tmp_gl_tex, lw as i32, lh as i32, |engine| {
+        let shader = &engine.shaders.clipboard_clear;
+        engine.gl.use_program(Some(&shader.program));
 
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = shader.location(&engine.gl, "u_layerTex") {
-        engine.gl.uniform1i(Some(&loc), 0);
-    }
-
-    let has_mask = has_selection && engine.selection_mask_texture.is_some();
-    if has_mask {
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        if let Some(mask_handle) = engine.selection_mask_texture {
-            if let Some(mask_tex) = engine.texture_pool.get(mask_handle) {
-                engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
-            }
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        if let Some(loc) = shader.location(&engine.gl, "u_layerTex") {
+            engine.gl.uniform1i(Some(&loc), 0);
         }
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_maskTex") {
-        engine.gl.uniform1i(Some(&loc), 1);
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasMask") {
-        engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") {
-        engine.gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") {
-        engine.gl.uniform2f(Some(&loc), layer_x, layer_y);
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_layerSize") {
-        engine.gl.uniform2f(Some(&loc), lw as f32, lh as f32);
-    }
 
-    engine.draw_fullscreen_quad();
+        if let Some(m) = &mask_tex_opt {
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_maskTex") {
+            engine.gl.uniform1i(Some(&loc), 1);
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") {
+            engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_docSize") {
+            engine.gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") {
+            engine.gl.uniform2f(Some(&loc), layer_x, layer_y);
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_layerSize") {
+            engine.gl.uniform2f(Some(&loc), lw as f32, lh as f32);
+        }
 
-    // Copy scratch_a → layer texture
-    let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned()
-        .ok_or("scratch_a not found")?;
+        engine.draw_fullscreen_quad();
+    });
+
     engine.render_to_texture(&layer_tex, lw as i32, lh as i32, |engine| {
         engine.gl.use_program(Some(&engine.shaders.blit.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_a_tex));
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tmp_gl_tex));
         if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
             engine.gl.uniform1i(Some(&loc), 0);
         }
         engine.draw_fullscreen_quad();
     });
+
+    engine.texture_pool.release(tmp_tex_h);
 
     engine.mark_layer_dirty(layer_id);
     Ok(())
@@ -816,6 +869,36 @@ pub fn float_selection(
 
     // Write base to layer immediately (so the display shows selected pixels removed)
     composite_float(engine, 0, 0)?;
+
+    Ok(())
+}
+
+/// Replace the float base texture with a copy of a source texture.
+/// Used by option+drag (copy-move): after floatSelection cuts the selected
+/// pixels, this restores the base so the original pixels remain visible.
+pub fn restore_float_base(
+    engine: &mut EngineInner,
+    src_id: &str,
+) -> Result<(), String> {
+    let base_handle = engine.float_base_texture
+        .ok_or("No float base")?;
+    let src_handle = *engine.layer_textures.get(src_id)
+        .ok_or_else(|| format!("Source {src_id} not found"))?;
+    let src_tex = engine.texture_pool.get(src_handle).cloned()
+        .ok_or("Source texture not found")?;
+    let base_tex = engine.texture_pool.get(base_handle).cloned()
+        .ok_or("Base texture not found")?;
+    let (bw, bh) = engine.texture_pool.get_size(base_handle).unwrap_or((1, 1));
+
+    engine.render_to_texture(&base_tex, bw as i32, bh as i32, |engine| {
+        engine.gl.use_program(Some(&engine.shaders.blit.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
+            engine.gl.uniform1i(Some(&loc), 0);
+        }
+        engine.draw_fullscreen_quad();
+    });
 
     Ok(())
 }
@@ -1341,6 +1424,53 @@ pub fn read_pixels(
         .ok_or("Texture not found")?;
 
     // Create temp FBO, attach texture, read pixels
+    let fbo = engine.gl.create_framebuffer()
+        .ok_or("Failed to create temp FBO")?;
+    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+    engine.gl.framebuffer_texture_2d(
+        WebGl2RenderingContext::FRAMEBUFFER,
+        WebGl2RenderingContext::COLOR_ATTACHMENT0,
+        WebGl2RenderingContext::TEXTURE_2D,
+        Some(texture),
+        0,
+    );
+
+    let pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h)?;
+
+    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+    engine.gl.delete_framebuffer(Some(&fbo));
+
+    Ok(pixels)
+}
+
+pub fn upload_clipboard_pixels(
+    engine: &mut EngineInner,
+    data: &[u8],
+    width: u32,
+    height: u32,
+    offset_x: i32,
+    offset_y: i32,
+) -> Result<(), String> {
+    if let Some(old) = engine.clipboard_texture.take() {
+        engine.texture_pool.release(old);
+    }
+    let tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
+    engine.texture_pool.upload_rgba(&engine.gl, tex, 0, 0, width, height, data)?;
+    engine.clipboard_texture = Some(tex);
+    engine.clipboard_width = width;
+    engine.clipboard_height = height;
+    engine.clipboard_offset_x = offset_x;
+    engine.clipboard_offset_y = offset_y;
+    Ok(())
+}
+
+pub fn read_clipboard_pixels(engine: &EngineInner) -> Result<Vec<u8>, String> {
+    let tex_handle = engine.clipboard_texture
+        .ok_or("No clipboard texture")?;
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
+    let texture = engine.texture_pool.get(tex_handle)
+        .ok_or("Clipboard texture not found")?;
+
     let fbo = engine.gl.create_framebuffer()
         .ok_or("Failed to create temp FBO")?;
     engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));

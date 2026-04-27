@@ -445,7 +445,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   magneticLassoFrequency: 40,
   textContent: 'Text',
   textFontSize: 24,
-  textFontFamily: 'sans-serif',
+  textFontFamily: 'Inter, sans-serif',
   textFontWeight: 400,
   textFontStyle: 'normal' as const,
   textAlign: 'left' as const,

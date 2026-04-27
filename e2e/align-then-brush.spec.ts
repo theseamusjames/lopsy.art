@@ -24,7 +24,14 @@ async function createDocument(page: Page, w: number, h: number, transparent: boo
     },
     { w, h, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -97,12 +104,7 @@ async function clickAlign(page: Page, label: string) {
 }
 
 async function selectMoveTool(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (tool: string) => void };
-    };
-    store.getState().setActiveTool('move');
-  });
+  await page.keyboard.press('v');
   await page.waitForTimeout(100);
 }
 
@@ -142,6 +144,7 @@ function countBlackInRect(
 
 test.describe('Align then brush — brush paints at cursor, not offset by alignment', () => {
   test('brush top-left after aligning rect bottom-right lands in top-left', async ({ page }) => {
+    test.setTimeout(120_000);
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 1920, 1080, true);

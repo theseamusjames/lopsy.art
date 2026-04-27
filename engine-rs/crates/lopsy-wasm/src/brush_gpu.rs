@@ -15,9 +15,9 @@ pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), Stri
             engine.stroke_fbo = Some(fbo);
         }
 
-        // Attach stroke texture to FBO
         if let (Some(fbo), Some(tex)) = (engine.stroke_fbo, engine.texture_pool.get(stroke_tex)) {
             engine.fbo_pool.attach_texture(&engine.gl, fbo, tex);
+            engine.fbo_pool.unbind(&engine.gl);
         }
     }
     Ok(())
@@ -76,6 +76,15 @@ pub fn apply_dab_batch(
         }
     }
     gl.viewport(0, 0, w as i32, h as i32);
+
+    // Break any accidental feedback loop: the stroke texture may still be
+    // bound to a texture unit from acquire() or attach_texture(). If it's
+    // simultaneously attached as the FBO color target AND bound to a
+    // sampler unit, the WebGL implementation can silently discard the draw.
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
     // MAX blending for dab accumulation on the stroke texture.
     // Each pixel takes the maximum of the existing value and the new dab value.
@@ -168,15 +177,40 @@ pub fn apply_dab_batch(
         }
     }
 
-    // Render each dab as a separate draw call
+    // Scissor each dab to its bounding box so the fragment shader only
+    // runs on the pixels it will actually write. Without this, every dab
+    // runs the FS on the full stroke texture (e.g. 2550x3300 for a letter
+    // canvas) and discards >99.98% of invocations for a typical brush size.
+    //
+    // The bounding half-extent uses sqrt(2)/2 * size so rotated custom
+    // brush tips (whose sampled region is a rotated unit square scaled by
+    // size) fit inside. +2 px covers the smoothstep edge feather and any
+    // sub-pixel drift from the float→int conversion.
+    let tex_w_i = w as i32;
+    let tex_h_i = h as i32;
+    let half_extent = (size * 0.5 * std::f32::consts::SQRT_2).ceil() as i32 + 2;
+    gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
+
+    let u_center_loc = shader.location(gl, "u_center");
     for chunk in points.chunks(2) {
         if chunk.len() < 2 { break; }
-        if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), chunk[0] as f32, chunk[1] as f32);
+        let cx = chunk[0] as f32;
+        let cy = chunk[1] as f32;
+
+        let x0 = (cx.floor() as i32 - half_extent).max(0);
+        let y0 = (cy.floor() as i32 - half_extent).max(0);
+        let x1 = (cx.ceil() as i32 + half_extent).min(tex_w_i);
+        let y1 = (cy.ceil() as i32 + half_extent).min(tex_h_i);
+        if x1 <= x0 || y1 <= y0 { continue; }
+        gl.scissor(x0, y0, x1 - x0, y1 - y0);
+
+        if let Some(loc) = &u_center_loc {
+            gl.uniform2f(Some(loc), cx, cy);
         }
         engine.draw_fullscreen_quad();
     }
 
+    gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
     gl.disable(WebGl2RenderingContext::BLEND);
     // Reset blend equation to default ADD for subsequent passes
     gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);

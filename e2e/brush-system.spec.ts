@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { setToolOption, setForegroundColor, setBrushModalOption, openBrushModal, closeBrushModal } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -18,7 +19,14 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -64,17 +72,6 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   }, { setter, value });
 }
 
-async function setUIState(page: Page, setter: string, value: unknown) {
-  await page.evaluate(({ setter, value }) => {
-    const colorSetters = new Set(['setForegroundColor', 'setBackgroundColor', 'swapColors', 'resetColors', 'addRecentColor']);
-    const storeKey = colorSetters.has(setter) ? '__toolSettingsStore' : '__uiStore';
-    const store = (window as unknown as Record<string, unknown>)[storeKey] as {
-      getState: () => Record<string, (v: unknown) => void>;
-    };
-    store.getState()[setter]!(value);
-  }, { setter, value });
-}
-
 type PixelSnapshot = { width: number; height: number; pixels: number[] };
 
 async function snapshot(page: Page): Promise<PixelSnapshot> {
@@ -112,16 +109,6 @@ async function getBrushPresets(page: Page) {
   });
 }
 
-async function openBrushModal(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setShowBrushModal: (v: boolean) => void };
-    };
-    store.getState().setShowBrushModal(true);
-  });
-  await page.waitForTimeout(300);
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -137,9 +124,9 @@ test.describe('Brush System', () => {
   });
 
   test('01 - default brush stroke renders', async ({ page }) => {
-    await setToolSetting(page, 'setBrushSize', 20);
-    await setToolSetting(page, 'setBrushHardness', 80);
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setToolOption(page, 'Size', 20);
+    await setToolOption(page, 'Hardness', 80);
+    await setForegroundColor(page, 255, 0, 0);
 
     const before = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 500, y: 200 }, 20);
@@ -150,9 +137,9 @@ test.describe('Brush System', () => {
   });
 
   test('02 - soft brush produces gradient edges', async ({ page }) => {
-    await setToolSetting(page, 'setBrushSize', 40);
-    await setToolSetting(page, 'setBrushHardness', 0);
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setToolOption(page, 'Size', 40);
+    await setToolOption(page, 'Hardness', 0);
+    await setForegroundColor(page, 0, 0, 255);
 
     const before = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 500, y: 200 }, 20);
@@ -175,10 +162,11 @@ test.describe('Brush System', () => {
   });
 
   test('03 - spacing 100% vs dense spacing', async ({ page }) => {
-    await setToolSetting(page, 'setBrushSize', 30);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 100);
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setToolOption(page, 'Size', 30);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 100);
+    await closeBrushModal(page);
+    await setForegroundColor(page, 255, 0, 0);
 
     const baseline = await snapshot(page);
     await drawStroke(page, { x: 50, y: 200 }, { x: 550, y: 200 }, 30);
@@ -187,15 +175,11 @@ test.describe('Brush System', () => {
     await page.screenshot({ path: 'test-results/screenshots/brush-03-spacing-100.png' });
 
     // Undo
-    await page.evaluate(() => {
-      (window as unknown as Record<string, unknown>).__editorStore &&
-        ((window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { undo: () => void };
-        }).getState().undo();
-    });
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(500);
 
-    await setToolSetting(page, 'setBrushSpacing', 10);
+    await setBrushModalOption(page, 'Spacing', 10);
+    await closeBrushModal(page);
     const baseline2 = await snapshot(page);
     await drawStroke(page, { x: 50, y: 200 }, { x: 550, y: 200 }, 30);
     const denseSnap = await snapshot(page);
@@ -209,11 +193,12 @@ test.describe('Brush System', () => {
   });
 
   test('04 - scatter offsets dabs from stroke line', async ({ page }) => {
-    await setToolSetting(page, 'setBrushSize', 15);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 30);
-    await setToolSetting(page, 'setBrushScatter', 80);
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 255, b: 0, a: 1 });
+    await setToolOption(page, 'Size', 15);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 30);
+    await setBrushModalOption(page, 'Scatter', 80);
+    await closeBrushModal(page);
+    await setForegroundColor(page, 0, 255, 0);
 
     const before = await snapshot(page);
     await drawStroke(page, { x: 50, y: 200 }, { x: 550, y: 200 }, 30);
@@ -256,7 +241,7 @@ test.describe('Brush System', () => {
     });
     await page.waitForTimeout(200);
 
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
     const base0 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 500, y: 200 }, 20);
     const snap0 = await snapshot(page);
@@ -264,14 +249,11 @@ test.describe('Brush System', () => {
     await page.screenshot({ path: 'test-results/screenshots/brush-06-angle-0.png' });
 
     // Undo
-    await page.evaluate(() => {
-      ((window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      }).getState().undo();
-    });
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     await setToolSetting(page, 'setBrushAngle', 90);
+    await page.waitForTimeout(200);
     const base90 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 500, y: 200 }, 20);
     const snap90 = await snapshot(page);
@@ -325,7 +307,7 @@ test.describe('Brush System', () => {
     // Set the brush to a small size before opening the modal so the
     // preview's clamping (size = clamp(brushSize, 2, 40)) yields a clearly
     // different stamp than at size 40 later.
-    await setToolSetting(page, 'setBrushSize', 4);
+    await setToolOption(page, 'Size', 4);
     await page.waitForTimeout(50);
 
     await openBrushModal(page);
@@ -364,7 +346,7 @@ test.describe('Brush System', () => {
 
     // Bump the brush size to 60 — the preview clamps to 40, far larger
     // than the original 4.
-    await setToolSetting(page, 'setBrushSize', 60);
+    await setToolOption(page, 'Size', 60);
     await page.waitForTimeout(300);
 
     const newSize = await page.evaluate(() => {
@@ -418,7 +400,7 @@ test.describe('Brush System', () => {
     });
     await page.waitForTimeout(200);
 
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 255, a: 1 });
+    await setForegroundColor(page, 255, 0, 255);
     const before = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 500, y: 200 }, 15);
     const after = await snapshot(page);
@@ -428,8 +410,8 @@ test.describe('Brush System', () => {
   });
 
   test('10 - brush from selection creates preset', async ({ page }) => {
-    await setToolSetting(page, 'setBrushSize', 30);
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 255, b: 0, a: 1 });
+    await setToolOption(page, 'Size', 30);
+    await setForegroundColor(page, 255, 255, 0);
     await drawStroke(page, { x: 250, y: 150 }, { x: 350, y: 250 }, 15);
 
     await page.evaluate(() => {
@@ -501,8 +483,8 @@ test.describe('Brush System', () => {
   });
 
   test('12 - undo/redo preserves brush strokes', async ({ page }) => {
-    await setToolSetting(page, 'setBrushSize', 25);
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 100, b: 0, a: 1 });
+    await setToolOption(page, 'Size', 25);
+    await setForegroundColor(page, 255, 100, 0);
 
     const before = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 500, y: 200 }, 20);
@@ -512,11 +494,7 @@ test.describe('Brush System', () => {
     await page.screenshot({ path: 'test-results/screenshots/brush-15-before-undo.png' });
 
     // Undo
-    await page.evaluate(() => {
-      ((window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      }).getState().undo();
-    });
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(500);
     // Wait for multiple render cycles so GPU state reflects the undo
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -529,11 +507,7 @@ test.describe('Brush System', () => {
     expect(undoDiff).toBeLessThanOrEqual(drawDiff);
 
     // Redo
-    await page.evaluate(() => {
-      ((window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { redo: () => void };
-      }).getState().redo();
-    });
+    await page.keyboard.press('Control+Shift+z');
     await page.waitForTimeout(500);
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
     await page.waitForTimeout(300);

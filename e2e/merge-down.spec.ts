@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { drawRect, setActiveLayer } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,7 +15,14 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     },
     { w: width, h: height, t: transparent },
   );
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
+    } | undefined;
+    if (!store) return false;
+    const s = store.getState();
+    return s.document.layers.length > 0 && s.undoStack.length > 0;
+  });
 }
 
 async function getEditorState(page: Page) {
@@ -72,62 +80,8 @@ async function getPixelAt(page: Page, x: number, y: number, layerId?: string) {
   );
 }
 
-async function paintRect(
-  page: Page,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  color: { r: number; g: number; b: number; a: number },
-  layerId?: string,
-) {
-  await page.evaluate(
-    ({ x, y, w, h, color, lid }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
-          updateLayerPixelData: (id: string, data: ImageData) => void;
-        };
-      };
-      const state = store.getState();
-      const id = lid ?? state.document.activeLayerId;
-      const data = state.getOrCreateLayerPixelData(id);
-      for (let py = y; py < y + h; py++) {
-        for (let px = x; px < x + w; px++) {
-          if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
-          const idx = (py * data.width + px) * 4;
-          data.data[idx] = color.r;
-          data.data[idx + 1] = color.g;
-          data.data[idx + 2] = color.b;
-          data.data[idx + 3] = color.a;
-        }
-      }
-      state.updateLayerPixelData(id, data);
-    },
-    { x, y, w, h, color, lid: layerId ?? null },
-  );
-}
-
 async function addLayer(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { addLayer: () => void };
-    };
-    store.getState().addLayer();
-  });
-}
-
-async function setActiveLayer(page: Page, layerId: string) {
-  await page.evaluate(
-    (id) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(id);
-    },
-    layerId,
-  );
+  await page.locator('[aria-label="Add Layer"]').click();
 }
 
 async function getPixelFromGpu(page: Page, x: number, y: number, layerId?: string) {
@@ -192,13 +146,14 @@ test.describe('Merge Down', () => {
     const bgId = state0.document.layers[0]!.id;
 
     // Paint red on background
-    await paintRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0 });
 
     // Add layer, paint blue
     await addLayer(page);
     const state1 = await getEditorState(page);
     const topId = state1.document.activeLayerId;
-    await paintRect(page, 25, 25, 50, 50, { r: 0, g: 0, b: 255, a: 255 }, topId);
+    await drawRect(page, 25, 25, 50, 50, { r: 0, g: 0, b: 255 });
 
     // Merge down (Cmd+E)
     await page.keyboard.press(`${mod}+KeyE`);
@@ -231,13 +186,14 @@ test.describe('Merge Down', () => {
     const bgId = state0.document.layers[0]!.id;
 
     // Paint red on background
-    await paintRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0 });
 
     // Add layer, paint green
     await addLayer(page);
     const state1 = await getEditorState(page);
     const topId = state1.document.activeLayerId;
-    await paintRect(page, 50, 50, 50, 50, { r: 0, g: 255, b: 0, a: 255 }, topId);
+    await drawRect(page, 50, 50, 50, 50, { r: 0, g: 255, b: 0 });
 
     // Verify pre-merge state
     expect(state1.document.layers).toHaveLength(3);
@@ -283,12 +239,14 @@ test.describe('Merge Down', () => {
     const state0 = await getEditorState(page);
     const bgId = state0.document.layers[0]!.id;
 
-    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0 });
 
     await addLayer(page);
     const state1 = await getEditorState(page);
     const topId = state1.document.activeLayerId;
-    await paintRect(page, 0, 0, 100, 100, { r: 0, g: 0, b: 255, a: 128 }, topId);
+    await setActiveLayer(page, topId);
+    await drawRect(page, 0, 0, 100, 100, { r: 0, g: 0, b: 255, a: 128 / 255 });
 
     // Merge, undo, redo
     await page.keyboard.press(`${mod}+KeyE`);
@@ -309,19 +267,20 @@ test.describe('Merge Down', () => {
 
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
-    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0 });
 
     // Add layer 2
     await addLayer(page);
     const s1 = await getEditorState(page);
     const midId = s1.document.activeLayerId;
-    await paintRect(page, 0, 0, 100, 100, { r: 0, g: 255, b: 0, a: 255 }, midId);
+    await drawRect(page, 0, 0, 100, 100, { r: 0, g: 255, b: 0 });
 
     // Add layer 3
     await addLayer(page);
     const s2 = await getEditorState(page);
     const topId = s2.document.activeLayerId;
-    await paintRect(page, 0, 0, 100, 100, { r: 0, g: 0, b: 255, a: 255 }, topId);
+    await drawRect(page, 0, 0, 100, 100, { r: 0, g: 0, b: 255 });
 
     expect(s2.document.layers).toHaveLength(4);
 
@@ -345,13 +304,14 @@ test.describe('Merge Down', () => {
     const bgId = s0.document.layers[0]!.id;
 
     // Paint specific pattern on background
-    await paintRect(page, 0, 0, 30, 30, { r: 200, g: 100, b: 50, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 30, 30, { r: 200, g: 100, b: 50 });
 
     // Add and paint layer
     await addLayer(page);
     const s1 = await getEditorState(page);
     const topId = s1.document.activeLayerId;
-    await paintRect(page, 70, 70, 30, 30, { r: 50, g: 100, b: 200, a: 255 }, topId);
+    await drawRect(page, 70, 70, 30, 30, { r: 50, g: 100, b: 200 });
 
     // Snapshot composited canvas before merge
     await page.waitForTimeout(200);
