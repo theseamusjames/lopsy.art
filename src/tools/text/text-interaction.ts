@@ -4,9 +4,10 @@ import type { Point } from '../../types';
 import { useUIStore, type TextEditingState } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
-import { renderTextToCanvas, type TextStyle } from './text';
+import { computeTextLayout, rasterizeText, type TextStyle } from './text';
 import { hitTestTextLayer } from './text-hit-test';
 import { createTextLayer } from '../../layers/layer-model';
+import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 
 const TEXT_DRAG_THRESHOLD = 4;
 
@@ -55,18 +56,14 @@ export function commitTextEditing(): void {
     textAlign: toolSettings.textAlign,
   };
 
-  const doc = editorState.document;
   const areaWidth = editing.bounds.width;
 
-  // Render text at (0,0) on a canvas — the layer's x/y positions it in document space.
-  const textCanvas = renderTextToCanvas(
-    doc.width,
-    doc.height,
-    { x: 0, y: 0 },
-    editing.text,
-    style,
-    areaWidth,
-  );
+  // Rasterize onto a canvas sized to fit the rendered glyphs (with padding
+  // for antialiasing and descenders). The layout describes where the canvas
+  // should sit relative to the click anchor (bounds.x/y), so center / right
+  // alignment land their text at the click point and glyphs extending past
+  // the document edge are preserved instead of being silently clipped.
+  const { canvas: textCanvas, layout } = rasterizeText(editing.text, style, areaWidth);
 
   editorState.updateTextLayerProperties(editing.layerId, {
     text: editing.text,
@@ -77,15 +74,14 @@ export function commitTextEditing(): void {
     color: textColor,
     textAlign: toolSettings.textAlign,
     width: areaWidth,
-    x: editing.bounds.x,
-    y: editing.bounds.y,
+    x: editing.bounds.x + layout.offsetX,
+    y: editing.bounds.y + layout.offsetY,
     visible: true,
   });
 
-  // Upload pixel data through the standard pipeline.
   const textCtx = textCanvas.getContext('2d');
   if (textCtx) {
-    const imageData = textCtx.getImageData(0, 0, doc.width, doc.height);
+    const imageData = textCtx.getImageData(0, 0, layout.width, layout.height);
     editorState.updateLayerPixelData(editing.layerId, imageData);
   }
   editorState.notifyRender();
@@ -115,12 +111,32 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
 
     editorState.setActiveLayer(hitLayer.id);
 
-    // Layer stays visible — GPU renders text preview in real-time.
+    // Drop the cached committed pixel data so the per-frame live preview
+    // owns the GPU texture during editing — otherwise syncLayers would
+    // re-upload the stale committed bytes on top of each preview frame.
+    clearJsPixelData(hitLayer.id);
+
+    // Recover the original click anchor (which `bounds.x/y` represents during
+    // editing) from the saved layer's top-left position. commitTextEditing
+    // shifts the layer by `layout.offset*` so that center / right alignment
+    // and descender padding can extend the rasterized canvas; we invert that
+    // shift here so re-editing preserves the click anchor semantics.
+    const hitStyle: TextStyle = {
+      fontSize: hitLayer.fontSize,
+      fontFamily: hitLayer.fontFamily,
+      fontWeight: hitLayer.fontWeight,
+      fontStyle: hitLayer.fontStyle,
+      color: hitLayer.color,
+      lineHeight: hitLayer.lineHeight,
+      letterSpacing: hitLayer.letterSpacing,
+      textAlign: hitLayer.textAlign,
+    };
+    const hitLayout = computeTextLayout(hitLayer.text, hitStyle, hitLayer.width);
     const editingState: TextEditingState = {
       layerId: hitLayer.id,
       bounds: {
-        x: hitLayer.x,
-        y: hitLayer.y,
+        x: hitLayer.x - hitLayout.offsetX,
+        y: hitLayer.y - hitLayout.offsetY,
         width: hitLayer.width,
         height: null,
       },

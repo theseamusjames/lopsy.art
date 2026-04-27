@@ -33,7 +33,7 @@ const LAYER_TYPE_MAP: Record<string, string> = {
   'adjustment': 'Adjustment',
 };
 
-function layerToDescJson(layer: Layer, effectiveVisible: boolean): string {
+export function layerToDescJson(layer: Layer, effectiveVisible: boolean): string {
   const effects: Record<string, unknown> = {};
 
   const eff = layer.effects;

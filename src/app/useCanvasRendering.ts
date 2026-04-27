@@ -25,7 +25,7 @@ import { renderSelectionAnts, renderTransformHandles } from './rendering/render-
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
 import { aggregateGroupAdjustments } from '../filters/image-adjustments';
 import { renderTextDragOverlay, renderTextEditOverlay } from './rendering/render-text-overlay';
-import { renderTextToCanvas } from '../tools/text/text';
+import { rasterizeText } from '../tools/text/text';
 import type { TextStyle } from '../tools/text/text';
 import { uploadLayerPixels } from '../engine-wasm/wasm-bridge';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch } from './rendering/render-guides';
@@ -106,19 +106,24 @@ function renderFrameGpu(
       letterSpacing: 0,
       textAlign: ts.textAlign,
     };
-    const textCanvas = renderTextToCanvas(
-      doc.width, doc.height,
-      { x: 0, y: 0 },
+    const { canvas: textCanvas, layout } = rasterizeText(
       textEditing.text,
       textStyle,
       textEditing.bounds.width,
     );
+    const desiredX = textEditing.bounds.x + layout.offsetX;
+    const desiredY = textEditing.bounds.y + layout.offsetY;
+    const layer = layers.find((l) => l.id === textEditing.layerId);
+    // Keep the engine's view of layer.x/y in sync with the rasterized canvas
+    // so the live preview is positioned the same way as the committed result.
+    if (layer && (layer.x !== desiredX || layer.y !== desiredY)) {
+      editorState.updateTextLayerProperties(textEditing.layerId, { x: desiredX, y: desiredY });
+    }
     const textCtx = textCanvas.getContext('2d');
     if (textCtx) {
-      const imgData = textCtx.getImageData(0, 0, doc.width, doc.height);
+      const imgData = textCtx.getImageData(0, 0, layout.width, layout.height);
       const rawBytes = new Uint8Array(imgData.data.buffer, imgData.data.byteOffset, imgData.data.byteLength);
-      const layer = layers.find((l) => l.id === textEditing.layerId);
-      uploadLayerPixels(engine, textEditing.layerId, rawBytes, doc.width, doc.height, layer?.x ?? 0, layer?.y ?? 0);
+      uploadLayerPixels(engine, textEditing.layerId, rawBytes, layout.width, layout.height, desiredX, desiredY);
     }
   }
 
