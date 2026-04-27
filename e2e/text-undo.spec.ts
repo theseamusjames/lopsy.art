@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForStore, createDocument, paintRect, getEditorState, undo, redo } from './helpers';
+import { waitForStore, createDocument, drawRect, setActiveLayer, getEditorState, undo, redo } from './helpers';
 
 /**
  * Helper: commit text via the real UI flow (text tool → type → switch tool).
@@ -10,11 +10,7 @@ async function commitTextViaUI(
   docX: number, docY: number, text: string,
 ) {
   // Switch to text tool
-  await page.evaluate(() => {
-    ((window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    }).getState().setActiveTool('text');
-  });
+  await page.keyboard.press('t');
   await page.waitForTimeout(200);
 
   // Get canvas mapping
@@ -39,11 +35,7 @@ async function commitTextViaUI(
   await page.waitForTimeout(200);
 
   // Switch to move tool (triggers onDeactivate → commitTextEditing)
-  await page.evaluate(() => {
-    ((window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    }).getState().setActiveTool('move');
-  });
+  await page.keyboard.press('v');
   await page.waitForTimeout(500);
 }
 
@@ -115,7 +107,8 @@ test('undo after text commit does not move other layers', async ({ page }) => {
     (l: { name: string }) => l.name === 'Background',
   )?.id;
   if (bgLayerId) {
-    await paintRect(page, 50, 50, 80, 60, { r: 255, g: 0, b: 0, a: 255 }, bgLayerId);
+    await setActiveLayer(page, bgLayerId);
+    await drawRect(page, 50, 50, 80, 60, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(300);
   }
 
@@ -161,7 +154,8 @@ test('undo after text commit does not move cropped layers at non-zero positions'
   // should be at (50, 50) with a small width/height, NOT at (0, 0).
   const state = await getEditorState(page);
   const activeId = state.document.activeLayerId;
-  await paintRect(page, 50, 50, 80, 60, { r: 255, g: 0, b: 0, a: 255 }, activeId);
+  await setActiveLayer(page, activeId);
+  await drawRect(page, 50, 50, 80, 60, { r: 255, g: 0, b: 0 });
   await page.waitForTimeout(500);
 
   // Verify the layer is cropped to a non-zero position

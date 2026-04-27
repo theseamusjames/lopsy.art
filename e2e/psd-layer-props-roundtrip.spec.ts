@@ -11,6 +11,15 @@
  * to survive export → import will show up as a pixel diff.
  */
 import { test, expect, type Page } from './fixtures';
+import {
+  setLayerOpacity as setLayerOpacityUI,
+  openEffectsPanel,
+  closeEffectsPanel,
+  enableEffect as enableEffectUI,
+  configureEffect as configureEffectUI,
+  setEffectColor as setEffectColorUI,
+  setActiveLayer as setActiveLayerUI,
+} from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -53,12 +62,7 @@ async function addLayer(page: Page, name: string): Promise<string> {
 }
 
 async function setActiveLayer(page: Page, layerId: string) {
-  await page.evaluate((id) => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { setActiveLayer: (id: string) => void };
-    };
-    store.getState().setActiveLayer(id);
-  }, layerId);
+  await page.locator(`[data-layer-id="${layerId}"]`).click();
 }
 
 /**
@@ -156,15 +160,7 @@ async function setBlendMode(page: Page, layerId: string, mode: string) {
 }
 
 async function setLayerOpacity(page: Page, layerId: string, opacity: number) {
-  await page.evaluate(
-    ({ id, opacity }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { updateLayerOpacity: (id: string, opacity: number) => void };
-      };
-      store.getState().updateLayerOpacity(id, opacity);
-    },
-    { id: layerId, opacity },
-  );
+  await setLayerOpacityUI(page, layerId, Math.round(opacity * 100));
 }
 
 async function setLayerEffects(
@@ -172,15 +168,54 @@ async function setLayerEffects(
   layerId: string,
   effects: Record<string, unknown>,
 ) {
-  await page.evaluate(
-    ({ id, effects }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { updateLayerEffects: (id: string, effects: Record<string, unknown>) => void };
-      };
-      store.getState().updateLayerEffects(id, effects);
-    },
-    { id: layerId, effects },
-  );
+  await setActiveLayerUI(page, layerId);
+
+  for (const [key, value] of Object.entries(effects)) {
+    const fx = value as Record<string, unknown>;
+    if (!fx.enabled) continue;
+
+    if (key === 'colorOverlay') {
+      await enableEffectUI(page, 'Color Overlay');
+      const c = fx.color as { r: number; g: number; b: number };
+      await setEffectColorUI(page, 'Overlay color', c.r, c.g, c.b);
+    } else if (key === 'stroke') {
+      const settings: Record<string, number> = {};
+      if (fx.width !== undefined) settings['Width'] = fx.width as number;
+      await configureEffectUI(page, 'Stroke', settings);
+      const c = fx.color as { r: number; g: number; b: number };
+      await setEffectColorUI(page, 'Stroke color', c.r, c.g, c.b);
+      if (fx.position) {
+        await page.locator(`[aria-label="Stroke position: ${fx.position}"]`).click();
+      }
+    } else if (key === 'dropShadow') {
+      const settings: Record<string, number> = {};
+      if (fx.offsetX !== undefined) settings['Offset X'] = fx.offsetX as number;
+      if (fx.offsetY !== undefined) settings['Offset Y'] = fx.offsetY as number;
+      if (fx.blur !== undefined) settings['Blur'] = fx.blur as number;
+      if (fx.spread !== undefined) settings['Spread'] = fx.spread as number;
+      if (fx.opacity !== undefined) settings['Opacity'] = Math.round((fx.opacity as number) * 100);
+      await configureEffectUI(page, 'Drop Shadow', settings);
+      const c = fx.color as { r: number; g: number; b: number };
+      await setEffectColorUI(page, 'Shadow color', c.r, c.g, c.b);
+    } else if (key === 'outerGlow') {
+      const settings: Record<string, number> = {};
+      if (fx.size !== undefined) settings['Size'] = fx.size as number;
+      if (fx.spread !== undefined) settings['Spread'] = fx.spread as number;
+      if (fx.opacity !== undefined) settings['Opacity'] = Math.round((fx.opacity as number) * 100);
+      await configureEffectUI(page, 'Outer Glow', settings);
+      const c = fx.color as { r: number; g: number; b: number };
+      await setEffectColorUI(page, 'Glow color', c.r, c.g, c.b);
+    } else if (key === 'innerGlow') {
+      const settings: Record<string, number> = {};
+      if (fx.size !== undefined) settings['Size'] = fx.size as number;
+      if (fx.spread !== undefined) settings['Spread'] = fx.spread as number;
+      if (fx.opacity !== undefined) settings['Opacity'] = Math.round((fx.opacity as number) * 100);
+      await configureEffectUI(page, 'Inner Glow', settings);
+      const c = fx.color as { r: number; g: number; b: number };
+      await setEffectColorUI(page, 'Glow color', c.r, c.g, c.b);
+    }
+  }
+  await closeEffectsPanel(page);
 }
 
 async function flushRenderAndWait(page: Page) {

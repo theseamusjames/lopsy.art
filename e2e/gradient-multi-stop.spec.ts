@@ -70,12 +70,7 @@ async function docToScreen(page: Page, docX: number, docY: number) {
 }
 
 async function activateGradientTool(page: Page) {
-  await page.evaluate(() => {
-    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    ui.getState().setActiveTool('gradient');
-  });
+  await page.locator('[data-tool-id="gradient"]').click();
   await page.waitForTimeout(100);
 }
 

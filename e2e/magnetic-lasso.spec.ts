@@ -53,12 +53,7 @@ async function docToScreen(page: Page, docX: number, docY: number) {
 }
 
 async function setTool(page: Page, tool: string) {
-  await page.evaluate((t) => {
-    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    ui.getState().setActiveTool(t);
-  }, tool);
+  await page.locator(`[data-tool-id="${tool}"]`).click();
 }
 
 async function setMagneticLassoSettings(

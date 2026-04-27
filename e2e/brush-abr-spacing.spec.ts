@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { setToolOption, setForegroundColor, setBrushModalOption, openBrushModal, closeBrushModal } from './helpers';
 import path from 'path';
 import fs from 'fs';
 
@@ -73,17 +74,6 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   }, { setter, value });
 }
 
-async function setUIState(page: Page, setter: string, value: unknown) {
-  await page.evaluate(({ setter, value }) => {
-    const colorSetters = new Set(['setForegroundColor', 'setBackgroundColor', 'swapColors', 'resetColors', 'addRecentColor']);
-    const storeKey = colorSetters.has(setter) ? '__toolSettingsStore' : '__uiStore';
-    const store = (window as unknown as Record<string, unknown>)[storeKey] as {
-      getState: () => Record<string, (v: unknown) => void>;
-    };
-    store.getState()[setter]!(value);
-  }, { setter, value });
-}
-
 type PixelSnapshot = { width: number; height: number; pixels: number[] };
 
 async function snapshot(page: Page): Promise<PixelSnapshot> {
@@ -116,32 +106,8 @@ async function getBrushPresets(page: Page) {
   });
 }
 
-async function openBrushModal(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setShowBrushModal: (v: boolean) => void };
-    };
-    store.getState().setShowBrushModal(true);
-  });
-  await page.waitForTimeout(300);
-}
-
-async function closeBrushModal(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setShowBrushModal: (v: boolean) => void };
-    };
-    store.getState().setShowBrushModal(false);
-  });
-  await page.waitForTimeout(200);
-}
-
 async function undo(page: Page) {
-  await page.evaluate(() => {
-    ((window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { undo: () => void };
-    }).getState().undo();
-  });
+  await page.keyboard.press('Control+z');
   await page.waitForTimeout(300);
 }
 
@@ -268,7 +234,7 @@ test.describe('ABR Import & Brush Properties', () => {
     });
     await page.waitForTimeout(200);
 
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
     const before = await snapshot(page);
     await drawStroke(page, { x: 100, y: 300 }, { x: 700, y: 300 }, 20);
     const after = await snapshot(page);
@@ -310,10 +276,11 @@ test.describe('ABR Import & Brush Properties', () => {
   // -----------------------------------------------------------------------
 
   test('Spacing — max spacing (200%) produces widely spaced dabs', async ({ page }) => {
-    await setToolSetting(page, 'setBrushSize', 20);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 200);
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setToolOption(page, 'Size', 20);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 200);
+    await closeBrushModal(page);
+    await setForegroundColor(page, 255, 0, 0);
 
     const before = await snapshot(page);
     await drawStroke(page, { x: 50, y: 300 }, { x: 750, y: 300 }, 40);
@@ -328,7 +295,8 @@ test.describe('ABR Import & Brush Properties', () => {
     // Should be substantially less than a dense stroke
     await undo(page);
 
-    await setToolSetting(page, 'setBrushSpacing', 10);
+    await setBrushModalOption(page, 'Spacing', 10);
+    await closeBrushModal(page);
     const before2 = await snapshot(page);
     await drawStroke(page, { x: 50, y: 300 }, { x: 750, y: 300 }, 40);
     const afterDense = await snapshot(page);
@@ -340,10 +308,11 @@ test.describe('ABR Import & Brush Properties', () => {
   });
 
   test('Spacing — default 25% produces smooth continuous stroke', async ({ page }) => {
-    await setToolSetting(page, 'setBrushSize', 20);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 25);
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setToolOption(page, 'Size', 20);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 25);
+    await closeBrushModal(page);
+    await setForegroundColor(page, 0, 0, 255);
 
     const before = await snapshot(page);
     await drawStroke(page, { x: 100, y: 300 }, { x: 700, y: 300 }, 30);
@@ -354,10 +323,11 @@ test.describe('ABR Import & Brush Properties', () => {
   });
 
   test('Spacing — 100% shows individual dab circles', async ({ page }) => {
-    await setToolSetting(page, 'setBrushSize', 30);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 100);
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 200, b: 0, a: 1 });
+    await setToolOption(page, 'Size', 30);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 100);
+    await closeBrushModal(page);
+    await setForegroundColor(page, 0, 200, 0);
 
     const before = await snapshot(page);
     await drawStroke(page, { x: 50, y: 300 }, { x: 750, y: 300 }, 40);
@@ -369,10 +339,11 @@ test.describe('ABR Import & Brush Properties', () => {
 
   test('Spacing — respects spacing during fast mouse movement', async ({ page }) => {
     // Use very wide spacing and a fast stroke (few mouse events, large steps)
-    await setToolSetting(page, 'setBrushSize', 15);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 150);
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 255, b: 0, a: 1 });
+    await setToolOption(page, 'Size', 15);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 150);
+    await closeBrushModal(page);
+    await setForegroundColor(page, 255, 255, 0);
 
     const before = await snapshot(page);
     // Use only 5 steps — this means large jumps between mouse events
@@ -390,12 +361,13 @@ test.describe('ABR Import & Brush Properties', () => {
   // -----------------------------------------------------------------------
 
   test('Modifying brush size changes stroke thickness', async ({ page }) => {
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 25);
+    await setForegroundColor(page, 255, 0, 0);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 25);
+    await closeBrushModal(page);
 
     // Small brush
-    await setToolSetting(page, 'setBrushSize', 5);
+    await setToolOption(page, 'Size', 5);
     const before1 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 700, y: 200 }, 20);
     const after1 = await snapshot(page);
@@ -403,7 +375,7 @@ test.describe('ABR Import & Brush Properties', () => {
     await page.screenshot({ path: 'test-results/screenshots/props-01-small-size.png' });
 
     // Large brush on a new line
-    await setToolSetting(page, 'setBrushSize', 50);
+    await setToolOption(page, 'Size', 50);
     const before2 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 400 }, { x: 700, y: 400 }, 20);
     const after2 = await snapshot(page);
@@ -415,13 +387,14 @@ test.describe('ABR Import & Brush Properties', () => {
   });
 
   test('Modifying opacity changes stroke transparency', async ({ page }) => {
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
-    await setToolSetting(page, 'setBrushSize', 30);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 25);
+    await setForegroundColor(page, 255, 0, 0);
+    await setToolOption(page, 'Size', 30);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 25);
+    await closeBrushModal(page);
 
     // Full opacity
-    await setToolSetting(page, 'setBrushOpacity', 100);
+    await setToolOption(page, 'Opacity', 100);
     const before1 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 700, y: 200 }, 20);
     const after1 = await snapshot(page);
@@ -429,7 +402,7 @@ test.describe('ABR Import & Brush Properties', () => {
 
     // Low opacity — same position but undo first
     await undo(page);
-    await setToolSetting(page, 'setBrushOpacity', 20);
+    await setToolOption(page, 'Opacity', 20);
     const before2 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 700, y: 200 }, 20);
     const after2 = await snapshot(page);
@@ -443,13 +416,14 @@ test.describe('ABR Import & Brush Properties', () => {
   });
 
   test('Modifying hardness changes edge softness', async ({ page }) => {
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 255, a: 1 });
-    await setToolSetting(page, 'setBrushSize', 40);
-    await setToolSetting(page, 'setBrushSpacing', 25);
-    await setToolSetting(page, 'setBrushOpacity', 100);
+    await setForegroundColor(page, 0, 0, 255);
+    await setToolOption(page, 'Size', 40);
+    await setBrushModalOption(page, 'Spacing', 25);
+    await closeBrushModal(page);
+    await setToolOption(page, 'Opacity', 100);
 
     // Hard brush
-    await setToolSetting(page, 'setBrushHardness', 100);
+    await setToolOption(page, 'Hardness', 100);
     const before1 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 700, y: 200 }, 20);
     const after1 = await snapshot(page);
@@ -459,7 +433,7 @@ test.describe('ABR Import & Brush Properties', () => {
     await undo(page);
 
     // Soft brush
-    await setToolSetting(page, 'setBrushHardness', 0);
+    await setToolOption(page, 'Hardness', 0);
     const before2 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 700, y: 200 }, 20);
     const after2 = await snapshot(page);
@@ -474,13 +448,14 @@ test.describe('ABR Import & Brush Properties', () => {
   });
 
   test('Scatter spreads dabs perpendicular to stroke direction', async ({ page }) => {
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 255, a: 1 });
-    await setToolSetting(page, 'setBrushSize', 10);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 30);
+    await setForegroundColor(page, 255, 0, 255);
+    await setToolOption(page, 'Size', 10);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 30);
 
     // No scatter
-    await setToolSetting(page, 'setBrushScatter', 0);
+    await setBrushModalOption(page, 'Scatter', 0);
+    await closeBrushModal(page);
     const before1 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 700, y: 200 }, 30);
     const after1 = await snapshot(page);
@@ -488,7 +463,8 @@ test.describe('ABR Import & Brush Properties', () => {
     await page.screenshot({ path: 'test-results/screenshots/props-06-no-scatter.png' });
 
     // Max scatter
-    await setToolSetting(page, 'setBrushScatter', 100);
+    await setBrushModalOption(page, 'Scatter', 100);
+    await closeBrushModal(page);
     const before2 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 400 }, { x: 700, y: 400 }, 30);
     const after2 = await snapshot(page);
@@ -519,7 +495,7 @@ test.describe('ABR Import & Brush Properties', () => {
     });
     await page.waitForTimeout(200);
 
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 128, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 128, 0);
 
     // Angle 0
     await setToolSetting(page, 'setBrushAngle', 0);

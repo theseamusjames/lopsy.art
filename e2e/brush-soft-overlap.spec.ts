@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { setToolOption, setForegroundColor, setBrushModalOption, closeBrushModal } from './helpers';
 
 async function waitForStore(page: Page) {
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
@@ -40,26 +41,6 @@ async function docToScreen(page: Page, docX: number, docY: number) {
       y: rect.top + (docY - state.document.height / 2) * state.viewport.zoom + state.viewport.panY + cy,
     };
   }, { docX, docY });
-}
-
-async function setToolSetting(page: Page, setter: string, value: unknown) {
-  await page.evaluate(({ setter, value }) => {
-    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => Record<string, (v: unknown) => void>;
-    };
-    store.getState()[setter]!(value);
-  }, { setter, value });
-}
-
-async function setUIState(page: Page, setter: string, value: unknown) {
-  await page.evaluate(({ setter, value }) => {
-    const colorSetters = new Set(['setForegroundColor', 'setBackgroundColor', 'swapColors', 'resetColors', 'addRecentColor']);
-    const storeKey = colorSetters.has(setter) ? '__toolSettingsStore' : '__uiStore';
-    const store = (window as unknown as Record<string, unknown>)[storeKey] as {
-      getState: () => Record<string, (v: unknown) => void>;
-    };
-    store.getState()[setter]!(value);
-  }, { setter, value });
 }
 
 type PixelSnapshot = { width: number; height: number; pixels: number[] };
@@ -111,11 +92,12 @@ test.describe('Soft brush dab overlap', () => {
   test('overlapping soft brush dabs do not compound opacity', async ({ page }) => {
     // Use a large soft brush with 50% opacity so overlapping dabs are obvious
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 80);
-    await setToolSetting(page, 'setBrushHardness', 0);
-    await setToolSetting(page, 'setBrushOpacity', 50);
-    await setToolSetting(page, 'setBrushSpacing', 10);
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setToolOption(page, 'Size', 80);
+    await setToolOption(page, 'Hardness', 0);
+    await setToolOption(page, 'Opacity', 50);
+    await setBrushModalOption(page, 'Spacing', 10);
+    await closeBrushModal(page);
+    await setForegroundColor(page, 255, 0, 0);
 
     // Draw a single dab (click without drag)
     const singleDabPos = await docToScreen(page, 100, 150);

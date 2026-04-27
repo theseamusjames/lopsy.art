@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { setToolOption, setForegroundColor, setBrushModalOption, closeBrushModal } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -62,33 +63,8 @@ async function drawStroke(page: Page, from: { x: number; y: number }, to: { x: n
   await page.waitForTimeout(400);
 }
 
-async function setToolSetting(page: Page, setter: string, value: unknown) {
-  await page.evaluate(({ setter, value }) => {
-    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => Record<string, (v: unknown) => void>;
-    };
-    store.getState()[setter]!(value);
-  }, { setter, value });
-}
-
-async function setUIState(page: Page, setter: string, value: unknown) {
-  await page.evaluate(({ setter, value }) => {
-    const colorSetters = new Set(['setForegroundColor', 'setBackgroundColor', 'swapColors', 'resetColors', 'addRecentColor']);
-    const storeKey = colorSetters.has(setter) ? '__toolSettingsStore' : '__uiStore';
-    const store = (window as unknown as Record<string, unknown>)[storeKey] as {
-      getState: () => Record<string, (v: unknown) => void>;
-    };
-    store.getState()[setter]!(value);
-  }, { setter, value });
-}
-
 async function addLayer(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { addLayer: () => void };
-    };
-    store.getState().addLayer();
-  });
+  await page.locator('[aria-label="Add Layer"]').click();
   await page.waitForTimeout(200);
 }
 
@@ -160,19 +136,20 @@ test.describe('Brush Opacity Range', () => {
     await page.waitForTimeout(100);
 
     // Set up brush: 50px, hard, full opacity, no spacing
-    await setToolSetting(page, 'setBrushSize', 50);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushOpacity', 100);
-    await setToolSetting(page, 'setBrushSpacing', 0);
+    await setToolOption(page, 'Size', 50);
+    await setToolOption(page, 'Hardness', 100);
+    await setToolOption(page, 'Opacity', 100);
+    await setBrushModalOption(page, 'Spacing', 0);
+    await closeBrushModal(page);
 
     // Set foreground color to black
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 0, 0, 0);
 
     // Draw vertical black line at x=300, from y=20 to y=580
     await drawStroke(page, { x: 300, y: 20 }, { x: 300, y: 580 }, 30);
 
     // Set foreground color to red
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
 
     // Add new layer for red strokes
     await addLayer(page);
@@ -187,7 +164,7 @@ test.describe('Brush Opacity Range', () => {
       const y = 30 + i * 50; // Spaced 50px apart: y = 30, 80, 130, ...
       yPositions.push(y);
 
-      await setToolSetting(page, 'setBrushOpacity', opacity);
+      await setToolOption(page, 'Opacity', opacity);
       await drawStroke(page, { x: 50, y }, { x: 550, y }, 20);
     }
 

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { waitForStore, createDocument, paintRect } from './helpers';
+import { waitForStore, createDocument, drawRect } from './helpers';
 
 test.describe('Export formats (#57)', () => {
   test.beforeEach(async ({ page }) => {
@@ -7,7 +7,7 @@ test.describe('Export formats (#57)', () => {
     await waitForStore(page);
     await createDocument(page, 100, 100, false);
     await page.waitForTimeout(300);
-    await paintRect(page, 10, 10, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 10, 10, 20, 20, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(200);
   });
 

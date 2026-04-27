@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { waitForStore, createDocument, paintRect } from './helpers';
+import { waitForStore, createDocument, drawRect } from './helpers';
 
 interface PixelSnap {
   width: number;
@@ -99,7 +99,7 @@ test.describe('Levels visibility toggle', () => {
 
   test('toggling adjustments off removes levels, toggling back on restores them', async ({ page }) => {
     // Paint a white rect so we have known pixel content.
-    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 255, b: 255, a: 255 });
+    await drawRect(page, 0, 0, 100, 100, { r: 255, g: 255, b: 255 });
     await page.waitForTimeout(200);
 
     // Baseline: pixel at (0,0) should be white.

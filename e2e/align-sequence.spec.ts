@@ -1,4 +1,5 @@
 import { test, type Page } from './fixtures';
+import { drawRect } from './helpers';
 
 async function waitForStore(page: Page) {
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
@@ -24,44 +25,8 @@ async function createDocument(page: Page, w: number, h: number, transparent: boo
   });
 }
 
-async function paintRectOnActiveLayer(page: Page, x: number, y: number, w: number, h: number) {
-  // Paint directly into JS pixel data, then upload to GPU.
-  await page.evaluate(
-    ({ x, y, w, h }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; width: number; height: number }> };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
-          updateLayerPixelData: (id: string, data: ImageData) => void;
-        };
-      };
-      const s = store.getState();
-      const id = s.document.activeLayerId;
-      const data = s.getOrCreateLayerPixelData(id);
-      for (let py = y; py < y + h; py++) {
-        for (let px = x; px < x + w; px++) {
-          if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
-          const idx = (py * data.width + px) * 4;
-          data.data[idx] = 0;
-          data.data[idx + 1] = 0;
-          data.data[idx + 2] = 0;
-          data.data[idx + 3] = 255;
-        }
-      }
-      s.updateLayerPixelData(id, data);
-    },
-    { x, y, w, h },
-  );
-  await page.waitForTimeout(200);
-}
-
 async function selectMoveTool(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (tool: string) => void };
-    };
-    store.getState().setActiveTool('move');
-  });
+  await page.keyboard.press('v');
   await page.waitForTimeout(100);
 }
 
@@ -141,8 +106,8 @@ test.describe('Align buttons sequence — 50x100 rect at (50,50) on 1920x1080', 
     await createDocument(page, 1920, 1080, false);
     await page.waitForSelector('[data-testid="canvas-container"]');
 
-    // Paint a 50x100 black rect at (50,50) on Layer 1 (active)
-    await paintRectOnActiveLayer(page, 50, 50, 50, 100);
+    // Draw a 50x100 black rect at (50,50) on Layer 1 (active)
+    await drawRect(page, 50, 50, 50, 100, { r: 0, g: 0, b: 0 });
 
     await selectMoveTool(page);
 

@@ -264,17 +264,16 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName 
   const s3 = await snapshot(page, 'SNAPSHOT 3: After adding empty layer');
 
   // === Switch to background layer ===
-  await page.evaluate(() => {
+  const bgId = await page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
         document: { layers: Array<{ id: string; name: string }> };
-        setActiveLayer: (id: string) => void;
       };
     };
-    const state = store.getState();
-    const bg = state.document.layers.find(l => l.name === 'Background');
-    if (bg) state.setActiveLayer(bg.id);
+    const bg = store.getState().document.layers.find(l => l.name === 'Background');
+    return bg?.id ?? '';
   });
+  if (bgId) await page.locator(`[data-layer-id="${bgId}"]`).click();
   await page.waitForTimeout(500);
 
   // === SNAPSHOT 4: After selecting background ===

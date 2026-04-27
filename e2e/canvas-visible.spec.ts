@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { waitForStore, createDocument, paintRect, getPixelAt } from './helpers';
+import { waitForStore, createDocument, drawRect, getPixelAt } from './helpers';
 
 test.describe('Canvas renders visibly', () => {
   test.beforeEach(async ({ page }) => {
@@ -40,7 +40,7 @@ test.describe('Canvas renders visibly', () => {
     page.on('pageerror', (err) => errors.push(err.message));
 
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 100, 100, 50, 50, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 100, 100, 50, 50, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(500);
 
     const pixel = await getPixelAt(page, 125, 125);

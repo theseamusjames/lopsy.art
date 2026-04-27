@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForStore, createDocument, getPixelAt, paintRect, getEditorState } from './helpers';
+import { waitForStore, createDocument, getPixelAt, drawRect, setActiveLayer, getEditorState } from './helpers';
 
 test.describe('Pattern Fill', () => {
   test.beforeEach(async ({ page }) => {
@@ -73,7 +73,8 @@ test.describe('Pattern Fill', () => {
     // Fill the new layer with white first so we have something to see tiling against
     const newState = await getEditorState(page);
     const newLayerId = newState.document.activeLayerId;
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 255, b: 255, a: 255 }, newLayerId);
+    await setActiveLayer(page, newLayerId);
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 255, b: 255 });
 
     // Apply pattern fill via WASM bridge directly (programmatic, not via dialog)
     await page.evaluate(async () => {

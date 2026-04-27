@@ -33,11 +33,8 @@ test.describe('Brush perf — 1080x1080 profile', () => {
       store.getState().createDocument(1080, 1080, false);
     });
 
+    await page.keyboard.press('b');
     await page.evaluate(() => {
-      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      uiStore.getState().setActiveTool('brush');
       const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => { setBrushSize: (s: number) => void; setBrushHardness: (h: number) => void };
       };

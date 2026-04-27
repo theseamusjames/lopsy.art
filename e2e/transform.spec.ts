@@ -585,12 +585,7 @@ test.describe('Free Transform', () => {
 
     // Helper: switch to a layer
     async function switchLayer(page: Page, layerId: string) {
-      await page.evaluate((id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { setActiveLayer: (id: string) => void };
-        };
-        store.getState().setActiveLayer(id);
-      }, layerId);
+      await page.locator(`[data-layer-id="${layerId}"]`).click();
       await page.waitForTimeout(50);
     }
 

@@ -5,9 +5,9 @@ import {
   waitForStore,
   getEditorState,
   getPixelAt,
-  paintRect,
   addLayer,
-  moveLayer,
+  moveLayerTo,
+  drawRect,
 } from './helpers';
 
 interface SelectionInfo {
@@ -36,13 +36,24 @@ async function getSelection(page: Page): Promise<SelectionInfo> {
 // selection-handlers.ts (the production code), not test-local copies.
 // ---------------------------------------------------------------------------
 
+const toolShortcuts: Record<string, string> = {
+  'move': 'v',
+  'brush': 'b',
+  'fill': 'g',
+  'shape': 'u',
+  'text': 't',
+  'eraser': 'e',
+  'marquee-rect': 'm',
+  'wand': 'w',
+};
+
 async function setActiveTool(page: Page, tool: string): Promise<void> {
-  await page.evaluate((t) => {
-    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    ui.getState().setActiveTool(t);
-  }, tool);
+  const shortcut = toolShortcuts[tool];
+  if (shortcut) {
+    await page.keyboard.press(shortcut);
+  } else {
+    await page.locator(`[data-tool-id="${tool}"]`).click();
+  }
   await page.waitForTimeout(50);
 }
 
@@ -145,13 +156,13 @@ test.describe('Selection coordinates with layer offset', () => {
 
     // Paint a 60×60 red square at layer-local (60, 60)..(120, 120).
     // Auto-crop runs after paint, leaving the layer cropped to those bounds.
-    await paintRect(page, 60, 60, 60, 60, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 60, 60, 60, 60, { r: 255, g: 0, b: 0 });
 
     // Now move the cropped layer down by 20 doc px so the red square sits
     // at doc (60, 80)..(120, 140) instead of (60, 60)..(120, 120).
     const s0 = await getEditorState(page);
     const layerId = s0.document.layers[0]!.id;
-    await moveLayer(page, layerId, 80, 80); // top-left of cropped layer in doc coords
+    await moveLayerTo(page, layerId, 80, 80); // top-left of cropped layer in doc coords
 
     // Switch to the wand tool and click on the red square in document
     // space — at doc (90, 110), the centre of the square's new position.
@@ -180,7 +191,7 @@ test.describe('Selection coordinates with layer offset', () => {
     await createDocument(page, 100, 100, true);
 
     // Paint a 40×40 red square at doc (30, 30).
-    await paintRect(page, 30, 30, 40, 40, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 30, 30, 40, 40, { r: 255, g: 0, b: 0 });
 
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
@@ -195,12 +206,7 @@ test.describe('Selection coordinates with layer offset', () => {
     // Use the wand to select all the empty area on the background layer.
     // First switch back to the bg layer, then click outside the red square
     // to wand-select the transparent region.
-    await page.evaluate((id) => {
-      const ed = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      ed.getState().setActiveLayer(id);
-    }, bgId);
+    await page.locator(`[data-layer-id="${bgId}"]`).click();
     await page.waitForTimeout(50);
 
     await setActiveTool(page, 'wand');
@@ -213,12 +219,7 @@ test.describe('Selection coordinates with layer offset', () => {
     // Now switch back to the empty fill layer and apply a green fill via
     // the bucket tool. The fill must respect the active selection mask
     // (selection-handlers.ts intersects fillMask with selection mask).
-    await page.evaluate((id) => {
-      const ed = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      ed.getState().setActiveLayer(id);
-    }, fillLayerId);
+    await page.locator(`[data-layer-id="${fillLayerId}"]`).click();
     await page.waitForTimeout(200); // let engine sync the layer
 
     await setForegroundColor(page, { r: 0, g: 255, b: 0, a: 1 });
@@ -258,11 +259,11 @@ test.describe('Selection coordinates with layer offset', () => {
     // 100×100 doc with the background painted red, then moved off-canvas
     // to ensure layer offsets do not affect a doc-space full selection.
     await createDocument(page, 100, 100, true);
-    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0 });
 
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
-    await moveLayer(page, bgId, -75, -75);
+    await moveLayerTo(page, bgId, -75, -75);
 
     // Use a marquee-rect drag covering the whole document to create a
     // doc-space full selection via the real selection tool.

@@ -65,24 +65,11 @@ async function getUIState(page: Page) {
 }
 
 async function addLayer(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { addLayer: () => void };
-    };
-    store.getState().addLayer();
-  });
+  await page.locator('[aria-label="Add Layer"]').click();
 }
 
-async function addMaskViaStore(page: Page, layerId: string) {
-  await page.evaluate(
-    (id) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { addLayerMask: (id: string) => void };
-      };
-      store.getState().addLayerMask(id);
-    },
-    layerId,
-  );
+async function addMaskViaStore(page: Page, _layerId: string) {
+  await page.locator('[aria-label="Add Mask"]').click();
 }
 
 // ---------------------------------------------------------------------------

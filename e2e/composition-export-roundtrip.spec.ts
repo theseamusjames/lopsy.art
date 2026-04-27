@@ -9,6 +9,17 @@
  * Theme: "Neon City" — geometric shapes, glowing text, vibrant overlays.
  */
 import { test, expect, type Page } from './fixtures';
+import {
+  setForegroundColor as setForegroundColorUI,
+  setBlendMode as setBlendModeUI,
+  setLayerOpacity as setLayerOpacityUI,
+  configureEffect,
+  setEffectColor,
+  closeEffectsPanel,
+  drawRect,
+  drawEllipse,
+  setActiveLayer,
+} from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -75,168 +86,16 @@ async function addGroup(page: Page, name: string): Promise<string> {
   }, name);
 }
 
-async function setActiveLayer(page: Page, layerId: string) {
-  await page.evaluate((id) => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { setActiveLayer: (id: string) => void };
-    };
-    store.getState().setActiveLayer(id);
-  }, layerId);
-}
-
-async function paintRect(
-  page: Page,
-  x: number, y: number, w: number, h: number,
-  color: { r: number; g: number; b: number; a: number },
-  layerId?: string,
-) {
-  await page.evaluate(
-    ({ x, y, w, h, color, lid }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: {
-            activeLayerId: string;
-            width: number;
-            height: number;
-            layers: Array<{ id: string; width: number; height: number }>;
-          };
-          updateLayerPixelData: (id: string, data: ImageData) => void;
-          pushHistory: (label?: string) => void;
-        };
-      };
-      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
-        get: (id: string) => ImageData | undefined;
-      };
-      const state = store.getState();
-      const id = lid ?? state.document.activeLayerId;
-      state.pushHistory('Paint');
-      const existing = pixelData.get(id);
-      const layer = state.document.layers.find((l) => l.id === id);
-      const lw = existing?.width ?? layer?.width ?? state.document.width;
-      const lh = existing?.height ?? layer?.height ?? state.document.height;
-      const data = existing ?? new ImageData(lw, lh);
-      for (let py = y; py < y + h; py++) {
-        for (let px = x; px < x + w; px++) {
-          if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
-          const idx = (py * data.width + px) * 4;
-          data.data[idx] = color.r;
-          data.data[idx + 1] = color.g;
-          data.data[idx + 2] = color.b;
-          data.data[idx + 3] = color.a;
-        }
-      }
-      state.updateLayerPixelData(id, data);
-    },
-    { x, y, w, h, color, lid: layerId ?? null },
-  );
-}
-
-async function paintCircle(
-  page: Page,
-  cx: number, cy: number, radius: number,
-  color: { r: number; g: number; b: number; a: number },
-  layerId?: string,
-) {
-  await page.evaluate(
-    ({ cx, cy, radius, color, lid }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: {
-            activeLayerId: string;
-            width: number;
-            height: number;
-            layers: Array<{ id: string; width: number; height: number }>;
-          };
-          updateLayerPixelData: (id: string, data: ImageData) => void;
-          pushHistory: (label?: string) => void;
-        };
-      };
-      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
-        get: (id: string) => ImageData | undefined;
-      };
-      const state = store.getState();
-      const id = lid ?? state.document.activeLayerId;
-      state.pushHistory('Paint Circle');
-      const existing = pixelData.get(id);
-      const layer = state.document.layers.find((l) => l.id === id);
-      const lw = existing?.width ?? layer?.width ?? state.document.width;
-      const lh = existing?.height ?? layer?.height ?? state.document.height;
-      const data = existing ?? new ImageData(lw, lh);
-      for (let y = 0; y < data.height; y++) {
-        for (let x = 0; x < data.width; x++) {
-          const dx = x - cx;
-          const dy = y - cy;
-          if (dx * dx + dy * dy <= radius * radius) {
-            const idx = (y * data.width + x) * 4;
-            data.data[idx] = color.r;
-            data.data[idx + 1] = color.g;
-            data.data[idx + 2] = color.b;
-            data.data[idx + 3] = color.a;
-          }
-        }
-      }
-      state.updateLayerPixelData(id, data);
-    },
-    { cx, cy, radius, color, lid: layerId ?? null },
-  );
-}
-
 async function setBlendMode(page: Page, layerId: string, mode: string) {
-  await page.evaluate(
-    ({ id, mode }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { updateLayerBlendMode: (id: string, mode: string) => void };
-      };
-      store.getState().updateLayerBlendMode(id, mode);
-    },
-    { id: layerId, mode },
-  );
+  await page.locator(`[data-layer-id="${layerId}"]`).click();
+  await setBlendModeUI(page, mode);
 }
 
 async function setLayerOpacity(page: Page, layerId: string, opacity: number) {
-  await page.evaluate(
-    ({ id, opacity }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { updateLayerOpacity: (id: string, opacity: number) => void };
-      };
-      store.getState().updateLayerOpacity(id, opacity);
-    },
-    { id: layerId, opacity },
-  );
+  // Convert 0.0-1.0 to 0-100 percent for the UI helper
+  await setLayerOpacityUI(page, layerId, Math.round(opacity * 100));
 }
 
-async function setLayerEffects(
-  page: Page,
-  layerId: string,
-  effects: Record<string, unknown>,
-) {
-  await page.evaluate(
-    ({ id, effects }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { updateLayerEffects: (id: string, effects: Record<string, unknown>) => void };
-      };
-      store.getState().updateLayerEffects(id, effects);
-    },
-    { id: layerId, effects },
-  );
-}
-
-async function moveLayer(page: Page, layerId: string, x: number, y: number) {
-  await page.evaluate(
-    ({ id, x, y }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          pushHistory: (label?: string) => void;
-          updateLayerPosition: (id: string, x: number, y: number) => void;
-        };
-      };
-      const state = store.getState();
-      state.pushHistory('Move');
-      state.updateLayerPosition(id, x, y);
-    },
-    { id: layerId, x, y },
-  );
-}
 
 async function undo(page: Page) {
   await page.keyboard.press('Meta+z');
@@ -370,13 +229,19 @@ async function docToScreen(page: Page, docX: number, docY: number) {
   );
 }
 
+const toolKeyMap: Record<string, string> = {
+  move: 'v', brush: 'b', fill: 'g', shape: 'u', text: 't', eraser: 'e',
+  'marquee-rect': 'm', wand: 'w', lasso: 'l', stamp: 's', dodge: 'o',
+  smudge: 'r', eyedropper: 'i', pencil: 'n', crop: 'c', path: 'p', spray: 'j',
+};
+
 async function setActiveTool(page: Page, tool: string) {
-  await page.evaluate((t) => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    store.getState().setActiveTool(t);
-  }, tool);
+  const key = toolKeyMap[tool];
+  if (key) {
+    await page.keyboard.press(key);
+  } else {
+    await page.locator(`[data-tool-id="${tool}"]`).click();
+  }
   await page.waitForTimeout(100);
 }
 
@@ -393,12 +258,7 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
 }
 
 async function setForegroundColor(page: Page, color: { r: number; g: number; b: number; a: number }) {
-  await page.evaluate((c) => {
-    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-    };
-    store.getState().setForegroundColor(c);
-  }, color);
+  await setForegroundColorUI(page, color.r, color.g, color.b);
 }
 
 async function drawStroke(
@@ -550,9 +410,10 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
     layerIds['bg'] = doc0.layers[0]!.id;
 
     // Paint a dark gradient background manually
-    await paintRect(page, 0, 0, 800, 600, { r: 15, g: 10, b: 35, a: 255 }, layerIds['bg']);
+    await setActiveLayer(page, layerIds['bg']!);
+    await drawRect(page, 0, 0, 800, 600, { r: 15, g: 10, b: 35 });
     // Add some gradient feel — lighter at bottom
-    await paintRect(page, 0, 400, 800, 200, { r: 25, g: 15, b: 55, a: 255 }, layerIds['bg']);
+    await drawRect(page, 0, 400, 800, 200, { r: 25, g: 15, b: 55 });
 
 
     // =================================================================
@@ -562,33 +423,34 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
 
     // Add building layers inside the group
     layerIds['building1'] = await addLayer(page, 'Tower Left');
-    await paintRect(page, 50, 200, 120, 400, { r: 20, g: 20, b: 40, a: 255 }, layerIds['building1']);
+    await drawRect(page, 50, 200, 120, 400, { r: 20, g: 20, b: 40 });
 
     layerIds['building2'] = await addLayer(page, 'Tower Center');
-    await paintRect(page, 300, 150, 150, 450, { r: 25, g: 22, b: 45, a: 255 }, layerIds['building2']);
+    await drawRect(page, 300, 150, 150, 450, { r: 25, g: 22, b: 45 });
 
     layerIds['building3'] = await addLayer(page, 'Tower Right');
-    await paintRect(page, 580, 250, 130, 350, { r: 18, g: 18, b: 38, a: 255 }, layerIds['building3']);
+    await drawRect(page, 580, 250, 130, 350, { r: 18, g: 18, b: 38 });
 
     layerIds['building4'] = await addLayer(page, 'Low Block');
-    await paintRect(page, 200, 350, 180, 250, { r: 22, g: 20, b: 42, a: 255 }, layerIds['building4']);
+    await drawRect(page, 200, 350, 180, 250, { r: 22, g: 20, b: 42 });
 
 
     // =================================================================
     // PHASE 3: Building windows (dots of light)
     // =================================================================
     layerIds['windows'] = await addLayer(page, 'Windows');
-    const windowColor = { r: 255, g: 230, b: 150, a: 200 };
+    const windowColor = { r: 255, g: 230, b: 150, a: 200 / 255 };
+    await setActiveLayer(page, layerIds['windows']!);
     // Left tower windows
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 3; col++) {
-        await paintRect(page, 70 + col * 30, 220 + row * 40, 8, 12, windowColor, layerIds['windows']);
+        await drawRect(page, 70 + col * 30, 220 + row * 40, 8, 12, windowColor);
       }
     }
     // Center tower windows
     for (let row = 0; row < 10; row++) {
       for (let col = 0; col < 4; col++) {
-        await paintRect(page, 320 + col * 30, 170 + row * 40, 8, 12, windowColor, layerIds['windows']);
+        await drawRect(page, 320 + col * 30, 170 + row * 40, 8, 12, windowColor);
       }
     }
     await pushHistory(page, 'Windows blend');
@@ -625,54 +487,34 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
 
     // Neon accent bars
     layerIds['neonBar1'] = await addLayer(page, 'Neon Pink Bar');
-    await paintRect(page, 60, 280, 100, 6, { r: 255, g: 20, b: 147, a: 255 }, layerIds['neonBar1']);
+    await drawRect(page, 60, 280, 100, 6, { r: 255, g: 20, b: 147 });
     await pushHistory(page, 'Neon glow');
-    await setLayerEffects(page, layerIds['neonBar1'], {
-      outerGlow: {
-        enabled: true,
-        color: { r: 255, g: 20, b: 147, a: 1 },
-        size: 15,
-        spread: 0,
-        opacity: 0.8,
-      },
-    });
+    await setActiveLayer(page, layerIds['neonBar1']);
+    await configureEffect(page, 'Outer Glow', { 'Size': 15, 'Spread': 0, 'Opacity': 80 });
+    await setEffectColor(page, 'Glow color', 255, 20, 147);
+    await closeEffectsPanel(page);
 
     layerIds['neonBar2'] = await addLayer(page, 'Neon Cyan Bar');
-    await paintRect(page, 590, 310, 100, 6, { r: 0, g: 255, b: 255, a: 255 }, layerIds['neonBar2']);
+    await drawRect(page, 590, 310, 100, 6, { r: 0, g: 255, b: 255 });
     await pushHistory(page, 'Cyan glow');
-    await setLayerEffects(page, layerIds['neonBar2'], {
-      outerGlow: {
-        enabled: true,
-        color: { r: 0, g: 255, b: 255, a: 1 },
-        size: 15,
-        spread: 0,
-        opacity: 0.8,
-      },
-    });
+    await setActiveLayer(page, layerIds['neonBar2']);
+    await configureEffect(page, 'Outer Glow', { 'Size': 15, 'Spread': 0, 'Opacity': 80 });
+    await setEffectColor(page, 'Glow color', 0, 255, 255);
+    await closeEffectsPanel(page);
 
 
     // =================================================================
     // PHASE 6: Neon circle
     // =================================================================
     layerIds['neonCircle'] = await addLayer(page, 'Neon Circle');
-    await paintCircle(page, 400, 200, 60, { r: 255, g: 100, b: 255, a: 255 }, layerIds['neonCircle']);
+    await drawEllipse(page, 400, 200, 60, 60, { r: 255, g: 100, b: 255 });
     await pushHistory(page, 'Circle effects');
-    await setLayerEffects(page, layerIds['neonCircle'], {
-      outerGlow: {
-        enabled: true,
-        color: { r: 255, g: 100, b: 255, a: 1 },
-        size: 20,
-        spread: 0,
-        opacity: 0.9,
-      },
-      innerGlow: {
-        enabled: true,
-        color: { r: 255, g: 200, b: 255, a: 1 },
-        size: 8,
-        spread: 0,
-        opacity: 0.6,
-      },
-    });
+    await setActiveLayer(page, layerIds['neonCircle']);
+    await configureEffect(page, 'Outer Glow', { 'Size': 20, 'Spread': 0, 'Opacity': 90 });
+    await setEffectColor(page, 'Glow color', 255, 100, 255);
+    await configureEffect(page, 'Inner Glow', { 'Size': 8, 'Spread': 0, 'Opacity': 60 });
+    await setEffectColor(page, 'Glow color', 255, 200, 255);
+    await closeEffectsPanel(page);
     await setBlendMode(page, layerIds['neonCircle'], 'screen');
 
 
@@ -713,15 +555,10 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
 
     // Add glow to title
     await pushHistory(page, 'Title glow');
-    await setLayerEffects(page, layerIds['titleText'], {
-      outerGlow: {
-        enabled: true,
-        color: { r: 255, g: 0, b: 200, a: 1 },
-        size: 12,
-        spread: 0,
-        opacity: 0.7,
-      },
-    });
+    await setActiveLayer(page, layerIds['titleText']);
+    await configureEffect(page, 'Outer Glow', { 'Size': 12, 'Spread': 0, 'Opacity': 70 });
+    await setEffectColor(page, 'Glow color', 255, 0, 200);
+    await closeEffectsPanel(page);
 
     // Switch away from text tool to prevent hit-testing existing text
     await setActiveTool(page, 'move');
@@ -743,16 +580,17 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
     await setActiveLayer(page, rootGroup!.id);
 
     layerIds['street'] = await addLayer(page, 'Street');
-    await paintRect(page, 0, 500, 800, 100, { r: 30, g: 25, b: 35, a: 255 }, layerIds['street']);
+    await drawRect(page, 0, 500, 800, 100, { r: 30, g: 25, b: 35 });
     // Street line
-    await paintRect(page, 100, 540, 600, 4, { r: 200, g: 200, b: 200, a: 180 }, layerIds['street']);
+    await drawRect(page, 100, 540, 600, 4, { r: 200, g: 200, b: 200, a: 180 / 255 });
 
 
     // =================================================================
     // PHASE 10: Reflection / puddle effect
     // =================================================================
     layerIds['puddle'] = await addLayer(page, 'Puddle');
-    await paintRect(page, 200, 550, 400, 40, { r: 80, g: 40, b: 120, a: 100 }, layerIds['puddle']);
+    await setActiveLayer(page, layerIds['puddle']!);
+    await drawRect(page, 200, 550, 400, 40, { r: 80, g: 40, b: 120, a: 100 / 255 });
     await pushHistory(page, 'Puddle blend');
     await setBlendMode(page, layerIds['puddle'], 'overlay');
     await setLayerOpacity(page, layerIds['puddle'], 0.6);
@@ -764,14 +602,15 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
     await setActiveLayer(page, layerIds['buildingsGroup']);
 
     layerIds['antenna'] = await addLayer(page, 'Antenna');
-    await paintRect(page, 370, 100, 6, 50, { r: 40, g: 40, b: 60, a: 255 }, layerIds['antenna']);
+    await drawRect(page, 370, 100, 6, 50, { r: 40, g: 40, b: 60 });
     // Blinking light on antenna
-    await paintCircle(page, 373, 100, 4, { r: 255, g: 0, b: 0, a: 255 }, layerIds['antenna']);
+    await drawEllipse(page, 373, 100, 4, 4, { r: 255, g: 0, b: 0 });
 
     layerIds['buildingDetail'] = await addLayer(page, 'Building Accents');
-    await paintRect(page, 50, 200, 120, 4, { r: 100, g: 80, b: 140, a: 200 }, layerIds['buildingDetail']);
-    await paintRect(page, 300, 150, 150, 4, { r: 100, g: 80, b: 140, a: 200 }, layerIds['buildingDetail']);
-    await paintRect(page, 580, 250, 130, 4, { r: 100, g: 80, b: 140, a: 200 }, layerIds['buildingDetail']);
+    await setActiveLayer(page, layerIds['buildingDetail']!);
+    await drawRect(page, 50, 200, 120, 4, { r: 100, g: 80, b: 140, a: 200 / 255 });
+    await drawRect(page, 300, 150, 150, 4, { r: 100, g: 80, b: 140, a: 200 / 255 });
+    await drawRect(page, 580, 250, 130, 4, { r: 100, g: 80, b: 140, a: 200 / 255 });
 
 
     // =================================================================
@@ -780,7 +619,8 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
     await setActiveLayer(page, rootGroup!.id);
 
     layerIds['colorWash'] = await addLayer(page, 'Purple Wash');
-    await paintRect(page, 0, 0, 800, 600, { r: 80, g: 0, b: 120, a: 60 }, layerIds['colorWash']);
+    await setActiveLayer(page, layerIds['colorWash']!);
+    await drawRect(page, 0, 0, 800, 600, { r: 80, g: 0, b: 120, a: 60 / 255 });
     await pushHistory(page, 'Color wash blend');
     await setBlendMode(page, layerIds['colorWash'], 'color');
     await setLayerOpacity(page, layerIds['colorWash'], 0.3);
@@ -790,13 +630,14 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
     // PHASE 13: Stars in the sky
     // =================================================================
     layerIds['stars'] = await addLayer(page, 'Stars');
+    await setActiveLayer(page, layerIds['stars']!);
     const starPositions = [
       [120, 40], [250, 25], [400, 50], [550, 30], [680, 55],
       [80, 80], [350, 90], [500, 70], [650, 100], [200, 110],
       [720, 45], [180, 60], [460, 35], [600, 85], [300, 45],
     ];
     for (const [sx, sy] of starPositions) {
-      await paintCircle(page, sx!, sy!, 2, { r: 255, g: 255, b: 255, a: 200 }, layerIds['stars']);
+      await drawEllipse(page, sx!, sy!, 2, 2, { r: 255, g: 255, b: 255, a: 200 / 255 });
     }
     await pushHistory(page, 'Stars blend');
     await setBlendMode(page, layerIds['stars'], 'screen');
@@ -806,17 +647,12 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
     // PHASE 14: Moon
     // =================================================================
     layerIds['moon'] = await addLayer(page, 'Moon');
-    await paintCircle(page, 680, 80, 30, { r: 220, g: 220, b: 240, a: 255 }, layerIds['moon']);
+    await drawEllipse(page, 680, 80, 30, 30, { r: 220, g: 220, b: 240 });
     await pushHistory(page, 'Moon glow');
-    await setLayerEffects(page, layerIds['moon'], {
-      outerGlow: {
-        enabled: true,
-        color: { r: 200, g: 200, b: 255, a: 1 },
-        size: 25,
-        spread: 0,
-        opacity: 0.5,
-      },
-    });
+    await setActiveLayer(page, layerIds['moon']);
+    await configureEffect(page, 'Outer Glow', { 'Size': 25, 'Spread': 0, 'Opacity': 50 });
+    await setEffectColor(page, 'Glow color', 200, 200, 255);
+    await closeEffectsPanel(page);
 
 
     // =================================================================
@@ -841,24 +677,18 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
     // PHASE 16: Add a drop shadow to a building
     // =================================================================
     await pushHistory(page, 'Building effects');
-    await setLayerEffects(page, layerIds['building2'], {
-      dropShadow: {
-        enabled: true,
-        color: { r: 0, g: 0, b: 0, a: 1 },
-        offsetX: 8,
-        offsetY: 8,
-        blur: 15,
-        spread: 0,
-        opacity: 0.6,
-      },
-    });
+    await setActiveLayer(page, layerIds['building2']);
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 8, 'Offset Y': 8, 'Blur': 15, 'Spread': 0, 'Opacity': 60 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
 
 
     // =================================================================
     // PHASE 17: Fog / atmosphere layer
     // =================================================================
     layerIds['fog'] = await addLayer(page, 'Fog');
-    await paintRect(page, 0, 300, 800, 150, { r: 100, g: 80, b: 140, a: 40 }, layerIds['fog']);
+    await setActiveLayer(page, layerIds['fog']!);
+    await drawRect(page, 0, 300, 800, 150, { r: 100, g: 80, b: 140, a: 40 / 255 });
     await pushHistory(page, 'Fog blend');
     await setBlendMode(page, layerIds['fog'], 'screen');
     await setLayerOpacity(page, layerIds['fog'], 0.4);

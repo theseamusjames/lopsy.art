@@ -238,25 +238,22 @@ export async function paintCircle(
   );
 }
 
-export async function addLayer(page: Page): Promise<void> {
-  await page.evaluate(() => {
+export async function addLayer(page: Page): Promise<string> {
+  await page.locator('[aria-label="Add Layer"]').click();
+  await page.waitForTimeout(200);
+  const id = await page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { addLayer: () => void };
+      getState: () => { document: { activeLayerId: string } };
     };
-    store.getState().addLayer();
+    return store.getState().document.activeLayerId;
   });
+  return id;
 }
 
 export async function setActiveLayer(page: Page, layerId: string): Promise<void> {
-  await page.evaluate(
-    (id) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(id);
-    },
-    layerId,
-  );
+  const locator = page.locator(`[data-layer-id="${layerId}"]`);
+  await locator.waitFor({ state: 'visible', timeout: 10000 });
+  await locator.click();
 }
 
 export async function moveLayer(page: Page, layerId: string, x: number, y: number): Promise<void> {
@@ -277,19 +274,345 @@ export async function moveLayer(page: Page, layerId: string, x: number, y: numbe
 }
 
 export async function undo(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { undo: () => void };
-    };
-    store.getState().undo();
-  });
+  await page.keyboard.press('Control+z');
 }
 
 export async function redo(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { redo: () => void };
+  await page.keyboard.press('Control+Shift+z');
+}
+
+// ---------------------------------------------------------------------------
+// UI interaction helpers
+// ---------------------------------------------------------------------------
+
+const TOOL_SHORTCUTS: Record<string, string> = {
+  move: 'v', brush: 'b', pencil: 'n', eraser: 'e', fill: 'g',
+  eyedropper: 'i', stamp: 's', dodge: 'o', smudge: 'r', spray: 'j',
+  'marquee-rect': 'm', lasso: 'l', wand: 'w',
+  shape: 'u', text: 't', crop: 'c', path: 'p',
+};
+
+export async function selectTool(page: Page, toolId: string): Promise<void> {
+  const key = TOOL_SHORTCUTS[toolId];
+  if (key) {
+    await page.keyboard.press(key);
+  } else {
+    await page.locator(`[data-tool-id="${toolId}"]`).click();
+  }
+}
+
+export async function setToolOption(page: Page, label: string, value: number): Promise<void> {
+  const input = page.locator(`role=toolbar >> [aria-label="${label} value"]`).first();
+  await input.fill(String(value));
+  await input.press('Enter');
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+}
+
+export async function setForegroundColor(page: Page, r: number, g: number, b: number, a?: number): Promise<void> {
+  const hex = [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
+  const input = page.locator('[aria-label="Hex color value"]');
+  await input.fill(hex);
+  await input.press('Enter');
+  if (a !== undefined && a < 1) {
+    const alphaInput = page.locator('[aria-label="A value"]');
+    await alphaInput.fill(String(Math.round(a * 100)));
+    await alphaInput.press('Enter');
+  }
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+}
+
+export async function openBrushModal(page: Page): Promise<void> {
+  const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
+  if (!(await dialog.isVisible())) {
+    await page.locator('[aria-label="Open brush presets"]').click();
+    await page.waitForTimeout(100);
+  }
+}
+
+export async function closeBrushModal(page: Page): Promise<void> {
+  const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
+  if (await dialog.isVisible()) {
+    await dialog.locator('button:has-text("Close")').click();
+  }
+}
+
+export async function setBrushModalOption(page: Page, label: string, value: number): Promise<void> {
+  await openBrushModal(page);
+  const input = page.locator(`[role="dialog"][aria-label="Brushes"] [aria-label="${label} value"]`);
+  await input.fill(String(value));
+  await input.press('Enter');
+}
+
+export async function setBlendMode(page: Page, mode: string): Promise<void> {
+  const select = page.locator('[aria-labelledby="blend-mode-label"]');
+  if (!(await select.isVisible())) {
+    await page.locator('button[aria-label*="effects"]').first().click();
+    await page.waitForTimeout(100);
+  }
+  await select.selectOption(mode);
+}
+
+export async function setLayerOpacity(page: Page, layerId: string, percent: number): Promise<void> {
+  const row = page.locator(`[data-layer-id="${layerId}"]`);
+  await row.locator('button[class*="opacityBtn"]').click();
+  const slider = page.locator(`[aria-label*="opacity"][type="range"]`);
+  await slider.fill(String(percent));
+}
+
+export async function applyFilter(
+  page: Page,
+  filterName: string,
+  params?: Record<string, number>,
+): Promise<void> {
+  await page.click('text=Filter');
+  await page.click(`text=${filterName}`);
+  if (params) {
+    const modal = page.locator(`h2:has-text("${filterName.replace('...', '')}")`)
+      .locator('xpath=ancestor::*[contains(@class,"modal")][1]');
+    for (const [label, value] of Object.entries(params)) {
+      const slider = modal.locator(`text=${label}`).locator('..').locator('input[type="range"]');
+      await slider.fill(String(value));
+    }
+    await page.locator('button:has-text("Apply")').click();
+  }
+  await page.waitForTimeout(200);
+}
+
+export async function setAdjustment(page: Page, label: string, value: number): Promise<void> {
+  const input = page.locator(`[aria-label="${label} value"]`);
+  if (!(await input.isVisible())) {
+    const valuesSliders = ['Exposure', 'Contrast', 'Highlights', 'Shadows', 'Whites', 'Blacks', 'Vignette'];
+    const tab = valuesSliders.includes(label) ? 'Values' : 'Colors';
+    await page.locator(`role=tab[name="${tab}"]`).click();
+  }
+  await input.fill(String(value));
+  await input.press('Enter');
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+}
+
+// ---------------------------------------------------------------------------
+// Coordinate projection
+// ---------------------------------------------------------------------------
+
+export async function docToScreen(
+  page: Page,
+  docX: number,
+  docY: number,
+): Promise<{ x: number; y: number }> {
+  return page.evaluate(
+    ({ docX, docY }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { width: number; height: number };
+          viewport: { zoom: number; panX: number; panY: number };
+        };
+      };
+      const state = store.getState();
+      const container = document.querySelector('[data-testid="canvas-container"]');
+      if (!container) return { x: 0, y: 0 };
+      const rect = container.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      return {
+        x: rect.left + (docX - state.document.width / 2) * state.viewport.zoom + state.viewport.panX + cx,
+        y: rect.top + (docY - state.document.height / 2) * state.viewport.zoom + state.viewport.panY + cy,
+      };
+    },
+    { docX, docY },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Drawing via shape tool (replaces paintRect/paintCircle for UI-driven tests)
+// ---------------------------------------------------------------------------
+
+async function saveTool(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__uiStore as {
+      getState: () => { activeTool: string };
     };
-    store.getState().redo();
+    return store.getState().activeTool;
   });
+}
+
+export async function drawRect(
+  page: Page,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: { r: number; g: number; b: number; a?: number },
+): Promise<void> {
+  const prevTool = await saveTool(page);
+  await setForegroundColor(page, color.r, color.g, color.b, color.a);
+  await selectTool(page, 'marquee-rect');
+  const start = await docToScreen(page, x, y);
+  const end = await docToScreen(page, x + w, y + h);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  await selectTool(page, 'fill');
+  const center = await docToScreen(page, x + w / 2, y + h / 2);
+  await page.mouse.click(center.x, center.y);
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Control+d');
+  await page.waitForTimeout(100);
+  await page.evaluate(async () => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { activeLayerId: string };
+        updateLayerPixelData: (id: string, data: ImageData) => void;
+      };
+    };
+    const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
+      (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
+    const s = store.getState();
+    const id = s.document.activeLayerId;
+    const gpu = await readFn(id);
+    if (gpu && gpu.width > 0) {
+      const img = new ImageData(gpu.width, gpu.height);
+      for (let i = 0; i < gpu.pixels.length; i++) img.data[i] = gpu.pixels[i]!;
+      s.updateLayerPixelData(id, img);
+    }
+  });
+  await selectTool(page, prevTool);
+}
+
+export async function drawEllipse(
+  page: Page,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  color: { r: number; g: number; b: number; a?: number },
+): Promise<void> {
+  const prevTool = await saveTool(page);
+  await setForegroundColor(page, color.r, color.g, color.b, color.a);
+  await selectTool(page, 'shape');
+  await page.locator('[aria-labelledby="shape-mode-label"]').selectOption('ellipse');
+  const start = await docToScreen(page, cx - rx, cy - ry);
+  const end = await docToScreen(page, cx + rx, cy + ry);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  await page.evaluate(async () => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { activeLayerId: string };
+        updateLayerPixelData: (id: string, data: ImageData) => void;
+      };
+    };
+    const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
+      (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
+    const s = store.getState();
+    const id = s.document.activeLayerId;
+    const gpu = await readFn(id);
+    if (gpu && gpu.width > 0) {
+      const img = new ImageData(gpu.width, gpu.height);
+      for (let i = 0; i < gpu.pixels.length; i++) img.data[i] = gpu.pixels[i]!;
+      s.updateLayerPixelData(id, img);
+    }
+  });
+  await selectTool(page, prevTool);
+}
+
+// ---------------------------------------------------------------------------
+// Move layer via move tool drag (replaces moveLayer store call)
+// ---------------------------------------------------------------------------
+
+export async function moveLayerTo(
+  page: Page,
+  layerId: string,
+  targetX: number,
+  targetY: number,
+): Promise<void> {
+  const current = await page.evaluate((lid) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: {
+          layers: Array<{ id: string; x: number; y: number; width: number; height: number }>;
+        };
+        viewport: { zoom: number };
+      };
+    };
+    const state = store.getState();
+    const layer = state.document.layers.find((l) => l.id === lid);
+    if (!layer) return { x: 0, y: 0, w: 0, h: 0, zoom: 1 };
+    return { x: layer.x, y: layer.y, w: layer.width, h: layer.height, zoom: state.viewport.zoom };
+  }, layerId);
+
+  await setActiveLayer(page, layerId);
+  await selectTool(page, 'move');
+
+  const centerDocX = current.x + current.w / 2;
+  const centerDocY = current.y + current.h / 2;
+  const start = await docToScreen(page, centerDocX, centerDocY);
+
+  const dx = (targetX - current.x) * current.zoom;
+  const dy = (targetY - current.y) * current.zoom;
+
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + dx, start.y + dy, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+}
+
+// ---------------------------------------------------------------------------
+// Layer effects via effects panel UI
+// ---------------------------------------------------------------------------
+
+export async function openEffectsPanel(page: Page): Promise<void> {
+  const panel = page.locator('[aria-labelledby="blend-mode-label"]');
+  if (!(await panel.isVisible())) {
+    await page.locator('button[aria-label*="effects"]').first().click();
+    await page.waitForTimeout(100);
+  }
+}
+
+export async function closeEffectsPanel(page: Page): Promise<void> {
+  const close = page.locator('[aria-label="Close effects"]');
+  if (await close.isVisible()) {
+    await close.click();
+  }
+}
+
+export async function enableEffect(page: Page, effectName: string): Promise<void> {
+  await openEffectsPanel(page);
+  const checkbox = page.locator(`[aria-label="Enable ${effectName}"]`);
+  if (!(await checkbox.isChecked())) {
+    await checkbox.click();
+  }
+  const row = page.locator(`role=option:has-text("${effectName}")`);
+  await row.click();
+  await page.waitForTimeout(50);
+}
+
+export async function configureEffect(
+  page: Page,
+  effectName: string,
+  settings: Record<string, number>,
+): Promise<void> {
+  await enableEffect(page, effectName);
+  for (const [label, value] of Object.entries(settings)) {
+    const input = page.locator(`[aria-label="${label} value"]`);
+    await input.fill(String(value));
+    await input.press('Enter');
+  }
+}
+
+export async function setEffectColor(
+  page: Page,
+  ariaLabel: string,
+  r: number,
+  g: number,
+  b: number,
+): Promise<void> {
+  const hex = '#' + [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
+  const input = page.locator(`[aria-label="${ariaLabel}"]`);
+  await input.fill(hex);
 }

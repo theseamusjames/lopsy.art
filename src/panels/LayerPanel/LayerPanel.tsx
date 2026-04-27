@@ -202,6 +202,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                 .filter(Boolean)
                 .join(' ')}
               style={{ '--layer-depth': depth } as React.CSSProperties}
+              data-layer-id={layer.id}
               onClick={() => onSelectLayer(layer.id)}
             >
               {!isRootGroup(layer.id) && (

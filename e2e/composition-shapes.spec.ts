@@ -15,6 +15,10 @@
  * Grid and guides toggle.
  */
 import { test, expect, type Page } from './fixtures';
+import {
+  setToolOption,
+  setForegroundColor as setForegroundColorUI,
+} from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -89,6 +93,7 @@ async function dragAtDoc(
   await page.waitForTimeout(300);
 }
 
+/** Thin wrapper: for tool settings without UI sliders. */
 async function setToolSetting(page: Page, setter: string, value: unknown) {
   await page.evaluate(({ setter, value }) => {
     const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
@@ -98,22 +103,33 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   }, { setter, value });
 }
 
-async function setForegroundColor(page: Page, color: { r: number; g: number; b: number; a: number }) {
-  await page.evaluate((c) => {
-    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-    };
-    store.getState().setForegroundColor(c);
-  }, color);
-}
+const toolKeyMap: Record<string, string> = {
+  move: 'v',
+  brush: 'b',
+  fill: 'g',
+  shape: 'u',
+  text: 't',
+  eraser: 'e',
+  'marquee-rect': 'm',
+  wand: 'w',
+  lasso: 'l',
+  stamp: 's',
+  dodge: 'o',
+  smudge: 'r',
+  eyedropper: 'i',
+  pencil: 'n',
+  crop: 'c',
+  path: 'p',
+  spray: 'j',
+};
 
 async function setActiveTool(page: Page, tool: string) {
-  await page.evaluate((t) => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    store.getState().setActiveTool(t);
-  }, tool);
+  const key = toolKeyMap[tool];
+  if (key) {
+    await page.keyboard.press(key);
+  } else {
+    await page.locator(`[data-tool-id="${tool}"]`).click();
+  }
   await page.waitForTimeout(100);
 }
 
@@ -391,12 +407,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(await getActiveTool(page)).toBe('move');
 
     // Select hex layer and align center horizontally
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(lid);
-    }, hexLayerId);
+    await page.locator(`[data-layer-id="${hexLayerId}"]`).click();
     await page.waitForTimeout(100);
 
     // Align left
@@ -429,12 +440,7 @@ test.describe('Composition 2: Geometric Design', () => {
     // =====================================================================
     // PHASE 5: MOVE TOOL — Nudge with arrow keys
     // =====================================================================
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(lid);
-    }, triLayerId);
+    await page.locator(`[data-layer-id="${triLayerId}"]`).click();
 
     const posBefore = await page.evaluate((lid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -584,9 +590,9 @@ test.describe('Composition 2: Geometric Design', () => {
 
     // Paint a colored area to work with
     await page.keyboard.press('b');
-    await setToolSetting(page, 'setBrushSize', 100);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setForegroundColor(page, { r: 255, g: 200, b: 0, a: 1 });
+    await setToolOption(page, 'Size', 100);
+    await setToolOption(page, 'Hardness', 100);
+    await setForegroundColorUI(page, 255, 200, 0);
     await dragAtDoc(page, { x: 50, y: 350 }, { x: 200, y: 350 });
     await dragAtDoc(page, { x: 50, y: 400 }, { x: 200, y: 400 });
     await dragAtDoc(page, { x: 50, y: 450 }, { x: 200, y: 450 });
@@ -615,7 +621,7 @@ test.describe('Composition 2: Geometric Design', () => {
     await page.keyboard.press('g');
     expect(await getActiveTool(page)).toBe('fill');
 
-    await setForegroundColor(page, { r: 128, g: 0, b: 255, a: 1 });
+    await setForegroundColorUI(page, 128, 0, 255);
     await setToolSetting(page, 'setFillTolerance', 200);
 
     await clickAtDoc(page, 120, 400);
@@ -670,12 +676,8 @@ test.describe('Composition 2: Geometric Design', () => {
     // PHASE 15: MAGIC WAND — Select by color
     // =====================================================================
     // Select the red ellipse area
-    await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(lid);
-    }, (await getEditorState(page)).document.layers[0]!.id);
+    const wandLayerId = (await getEditorState(page)).document.layers[0]!.id;
+    await page.locator(`[data-layer-id="${wandLayerId}"]`).click();
 
     await page.keyboard.press('w');
     expect(await getActiveTool(page)).toBe('wand');
@@ -754,13 +756,8 @@ test.describe('Composition 2: Geometric Design', () => {
     // Switch to move tool first to ensure shortcuts work
     await setActiveTool(page, 'move');
 
-    // Toggle grid via store
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { toggleGrid: () => void };
-      };
-      store.getState().toggleGrid();
-    });
+    // Toggle grid via keyboard shortcut
+    await page.keyboard.press("Control+'");
     await page.waitForTimeout(200);
 
     const gridVisible = await page.evaluate(() => {
@@ -773,13 +770,8 @@ test.describe('Composition 2: Geometric Design', () => {
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-16-grid.png' });
 
-    // Toggle guides via store (default is true, so toggling turns them off)
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { toggleGuides: () => void };
-      };
-      store.getState().toggleGuides();
-    });
+    // Toggle guides via keyboard shortcut (default is true, so toggling turns them off)
+    await page.keyboard.press('Control+;');
     await page.waitForTimeout(200);
 
     const guidesOff = await page.evaluate(() => {
@@ -791,12 +783,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(guidesOff).toBe(false);
 
     // Toggle back on
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { toggleGuides: () => void };
-      };
-      store.getState().toggleGuides();
-    });
+    await page.keyboard.press('Control+;');
     await page.waitForTimeout(100);
 
     const guidesOn = await page.evaluate(() => {
@@ -808,12 +795,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(guidesOn).toBe(true);
 
     // Turn grid off
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { toggleGrid: () => void };
-      };
-      store.getState().toggleGrid();
-    });
+    await page.keyboard.press("Control+'");
     await page.waitForTimeout(200);
 
     // =====================================================================

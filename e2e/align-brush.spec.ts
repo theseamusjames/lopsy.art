@@ -71,12 +71,7 @@ async function getLayerPosition(page: Page) {
 }
 
 async function selectMoveTool(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (tool: string) => void };
-    };
-    store.getState().setActiveTool('move');
-  });
+  await page.keyboard.press('v');
   await page.waitForTimeout(100);
 }
 

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { waitForStore, createDocument, paintRect, addLayer, getEditorState } from './helpers';
+import { waitForStore, createDocument, drawRect, addLayer, getEditorState } from './helpers';
 
 test.describe('New document clears engine resources (#124)', () => {
   test.beforeEach(async ({ page }) => {
@@ -15,12 +15,12 @@ test.describe('New document clears engine resources (#124)', () => {
 
     await addLayer(page);
     await page.waitForTimeout(100);
-    await paintRect(page, 10, 10, 80, 80, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 10, 10, 80, 80, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(100);
 
     await addLayer(page);
     await page.waitForTimeout(100);
-    await paintRect(page, 50, 50, 80, 80, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 50, 50, 80, 80, { r: 0, g: 0, b: 255 });
     await page.waitForTimeout(100);
 
     // Snapshot the old layer IDs and verify each one has live GPU texture

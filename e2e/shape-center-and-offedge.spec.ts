@@ -12,32 +12,7 @@
  *      lost on the return trip.
  */
 import { test, expect, type Page } from './fixtures';
-
-async function waitForStore(page: Page) {
-  await page.waitForFunction(
-    () => !!(window as unknown as Record<string, unknown>).__editorStore,
-  );
-}
-
-async function createDocument(page: Page, width: number, height: number, transparent: boolean) {
-  await page.evaluate(
-    ({ w, h, t }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { createDocument: (w: number, h: number, t: boolean) => void };
-      };
-      store.getState().createDocument(w, h, t);
-    },
-    { w: width, h: height, t: transparent },
-  );
-  await page.waitForFunction(() => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { document: { layers: unknown[] }; undoStack: unknown[] };
-    } | undefined;
-    if (!store) return false;
-    const s = store.getState();
-    return s.document.layers.length > 0 && s.undoStack.length > 0;
-  });
-}
+import { createDocument, waitForStore, getPixelAt, selectTool, setForegroundColor } from './helpers';
 
 async function docToScreen(page: Page, docX: number, docY: number) {
   return page.evaluate(
@@ -62,16 +37,6 @@ async function docToScreen(page: Page, docX: number, docY: number) {
   );
 }
 
-async function activateShapeTool(page: Page) {
-  await page.evaluate(() => {
-    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    ui.getState().setActiveTool('shape');
-  });
-  await page.waitForTimeout(50);
-}
-
 async function setToolSetting(page: Page, setter: string, value: unknown) {
   await page.evaluate(
     ({ setter, value }) => {
@@ -82,6 +47,11 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
     },
     { setter, value },
   );
+}
+
+async function setShapeMode(page: Page, mode: string) {
+  const select = page.locator('[aria-labelledby="shape-mode-label"]');
+  await select.selectOption(mode);
 }
 
 async function getActiveLayer(page: Page) {
@@ -98,44 +68,6 @@ async function getActiveLayer(page: Page) {
     const layer = state.document.layers.find((l) => l.id === state.document.activeLayerId);
     return layer ?? null;
   });
-}
-
-async function getPixelAt(page: Page, x: number, y: number, layerId?: string) {
-  return page.evaluate(
-    async ({ x, y, lid }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: {
-            activeLayerId: string;
-            layers: Array<{ id: string; x: number; y: number }>;
-          };
-        };
-      };
-      const state = store.getState();
-      const id = lid ?? state.document.activeLayerId;
-      const layer = state.document.layers.find((l) => l.id === id);
-      const lx = layer?.x ?? 0;
-      const ly = layer?.y ?? 0;
-      const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as (
-        id?: string,
-      ) => Promise<{ width: number; height: number; pixels: number[] } | null>;
-      const result = await readFn(id);
-      if (!result || result.width === 0) return { r: 0, g: 0, b: 0, a: 0 };
-      const localX = x - lx;
-      const localY = y - ly;
-      if (localX < 0 || localX >= result.width || localY < 0 || localY >= result.height) {
-        return { r: 0, g: 0, b: 0, a: 0 };
-      }
-      const idx = (localY * result.width + localX) * 4;
-      return {
-        r: result.pixels[idx] ?? 0,
-        g: result.pixels[idx + 1] ?? 0,
-        b: result.pixels[idx + 2] ?? 0,
-        a: result.pixels[idx + 3] ?? 0,
-      };
-    },
-    { x, y, lid: layerId ?? null },
-  );
 }
 
 async function countOpaquePixels(page: Page, layerId?: string) {
@@ -169,9 +101,9 @@ test.describe('Shape tool click-to-size centering', () => {
   });
 
   test('click + ShapeSizeModal Create centers the shape on the click point', async ({ page }) => {
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'ellipse');
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Click (no drag) at doc center (200, 150). The shape tool interprets
@@ -232,9 +164,9 @@ test.describe('Move tool off-edge pixel preservation', () => {
   test('dragging a shape partially off-canvas and back does not clip its pixels', async ({ page }) => {
     // Create an opaque shape on the active layer via drag (reliably centred,
     // no modal indirection — this test is about the *move* regression).
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 255, b: 0, a: 1 });
+    await setForegroundColor(page, 0, 255, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'ellipse');
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     const dragFrom = await docToScreen(page, 200, 150);
@@ -250,12 +182,7 @@ test.describe('Move tool off-edge pixel preservation', () => {
 
     // Switch to move tool and drag far enough right that roughly half the
     // shape leaves the canvas.
-    await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('move');
-    });
+    await page.keyboard.press('v');
     await page.waitForTimeout(50);
 
     const moveStart = await docToScreen(page, 200, 150);

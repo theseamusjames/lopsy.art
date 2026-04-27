@@ -4,10 +4,16 @@ import {
   waitForStore,
   getEditorState,
   getPixelAt,
-  paintRect,
   addLayer,
   undo,
   redo,
+  setLayerOpacity,
+  setActiveLayer,
+  openEffectsPanel,
+  closeEffectsPanel,
+  enableEffect,
+  configureEffect,
+  drawRect,
 } from './helpers';
 
 // ---------------------------------------------------------------------------
@@ -82,7 +88,8 @@ test.describe('History - Multi-Step Operations', () => {
     const bgId = s0.document.layers[0]!.id;
 
     // Step 1: Paint red on bg
-    await paintRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0 });
 
     // Step 2: Add layer
     await addLayer(page);
@@ -90,7 +97,8 @@ test.describe('History - Multi-Step Operations', () => {
     const topId = s1.document.activeLayerId;
 
     // Step 3: Paint blue on top
-    await paintRect(page, 25, 25, 50, 50, { r: 0, g: 0, b: 255, a: 255 }, topId);
+    await setActiveLayer(page, topId);
+    await drawRect(page, 25, 25, 50, 50, { r: 0, g: 0, b: 255 });
 
     // Step 4: Merge down
     await page.evaluate(() => {
@@ -128,11 +136,13 @@ test.describe('History - Multi-Step Operations', () => {
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
 
-    await paintRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0 });
     await addLayer(page);
     const s1 = await getEditorState(page);
     const topId = s1.document.activeLayerId;
-    await paintRect(page, 50, 50, 50, 50, { r: 0, g: 255, b: 0, a: 255 }, topId);
+    await setActiveLayer(page, topId);
+    await drawRect(page, 50, 50, 50, 50, { r: 0, g: 255, b: 0 });
 
     // Undo everything
     await undo(page); // undo paint top
@@ -168,15 +178,7 @@ test.describe('History - Layer Visibility', () => {
     const layerId = s0.document.layers[0]!.id;
     expect(s0.document.layers[0]!.visible).toBe(true);
 
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { toggleLayerVisibility: (id: string) => void };
-        };
-        store.getState().toggleLayerVisibility(id);
-      },
-      layerId,
-    );
+    await page.locator(`[data-layer-id="${layerId}"]`).locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]').click();
 
     expect((await getEditorState(page)).document.layers[0]!.visible).toBe(false);
 
@@ -195,20 +197,7 @@ test.describe('History - Layer Opacity', () => {
     const s0 = await getEditorState(page);
     const layerId = s0.document.layers[0]!.id;
 
-    await page.evaluate(
-      ({ id, opacity }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            pushHistory: (label?: string) => void;
-            updateLayerOpacity: (id: string, opacity: number) => void;
-          };
-        };
-        const state = store.getState();
-        state.pushHistory('Change Opacity');
-        state.updateLayerOpacity(id, opacity);
-      },
-      { id: layerId, opacity: 0.5 },
-    );
+    await setLayerOpacity(page, layerId, 50);
 
     expect((await getEditorState(page)).document.layers[0]!.opacity).toBe(0.5);
 
@@ -227,24 +216,9 @@ test.describe('History - Layer Effects', () => {
     const s0 = await getEditorState(page);
     const layerId = s0.document.layers[0]!.id;
 
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-            updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-          };
-        };
-        const state = store.getState();
-        const layer = state.document.layers.find((l) => l.id === id)!;
-        const newEffects = {
-          ...layer.effects,
-          dropShadow: { ...(layer.effects.dropShadow as Record<string, unknown>), enabled: true },
-        };
-        state.updateLayerEffects(id, newEffects as never);
-      },
-      layerId,
-    );
+    await setActiveLayer(page, layerId);
+    await enableEffect(page, 'Drop Shadow');
+    await closeEffectsPanel(page);
 
     expect((await getEditorState(page)).document.layers[0]!.effects.dropShadow.enabled).toBe(true);
 
@@ -359,7 +333,8 @@ test.describe('History - Complex Sequences', () => {
     const bgId = s0.document.layers[0]!.id;
 
     // Paint on bg
-    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0 });
 
     // Add layer 2
     await addLayer(page);
@@ -367,34 +342,14 @@ test.describe('History - Complex Sequences', () => {
     const layer2Id = s1.document.activeLayerId;
 
     // Paint on layer 2
-    await paintRect(page, 0, 0, 50, 50, { r: 0, g: 255, b: 0, a: 255 }, layer2Id);
+    await setActiveLayer(page, layer2Id);
+    await drawRect(page, 0, 0, 50, 50, { r: 0, g: 255, b: 0 });
 
     // Toggle bg visibility
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { toggleLayerVisibility: (id: string) => void };
-        };
-        store.getState().toggleLayerVisibility(id);
-      },
-      bgId,
-    );
+    await page.locator(`[data-layer-id="${bgId}"]`).locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]').click();
 
     // Change layer 2 opacity
-    await page.evaluate(
-      ({ id, opacity }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            pushHistory: (label?: string) => void;
-            updateLayerOpacity: (id: string, opacity: number) => void;
-          };
-        };
-        const state = store.getState();
-        state.pushHistory('Change Opacity');
-        state.updateLayerOpacity(id, opacity);
-      },
-      { id: layer2Id, opacity: 0.75 },
-    );
+    await setLayerOpacity(page, layer2Id, 75);
 
     // Add layer 3
     await addLayer(page);
@@ -440,7 +395,8 @@ test.describe('History - Complex Sequences', () => {
     const bgId = s0.document.layers[0]!.id;
 
     // Step 1: Paint red
-    await paintRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0 });
 
     // Step 2: Add layer
     await addLayer(page);
@@ -457,7 +413,8 @@ test.describe('History - Complex Sequences', () => {
     expect((await getEditorState(page)).redoStackLength).toBe(2);
 
     // Paint blue (diverges from original history)
-    await paintRect(page, 50, 50, 50, 50, { r: 0, g: 0, b: 255, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 50, 50, 50, 50, { r: 0, g: 0, b: 255 });
 
     // Redo should be empty now
     expect((await getEditorState(page)).redoStackLength).toBe(0);
@@ -478,33 +435,20 @@ test.describe('History - Complex Sequences', () => {
     const bgId = s0.document.layers[0]!.id;
 
     // Paint bg
-    await paintRect(page, 0, 0, 100, 100, { r: 100, g: 100, b: 100, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 100, 100, { r: 100, g: 100, b: 100 });
 
     // Add layer and paint
     await addLayer(page);
     const s1 = await getEditorState(page);
     const topId = s1.document.activeLayerId;
-    await paintRect(page, 10, 10, 30, 30, { r: 255, g: 0, b: 0, a: 255 }, topId);
+    await setActiveLayer(page, topId);
+    await drawRect(page, 10, 10, 30, 30, { r: 255, g: 0, b: 0 });
 
     // Enable drop shadow on top layer
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-            updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-          };
-        };
-        const state = store.getState();
-        const layer = state.document.layers.find((l) => l.id === id)!;
-        const newEffects = {
-          ...layer.effects,
-          dropShadow: { ...(layer.effects.dropShadow as Record<string, unknown>), enabled: true },
-        };
-        state.updateLayerEffects(id, newEffects as never);
-      },
-      topId,
-    );
+    await setActiveLayer(page, topId);
+    await enableEffect(page, 'Drop Shadow');
+    await closeEffectsPanel(page);
 
     // Merge down
     await page.evaluate(() => {
@@ -536,15 +480,11 @@ test.describe('History - Complex Sequences', () => {
     const bgId = s0.document.layers[0]!.id;
 
     // Paint on bg
-    await paintRect(page, 0, 0, 100, 100, { r: 128, g: 64, b: 32, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 100, 100, { r: 128, g: 64, b: 32 });
 
     // Duplicate layer
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { duplicateLayer: () => void };
-      };
-      store.getState().duplicateLayer();
-    });
+    await page.locator('[aria-label="Duplicate Layer"]').click();
 
     const afterDup = await getEditorState(page);
     expect(afterDup.document.layers).toHaveLength(3);
@@ -555,15 +495,7 @@ test.describe('History - Complex Sequences', () => {
     expect(dupPixel.r).toBe(128);
 
     // Delete the duplicate
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { removeLayer: (id: string) => void };
-        };
-        store.getState().removeLayer(id);
-      },
-      dupId,
-    );
+    await page.locator('[aria-label="Delete Layer"]').click();
 
     expect((await getEditorState(page)).document.layers).toHaveLength(2);
 
@@ -588,7 +520,7 @@ test.describe('History - Complex Sequences', () => {
 
     // Build up 5 history entries
     for (let i = 0; i < 5; i++) {
-      await paintRect(page, i * 20, 0, 20, 20, { r: 255, g: 0, b: 0, a: 255 });
+      await drawRect(page, i * 20, 0, 20, 20, { r: 255, g: 0, b: 0 });
     }
 
     const s1 = await getEditorState(page);
@@ -618,17 +550,20 @@ test.describe('History - Complex Sequences', () => {
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
 
-    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0 });
 
     await addLayer(page);
     const s1 = await getEditorState(page);
     const midId = s1.document.activeLayerId;
-    await paintRect(page, 0, 0, 100, 100, { r: 0, g: 255, b: 0, a: 128 }, midId);
+    await setActiveLayer(page, midId);
+    await drawRect(page, 0, 0, 100, 100, { r: 0, g: 255, b: 0, a: 128 / 255 });
 
     await addLayer(page);
     const s2 = await getEditorState(page);
     const topId = s2.document.activeLayerId;
-    await paintRect(page, 0, 0, 100, 100, { r: 0, g: 0, b: 255, a: 64 }, topId);
+    await setActiveLayer(page, topId);
+    await drawRect(page, 0, 0, 100, 100, { r: 0, g: 0, b: 255, a: 64 / 255 });
 
     expect((await getEditorState(page)).document.layers).toHaveLength(4);
 

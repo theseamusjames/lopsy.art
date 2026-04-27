@@ -54,12 +54,7 @@ async function docToScreen(page: Page, docX: number, docY: number) {
 }
 
 async function selectTextTool(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (tool: string) => void };
-    };
-    store.getState().setActiveTool('text');
-  });
+  await page.keyboard.press('t');
 }
 
 async function getTextEditing(page: Page) {
