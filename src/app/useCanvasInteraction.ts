@@ -10,6 +10,7 @@ import {
   applyBrushDabBatch as gpuBrushDabBatch,
   uploadLayerPixels,
   getLayerTextureDimensions,
+  setSelectionMask,
 } from '../engine-wasm/wasm-bridge';
 import { flushLayerSync, resetTrackedState, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
 import { uploadCompressed } from '../engine-wasm/gpu-pixel-access';
@@ -32,6 +33,7 @@ import {
   handleMeshWarpUp,
 } from './interactions/mesh-warp-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
+import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 import { createTransformState } from '../tools/transform/transform';
 import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 // PAINT_TOOLS / GPU_TOOLS are derived from the tool registry, so adding a
@@ -279,6 +281,21 @@ export function useCanvasInteraction(
       if (transformResult) {
         stateRef.current = transformResult;
         return;
+      }
+
+      // Commit any active GPU float (from transform or move) before dispatching
+      // to other tools. Without this, tools like gradient read the stale
+      // pre-transform selection mask from the GPU.
+      // Move handles this itself in handleMoveDown.
+      if (activeTool !== 'move' && engine && hasFloat(engine)) {
+        persistentTransformRef.current = null;
+        floatingSelectionRef.current = null;
+        selectLayerAlpha(activeLayerId);
+        const selAfter = useEditorStore.getState().selection;
+        if (selAfter.active && selAfter.mask) {
+          const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
+          setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
+        }
       }
 
       const handler = toolHandlers[activeTool];
