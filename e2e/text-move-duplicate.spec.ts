@@ -35,21 +35,11 @@ async function docToScreen(page: Page, docX: number, docY: number) {
 }
 
 async function selectTextTool(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (tool: string) => void };
-    };
-    store.getState().setActiveTool('text');
-  });
+  await page.keyboard.press('t');
 }
 
 async function selectMoveTool(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (tool: string) => void };
-    };
-    store.getState().setActiveTool('move');
-  });
+  await page.keyboard.press('v');
 }
 
 async function getTextLayers(page: Page) {
@@ -98,24 +88,11 @@ async function getLayerById(
 }
 
 async function duplicateActiveLayer(page: Page) {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { duplicateLayer: () => void };
-    };
-    store.getState().duplicateLayer();
-  });
+  await page.locator('[aria-label="Duplicate Layer"]').click();
 }
 
 async function setActiveLayer(page: Page, id: string) {
-  await page.evaluate(
-    (lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(lid);
-    },
-    id,
-  );
+  await page.locator(`[data-layer-id="${id}"]`).click();
 }
 
 /**

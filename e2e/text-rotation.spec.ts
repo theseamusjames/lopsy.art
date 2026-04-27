@@ -24,16 +24,7 @@ test('text layer rotation: content stays centered and does not scale', async ({ 
 
   // --- Step 1: Use the REAL text tool UI ---
   await page.screenshot({ path: 'e2e/screenshots/text-rotation-00-initial.png' });
-  // Click the text tool button in the toolbox
-  await page.locator('button[aria-label="Text"]').first().click({ timeout: 5000 }).catch(async () => {
-    // Fallback: set via store
-    console.log('WARN: Could not find Text button, using store fallback');
-    await page.evaluate(() => {
-      ((window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      }).getState().setActiveTool('text');
-    });
-  });
+  await page.keyboard.press('t');
   await page.waitForTimeout(200);
 
   // Click on canvas to place text
@@ -48,11 +39,7 @@ test('text layer rotation: content stays centered and does not scale', async ({ 
   await page.screenshot({ path: 'e2e/screenshots/text-rotation-01-typing.png' });
 
   // --- Step 2: Switch to marquee tool (should commit the text) ---
-  await page.evaluate(() => {
-    ((window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    }).getState().setActiveTool('marquee-rect');
-  });
+  await page.keyboard.press('m');
   await page.waitForTimeout(500);
 
   await page.screenshot({ path: 'e2e/screenshots/text-rotation-02-committed.png' });
@@ -78,12 +65,7 @@ test('text layer rotation: content stays centered and does not scale', async ({ 
   expect(textLayer.type).toBe('raster');
 
   // --- Step 3: Select the text layer and marquee around it ---
-  await page.evaluate((id) => {
-    (window as unknown as Record<string, unknown>).__editorStore &&
-    ((window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { setActiveLayer: (id: string) => void };
-    }).getState().setActiveLayer(id);
-  }, textLayer.id);
+  await page.locator(`[data-layer-id="${textLayer.id}"]`).click();
   await page.waitForTimeout(100);
 
   const m = 10;
@@ -96,11 +78,7 @@ test('text layer rotation: content stays centered and does not scale', async ({ 
   await page.waitForTimeout(300);
 
   // --- Step 4: Switch to move tool ---
-  await page.evaluate(() => {
-    ((window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    }).getState().setActiveTool('move');
-  });
+  await page.keyboard.press('v');
   await page.waitForTimeout(200);
 
   await page.screenshot({ path: 'e2e/screenshots/text-rotation-03-selected.png' });

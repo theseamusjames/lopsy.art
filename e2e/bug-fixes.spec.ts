@@ -6,13 +6,19 @@ import {
   waitForStore,
   getEditorState,
   getPixelAt,
-  paintRect,
-  paintCircle,
   addLayer,
   setActiveLayer,
-  moveLayer,
+  moveLayerTo,
   undo,
   redo,
+  setLayerOpacity,
+  openEffectsPanel,
+  closeEffectsPanel,
+  enableEffect,
+  configureEffect,
+  setEffectColor,
+  drawRect,
+  drawEllipse,
 } from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -160,12 +166,7 @@ async function fitToView(page: Page): Promise<void> {
 }
 
 async function selectMoveTool(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (tool: string) => void };
-    };
-    store.getState().setActiveTool('move');
-  });
+  await page.keyboard.press('v');
   await page.waitForTimeout(100);
 }
 
@@ -215,7 +216,8 @@ test.describe('Bug Fix: Layer Masks', () => {
     const layerId = s0.document.layers[0]!.id;
 
     // Paint the entire layer red
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 }, layerId);
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
 
     // Add a mask (default is white = fully opaque)
     await page.evaluate(
@@ -279,7 +281,8 @@ test.describe('Bug Fix: Layer Masks', () => {
     const layerId = s0.document.layers[0]!.id;
 
     // Paint content
-    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0, a: 255 }, layerId);
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0 });
 
     // Add mask
     await page.evaluate(
@@ -349,8 +352,9 @@ test.describe('Bug Fix: Selection Constraining Painting', () => {
     expect(selState.active).toBe(true);
     expect(selState.bounds).toEqual({ x: 50, y: 50, width: 100, height: 100 });
 
-    // Paint only inside the selection bounds using paintRect
-    await paintRect(page, 50, 50, 100, 100, { r: 0, g: 255, b: 0, a: 255 }, layerId);
+    // Paint only inside the selection bounds using drawRect
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 50, 50, 100, 100, { r: 0, g: 255, b: 0 });
     await page.waitForTimeout(300);
 
     // Inside painted region: should be green
@@ -387,19 +391,22 @@ test.describe('Bug Fix: Flatten Image', () => {
     const bgId = s0.document.layers[0]!.id;
 
     // Paint red on background
-    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0 });
 
     // Add second layer with green
     await addLayer(page);
     const s1 = await getEditorState(page);
     const layer2Id = s1.document.activeLayerId;
-    await paintRect(page, 0, 0, 50, 100, { r: 0, g: 255, b: 0, a: 255 }, layer2Id);
+    await setActiveLayer(page, layer2Id);
+    await drawRect(page, 0, 0, 50, 100, { r: 0, g: 255, b: 0 });
 
     // Add third layer with blue
     await addLayer(page);
     const s2 = await getEditorState(page);
     const layer3Id = s2.document.activeLayerId;
-    await paintRect(page, 0, 0, 100, 50, { r: 0, g: 0, b: 255, a: 255 }, layer3Id);
+    await setActiveLayer(page, layer3Id);
+    await drawRect(page, 0, 0, 100, 50, { r: 0, g: 0, b: 255 });
 
     expect((await getEditorState(page)).document.layers).toHaveLength(4);
 
@@ -437,7 +444,8 @@ test.describe('Bug Fix: Flatten Image', () => {
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
 
-    await paintRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 100, 100, { r: 255, g: 0, b: 0 });
     await addLayer(page);
     await addLayer(page);
 
@@ -477,9 +485,10 @@ test.describe('Bug Fix: Clone Stamp', () => {
     const layerId = s0.document.layers[0]!.id;
 
     // Paint a distinctive source pattern: red square at (10,10) 40x40
-    await paintRect(page, 10, 10, 40, 40, { r: 255, g: 0, b: 0, a: 255 }, layerId);
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 10, 10, 40, 40, { r: 255, g: 0, b: 0 });
     // And a blue square at (20,20) 20x20 (overlapping the red)
-    await paintRect(page, 20, 20, 20, 20, { r: 0, g: 0, b: 255, a: 255 }, layerId);
+    await drawRect(page, 20, 20, 20, 20, { r: 0, g: 0, b: 255 });
 
     // Simulate clone stamp: copy source region to destination
     // Source: (10,10)-(50,50), Destination: (100,100)-(140,140)
@@ -544,7 +553,8 @@ test.describe('Bug Fix: Clone Stamp', () => {
     const s0 = await getEditorState(page);
     const layerId = s0.document.layers[0]!.id;
 
-    await paintRect(page, 0, 0, 30, 30, { r: 255, g: 0, b: 0, a: 255 }, layerId);
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 0, 0, 30, 30, { r: 255, g: 0, b: 0 });
 
     // Clone
     await page.evaluate(
@@ -599,7 +609,7 @@ test.describe('Bug Fix: Move/Align Buttons', () => {
     await selectMoveTool(page);
 
     // Paint a 40x40 block at top-left corner
-    await paintRect(page, 0, 0, 40, 40, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 40, 40, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(200);
 
     const posBefore = await getLayerPosition(page);
@@ -619,7 +629,7 @@ test.describe('Bug Fix: Move/Align Buttons', () => {
     await page.waitForSelector('[data-testid="canvas-container"]');
     await selectMoveTool(page);
 
-    await paintRect(page, 0, 0, 40, 40, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 40, 40, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(200);
 
     await clickAlignButton(page, 'Align center vertically');
@@ -634,7 +644,7 @@ test.describe('Bug Fix: Move/Align Buttons', () => {
     await page.waitForSelector('[data-testid="canvas-container"]');
     await selectMoveTool(page);
 
-    await paintRect(page, 10, 10, 20, 30, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 10, 10, 20, 30, { r: 0, g: 0, b: 255 });
     await page.waitForTimeout(200);
 
     await clickAlignButton(page, 'Align center horizontally');
@@ -661,7 +671,8 @@ test.describe('Bug Fix: Image Adjustments', () => {
     const layerId = s0.document.layers[0]!.id;
 
     // Paint a mid-gray rectangle
-    await paintRect(page, 0, 0, 100, 100, { r: 128, g: 128, b: 128, a: 255 }, layerId);
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 0, 0, 100, 100, { r: 128, g: 128, b: 128 });
     await page.waitForTimeout(300);
 
     // Read baseline composite pixel
@@ -723,7 +734,7 @@ test.describe('Bug Fix: Image Adjustments', () => {
 
   test('disabling adjustments restores original composite', async ({ page }) => {
     await createDocument(page, 100, 100, false);
-    await paintRect(page, 0, 0, 100, 100, { r: 100, g: 100, b: 100, a: 255 });
+    await drawRect(page, 0, 0, 100, 100, { r: 100, g: 100, b: 100 });
     await page.waitForTimeout(300);
 
     const original = await getCompositePixelAt(page, 50, 50);
@@ -804,7 +815,8 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
     const bgId = s0.document.layers[0]!.id;
 
     // Step 1: Paint red on background
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
 
     // Step 2: Add layer 2
     await addLayer(page);
@@ -812,7 +824,8 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
     const layer2Id = s1.document.activeLayerId;
 
     // Step 3: Paint green on layer 2
-    await paintRect(page, 0, 0, 100, 100, { r: 0, g: 255, b: 0, a: 255 }, layer2Id);
+    await setActiveLayer(page, layer2Id);
+    await drawRect(page, 0, 0, 100, 100, { r: 0, g: 255, b: 0 });
 
     // Step 4: Add layer 3
     await addLayer(page);
@@ -820,7 +833,8 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
     const layer3Id = s2.document.activeLayerId;
 
     // Step 5: Paint blue on layer 3
-    await paintRect(page, 50, 50, 100, 100, { r: 0, g: 0, b: 255, a: 255 }, layer3Id);
+    await setActiveLayer(page, layer3Id);
+    await drawRect(page, 50, 50, 100, 100, { r: 0, g: 0, b: 255 });
 
     // Step 6: Add layer 4
     await addLayer(page);
@@ -828,7 +842,8 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
     const layer4Id = s3.document.activeLayerId;
 
     // Step 7: Paint yellow on layer 4
-    await paintRect(page, 100, 0, 100, 100, { r: 255, g: 255, b: 0, a: 255 }, layer4Id);
+    await setActiveLayer(page, layer4Id);
+    await drawRect(page, 100, 0, 100, 100, { r: 255, g: 255, b: 0 });
 
     // Step 8: Add layer 5
     await addLayer(page);
@@ -836,37 +851,17 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
     const layer5Id = s4.document.activeLayerId;
 
     // Step 9: Paint magenta on layer 5
-    await paintRect(page, 0, 100, 100, 100, { r: 255, g: 0, b: 255, a: 255 }, layer5Id);
+    await setActiveLayer(page, layer5Id);
+    await drawRect(page, 0, 100, 100, 100, { r: 255, g: 0, b: 255 });
 
     // Step 10: Move layer 2
-    await moveLayer(page, layer2Id, 10, 10);
+    await moveLayerTo(page, layer2Id, 10, 10);
 
     // Step 11: Change layer 4 opacity
-    await page.evaluate(
-      ({ id, opacity }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            pushHistory: (label?: string) => void;
-            updateLayerOpacity: (id: string, opacity: number) => void;
-          };
-        };
-        const state = store.getState();
-        state.pushHistory('Opacity');
-        state.updateLayerOpacity(id, opacity);
-      },
-      { id: layer4Id, opacity: 0.5 },
-    );
+    await setLayerOpacity(page, layer4Id, 50);
 
     // Step 12: Toggle visibility of layer 3
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { toggleLayerVisibility: (id: string) => void };
-        };
-        store.getState().toggleLayerVisibility(id);
-      },
-      layer3Id,
-    );
+    await page.locator(`[data-layer-id="${layer3Id}"]`).locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]').click();
 
     // Step 13: Add mask to layer 5
     await page.evaluate(
@@ -880,39 +875,24 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
     );
 
     // Step 14: Paint more on background
-    await paintRect(page, 150, 150, 50, 50, { r: 128, g: 0, b: 0, a: 255 }, bgId);
+    await setActiveLayer(page, bgId);
+    await drawRect(page, 150, 150, 50, 50, { r: 128, g: 0, b: 0 });
 
     // Step 15: Paint on layer 2
-    await paintRect(page, 50, 50, 50, 50, { r: 0, g: 128, b: 0, a: 255 }, layer2Id);
+    await setActiveLayer(page, layer2Id);
+    await drawRect(page, 50, 50, 50, 50, { r: 0, g: 128, b: 0 });
 
     // Step 16: Add drop shadow effect to layer 4
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-            updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-          };
-        };
-        const state = store.getState();
-        const layer = state.document.layers.find((l) => l.id === id)!;
-        const newEffects = {
-          ...layer.effects,
-          dropShadow: {
-            ...(layer.effects.dropShadow as Record<string, unknown>),
-            enabled: true,
-          },
-        };
-        state.updateLayerEffects(id, newEffects as never);
-      },
-      layer4Id,
-    );
+    await setActiveLayer(page, layer4Id);
+    await enableEffect(page, 'Drop Shadow');
+    await closeEffectsPanel(page);
 
     // Step 17: Move layer 5
-    await moveLayer(page, layer5Id, 20, 30);
+    await moveLayerTo(page, layer5Id, 20, 30);
 
     // Step 18: Paint cyan on layer 3
-    await paintRect(page, 10, 10, 30, 30, { r: 0, g: 255, b: 255, a: 255 }, layer3Id);
+    await setActiveLayer(page, layer3Id);
+    await drawRect(page, 10, 10, 30, 30, { r: 0, g: 255, b: 255 });
 
     // Step 19: Toggle mask on layer 5
     await page.evaluate(
@@ -926,26 +906,14 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
     );
 
     // Step 20: Move layer 4
-    await moveLayer(page, layer4Id, 5, 5);
+    await moveLayerTo(page, layer4Id, 5, 5);
 
     // Step 21: Paint orange on layer 5
-    await paintRect(page, 60, 60, 40, 40, { r: 255, g: 165, b: 0, a: 255 }, layer5Id);
+    await setActiveLayer(page, layer5Id);
+    await drawRect(page, 60, 60, 40, 40, { r: 255, g: 165, b: 0 });
 
     // Step 22: Change opacity of layer 2
-    await page.evaluate(
-      ({ id, opacity }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            pushHistory: (label?: string) => void;
-            updateLayerOpacity: (id: string, opacity: number) => void;
-          };
-        };
-        const state = store.getState();
-        state.pushHistory('Opacity');
-        state.updateLayerOpacity(id, opacity);
-      },
-      { id: layer2Id, opacity: 0.75 },
-    );
+    await setLayerOpacity(page, layer2Id, 75);
 
     // Verify final state
     const finalState = await getEditorState(page);
@@ -1029,34 +997,18 @@ test.describe('Masterpiece: Full Feature Integration', () => {
     const sunLayerId = s1.document.activeLayerId;
 
     // Paint a large yellow sun
-    await paintCircle(page, 450, 80, 50, { r: 255, g: 200, b: 0, a: 255 }, sunLayerId);
+    await setActiveLayer(page, sunLayerId);
+    await drawEllipse(page, 450, 80, 50, 50, { r: 255, g: 200, b: 0 });
     // Paint an orange center
-    await paintCircle(page, 450, 80, 25, { r: 255, g: 140, b: 0, a: 255 }, sunLayerId);
+    await drawEllipse(page, 450, 80, 25, 25, { r: 255, g: 140, b: 0 });
 
     // Add outer glow effect
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-            updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-          };
-        };
-        const state = store.getState();
-        const layer = state.document.layers.find((l) => l.id === id)!;
-        state.updateLayerEffects(id, {
-          ...layer.effects,
-          outerGlow: {
-            enabled: true,
-            color: { r: 255, g: 200, b: 50, a: 255 },
-            size: 15,
-            spread: 5,
-            opacity: 0.8,
-          },
-        } as never);
-      },
-      sunLayerId,
-    );
+    await setActiveLayer(page, sunLayerId);
+    await configureEffect(page, 'Outer Glow', {
+      'Size': 15, 'Spread': 5, 'Opacity': 80,
+    });
+    await setEffectColor(page, 'Glow color', 255, 200, 50);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(300);
 
     // -----------------------------------------------------------------------
@@ -1072,53 +1024,16 @@ test.describe('Masterpiece: Full Feature Integration', () => {
     await paintTriangle(page, 400, 350, 520, 200, 600, 350, { r: 20, g: 90, b: 20, a: 255 }, mountainLayerId);
 
     // Add drop shadow to mountains
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-            updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-          };
-        };
-        const state = store.getState();
-        const layer = state.document.layers.find((l) => l.id === id)!;
-        state.updateLayerEffects(id, {
-          ...layer.effects,
-          dropShadow: {
-            enabled: true,
-            color: { r: 0, g: 0, b: 0, a: 255 },
-            offsetX: 5,
-            offsetY: 5,
-            blur: 10,
-            spread: 0,
-            opacity: 0.6,
-          },
-        } as never);
-      },
-      mountainLayerId,
-    );
+    await setActiveLayer(page, mountainLayerId);
+    await configureEffect(page, 'Drop Shadow', {
+      'Offset X': 5, 'Offset Y': 5, 'Blur': 10, 'Spread': 0, 'Opacity': 60,
+    });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
 
     // Add color overlay on mountains for slightly different tint
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-            updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-          };
-        };
-        const state = store.getState();
-        const layer = state.document.layers.find((l) => l.id === id)!;
-        state.updateLayerEffects(id, {
-          ...layer.effects,
-          colorOverlay: {
-            enabled: true,
-            color: { r: 30, g: 80, b: 30, a: 128 },
-          },
-        } as never);
-      },
-      mountainLayerId,
-    );
+    await enableEffect(page, 'Color Overlay');
+    await setEffectColor(page, 'Overlay color', 30, 80, 30);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(300);
 
     // -----------------------------------------------------------------------
@@ -1129,29 +1044,17 @@ test.describe('Masterpiece: Full Feature Integration', () => {
     const cloudLayerId = s3.document.activeLayerId;
 
     // Paint cloud clusters
-    await paintCircle(page, 100, 70, 35, { r: 255, g: 255, b: 255, a: 220 }, cloudLayerId);
-    await paintCircle(page, 140, 60, 30, { r: 255, g: 255, b: 255, a: 200 }, cloudLayerId);
-    await paintCircle(page, 120, 80, 25, { r: 240, g: 240, b: 255, a: 210 }, cloudLayerId);
+    await setActiveLayer(page, cloudLayerId);
+    await drawEllipse(page, 100, 70, 35, 35, { r: 255, g: 255, b: 255, a: 220 / 255 });
+    await drawEllipse(page, 140, 60, 30, 30, { r: 255, g: 255, b: 255, a: 200 / 255 });
+    await drawEllipse(page, 120, 80, 25, 25, { r: 240, g: 240, b: 255, a: 210 / 255 });
 
-    await paintCircle(page, 300, 50, 40, { r: 255, g: 255, b: 255, a: 220 }, cloudLayerId);
-    await paintCircle(page, 350, 45, 35, { r: 255, g: 255, b: 255, a: 200 }, cloudLayerId);
-    await paintCircle(page, 325, 65, 28, { r: 240, g: 240, b: 255, a: 210 }, cloudLayerId);
+    await drawEllipse(page, 300, 50, 40, 40, { r: 255, g: 255, b: 255, a: 220 / 255 });
+    await drawEllipse(page, 350, 45, 35, 35, { r: 255, g: 255, b: 255, a: 200 / 255 });
+    await drawEllipse(page, 325, 65, 28, 28, { r: 240, g: 240, b: 255, a: 210 / 255 });
 
     // Set cloud layer to 60% opacity
-    await page.evaluate(
-      ({ id, opacity }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            pushHistory: (label?: string) => void;
-            updateLayerOpacity: (id: string, opacity: number) => void;
-          };
-        };
-        const state = store.getState();
-        state.pushHistory('Cloud Opacity');
-        state.updateLayerOpacity(id, opacity);
-      },
-      { id: cloudLayerId, opacity: 0.6 },
-    );
+    await setLayerOpacity(page, cloudLayerId, 60);
     await page.waitForTimeout(300);
 
     // -----------------------------------------------------------------------
@@ -1162,36 +1065,20 @@ test.describe('Masterpiece: Full Feature Integration', () => {
     const brushLayerId = s4.document.activeLayerId;
 
     // Paint abstract color strokes
-    await paintRect(page, 20, 200, 150, 8, { r: 255, g: 100, b: 50, a: 180 }, brushLayerId);
-    await paintRect(page, 60, 220, 120, 6, { r: 50, g: 200, b: 255, a: 160 }, brushLayerId);
-    await paintRect(page, 100, 240, 200, 10, { r: 200, g: 50, b: 200, a: 140 }, brushLayerId);
-    await paintRect(page, 350, 280, 180, 7, { r: 100, g: 255, b: 100, a: 170 }, brushLayerId);
-    await paintRect(page, 400, 300, 150, 9, { r: 255, g: 255, b: 100, a: 150 }, brushLayerId);
+    await setActiveLayer(page, brushLayerId);
+    await drawRect(page, 20, 200, 150, 8, { r: 255, g: 100, b: 50, a: 180 / 255 });
+    await drawRect(page, 60, 220, 120, 6, { r: 50, g: 200, b: 255, a: 160 / 255 });
+    await drawRect(page, 100, 240, 200, 10, { r: 200, g: 50, b: 200, a: 140 / 255 });
+    await drawRect(page, 350, 280, 180, 7, { r: 100, g: 255, b: 100, a: 170 / 255 });
+    await drawRect(page, 400, 300, 150, 9, { r: 255, g: 255, b: 100, a: 150 / 255 });
 
     // Add inner glow to sun layer
-    await page.evaluate(
-      (id) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-            updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-          };
-        };
-        const state = store.getState();
-        const layer = state.document.layers.find((l) => l.id === id)!;
-        state.updateLayerEffects(id, {
-          ...layer.effects,
-          innerGlow: {
-            enabled: true,
-            color: { r: 255, g: 240, b: 200, a: 255 },
-            size: 10,
-            spread: 3,
-            opacity: 0.7,
-          },
-        } as never);
-      },
-      sunLayerId,
-    );
+    await setActiveLayer(page, sunLayerId);
+    await configureEffect(page, 'Inner Glow', {
+      'Size': 10, 'Spread': 3, 'Opacity': 70,
+    });
+    await setEffectColor(page, 'Glow color', 255, 240, 200);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(300);
 
     // -----------------------------------------------------------------------

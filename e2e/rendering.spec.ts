@@ -1,4 +1,14 @@
 import { test, expect, type Page } from './fixtures';
+import {
+  setToolOption,
+  setForegroundColor,
+  setActiveLayer as setActiveLayerUI,
+  configureEffect,
+  setEffectColor,
+  closeEffectsPanel,
+  enableEffect,
+  drawRect,
+} from './helpers';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -28,43 +38,6 @@ async function createDocument(page: Page, width = 400, height = 300, transparent
     const s = store.getState();
     return s.document.layers.length > 0 && s.undoStack.length > 0;
   });
-}
-
-async function paintRect(
-  page: Page,
-  x: number, y: number, w: number, h: number,
-  color: { r: number; g: number; b: number; a: number },
-  layerId?: string,
-) {
-  await page.evaluate(
-    ({ x, y, w, h, color, lid }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
-          updateLayerPixelData: (id: string, data: ImageData) => void;
-          pushHistory: (label?: string) => void;
-        };
-      };
-      const state = store.getState();
-      const id = lid ?? state.document.activeLayerId;
-      state.pushHistory('Paint');
-      const data = state.getOrCreateLayerPixelData(id);
-      for (let py = y; py < y + h; py++) {
-        for (let px = x; px < x + w; px++) {
-          if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
-          const idx = (py * data.width + px) * 4;
-          data.data[idx] = color.r;
-          data.data[idx + 1] = color.g;
-          data.data[idx + 2] = color.b;
-          data.data[idx + 3] = color.a;
-        }
-      }
-      state.updateLayerPixelData(id, data);
-    },
-    { x, y, w, h, color, lid: layerId ?? null },
-  );
-  await page.waitForTimeout(200);
 }
 
 async function fitToView(page: Page) {
@@ -171,7 +144,7 @@ test.describe('WASM/WebGL Rendering', () => {
   test('03 - full red fill (no sparse conversion)', async ({ page }) => {
     await createDocument(page, 400, 300, true);
     // Paint entire canvas red — >50% content, won't be sparsified
-    await paintRect(page, 0, 0, 400, 300, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 400, 300, { r: 255, g: 0, b: 0 });
     await fitToView(page);
     await page.waitForTimeout(500);
     // Check that pixel data exists in store
@@ -208,7 +181,7 @@ test.describe('WASM/WebGL Rendering', () => {
 
   test('04 - blue rectangle in bottom-right corner', async ({ page }) => {
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 300, 225, 100, 75, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 300, 225, 100, 75, { r: 0, g: 0, b: 255 });
     await fitToView(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '04-blue-rect-bottom-right.png') });
@@ -240,13 +213,13 @@ test.describe('WASM/WebGL Rendering', () => {
   test('05 - four colored corners verify orientation', async ({ page }) => {
     await createDocument(page, 400, 300, true);
     // Top-left: red
-    await paintRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0 });
     // Top-right: green
-    await paintRect(page, 350, 0, 50, 50, { r: 0, g: 255, b: 0, a: 255 });
+    await drawRect(page, 350, 0, 50, 50, { r: 0, g: 255, b: 0 });
     // Bottom-left: blue
-    await paintRect(page, 0, 250, 50, 50, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 0, 250, 50, 50, { r: 0, g: 0, b: 255 });
     // Bottom-right: yellow
-    await paintRect(page, 350, 250, 50, 50, { r: 255, g: 255, b: 0, a: 255 });
+    await drawRect(page, 350, 250, 50, 50, { r: 255, g: 255, b: 0 });
     await fitToView(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '05-four-corners.png') });
@@ -283,7 +256,7 @@ test.describe('WASM/WebGL Rendering', () => {
 
   test('06 - panning moves document correctly', async ({ page }) => {
     await createDocument(page, 400, 300, false);
-    await paintRect(page, 0, 0, 200, 150, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 150, { r: 255, g: 0, b: 0 });
     await fitToView(page);
     await page.waitForTimeout(300);
     // Pan right and down
@@ -309,7 +282,7 @@ test.describe('WASM/WebGL Rendering', () => {
 
   test('07 - zoomed in view', async ({ page }) => {
     await createDocument(page, 400, 300, true);
-    await paintRect(page, 180, 130, 40, 40, { r: 0, g: 128, b: 255, a: 255 });
+    await drawRect(page, 180, 130, 40, 40, { r: 0, g: 128, b: 255 });
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
@@ -346,9 +319,11 @@ test.describe('WASM/WebGL Rendering', () => {
       return store.getState().document.layers.map(l => l.id);
     });
     // Bottom layer: large red rect
-    await paintRect(page, 50, 50, 200, 150, { r: 255, g: 0, b: 0, a: 255 }, layers[0]);
+    await setActiveLayerUI(page, layers[0]!);
+    await drawRect(page, 50, 50, 200, 150, { r: 255, g: 0, b: 0 });
     // Top layer: overlapping blue rect
-    await paintRect(page, 150, 100, 200, 150, { r: 0, g: 0, b: 255, a: 255 }, layers[1]);
+    await setActiveLayerUI(page, layers[1]!);
+    await drawRect(page, 150, 100, 200, 150, { r: 0, g: 0, b: 255 });
     await fitToView(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '08-multi-layer.png') });
@@ -378,17 +353,9 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(500);
 
     // Select brush tool and set settings
-    await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setBrushSize: (s: number) => void; setBrushHardness: (h: number) => void };
-      };
-      ui.getState().setActiveTool('brush');
-      ts.getState().setBrushSize(30);
-      ts.getState().setBrushHardness(100);
-    });
+    await page.keyboard.press('b');
+    await setToolOption(page, 'Size', 30);
+    await setToolOption(page, 'Hardness', 100);
     await page.waitForTimeout(200);
 
     // Draw a horizontal stroke across the middle of the canvas
@@ -470,22 +437,10 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(300);
 
     // Select brush tool with red color
-    await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => {
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
-          setBrushSize: (s: number) => void;
-          setBrushHardness: (h: number) => void;
-        };
-      };
-      ui.getState().setActiveTool('brush');
-      ts.getState().setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
-      ts.getState().setBrushSize(50);
-      ts.getState().setBrushHardness(100);
-    });
+    await page.keyboard.press('b');
+    await setForegroundColor(page, 255, 0, 0);
+    await setToolOption(page, 'Size', 50);
+    await setToolOption(page, 'Hardness', 100);
     await page.waitForTimeout(200);
 
     // Draw a horizontal stroke across the full width (should clip to selection)
@@ -625,18 +580,14 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(300);
 
     // Select gradient tool
+    await page.locator('[data-tool-id="gradient"]').click();
+    await setForegroundColor(page, 255, 0, 0);
     await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
           setBackgroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
         };
       };
-      ui.getState().setActiveTool('gradient');
-      ts.getState().setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
       ts.getState().setBackgroundColor({ r: 0, g: 0, b: 255, a: 1 });
     });
     await page.waitForTimeout(200);
@@ -706,26 +657,13 @@ test.describe('WASM/WebGL Rendering', () => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
     // Paint a centered red square
-    await paintRect(page, 60, 60, 80, 80, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 60, 60, 80, 80, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(300);
 
     // Enable drop shadow
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 1 }, offsetX: 10, offsetY: 10, blur: 5, spread: 0 },
-      });
-    });
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 10, 'Offset Y': 10, 'Blur': 5, 'Spread': 0 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '13-drop-shadow.png') });
 
@@ -746,26 +684,13 @@ test.describe('WASM/WebGL Rendering', () => {
   test('14 - color overlay changes color', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
-    await paintRect(page, 50, 50, 100, 100, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 50, 50, 100, 100, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(300);
 
     // Enable color overlay (blue)
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        colorOverlay: { enabled: true, color: { r: 0, g: 0, b: 255, a: 1 } },
-      });
-    });
+    await enableEffect(page, 'Color Overlay');
+    await setEffectColor(page, 'Overlay color', 0, 0, 255);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '14-color-overlay.png') });
 
@@ -807,15 +732,10 @@ test.describe('WASM/WebGL Rendering', () => {
     });
 
     // Paint red
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
 
     // Undo
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      };
-      store.getState().undo();
-    });
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     const after = await page.evaluate(() => {
@@ -842,7 +762,7 @@ test.describe('WASM/WebGL Rendering', () => {
   test('16 - undo then redo restores paint', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
-    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 255, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 0, g: 255, b: 0 });
 
     const painted = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -856,20 +776,11 @@ test.describe('WASM/WebGL Rendering', () => {
     });
 
     // Undo
-    await page.evaluate(() => {
-      (window as unknown as Record<string, unknown>).__editorStore &&
-      ((window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      }).getState().undo();
-    });
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(200);
 
     // Redo
-    await page.evaluate(() => {
-      ((window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { redo: () => void };
-      }).getState().redo();
-    });
+    await page.keyboard.press('Control+Shift+z');
     await page.waitForTimeout(300);
 
     const afterRedo = await page.evaluate(() => {
@@ -896,7 +807,7 @@ test.describe('WASM/WebGL Rendering', () => {
 
     // Fill with exact known RGB values
     const testColor = { r: 42, g: 137, b: 221, a: 255 };
-    await paintRect(page, 0, 0, 100, 100, testColor);
+    await drawRect(page, 0, 0, 100, 100, { r: testColor.r, g: testColor.g, b: testColor.b });
 
     const result = await page.evaluate(({ r, g, b, a }) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -931,7 +842,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await createDocument(page, 200, 200, false); // white bg
     await fitToView(page);
     // Paint red on top layer at 50% opacity
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
@@ -962,7 +873,7 @@ test.describe('WASM/WebGL Rendering', () => {
   test('19 - layer visibility toggle', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(300);
 
     // Hide the layer
@@ -996,7 +907,7 @@ test.describe('WASM/WebGL Rendering', () => {
   test('20 - duplicate layer', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
-    await paintRect(page, 50, 50, 100, 100, { r: 0, g: 255, b: 0, a: 255 });
+    await drawRect(page, 50, 50, 100, 100, { r: 0, g: 255, b: 0 });
 
     const layerCountBefore = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -1025,7 +936,7 @@ test.describe('WASM/WebGL Rendering', () => {
   test('21 - invert filter', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     await fitToView(page);
-    await paintRect(page, 0, 0, 100, 100, { r: 200, g: 50, b: 100, a: 255 });
+    await drawRect(page, 0, 0, 100, 100, { r: 200, g: 50, b: 100 });
 
     // Apply invert via filter runner
     await page.evaluate(() => {
@@ -1078,7 +989,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint red on first layer
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
 
     // Add new layer
     await page.evaluate(() => {
@@ -1089,23 +1000,15 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(200);
 
     // Paint blue on second layer
-    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 255 });
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '22-multi-step-before-undo.png') });
 
     // Undo the blue paint
-    await page.evaluate(() => {
-      ((window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      }).getState().undo();
-    });
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // Undo the add layer
-    await page.evaluate(() => {
-      ((window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      }).getState().undo();
-    });
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // Should still have the red paint on the original layer
@@ -1135,7 +1038,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Bottom layer: light blue
-    await paintRect(page, 0, 0, 200, 200, { r: 100, g: 150, b: 255, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 100, g: 150, b: 255 });
 
     // Add layer on top
     await page.evaluate(() => {
@@ -1146,7 +1049,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(200);
 
     // Top layer: light red, set to multiply blend
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 100, b: 100, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 100, b: 100 });
     // Set blend mode by updating the layer directly via setState
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -1190,7 +1093,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint red on bottom layer
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
 
     // Add top layer, paint blue on top half
     await page.evaluate(() => {
@@ -1199,7 +1102,7 @@ test.describe('WASM/WebGL Rendering', () => {
       }).getState().addLayer();
     });
     await page.waitForTimeout(200);
-    await paintRect(page, 0, 0, 200, 100, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 0, 0, 200, 100, { r: 0, g: 0, b: 255 });
 
     // Merge down
     await page.evaluate(() => {
@@ -1247,7 +1150,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint red on layer 1
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
 
     // Add layer 2, paint green
     await page.evaluate(() => {
@@ -1256,7 +1159,7 @@ test.describe('WASM/WebGL Rendering', () => {
       }).getState().addLayer();
     });
     await page.waitForTimeout(200);
-    await paintRect(page, 0, 0, 100, 200, { r: 0, g: 255, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 100, 200, { r: 0, g: 255, b: 0 });
 
     // Add layer 3, paint blue
     await page.evaluate(() => {
@@ -1265,7 +1168,7 @@ test.describe('WASM/WebGL Rendering', () => {
       }).getState().addLayer();
     });
     await page.waitForTimeout(200);
-    await paintRect(page, 0, 0, 200, 100, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 0, 0, 200, 100, { r: 0, g: 0, b: 255 });
 
     // Flatten
     await page.evaluate(() => {
@@ -1320,14 +1223,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(300);
 
     // Set foreground to green and fill the selection
-    await page.evaluate(() => {
-      const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => {
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
-        };
-      };
-      ts.getState().setForegroundColor({ r: 0, g: 255, b: 0, a: 1 });
-    });
+    await setForegroundColor(page, 0, 255, 0);
     await page.waitForTimeout(100);
 
     // Fill the selection programmatically
@@ -1399,12 +1295,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(500);
 
     // Select marquee-rect tool
-    await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('marquee-rect');
-    });
+    await page.keyboard.press('m');
     await page.waitForTimeout(200);
 
     // Drag a rectangular selection
@@ -1449,7 +1340,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Fill with blue
-    await paintRect(page, 0, 0, 300, 300, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 0, 0, 300, 300, { r: 0, g: 0, b: 255 });
 
     // Resize canvas to 500x400, anchor top-left (0, 0)
     await page.evaluate(() => {
@@ -1502,8 +1393,8 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Left half red, right half blue
-    await paintRect(page, 0, 0, 100, 200, { r: 255, g: 0, b: 0, a: 255 });
-    await paintRect(page, 100, 0, 100, 200, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 0, 0, 100, 200, { r: 255, g: 0, b: 0 });
+    await drawRect(page, 100, 0, 100, 200, { r: 0, g: 0, b: 255 });
 
     // Flip horizontal by manipulating pixel data directly
     await page.evaluate(() => {
@@ -1570,7 +1461,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint full red
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
 
     // Add layer mask
     await page.evaluate(() => {
@@ -1628,7 +1519,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint green square
-    await paintRect(page, 50, 50, 100, 100, { r: 0, g: 255, b: 0, a: 255 });
+    await drawRect(page, 50, 50, 100, 100, { r: 0, g: 255, b: 0 });
 
     // Select all
     await page.evaluate(() => {
@@ -1693,26 +1584,18 @@ test.describe('WASM/WebGL Rendering', () => {
     ];
 
     for (const c of colors) {
-      await paintRect(page, 0, 0, 100, 100, c);
+      await drawRect(page, 0, 0, 100, 100, { r: c.r, g: c.g, b: c.b });
     }
 
     // Undo 3 times: magenta -> yellow -> blue -> green (current)
     for (let i = 0; i < 3; i++) {
-      await page.evaluate(() => {
-        ((window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { undo: () => void };
-        }).getState().undo();
-      });
+      await page.keyboard.press('Control+z');
       await page.waitForTimeout(200);
     }
 
     // Redo 2 times: green -> blue -> yellow (current)
     for (let i = 0; i < 2; i++) {
-      await page.evaluate(() => {
-        ((window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { redo: () => void };
-        }).getState().redo();
-      });
+      await page.keyboard.press('Control+Shift+z');
       await page.waitForTimeout(200);
     }
 
@@ -1749,26 +1632,13 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint a small centered square
-    await paintRect(page, 75, 75, 50, 50, { r: 255, g: 255, b: 0, a: 255 });
+    await drawRect(page, 75, 75, 50, 50, { r: 255, g: 255, b: 0 });
     await page.waitForTimeout(300);
 
     // Enable outer glow
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        outerGlow: { enabled: true, color: { r: 0, g: 255, b: 255, a: 1 }, size: 20, spread: 0, opacity: 1 },
-      });
-    });
+    await configureEffect(page, 'Outer Glow', { 'Size': 20, 'Spread': 0, 'Opacity': 100 });
+    await setEffectColor(page, 'Glow color', 0, 255, 255);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '33-outer-glow.png') });
 
@@ -1795,26 +1665,14 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint a centered square
-    await paintRect(page, 60, 60, 80, 80, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 60, 60, 80, 80, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(300);
 
     // Enable stroke
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        stroke: { enabled: true, color: { r: 0, g: 0, b: 255, a: 1 }, width: 4, position: 'outside' },
-      });
-    });
+    await configureEffect(page, 'Stroke', { 'Width': 4 });
+    await setEffectColor(page, 'Stroke color', 0, 0, 255);
+    await page.locator('[aria-label="Stroke position: outside"]').click();
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '34-stroke-effect.png') });
 
@@ -1843,7 +1701,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Bottom layer: dark red
-    await paintRect(page, 0, 0, 200, 200, { r: 150, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 150, g: 0, b: 0 });
 
     // Add top layer: dark blue with screen blend
     await page.evaluate(() => {
@@ -1852,7 +1710,7 @@ test.describe('WASM/WebGL Rendering', () => {
       }).getState().addLayer();
     });
     await page.waitForTimeout(200);
-    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 150, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 150 });
 
     // Set screen blend mode
     await page.evaluate(() => {
@@ -1897,7 +1755,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint a white background to fill into
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 255, b: 255, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 255, b: 255 });
 
     // Simulate flood fill: replace white with purple
     await page.evaluate(() => {
@@ -1957,8 +1815,8 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint a sharp edge: left half black, right half white
-    await paintRect(page, 0, 0, 50, 100, { r: 0, g: 0, b: 0, a: 255 });
-    await paintRect(page, 50, 0, 50, 100, { r: 255, g: 255, b: 255, a: 255 });
+    await drawRect(page, 0, 0, 50, 100, { r: 0, g: 0, b: 0 });
+    await drawRect(page, 50, 0, 50, 100, { r: 255, g: 255, b: 255 });
 
     // Read the edge pixel before blur
     const beforeEdge = await page.evaluate(() => {
@@ -2059,7 +1917,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint mid-gray
-    await paintRect(page, 0, 0, 100, 100, { r: 128, g: 128, b: 128, a: 255 });
+    await drawRect(page, 0, 0, 100, 100, { r: 128, g: 128, b: 128 });
 
     // Increase brightness by +50
     await page.evaluate(() => {
@@ -2119,7 +1977,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Step 1: Paint red background
-    await paintRect(page, 0, 0, 300, 300, { r: 200, g: 50, b: 50, a: 255 });
+    await drawRect(page, 0, 0, 300, 300, { r: 200, g: 50, b: 50 });
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '39-workflow-step1-paint.png') });
 
     // Step 2: Create a center selection
@@ -2178,35 +2036,17 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '39-workflow-step3-gradient.png') });
 
     // Step 4: Add drop shadow effect
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 0.8 }, offsetX: 5, offsetY: 5, blur: 10, spread: 0 },
-      });
-    });
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 5, 'Offset Y': 5, 'Blur': 10, 'Spread': 0 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '39-workflow-step4-effects.png') });
 
     // Step 5: Undo back to the red background
     // May need multiple undos depending on how many history entries were created
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      };
-      // Undo gradient fill and any intermediate states
-      store.getState().undo();
-      store.getState().undo();
-    });
+    // Undo gradient fill and any intermediate states
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // Verify we're back to the red background
@@ -2242,7 +2082,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Fill with solid green
-    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 255, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 0, g: 255, b: 0 });
 
     // Verify green is present before erasing
     const before = await page.evaluate(() => {
@@ -2348,7 +2188,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await createDocument(page, 400, 300, true);
     await fitToView(page);
     // Paint a small 20x20 rect at (180, 140) — triggers crop + potential sparsification
-    await paintRect(page, 180, 140, 20, 20, { r: 255, g: 128, b: 0, a: 255 });
+    await drawRect(page, 180, 140, 20, 20, { r: 255, g: 128, b: 0 });
 
     const result = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -2397,7 +2237,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint small rect (triggers crop — changes layer x,y)
-    await paintRect(page, 80, 80, 40, 40, { r: 255, g: 0, b: 255, a: 255 });
+    await drawRect(page, 80, 80, 40, 40, { r: 255, g: 0, b: 255 });
 
     const afterPaint = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -2410,11 +2250,7 @@ test.describe('WASM/WebGL Rendering', () => {
     });
 
     // Undo
-    await page.evaluate(() => {
-      ((window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      }).getState().undo();
-    });
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     const afterUndo = await page.evaluate(() => {
@@ -2476,7 +2312,7 @@ test.describe('WASM/WebGL Rendering', () => {
   test('44 - layer opacity 0 hides content completely', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
-    await paintRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
 
     // Set opacity to 0
     await page.evaluate(() => {
@@ -2560,25 +2396,19 @@ test.describe('WASM/WebGL Rendering', () => {
       { r: 128, g: 128, b: 128, a: 255 },
     ];
     for (const c of colors) {
-      await paintRect(page, 0, 0, 200, 200, c);
+      await drawRect(page, 0, 0, 200, 200, { r: c.r, g: c.g, b: c.b });
     }
 
     // Undo all 10
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      };
-      for (let i = 0; i < 10; i++) store.getState().undo();
-    });
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press('Control+z');
+    }
     await page.waitForTimeout(200);
 
     // Redo all 10
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { redo: () => void };
-      };
-      for (let i = 0; i < 10; i++) store.getState().redo();
-    });
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press('Control+Shift+z');
+    }
     await page.waitForTimeout(200);
 
     // Should be back to the last color (128, 128, 128)
@@ -2613,37 +2443,20 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint a yellow square
-    await paintRect(page, 50, 50, 100, 100, { r: 255, g: 255, b: 0, a: 255 });
+    await drawRect(page, 50, 50, 100, 100, { r: 255, g: 255, b: 0 });
 
     // Enable drop shadow
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 1 }, offsetX: 8, offsetY: 8, blur: 5, spread: 0 },
-      });
-    });
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 8, 'Offset Y': 8, 'Blur': 5, 'Spread': 0 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(300);
 
     // Paint more on top (green)
-    await paintRect(page, 60, 60, 80, 80, { r: 0, g: 255, b: 0, a: 255 });
+    await drawRect(page, 60, 60, 80, 80, { r: 0, g: 255, b: 0 });
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '47-effects-before-undo.png') });
 
     // Undo the green paint
-    await page.evaluate(() => {
-      ((window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      }).getState().undo();
-    });
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '47-effects-after-undo.png') });
 
@@ -2680,7 +2493,7 @@ test.describe('WASM/WebGL Rendering', () => {
   test('48 - move layer position', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
-    await paintRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0 });
 
     // Move layer to (75, 75)
     await page.evaluate(() => {
@@ -2797,7 +2610,7 @@ test.describe('WASM/WebGL Rendering', () => {
   test('50 - large canvas (2000x2000)', async ({ page }) => {
     await createDocument(page, 2000, 2000, true);
     await fitToView(page);
-    await paintRect(page, 500, 500, 1000, 1000, { r: 0, g: 100, b: 200, a: 255 });
+    await drawRect(page, 500, 500, 1000, 1000, { r: 0, g: 100, b: 200 });
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '50-large-canvas.png') });
 
@@ -2828,7 +2641,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint a green background on the first layer
-    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 200, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 0, g: 200, b: 0 });
 
     // Add a new layer and paint red square
     await page.evaluate(() => {
@@ -2838,25 +2651,12 @@ test.describe('WASM/WebGL Rendering', () => {
       store.getState().addLayer();
     });
     await page.waitForTimeout(200);
-    await paintRect(page, 60, 60, 80, 80, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 60, 60, 80, 80, { r: 255, g: 0, b: 0 });
 
-    // Enable drop shadow on the new layer — this triggers CPU fallback
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 1 }, offsetX: 8, offsetY: 8, blur: 4, spread: 0 },
-      });
-    });
+    // Enable drop shadow on the new layer
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 8, 'Offset Y': 8, 'Blur': 4, 'Spread': 0 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '51-effects-other-layers-visible.png') });
@@ -2895,26 +2695,14 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint a circle-ish shape (small square for simplicity)
-    await paintRect(page, 70, 70, 60, 60, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 70, 70, 60, 60, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(300);
 
     // Enable stroke effect
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        stroke: { enabled: true, color: { r: 0, g: 0, b: 0, a: 1 }, width: 3, position: 'outside' },
-      });
-    });
+    await configureEffect(page, 'Stroke', { 'Width': 3 });
+    await setEffectColor(page, 'Stroke color', 0, 0, 0);
+    await page.locator('[aria-label="Stroke position: outside"]').click();
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '52-stroke-matches-content.png') });
@@ -2943,27 +2731,17 @@ test.describe('WASM/WebGL Rendering', () => {
   test('53 - combined effects: drop shadow + stroke + inner glow', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
-    await paintRect(page, 50, 50, 100, 100, { r: 0, g: 128, b: 255, a: 255 });
+    await drawRect(page, 50, 50, 100, 100, { r: 0, g: 128, b: 255 });
     await page.waitForTimeout(300);
 
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 1 }, offsetX: 6, offsetY: 6, blur: 8, spread: 0 },
-        stroke: { enabled: true, color: { r: 255, g: 255, b: 255, a: 1 }, width: 2, position: 'outside' },
-        innerGlow: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, size: 10, spread: 2, opacity: 0.8 },
-      });
-    });
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 6, 'Offset Y': 6, 'Blur': 8, 'Spread': 0 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await configureEffect(page, 'Stroke', { 'Width': 2 });
+    await setEffectColor(page, 'Stroke color', 255, 255, 255);
+    await page.locator('[aria-label="Stroke position: outside"]').click();
+    await configureEffect(page, 'Inner Glow', { 'Size': 10, 'Spread': 2, 'Opacity': 80 });
+    await setEffectColor(page, 'Glow color', 255, 255, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '53-combined-effects.png') });
 
@@ -3003,7 +2781,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Layer 1 (bottom) — green
-    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 200, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 0, g: 200, b: 0 });
 
     // Layer 2 (middle) — blue square
     await page.evaluate(() => {
@@ -3013,7 +2791,7 @@ test.describe('WASM/WebGL Rendering', () => {
       store.getState().addLayer();
     });
     await page.waitForTimeout(200);
-    await paintRect(page, 20, 20, 80, 80, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 20, 20, 80, 80, { r: 0, g: 0, b: 255 });
 
     // Layer 3 (top) — red square with effects
     await page.evaluate(() => {
@@ -3023,27 +2801,17 @@ test.describe('WASM/WebGL Rendering', () => {
       store.getState().addLayer();
     });
     await page.waitForTimeout(200);
-    await paintRect(page, 100, 100, 60, 60, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 100, 100, 60, 60, { r: 255, g: 0, b: 0 });
 
     // Enable effects on top layer
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 0.7 }, offsetX: 5, offsetY: 5, blur: 6, spread: 0 },
-        stroke: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, width: 3, position: 'outside' },
-        outerGlow: { enabled: true, color: { r: 255, g: 0, b: 255, a: 1 }, size: 8, spread: 2, opacity: 0.6 },
-      });
-    });
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 5, 'Offset Y': 5, 'Blur': 6, 'Spread': 0 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await configureEffect(page, 'Stroke', { 'Width': 3 });
+    await setEffectColor(page, 'Stroke color', 255, 255, 0);
+    await page.locator('[aria-label="Stroke position: outside"]').click();
+    await configureEffect(page, 'Outer Glow', { 'Size': 8, 'Spread': 2, 'Opacity': 60 });
+    await setEffectColor(page, 'Glow color', 255, 0, 255);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '54-multi-layer-effects.png') });
@@ -3078,7 +2846,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Bottom layer: solid blue fill
-    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 255, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 255 });
 
     // Top layer: small red square in center (rest is transparent)
     await page.evaluate(() => {
@@ -3088,27 +2856,17 @@ test.describe('WASM/WebGL Rendering', () => {
       store.getState().addLayer();
     });
     await page.waitForTimeout(200);
-    await paintRect(page, 80, 80, 40, 40, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 80, 80, 40, 40, { r: 255, g: 0, b: 0 });
 
     // Enable ALL effects on the top layer
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 0.7 }, offsetX: 5, offsetY: 5, blur: 4, spread: 0 },
-        stroke: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, width: 2, position: 'outside' },
-        innerGlow: { enabled: true, color: { r: 0, g: 255, b: 0, a: 1 }, size: 5, spread: 1, opacity: 0.6 },
-      });
-    });
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 5, 'Offset Y': 5, 'Blur': 4, 'Spread': 0 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await configureEffect(page, 'Stroke', { 'Width': 2 });
+    await setEffectColor(page, 'Stroke color', 255, 255, 0);
+    await page.locator('[aria-label="Stroke position: outside"]').click();
+    await configureEffect(page, 'Inner Glow', { 'Size': 5, 'Spread': 1, 'Opacity': 60 });
+    await setEffectColor(page, 'Glow color', 0, 255, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '55-effects-no-white.png') });
@@ -3158,7 +2916,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Fill background with black
-    await paintRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 200, 200, { r: 0, g: 0, b: 0 });
 
     // Add new layer
     await page.evaluate(() => {
@@ -3170,26 +2928,13 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(200);
 
     // Draw red square in center (simulating a circle shape)
-    await paintRect(page, 60, 60, 80, 80, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 60, 60, 80, 80, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(300);
 
     // Apply inner glow
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        innerGlow: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, size: 10, spread: 2, opacity: 0.8 },
-      });
-    });
+    await configureEffect(page, 'Inner Glow', { 'Size': 10, 'Spread': 2, 'Opacity': 80 });
+    await setEffectColor(page, 'Glow color', 255, 255, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '56-inner-glow-no-white.png') });
@@ -3230,16 +2975,8 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Step 1: Select bucket fill tool and fill background with black
-    await page.evaluate(() => {
-      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-      };
-      toolStore.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
-      uiStore.getState().setActiveTool('fill');
-    });
+    await setForegroundColor(page, 0, 0, 0);
+    await page.keyboard.press('g');
     await page.waitForTimeout(100);
 
     // Click center of canvas to fill
@@ -3276,26 +3013,13 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(200);
 
     // Step 3: Paint red square on new layer (using programmatic for reliability)
-    await paintRect(page, 100, 100, 100, 100, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 100, 100, 100, 100, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(300);
 
     // Step 4: Enable inner glow on the new layer
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        innerGlow: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, size: 15, spread: 3, opacity: 0.8 },
-      });
-    });
+    await configureEffect(page, 'Inner Glow', { 'Size': 15, 'Spread': 3, 'Opacity': 80 });
+    await setEffectColor(page, 'Glow color', 255, 255, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '57-manual-inner-glow.png') });
@@ -3337,7 +3061,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint a dot at center of the layer
-    await paintRect(page, 180, 130, 40, 40, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 180, 130, 40, 40, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(300);
 
     // Verify red is visible
@@ -3360,12 +3084,7 @@ test.describe('WASM/WebGL Rendering', () => {
     console.log('Before undo:', before);
 
     // Undo
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      };
-      store.getState().undo();
-    });
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(500);
 
     // After undo: layer should have no data, no visible mark
@@ -3421,9 +3140,9 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Step 1: Draw 3 spots on Layer 1 using 100px pencil blocks
-    await paintRect(page, 50, 50, 100, 100, { r: 255, g: 0, b: 0, a: 255 }); // spot 1: red
-    await paintRect(page, 200, 50, 100, 100, { r: 0, g: 255, b: 0, a: 255 }); // spot 2: green
-    await paintRect(page, 125, 170, 100, 100, { r: 0, g: 0, b: 255, a: 255 }); // spot 3: blue
+    await drawRect(page, 50, 50, 100, 100, { r: 255, g: 0, b: 0 }); // spot 1: red
+    await drawRect(page, 200, 50, 100, 100, { r: 0, g: 255, b: 0 }); // spot 2: green
+    await drawRect(page, 125, 170, 100, 100, { r: 0, g: 0, b: 255 }); // spot 3: blue
     await page.waitForTimeout(200);
 
     // Snapshot: verify 3 spots exist (account for crop offset)
@@ -3471,59 +3190,36 @@ test.describe('WASM/WebGL Rendering', () => {
       store.getState().addLayer();
     });
     await page.waitForTimeout(200);
-    await paintRect(page, 30, 30, 80, 80, { r: 255, g: 255, b: 0, a: 255 }); // yellow
-    await paintRect(page, 280, 180, 80, 80, { r: 255, g: 0, b: 255, a: 255 }); // magenta
+    await drawRect(page, 30, 30, 80, 80, { r: 255, g: 255, b: 0 }); // yellow
+    await drawRect(page, 280, 180, 80, 80, { r: 255, g: 0, b: 255 }); // magenta
 
     // Step 3: Add drop shadow to Layer 2
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 0.8 }, offsetX: 5, offsetY: 5, blur: 3, spread: 0 },
-      });
-    });
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 5, 'Offset Y': 5, 'Blur': 3, 'Spread': 0 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(300);
 
     // Step 4: Switch to Layer 1 and add outer glow
-    await page.evaluate(() => {
+    const layer1Id = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          document: { layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          setActiveLayer: (id: string) => void;
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
+          document: { layers: Array<{ id: string }> };
         };
       };
-      const state = store.getState();
-      const layer1 = state.document.layers[0]; // bottom layer
-      if (!layer1) return;
-      store.getState().setActiveLayer(layer1.id);
-      store.getState().updateLayerEffects(layer1.id, {
-        ...layer1.effects,
-        outerGlow: { enabled: true, color: { r: 255, g: 255, b: 255, a: 1 }, size: 8, spread: 1, opacity: 0.7 },
-      });
+      return store.getState().document.layers[0]?.id ?? '';
     });
+    await setActiveLayerUI(page, layer1Id);
+    await configureEffect(page, 'Outer Glow', { 'Size': 8, 'Spread': 1, 'Opacity': 70 });
+    await setEffectColor(page, 'Glow color', 255, 255, 255);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '59-before-undo.png') });
 
     // Step 5: Undo until we're back to the 3 spots (undo effects + layer2 spots + addLayer)
-    // Operations: 3 paintRect (3 history), addLayer (1), 2 paintRect (2), 2 effects (2) = 8 total
+    // Operations: 3 drawRect (3 history), addLayer (1), 2 drawRect (2), 2 effects (2) = 8 total
     // Undo 5 times to get back to just after the 3rd spot
     for (let i = 0; i < 5; i++) {
-      await page.evaluate(() => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { undo: () => void };
-        };
-        store.getState().undo();
-      });
+      await page.keyboard.press('Control+z');
       await page.waitForTimeout(150);
     }
     await page.waitForTimeout(500);
@@ -3662,44 +3358,35 @@ test.describe('WASM/WebGL Rendering', () => {
     // Step 4: Add drop shadow to Layer 2
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, e: Record<string, unknown>) => void;
-          pushHistory: (l?: string) => void;
-        };
+        getState: () => { pushHistory: (l?: string) => void };
       };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      state.pushHistory('Effects L2');
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 1 }, offsetX: 5, offsetY: 5, blur: 3, spread: 0 },
-      });
+      store.getState().pushHistory('Effects L2');
     });
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 5, 'Offset Y': 5, 'Blur': 3, 'Spread': 0 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(300);
 
     // Step 5: Switch to Layer 1 and add effects
-    await page.evaluate(() => {
+    const layer1IdTest60 = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          document: { layers: Array<{ id: string; name: string; effects: Record<string, unknown> }> };
-          setActiveLayer: (id: string) => void;
-          updateLayerEffects: (id: string, e: Record<string, unknown>) => void;
-          pushHistory: (l?: string) => void;
+          document: { layers: Array<{ id: string }> };
         };
       };
-      const state = store.getState();
-      const layer1 = state.document.layers[0];
-      if (!layer1) return;
-      state.setActiveLayer(layer1.id);
-      state.pushHistory('Effects L1');
-      store.getState().updateLayerEffects(layer1.id, {
-        ...layer1.effects,
-        stroke: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, width: 3, position: 'outside' },
-      });
+      return store.getState().document.layers[0]?.id ?? '';
     });
+    await setActiveLayerUI(page, layer1IdTest60);
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { pushHistory: (l?: string) => void };
+      };
+      store.getState().pushHistory('Effects L1');
+    });
+    await configureEffect(page, 'Stroke', { 'Width': 3 });
+    await setEffectColor(page, 'Stroke color', 255, 255, 0);
+    await page.locator('[aria-label="Stroke position: outside"]').click();
+    await closeEffectsPanel(page);
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '60-before-undo.png') });
@@ -3711,12 +3398,7 @@ test.describe('WASM/WebGL Rendering', () => {
     // undo 4: remove Layer 2 (addLayer pushed history)
     // undo 5: restore to just the 3 red spots
     for (let i = 0; i < 5; i++) {
-      await page.evaluate(() => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { undo: () => void };
-        };
-        store.getState().undo();
-      });
+      await page.keyboard.press('Control+z');
       await page.waitForTimeout(200);
     }
     await page.waitForTimeout(500);
@@ -3819,22 +3501,9 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '61-inner-glow-before.png') });
 
     // Apply inner glow: white, size 50, spread 50, opacity 50%
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        innerGlow: { enabled: true, color: { r: 255, g: 255, b: 255, a: 1 }, size: 50, spread: 50, opacity: 0.5 },
-      });
-    });
+    await configureEffect(page, 'Inner Glow', { 'Size': 50, 'Spread': 50, 'Opacity': 50 });
+    await setEffectColor(page, 'Glow color', 255, 255, 255);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     // Screenshot after inner glow
@@ -3892,7 +3561,6 @@ test.describe('WASM/WebGL Rendering', () => {
           addLayer: () => void;
           getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
           pushHistory: (label?: string) => void;
         };
       };
@@ -3923,16 +3591,13 @@ test.describe('WASM/WebGL Rendering', () => {
         }
       }
       store.getState().updateLayerPixelData(layer2Id, d2);
-
-      // Apply drop shadow to Layer 2
-      const layer2 = store.getState().document.layers.find(l => l.id === layer2Id);
-      if (layer2) {
-        store.getState().updateLayerEffects(layer2Id, {
-          ...layer2.effects,
-          dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 1 }, offsetX: 20, offsetY: 20, blur: 15, spread: 0 },
-        });
-      }
     });
+    await page.waitForTimeout(200);
+
+    // Apply drop shadow to Layer 2 via UI
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 20, 'Offset Y': 20, 'Blur': 15, 'Spread': 0 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '62-drop-shadow-opaque.png') });
@@ -4024,45 +3689,19 @@ test.describe('WASM/WebGL Rendering', () => {
     // Screenshot before any effects
     await page.screenshot({ path: path.join(AB_DIR, 'ab-before-effects.png') });
 
-    // Apply drop shadow: black, offsetX=15, offsetY=15, blur=10, opacity=0.7, spread=0
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 0.7 }, offsetX: 15, offsetY: 15, blur: 10, spread: 0 },
-      });
-    });
+    // Apply drop shadow: black, offsetX=15, offsetY=15, blur=10, spread=0
+    await configureEffect(page, 'Drop Shadow', { 'Offset X': 15, 'Offset Y': 15, 'Blur': 10, 'Spread': 0 });
+    await setEffectColor(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     // Screenshot with drop shadow only
     await page.screenshot({ path: path.join(AB_DIR, 'ab-with-shadow.png') });
 
-    // Also apply inner glow: white color, size=20, spread=2, opacity=0.8
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        innerGlow: { enabled: true, color: { r: 255, g: 255, b: 255, a: 1 }, size: 20, spread: 2, opacity: 0.8 },
-      });
-    });
+    // Also apply inner glow: white color, size=20, spread=2, opacity=80%
+    await configureEffect(page, 'Inner Glow', { 'Size': 20, 'Spread': 2, 'Opacity': 80 });
+    await setEffectColor(page, 'Glow color', 255, 255, 255);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     // Screenshot with both drop shadow and inner glow
@@ -4104,11 +3743,10 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          document: { activeLayerId: string };
           addLayer: () => void;
           getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
           pushHistory: (label?: string) => void;
         };
       };
@@ -4128,16 +3766,14 @@ test.describe('WASM/WebGL Rendering', () => {
         }
       }
       store.getState().updateLayerPixelData(id, data);
-
-      // Apply a 22px outside stroke in red
-      const layer = store.getState().document.layers.find(l => l.id === id);
-      if (layer) {
-        store.getState().updateLayerEffects(id, {
-          ...layer.effects,
-          stroke: { enabled: true, color: { r: 255, g: 0, b: 0, a: 1 }, width: 22, position: 'outside', opacity: 1.0 },
-        });
-      }
     });
+    await page.waitForTimeout(200);
+
+    // Apply a 22px outside stroke in red via UI
+    await configureEffect(page, 'Stroke', { 'Width': 22 });
+    await setEffectColor(page, 'Stroke color', 255, 0, 0);
+    await page.locator('[aria-label="Stroke position: outside"]').click();
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'ab-stroke-circle.png') });
@@ -4199,7 +3835,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Paint a red square on the Background layer
-    await paintRect(page, 50, 50, 100, 100, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 50, 50, 100, 100, { r: 255, g: 0, b: 0 });
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '63-color-overlay-before.png') });
 
@@ -4223,22 +3859,9 @@ test.describe('WASM/WebGL Rendering', () => {
     console.log('BEFORE overlay pixel counts:', JSON.stringify(beforeResult));
 
     // Apply color overlay: blue, opacity 100%
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-        };
-      };
-      const state = store.getState();
-      const id = state.document.activeLayerId;
-      const layer = state.document.layers.find(l => l.id === id);
-      if (!layer) return;
-      store.getState().updateLayerEffects(id, {
-        ...layer.effects,
-        colorOverlay: { enabled: true, color: { r: 0, g: 0, b: 255, a: 1 }, opacity: 1.0 },
-      });
-    });
+    await enableEffect(page, 'Color Overlay');
+    await setEffectColor(page, 'Overlay color', 0, 0, 255);
+    await closeEffectsPanel(page);
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '63-color-overlay-after.png') });
@@ -4364,10 +3987,10 @@ test.describe('WASM/WebGL Rendering', () => {
     await createDocument(page, 300, 300, false);
     await fitToView(page);
 
-    // Layer 1 (Background): fill entirely with red via paintRect
+    // Layer 1 (Background): fill entirely with red via drawRect
     // THEN simulate the GPU-only state by clearing JS pixel data
     // (mimics how the gradient tool works - data only on GPU)
-    await paintRect(page, 0, 0, 300, 300, { r: 255, g: 0, b: 0, a: 255 });
+    await drawRect(page, 0, 0, 300, 300, { r: 255, g: 0, b: 0 });
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
@@ -4455,12 +4078,7 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(200);
 
     // Select shape tool
-    await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('shape');
-    });
+    await page.keyboard.press('u');
     await page.waitForTimeout(100);
 
     // Draw shape by dragging on canvas
@@ -4646,13 +4264,8 @@ test.describe('WASM/WebGL Rendering', () => {
     console.log('Pre-move position:', JSON.stringify(posAtOriginal));
 
     // Redo twice
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { redo: () => void };
-      };
-      store.getState().redo();
-      store.getState().redo();
-    });
+    await page.keyboard.press('Control+Shift+z');
+    await page.keyboard.press('Control+Shift+z');
     await page.waitForTimeout(500);
 
     const posAfterRedo = await page.evaluate((cid) => {
@@ -4665,13 +4278,8 @@ test.describe('WASM/WebGL Rendering', () => {
     console.log('After redo x2:', JSON.stringify(posAfterRedo));
 
     // Undo twice — should be back to original position
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      };
-      store.getState().undo();
-      store.getState().undo();
-    });
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'undo-move-back-to-original.png') });
@@ -4700,12 +4308,12 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
+          document: { activeLayerId: string };
           addLayer: () => void;
           getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
-          updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
           pushHistory: (label?: string) => void;
+          cropLayerToContent: (id: string) => void;
         };
       };
       const state = store.getState();
@@ -4731,25 +4339,12 @@ test.describe('WASM/WebGL Rendering', () => {
 
     // Test inner glow at various sizes
     for (const size of [5, 10, 15, 17, 18, 20, 25, 27, 28, 30]) {
-      await page.evaluate((s) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            document: { activeLayerId: string; layers: Array<{ id: string; effects: Record<string, unknown> }> };
-            updateLayerEffects: (id: string, effects: Record<string, unknown>) => void;
-          };
-        };
-        const state = store.getState();
-        const id = state.document.activeLayerId;
-        const layer = state.document.layers.find(l => l.id === id);
-        if (!layer) return;
-        store.getState().updateLayerEffects(id, {
-          ...layer.effects,
-          innerGlow: { enabled: true, color: { r: 255, g: 255, b: 0, a: 1 }, size: s, spread: 0, opacity: 1.0 },
-        });
-      }, size);
+      await configureEffect(page, 'Inner Glow', { 'Size': size, 'Spread': 0, 'Opacity': 100 });
+      await setEffectColor(page, 'Glow color', 255, 255, 0);
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(SCREENSHOT_DIR, `glow-sweep-size-${size}.png`) });
     }
+    await closeEffectsPanel(page);
 
     // Verify the inner glow effect ended at the last sweep size
     const finalEffect = await page.evaluate(() => {

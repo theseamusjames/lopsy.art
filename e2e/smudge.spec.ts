@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { setToolOption, setForegroundColor, setBrushModalOption, closeBrushModal } from './helpers';
 
 async function waitForStore(page: Page) {
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
@@ -63,26 +64,6 @@ async function drawStroke(
   await page.waitForTimeout(200);
 }
 
-async function setToolSetting(page: Page, setter: string, value: unknown) {
-  await page.evaluate(({ setter, value }) => {
-    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => Record<string, (v: unknown) => void>;
-    };
-    store.getState()[setter]!(value);
-  }, { setter, value });
-}
-
-async function setUIState(page: Page, setter: string, value: unknown) {
-  await page.evaluate(({ setter, value }) => {
-    const colorSetters = new Set(['setForegroundColor', 'setBackgroundColor', 'swapColors', 'resetColors', 'addRecentColor']);
-    const storeKey = colorSetters.has(setter) ? '__toolSettingsStore' : '__uiStore';
-    const store = (window as unknown as Record<string, unknown>)[storeKey] as {
-      getState: () => Record<string, (v: unknown) => void>;
-    };
-    store.getState()[setter]!(value);
-  }, { setter, value });
-}
-
 type PixelSnapshot = { width: number; height: number; pixels: number[] };
 
 async function snapshot(page: Page): Promise<PixelSnapshot> {
@@ -130,19 +111,20 @@ test.describe('Smudge Tool', () => {
     await page.waitForTimeout(100);
     expect(await getActiveTool(page)).toBe('brush');
 
-    await setToolSetting(page, 'setBrushSize', 100);
-    await setToolSetting(page, 'setBrushHardness', 100);
-    await setToolSetting(page, 'setBrushSpacing', 25);
+    await setToolOption(page, 'Size', 100);
+    await setToolOption(page, 'Hardness', 100);
+    await setBrushModalOption(page, 'Spacing', 25);
+    await closeBrushModal(page);
 
     const baseline = await snapshot(page);
 
     // Paint the left half red — overlapping rows completely cover the canvas.
-    await setUIState(page, 'setForegroundColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
     for (let y = 50; y < 400; y += 70) {
       await drawStroke(page, { x: 0, y }, { x: 300, y }, 6);
     }
     // Paint the right half blue.
-    await setUIState(page, 'setForegroundColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setForegroundColor(page, 0, 0, 255);
     for (let y = 50; y < 400; y += 70) {
       await drawStroke(page, { x: 300, y }, { x: 600, y }, 6);
     }
@@ -157,8 +139,8 @@ test.describe('Smudge Tool', () => {
     await page.waitForTimeout(100);
     expect(await getActiveTool(page)).toBe('smudge');
 
-    await setToolSetting(page, 'setSmudgeSize', 80);
-    await setToolSetting(page, 'setSmudgeStrength', 90);
+    await setToolOption(page, 'Size', 80);
+    await setToolOption(page, 'Strength', 90);
 
     // Step 3: Drag horizontally from the red side into the blue side at
     // a few heights to smudge the boundary.

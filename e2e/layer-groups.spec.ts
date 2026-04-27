@@ -156,8 +156,8 @@ test.describe('Layer Groups', () => {
     const childId = doc2.activeLayerId!;
     expect(doc2.layers.find((l) => l.id === groupId)!.children).toContain(childId);
     // Delete the group
-    await callStore(page, 'setActiveLayer', groupId);
-    await callStore(page, 'removeLayer', groupId);
+    await page.locator(`[data-layer-id="${groupId}"]`).click();
+    await page.locator('[aria-label="Delete Layer"]').click();
     const doc3 = await getDocInfo(page);
     expect(doc3.layers.find((l) => l.id === groupId)).toBeUndefined();
     expect(doc3.layers.find((l) => l.id === childId)).toBeUndefined();
@@ -239,9 +239,9 @@ test.describe('Layer Groups', () => {
     const doc2 = await getDocInfo(page);
     const childCount = doc2.layers.find((l) => l.id === groupId)!.children!.length;
     // Select the group and duplicate — wait for engine sync first
-    await callStore(page, 'setActiveLayer', groupId);
+    await page.locator(`[data-layer-id="${groupId}"]`).click();
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
-    await callStore(page, 'duplicateLayer');
+    await page.locator('[aria-label="Duplicate Layer"]').click();
     const doc3 = await getDocInfo(page);
     const dupGroup = doc3.layers.find((l) => l.name === 'DupMe copy');
     expect(dupGroup).toBeTruthy();
@@ -314,7 +314,7 @@ test.describe('Layer Groups', () => {
     const doc2 = await getDocInfo(page);
     const childId = doc2.activeLayerId!;
     // Move child to a known position first
-    await callStore(page, 'setActiveLayer', childId);
+    await page.locator(`[data-layer-id="${childId}"]`).click();
     await page.evaluate(
       ({ id }) => {
         const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -325,7 +325,7 @@ test.describe('Layer Groups', () => {
       { id: childId },
     );
     // Now move the group
-    await callStore(page, 'setActiveLayer', groupId);
+    await page.locator(`[data-layer-id="${groupId}"]`).click();
     await page.evaluate(
       ({ id }) => {
         const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -548,7 +548,7 @@ test.describe('Group effects only affect current members', () => {
     await callStore(page, 'moveLayerToGroup', childId, rootId);
 
     // Hide the sub-group
-    await callStore(page, 'toggleLayerVisibility', subGroupId);
+    await page.locator(`[data-layer-id="${subGroupId}"]`).locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]').click();
 
     // The moved-out layer should still be visible (not affected by hidden sub-group)
     const doc3 = await getDocInfo(page);
@@ -646,7 +646,7 @@ test.describe('Layer moved out of group is not affected by group visibility', ()
     expect(updatedGroup.children).not.toContain(layerId);
 
     // Hide the group
-    await callStore(page, 'toggleLayerVisibility', groupId);
+    await page.locator(`[data-layer-id="${groupId}"]`).locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]').click();
     const doc4 = await getDocInfo(page);
     expect(doc4.layers.find((l) => l.id === groupId)!.visible).toBe(false);
 
@@ -960,7 +960,7 @@ test.describe('Visual rendering after group move', () => {
     expect(doc3.layers.find((l) => l.id === rootId)!.children).toContain(layer1.id);
 
     // Hide the group
-    await callStore(page, 'toggleLayerVisibility', groupId);
+    await page.locator(`[data-layer-id="${groupId}"]`).locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]').click();
     await page.waitForTimeout(300);
 
     // Take a screenshot and check that the canvas is NOT all white

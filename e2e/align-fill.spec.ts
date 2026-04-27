@@ -90,12 +90,7 @@ test('align bottom, then fill center — spiral stays visible', async ({ page, i
   await page.screenshot({ path: 'test-results/align-fill/01-spiral.png' });
 
   // Align bottom
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (tool: string) => void };
-    };
-    store.getState().setActiveTool('move');
-  });
+  await page.keyboard.press('v');
   await page.waitForTimeout(100);
   await page.locator(`button[aria-label="Align bottom"]`).click();
   await page.waitForTimeout(400);
@@ -132,12 +127,7 @@ test('align bottom, then fill center — spiral stays visible', async ({ page, i
   });
 
   // Select fill (bucket) tool
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (tool: string) => void };
-    };
-    store.getState().setActiveTool('fill');
-  });
+  await page.keyboard.press('g');
   await page.waitForTimeout(100);
 
   // Probe texture dims BEFORE fill

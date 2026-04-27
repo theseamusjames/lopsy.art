@@ -88,12 +88,7 @@ test.describe('FilterDialog pointer isolation', () => {
   test('dragging the pixelate slider does not move the active layer', async ({ page }) => {
     // Switch to the move tool — this is the tool that was getting kicked
     // off by the leaked events.
-    await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('move');
-    });
+    await page.keyboard.press('v');
     await page.waitForTimeout(50);
 
     const posBefore = await getActiveLayerPosition(page);
@@ -142,12 +137,7 @@ test.describe('FilterDialog pointer isolation', () => {
   });
 
   test('clicking the dialog backdrop does not move the active layer', async ({ page }) => {
-    await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('move');
-    });
+    await page.keyboard.press('v');
     await page.waitForTimeout(50);
 
     const posBefore = await getActiveLayerPosition(page);

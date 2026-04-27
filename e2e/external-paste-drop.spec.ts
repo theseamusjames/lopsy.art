@@ -258,12 +258,7 @@ test.describe('External paste', () => {
     expect(after.undoStackLength).toBeGreaterThan(before.undoStackLength);
 
     // Undo should remove the pasted layer
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      };
-      store.getState().undo();
-    });
+    await page.keyboard.press(`${mod}+z`);
 
     const undone = await getEditorState(page);
     expect(undone.document.layers).toHaveLength(before.document.layers.length);

@@ -99,11 +99,8 @@ test.describe('Text + brush + merge down', () => {
     // Placing text past (100, 100) on a 200x200 doc means if the
     // position gets doubled during merge (the bug), content falls
     // off the bottom layer's texture and disappears.
+    await page.keyboard.press('t');
     await page.evaluate(() => {
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('text');
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
           setTextFontSize: (s: number) => void;
@@ -138,15 +135,9 @@ test.describe('Text + brush + merge down', () => {
     expect(textPixels).toBeGreaterThan(50);
 
     // --- 2. Switch to brush and paint on the text layer ---
-    await page.evaluate((id: string) => {
-      const editor = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      editor.getState().setActiveLayer(id);
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('brush');
+    await page.locator(`[data-layer-id="${textId}"]`).click();
+    await page.keyboard.press('b');
+    await page.evaluate(() => {
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
           setBrushSize: (s: number) => void;
@@ -156,7 +147,7 @@ test.describe('Text + brush + merge down', () => {
       const s = ts.getState();
       s.setBrushSize(8);
       s.setForegroundColor({ r: 0, g: 0, b: 255, a: 1 });
-    }, textId);
+    });
 
     // Paint a stroke in the corner (away from text)
     const from = await docToScreen(page, 20, 20);
@@ -175,12 +166,7 @@ test.describe('Text + brush + merge down', () => {
     await page.waitForTimeout(300);
 
     // Ensure text layer is active before merge
-    await page.evaluate((id: string) => {
-      const editor = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      editor.getState().setActiveLayer(id);
-    }, textId);
+    await page.locator(`[data-layer-id="${textId}"]`).click();
     await page.waitForTimeout(100);
 
     await page.keyboard.press(`${mod}+KeyE`);

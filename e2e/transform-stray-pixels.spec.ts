@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { createDocument, getEditorState, paintRect } from './helpers';
+import { createDocument, getEditorState, drawRect } from './helpers';
 
 const isMac = process.platform === 'darwin';
 
@@ -245,25 +245,25 @@ async function clickFlipHorizontal(page: Page) {
 
 /** Enable snap to grid */
 async function enableGrid(page: Page) {
-  await page.evaluate(() => {
+  const showGrid = await page.evaluate(() => {
     const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { showGrid: boolean; toggleGrid: () => void };
+      getState: () => { showGrid: boolean };
     };
-    const state = uiStore.getState();
-    if (!state.showGrid) state.toggleGrid();
+    return uiStore.getState().showGrid;
   });
+  if (!showGrid) await page.keyboard.press("Control+'");
   await page.waitForTimeout(100);
 }
 
 /** Disable grid */
 async function disableGrid(page: Page) {
-  await page.evaluate(() => {
+  const showGrid = await page.evaluate(() => {
     const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { showGrid: boolean; toggleGrid: () => void };
+      getState: () => { showGrid: boolean };
     };
-    const state = uiStore.getState();
-    if (state.showGrid) state.toggleGrid();
+    return uiStore.getState().showGrid;
   });
+  if (showGrid) await page.keyboard.press("Control+'");
   await page.waitForTimeout(100);
 }
 
@@ -277,7 +277,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
   test('select → move via UI → delete → canvas empty', async ({ page }) => {
     await createDocument(page, 400, 400, false);
     const state = await getEditorState(page);
-    await paintRect(page, 100, 100, 200, 200, { r: 0, g: 0, b: 0, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 100, 100, 200, 200, { r: 0, g: 0, b: 0 });
     expect(await countActiveLayerPixelsGPU(page)).toBe(40000);
 
     await cmdClickThumbnail(page);
@@ -293,7 +293,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
     await createDocument(page, 400, 400, false);
     const state = await getEditorState(page);
     // Non-square rect so rotation visibly changes shape
-    await paintRect(page, 100, 150, 200, 100, { r: 255, g: 0, b: 0, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 100, 150, 200, 100, { r: 255, g: 0, b: 0 });
 
     // Select and rotate via UI button
     await cmdClickThumbnail(page);
@@ -321,7 +321,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
   test('select → drag rotate handle 45° → commit → re-select → move → delete → canvas empty', async ({ page }) => {
     await createDocument(page, 600, 600, false);
     const state = await getEditorState(page);
-    await paintRect(page, 200, 200, 200, 200, { r: 0, g: 0, b: 255, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 200, 200, 200, 200, { r: 0, g: 0, b: 255 });
 
     // Select
     await cmdClickThumbnail(page);
@@ -351,7 +351,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
   test('select → drag resize handle → commit → re-select → move → delete → canvas empty', async ({ page }) => {
     await createDocument(page, 600, 600, false);
     const state = await getEditorState(page);
-    await paintRect(page, 200, 200, 150, 150, { r: 0, g: 128, b: 0, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 200, 200, 150, 150, { r: 0, g: 128, b: 0 });
 
     // Select
     await cmdClickThumbnail(page);
@@ -381,7 +381,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
   test('select → rotate 90° button → drag resize → commit → re-select → delete → canvas empty', async ({ page }) => {
     await createDocument(page, 600, 600, false);
     const state = await getEditorState(page);
-    await paintRect(page, 200, 200, 200, 100, { r: 128, g: 0, b: 128, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 200, 200, 200, 100, { r: 128, g: 0, b: 128 });
 
     // Select
     await cmdClickThumbnail(page);
@@ -420,7 +420,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
   test('select → flip → move → delete → canvas empty', async ({ page }) => {
     await createDocument(page, 400, 400, false);
     const state = await getEditorState(page);
-    await paintRect(page, 100, 100, 150, 200, { r: 0, g: 0, b: 0, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 100, 100, 150, 200, { r: 0, g: 0, b: 0 });
 
     await cmdClickThumbnail(page);
     await assertSelectionActive(page);
@@ -448,7 +448,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
   test('select → move → commit → flip → re-select → delete → canvas empty', async ({ page }) => {
     await createDocument(page, 400, 400, false);
     const state = await getEditorState(page);
-    await paintRect(page, 100, 100, 150, 200, { r: 0, g: 0, b: 0, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 100, 100, 150, 200, { r: 0, g: 0, b: 0 });
 
     await cmdClickThumbnail(page);
     await assertSelectionActive(page);
@@ -480,7 +480,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
   test('select → flip → move → commit → re-select → flip → re-select → delete → canvas empty', async ({ page }) => {
     await createDocument(page, 400, 400, false);
     const state = await getEditorState(page);
-    await paintRect(page, 100, 100, 150, 200, { r: 0, g: 0, b: 0, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 100, 100, 150, 200, { r: 0, g: 0, b: 0 });
 
     // Select, flip horizontal
     await cmdClickThumbnail(page);
@@ -517,7 +517,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
   test('select → drag rotate with snap → commit → re-select → move → delete → canvas empty', async ({ page }) => {
     await createDocument(page, 600, 600, false);
     const state = await getEditorState(page);
-    await paintRect(page, 200, 200, 200, 200, { r: 0, g: 0, b: 0, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 200, 200, 200, 200, { r: 0, g: 0, b: 0 });
 
     // Select
     await cmdClickThumbnail(page);
@@ -554,7 +554,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
     // User's exact repro: rotate then immediately resize without committing
     await createDocument(page, 600, 600, false);
     const state = await getEditorState(page);
-    await paintRect(page, 200, 200, 200, 200, { r: 0, g: 0, b: 0, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 200, 200, 200, 200, { r: 0, g: 0, b: 0 });
 
     // Select
     await cmdClickThumbnail(page);
@@ -587,7 +587,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
     // User's full repro: rotate with grid, re-select, resize, then move
     await createDocument(page, 600, 600, false);
     const state = await getEditorState(page);
-    await paintRect(page, 200, 200, 200, 200, { r: 0, g: 0, b: 0, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 200, 200, 200, 200, { r: 0, g: 0, b: 0 });
 
     // Select
     await cmdClickThumbnail(page);
@@ -625,7 +625,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
     // Chained: rotate, move, rotate again
     await createDocument(page, 600, 600, false);
     const state = await getEditorState(page);
-    await paintRect(page, 200, 200, 200, 200, { r: 0, g: 0, b: 0, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 200, 200, 200, 200, { r: 0, g: 0, b: 0 });
 
     // Select
     await cmdClickThumbnail(page);
@@ -669,7 +669,7 @@ test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, 
     // Specific test for marching ants artifacts: rotate then deselect, check edges
     await createDocument(page, 400, 400, false);
     const state = await getEditorState(page);
-    await paintRect(page, 100, 100, 200, 200, { r: 0, g: 0, b: 0, a: 255 }, state.document.activeLayerId);
+    await drawRect(page, 100, 100, 200, 200, { r: 0, g: 0, b: 0 });
 
     const beforePixels = await countActiveLayerPixelsGPU(page);
     expect(beforePixels).toBe(200 * 200);

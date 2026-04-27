@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { createDocument, waitForStore, getPixelAt, getEditorState } from './helpers';
+import { createDocument, waitForStore, getPixelAt, getEditorState, selectTool, setToolOption, setForegroundColor } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,14 +59,14 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   );
 }
 
-async function activateShapeTool(page: Page) {
-  await page.evaluate(() => {
-    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    ui.getState().setActiveTool('shape');
-  });
-  await page.waitForTimeout(100);
+async function setShapeMode(page: Page, mode: string) {
+  const select = page.locator('[aria-labelledby="shape-mode-label"]');
+  await select.selectOption(mode);
+}
+
+async function setPolygonSides(page: Page, sides: number) {
+  const input = page.locator('#polygon-sides');
+  await input.fill(String(sides));
 }
 
 /**
@@ -152,9 +152,9 @@ test.describe('Shape tool corner radius (#62)', () => {
     // them). This is the behaviour issue #62 expected for "rounded corners".
     await createDocument(page, 400, 300, true);
 
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'ellipse');
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     const beforeState = await getEditorState(page);
@@ -201,14 +201,14 @@ test.describe('Shape tool corner radius (#62)', () => {
     // both produce essentially the same raster.
     await createDocument(page, 200, 200, true);
 
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 6);
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setForegroundColor(page, 0, 0, 255);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 6);
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Drag a 40×40 hexagon. halfSize = (20, 20). Cap is min(40, 40)/2 = 20.
-    await setToolSetting(page, 'setShapeCornerRadius', 20);
+    await setToolOption(page, 'Corner Radius', 20);
     await dragShape(page, { x: 100, y: 100 }, { x: 120, y: 120 });
     const cappedSnap = await readLayer(page);
     const cappedOpaque = countOpaquePixels(cappedSnap);
@@ -217,15 +217,10 @@ test.describe('Shape tool corner radius (#62)', () => {
     expect(cappedCentre.b).toBe(255);
 
     // Reset and draw the same shape with an exaggerated radius.
-    await page.evaluate(() => {
-      const ed = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { undo: () => void };
-      };
-      ed.getState().undo();
-    });
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(100);
 
-    await setToolSetting(page, 'setShapeCornerRadius', 200);
+    await setToolOption(page, 'Corner Radius', 200);
     await dragShape(page, { x: 100, y: 100 }, { x: 120, y: 120 });
     const exaggeratedSnap = await readLayer(page);
     const exaggeratedOpaque = countOpaquePixels(exaggeratedSnap);
@@ -250,11 +245,11 @@ test.describe('Shape tool corner radius (#62)', () => {
     // every pixel just inside the edge is opaque.
     await createDocument(page, 400, 300, true);
 
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 4);
-    await setToolSetting(page, 'setShapeCornerRadius', 0);
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 255, b: 0, a: 1 });
+    await setForegroundColor(page, 0, 255, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 4);
+    await setToolOption(page, 'Corner Radius', 0);
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     const beforeState = await getEditorState(page);
@@ -293,11 +288,11 @@ test.describe('Shape tool corner radius (#62)', () => {
     // carved out and the straight sections reach the bounding box.
     await createDocument(page, 400, 300, true);
 
-    await activateShapeTool(page);
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 4);
-    await setToolSetting(page, 'setShapeCornerRadius', 40);
-    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setForegroundColor(page, 255, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 4);
+    await setToolOption(page, 'Corner Radius', 40);
     await setToolSetting(page, 'setShapeStrokeColor', null);
 
     // Drag from centre (200, 150) to edge (300, 250) — halfSize (100, 100)
@@ -351,11 +346,11 @@ test.describe('Shape tool corner radius (#62)', () => {
       await createDocument(page, 400, 300, true);
 
       const drawAt = async (cornerRadius: number) => {
-        await activateShapeTool(page);
-        await setToolSetting(page, 'setShapeMode', 'polygon');
-        await setToolSetting(page, 'setShapePolygonSides', sides);
-        await setToolSetting(page, 'setShapeCornerRadius', cornerRadius);
-        await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
+        await setForegroundColor(page, 255, 0, 0);
+        await selectTool(page, 'shape');
+        await setShapeMode(page, 'polygon');
+        await setPolygonSides(page, sides);
+        await setToolOption(page, 'Corner Radius', cornerRadius);
         await setToolSetting(page, 'setShapeStrokeColor', null);
         await dragShape(page, { x: 200, y: 150 }, { x: 300, y: 250 });
       };
@@ -383,12 +378,7 @@ test.describe('Shape tool corner radius (#62)', () => {
 
       // Undo the sharp shape before drawing the rounded one so we're
       // not comparing shapes on a polluted layer.
-      await page.evaluate(() => {
-        const ed = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { undo: () => void };
-        };
-        ed.getState().undo();
-      });
+      await page.keyboard.press('Control+z');
       await page.waitForTimeout(100);
 
       await drawAt(30);

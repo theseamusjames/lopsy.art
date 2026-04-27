@@ -7,12 +7,13 @@ import { waitForStore, createDocument } from './helpers';
 // ---------------------------------------------------------------------------
 
 async function enableGrid(page: Page): Promise<void> {
-  await page.evaluate(() => {
+  const showGrid = await page.evaluate(() => {
     const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { toggleGrid: () => void; showGrid: boolean };
+      getState: () => { showGrid: boolean };
     };
-    if (!ui.getState().showGrid) ui.getState().toggleGrid();
+    return ui.getState().showGrid;
   });
+  if (!showGrid) await page.keyboard.press("Control+'");
 }
 
 /**

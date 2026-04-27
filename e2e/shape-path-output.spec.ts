@@ -128,14 +128,10 @@ async function setShapeTool(
       if (sides !== undefined) {
         settings.setShapePolygonSides(sides);
       }
-
-      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { setActiveTool: (t: string) => void };
-      };
-      ui.getState().setActiveTool('shape');
     },
     { mode, output, sides: options?.sides ?? null },
   );
+  await page.keyboard.press('u');
   await page.waitForTimeout(100);
 }
 

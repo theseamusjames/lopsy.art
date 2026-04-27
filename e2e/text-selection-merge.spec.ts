@@ -41,13 +41,18 @@ async function docToScreen(page: Page, docX: number, docY: number) {
   }, { docX, docY });
 }
 
+const toolShortcuts: Record<string, string> = {
+  'move': 'v', 'brush': 'b', 'fill': 'g', 'shape': 'u',
+  'text': 't', 'eraser': 'e', 'marquee-rect': 'm', 'wand': 'w',
+};
+
 async function setTool(page: Page, tool: string) {
-  await page.evaluate((t) => {
-    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { setActiveTool: (t: string) => void };
-    };
-    ui.getState().setActiveTool(t);
-  }, tool);
+  const shortcut = toolShortcuts[tool];
+  if (shortcut) {
+    await page.keyboard.press(shortcut);
+  } else {
+    await page.locator(`[data-tool-id="${tool}"]`).click();
+  }
 }
 
 async function setSelection(page: Page, x: number, y: number, w: number, h: number) {
@@ -136,12 +141,7 @@ test.describe('Text selection + merge', () => {
       // Text layers are rasterized on commit — find by name
       return store.getState().document.layers.find((l) => l.type === 'raster' && l.name.startsWith('Text'))?.id ?? '';
     });
-    await page.evaluate((id: string) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { setActiveLayer: (id: string) => void };
-      };
-      store.getState().setActiveLayer(id);
-    }, textId);
+    await page.locator(`[data-layer-id="${textId}"]`).click();
     await page.waitForTimeout(100);
 
     await page.screenshot({ path: 'e2e/screenshots/text-sel-merge-initial.png' });
