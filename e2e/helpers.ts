@@ -569,8 +569,15 @@ export async function moveLayerTo(
 export async function openEffectsPanel(page: Page): Promise<void> {
   const panel = page.locator('[aria-labelledby="blend-mode-label"]');
   if (!(await panel.isVisible())) {
-    await page.locator('button[aria-label*="effects"]').first().click();
-    await page.waitForTimeout(100);
+    const activeId = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { activeLayerId: string } };
+      };
+      return store.getState().document.activeLayerId;
+    });
+    const row = page.locator(`[data-layer-id="${activeId}"]`);
+    await row.locator('button[aria-label*="effects"]').click();
+    await panel.waitFor({ state: 'visible', timeout: 5000 });
   }
 }
 
@@ -578,16 +585,18 @@ export async function closeEffectsPanel(page: Page): Promise<void> {
   const close = page.locator('[aria-label="Close effects"]');
   if (await close.isVisible()) {
     await close.click();
+    await page.waitForTimeout(50);
   }
 }
 
 export async function enableEffect(page: Page, effectName: string): Promise<void> {
   await openEffectsPanel(page);
   const checkbox = page.locator(`[aria-label="Enable ${effectName}"]`);
+  await checkbox.waitFor({ state: 'visible', timeout: 5000 });
   if (!(await checkbox.isChecked())) {
     await checkbox.click();
   }
-  const row = page.locator(`role=option:has-text("${effectName}")`);
+  const row = page.locator(`[role="option"]`).filter({ hasText: effectName });
   await row.click();
   await page.waitForTimeout(50);
 }
@@ -600,9 +609,11 @@ export async function configureEffect(
   await enableEffect(page, effectName);
   for (const [label, value] of Object.entries(settings)) {
     const input = page.locator(`[aria-label="${label} value"]`);
+    await input.waitFor({ state: 'visible', timeout: 3000 });
     await input.fill(String(value));
     await input.press('Enter');
   }
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
 }
 
 export async function setEffectColor(

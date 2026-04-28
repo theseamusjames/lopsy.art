@@ -1650,8 +1650,8 @@ test.describe('Layer Effects', () => {
     await closeEffectsPanel(page);
 
     const updated = await getEditorState(page);
-    const effects = updated.document.layers[0]!.effects;
-    expect(effects.dropShadow.enabled).toBe(true);
+    const activeLayer = updated.document.layers.find(l => l.id === updated.document.activeLayerId)!;
+    expect(activeLayer.effects.dropShadow.enabled).toBe(true);
   });
 
   test('setting stroke on layer', async ({ page }) => {
@@ -1661,8 +1661,8 @@ test.describe('Layer Effects', () => {
     await closeEffectsPanel(page);
 
     const updated = await getEditorState(page);
-    const effects = updated.document.layers[0]!.effects;
-    expect(effects.stroke.enabled).toBe(true);
+    const activeLayer = updated.document.layers.find(l => l.id === updated.document.activeLayerId)!;
+    expect(activeLayer.effects.stroke.enabled).toBe(true);
   });
 
   test('effects persist after undo/redo', async ({ page }) => {
@@ -1678,14 +1678,16 @@ test.describe('Layer Effects', () => {
     await page.waitForTimeout(100);
 
     const afterUndo = await getEditorState(page);
-    expect(afterUndo.document.layers[0]!.effects.dropShadow.enabled).toBe(false);
+    const undoLayer = afterUndo.document.layers.find(l => l.id === afterUndo.document.activeLayerId)!;
+    expect(undoLayer.effects.dropShadow.enabled).toBe(false);
 
     // Redo
     await page.keyboard.press('Control+Shift+z');
     await page.waitForTimeout(100);
 
     const afterRedo = await getEditorState(page);
-    expect(afterRedo.document.layers[0]!.effects.dropShadow.enabled).toBe(true);
+    const redoLayer = afterRedo.document.layers.find(l => l.id === afterRedo.document.activeLayerId)!;
+    expect(redoLayer.effects.dropShadow.enabled).toBe(true);
   });
 });
 
