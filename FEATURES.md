@@ -97,6 +97,13 @@
 - **Tolerance**: 0 - 255
 - **Contiguous**: on/off
 
+### Color Range Selection
+- **Fuzziness**: 0 - 200 (Euclidean RGBA distance tolerance)
+- Selects all pixels on the active layer matching the current foreground color
+- Live preview mask in the dialog (white = selected, black = not)
+- Non-contiguous: matches across the entire layer regardless of pixel adjacency
+- Accessed via Select > Color Range…
+
 ### Selection Operations
 - Add, subtract, intersect (combine modes)
 - Invert selection
@@ -104,6 +111,7 @@
 - Deselect
 - Selection from layer alpha (non-transparent pixels)
 - Path to selection
+- Color Range (select by color similarity)
 
 ---
 

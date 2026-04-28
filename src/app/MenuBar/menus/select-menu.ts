@@ -2,7 +2,7 @@ import { useEditorStore } from '../../editor-store';
 import { createRectSelection, invertSelection } from '../../../selection/selection';
 import type { MenuDef } from './types';
 
-export type SelectDialogId = 'grow' | 'shrink';
+export type SelectDialogId = 'grow' | 'shrink' | 'color-range';
 
 export function selectAll(): void {
   const state = useEditorStore.getState();
@@ -28,6 +28,8 @@ export function createSelectMenu(showDialog: (id: SelectDialogId) => void): Menu
       { label: 'All', shortcut: '⌘A', action: () => selectAll() },
       { label: 'Deselect', shortcut: '⌘D', action: () => useEditorStore.getState().clearSelection() },
       { label: 'Inverse', shortcut: '⇧⌘I', action: () => invertSelectionAction() },
+      { separator: true, label: '' },
+      { label: 'Color Range…', action: () => showDialog('color-range') },
       { separator: true, label: '' },
       { label: 'Grow…', action: () => showDialog('grow') },
       { label: 'Shrink…', action: () => showDialog('shrink') },

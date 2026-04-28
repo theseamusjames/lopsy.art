@@ -25,6 +25,7 @@ import { CanvasSizeModal } from '../../components/CanvasSizeModal/CanvasSizeModa
 import { ImageSizeModal } from '../../components/ImageSizeModal/ImageSizeModal';
 import { KeyboardShortcutsModal } from '../../components/KeyboardShortcutsModal/KeyboardShortcutsModal';
 import { AboutModal } from '../../components/AboutModal/AboutModal';
+import { ColorRangeDialog } from '../../components/ColorRangeDialog/ColorRangeDialog';
 import { useEditorStore } from '../editor-store';
 import { growSelection, shrinkSelection, selectionBounds } from '../../selection/selection';
 import { createTransformState } from '../../tools/transform/transform';
@@ -186,6 +187,19 @@ export function MenuBar() {
     setSelectDialog(null);
   }, [selectDialog]);
 
+  const handleColorRangeApply = useCallback((mask: Uint8ClampedArray, width: number, height: number) => {
+    const editor = useEditorStore.getState();
+    const bounds = selectionBounds(mask, width, height);
+    if (bounds) {
+      editor.setSelection(bounds, mask, width, height);
+      useUIStore.getState().setTransform(createTransformState(bounds));
+    } else {
+      editor.clearSelection();
+      useUIStore.getState().setTransform(null);
+    }
+    setSelectDialog(null);
+  }, []);
+
   const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill'
     ? getFilterDialogConfig(activeDialog)
     : null;
@@ -281,7 +295,13 @@ export function MenuBar() {
       {helpDialog === 'about' && (
         <AboutModal onClose={() => setHelpDialog(null)} />
       )}
-      {selectDialog && (
+      {selectDialog === 'color-range' && (
+        <ColorRangeDialog
+          onApply={handleColorRangeApply}
+          onCancel={() => setSelectDialog(null)}
+        />
+      )}
+      {selectDialog && selectDialog !== 'color-range' && (
         <FilterDialog
           title={selectDialog === 'grow' ? 'Grow Selection' : 'Shrink Selection'}
           params={[{ key: 'amount', label: 'Amount (px)', min: 1, max: 100, step: 1, defaultValue: 1 }]}
