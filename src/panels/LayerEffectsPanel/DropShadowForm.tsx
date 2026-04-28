@@ -27,31 +27,32 @@ export function DropShadowForm({ shadow, onChange, onCommit }: DropShadowFormPro
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Offset X</span>
         <div className={styles.sliderWrap}>
-          <Slider value={shadow.offsetX} min={-100} max={100} onChange={(v) => onChange({ ...shadow, offsetX: v })} onCommit={onCommit} />
+          <Slider label="Offset X" value={shadow.offsetX} min={-100} max={100} onChange={(v) => onChange({ ...shadow, offsetX: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Offset Y</span>
         <div className={styles.sliderWrap}>
-          <Slider value={shadow.offsetY} min={-100} max={100} onChange={(v) => onChange({ ...shadow, offsetY: v })} onCommit={onCommit} />
+          <Slider label="Offset Y" value={shadow.offsetY} min={-100} max={100} onChange={(v) => onChange({ ...shadow, offsetY: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Blur</span>
         <div className={styles.sliderWrap}>
-          <Slider value={shadow.blur} min={0} max={100} onChange={(v) => onChange({ ...shadow, blur: v })} onCommit={onCommit} />
+          <Slider label="Blur" value={shadow.blur} min={0} max={100} onChange={(v) => onChange({ ...shadow, blur: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Spread</span>
         <div className={styles.sliderWrap}>
-          <Slider value={shadow.spread} min={0} max={100} onChange={(v) => onChange({ ...shadow, spread: v })} onCommit={onCommit} />
+          <Slider label="Spread" value={shadow.spread} min={0} max={100} onChange={(v) => onChange({ ...shadow, spread: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Opacity</span>
         <div className={styles.sliderWrap}>
           <Slider
+            label="Opacity"
             value={Math.round((shadow.opacity ?? 0.75) * 100)}
             min={0}
             max={100}

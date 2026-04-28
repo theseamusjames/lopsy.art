@@ -27,7 +27,7 @@ export function StrokeForm({ stroke, onChange, onCommit }: StrokeFormProps) {
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Width</span>
         <div className={styles.sliderWrap}>
-          <Slider value={stroke.width} min={1} max={50} onChange={(v) => onChange({ ...stroke, width: v })} onCommit={onCommit} />
+          <Slider label="Width" value={stroke.width} min={1} max={50} onChange={(v) => onChange({ ...stroke, width: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>

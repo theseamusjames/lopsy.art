@@ -27,19 +27,20 @@ export function GlowForm({ glow, onChange, onCommit }: GlowFormProps) {
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Size</span>
         <div className={styles.sliderWrap}>
-          <Slider value={glow.size} min={0} max={100} onChange={(v) => onChange({ ...glow, size: v })} onCommit={onCommit} />
+          <Slider label="Size" value={glow.size} min={0} max={100} onChange={(v) => onChange({ ...glow, size: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Spread</span>
         <div className={styles.sliderWrap}>
-          <Slider value={glow.spread} min={0} max={100} onChange={(v) => onChange({ ...glow, spread: v })} onCommit={onCommit} />
+          <Slider label="Spread" value={glow.spread} min={0} max={100} onChange={(v) => onChange({ ...glow, spread: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Opacity</span>
         <div className={styles.sliderWrap}>
           <Slider
+            label="Opacity"
             value={Math.round(glow.opacity * 100)}
             min={0}
             max={100}
