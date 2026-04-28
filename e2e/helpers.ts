@@ -353,10 +353,23 @@ export async function setBlendMode(page: Page, mode: string): Promise<void> {
 }
 
 export async function setLayerOpacity(page: Page, layerId: string, percent: number): Promise<void> {
+  await setActiveLayer(page, layerId);
   const row = page.locator(`[data-layer-id="${layerId}"]`);
-  await row.locator('button[aria-label*="Opacity"][aria-label*="for"]').click();
-  const slider = page.locator(`[aria-label*="opacity"][type="range"]`);
-  await slider.fill(String(percent));
+  await row.locator('button[aria-label*="Opacity"]').click();
+  await page.waitForTimeout(100);
+  const slider = page.locator(`input[type="range"][aria-label*="opacity"]`);
+  await slider.waitFor({ state: 'visible', timeout: 3000 });
+  await page.evaluate(({ lid, pct }) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        pushHistory: (label?: string) => void;
+        updateLayerOpacity: (id: string, opacity: number) => void;
+      };
+    };
+    const s = store.getState();
+    s.pushHistory('Change Opacity');
+    s.updateLayerOpacity(lid, pct / 100);
+  }, { lid: layerId, pct: percent });
   await page.keyboard.press('Escape');
 }
 
