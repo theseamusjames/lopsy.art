@@ -1,6 +1,7 @@
 import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
+import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
 import { createImageData } from '../../engine/color-space';
 import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
@@ -154,7 +155,7 @@ export interface DocumentSlice {
   addGroup: (name?: string) => void;
   toggleGroupCollapsed: (groupId: string) => void;
   moveLayerToGroup: (layerId: string, targetGroupId: string, insertIndex?: number) => void;
-  setGroupAdjustments: (groupId: string, adjustments: import('../../filters/image-adjustments').ImageAdjustments) => void;
+  setGroupAdjustments: (groupId: string, adjustments: Partial<import('../../filters/image-adjustments').ImageAdjustments>) => void;
   setGroupAdjustmentsEnabled: (groupId: string, enabled: boolean) => void;
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
@@ -321,7 +322,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   setGroupAdjustments: (groupId, adjustments) => {
     const doc = get().document;
     const layers = doc.layers.map((l) =>
-      l.id === groupId && l.type === 'group' ? { ...l, adjustments } : l,
+      l.id === groupId && l.type === 'group'
+        ? { ...l, adjustments: { ...DEFAULT_ADJUSTMENTS, ...l.adjustments, ...adjustments } }
+        : l,
     );
     set({ document: { ...doc, layers } });
   },
