@@ -125,3 +125,30 @@ describe('layerToDescJson — issue #225 (effects on text layers)', () => {
     expect(desc.effects.drop_shadow).toBeUndefined();
   });
 });
+
+describe('layerToDescJson — issue #239 (integer x/y for WASM i32 deserialization)', () => {
+  it('rounds fractional layer.x and layer.y to integers', () => {
+    const layer: RasterLayer = { ...baseRasterLayer, x: 99.794921875, y: 182.75634765625 };
+    const desc = JSON.parse(layerToDescJson(layer, true));
+    expect(desc.x).toBe(100);
+    expect(desc.y).toBe(183);
+    expect(Number.isInteger(desc.x)).toBe(true);
+    expect(Number.isInteger(desc.y)).toBe(true);
+  });
+
+  it('passes through integer positions unchanged', () => {
+    const layer: RasterLayer = { ...baseRasterLayer, x: 50, y: -25 };
+    const desc = JSON.parse(layerToDescJson(layer, true));
+    expect(desc.x).toBe(50);
+    expect(desc.y).toBe(-25);
+  });
+
+  it('rounds negative fractional positions to integers', () => {
+    const layer: RasterLayer = { ...baseRasterLayer, x: -10.4, y: -10.6 };
+    const desc = JSON.parse(layerToDescJson(layer, true));
+    expect(Number.isInteger(desc.x)).toBe(true);
+    expect(Number.isInteger(desc.y)).toBe(true);
+    expect(desc.x).toBe(-10);
+    expect(desc.y).toBe(-11);
+  });
+});

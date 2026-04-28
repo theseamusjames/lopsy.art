@@ -28,6 +28,7 @@ import { computeCropCanvas } from './actions/crop-canvas';
 import { computeResizeCanvas } from './actions/resize-canvas';
 import { computeResizeImage } from './actions/resize-image';
 import { computeAlignLayer } from './actions/align-layer';
+import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
 import { computeAddLayerMask } from './actions/add-layer-mask';
 import { computeRemoveLayerMask } from './actions/remove-layer-mask';
 import {
@@ -321,7 +322,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   setGroupAdjustments: (groupId, adjustments) => {
     const doc = get().document;
     const layers = doc.layers.map((l) =>
-      l.id === groupId && l.type === 'group' ? { ...l, adjustments } : l,
+      l.id === groupId && l.type === 'group'
+        ? { ...l, adjustments: { ...DEFAULT_ADJUSTMENTS, ...adjustments } }
+        : l,
     );
     set({ document: { ...doc, layers } });
   },
