@@ -205,6 +205,7 @@ Applied globally or per-group. All default to 0.
 - **Box Blur**: radius
 - **Motion Blur**: angle (degrees), distance (px)
 - **Radial Blur**: amount (centered)
+- **Tilt-Shift Blur**: focus position 0–100% (center of sharp band along blur axis), focus width 0–100% (width of the sharp band), blur radius 1–32 px (max blur intensity in out-of-focus regions), angle 0–360° (rotation of the focus plane). Creates selective-focus miniature photography effects by blurring areas outside a configurable focus band while leaving the focus zone sharp.
 
 ### Sharpen
 - **Unsharp Mask**: radius, amount, threshold

@@ -38,7 +38,8 @@ export type FilterDialogId =
   | 'chromatic-aberration'
   | 'pixel-stretch'
   | 'lens-distortion'
-  | 'pattern-fill';
+  | 'pattern-fill'
+  | 'tilt-shift-blur';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;

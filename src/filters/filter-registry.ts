@@ -20,6 +20,7 @@ import { oilPaint } from './oil-paint';
 import { chromaticAberration } from './chromatic-aberration';
 import { pixelStretch } from './pixel-stretch';
 import { lensDistortion } from './lens-distortion';
+import { tiltShiftBlur } from './tilt-shift-blur';
 
 export type { FilterDefinition };
 
@@ -45,6 +46,7 @@ const allFilters: FilterDefinition[] = [
   chromaticAberration,
   pixelStretch,
   lensDistortion,
+  tiltShiftBlur,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(
