@@ -116,3 +116,100 @@ describe('engine-sync tracked state', () => {
     expect(setGrid).toHaveBeenCalledTimes(3); // only A re-pushed
   });
 });
+
+describe('syncSelection (issue #224 — sequential cuts)', () => {
+  it('uploads each new mask reference to the engine', () => {
+    // Sequential cut() calls (issue #224) rely on syncSelection re-uploading
+    // the GPU selection mask whenever the JS-side mask reference changes.
+    // If this short-circuit ever skips the upload, clipboard_clear_selected
+    // operates on a stale mask and the cut clears unrelated regions.
+    const engine = makeFakeEngine();
+    const setMask = vi.mocked(bridge.setSelectionMask);
+    setMask.mockClear();
+
+    const mask1 = new Uint8ClampedArray(800 * 600);
+    for (let y = 325; y < 330; y++) {
+      for (let x = 260; x < 540; x++) mask1[y * 800 + x] = 255;
+    }
+    sync.syncSelection(engine, {
+      active: true,
+      bounds: { x: 260, y: 325, width: 280, height: 5 },
+      mask: mask1,
+      maskWidth: 800,
+      maskHeight: 600,
+    });
+    expect(setMask).toHaveBeenCalledTimes(1);
+
+    // Same reference — no second upload.
+    sync.syncSelection(engine, {
+      active: true,
+      bounds: { x: 260, y: 325, width: 280, height: 5 },
+      mask: mask1,
+      maskWidth: 800,
+      maskHeight: 600,
+    });
+    expect(setMask).toHaveBeenCalledTimes(1);
+
+    // New mask reference — must upload again.
+    const mask2 = new Uint8ClampedArray(800 * 600);
+    for (let y = 370; y < 380; y++) {
+      for (let x = 260; x < 540; x++) mask2[y * 800 + x] = 255;
+    }
+    sync.syncSelection(engine, {
+      active: true,
+      bounds: { x: 260, y: 370, width: 280, height: 10 },
+      mask: mask2,
+      maskWidth: 800,
+      maskHeight: 600,
+    });
+    expect(setMask).toHaveBeenCalledTimes(2);
+    // The bytes uploaded for the second call must come from mask2, not mask1
+    // — verify by checking a pixel that's set in mask2 but not mask1.
+    const lastCall = setMask.mock.calls[setMask.mock.calls.length - 1]!;
+    const bytes = lastCall[1] as Uint8Array;
+    expect(bytes[375 * 800 + 400]).toBe(255); // inside stripe #2
+    expect(bytes[327 * 800 + 400]).toBe(0);   // inside stripe #1, not stripe #2
+  });
+
+  it('clears the selection on the engine when JS goes inactive', () => {
+    const engine = makeFakeEngine();
+    const setMask = vi.mocked(bridge.setSelectionMask);
+    const clearSel = vi.mocked(bridge.clearSelection);
+    setMask.mockClear();
+    clearSel.mockClear();
+
+    const mask = new Uint8ClampedArray(10 * 10);
+    mask[0] = 255;
+    sync.syncSelection(engine, {
+      active: true,
+      bounds: { x: 0, y: 0, width: 1, height: 1 },
+      mask,
+      maskWidth: 10,
+      maskHeight: 10,
+    });
+    expect(setMask).toHaveBeenCalledTimes(1);
+    expect(clearSel).toHaveBeenCalledTimes(0);
+
+    // Deactivate — clearSelection must fire so the engine drops its mask
+    // texture; otherwise a subsequent cut() with hasSelection=false would
+    // run against a stale mask.
+    sync.syncSelection(engine, {
+      active: false,
+      bounds: null,
+      mask: null,
+      maskWidth: 0,
+      maskHeight: 0,
+    });
+    expect(clearSel).toHaveBeenCalledTimes(1);
+
+    // Idle deactivate — must NOT re-fire clearSelection.
+    sync.syncSelection(engine, {
+      active: false,
+      bounds: null,
+      mask: null,
+      maskWidth: 0,
+      maskHeight: 0,
+    });
+    expect(clearSel).toHaveBeenCalledTimes(1);
+  });
+});
