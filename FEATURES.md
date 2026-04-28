@@ -45,7 +45,8 @@
 ## Shape & Vector Tools
 
 ### Shape Tool
-- **Shape types**: rectangle, ellipse, polygon, line, arrow, star
+- **Shape types**: ellipse, polygon. A rectangle/square is drawn as a
+  4-sided polygon (set sides to 4); triangles use sides=3, etc.
 - **Output**: pixels or path
 - **Fill color**: any color or none
 - **Stroke color**: any color or none
@@ -271,7 +272,7 @@ Applied globally or per-group. All default to 0.
 ### Layer Types
 - **Raster**: pixel layer
 - **Text**: live-editable text
-- **Shape**: vector shape (rectangle, ellipse, polygon, line, arrow, star)
+- **Shape**: vector shape (ellipse, polygon — see Shape Tool above)
 - **Group**: folder with optional per-group adjustments
 - **Adjustment**: adjustment layer
 - **Fill**: fill layer
