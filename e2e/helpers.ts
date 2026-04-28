@@ -354,9 +354,10 @@ export async function setBlendMode(page: Page, mode: string): Promise<void> {
 
 export async function setLayerOpacity(page: Page, layerId: string, percent: number): Promise<void> {
   const row = page.locator(`[data-layer-id="${layerId}"]`);
-  await row.locator('button[class*="opacityBtn"]').click();
+  await row.locator('button[aria-label*="Opacity"][aria-label*="for"]').click();
   const slider = page.locator(`[aria-label*="opacity"][type="range"]`);
   await slider.fill(String(percent));
+  await page.keyboard.press('Escape');
 }
 
 export async function applyFilter(

@@ -158,6 +158,10 @@
   min-width: 0;
 }
 
+.sliderWrap > div > span:first-child {
+  display: none;
+}
+
 .positionGroup {
   display: flex;
   gap: var(--space-1);
