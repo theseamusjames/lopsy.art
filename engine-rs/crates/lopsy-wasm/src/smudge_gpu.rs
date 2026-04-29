@@ -33,6 +33,13 @@ pub fn apply_smudge_dab_batch(
     if points.len() < 4 {
         return;
     }
+    // The dispatch writes to a doc-sized scratch FBO with the viewport set
+    // to the layer texture size, then blits the scratch back to the layer.
+    // If the layer is smaller than the scratch, the blit reads garbage
+    // from the scratch's unwritten region — the same root cause as the
+    // filter bounds bug, surfacing as full-width streak artifacts.
+    let _ = engine.ensure_layer_full_size(layer_id);
+
     let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,

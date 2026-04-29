@@ -483,7 +483,14 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setEraserOpacity: (opacity) => set({ eraserOpacity: Math.max(1, Math.min(100, opacity)) }),
   setFillTolerance: (tolerance) => set({ fillTolerance: Math.max(0, Math.min(255, tolerance)) }),
   setFillContiguous: (contiguous) => set({ fillContiguous: contiguous }),
-  setShapeMode: (mode) => set({ shapeMode: mode }),
+  setShapeMode: (mode) => {
+    // Guard against invalid values (e.g. 'rectangle', 'line') sneaking in
+    // via store bypass. The shader treats anything-not-ellipse as polygon
+    // and would render a polygon with whatever sides setting is current,
+    // which doesn't match what a caller passing 'rectangle' expects.
+    if (mode !== 'ellipse' && mode !== 'polygon') return;
+    set({ shapeMode: mode });
+  },
   setShapeOutput: (output) => set({ shapeOutput: output }),
   setShapeFillColor: (color) => set({ shapeFillColor: color }),
   setShapeStrokeColor: (color) => set({ shapeStrokeColor: color }),

@@ -61,7 +61,23 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     return handleSelectionTransformDown(ctx, currentTransform);
   }
 
-  const handleRadius = 8 / editorState.viewport.zoom;
+  // Only the move tool transforms layer pixels via the selection-bound
+  // handles. Click-driven tools like fill, eyedropper, text, etc. should
+  // dispatch to their own handlers — at low zoom with small selections the
+  // handle hit-radius can swallow the entire selection area otherwise,
+  // silently stealing every click (issue #222).
+  if (activeTool !== 'move') {
+    return null;
+  }
+
+  // Cap the handle radius so a click near the centre of a small selection
+  // can't hit multiple handles at once. The 8/zoom screen-space heuristic
+  // breaks at low zoom because the doc-space radius can exceed the
+  // selection's half-extent, making every click on the selection register
+  // as a handle hit.
+  const bounds = getTransformedBounds(currentTransform);
+  const halfMin = Math.min(bounds.width, bounds.height) / 2;
+  const handleRadius = Math.max(1, Math.min(8 / editorState.viewport.zoom, halfMin * 0.8));
   const hit = hitTestHandle(canvasPos, currentTransform, handleRadius);
 
   if (!hit) {

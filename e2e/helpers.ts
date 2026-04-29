@@ -581,17 +581,26 @@ export async function moveLayerTo(
 // ---------------------------------------------------------------------------
 
 export async function openEffectsPanel(page: Page): Promise<void> {
-  const panel = page.locator('[aria-labelledby="blend-mode-label"]');
-  if (!(await panel.isVisible())) {
-    const activeId = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { activeLayerId: string } };
-      };
-      return store.getState().document.activeLayerId;
-    });
-    const row = page.locator(`[data-layer-id="${activeId}"]`);
-    await row.locator('button[aria-label*="effects"]').click();
-    await panel.waitFor({ state: 'visible', timeout: 5000 });
+  const drawer = page.getByTestId('effects-drawer');
+  if (await drawer.isVisible()) return;
+
+  const { activeId, isGroup } = await page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { activeLayerId: string; layers: { id: string; type: string }[] } };
+    };
+    const doc = store.getState().document;
+    const layer = doc.layers.find((l) => l.id === doc.activeLayerId);
+    return { activeId: doc.activeLayerId, isGroup: layer?.type === 'group' };
+  });
+  const row = page.locator(`[data-layer-id="${activeId}"]`);
+  await row.locator('button[aria-label*="effects"]').click();
+  // Group layers render AdjustmentsPanel (no blend-mode header); raster/text
+  // render LayerEffectsPanel which IS keyed by blend-mode-label. Wait for
+  // the appropriate sentinel based on which layer type is active.
+  if (isGroup) {
+    await page.locator('[role="tablist"][aria-label="Adjustment type"]').waitFor({ state: 'visible', timeout: 5000 });
+  } else {
+    await page.locator('[aria-labelledby="blend-mode-label"]').waitFor({ state: 'visible', timeout: 5000 });
   }
 }
 
@@ -621,8 +630,12 @@ export async function configureEffect(
   settings: Record<string, number>,
 ): Promise<void> {
   await enableEffect(page, effectName);
+  // Scope to the effects drawer so labels like "Size" don't collide with
+  // identically-named tool-options-bar inputs (brush/eraser also have a
+  // "Size" slider with the same aria-label).
+  const drawer = page.getByTestId('effects-drawer');
   for (const [label, value] of Object.entries(settings)) {
-    const input = page.locator(`[aria-label="${label} value"]`);
+    const input = drawer.locator(`[aria-label="${label} value"]`);
     await input.waitFor({ state: 'visible', timeout: 3000 });
     await input.fill(String(value));
     await input.press('Enter');

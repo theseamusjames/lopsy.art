@@ -104,6 +104,13 @@ pub fn apply_filter(
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
     set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
 ) {
+    // Scratch FBOs are sized to the document. If the layer texture is
+    // smaller (e.g. a tiny ellipse on a large canvas), pass-2 sampling
+    // would read garbage from the scratch's unwritten region, destroying
+    // the filter output. Expanding the layer to at least doc size
+    // guarantees the scratch and layer dimensions match.
+    let _ = engine.ensure_layer_full_size(layer_id);
+
     let has_selection = engine.selection_mask_texture.is_some();
 
     // If there's a selection, save the original layer to scratch B first
@@ -181,6 +188,10 @@ pub fn apply_separable_blur(
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
     set_common_uniforms: impl Fn(&WebGl2RenderingContext, &ShaderProgram),
 ) {
+    // See note in apply_filter: ensure layer/scratch dimensions match so
+    // pass 2 doesn't sample garbage outside the layer's sub-region.
+    let _ = engine.ensure_layer_full_size(layer_id);
+
     let has_selection = engine.selection_mask_texture.is_some();
 
     let tex_handle = match engine.layer_textures.get(layer_id) {

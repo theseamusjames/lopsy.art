@@ -53,6 +53,10 @@ pub fn filter_unsharp_mask(
     // Step 2: sharpen shader with original + blurred
     if radius == 0 { return; }
 
+    // Match the rest of the filter pipeline: ensure layer/scratch sizes
+    // align so pass-2 sampling doesn't read garbage outside the layer.
+    let _ = engine.inner.ensure_layer_full_size(layer_id);
+
     // First do a gaussian blur pass (layer -> scratch B via scratch A)
     let kernel = lopsy_core::filters::blur::gaussian_kernel(radius);
     let gl = &engine.inner.gl;
