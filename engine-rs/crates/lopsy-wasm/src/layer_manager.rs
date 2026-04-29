@@ -929,59 +929,33 @@ pub fn composite_float(
     let layer_tex = engine.texture_pool.get(layer_tex_handle).cloned()
         .ok_or("Layer texture not found")?;
 
-    // Step 1: blit base → scratch_a
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, fw as i32, fh as i32);
+    // Blend float (src, at offset dx/dy) onto base (dst) directly into the layer
+    // texture in one pass. base_tex and float_tex are both fw×fh, so v_uv maps
+    // correctly without the UV-scale mismatch that doc-sized scratch textures cause.
     engine.gl.disable(WebGl2RenderingContext::BLEND);
-
-    engine.gl.use_program(Some(&engine.shaders.blit.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&base_tex));
-    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
-        engine.gl.uniform1i(Some(&loc), 0);
-    }
-    engine.draw_fullscreen_quad();
-
-    // Step 2: blend float at (dx, dy) onto scratch_a → scratch_b
-    let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned()
-        .ok_or("scratch_a not found")?;
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-    engine.gl.viewport(0, 0, fw as i32, fh as i32);
-
-    let shader = &engine.shaders.blend;
-    engine.gl.use_program(Some(&shader.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_a_tex));
-
-    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), dx as f32, dy as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
-    engine.draw_fullscreen_quad();
-
-    // Unbind scratch_a from TEXTURE1
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-
-    // Step 3: blit scratch_b → layer texture
-    let scratch_b_tex = engine.texture_pool.get(engine.scratch_texture_b).cloned()
-        .ok_or("scratch_b not found")?;
     engine.render_to_texture(&layer_tex, fw as i32, fh as i32, |engine| {
-        engine.gl.use_program(Some(&engine.shaders.blit.program));
+        let shader = &engine.shaders.blend;
+        engine.gl.use_program(Some(&shader.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_b_tex));
-        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
-            engine.gl.uniform1i(Some(&loc), 0);
-        }
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&base_tex));
+
+        if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), dx as f32, dy as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
         engine.draw_fullscreen_quad();
     });
+
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
     engine.mark_layer_dirty(&layer_id);
     Ok(())
@@ -1126,10 +1100,8 @@ pub fn composite_float_perspective(
 }
 
 /// Internal: render transformed float into the layer texture.
-/// Step 1: Render transformed float → scratch_a
-/// Step 2: Blit base → scratch_b
-/// Step 3: Blend scratch_a onto scratch_b
-/// Step 4: Blit result → layer texture
+/// Step 1: Render transformed float → fw×fh temp texture (correctly sized)
+/// Step 2: Blend temp onto base → layer texture directly
 fn composite_float_transformed(
     engine: &mut EngineInner,
 ) -> Result<(), String> {
@@ -1154,11 +1126,16 @@ fn composite_float_transformed(
     let layer_tex = engine.texture_pool.get(layer_tex_handle).cloned()
         .ok_or("Layer texture not found")?;
 
-    // Step 1: Render transformed float → scratch_a
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, fw as i32, fh as i32);
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    // Allocate a fw×fh temp texture for the transformed float result. Using
+    // doc-sized scratch textures here causes a UV-scale mismatch: the scratch
+    // texture is 800×600 but only fw×fh pixels are written (viewport clip),
+    // so reading it back with v_uv=[0,1] samples the wrong region and leaks
+    // stale compositor content into the layer texture.
+    let tmp = engine.texture_pool.acquire(&engine.gl, fw, fh)?;
+    let tmp_tex = engine.texture_pool.get(tmp).cloned()
+        .ok_or("Tmp texture not found")?;
 
+    // Step 1: Render transformed float → tmp (fw×fh, correctly sized)
     // Enable linear filtering on float texture for smooth transforms
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
@@ -1173,72 +1150,76 @@ fn composite_float_transformed(
         WebGl2RenderingContext::LINEAR as i32,
     );
 
-    if engine.float_transform_mode == 1 {
-        // Affine transform shader
-        let shader = &engine.shaders.transform_affine;
-        engine.gl.use_program(Some(&shader.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
-        if let Some(loc) = shader.location(&engine.gl, "u_floatTex") {
-            engine.gl.uniform1i(Some(&loc), 0);
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&tmp_tex, fw as i32, fh as i32, |engine| {
+        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+
+        if engine.float_transform_mode == 1 {
+            let shader = &engine.shaders.transform_affine;
+            engine.gl.use_program(Some(&shader.program));
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
+            if let Some(loc) = shader.location(&engine.gl, "u_floatTex") {
+                engine.gl.uniform1i(Some(&loc), 0);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_floatSize") {
+                engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") {
+                engine.gl.uniform2f(Some(&loc), lx, ly);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_layerSize") {
+                engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_srcCenter") {
+                engine.gl.uniform2f(Some(&loc), engine.float_transform_center[0], engine.float_transform_center[1]);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_dstCenter") {
+                engine.gl.uniform2f(Some(&loc), engine.float_transform_corners[0], engine.float_transform_corners[1]);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_invMatrix") {
+                engine.gl.uniform_matrix3fv_with_f32_array(
+                    Some(&loc), false, &engine.float_transform_inv_matrix,
+                );
+            }
+        } else {
+            let shader = &engine.shaders.transform_perspective;
+            engine.gl.use_program(Some(&shader.program));
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
+            if let Some(loc) = shader.location(&engine.gl, "u_floatTex") {
+                engine.gl.uniform1i(Some(&loc), 0);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_floatSize") {
+                engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") {
+                engine.gl.uniform2f(Some(&loc), lx, ly);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_layerSize") {
+                engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
+            }
+            let c = &engine.float_transform_corners;
+            if let Some(loc) = shader.location(&engine.gl, "u_cornerTL") {
+                engine.gl.uniform2f(Some(&loc), c[0], c[1]);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_cornerTR") {
+                engine.gl.uniform2f(Some(&loc), c[2], c[3]);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_cornerBR") {
+                engine.gl.uniform2f(Some(&loc), c[4], c[5]);
+            }
+            if let Some(loc) = shader.location(&engine.gl, "u_cornerBL") {
+                engine.gl.uniform2f(Some(&loc), c[6], c[7]);
+            }
+            let r = &engine.float_transform_orig_rect;
+            if let Some(loc) = shader.location(&engine.gl, "u_origRect") {
+                engine.gl.uniform4f(Some(&loc), r[0], r[1], r[2], r[3]);
+            }
         }
-        if let Some(loc) = shader.location(&engine.gl, "u_floatSize") {
-            engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") {
-            engine.gl.uniform2f(Some(&loc), lx, ly);
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_layerSize") {
-            engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_srcCenter") {
-            engine.gl.uniform2f(Some(&loc), engine.float_transform_center[0], engine.float_transform_center[1]);
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_dstCenter") {
-            engine.gl.uniform2f(Some(&loc), engine.float_transform_corners[0], engine.float_transform_corners[1]);
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_invMatrix") {
-            engine.gl.uniform_matrix3fv_with_f32_array(
-                Some(&loc), false, &engine.float_transform_inv_matrix,
-            );
-        }
-    } else {
-        // Perspective transform shader
-        let shader = &engine.shaders.transform_perspective;
-        engine.gl.use_program(Some(&shader.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
-        if let Some(loc) = shader.location(&engine.gl, "u_floatTex") {
-            engine.gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_floatSize") {
-            engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") {
-            engine.gl.uniform2f(Some(&loc), lx, ly);
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_layerSize") {
-            engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
-        }
-        let c = &engine.float_transform_corners;
-        if let Some(loc) = shader.location(&engine.gl, "u_cornerTL") {
-            engine.gl.uniform2f(Some(&loc), c[0], c[1]);
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_cornerTR") {
-            engine.gl.uniform2f(Some(&loc), c[2], c[3]);
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_cornerBR") {
-            engine.gl.uniform2f(Some(&loc), c[4], c[5]);
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_cornerBL") {
-            engine.gl.uniform2f(Some(&loc), c[6], c[7]);
-        }
-        let r = &engine.float_transform_orig_rect;
-        if let Some(loc) = shader.location(&engine.gl, "u_origRect") {
-            engine.gl.uniform4f(Some(&loc), r[0], r[1], r[2], r[3]);
-        }
-    }
-    engine.draw_fullscreen_quad();
+        engine.draw_fullscreen_quad();
+    });
 
     // Restore nearest filtering on float texture
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
@@ -1254,33 +1235,15 @@ fn composite_float_transformed(
         WebGl2RenderingContext::NEAREST as i32,
     );
 
-    // Step 2: Blit base → scratch_b
-    let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned()
-        .ok_or("scratch_a not found")?;
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-    engine.gl.viewport(0, 0, fw as i32, fh as i32);
-
-    engine.gl.use_program(Some(&engine.shaders.blit.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&base_tex));
-    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
-        engine.gl.uniform1i(Some(&loc), 0);
-    }
-    engine.draw_fullscreen_quad();
-
-    // Step 3: Blend transformed float (scratch_a) onto base (scratch_b) → scratch_b
-    // Read scratch_b back as destination, draw scratch_a as source
-    let scratch_b_tex = engine.texture_pool.get(engine.scratch_texture_b).cloned()
-        .ok_or("scratch_b not found")?;
-
-    // We need to blend scratch_a onto scratch_b. Use a temp FBO for the output.
+    // Step 2: Blend tmp (transformed float, fw×fh) onto base → layer texture.
+    // Both tmp and base_tex are fw×fh, so v_uv correctly addresses them.
     engine.render_to_texture(&layer_tex, fw as i32, fh as i32, |engine| {
         let shader = &engine.shaders.blend;
         engine.gl.use_program(Some(&shader.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_a_tex));
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tmp_tex));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_b_tex));
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&base_tex));
 
         if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
@@ -1295,9 +1258,10 @@ fn composite_float_transformed(
         engine.draw_fullscreen_quad();
     });
 
-    // Unbind
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+
+    engine.texture_pool.release(tmp);
 
     engine.mark_layer_dirty(&layer_id);
     Ok(())
