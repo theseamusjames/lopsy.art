@@ -8,6 +8,7 @@ import { HistoryPanel } from '../panels/HistoryPanel/HistoryPanel';
 import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
 import { AdjustmentsPanel } from '../panels/AdjustmentsPanel/AdjustmentsPanel';
 import { PathsPanel } from '../panels/PathsPanel/PathsPanel';
+import { ReferenceImagePanel } from '../panels/ReferenceImagePanel/ReferenceImagePanel';
 import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
 import { MenuBar } from './MenuBar/MenuBar';
 import { OptionsBar } from './OptionsBar/OptionsBar';
@@ -244,6 +245,7 @@ export function App() {
                 {visiblePanels.has('color') && <ColorPanel />}
                 {visiblePanels.has('history') && <HistoryPanel />}
                 {visiblePanels.has('paths') && <PathsPanel />}
+                {visiblePanels.has('reference') && <ReferenceImagePanel />}
               </div>
               <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
                 {visiblePanels.has('layers') && <LayerPanel onSelectLayer={handleSelectLayer} />}
