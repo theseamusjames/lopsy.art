@@ -202,8 +202,13 @@ async function dragRotate(page: Page, angleRadians: number) {
   await page.waitForTimeout(200);
 }
 
-/** Drag a scale handle to a new doc position */
+/** Drag a scale handle to a new doc position. Transform handles only respond
+ *  to the move tool (issue #222 — non-move tools no longer intercept handle
+ *  hits, so they don't silently steal clicks from fill/brush/etc.).
+ */
 async function dragScaleHandle(page: Page, handle: string, toDocX: number, toDocY: number) {
+  await page.keyboard.press('v');
+  await page.waitForTimeout(50);
   const pos = await getScaleHandleInfo(page, handle);
   if (!pos) throw new Error(`No handle position for ${handle}`);
 
