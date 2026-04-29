@@ -58,11 +58,24 @@ test('text layer rotation: content stays centered and does not scale', async ({ 
   console.log('Text layer:', JSON.stringify(textLayer));
 
   // If no text layer, the text didn't render (font missing in headless) — skip
-  if (!textLayer || textLayer.width === 0) {
+  if (!textLayer) {
     console.log('SKIP: Text layer not found or empty (font likely missing in headless)');
     return;
   }
-  expect(textLayer.type).toBe('raster');
+  expect(textLayer.type).toBe('text');
+
+  // Get the actual pixel dimensions of the committed text from the GPU texture
+  const textDims = await page.evaluate(async (layerId: string) => {
+    const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
+      (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
+    const result = await readFn(layerId);
+    return result ? { width: result.width, height: result.height } : null;
+  }, textLayer.id);
+
+  if (!textDims || textDims.width === 0) {
+    console.log('SKIP: Text layer has no pixel data');
+    return;
+  }
 
   // --- Step 3: Select the text layer and marquee around it ---
   await page.locator(`[data-layer-id="${textLayer.id}"]`).click();
@@ -70,7 +83,7 @@ test('text layer rotation: content stays centered and does not scale', async ({ 
 
   const m = 10;
   const s1 = d2s(textLayer.x - m, textLayer.y - m);
-  const s2 = d2s(textLayer.x + textLayer.width + m, textLayer.y + textLayer.height + m);
+  const s2 = d2s(textLayer.x + textDims.width + m, textLayer.y + textDims.height + m);
   await page.mouse.move(s1.x, s1.y);
   await page.mouse.down();
   await page.mouse.move(s2.x, s2.y, { steps: 5 });

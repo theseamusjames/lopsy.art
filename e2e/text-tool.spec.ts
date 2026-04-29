@@ -150,10 +150,10 @@ test.describe('Text tool', () => {
     expect(editing).toBeNull();
 
     const doc = await getEditorDoc(page);
-    // After commit, text layers are rasterized to type 'raster' but keep their "Text" name
-    const rasterizedTextLayers = doc.layers.filter((l) => l.type === 'raster' && l.name.startsWith('Text'));
-    expect(rasterizedTextLayers.length).toBe(1);
-    expect(rasterizedTextLayers[0]!.visible).toBe(true);
+    // After commit, text layers keep type 'text' with pixel data uploaded to GPU
+    const committedTextLayers = doc.layers.filter((l) => l.type === 'text' && l.name.startsWith('Text'));
+    expect(committedTextLayers.length).toBe(1);
+    expect(committedTextLayers[0]!.visible).toBe(true);
   });
 
   test('pressing Escape cancels editing and removes the new layer', async ({ page }) => {
@@ -186,28 +186,27 @@ test.describe('Text tool', () => {
     await page.waitForTimeout(200);
 
     const doc = await getEditorDoc(page);
-    // After commit, text layers are rasterized — type becomes 'raster'
-    const rasterizedTextLayers = doc.layers.filter((l) => l.type === 'raster' && l.name.startsWith('Text'));
-    expect(rasterizedTextLayers.length).toBe(1);
-    // Rasterized layer covers the full document
-    expect(rasterizedTextLayers[0]!.width).not.toBeNull();
+    // After commit, text layers keep type 'text' with pixel data uploaded to GPU
+    const committedTextLayers = doc.layers.filter((l) => l.type === 'text' && l.name.startsWith('Text'));
+    expect(committedTextLayers.length).toBe(1);
+    expect(committedTextLayers[0]!.width).not.toBeNull();
   });
 
-  test('clicking after commit starts a new text session (rasterized text cannot be re-edited)', async ({ page }) => {
+  test('clicking committed text re-enters edit mode for that layer', async ({ page }) => {
     // Create and commit text at a known position
     await clickAtDoc(page, 200, 200);
     await page.keyboard.type('Existing text');
     await page.keyboard.press('Shift+Enter');
     await page.waitForTimeout(200);
 
-    // Text is now rasterized — clicking at the same location starts a new text session
+    // Text layers keep type 'text' — clicking re-enters edit mode
     await clickAtDoc(page, 210, 210);
     await page.waitForTimeout(100);
 
     const editing = await getTextEditing(page) as { text: string; isNew: boolean } | null;
     expect(editing).not.toBeNull();
-    expect(editing!.isNew).toBe(true);
-    expect(editing!.text).toBe('');
+    expect(editing!.isNew).toBe(false);
+    expect(editing!.text).toBe('Existing text');
   });
 
   test('Enter key inserts a newline', async ({ page }) => {
@@ -249,7 +248,7 @@ test.describe('Text tool', () => {
     await page.keyboard.press('Shift+Enter');
     await page.waitForTimeout(300);
 
-    // Check that the rasterized text layer has pixel data in the GPU texture
+    // Check that the committed text layer has pixel data in the GPU texture
     const hasPixels = await page.evaluate(async () => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
@@ -259,7 +258,7 @@ test.describe('Text tool', () => {
       const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
         (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
       const state = store.getState();
-      const textLayer = state.document.layers.find((l) => l.type === 'raster' && l.name.startsWith('Text'));
+      const textLayer = state.document.layers.find((l) => l.type === 'text' && l.name.startsWith('Text'));
       if (!textLayer) return false;
       const result = await readFn(textLayer.id);
       if (!result || result.width === 0) return false;

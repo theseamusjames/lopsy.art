@@ -68,15 +68,19 @@ test('undo after text commit removes the text layer', async ({ page }) => {
   console.log('After commit:', JSON.stringify(afterCommit));
   const textLayer = afterCommit.find(l => l.name.startsWith('Text'));
 
-  // Text layer should exist and be rasterized
+  // Text layer should exist (keeps type 'text' after commit)
   if (!textLayer) {
     console.log('SKIP: Text did not render (font missing in headless)');
     return;
   }
-  expect(textLayer.type).toBe('raster');
+  expect(textLayer.type).toBe('text');
   expect(afterCommit.length).toBe(layerCountBefore + 1);
 
   await page.screenshot({ path: 'e2e/screenshots/text-undo-01-committed.png' });
+
+  // Click on canvas to ensure focus is on the app (not a layer name input)
+  await page.locator('[data-testid="canvas-container"]').click();
+  await page.waitForTimeout(100);
 
   // Undo twice: once for "Text" commit, once for "Add Text Layer"
   await undo(page);
@@ -205,6 +209,10 @@ test('undo + redo after text commit preserves text correctly', async ({ page }) 
   }
   console.log('After commit:', JSON.stringify(textLayer));
 
+  // Click on canvas to ensure focus is on the app (not a layer name input)
+  await page.locator('[data-testid="canvas-container"]').click();
+  await page.waitForTimeout(100);
+
   // Undo
   await undo(page);
   await page.waitForTimeout(300);
@@ -218,8 +226,8 @@ test('undo + redo after text commit preserves text correctly', async ({ page }) 
 
   await page.screenshot({ path: 'e2e/screenshots/text-undo-04-after-redo.png' });
 
-  // The text layer should be back as a raster layer
+  // The text layer should be back (keeps type 'text' after commit)
   const redoTextLayer = afterRedo.find(l => l.name.startsWith('Text'));
   expect(redoTextLayer).toBeTruthy();
-  expect(redoTextLayer!.type).toBe('raster');
+  expect(redoTextLayer!.type).toBe('text');
 });

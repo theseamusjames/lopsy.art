@@ -138,8 +138,8 @@ test.describe('Text selection + merge', () => {
           document: { layers: Array<{ id: string; type: string; name: string }> };
         };
       };
-      // Text layers are rasterized on commit — find by name
-      return store.getState().document.layers.find((l) => l.type === 'raster' && l.name.startsWith('Text'))?.id ?? '';
+      // Committed text layers keep type 'text' — find by name
+      return store.getState().document.layers.find((l) => l.type === 'text' && l.name.startsWith('Text'))?.id ?? '';
     });
     await page.locator(`[data-layer-id="${textId}"]`).click();
     await page.waitForTimeout(100);
