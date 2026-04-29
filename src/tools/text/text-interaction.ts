@@ -80,11 +80,25 @@ export function commitTextEditing(): void {
     visible: true,
   });
 
+  // Convert to raster BEFORE uploading pixels so cropLayerToContent (called
+  // inside updateLayerPixelData) sees type:'raster' and trims transparent padding.
+  useEditorStore.setState((s) => ({
+    document: {
+      ...s.document,
+      layers: s.document.layers.map((l) =>
+        l.id === editing.layerId
+          ? ({ ...l, type: 'raster', width: layout.width, height: layout.height } as unknown as import('../../types').Layer)
+          : l,
+      ),
+    },
+  }));
+
   const textCtx = textCanvas.getContext('2d');
   if (textCtx) {
     const imageData = textCtx.getImageData(0, 0, layout.width, layout.height);
     editorState.updateLayerPixelData(editing.layerId, imageData);
   }
+
   editorState.notifyRender();
 }
 
