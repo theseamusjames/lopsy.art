@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useToolSettingsStore } from './tool-settings-store';
 
 describe('setShapeMode — issue #236 (invalid modes render incorrectly)', () => {
@@ -30,5 +30,75 @@ describe('setShapeMode — issue #236 (invalid modes render incorrectly)', () =>
     setter('arrow');
     setter('star');
     expect(useToolSettingsStore.getState().shapeMode).toBe('polygon');
+  });
+});
+
+describe('opacity setters — issue #250 (percent vs normalised footgun)', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    // The warn-once dedupe lives in module state, so re-import a fresh copy
+    // for each test to make the warning behaviour deterministic.
+    vi.resetModules();
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it('clamps brush opacity to the documented 1–100 percent range', async () => {
+    const { useToolSettingsStore: store } = await import('./tool-settings-store');
+    store.getState().setBrushOpacity(50);
+    expect(store.getState().brushOpacity).toBe(50);
+    store.getState().setBrushOpacity(200);
+    expect(store.getState().brushOpacity).toBe(100);
+    store.getState().setBrushOpacity(-5);
+    expect(store.getState().brushOpacity).toBe(1);
+  });
+
+  it('warns when setBrushOpacity receives a fractional value (likely 0–1 normalised)', async () => {
+    const { useToolSettingsStore: store } = await import('./tool-settings-store');
+    store.getState().setBrushOpacity(0.5);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const message = String(warnSpy.mock.calls[0]?.[0] ?? '');
+    expect(message).toContain('setBrushOpacity');
+    expect(message).toContain('percent');
+    expect(message).toContain('50');
+    // The value still gets clamped into the percent range (no silent
+    // 1%-stroke), so callers don't get the original footgun.
+    expect(store.getState().brushOpacity).toBe(1);
+  });
+
+  it('does not warn for the integer sentinel 0', async () => {
+    const { useToolSettingsStore: store } = await import('./tool-settings-store');
+    store.getState().setBrushOpacity(0);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not warn for legitimate percent values, including 1', async () => {
+    const { useToolSettingsStore: store } = await import('./tool-settings-store');
+    store.getState().setBrushOpacity(1);
+    store.getState().setBrushOpacity(50);
+    store.getState().setBrushOpacity(100);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('warns at most once per setter even with repeated bad calls', async () => {
+    const { useToolSettingsStore: store } = await import('./tool-settings-store');
+    store.getState().setBrushOpacity(0.5);
+    store.getState().setBrushOpacity(0.2);
+    store.getState().setBrushOpacity(0.99);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('also warns from setEraserOpacity and setSprayOpacity (same footgun)', async () => {
+    const { useToolSettingsStore: store } = await import('./tool-settings-store');
+    store.getState().setEraserOpacity(0.5);
+    store.getState().setSprayOpacity(0.3);
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    const messages = warnSpy.mock.calls.map((c: unknown[]) => String(c[0] ?? ''));
+    expect(messages.some((m: string) => m.includes('setEraserOpacity'))).toBe(true);
+    expect(messages.some((m: string) => m.includes('setSprayOpacity'))).toBe(true);
   });
 });

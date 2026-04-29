@@ -8,6 +8,22 @@ import { colorEquals } from '../utils/color';
 
 const MAX_RECENT_COLORS = 20;
 
+// Opacity setters in this store take **percent** (1–100), not normalised
+// 0–1. Callers reaching for normalised opacity (which is what colours and
+// layer alpha use elsewhere) will silently end up with ~1% strokes. Warn
+// once per setter when the input looks normalised — fractional and not
+// the legitimate sentinel 0.
+const warnedNormalisedOpacity = new Set<string>();
+function warnIfNormalisedOpacity(setter: string, value: number): void {
+  if (value > 0 && value < 1 && !warnedNormalisedOpacity.has(setter)) {
+    warnedNormalisedOpacity.add(setter);
+    console.warn(
+      `[tool-settings] ${setter}(${value}) looks like a normalised 0–1 opacity. ` +
+      `This setter expects percent (1–100). Did you mean ${Math.round(value * 100)}?`,
+    );
+  }
+}
+
 let nextId = 1;
 function uid(): string {
   return `brush-${nextId++}`;
@@ -345,6 +361,7 @@ interface ToolSettings {
 
   setSpraySize: (size: number) => void;
   setSprayDensity: (density: number) => void;
+  /** Spray opacity in **percent**, range `1–100` (not normalised `0–1`). */
   setSprayOpacity: (opacity: number) => void;
   setSprayHardness: (hardness: number) => void;
   setBrushSize: (size: number) => void;
@@ -370,10 +387,12 @@ interface ToolSettings {
   setTextFontWeight: (weight: number) => void;
   setTextFontStyle: (style: FontStyle) => void;
   setTextAlign: (align: TextAlign) => void;
+  /** Brush opacity in **percent**, range `1–100` (not normalised `0–1`). */
   setBrushOpacity: (opacity: number) => void;
   setBrushHardness: (hardness: number) => void;
   setPencilSize: (size: number) => void;
   setEraserSize: (size: number) => void;
+  /** Eraser opacity in **percent**, range `1–100` (not normalised `0–1`). */
   setEraserOpacity: (opacity: number) => void;
   setFillTolerance: (tolerance: number) => void;
   setFillContiguous: (contiguous: boolean) => void;
@@ -468,7 +487,10 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
 
   setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(500, size)) }),
   setSprayDensity: (density) => set({ sprayDensity: Math.max(1, Math.min(100, density)) }),
-  setSprayOpacity: (opacity) => set({ sprayOpacity: Math.max(1, Math.min(100, opacity)) }),
+  setSprayOpacity: (opacity) => {
+    warnIfNormalisedOpacity('setSprayOpacity', opacity);
+    set({ sprayOpacity: Math.max(1, Math.min(100, opacity)) });
+  },
   setSprayHardness: (hardness) => set({ sprayHardness: Math.max(0, Math.min(100, hardness)) }),
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(2000, size)) }),
   setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(2000, fade)) }),
@@ -476,11 +498,17 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setBrushScatter: (scatter) => set({ brushScatter: Math.max(0, Math.min(100, scatter)) }),
   setBrushAngle: (angle) => set({ brushAngle: ((angle % 360) + 360) % 360 }),
   setActiveBrushTip: (tip) => set({ activeBrushTip: tip }),
-  setBrushOpacity: (opacity) => set({ brushOpacity: Math.max(1, Math.min(100, opacity)) }),
+  setBrushOpacity: (opacity) => {
+    warnIfNormalisedOpacity('setBrushOpacity', opacity);
+    set({ brushOpacity: Math.max(1, Math.min(100, opacity)) });
+  },
   setBrushHardness: (hardness) => set({ brushHardness: Math.max(0, Math.min(100, hardness)) }),
   setPencilSize: (size) => set({ pencilSize: Math.max(1, Math.min(100, size)) }),
   setEraserSize: (size) => set({ eraserSize: Math.max(1, Math.min(200, size)) }),
-  setEraserOpacity: (opacity) => set({ eraserOpacity: Math.max(1, Math.min(100, opacity)) }),
+  setEraserOpacity: (opacity) => {
+    warnIfNormalisedOpacity('setEraserOpacity', opacity);
+    set({ eraserOpacity: Math.max(1, Math.min(100, opacity)) });
+  },
   setFillTolerance: (tolerance) => set({ fillTolerance: Math.max(0, Math.min(255, tolerance)) }),
   setFillContiguous: (contiguous) => set({ fillContiguous: contiguous }),
   setShapeMode: (mode) => {
