@@ -475,6 +475,52 @@ than the document. For a 501×501 doc in a 932×628 viewport,
 `viewport.zoom = 1, panX = 0, panY = 0`. The doc is centred inside the
 canvas container (not the overlay).
 
+### 13. Text layers stay as `type: 'text'` after commit — never `'raster'`
+
+Since PR #228, committing a text layer keeps it as `type: 'text'` with
+GPU pixel data rather than converting it to `type: 'raster'`. Any test
+that asserts `layer.type === 'raster'` for a committed text layer is
+wrong and will silently fail early, causing all the pixel-level
+assertions below it to be skipped entirely.
+
+**Always assert `layer.type === 'text'` for committed text layers.**
+
+If an assertion like `type === 'raster'` causes the test to bail before
+reaching its pixel checks, every subsequent rotation, move, or transform
+operation on that layer goes completely untested — which is how a GPU
+UV-mismatch bug in `composite_float` shipped undetected.
+
+### 14. Float/transform operations need GPU pixel-count sanity checks
+
+Operations that go through `composite_float` — move with selection,
+rotate, scale, skew, perspective — lift pixels into a floating GPU
+texture and re-composite them back into the layer texture. JS-store
+assertions (`layer.x`, `layer.fontSize`, `transform.originalBounds`)
+cannot detect corruption inside the GPU texture.
+
+**Always read `__readLayerPixels(layerId)` before and after a float
+operation and assert that the opaque pixel count is approximately
+preserved:**
+
+```ts
+const before = await readLayerPixels(page, layerId);
+const beforeCount = before.pixels.filter((v, i) => i % 4 === 3 && v > 10).length;
+
+// ... perform rotation / move / scale ...
+
+const after = await readLayerPixels(page, layerId);
+const afterCount = after.pixels.filter((v, i) => i % 4 === 3 && v > 10).length;
+
+// A 50%+ drop means pixels were lost; a 10× increase means stale
+// compositor content leaked into the layer texture.
+expect(afterCount).toBeGreaterThan(beforeCount * 0.5);
+expect(afterCount).toBeLessThan(beforeCount * 3);
+```
+
+The tolerance is deliberately loose (0.5–3×) to survive antialiasing
+differences and bounding-box expansion on rotation, but it catches the
+class of bug where the entire texture fills with garbage.
+
 ---
 
 ## Choosing what to assert
