@@ -94,16 +94,15 @@ export function FilterDialog({ title, params, onApply, onCancel, onPreviewChange
   const { offset, dragProps } = useDraggablePanel();
 
   return (
-    <div className={styles.overlay} role="presentation">
+    <div className={`${styles.overlay} ${preview ? styles.overlayTransparent : ''}`} role="presentation">
       <div
         className={styles.modal}
         role="dialog"
         aria-label={title}
         onKeyDown={handleKeyDown}
         style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
-        {...dragProps}
       >
-        <div className={styles.header}>
+        <div className={styles.header} {...dragProps}>
           <h2>{title}</h2>
         </div>
         <div className={styles.body}>

@@ -88,16 +88,15 @@ export function PatternFillDialog({ onApply, onCancel, onPreviewChange, onPrevie
   const selectedPattern: PatternDefinition | undefined = patterns.find((p) => p.id === selectedId);
 
   return (
-    <div className={styles.overlay} role="presentation">
+    <div className={`${styles.overlay} ${preview ? styles.overlayTransparent : ''}`} role="presentation">
       <div
         className={styles.modal}
         role="dialog"
         aria-label="Pattern Fill"
         onKeyDown={handleKeyDown}
         style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
-        {...dragProps}
       >
-        <div className={styles.header}>
+        <div className={styles.header} {...dragProps}>
           <h2>Pattern Fill</h2>
         </div>
         <div className={styles.body}>

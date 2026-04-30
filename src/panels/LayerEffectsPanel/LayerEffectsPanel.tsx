@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { IconButton } from '../../components/IconButton/IconButton';
+import type { DragProps } from '../../app/hooks/useDraggablePanel';
 import type { BlendMode, LayerEffects } from '../../types';
 import { BLEND_MODE_TO_DISPLAY } from '../../types/blend-mode-tables';
 import { DropShadowForm } from './DropShadowForm';
@@ -33,7 +34,11 @@ const EFFECT_LIST: { key: EffectKey; label: string }[] = [
   { key: 'colorOverlay', label: 'Color Overlay' },
 ];
 
-export function LayerEffectsPanel() {
+interface LayerEffectsPanelProps {
+  dragProps?: DragProps;
+}
+
+export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
   const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
   const layers = useEditorStore((s) => s.document.layers);
   const updateLayerEffects = useEditorStore((s) => s.updateLayerEffects);
@@ -90,7 +95,7 @@ export function LayerEffectsPanel() {
   if (!activeLayer) {
     return (
       <div className={styles.drawer}>
-        <div className={styles.drawerHeader}>
+        <div className={styles.drawerHeader} {...dragProps}>
           <span className={styles.drawerTitle}>Layer Effects</span>
           <IconButton
             icon={<X size={14} />}
