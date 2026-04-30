@@ -128,7 +128,7 @@ test('text does not shrink after: add → change size while editing → commit �
     };
     return s.getState().document.layers;
   });
-  const textLayer = layers.find((l) => l.type === 'text' && l.name.startsWith('Text'));
+  const textLayer = layers.find((l) => l.name.startsWith('Text'));
   console.log('Text layer after commit:', JSON.stringify(textLayer));
 
   if (!textLayer) {

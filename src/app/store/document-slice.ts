@@ -29,7 +29,6 @@ import { computeCropCanvas } from './actions/crop-canvas';
 import { computeResizeCanvas } from './actions/resize-canvas';
 import { computeResizeImage } from './actions/resize-image';
 import { computeAlignLayer } from './actions/align-layer';
-import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
 import { computeAddLayerMask } from './actions/add-layer-mask';
 import { computeRemoveLayerMask } from './actions/remove-layer-mask';
 import {

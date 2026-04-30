@@ -30,7 +30,7 @@ export function computeMergeDown(
         updateLayer(engine, JSON.stringify({
           id: topLayer.id,
           name: topLayer.name,
-          layer_type: topLayer.type === 'text' ? 'Text' : topLayer.type === 'group' ? 'Group' : 'Raster',
+          layer_type: topLayer.type === 'group' ? 'Group' : 'Raster',
           visible: topLayer.visible,
           locked: topLayer.locked,
           opacity: topLayer.opacity,
@@ -53,7 +53,7 @@ export function computeMergeDown(
         updateLayer(engine, JSON.stringify({
           id: bottomLayer.id,
           name: bottomLayer.name,
-          layer_type: bottomLayer.type === 'text' ? 'Text' : bottomLayer.type === 'group' ? 'Group' : 'Raster',
+          layer_type: bottomLayer.type === 'group' ? 'Group' : 'Raster',
           visible: bottomLayer.visible,
           locked: bottomLayer.locked,
           opacity: bottomLayer.opacity,
