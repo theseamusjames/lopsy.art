@@ -281,6 +281,7 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - **Desaturate**: no parameters (Rec. 709 luminance)
 - **Posterize**: levels (min 2)
 - **Threshold**: level 0 - 255
+- **Channel Mixer**: 3×3 matrix (Red/Green/Blue → Red/Green/Blue, each -200 to +200%) plus per-channel constant offset (-100 to +100%). Remixes RGB channels for creative color grading, custom B&W conversions, channel swaps, and cross-processing effects. GPU-accelerated with live preview.
 
 ### Noise
 - **Add Noise**: amount 0 - 255, monochrome on/off

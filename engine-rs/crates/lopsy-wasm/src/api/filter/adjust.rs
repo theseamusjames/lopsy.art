@@ -1,5 +1,5 @@
 //! Color / tone adjustment filters: brightness/contrast, hue/sat, invert,
-//! desaturate, posterize, threshold, solarize.
+//! desaturate, posterize, threshold, solarize, channel mixer.
 
 use wasm_bindgen::prelude::*;
 
@@ -132,6 +132,35 @@ pub fn filter_solarize(engine: &mut Engine, layer_id: &str, threshold: u32) {
             if let Some(loc) = shader.location(gl, "u_threshold") {
                 gl.uniform1f(Some(&loc), threshold as f32 / 255.0);
             }
+        },
+    );
+}
+
+#[wasm_bindgen(js_name = "filterChannelMixer")]
+pub fn filter_channel_mixer(
+    engine: &mut Engine, layer_id: &str,
+    rr: f32, rg: f32, rb: f32,
+    gr: f32, gg: f32, gb: f32,
+    br: f32, bg: f32, bb: f32,
+    cr: f32, cg: f32, cb: f32,
+) {
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.channel_mixer,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_rr") { gl.uniform1f(Some(&loc), rr / 100.0); }
+            if let Some(loc) = shader.location(gl, "u_rg") { gl.uniform1f(Some(&loc), rg / 100.0); }
+            if let Some(loc) = shader.location(gl, "u_rb") { gl.uniform1f(Some(&loc), rb / 100.0); }
+            if let Some(loc) = shader.location(gl, "u_gr") { gl.uniform1f(Some(&loc), gr / 100.0); }
+            if let Some(loc) = shader.location(gl, "u_gg") { gl.uniform1f(Some(&loc), gg / 100.0); }
+            if let Some(loc) = shader.location(gl, "u_gb") { gl.uniform1f(Some(&loc), gb / 100.0); }
+            if let Some(loc) = shader.location(gl, "u_br") { gl.uniform1f(Some(&loc), br / 100.0); }
+            if let Some(loc) = shader.location(gl, "u_bg") { gl.uniform1f(Some(&loc), bg / 100.0); }
+            if let Some(loc) = shader.location(gl, "u_bb") { gl.uniform1f(Some(&loc), bb / 100.0); }
+            if let Some(loc) = shader.location(gl, "u_cr") { gl.uniform1f(Some(&loc), cr / 100.0); }
+            if let Some(loc) = shader.location(gl, "u_cg") { gl.uniform1f(Some(&loc), cg / 100.0); }
+            if let Some(loc) = shader.location(gl, "u_cb") { gl.uniform1f(Some(&loc), cb / 100.0); }
         },
     );
 }

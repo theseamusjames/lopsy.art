@@ -32,6 +32,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { separator: true, label: '' },
       { label: 'Brightness/Contrast...', action: () => showFilterDialog('brightness-contrast') },
       { label: 'Hue/Saturation...', action: () => showFilterDialog('hue-saturation') },
+      { label: 'Channel Mixer...', action: () => showFilterDialog('channel-mixer') },
       { separator: true, label: '' },
       { label: 'Invert', action: () => applyInvert() },
       { label: 'Desaturate', action: () => applyDesaturate() },

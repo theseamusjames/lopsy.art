@@ -64,6 +64,7 @@ pub const PATTERN_FILL_FRAG: &str = include_str!("shaders/filters/pattern_fill.g
 pub const MESH_WARP_FRAG: &str = include_str!("shaders/filters/mesh_warp.glsl");
 pub const BLOOM_THRESHOLD_FRAG: &str = include_str!("shaders/filters/bloom_threshold.glsl");
 pub const BLOOM_COMBINE_FRAG: &str = include_str!("shaders/filters/bloom_combine.glsl");
+pub const CHANNEL_MIXER_FRAG: &str = include_str!("shaders/filters/channel_mixer.glsl");
 pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
 
 // Brush
@@ -224,6 +225,7 @@ pub struct ShaderPrograms {
     pub mesh_warp: ShaderProgram,
     pub bloom_threshold: ShaderProgram,
     pub bloom_combine: ShaderProgram,
+    pub channel_mixer: ShaderProgram,
     pub selection_mask_blend: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab: ShaderProgram,
@@ -305,6 +307,7 @@ impl ShaderPrograms {
             mesh_warp: compile_program(gl, v, MESH_WARP_FRAG)?,
             bloom_threshold: compile_program(gl, v, BLOOM_THRESHOLD_FRAG)?,
             bloom_combine: compile_program(gl, v, BLOOM_COMBINE_FRAG)?,
+            channel_mixer: compile_program(gl, v, CHANNEL_MIXER_FRAG)?,
             selection_mask_blend: compile_program(gl, v, SELECTION_MASK_BLEND_FRAG)?,
             // Brush — use standard fullscreen quad vert; dab positioning via fragment shader
             brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,
