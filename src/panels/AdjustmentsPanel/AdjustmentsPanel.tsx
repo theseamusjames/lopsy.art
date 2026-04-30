@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Eye, EyeOff, X } from 'lucide-react';
 import { Slider } from '../../components/Slider/Slider';
 import { IconButton } from '../../components/IconButton/IconButton';
+import type { DragProps } from '../../app/hooks/useDraggablePanel';
 import { CurveEditor } from '../../components/CurveEditor/CurveEditor';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
@@ -81,9 +82,10 @@ function useActiveGroup(): GroupLayer | null {
 
 interface AdjustmentsPanelProps {
   showHeader?: boolean;
+  dragProps?: DragProps;
 }
 
-export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
+export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProps = {}) {
   const group = useActiveGroup();
   const setGroupAdjustments = useEditorStore((s) => s.setGroupAdjustments);
   const setGroupAdjustmentsEnabled = useEditorStore((s) => s.setGroupAdjustmentsEnabled);
@@ -130,7 +132,7 @@ export function AdjustmentsPanel({ showHeader }: AdjustmentsPanelProps = {}) {
   return (
     <div className={styles.panel}>
       {showHeader && (
-        <div className={styles.header}>
+        <div className={styles.header} {...dragProps}>
           <span className={styles.headerTitle}>{group.name}</span>
           <IconButton
             icon={<X size={14} />}

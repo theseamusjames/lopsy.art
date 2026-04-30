@@ -2,6 +2,12 @@ import { useCallback, useRef, useState } from 'react';
 
 const INTERACTIVE_SELECTORS = 'input, button, select, textarea, [role="slider"], [role="option"], label';
 
+export type DragProps = {
+  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onPointerUp: () => void;
+};
+
 export function useDraggablePanel() {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const dragState = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);

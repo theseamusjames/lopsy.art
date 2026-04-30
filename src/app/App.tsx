@@ -229,11 +229,10 @@ export function App() {
               ref={effectsDrawerRef}
               data-testid="effects-drawer"
               style={{ transform: `translate(${drawerOffset.x}px, ${drawerOffset.y}px)` }}
-              {...drawerDragProps}
             >
               {activeLayerId && layers.find((l) => l.id === activeLayerId)?.type === 'group'
-                ? <AdjustmentsPanel showHeader />
-                : <LayerEffectsPanel />
+                ? <AdjustmentsPanel showHeader dragProps={drawerDragProps} />
+                : <LayerEffectsPanel dragProps={drawerDragProps} />
               }
             </div>
           )}

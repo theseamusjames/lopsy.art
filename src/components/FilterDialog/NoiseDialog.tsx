@@ -45,9 +45,8 @@ export function NoiseDialog({ title, onApply, onCancel }: NoiseDialogProps) {
         aria-label={title}
         onKeyDown={handleKeyDown}
         style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
-        {...dragProps}
       >
-        <div className={styles.header}>
+        <div className={styles.header} {...dragProps}>
           <h2>{title}</h2>
         </div>
         <div className={styles.body}>
@@ -131,9 +130,8 @@ export function FillNoiseDialog({ title, onApply, onCancel }: FillNoiseDialogPro
         aria-label={title}
         onKeyDown={handleKeyDown}
         style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
-        {...dragProps}
       >
-        <div className={styles.header}>
+        <div className={styles.header} {...dragProps}>
           <h2>{title}</h2>
         </div>
         <div className={styles.body}>
