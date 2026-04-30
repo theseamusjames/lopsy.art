@@ -346,7 +346,15 @@ export async function setBrushModalOption(page: Page, label: string, value: numb
 export async function setBlendMode(page: Page, mode: string): Promise<void> {
   const select = page.locator('[aria-labelledby="blend-mode-label"]');
   if (!(await select.isVisible())) {
-    await page.locator('button[aria-label*="effects"]').first().click();
+    const activeLayerId = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { activeLayerId: string } };
+      };
+      return store.getState().document.activeLayerId;
+    });
+    const layerRow = page.locator(`[data-layer-id="${activeLayerId}"]`);
+    await layerRow.scrollIntoViewIfNeeded();
+    await layerRow.locator('button[aria-label*="effects"]').click();
     await page.waitForTimeout(100);
   }
   await select.selectOption(mode);
@@ -393,11 +401,31 @@ export async function applyFilter(
 }
 
 export async function setAdjustment(page: Page, label: string, value: number): Promise<void> {
+  const valuesSliders = ['Exposure', 'Contrast', 'Highlights', 'Shadows', 'Whites', 'Blacks', 'Vignette'];
+  const tab = valuesSliders.includes(label) ? 'Values' : 'Colors';
+
   const input = page.locator(`[aria-label="${label} value"]`);
-  if (!(await input.isVisible())) {
-    const valuesSliders = ['Exposure', 'Contrast', 'Highlights', 'Shadows', 'Whites', 'Blacks', 'Vignette'];
-    const tab = valuesSliders.includes(label) ? 'Values' : 'Colors';
-    await page.locator(`role=tab[name="${tab}"]`).click();
+  if (!(await input.isVisible({ timeout: 500 }).catch(() => false))) {
+    // Check if the correct tab just needs to be selected
+    const tabLocator = page.locator(`role=tab[name="${tab}"]`);
+    if (await tabLocator.isVisible({ timeout: 500 }).catch(() => false)) {
+      await tabLocator.click();
+      await page.waitForTimeout(100);
+    } else {
+      // Open the adjustments panel via the root group's effects button
+      const rootGroupId = await page.evaluate(() => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { document: { rootGroupId: string } };
+        };
+        return store.getState().document.rootGroupId;
+      });
+      await page.locator(`[data-layer-id="${rootGroupId}"] button[aria-label*="effects"]`).click();
+      await page.waitForTimeout(200);
+      const tabAfter = page.locator(`role=tab[name="${tab}"]`);
+      if (await tabAfter.isVisible({ timeout: 500 }).catch(() => false)) {
+        await tabAfter.click();
+      }
+    }
   }
   await input.fill(String(value));
   await input.press('Enter');
