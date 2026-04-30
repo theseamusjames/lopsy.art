@@ -136,12 +136,8 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
       blendMode: BLEND_MODE_TO_U8[layer.blendMode] ?? 0,
       x: layer.x,
       y: layer.y,
-      width: (layer.type === 'raster' || layer.type === 'shape')
-        ? (layer as RasterLayer).width
-        : (layer.type === 'text') ? doc.width : 0,
-      height: (layer.type === 'raster' || layer.type === 'shape')
-        ? (layer as RasterLayer).height
-        : (layer.type === 'text') ? doc.height : 0,
+      width: (layer.type === 'raster' || layer.type === 'shape') ? (layer as RasterLayer).width : 0,
+      height: (layer.type === 'raster' || layer.type === 'shape') ? (layer as RasterLayer).height : 0,
       clipToBelow: layer.clipToBelow,
       groupKind,
       effectsJson: hasEnabledEffects(layer.effects)
