@@ -8,6 +8,15 @@
   z-index: var(--z-modal);
 }
 
+.overlayTransparent {
+  background: transparent;
+  pointer-events: none;
+}
+
+.overlayTransparent .modal {
+  pointer-events: auto;
+}
+
 .modal {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
@@ -23,6 +32,7 @@
 .header {
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border);
+  cursor: grab;
 }
 
 .header h2 {
