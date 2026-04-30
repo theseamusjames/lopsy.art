@@ -17,12 +17,13 @@ const panels: PanelDef[] = [
   { id: 'layers', icon: <Layers size={ICON_SIZE} />, label: 'Layers' },
   { id: 'history', icon: <History size={ICON_SIZE} />, label: 'History' },
   { id: 'paths', icon: <Spline size={ICON_SIZE} />, label: 'Paths' },
-  { id: 'reference', icon: <ImagePlus size={ICON_SIZE} />, label: 'Reference' },
 ];
 
 export function PanelToolbar() {
   const visiblePanels = useUIStore((s) => s.visiblePanels);
   const togglePanel = useUIStore((s) => s.togglePanel);
+  const showReferenceModal = useUIStore((s) => s.showReferenceModal);
+  const setShowReferenceModal = useUIStore((s) => s.setShowReferenceModal);
 
   return (
     <div className={styles.toolbar} role="toolbar" aria-label="Panel visibility">
@@ -35,6 +36,12 @@ export function PanelToolbar() {
           onClick={() => togglePanel(panel.id)}
         />
       ))}
+      <IconButton
+        icon={<ImagePlus size={ICON_SIZE} />}
+        label="Reference"
+        isActive={showReferenceModal}
+        onClick={() => setShowReferenceModal(!showReferenceModal)}
+      />
     </div>
   );
 }

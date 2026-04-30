@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlipHorizontal2, FlipVertical2, ImagePlus, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { ImagePlus, Plus, X } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
-import { Slider } from '../../components/Slider/Slider';
-import { PanelContainer } from '../PanelContainer/PanelContainer';
-import { usePanelCollapse } from '../usePanelCollapse';
+import { useUIStore } from '../../app/ui-store';
 import styles from './ReferenceImagePanel.module.css';
 
 interface ReferenceImage {
@@ -52,7 +50,7 @@ function loadImage(file: File): Promise<ReferenceImage> {
 }
 
 export function ReferenceImagePanel() {
-  const [collapsed, setCollapsed] = usePanelCollapse('reference');
+  const setShowReferenceModal = useUIStore((s) => s.setShowReferenceModal);
   const [images, setImages] = useState<ReferenceImage[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [views, setViews] = useState<Map<string, ViewState>>(new Map());
@@ -117,23 +115,6 @@ export function ReferenceImagePanel() {
     }
   }, [activeImage, views, fitToContainer]);
 
-  const removeImage = useCallback((index: number) => {
-    setImages((prev) => {
-      const img = prev[index];
-      if (img) {
-        URL.revokeObjectURL(img.url);
-        setViews((v) => {
-          const next = new Map(v);
-          next.delete(img.id);
-          return next;
-        });
-      }
-      const next = prev.filter((_, i) => i !== index);
-      return next;
-    });
-    setActiveIndex((prev) => Math.min(prev, Math.max(0, images.length - 2)));
-  }, [images.length]);
-
   const handleFileInput = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -169,7 +150,7 @@ export function ReferenceImagePanel() {
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const factor = e.deltaY < 0 ? 1.07 : 1 / 1.07;
     const newZoom = Math.max(0.05, Math.min(20, activeView.zoom * factor));
 
     const dx = mouseX - activeView.panX;
@@ -185,6 +166,7 @@ export function ReferenceImagePanel() {
     const target = e.target as HTMLElement;
     if (target.closest('button, input, [role="slider"]')) return;
 
+    e.stopPropagation();
     dragRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -208,31 +190,68 @@ export function ReferenceImagePanel() {
     dragRef.current = null;
   }, []);
 
-  const handleReset = useCallback(() => {
-    if (activeImage) fitToContainer(activeImage);
-  }, [activeImage, fitToContainer]);
-
-  const zoomPercent = Math.round(activeView.zoom * 100);
-
   const scaleX = activeView.zoom * (activeView.flipH ? -1 : 1);
   const scaleY = activeView.zoom * (activeView.flipV ? -1 : 1);
   const offsetX = activeView.flipH && activeImage ? activeImage.width * activeView.zoom : 0;
   const offsetY = activeView.flipV && activeImage ? activeImage.height * activeView.zoom : 0;
   const imageTransform = `translate(${activeView.panX + offsetX}px, ${activeView.panY + offsetY}px) scale(${scaleX}, ${scaleY})`;
 
+  const stopPropagation = useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
+  }, []);
+
+  const resizeRef = useRef<{ startX: number; startY: number; origW: number; origH: number } | null>(null);
+
+  const handleResizeDown = useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const drawer = (e.currentTarget as HTMLElement).closest('[data-testid="reference-drawer"]') as HTMLElement | null;
+    if (!drawer) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    resizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origW: drawer.offsetWidth,
+      origH: drawer.offsetHeight,
+    };
+  }, []);
+
+  const handleResizeMove = useCallback((e: React.PointerEvent) => {
+    if (!resizeRef.current) return;
+    const drawer = (e.currentTarget as HTMLElement).closest('[data-testid="reference-drawer"]') as HTMLElement | null;
+    if (!drawer) return;
+    const dx = e.clientX - resizeRef.current.startX;
+    const dy = e.clientY - resizeRef.current.startY;
+    drawer.style.width = `${Math.max(200, resizeRef.current.origW + dx)}px`;
+    drawer.style.height = `${Math.max(200, resizeRef.current.origH + dy)}px`;
+  }, []);
+
+  const handleResizeUp = useCallback(() => {
+    resizeRef.current = null;
+  }, []);
+
   return (
-    <PanelContainer title="Reference" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
+    <div className={styles.drawer}>
+      <div className={styles.drawerHeader}>
+        <span className={styles.drawerTitle}>Reference</span>
+        <IconButton
+          icon={<X size={14} />}
+          label="Close reference"
+          onClick={() => setShowReferenceModal(false)}
+        />
+      </div>
+
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
         multiple
-        style={{ display: 'none' }}
+        className={styles.hiddenInput}
         onChange={handleFileChange}
         data-testid="reference-file-input"
       />
 
-      {collapsed ? null : images.length === 0 ? (
+      {images.length === 0 ? (
         <div
           className={`${styles.dropZone} ${isDragOver ? styles.dropZoneDragOver : ''}`}
           onClick={handleFileInput}
@@ -263,7 +282,6 @@ export function ReferenceImagePanel() {
                 alt={activeImage.name}
                 className={styles.previewImage}
                 style={{
-                  opacity: activeView.opacity / 100,
                   transform: imageTransform,
                   width: activeImage.width,
                   height: activeImage.height,
@@ -273,77 +291,39 @@ export function ReferenceImagePanel() {
             )}
           </div>
 
-          <div className={styles.controls}>
-            <div className={styles.controlRow}>
-              <span className={styles.controlLabel}>Opacity</span>
-              <Slider
-                value={activeView.opacity}
-                min={1}
-                max={100}
-                step={1}
-                label="Opacity"
-                defaultValue={100}
-                onChange={(v) => activeImage && updateView(activeImage.id, { opacity: v })}
-                suffix="%"
+          <div
+            className={styles.thumbnailStrip}
+            onPointerDown={stopPropagation}
+            data-testid="reference-thumbnails"
+          >
+            {images.map((img, i) => (
+              <img
+                key={img.id}
+                src={img.url}
+                alt={img.name}
+                className={`${styles.thumbnail} ${i === activeIndex ? styles.thumbnailActive : ''}`}
+                onClick={() => setActiveIndex(i)}
+                draggable={false}
               />
-            </div>
-
-            <div className={styles.buttonRow}>
-              <div className={styles.buttonGroup}>
-                <IconButton
-                  icon={<FlipHorizontal2 size={14} />}
-                  label="Flip horizontal"
-                  isActive={activeView.flipH}
-                  onClick={() => activeImage && updateView(activeImage.id, { flipH: !activeView.flipH })}
-                />
-                <IconButton
-                  icon={<FlipVertical2 size={14} />}
-                  label="Flip vertical"
-                  isActive={activeView.flipV}
-                  onClick={() => activeImage && updateView(activeImage.id, { flipV: !activeView.flipV })}
-                />
-                <IconButton
-                  icon={<RotateCcw size={14} />}
-                  label="Reset view"
-                  onClick={handleReset}
-                />
-              </div>
-              <div className={styles.buttonGroup}>
-                <span className={styles.zoomLabel}>{zoomPercent}%</span>
-                <IconButton
-                  icon={<Trash2 size={14} />}
-                  label="Remove image"
-                  onClick={() => removeImage(activeIndex)}
-                />
-              </div>
-            </div>
+            ))}
+            <button
+              className={styles.addButton}
+              onClick={handleFileInput}
+              type="button"
+              aria-label="Add reference image"
+              data-testid="reference-add-button"
+            >
+              <Plus size={16} />
+            </button>
           </div>
-
-          {(images.length > 1 || images.length === 1) && (
-            <div className={styles.thumbnailStrip} data-testid="reference-thumbnails">
-              {images.map((img, i) => (
-                <img
-                  key={img.id}
-                  src={img.url}
-                  alt={img.name}
-                  className={`${styles.thumbnail} ${i === activeIndex ? styles.thumbnailActive : ''}`}
-                  onClick={() => setActiveIndex(i)}
-                  draggable={false}
-                />
-              ))}
-              <button
-                className={styles.addButton}
-                onClick={handleFileInput}
-                type="button"
-                aria-label="Add reference image"
-                data-testid="reference-add-button"
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-          )}
         </div>
       )}
-    </PanelContainer>
+      <div
+        className={styles.resizeHandle}
+        onPointerDown={handleResizeDown}
+        onPointerMove={handleResizeMove}
+        onPointerUp={handleResizeUp}
+      />
+    </div>
   );
 }

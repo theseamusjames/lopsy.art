@@ -82,6 +82,7 @@ export function App() {
   const documentReady = useEditorStore((s) => s.documentReady);
   const createDocument = useEditorStore((s) => s.createDocument);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
+  const showReferenceModal = useUIStore((s) => s.showReferenceModal);
   const loadingMessage = useUIStore((s) => s.modal?.kind === 'loading' ? s.modal.message : null);
 
   useEffect(() => {
@@ -104,6 +105,11 @@ export function App() {
   useEffect(() => {
     if (!showEffectsDrawer) resetDrawerOffset();
   }, [showEffectsDrawer, resetDrawerOffset]);
+
+  const { offset: refDrawerOffset, reset: resetRefDrawerOffset, dragProps: refDrawerDragProps } = useDraggablePanel();
+  useEffect(() => {
+    if (!showReferenceModal) resetRefDrawerOffset();
+  }, [showReferenceModal, resetRefDrawerOffset]);
 
   const [pointerMode, setPointerMode] = useState<PointerMode>(POINTER_IDLE);
 
@@ -238,6 +244,16 @@ export function App() {
               }
             </div>
           )}
+          {showReferenceModal && (
+            <div
+              className={styles.referenceDrawer}
+              data-testid="reference-drawer"
+              style={{ transform: `translate(${refDrawerOffset.x}px, ${refDrawerOffset.y}px)` }}
+              {...refDrawerDragProps}
+            >
+              <ReferenceImagePanel />
+            </div>
+          )}
           {visiblePanels.size > 0 && (
             <div className={styles.sidebar}>
               <div className={styles.sidebarScroll}>
@@ -245,7 +261,6 @@ export function App() {
                 {visiblePanels.has('color') && <ColorPanel />}
                 {visiblePanels.has('history') && <HistoryPanel />}
                 {visiblePanels.has('paths') && <PathsPanel />}
-                {visiblePanels.has('reference') && <ReferenceImagePanel />}
               </div>
               <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
                 {visiblePanels.has('layers') && <LayerPanel onSelectLayer={handleSelectLayer} />}
