@@ -7,7 +7,7 @@ import { useToolSettingsStore } from './app/tool-settings-store';
 import { usePatternStore } from './app/pattern-store';
 import { pixelDataManager } from './engine/pixel-data-manager';
 import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
-import { render as renderWasm, readLayerPixels, getLayerTextureDimensions } from './engine-wasm/wasm-bridge';
+import { render as renderWasm, readLayerPixels, getLayerTextureDimensions, initWasm } from './engine-wasm/wasm-bridge';
 import {
   syncDocumentSize,
   syncBackgroundColor,
@@ -129,6 +129,10 @@ window.addEventListener('keydown', (e) => {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js');
 }
+
+// Kick off WASM fetch + compilation immediately so it's ready by the time
+// the user creates their first document.
+initWasm().catch(() => {});
 
 const root = document.getElementById('root');
 if (!root) {
