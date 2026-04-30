@@ -342,6 +342,20 @@ Applied globally or per-group. All default to 0.
 
 ---
 
+## Reference Image Panel
+
+- Load reference images via file picker or drag-and-drop
+- **Multiple images**: thumbnail strip with add/remove, click to switch
+- **Zoom**: mouse wheel zoom with cursor-centered scaling (0.05x – 20x)
+- **Pan**: click and drag to reposition within the preview
+- **Opacity**: 1 – 100% slider to fade the reference image
+- **Flip horizontal / vertical**: mirror the reference for composition checks
+- **Reset view**: fit image to panel width
+- Collapse state persisted to localStorage
+- Images are pure client-side blob URLs — no upload, no backend
+
+---
+
 ## Paths Panel
 
 - Named stored paths

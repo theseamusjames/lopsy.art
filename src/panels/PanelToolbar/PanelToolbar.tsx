@@ -1,4 +1,4 @@
-import { Palette, Layers, History, Info, Spline } from 'lucide-react';
+import { Palette, Layers, History, Info, Spline, ImagePlus } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useUIStore } from '../../app/ui-store';
 import styles from './PanelToolbar.module.css';
@@ -17,6 +17,7 @@ const panels: PanelDef[] = [
   { id: 'layers', icon: <Layers size={ICON_SIZE} />, label: 'Layers' },
   { id: 'history', icon: <History size={ICON_SIZE} />, label: 'History' },
   { id: 'paths', icon: <Spline size={ICON_SIZE} />, label: 'Paths' },
+  { id: 'reference', icon: <ImagePlus size={ICON_SIZE} />, label: 'Reference' },
 ];
 
 export function PanelToolbar() {
