@@ -1,0 +1,163 @@
+.drawer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-secondary);
+  overflow: hidden;
+}
+
+.drawerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.drawerTitle {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.dropZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  margin: var(--space-2);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+  flex: 1;
+}
+
+.dropZone:hover,
+.dropZoneDragOver {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.dropZoneIcon {
+  color: var(--color-text-disabled);
+}
+
+.dropZoneText {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-disabled);
+  text-align: center;
+}
+
+.viewer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.previewContainer {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 120px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-canvas);
+  cursor: grab;
+  user-select: none;
+}
+
+.previewContainer:active {
+  cursor: grabbing;
+}
+
+.previewImage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  image-rendering: auto;
+  pointer-events: none;
+}
+
+.thumbnailStrip {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.thumbnail {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 2px solid transparent;
+  object-fit: cover;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+  background: var(--color-bg-canvas);
+}
+
+.thumbnail:hover {
+  border-color: var(--color-border-strong);
+}
+
+.thumbnailActive {
+  border-color: var(--color-accent);
+}
+
+.addButton {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--color-border);
+  background: none;
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.addButton:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.resizeHandle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  z-index: 1;
+}
+
+.resizeHandle::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--color-text-disabled);
+  border-bottom: 2px solid var(--color-text-disabled);
+}

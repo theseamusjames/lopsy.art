@@ -1,4 +1,4 @@
-import { Palette, Layers, History, Info, Spline } from 'lucide-react';
+import { Palette, Layers, History, Info, Spline, ImagePlus } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useUIStore } from '../../app/ui-store';
 import styles from './PanelToolbar.module.css';
@@ -22,6 +22,8 @@ const panels: PanelDef[] = [
 export function PanelToolbar() {
   const visiblePanels = useUIStore((s) => s.visiblePanels);
   const togglePanel = useUIStore((s) => s.togglePanel);
+  const showReferenceModal = useUIStore((s) => s.showReferenceModal);
+  const setShowReferenceModal = useUIStore((s) => s.setShowReferenceModal);
 
   return (
     <div className={styles.toolbar} role="toolbar" aria-label="Panel visibility">
@@ -34,6 +36,12 @@ export function PanelToolbar() {
           onClick={() => togglePanel(panel.id)}
         />
       ))}
+      <IconButton
+        icon={<ImagePlus size={ICON_SIZE} />}
+        label="Reference"
+        isActive={showReferenceModal}
+        onClick={() => setShowReferenceModal(!showReferenceModal)}
+      />
     </div>
   );
 }

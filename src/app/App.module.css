@@ -91,10 +91,10 @@
   display: flex;
 }
 
-.effectsDrawer {
+.effectsDrawer,
+.referenceDrawer {
   position: absolute;
   right: 100%;
-  width: 420px;
   z-index: 1;
   background: var(--color-bg-secondary);
   border-left: 1px solid var(--color-border);
@@ -105,6 +105,20 @@
   box-shadow: -4px 0 12px rgba(0, 0, 0, 0.2);
   user-select: none;
   touch-action: none;
+}
+
+.effectsDrawer {
+  width: 420px;
+}
+
+.referenceDrawer {
+  width: 300px;
+  height: 300px;
+  min-width: 200px;
+  min-height: 200px;
+  top: 0;
+  background: transparent;
+  border-radius: var(--radius-md);
 }
 
 .sidebar {

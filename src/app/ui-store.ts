@@ -101,6 +101,7 @@ interface UIState {
   /** Active modal, or null when nothing is open. Only one at a time. */
   modal: ModalState | null;
   showEffectsDrawer: boolean;
+  showReferenceModal: boolean;
   visiblePanels: Set<string>;
   cursorPosition: Point;
   gradientPreview: { start: Point; end: Point } | null;
@@ -117,6 +118,7 @@ interface UIState {
   /** Backward-compat setter — use openModal/closeModalOfKind for new code. */
   setShowBrushModal: (show: boolean) => void;
   setShowEffectsDrawer: (show: boolean) => void;
+  setShowReferenceModal: (show: boolean) => void;
   togglePanel: (panelId: string) => void;
   setGradientPreview: (preview: { start: Point; end: Point } | null) => void;
   setActiveTool: (tool: ToolId) => void;
@@ -200,6 +202,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   maskEditMode: false,
   modal: null,
   showEffectsDrawer: false,
+  showReferenceModal: false,
   visiblePanels: new Set(
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
       ? []
@@ -238,6 +241,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   setShowEffectsDrawer: (show) => set({ showEffectsDrawer: show }),
+  setShowReferenceModal: (show) => set({ showReferenceModal: show }),
   togglePanel: (panelId) =>
     set((state) => {
       const next = new Set(state.visiblePanels);

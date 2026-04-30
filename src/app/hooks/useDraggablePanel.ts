@@ -12,9 +12,11 @@ export function useDraggablePanel() {
     const target = e.target as HTMLElement;
     if (target.closest(INTERACTIVE_SELECTORS)) return;
 
+    const el = e.currentTarget;
+
     e.preventDefault();
     e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    el.setPointerCapture(e.pointerId);
     dragState.current = {
       startX: e.clientX,
       startY: e.clientY,

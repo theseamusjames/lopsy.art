@@ -90,4 +90,5 @@ export function useAppEffects({
     ro.observe(bottom);
     return () => ro.disconnect();
   }, [sidebarBottomRef, effectsDrawerRef, showEffectsDrawer]);
+
 }
