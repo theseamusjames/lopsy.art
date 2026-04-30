@@ -14,31 +14,38 @@
 - **Custom brush tips**: grayscale bitmap or procedural circle
 - **ABR import**: Adobe Brush file support
 - **Built-in presets**: Hard Round, Soft Round, Airbrush, Square, Cross Hatch, Diamond, Star, Slash, Chalk, Spray, Leaf
+- **Shift+click**: draws a straight line from the previous stroke endpoint to the click point
+- **Hold-to-smooth**: pause the cursor mid-stroke and the recorded freehand path is auto-smoothed and re-rasterized in place (undo restores the freehand version first, then the pre-stroke state)
 
 ### Pencil
 - **Size**: 1 - 100 px
 - **Symmetry**: horizontal, vertical, or both
 - Pixel-perfect Bresenham lines (no anti-aliasing)
+- **Shift+click**: draws a straight pixel-perfect line from the previous stroke endpoint
 
 ### Eraser
 - **Size**: 1 - 200 px
 - **Opacity**: 1 - 100%
 - **Hardness**: 0 - 100% (internal)
+- **Shift+click**: erases a straight line from the previous stroke endpoint
 
 ### Dodge / Burn
 - **Mode**: dodge or burn
 - **Exposure**: 1 - 100%
 - **Size**: 1 - 200 px
+- **Shift+click**: applies dodge/burn along a straight line from the previous stroke endpoint
 
 ### Clone Stamp
 - **Size**: 1 - 200 px
-- Alt/Cmd+click to set source point
+- **Alt/Cmd+click**: set the source sample point
+- **Shift+click**: stamps along a straight line from the previous stroke endpoint, preserving source offset
 
 ### Smudge
 - **Size**: 1 - 200 px
 - **Strength**: 0 - 100% (how far pixels are pulled along the stroke)
 - Shortcut: `R`
 - Pulls colors along the stroke direction, blending neighbouring pixels.
+- **Shift+click**: smudges along a straight line from the previous stroke endpoint
 
 ---
 
@@ -61,6 +68,7 @@
 - Close path, split segment, convert anchor
 - Stroke path to pixels
 - Convert path to selection
+- **Cmd/Meta+click an anchor**: toggles between corner (no handles) and smooth spline (double-click does the same)
 
 ### Text Tool
 - **Font size**: 1 - 500
@@ -128,6 +136,8 @@
 - Snap to grid
 - Snap to guides
 - **Align**: left, center-h, right, top, center-v, bottom
+- **Alt/Option+drag**: with no active selection, duplicates the active layer before moving; with an active marquee, leaves the original pixels behind and moves a floating copy
+- **Shift+drag (transform handles)**: constrains aspect ratio when scaling, and forces grid/guide snapping during the transform
 
 ### Eyedropper
 - **Sample size**: point, 3x3, 5x5
@@ -140,6 +150,7 @@
 - **Type**: linear, radial
 - **Stops**: multiple color stops with position (0-1)
 - **Reverse**: on/off
+- **Cmd/Meta+drag**: snaps the gradient angle to 15° increments while dragging
 
 ### Crop
 - Interactive drag to define crop rectangle
@@ -318,6 +329,8 @@ Applied globally or per-group. All default to 0.
 - **Zoom**: 0.01x - 64x
 - **Pan**: unlimited
 - **Fit to view**: auto-zoom with padding
+- **Space+drag** or **middle-click drag**: temporarily pan from any tool
+- **Cmd/Ctrl+scroll**: zoom centered on the cursor; plain scroll pans
 
 ### Grid
 - **Show grid**: on/off
@@ -339,19 +352,21 @@ Applied globally or per-group. All default to 0.
 - **Sidebar collapsed**: on/off
 - **Panel visibility**: togglable per panel (color, layers, etc.)
 - **Mask edit mode**: on/off
+- **Draggable modals & panels**: filter dialogs, pattern fill, layer effects, adjustments, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked)
+- **Filter / pattern preview overlay**: when live preview is enabled the dim backdrop is removed and pointer-events on the overlay are disabled so the canvas is fully visible while the modal stays interactive
 
 ---
 
-## Reference Image Panel
+## Reference Image Drawer
 
-- Load reference images via file picker or drag-and-drop
-- **Multiple images**: thumbnail strip with add/remove, click to switch
-- **Zoom**: mouse wheel zoom with cursor-centered scaling (0.05x – 20x)
-- **Pan**: click and drag to reposition within the preview
-- **Opacity**: 1 – 100% slider to fade the reference image
-- **Flip horizontal / vertical**: mirror the reference for composition checks
-- **Reset view**: fit image to panel width
-- Collapse state persisted to localStorage
+A floating, draggable, resizable modal (toggled from the toolbar) for keeping reference images alongside the canvas.
+
+- Load reference images via file picker or drag-and-drop onto the drawer
+- **Multiple images**: thumbnail strip with add/remove, click to switch between references
+- **Zoom**: mouse-wheel zoom with cursor-centered scaling (0.05x – 20x)
+- **Pan**: click and drag inside the preview to reposition
+- **Per-image view state**: zoom, pan, opacity, and horizontal/vertical flip are tracked independently for each loaded image
+- **Drag the header bar** to reposition the drawer; **bottom-right resize handle** to resize
 - Images are pure client-side blob URLs — no upload, no backend
 
 ---
