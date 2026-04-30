@@ -12,3 +12,5 @@ engine-rs/target/
 test-results/
 engine-rs/test-output/
 tests/screenshots/
+
+.claude/worktrees
