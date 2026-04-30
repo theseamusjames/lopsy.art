@@ -148,7 +148,7 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
 
   return (
     <div className={styles.drawer}>
-      <div className={styles.drawerHeader}>
+      <div className={styles.drawerHeader} {...dragProps}>
         <span className={styles.drawerTitle}>Layer Effects</span>
         <IconButton
           icon={<X size={14} />}

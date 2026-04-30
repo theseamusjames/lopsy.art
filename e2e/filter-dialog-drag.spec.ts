@@ -33,7 +33,7 @@ test.describe('Filter dialog drag', () => {
     expect(boxAfter!.y).toBeCloseTo(box!.y - 60, -1);
   });
 
-  test('dragging the filter dialog body moves it', async ({ page }) => {
+  test('dragging the filter dialog body does not move it', async ({ page }) => {
     await page.click('text=Filter');
     await page.waitForTimeout(200);
     await page.click('text=Halftone...');
@@ -54,8 +54,8 @@ test.describe('Filter dialog drag', () => {
 
     const boxAfter = await dialog.boundingBox();
     expect(boxAfter).not.toBeNull();
-    expect(boxAfter!.x).toBeCloseTo(box!.x - 80, -1);
-    expect(boxAfter!.y).toBeCloseTo(box!.y + 40, -1);
+    expect(boxAfter!.x).toBeCloseTo(box!.x, 0);
+    expect(boxAfter!.y).toBeCloseTo(box!.y, 0);
   });
 
   test('clicking Apply does not trigger a drag', async ({ page }) => {

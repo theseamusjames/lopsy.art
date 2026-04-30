@@ -32,7 +32,7 @@ test.describe('Effects drawer drag', () => {
     expect(boxAfter!.y).toBeCloseTo(box!.y + 50, -1);
   });
 
-  test('dragging on a non-header area (effect list) also moves the panel', async ({ page }) => {
+  test('dragging on a non-header area (effect list) does not move the panel', async ({ page }) => {
     await page.locator('button[title="Layer effects"]').first().click();
 
     const drawer = page.locator('[data-testid="effects-drawer"]');
@@ -51,8 +51,8 @@ test.describe('Effects drawer drag', () => {
 
     const boxAfter = await drawer.boundingBox();
     expect(boxAfter).not.toBeNull();
-    expect(boxAfter!.x).toBeCloseTo(box!.x + 80, -1);
-    expect(boxAfter!.y).toBeCloseTo(box!.y - 30, -1);
+    expect(boxAfter!.x).toBeCloseTo(box!.x, 0);
+    expect(boxAfter!.y).toBeCloseTo(box!.y, 0);
   });
 
   test('clicking a checkbox does not start a drag', async ({ page }) => {

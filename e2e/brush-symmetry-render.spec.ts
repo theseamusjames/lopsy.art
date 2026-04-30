@@ -19,6 +19,10 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
   });
 
   test('symmetry strokes are committed when switching layers', async ({ page }) => {
+    // Select brush tool first so symmetry buttons are visible in the options bar
+    await page.keyboard.press('b');
+    await page.waitForTimeout(100);
+
     // Enable both symmetry axes via toolbar buttons
     await page.locator('[aria-label="Symmetry Horizontal"]').click();
     await page.locator('[aria-label="Symmetry Vertical"]').click();
@@ -33,9 +37,6 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
       state.setBrushSize(20);
       state.setBrushOpacity(100);
     });
-
-    // Select brush tool
-    await page.keyboard.press('b');
     await page.waitForTimeout(100);
 
     // Draw a stroke in the top-left quadrant
@@ -106,6 +107,10 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
   });
 
   test('effects apply to brush strokes after layer switch', async ({ page }) => {
+    // Select brush tool first so symmetry buttons are visible in the options bar
+    await page.keyboard.press('b');
+    await page.waitForTimeout(100);
+
     // Enable symmetry via toolbar buttons
     await page.locator('[aria-label="Symmetry Horizontal"]').click();
     await page.locator('[aria-label="Symmetry Vertical"]').click();
@@ -120,8 +125,6 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
       state.setBrushSize(20);
       state.setBrushOpacity(100);
     });
-
-    await page.keyboard.press('b');
     await page.waitForTimeout(100);
 
     // Draw a stroke

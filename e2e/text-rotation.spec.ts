@@ -38,8 +38,8 @@ test('text layer rotation: content stays centered and does not scale', async ({ 
 
   await page.screenshot({ path: 'e2e/screenshots/text-rotation-01-typing.png' });
 
-  // --- Step 2: Switch to marquee tool (should commit the text) ---
-  await page.keyboard.press('m');
+  // --- Step 2: Commit text via Shift+Enter (letter keys add to text, can't switch tools) ---
+  await page.keyboard.press('Shift+Enter');
   await page.waitForTimeout(500);
 
   await page.screenshot({ path: 'e2e/screenshots/text-rotation-02-committed.png' });
