@@ -1,4 +1,4 @@
-//! Distortion filters: mesh warp.
+//! Distortion filters: mesh warp, tile/offset.
 
 use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
@@ -88,4 +88,26 @@ pub fn filter_mesh_warp(
     );
 
     engine.inner.texture_pool.release(grid_handle);
+}
+
+#[wasm_bindgen(js_name = "filterTileOffset")]
+pub fn filter_tile_offset(
+    engine: &mut Engine,
+    layer_id: &str,
+    offset_x: f32,
+    offset_y: f32,
+) {
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.tile_offset,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_offsetX") {
+                gl.uniform1f(Some(&loc), offset_x);
+            }
+            if let Some(loc) = shader.location(gl, "u_offsetY") {
+                gl.uniform1f(Some(&loc), offset_y);
+            }
+        },
+    );
 }

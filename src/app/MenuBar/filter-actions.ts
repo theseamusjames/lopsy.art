@@ -38,6 +38,7 @@ export type FilterDialogId =
   | 'chromatic-aberration'
   | 'pixel-stretch'
   | 'lens-distortion'
+  | 'tile-offset'
   | 'pattern-fill';
 
 function getActiveLayerId(): string | null {
