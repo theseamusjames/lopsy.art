@@ -153,6 +153,14 @@ describe('processTextKey', () => {
     expect(processTextKey(state, 'Control', false)).toBeNull();
   });
 
+  it('returns null for Tab so the caller can treat it as a commit', () => {
+    // Issue #262: Tab is the user-facing "commit text" shortcut. The
+    // handler in useKeyboardShortcuts.ts intercepts Tab during text
+    // editing and calls commitTextEditing(); for that to be safe,
+    // processTextKey must NOT also try to insert "Tab" into the buffer.
+    expect(processTextKey(state, 'Tab', false)).toBeNull();
+  });
+
   it('ignores printable chars with meta key', () => {
     // Cmd+C should not insert 'c'
     expect(processTextKey(state, 'c', true)).toBeNull();
