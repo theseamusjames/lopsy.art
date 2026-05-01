@@ -88,8 +88,11 @@ export function useKeyboardShortcuts({
           return;
         }
 
-        // Shift+Enter commits text
-        if (e.key === 'Enter' && e.shiftKey) {
+        // Shift+Enter or Tab commits text. Tab also has to swallow the browser
+        // default (focus change) so the next single-key shortcut isn't captured
+        // by a newly-focused element, and so the textEditing state doesn't
+        // outlive the commit and route subsequent letters into the text buffer.
+        if ((e.key === 'Enter' && e.shiftKey) || e.key === 'Tab') {
           e.preventDefault();
           commitTextEditing();
           return;
