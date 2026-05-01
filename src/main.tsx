@@ -130,8 +130,6 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js');
 }
 
-// Kick off WASM fetch + compilation immediately so it's ready by the time
-// the user creates their first document.
 initWasm().catch(() => {});
 
 const root = document.getElementById('root');

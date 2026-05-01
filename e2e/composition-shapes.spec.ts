@@ -677,7 +677,9 @@ test.describe('Composition 2: Geometric Design', () => {
     // =====================================================================
     // Select the red ellipse area
     const wandLayerId = (await getEditorState(page)).document.layers[0]!.id;
-    await page.locator(`[data-layer-id="${wandLayerId}"]`).click();
+    const wandLayerRow = page.locator(`[data-layer-id="${wandLayerId}"]`);
+    await wandLayerRow.scrollIntoViewIfNeeded();
+    await wandLayerRow.click({ force: true });
 
     await page.keyboard.press('w');
     expect(await getActiveTool(page)).toBe('wand');

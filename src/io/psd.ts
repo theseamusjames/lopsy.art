@@ -134,8 +134,8 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
       visible: layer.visible,
       opacity: Math.round(layer.opacity * 255),
       blendMode: BLEND_MODE_TO_U8[layer.blendMode] ?? 0,
-      x: layer.x,
-      y: layer.y,
+      x: Math.round(layer.x),
+      y: Math.round(layer.y),
       width: (layer.type === 'raster' || layer.type === 'shape') ? (layer as RasterLayer).width : 0,
       height: (layer.type === 'raster' || layer.type === 'shape') ? (layer as RasterLayer).height : 0,
       clipToBelow: layer.clipToBelow,
@@ -156,8 +156,8 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
       const maskBytes = new Uint8Array(layer.mask.data.buffer);
       meta.maskWidth = layer.mask.width;
       meta.maskHeight = layer.mask.height;
-      meta.maskX = layer.x;
-      meta.maskY = layer.y;
+      meta.maskX = Math.round(layer.x);
+      meta.maskY = Math.round(layer.y);
       meta.maskOffset = maskOffset;
       meta.maskLength = maskBytes.length;
       meta.maskDefaultColor = 0;

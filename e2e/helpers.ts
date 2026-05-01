@@ -406,13 +406,11 @@ export async function setAdjustment(page: Page, label: string, value: number): P
 
   const input = page.locator(`[aria-label="${label} value"]`);
   if (!(await input.isVisible({ timeout: 500 }).catch(() => false))) {
-    // Check if the correct tab just needs to be selected
     const tabLocator = page.locator(`role=tab[name="${tab}"]`);
     if (await tabLocator.isVisible({ timeout: 500 }).catch(() => false)) {
       await tabLocator.click();
       await page.waitForTimeout(100);
     } else {
-      // Open the adjustments panel via the root group's effects button
       const rootGroupId = await page.evaluate(() => {
         const store = (window as unknown as Record<string, unknown>).__editorStore as {
           getState: () => { document: { rootGroupId: string } };

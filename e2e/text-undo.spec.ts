@@ -34,7 +34,7 @@ async function commitTextViaUI(
   await page.keyboard.type(text);
   await page.waitForTimeout(200);
 
-  // Shift+Enter commits text editing (pressing a letter key would just add it to the text)
+  // Commit text editing via Shift+Enter (keyboard shortcut handler)
   await page.keyboard.press('Shift+Enter');
   await page.waitForTimeout(500);
 }
@@ -68,7 +68,7 @@ test('undo after text commit removes the text layer', async ({ page }) => {
   console.log('After commit:', JSON.stringify(afterCommit));
   const textLayer = afterCommit.find(l => l.name.startsWith('Text'));
 
-  // Text layer should exist after commit
+  // Text layer should exist and be rasterized
   if (!textLayer) {
     console.log('SKIP: Text did not render (font missing in headless)');
     return;
@@ -218,7 +218,7 @@ test('undo + redo after text commit preserves text correctly', async ({ page }) 
 
   await page.screenshot({ path: 'e2e/screenshots/text-undo-04-after-redo.png' });
 
-  // The text layer should be back after redo
+  // The text layer should be back as a raster layer
   const redoTextLayer = afterRedo.find(l => l.name.startsWith('Text'));
   expect(redoTextLayer).toBeTruthy();
   expect(redoTextLayer!.type).toBe('raster');

@@ -395,93 +395,93 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     // --- Gaussian Blur ---
     await applyFilterViaMenu(page, 'Gaussian Blur...', 10);
     await page.screenshot({ path: 'e2e/screenshots/comp3-02-gaussian-blur.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Box Blur ---
     await applyFilterViaMenu(page, 'Box Blur...', 10);
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Motion Blur ---
     await applyFilterViaMenu(page, 'Motion Blur...', 10);
     await page.screenshot({ path: 'e2e/screenshots/comp3-03-motion-blur.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Radial Blur ---
     await applyFilterViaMenu(page, 'Radial Blur...', 5);
     await page.screenshot({ path: 'e2e/screenshots/comp3-04-radial-blur.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Find Edges ---
     await applyFilterViaMenu(page, 'Find Edges');
     await page.screenshot({ path: 'e2e/screenshots/comp3-05-find-edges.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Unsharp Mask ---
     await applyFilterViaMenu(page, 'Unsharp Mask...');
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Pixelate ---
     await applyFilterViaMenu(page, 'Pixelate...', 20);
     await page.screenshot({ path: 'e2e/screenshots/comp3-06-pixelate.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Halftone ---
     await applyFilterViaMenu(page, 'Halftone...');
     await page.screenshot({ path: 'e2e/screenshots/comp3-07-halftone.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Kaleidoscope ---
     await applyFilterViaMenu(page, 'Kaleidoscope...');
     await page.screenshot({ path: 'e2e/screenshots/comp3-08-kaleidoscope.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Oil Paint ---
     await applyFilterViaMenu(page, 'Oil Paint...');
     await page.screenshot({ path: 'e2e/screenshots/comp3-09-oil-paint.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Cel Shading ---
     await applyFilterViaMenu(page, 'Cel Shading...');
     await page.screenshot({ path: 'e2e/screenshots/comp3-10-cel-shading.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Chromatic Aberration ---
     await applyFilterViaMenu(page, 'Chromatic Aberration...', 15);
     await page.screenshot({ path: 'e2e/screenshots/comp3-11-chromatic-aberration.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Solarize ---
     await applyFilterViaMenu(page, 'Solarize...');
     await page.screenshot({ path: 'e2e/screenshots/comp3-12-solarize.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Add Noise ---
     await applyFilterViaMenu(page, 'Add Noise...', 20);
     await page.screenshot({ path: 'e2e/screenshots/comp3-13-add-noise.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Brightness/Contrast ---
     await applyFilterViaMenu(page, 'Brightness/Contrast...');
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Hue/Saturation ---
     await applyFilterViaMenu(page, 'Hue/Saturation...');
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // =====================================================================
@@ -491,25 +491,25 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     // --- Invert ---
     await applyFilterViaMenu(page, 'Invert');
     await page.screenshot({ path: 'e2e/screenshots/comp3-14-invert.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Desaturate ---
     await applyFilterViaMenu(page, 'Desaturate');
     await page.screenshot({ path: 'e2e/screenshots/comp3-15-desaturate.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Posterize ---
     await applyFilterViaMenu(page, 'Posterize...');
     await page.screenshot({ path: 'e2e/screenshots/comp3-16-posterize.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // --- Threshold ---
     await applyFilterViaMenu(page, 'Threshold...');
     await page.screenshot({ path: 'e2e/screenshots/comp3-17-threshold.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // =====================================================================
@@ -520,13 +520,13 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     // Fill with noise
     await applyFilterViaMenu(page, 'Fill with Noise...');
     await page.screenshot({ path: 'e2e/screenshots/comp3-18-fill-noise.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // Clouds
     await applyFilterViaMenu(page, 'Clouds...');
     await page.screenshot({ path: 'e2e/screenshots/comp3-19-clouds.png' });
-    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     // Smoke
@@ -535,7 +535,7 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
 
     // Keep smoke for atmosphere — set to Soft Light blend mode
     await page.locator(`[data-layer-id="${cloudLayerId}"]`).click();
-    await setBlendMode(page, 'softLight');
+    await setBlendMode(page, 'soft-light');
     await setLayerOpacity(page, cloudLayerId, 50);
 
     // =====================================================================
@@ -591,7 +591,7 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     // PHASE 5: BLEND MODES — Test remaining modes on the smoke layer
     // =====================================================================
     const blendModes = [
-      'darken', 'lighten', 'colorBurn', 'hardLight',
+      'darken', 'lighten', 'color-burn', 'hard-light',
       'difference', 'exclusion', 'hue', 'saturation',
       'color', 'luminosity',
     ];
@@ -603,7 +603,7 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     }
 
     // Set final mode
-    await setBlendMode(page, 'softLight');
+    await setBlendMode(page, 'soft-light');
 
     await page.screenshot({ path: 'e2e/screenshots/comp3-23-blend-modes.png' });
 
