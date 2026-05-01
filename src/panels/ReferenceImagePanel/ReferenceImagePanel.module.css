@@ -93,6 +93,37 @@
   pointer-events: none;
 }
 
+.controlsBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.controlLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  flex: 1;
+}
+
+.controlInput {
+  width: 44px;
+  padding: 1px 4px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
 .thumbnailStrip {
   display: flex;
   gap: 2px;

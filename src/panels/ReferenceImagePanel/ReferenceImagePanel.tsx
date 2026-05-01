@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ImagePlus, Plus, X } from 'lucide-react';
+import { FlipHorizontal, FlipVertical, ImagePlus, Plus, Trash2, X } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useUIStore } from '../../app/ui-store';
 import styles from './ReferenceImagePanel.module.css';
@@ -285,11 +285,56 @@ export function ReferenceImagePanel() {
                   transform: imageTransform,
                   width: activeImage.width,
                   height: activeImage.height,
+                  opacity: activeView.opacity / 100,
                 }}
                 draggable={false}
               />
             )}
           </div>
+
+          {activeImage && (
+            <div className={styles.controlsBar} onPointerDown={stopPropagation}>
+              <label className={styles.controlLabel}>
+                Opacity
+                <input
+                  type="number"
+                  className={styles.controlInput}
+                  aria-label="Opacity value"
+                  min={0}
+                  max={100}
+                  value={activeView.opacity}
+                  onChange={(e) => updateView(activeImage.id, { opacity: Math.max(0, Math.min(100, Number(e.target.value))) })}
+                />
+              </label>
+              <IconButton
+                icon={<FlipHorizontal size={14} />}
+                label="Flip horizontal"
+                onClick={() => updateView(activeImage.id, { flipH: !activeView.flipH })}
+              />
+              <IconButton
+                icon={<FlipVertical size={14} />}
+                label="Flip vertical"
+                onClick={() => updateView(activeImage.id, { flipV: !activeView.flipV })}
+              />
+              <IconButton
+                icon={<Trash2 size={14} />}
+                label="Remove image"
+                onClick={() => {
+                  URL.revokeObjectURL(activeImage.url);
+                  setImages((prev) => {
+                    const next = prev.filter((img) => img.id !== activeImage.id);
+                    setActiveIndex(Math.min(activeIndex, Math.max(0, next.length - 1)));
+                    return next;
+                  });
+                  setViews((prev) => {
+                    const next = new Map(prev);
+                    next.delete(activeImage.id);
+                    return next;
+                  });
+                }}
+              />
+            </div>
+          )}
 
           <div
             className={styles.thumbnailStrip}

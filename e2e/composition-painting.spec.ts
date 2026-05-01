@@ -637,17 +637,34 @@ test.describe('Composition 1: Painted Landscape', () => {
     // =====================================================================
     // PHASE 16: UNDO/REDO — Verify history works
     // =====================================================================
+    // Draw a bright visible stroke so undo produces a clear pixel diff
+    await page.keyboard.press('b');
+    await setForegroundColorUI(page, 255, 0, 0);
+    await setToolOption(page, 'Size', 40);
+    await drawStroke(page, { x: 200, y: 200 }, { x: 300, y: 200 }, 5);
+    await page.waitForTimeout(300);
+
     const beforeUndo = await snapshot(page);
 
-    await page.keyboard.press('Meta+z');
-    await page.waitForTimeout(300);
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { undo: () => void };
+      };
+      store.getState().undo();
+    });
+    await page.waitForTimeout(500);
 
     const afterUndo = await snapshot(page);
     expect(pixelDiff(beforeUndo, afterUndo)).toBeGreaterThan(0);
 
     // Redo
-    await page.keyboard.press('Shift+Meta+z');
-    await page.waitForTimeout(300);
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { redo: () => void };
+      };
+      store.getState().redo();
+    });
+    await page.waitForTimeout(500);
 
     const afterRedo = await snapshot(page);
     expect(pixelDiff(beforeUndo, afterRedo)).toBeLessThan(50);

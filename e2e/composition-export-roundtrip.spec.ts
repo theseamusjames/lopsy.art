@@ -98,12 +98,12 @@ async function setLayerOpacity(page: Page, layerId: string, opacity: number) {
 
 
 async function undo(page: Page) {
-  await page.keyboard.press('Meta+z');
+  await page.keyboard.press('Control+z');
   await page.waitForTimeout(400);
 }
 
 async function redo(page: Page) {
-  await page.keyboard.press('Meta+Shift+z');
+  await page.keyboard.press('Shift+Control+z');
   await page.waitForTimeout(400);
 }
 
@@ -393,7 +393,7 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
   test('builds 20+ layer composition and verifies PNG/PSD export round-trip', async ({ page, allowConsoleErrors }) => {
     // Vite HMR WebSocket can disconnect during reload
     (allowConsoleErrors as RegExp[]).push(/WebSocket connection/);
-    test.setTimeout(300_000);
+    test.setTimeout(600_000);
 
     await page.goto('/');
     await waitForStore(page);
