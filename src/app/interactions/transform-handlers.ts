@@ -222,14 +222,14 @@ function handleSelectionTransformDown(
 export function handleTransformMove(
   state: InteractionState,
   canvasPos: Point,
-  shiftKey: boolean,
+  metaKey: boolean,
 ): void {
   if (!state.transformHandle || !state.transformStartState || !state.startPoint) {
     return;
   }
 
   if (state.selectionOnlyTransform) {
-    handleSelectionTransformMove(state, canvasPos, shiftKey);
+    handleSelectionTransformMove(state, canvasPos, metaKey);
     return;
   }
 
@@ -264,7 +264,7 @@ export function handleTransformMove(
       state.startPoint,
       snappedInput,
       startState,
-      shiftKey,
+      metaKey,
     );
     newTransform = {
       ...startState,
@@ -277,7 +277,7 @@ export function handleTransformMove(
     const currentAngle = computeRotation(canvasPos, startState);
     const newRotation = currentAngle - state.transformStartAngle;
     const uiState = useUIStore.getState();
-    const shouldSnap = shiftKey || (uiState.showGrid && uiState.snapToGrid);
+    const shouldSnap = metaKey || (uiState.showGrid && uiState.snapToGrid);
     const snappedRotation = shouldSnap
       ? Math.round(newRotation / (Math.PI / 12)) * (Math.PI / 12)
       : newRotation;
@@ -322,7 +322,7 @@ export function handleTransformMove(
 function handleSelectionTransformMove(
   state: InteractionState,
   canvasPos: Point,
-  shiftKey: boolean,
+  metaKey: boolean,
 ): void {
   const handle = state.transformHandle!;
   const startState = state.transformStartState!;
@@ -333,7 +333,7 @@ function handleSelectionTransformMove(
     ? { x: Math.round(canvasPos.x / uiSnap.gridSize) * uiSnap.gridSize, y: Math.round(canvasPos.y / uiSnap.gridSize) * uiSnap.gridSize }
     : canvasPos;
 
-  const result = computeScale(handle, state.startPoint!, snappedInput, startState, shiftKey);
+  const result = computeScale(handle, state.startPoint!, snappedInput, startState, metaKey);
   const newTransform: TransformState = {
     ...startState,
     scaleX: result.scaleX,
