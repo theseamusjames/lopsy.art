@@ -47,6 +47,14 @@
 - Pulls colors along the stroke direction, blending neighbouring pixels.
 - **Shift+click**: smudges along a straight line from the previous stroke endpoint
 
+### Spray
+- **Size**: 1 - 500 px
+- **Density**: 1 - 100 (number of dots emitted per dab)
+- **Opacity**: 1 - 100%
+- **Softness**: 0 - 100% (per-dot hardness falloff)
+- Shortcut: `J`
+- Holding the cursor still keeps emitting dots at ~6 Hz so paint accumulates over time, mimicking an airbrush. Dragging spreads dots along the path with automatic spacing scaled to brush size.
+
 ---
 
 ## Shape & Vector Tools
@@ -93,9 +101,6 @@
 ### Lasso (Freehand)
 - No configurable parameters
 
-### Polygonal Lasso
-- Click-to-place-points polygon selection
-
 ### Magnetic Lasso
 - **Width**: 1 - 40 px (perpendicular search radius from the cursor path)
 - **Contrast**: 1 - 100% (minimum edge strength to snap onto)
@@ -125,6 +130,8 @@
 - **Skew**: X and Y
 - **Corner manipulation**: 4-point distort/perspective
 - **Quick transforms**: flip horizontal, flip vertical, rotate 90 CW, rotate 90 CCW
+- **Shift+drag a rotation handle**: snaps rotation to 15° increments (the same snap kicks in automatically when grid + snap-to-grid are enabled)
+- **Shift+drag a corner handle**: constrains the scale to a uniform aspect ratio
 
 ---
 
@@ -207,6 +214,11 @@ Applied globally or per-group. All default to 0.
   `CurveEditor` (drag points, click to add, double-click or yank to remove).
   Runs as a single 256×1 RGBA LUT texture sampled in the GPU adjustments
   shader; identity curves bypass the lookup.
+- **Levels**: per-channel input/output remap (RGB master + R / G / B) with
+  Input Black, Input White, Gamma (0.01 – 10, log slider), Output Black,
+  and Output White controls. Master is applied first, then per-channel
+  levels. Compiled to a 256×1 LUT and shares the GPU adjustments path with
+  Curves; identity levels bypass the lookup.
 
 ---
 
@@ -308,9 +320,11 @@ Applied globally or per-group. All default to 0.
 - Rename
 - Align (left, center-h, right, top, center-v, bottom)
 - Add/remove/toggle mask
+- **Cmd/Ctrl+click a layer thumbnail**: loads that layer's alpha as a marquee selection (non-transparent pixels become the selection)
 
 ### Clipboard
 - Copy, cut, paste (respects selection)
+- **Cmd+Shift+C**: copy merged (composites all visible layers within the selection bounds before copying, so the clipboard contains a flattened RGBA snapshot rather than just the active layer)
 - Paste external image data
 
 ---
