@@ -330,7 +330,7 @@ export function useCanvasInteraction(
 
       // Transform handle drag (not tool-routed)
       if (state.transformHandle && state.transformStartState && state.startPoint) {
-        handleTransformMove(state, canvasPos, e.shiftKey);
+        handleTransformMove(state, canvasPos, e.metaKey);
         return;
       }
 
