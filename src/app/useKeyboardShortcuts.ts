@@ -63,10 +63,18 @@ export function useKeyboardShortcuts({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
       // Text editing mode: route keyboard input to the text editor
       const textEditing = useUIStore.getState().textEditing;
+
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        if (!textEditing) return;
+        const el = e.target as HTMLInputElement;
+        if (el.type === 'text' || el.type === 'number' || el.type === 'search'
+          || e.target instanceof HTMLTextAreaElement) {
+          return;
+        }
+        el.blur();
+      }
       if (textEditing) {
         if (e.key === 'Escape') {
           e.preventDefault();
