@@ -188,6 +188,8 @@ pub struct EngineInner {
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
     /// while the tool is actively tracing).
     pub mlasso: MagneticLassoState,
+    // Text rendering
+    pub text_renderer: Option<crate::text_gpu::TextRendererState>,
 }
 
 impl EngineInner {
@@ -291,6 +293,7 @@ impl EngineInner {
             group_scratch_texture: None,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
+            text_renderer: None,
         })
     }
 
@@ -580,5 +583,8 @@ impl Drop for EngineInner {
     fn drop(&mut self) {
         self.texture_pool.destroy(&self.gl);
         self.fbo_pool.destroy(&self.gl);
+        if let Some(tr) = self.text_renderer.as_mut() {
+            tr.glyph_atlas.destroy(&self.gl);
+        }
     }
 }
