@@ -1,7 +1,8 @@
 //! Stylize filters: pixelate, halftone, kaleidoscope, oil paint, chromatic
-//! aberration, pixel stretch, find edges, cel shading.
+//! aberration, pixel stretch, find edges, cel shading, bloom.
 
 use wasm_bindgen::prelude::*;
+use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
 use crate::filter_gpu;
@@ -191,4 +192,133 @@ pub fn filter_cel_shading(engine: &mut Engine, layer_id: &str, levels: u32, edge
             }
         },
     );
+}
+
+#[wasm_bindgen(js_name = "filterBloom")]
+pub fn filter_bloom(
+    engine: &mut Engine,
+    layer_id: &str,
+    threshold: f32,
+    soft_knee: f32,
+    radius: u32,
+    intensity: f32,
+) {
+    if radius == 0 { return; }
+
+    let threshold = threshold.clamp(0.0, 1.0);
+    let soft_knee = soft_knee.clamp(0.0, 1.0);
+    let intensity = intensity.clamp(0.0, 5.0);
+
+    let _ = engine.inner.ensure_layer_full_size(layer_id);
+
+    let kernel = lopsy_core::filters::blur::gaussian_kernel(radius);
+
+    let tex_handle = match engine.inner.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+    let (w, h) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let layer_tex = match engine.inner.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    // Pass 1: Threshold — extract bright pixels (layer → scratch B)
+    let gl = &engine.inner.gl;
+    let thresh_shader = &engine.inner.shaders.bloom_threshold;
+    gl.use_program(Some(&thresh_shader.program));
+    engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_b);
+    gl.viewport(0, 0, w as i32, h as i32);
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+    if let Some(loc) = thresh_shader.location(gl, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+    if let Some(loc) = thresh_shader.location(gl, "u_threshold") {
+        gl.uniform1f(Some(&loc), threshold);
+    }
+    if let Some(loc) = thresh_shader.location(gl, "u_softKnee") {
+        gl.uniform1f(Some(&loc), soft_knee);
+    }
+    engine.inner.draw_fullscreen_quad();
+
+    // Pass 2: Horizontal blur (scratch B → scratch A)
+    let gl = &engine.inner.gl;
+    let blur_shader = &engine.inner.shaders.gaussian_blur;
+    gl.use_program(Some(&blur_shader.program));
+    engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_a);
+    gl.viewport(0, 0, w as i32, h as i32);
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    if let Some(scratch_b) = engine.inner.texture_pool.get(engine.inner.scratch_texture_b) {
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_b));
+    }
+    if let Some(loc) = blur_shader.location(gl, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+    if let Some(loc) = blur_shader.location(gl, "u_direction") {
+        gl.uniform2f(Some(&loc), 1.0, 0.0);
+    }
+    if let Some(loc) = blur_shader.location(gl, "u_radius") {
+        gl.uniform1i(Some(&loc), radius as i32);
+    }
+    for (i, &wt) in kernel.iter().enumerate().take(64) {
+        let name = format!("u_weights[{i}]");
+        if let Some(loc) = blur_shader.location(gl, &name) {
+            gl.uniform1f(Some(&loc), wt);
+        }
+    }
+    engine.inner.draw_fullscreen_quad();
+
+    // Pass 3: Vertical blur (scratch A → scratch B)
+    let gl = &engine.inner.gl;
+    let blur_shader = &engine.inner.shaders.gaussian_blur;
+    engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_b);
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    if let Some(scratch_a) = engine.inner.texture_pool.get(engine.inner.scratch_texture_a) {
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_a));
+    }
+    if let Some(loc) = blur_shader.location(gl, "u_direction") {
+        gl.uniform2f(Some(&loc), 0.0, 1.0);
+    }
+    engine.inner.draw_fullscreen_quad();
+
+    // Pass 4: Combine — add bloom onto original (layer + scratch B → scratch A)
+    let gl = &engine.inner.gl;
+    let combine_shader = &engine.inner.shaders.bloom_combine;
+    gl.use_program(Some(&combine_shader.program));
+    engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_a);
+    gl.viewport(0, 0, w as i32, h as i32);
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+    if let Some(loc) = combine_shader.location(gl, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    if let Some(scratch_b) = engine.inner.texture_pool.get(engine.inner.scratch_texture_b) {
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_b));
+    }
+    if let Some(loc) = combine_shader.location(gl, "u_bloomTex") {
+        gl.uniform1i(Some(&loc), 1);
+    }
+    if let Some(loc) = combine_shader.location(gl, "u_intensity") {
+        gl.uniform1f(Some(&loc), intensity);
+    }
+    engine.inner.draw_fullscreen_quad();
+
+    // Copy scratch A → layer texture
+    let scratch_a_tex = engine.inner.texture_pool.get(engine.inner.scratch_texture_a).cloned();
+    engine.inner.render_to_texture(&layer_tex, w as i32, h as i32, |eng| {
+        let gl = &eng.gl;
+        gl.use_program(Some(&eng.shaders.blit.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(s) = &scratch_a_tex {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
+        }
+        if let Some(loc) = eng.shaders.blit.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        eng.draw_fullscreen_quad();
+    });
+
+    engine.inner.mark_layer_dirty(layer_id);
 }
