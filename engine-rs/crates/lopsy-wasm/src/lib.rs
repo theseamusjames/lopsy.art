@@ -14,6 +14,7 @@ pub mod overlay_renderer;
 pub mod color_mgmt;
 pub mod glyph_atlas;
 pub mod text_gpu;
+pub mod woff2;
 pub mod api;
 
 use wasm_bindgen::prelude::*;

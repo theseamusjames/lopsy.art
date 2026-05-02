@@ -778,7 +778,7 @@ pub fn clipboard_paste(
 pub fn float_selection(
     engine: &mut EngineInner,
     layer_id: &str,
-) -> Result<(), String> {
+) -> Result<[f64; 4], String> {
     // Release any existing float
     drop_float(engine);
 
@@ -789,24 +789,42 @@ pub fn float_selection(
         .ok_or_else(|| format!("Layer desc {layer_id} not found"))?;
     let layer_x = layer_desc.x;
     let layer_y = layer_desc.y;
+    let is_text = layer_desc.layer_type == lopsy_core::layer::LayerType::Text;
 
-    // 1. Extract selected pixels into float_texture (clipboard_copy shader)
-    let float_tex = engine.texture_pool.acquire(&engine.gl, lw, lh)?;
+    // For text layers, expand float buffer to diagonal size to prevent rotation clipping.
+    // Text layers have tight bounding boxes (e.g., 444×68 for "ROTATE ME" at 80px).
+    // Rotating within the original fw×fh float clips content at large aspect ratios;
+    // a d×d buffer gives full 360° rotation without clipping.
+    let (fw, fh, pad_x, pad_y) = if is_text && (lw != lh) {
+        let d = ((lw as f64).hypot(lh as f64).ceil() as u32 + 2).max(lw).max(lh);
+        let px = (d - lw) / 2;
+        let py = (d - lh) / 2;
+        (d, d, px, py)
+    } else {
+        (lw, lh, 0u32, 0u32)
+    };
+    let new_x = layer_x - pad_x as i32;
+    let new_y = layer_y - pad_y as i32;
+
     let layer_tex = engine.texture_pool.get(layer_tex_handle).cloned()
         .ok_or("Layer texture not found")?;
-    let float_gl_tex = engine.texture_pool.get(float_tex).cloned()
-        .ok_or("Float texture not found")?;
 
     let has_mask = engine.selection_mask_texture.is_some();
-
     let mask_tex_opt = engine.selection_mask_texture
         .and_then(|h| engine.texture_pool.get(h).cloned());
 
-    // Render extracted pixels into float_texture
+    // 1. Extract selected pixels into float_texture (clipboard_copy shader).
+    // For expanded text layers, boundsOffset/boundsSize cover the full fw×fh region;
+    // clipboard_copy clips to the original layer area, leaving transparent padding.
+    let float_tex = engine.texture_pool.acquire(&engine.gl, fw, fh)?;
+    let float_gl_tex = engine.texture_pool.get(float_tex).cloned()
+        .ok_or("Float texture not found")?;
     {
         engine.gl.disable(WebGl2RenderingContext::BLEND);
         let mask_tex_ref = mask_tex_opt.clone();
-        engine.render_to_texture(&float_gl_tex, lw as i32, lh as i32, |engine| {
+        let (lx, ly) = (layer_x, layer_y);
+        let (flw, flh) = (lw, lh);
+        engine.render_to_texture(&float_gl_tex, fw as i32, fh as i32, |engine| {
             engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
             engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
@@ -823,23 +841,37 @@ pub fn float_selection(
             }
             if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 1); }
             if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 }); }
-            // Float covers the same area as the layer texture
-            if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), layer_x as f32, layer_y as f32); }
-            if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), lw as f32, lh as f32); }
-            if let Some(loc) = shader.location(&engine.gl, "u_boundsOffset") { engine.gl.uniform2f(Some(&loc), layer_x as f32, layer_y as f32); }
-            if let Some(loc) = shader.location(&engine.gl, "u_boundsSize") { engine.gl.uniform2f(Some(&loc), lw as f32, lh as f32); }
+            if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), lx as f32, ly as f32); }
+            if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), flw as f32, flh as f32); }
+            // Bounds cover the full fw×fh region (new_x, new_y origin for expanded layers)
+            if let Some(loc) = shader.location(&engine.gl, "u_boundsOffset") { engine.gl.uniform2f(Some(&loc), new_x as f32, new_y as f32); }
+            if let Some(loc) = shader.location(&engine.gl, "u_boundsSize") { engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32); }
             if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32); }
             engine.draw_fullscreen_quad();
         });
     }
 
-    // 2. Create base texture = layer with selected pixels cleared
-    let base_tex = engine.texture_pool.acquire(&engine.gl, lw, lh)?;
+    // 2. Create base texture = layer with selected pixels cleared.
+    // For expanded text layers, the base is fw×fh: cleared to transparent, with the
+    // clipboard_clear result rendered into the center [pad_x, pad_y, lw, lh] sub-region
+    // via viewport override so v_uv covers the original lw×lh layer texture correctly.
+    let base_tex = engine.texture_pool.acquire(&engine.gl, fw, fh)?;
     let base_gl_tex = engine.texture_pool.get(base_tex).cloned()
         .ok_or("Base texture not found")?;
     {
+        engine.gl.disable(WebGl2RenderingContext::BLEND);
         let mask_tex_ref = mask_tex_opt.clone();
-        engine.render_to_texture(&base_gl_tex, lw as i32, lh as i32, |engine| {
+        let (lx, ly) = (layer_x, layer_y);
+        let (flw, flh) = (lw, lh);
+        engine.render_to_texture(&base_gl_tex, fw as i32, fh as i32, |engine| {
+            // Clear full fw×fh to transparent.
+            engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+            engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+
+            // Override viewport to the center lw×lh sub-region so that
+            // clipboard_clear's v_uv [0,1] maps to the original layer texture.
+            engine.gl.viewport(pad_x as i32, pad_y as i32, flw as i32, flh as i32);
+
             let shader = &engine.shaders.clipboard_clear;
             engine.gl.use_program(Some(&shader.program));
             engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
@@ -853,24 +885,48 @@ pub fn float_selection(
             if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 1); }
             if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 }); }
             if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32); }
-            if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), layer_x as f32, layer_y as f32); }
-            if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), lw as f32, lh as f32); }
+            if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), lx as f32, ly as f32); }
+            if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), flw as f32, flh as f32); }
             engine.draw_fullscreen_quad();
         });
+    }
+
+    // 3. For expanded text layers, resize the layer texture to fw×fh (cleared transparent).
+    //    The compositor places the texture at (new_x, new_y) in document space; composite_float
+    //    writes the actual content (base) into it immediately below.
+    if fw != lw || fh != lh {
+        let old_handle = engine.layer_textures.remove(layer_id).unwrap_or(layer_tex_handle);
+        engine.texture_pool.release(old_handle);
+        let new_layer_handle = engine.texture_pool.acquire(&engine.gl, fw, fh)?;
+        let new_gl_tex = engine.texture_pool.get(new_layer_handle).cloned()
+            .ok_or("New layer texture not found")?;
+        engine.render_to_texture(&new_gl_tex, fw as i32, fh as i32, |engine| {
+            engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+            engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        });
+        engine.layer_textures.insert(layer_id.to_string(), new_layer_handle);
+
+        // Update LayerDesc so the compositor renders at the correct expanded position.
+        if let Some(desc) = engine.layer_stack.iter_mut().find(|l| l.id == layer_id) {
+            desc.x = new_x;
+            desc.y = new_y;
+            desc.width = fw;
+            desc.height = fh;
+        }
     }
 
     engine.float_texture = Some(float_tex);
     engine.float_base_texture = Some(base_tex);
     engine.float_layer_id = Some(layer_id.to_string());
-    engine.float_width = lw;
-    engine.float_height = lh;
-    engine.float_layer_x = layer_x;
-    engine.float_layer_y = layer_y;
+    engine.float_width = fw;
+    engine.float_height = fh;
+    engine.float_layer_x = new_x;
+    engine.float_layer_y = new_y;
 
     // Write base to layer immediately (so the display shows selected pixels removed)
     composite_float(engine, 0, 0)?;
 
-    Ok(())
+    Ok([new_x as f64, new_y as f64, fw as f64, fh as f64])
 }
 
 /// Replace the float base texture with a copy of a source texture.

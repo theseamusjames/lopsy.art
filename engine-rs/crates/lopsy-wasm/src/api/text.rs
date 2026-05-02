@@ -12,10 +12,18 @@ fn ensure_text_renderer(engine: &mut Engine) -> &mut TextRendererState {
 }
 
 /// Load raw font bytes into the engine's fontdb.
+/// Accepts TTF, OTF, or WOFF2 — WOFF2 is decoded to SFNT before loading.
 #[wasm_bindgen(js_name = "loadFontData")]
 pub fn load_font_data(engine: &mut Engine, font_data: &[u8]) -> Result<(), JsError> {
     let tr = ensure_text_renderer(engine);
-    tr.load_font(font_data).map_err(|e| JsError::new(&e))
+    if crate::woff2::is_woff2(font_data) {
+        match crate::woff2::decode_woff2(font_data) {
+            Some(sfnt) => tr.load_font(&sfnt).map_err(|e| JsError::new(&e)),
+            None => Err(JsError::new("WOFF2 decode failed")),
+        }
+    } else {
+        tr.load_font(font_data).map_err(|e| JsError::new(&e))
+    }
 }
 
 /// Set or update the text content and properties for a text layer.

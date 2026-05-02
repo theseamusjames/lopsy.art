@@ -389,8 +389,9 @@ pub fn upload_clipboard_pixels(
 // ============================================================
 
 #[wasm_bindgen(js_name = "floatSelection")]
-pub fn float_selection(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
+pub fn float_selection(engine: &mut Engine, layer_id: &str) -> Result<Vec<f64>, JsError> {
     layer_manager::float_selection(&mut engine.inner, layer_id)
+        .map(|b| b.to_vec())
         .map_err(|e| JsError::new(&e))
 }
 

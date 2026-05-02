@@ -36,7 +36,16 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
 
   // Float if needed
   if (!hasFloat(engine)) {
-    floatSelection(engine, activeLayerId);
+    const floatBounds = floatSelection(engine, activeLayerId);
+    // Sync expanded position to Zustand (text layers expand to diagonal size).
+    if (floatBounds.length >= 4) {
+      const newX = floatBounds[0]!;
+      const newY = floatBounds[1]!;
+      const curLayer = editorState.document.layers.find(l => l.id === activeLayerId);
+      if (curLayer && (curLayer.x !== newX || curLayer.y !== newY)) {
+        editorState.updateLayerPosition(activeLayerId, newX, newY);
+      }
+    }
   }
 
   // Apply transform centered on selection bounds
