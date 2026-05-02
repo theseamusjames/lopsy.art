@@ -5,6 +5,23 @@ import { getEngine } from '../engine-wasm/engine-state';
 const PREVIEW_CDN_BASE =
   'https://cdn.jsdelivr.net/gh/getstencil/GoogleWebFonts-FontFamilyPreviewImages@master/48px/compressed/';
 
+// jsDelivr CDN for the google/fonts GitHub repo (raw TTF files).
+const GOOGLE_FONTS_GH_CDN = 'https://cdn.jsdelivr.net/gh/google/fonts@main';
+
+const WEIGHT_NAMES: Record<number, string> = {
+  100: 'Thin',
+  200: 'ExtraLight',
+  300: 'Light',
+  400: 'Regular',
+  500: 'Medium',
+  600: 'SemiBold',
+  700: 'Bold',
+  800: 'ExtraBold',
+  900: 'Black',
+};
+
+const LICENSE_DIRS = ['ofl', 'apache', 'ufl'] as const;
+
 const loadCache = new Map<string, Promise<void>>();
 
 // Cache of already-fetched font binaries keyed by "family:weight".
@@ -37,45 +54,89 @@ export function loadGoogleFont(family: string, weights: readonly number[]): Prom
 }
 
 /**
- * Fetch the TTF binary for a Google Font and load it into the WASM engine's
+ * Derive candidate TTF URLs for a Google Font from the google/fonts GitHub repo.
+ *
+ * The repo uses: /{license}/{slug}/{FamilyNoSpaces}-{WeightName}.ttf
+ * where slug = family.toLowerCase().replace(/\s+/g, '')
+ * and FamilyNoSpaces = family.replace(/\s+/g, '')
+ *
+ * We try all three license directories (ofl, apache, ufl).
+ */
+function githubTtfUrls(family: string, weight: number): string[] {
+  const slug = family.toLowerCase().replace(/\s+/g, '');
+  const noSpaces = family.replace(/\s+/g, '');
+  const weightName = WEIGHT_NAMES[weight] ?? 'Regular';
+  const filename = `${noSpaces}-${weightName}.ttf`;
+  return LICENSE_DIRS.map(dir => `${GOOGLE_FONTS_GH_CDN}/${dir}/${slug}/${filename}`);
+}
+
+/**
+ * Try fetching a TTF from the google/fonts GitHub repo via jsDelivr CDN.
+ * Returns the ArrayBuffer on success, or null if all candidates fail.
+ */
+async function fetchTtfFromGithub(family: string, weight: number): Promise<ArrayBuffer | null> {
+  for (const url of githubTtfUrls(family, weight)) {
+    try {
+      const resp = await fetch(url);
+      if (resp.ok) return resp.arrayBuffer();
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+}
+
+/**
+ * Fall back to Google Fonts CSS API: fetch the @font-face CSS, extract the
+ * first font URL (WOFF2 in practice), and return its bytes. The WASM engine
+ * decodes WOFF2 internally via the brotli-based decoder.
+ */
+async function fetchFontFromCssApi(family: string, weight: number): Promise<ArrayBuffer | null> {
+  try {
+    const encoded = encodeURIComponent(family);
+    const cssUrl = `https://fonts.googleapis.com/css2?family=${encoded}:wght@${weight}&display=swap`;
+    const cssResp = await fetch(cssUrl);
+    if (!cssResp.ok) return null;
+    const css = await cssResp.text();
+
+    const match = /url\(([^)]+)\)/.exec(css);
+    if (!match?.[1]) return null;
+    const fontUrl = match[1].replace(/['"]/g, '');
+
+    const fontResp = await fetch(fontUrl);
+    return fontResp.ok ? fontResp.arrayBuffer() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the font binary for a Google Font and load it into the WASM engine's
  * fontdb so the engine can render that font natively.
  *
- * Strategy: fetch the Google Fonts CSS2 API with a non-WOFF2 User-Agent so
- * the response contains TTF `url(...)` entries instead of WOFF2. Parse the
- * first matching URL, fetch the binary, and send it to the engine. Falls back
- * silently — if the fetch fails the engine uses its bundled fallback font.
+ * Strategy:
+ * 1. Try TTF directly from google/fonts GitHub via jsDelivr CDN — no decoding
+ *    needed, works for all fonts in the repo.
+ * 2. Fall back to Google Fonts CSS API → download WOFF2 → WASM decoder handles
+ *    it (CFF-based fonts decode cleanly; TrueType falls back to Inter).
+ *
+ * Falls back silently — if all fetches fail the engine uses its bundled Inter.
  */
 export function loadFontBinaryToEngine(family: string, weight: number): void {
   const cacheKey = `${family}:${weight}`;
   if (binaryCache.has(cacheKey)) {
     const engine = getEngine();
     if (!engine) return;
-    const buf = binaryCache.get(cacheKey)!;
-    loadFontData(engine, new Uint8Array(buf));
+    loadFontData(engine, new Uint8Array(binaryCache.get(cacheKey)!));
     return;
   }
 
   void (async () => {
     try {
-      const encoded = encodeURIComponent(family);
-      const cssUrl = `https://fonts.googleapis.com/css2?family=${encoded}:wght@${weight}&display=swap`;
+      const buf = await fetchTtfFromGithub(family, weight)
+        ?? await fetchFontFromCssApi(family, weight);
 
-      // Fetch with a TTF-requesting UA — Google Fonts returns TTF URLs for
-      // older user agents that don't declare WOFF2 support.
-      const cssResp = await fetch(cssUrl, {
-        headers: { 'User-Agent': 'Mozilla/4.0 (compatible; MSIE 6.0)' },
-      });
-      if (!cssResp.ok) return;
-      const css = await cssResp.text();
-
-      // Extract the first url(...) from the CSS response.
-      const match = /url\(([^)]+)\)/.exec(css);
-      if (!match?.[1]) return;
-      const fontUrl = match[1].replace(/['"]/g, '');
-
-      const fontResp = await fetch(fontUrl);
-      if (!fontResp.ok) return;
-      const buf = await fontResp.arrayBuffer();
+      if (!buf) return;
 
       binaryCache.set(cacheKey, buf);
 
@@ -83,7 +144,7 @@ export function loadFontBinaryToEngine(family: string, weight: number): void {
       if (!engine) return;
       loadFontData(engine, new Uint8Array(buf));
     } catch {
-      // Fetch failed — engine will use fallback font.
+      // All fetches failed — engine uses Inter fallback.
     }
   })();
 }
