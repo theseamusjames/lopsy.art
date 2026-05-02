@@ -22,6 +22,8 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Pixel Stretch...', action: () => showFilterDialog('pixel-stretch') },
       { label: 'Lens Distortion...', action: () => showFilterDialog('lens-distortion') },
       { separator: true, label: '' },
+      { label: 'Bloom...', action: () => showFilterDialog('bloom') },
+      { separator: true, label: '' },
       { label: 'Add Noise...', action: () => showFilterDialog('add-noise') },
       { label: 'Fill with Noise...', action: () => showFilterDialog('fill-noise') },
       { separator: true, label: '' },

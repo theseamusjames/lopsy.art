@@ -62,6 +62,8 @@ pub const PIXEL_STRETCH_FRAG: &str = include_str!("shaders/filters/pixel_stretch
 pub const LENS_DISTORTION_FRAG: &str = include_str!("shaders/filters/lens_distortion.glsl");
 pub const PATTERN_FILL_FRAG: &str = include_str!("shaders/filters/pattern_fill.glsl");
 pub const MESH_WARP_FRAG: &str = include_str!("shaders/filters/mesh_warp.glsl");
+pub const BLOOM_THRESHOLD_FRAG: &str = include_str!("shaders/filters/bloom_threshold.glsl");
+pub const BLOOM_COMBINE_FRAG: &str = include_str!("shaders/filters/bloom_combine.glsl");
 pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
 
 // Brush
@@ -214,6 +216,8 @@ pub struct ShaderPrograms {
     pub lens_distortion: ShaderProgram,
     pub pattern_fill: ShaderProgram,
     pub mesh_warp: ShaderProgram,
+    pub bloom_threshold: ShaderProgram,
+    pub bloom_combine: ShaderProgram,
     pub selection_mask_blend: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab: ShaderProgram,
@@ -288,6 +292,8 @@ impl ShaderPrograms {
             lens_distortion: compile_program(gl, v, LENS_DISTORTION_FRAG)?,
             pattern_fill: compile_program(gl, v, PATTERN_FILL_FRAG)?,
             mesh_warp: compile_program(gl, v, MESH_WARP_FRAG)?,
+            bloom_threshold: compile_program(gl, v, BLOOM_THRESHOLD_FRAG)?,
+            bloom_combine: compile_program(gl, v, BLOOM_COMBINE_FRAG)?,
             selection_mask_blend: compile_program(gl, v, SELECTION_MASK_BLEND_FRAG)?,
             // Brush — use standard fullscreen quad vert; dab positioning via fragment shader
             brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,
