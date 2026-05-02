@@ -8,7 +8,7 @@ import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
-import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
+import { uploadLayerPixels, getLayerTextureDimensions } from '../../engine-wasm/wasm-bridge';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import type { ActionResult, SliceCreator, SparseLayerEntry } from './types';
@@ -166,6 +166,7 @@ export interface DocumentSlice {
   mergeDown: () => void;
   flattenImage: () => void;
   rasterizeLayerStyle: () => void;
+  rasterizeTextLayer: () => void;
   updateLayerEffects: (id: string, effects: Partial<LayerEffects>) => void;
   addLayerMask: (id: string) => void;
   removeLayerMask: (id: string) => void;
@@ -437,6 +438,55 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
     for (const id of sparseIds) get().cropLayerToContent(id);
+  },
+
+  rasterizeTextLayer: () => {
+    const s = get();
+    const activeId = s.document.activeLayerId;
+    if (!activeId) return;
+    const layer = s.document.layers.find((l) => l.id === activeId);
+    if (!layer || layer.type !== 'text') return;
+
+    const engine = getEngine();
+    if (!engine) return;
+
+    const dims = getLayerTextureDimensions(engine, activeId);
+    const w = dims[0] ?? 0;
+    const h = dims[1] ?? 0;
+    if (w === 0 || h === 0) return;
+
+    s.pushHistory('Rasterize Layer');
+
+    // Convert the text layer to raster. The GPU texture already has the
+    // rendered text pixels — no re-upload needed. Just update the Zustand
+    // state so the compositor and all pipeline code treat this as a raster
+    // layer going forward.
+    set({
+      document: {
+        ...s.document,
+        layers: s.document.layers.map((l) =>
+          l.id === activeId
+            ? {
+                id: l.id,
+                name: l.name,
+                type: 'raster' as const,
+                visible: l.visible,
+                locked: l.locked,
+                opacity: l.opacity,
+                blendMode: l.blendMode,
+                x: l.x,
+                y: l.y,
+                clipToBelow: l.clipToBelow,
+                effects: l.effects,
+                mask: l.mask,
+                width: w,
+                height: h,
+              }
+            : l,
+        ),
+      },
+      renderVersion: s.renderVersion + 1,
+    });
   },
 
   updateLayerEffects: (id: string, effects, skipHistory?: boolean) => {
