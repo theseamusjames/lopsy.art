@@ -193,6 +193,13 @@ import init, {
   parsePsd,
   decodeAndUploadPsdLayer,
   getPsdLayerMask,
+  loadFontData,
+  setTextLayerContent,
+  renderTextLayer,
+  measureTextBounds,
+  getGlyphPositions,
+  removeTextLayerState,
+  isFontLoaded,
 } from './pkg/lopsy_wasm';
 
 export type { Engine };
@@ -404,4 +411,11 @@ export {
   parsePsd,
   decodeAndUploadPsdLayer,
   getPsdLayerMask,
+  loadFontData,
+  setTextLayerContent,
+  renderTextLayer,
+  measureTextBounds,
+  getGlyphPositions,
+  removeTextLayerState,
+  isFontLoaded,
 };
