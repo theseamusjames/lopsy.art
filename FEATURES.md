@@ -130,8 +130,8 @@
 - **Skew**: X and Y
 - **Corner manipulation**: 4-point distort/perspective
 - **Quick transforms**: flip horizontal, flip vertical, rotate 90 CW, rotate 90 CCW
-- **Shift+drag a rotation handle**: snaps rotation to 15° increments (the same snap kicks in automatically when grid + snap-to-grid are enabled)
-- **Shift+drag a corner handle**: constrains the scale to a uniform aspect ratio
+- **Cmd/Meta+drag a rotation handle**: snaps rotation to 15° increments (the same snap kicks in automatically when grid + snap-to-grid are enabled)
+- **Cmd/Meta+drag a scale handle**: constrains the scale to a uniform aspect ratio
 
 ---
 
@@ -144,7 +144,7 @@
 - Snap to guides
 - **Align**: left, center-h, right, top, center-v, bottom
 - **Alt/Option+drag**: with no active selection, duplicates the active layer before moving; with an active marquee, leaves the original pixels behind and moves a floating copy
-- **Shift+drag (transform handles)**: constrains aspect ratio when scaling, and forces grid/guide snapping during the transform
+- **Cmd/Meta+drag (transform handles)**: constrains aspect ratio when scaling and snaps rotation to 15° increments. Grid + snap-to-grid also forces snapping automatically during the transform.
 
 ### Eyedropper
 - **Sample size**: point, 3x3, 5x5
