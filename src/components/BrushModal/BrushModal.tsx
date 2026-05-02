@@ -1,12 +1,14 @@
 import { useCallback, useRef } from 'react';
 import { useToolSettingsStore, abrBrushToPreset } from '../../app/tool-settings-store';
 import { useUIStore } from '../../app/ui-store';
+import { useEditorStore } from '../../app/editor-store';
 import { Slider } from '../Slider/Slider';
 import { AngleControl } from './AngleControl';
 import { BrushPreview } from './BrushPreview';
 import { BrushThumbnail } from './BrushThumbnail';
 import type { BrushTipData } from '../../types/brush';
 import { describeError, notifyError } from '../../app/notifications-store';
+import { docScaledMax } from '../../utils/slider-ranges';
 import styles from './BrushModal.module.css';
 
 export function BrushModal() {
@@ -36,6 +38,10 @@ export function BrushModal() {
 
   const activePreset = presets.find((p) => p.id === activePresetId);
   const isActiveCustom = activePreset?.isCustom ?? false;
+
+  const docWidth = useEditorStore((s) => s.document.width);
+  const docHeight = useEditorStore((s) => s.document.height);
+  const sizeMax = docScaledMax(docWidth, docHeight, 2000);
 
   const handleClose = useCallback(() => {
     setShowBrushModal(false);
@@ -142,7 +148,7 @@ export function BrushModal() {
           </div>
           <div className={styles.rightPanel}>
             <div className={styles.sliderSection}>
-              <Slider label="Size" value={brushSize} min={1} max={2000} onChange={setBrushSize} />
+              <Slider label="Size" value={brushSize} min={1} max={sizeMax} onChange={setBrushSize} />
               <Slider label="Spacing" value={brushSpacing} min={1} max={200} onChange={setBrushSpacing} />
               <Slider label="Hardness" value={brushHardness} min={0} max={100} onChange={setBrushHardness} />
               <Slider label="Scatter" value={brushScatter} min={0} max={100} onChange={setBrushScatter} />

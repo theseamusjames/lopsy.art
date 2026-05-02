@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Slider } from '../Slider/Slider';
 import { useDraggablePanel } from '../../app/hooks/useDraggablePanel';
+import { useEditorStore } from '../../app/editor-store';
+import { docScaledMax } from '../../utils/slider-ranges';
 import styles from './FilterDialog.module.css';
 
 interface FilterParam {
@@ -10,6 +12,8 @@ interface FilterParam {
   max: number;
   step?: number;
   defaultValue: number;
+  /** When 'doc', max scales to 1.5x max(docW, docH) capped at 5000, with `max` as the floor. */
+  dynamicMax?: 'doc';
 }
 
 interface FilterDialogProps {
@@ -92,6 +96,8 @@ export function FilterDialog({ title, params, onApply, onCancel, onPreviewChange
   }, [handleApply, handleCancel]);
 
   const { offset, dragProps } = useDraggablePanel();
+  const docWidth = useEditorStore((s) => s.document.width);
+  const docHeight = useEditorStore((s) => s.document.height);
 
   return (
     <div className={`${styles.overlay} ${preview ? styles.overlayTransparent : ''}`} role="presentation">
@@ -106,18 +112,23 @@ export function FilterDialog({ title, params, onApply, onCancel, onPreviewChange
           <h2>{title}</h2>
         </div>
         <div className={styles.body}>
-          {params.map((param) => (
-            <div key={param.key} className={styles.paramRow}>
-              <Slider
-                label={param.label}
-                value={values[param.key] ?? param.defaultValue}
-                min={param.min}
-                max={param.max}
-                step={param.step ?? 1}
-                onChange={(v) => handleChange(param.key, v)}
-              />
-            </div>
-          ))}
+          {params.map((param) => {
+            const max = param.dynamicMax === 'doc'
+              ? docScaledMax(docWidth, docHeight, param.max)
+              : param.max;
+            return (
+              <div key={param.key} className={styles.paramRow}>
+                <Slider
+                  label={param.label}
+                  value={values[param.key] ?? param.defaultValue}
+                  min={param.min}
+                  max={max}
+                  step={param.step ?? 1}
+                  onChange={(v) => handleChange(param.key, v)}
+                />
+              </div>
+            );
+          })}
         </div>
         <div className={styles.footer}>
           <label className={styles.previewLabel}>

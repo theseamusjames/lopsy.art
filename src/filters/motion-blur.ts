@@ -6,7 +6,7 @@ export const motionBlur: FilterDefinition = {
   title: 'Motion Blur',
   params: [
     { key: 'angle', label: 'Angle', min: 0, max: 360, step: 1, defaultValue: 0 },
-    { key: 'distance', label: 'Distance', min: 1, max: 100, step: 1, defaultValue: 10 },
+    { key: 'distance', label: 'Distance', min: 1, max: 100, step: 1, defaultValue: 10, dynamicMax: 'doc' },
   ],
   applyGpu: (engine, layerId, values) => {
     const angleRad = ((values['angle'] ?? 0) * Math.PI) / 180;

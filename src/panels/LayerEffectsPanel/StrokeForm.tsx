@@ -1,5 +1,7 @@
 import { Slider } from '../../components/Slider/Slider';
 import type { StrokeEffect } from '../../types';
+import { useEditorStore } from '../../app/editor-store';
+import { docScaledMax } from '../../utils/slider-ranges';
 import { colorToHex, hexToColor } from './color-convert';
 import styles from './LayerEffectsPanel.module.css';
 
@@ -10,6 +12,10 @@ interface StrokeFormProps {
 }
 
 export function StrokeForm({ stroke, onChange, onCommit }: StrokeFormProps) {
+  const docWidth = useEditorStore((s) => s.document.width);
+  const docHeight = useEditorStore((s) => s.document.height);
+  const widthMax = docScaledMax(docWidth, docHeight, 50);
+
   return (
     <>
       <div className={styles.row}>
@@ -26,7 +32,7 @@ export function StrokeForm({ stroke, onChange, onCommit }: StrokeFormProps) {
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
-          <Slider label="Width" value={stroke.width} min={1} max={50} onChange={(v) => onChange({ ...stroke, width: v })} onCommit={onCommit} />
+          <Slider label="Width" value={stroke.width} min={1} max={widthMax} onChange={(v) => onChange({ ...stroke, width: v })} onCommit={onCommit} />
         </div>
       </div>
       <div className={styles.row}>

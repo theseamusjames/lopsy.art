@@ -485,15 +485,15 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
 
-  setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(500, size)) }),
+  setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(5000, size)) }),
   setSprayDensity: (density) => set({ sprayDensity: Math.max(1, Math.min(100, density)) }),
   setSprayOpacity: (opacity) => {
     warnIfNormalisedOpacity('setSprayOpacity', opacity);
     set({ sprayOpacity: Math.max(1, Math.min(100, opacity)) });
   },
   setSprayHardness: (hardness) => set({ sprayHardness: Math.max(0, Math.min(100, hardness)) }),
-  setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(2000, size)) }),
-  setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(2000, fade)) }),
+  setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(5000, size)) }),
+  setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(5000, fade)) }),
   setBrushSpacing: (spacing) => set({ brushSpacing: Math.max(0, Math.min(200, spacing)) }),
   setBrushScatter: (scatter) => set({ brushScatter: Math.max(0, Math.min(100, scatter)) }),
   setBrushAngle: (angle) => set({ brushAngle: ((angle % 360) + 360) % 360 }),
@@ -503,8 +503,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     set({ brushOpacity: Math.max(1, Math.min(100, opacity)) });
   },
   setBrushHardness: (hardness) => set({ brushHardness: Math.max(0, Math.min(100, hardness)) }),
-  setPencilSize: (size) => set({ pencilSize: Math.max(1, Math.min(100, size)) }),
-  setEraserSize: (size) => set({ eraserSize: Math.max(1, Math.min(200, size)) }),
+  setPencilSize: (size) => set({ pencilSize: Math.max(1, Math.min(5000, size)) }),
+  setEraserSize: (size) => set({ eraserSize: Math.max(1, Math.min(5000, size)) }),
   setEraserOpacity: (opacity) => {
     warnIfNormalisedOpacity('setEraserOpacity', opacity);
     set({ eraserOpacity: Math.max(1, Math.min(100, opacity)) });
@@ -560,11 +560,11 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   }),
   setSymmetryHorizontal: (enabled) => set({ symmetryHorizontal: enabled }),
   setSymmetryVertical: (enabled) => set({ symmetryVertical: enabled }),
-  setStampSize: (size) => set({ stampSize: Math.max(1, Math.min(200, size)) }),
+  setStampSize: (size) => set({ stampSize: Math.max(1, Math.min(5000, size)) }),
   setPathStrokeWidth: (width) => set({ pathStrokeWidth: Math.max(1, Math.min(50, width)) }),
   setDodgeExposure: (exposure) => set({ dodgeExposure: Math.max(1, Math.min(100, exposure)) }),
   setDodgeMode: (mode) => set({ dodgeMode: mode }),
-  setSmudgeSize: (size) => set({ smudgeSize: Math.max(1, Math.min(200, size)) }),
+  setSmudgeSize: (size) => set({ smudgeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeStrength: (strength) => set({ smudgeStrength: Math.max(0, Math.min(100, strength)) }),
   setWandTolerance: (tolerance) => set({ wandTolerance: Math.max(0, Math.min(255, tolerance)) }),
   setWandContiguous: (contiguous) => set({ wandContiguous: contiguous }),

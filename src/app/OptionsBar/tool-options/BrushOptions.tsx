@@ -2,9 +2,11 @@ import { useCallback } from 'react';
 import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { useUIStore } from '../../ui-store';
+import { useEditorStore } from '../../editor-store';
 import { Slider } from '../../../components/Slider/Slider';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { BrushThumbnail } from '../../../components/BrushModal/BrushThumbnail';
+import { docScaledMax } from '../../../utils/slider-ranges';
 import styles from './BrushOptions.module.css';
 
 export function BrushOptions() {
@@ -24,6 +26,10 @@ export function BrushOptions() {
   const presets = useToolSettingsStore((s) => s.presets);
   const activePresetId = useToolSettingsStore((s) => s.activePresetId);
   const activePreset = presets.find((p) => p.id === activePresetId) ?? presets[0];
+  const docWidth = useEditorStore((s) => s.document.width);
+  const docHeight = useEditorStore((s) => s.document.height);
+  const sizeMax = docScaledMax(docWidth, docHeight, 200);
+  const fadeMax = docScaledMax(docWidth, docHeight, 2000);
 
   const handleOpenBrushModal = useCallback(() => {
     useUIStore.getState().setShowBrushModal(true);
@@ -36,10 +42,10 @@ export function BrushOptions() {
           <BrushThumbnail preset={activePreset} size={24} />
         </button>
       )}
-      <Slider label="Size" value={brushSize} min={1} max={200} onChange={setBrushSize} />
+      <Slider label="Size" value={brushSize} min={1} max={sizeMax} onChange={setBrushSize} />
       <Slider label="Opacity" value={brushOpacity} min={1} max={100} onChange={setBrushOpacity} />
       <Slider label="Hardness" value={brushHardness} min={0} max={100} onChange={setBrushHardness} />
-      <Slider label="Fade" value={brushFade} min={0} max={2000} onChange={setBrushFade} suffix="px" />
+      <Slider label="Fade" value={brushFade} min={0} max={fadeMax} onChange={setBrushFade} suffix="px" />
       <div className={styles.symmetryGroup}>
         <IconButton
           icon={<FlipVertical2 size={16} />}
