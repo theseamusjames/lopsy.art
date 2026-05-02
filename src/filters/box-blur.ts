@@ -4,6 +4,6 @@ import type { FilterDefinition } from './filter-types';
 export const boxBlur: FilterDefinition = {
   id: 'box-blur',
   title: 'Box Blur',
-  params: [{ key: 'radius', label: 'Radius', min: 1, max: 100, step: 1, defaultValue: 5 }],
+  params: [{ key: 'radius', label: 'Radius', min: 1, max: 100, step: 1, defaultValue: 5, dynamicMax: 'doc' }],
   applyGpu: (engine, layerId, values) => filterBoxBlur(engine, layerId, values['radius'] ?? 5),
 };

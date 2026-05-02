@@ -1,5 +1,7 @@
 import { useToolSettingsStore } from '../../tool-settings-store';
+import { useEditorStore } from '../../editor-store';
 import { Slider } from '../../../components/Slider/Slider';
+import { docScaledMax } from '../../../utils/slider-ranges';
 import type { DodgeMode } from '../../../tools/dodge/dodge';
 import styles from '../OptionsBar.module.css';
 
@@ -10,6 +12,9 @@ export function DodgeOptions() {
   const setDodgeExposure = useToolSettingsStore((s) => s.setDodgeExposure);
   const setDodgeMode = useToolSettingsStore((s) => s.setDodgeMode);
   const setBrushSize = useToolSettingsStore((s) => s.setBrushSize);
+  const docWidth = useEditorStore((s) => s.document.width);
+  const docHeight = useEditorStore((s) => s.document.height);
+  const sizeMax = docScaledMax(docWidth, docHeight, 200);
 
   return (
     <>
@@ -24,7 +29,7 @@ export function DodgeOptions() {
         <option value="burn">Burn</option>
       </select>
       <Slider label="Exposure" value={dodgeExposure} min={1} max={100} onChange={setDodgeExposure} />
-      <Slider label="Size" value={brushSize} min={1} max={200} onChange={setBrushSize} />
+      <Slider label="Size" value={brushSize} min={1} max={sizeMax} onChange={setBrushSize} />
     </>
   );
 }

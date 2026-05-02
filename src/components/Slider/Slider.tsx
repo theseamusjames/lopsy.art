@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { clamp } from '../../utils/math';
 import styles from './Slider.module.css';
 
 interface SliderProps {
@@ -31,6 +32,17 @@ function nextValueLog(v: number, step: number, min: number, max: number): number
   return min * Math.pow(max / min, next);
 }
 
+export function commitSliderValue(
+  input: string,
+  currentValue: number,
+  min: number,
+  max: number,
+): number {
+  const parsed = parseFloat(input);
+  if (isNaN(parsed)) return currentValue;
+  return clamp(parsed, min, max);
+}
+
 export function Slider({
   value,
   min,
@@ -57,10 +69,11 @@ export function Slider({
     if (isNaN(parsed)) {
       setLocalValue(String(value));
     } else {
-      setLocalValue(String(parsed));
-      onChange(parsed);
+      const clamped = clamp(parsed, min, max);
+      setLocalValue(String(clamped));
+      onChange(clamped);
     }
-  }, [localValue, value, onChange]);
+  }, [localValue, value, min, max, onChange]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -68,12 +81,14 @@ export function Slider({
         (e.target as HTMLInputElement).blur();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        const next = scale === 'log' ? nextValueLog(value, step, min, max) : value + step;
+        const raw = scale === 'log' ? nextValueLog(value, step, min, max) : value + step;
+        const next = clamp(raw, min, max);
         onChange(next);
         setLocalValue(String(next));
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        const next = scale === 'log' ? nextValueLog(value, step, min, max) : value - step;
+        const raw = scale === 'log' ? nextValueLog(value, step, min, max) : value - step;
+        const next = clamp(raw, min, max);
         onChange(next);
         setLocalValue(String(next));
       }
