@@ -4,7 +4,6 @@ import type { Point } from '../../types';
 import { useUIStore, type TextEditingState } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
-import { computeTextLayout, type TextStyle } from './text';
 import { hitTestTextLayer } from './text-hit-test';
 import { createTextLayer } from '../../layers/layer-model';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
@@ -14,6 +13,7 @@ import {
   renderTextLayer,
   getRenderedTextPixels,
   uploadLayerPixels,
+  measureTextBounds,
 } from '../../engine-wasm/wasm-bridge';
 
 const TEXT_DRAG_THRESHOLD = 4;
@@ -143,25 +143,41 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
 
     // Recover the original click anchor (which `bounds.x/y` represents during
     // editing) from the saved layer's top-left position. commitTextEditing
-    // shifts the layer by `layout.offset*` so that center / right alignment
-    // and descender padding can extend the rasterized canvas; we invert that
-    // shift here so re-editing preserves the click anchor semantics.
-    const hitStyle: TextStyle = {
-      fontSize: hitLayer.fontSize,
-      fontFamily: hitLayer.fontFamily,
-      fontWeight: hitLayer.fontWeight,
-      fontStyle: hitLayer.fontStyle,
-      color: hitLayer.color,
-      lineHeight: hitLayer.lineHeight,
-      letterSpacing: hitLayer.letterSpacing,
-      textAlign: hitLayer.textAlign,
-    };
-    const hitLayout = computeTextLayout(hitLayer.text, hitStyle, hitLayer.width);
+    // shifts the layer by the engine's offsetX/offsetY; we invert that shift
+    // here so re-editing preserves the click anchor semantics.
+    //
+    // Use the Rust engine for measurement — it uses the same layout/padding as
+    // commit time, whereas the JS canvas uses different padding (fontSize*0.5
+    // vs 2px), which would give wrong anchor recovery.
+    let boundsX = hitLayer.x;
+    let boundsY = hitLayer.y;
+    const reEditEngine = getEngine();
+    if (reEditEngine && hitLayer.text.trim().length > 0) {
+      const reEditPropsJson = JSON.stringify({
+        text: hitLayer.text,
+        fontFamily: hitLayer.fontFamily,
+        fontSize: hitLayer.fontSize,
+        fontWeight: hitLayer.fontWeight,
+        fontStyle: hitLayer.fontStyle,
+        color: [hitLayer.color.r / 255, hitLayer.color.g / 255, hitLayer.color.b / 255, hitLayer.color.a],
+        lineHeight: hitLayer.lineHeight,
+        letterSpacing: hitLayer.letterSpacing,
+        textAlign: hitLayer.textAlign,
+        areaWidth: hitLayer.width ?? null,
+      });
+      setTextLayerContent(reEditEngine, hitLayer.id, reEditPropsJson);
+      const boundsResult = measureTextBounds(reEditEngine, hitLayer.id);
+      if (boundsResult.length === 4) {
+        boundsX = hitLayer.x - (boundsResult[2] ?? 0);
+        boundsY = hitLayer.y - (boundsResult[3] ?? 0);
+      }
+    }
+
     const editingState: TextEditingState = {
       layerId: hitLayer.id,
       bounds: {
-        x: hitLayer.x - hitLayout.offsetX,
-        y: hitLayer.y - hitLayout.offsetY,
+        x: boundsX,
+        y: boundsY,
         width: hitLayer.width,
         height: null,
       },
