@@ -68,12 +68,12 @@ test('undo after text commit removes the text layer', async ({ page }) => {
   console.log('After commit:', JSON.stringify(afterCommit));
   const textLayer = afterCommit.find(l => l.name.startsWith('Text'));
 
-  // Text layer should exist and be rasterized
+  // Text layer should exist and stay as type 'text'
   if (!textLayer) {
     console.log('SKIP: Text did not render (font missing in headless)');
     return;
   }
-  expect(textLayer.type).toBe('raster');
+  expect(textLayer.type).toBe('text');
   expect(afterCommit.length).toBe(layerCountBefore + 1);
 
   await page.screenshot({ path: 'e2e/screenshots/text-undo-01-committed.png' });
@@ -218,8 +218,8 @@ test('undo + redo after text commit preserves text correctly', async ({ page }) 
 
   await page.screenshot({ path: 'e2e/screenshots/text-undo-04-after-redo.png' });
 
-  // The text layer should be back as a raster layer
+  // The text layer should be back as type 'text'
   const redoTextLayer = afterRedo.find(l => l.name.startsWith('Text'));
   expect(redoTextLayer).toBeTruthy();
-  expect(redoTextLayer!.type).toBe('raster');
+  expect(redoTextLayer!.type).toBe('text');
 });

@@ -126,8 +126,8 @@ test.describe('Text + brush + merge down', () => {
           document: { layers: Array<{ id: string; type: string; name: string }> };
         };
       };
-      // Text layers are rasterized on commit — find by name
-      return store.getState().document.layers.find((l) => l.type === 'raster' && l.name.startsWith('Text'))?.id ?? '';
+      // Text layers stay as type 'text' after commit — find by name
+      return store.getState().document.layers.find((l) => l.type === 'text' && l.name.startsWith('Text'))?.id ?? '';
     });
     expect(textId).not.toBe('');
 

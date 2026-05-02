@@ -37,7 +37,7 @@ export function computeRasterizeStyle(
               x: 0,
               y: 0,
               effects: DEFAULT_EFFECTS,
-              ...(l.type === 'raster' ? { width: doc.width, height: doc.height } : {}),
+              ...(l.type === 'raster' || l.type === 'text' ? { type: 'raster' as const, width: doc.width, height: doc.height } : {}),
             } as Layer
           : l,
       ),

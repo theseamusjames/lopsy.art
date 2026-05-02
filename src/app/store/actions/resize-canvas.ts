@@ -21,6 +21,16 @@ export function computeResizeCanvas(
   const newLayers: Layer[] = [];
 
   for (const layer of doc.layers) {
+    if (layer.type === 'text') {
+      // Text layers: adjust position by the canvas offset — engine re-renders
+      newLayers.push({
+        ...layer,
+        x: Math.round(layer.x + offsetX),
+        y: Math.round(layer.y + offsetY),
+      } as Layer);
+      continue;
+    }
+
     if (layer.type !== 'raster') {
       newLayers.push(layer);
       continue;

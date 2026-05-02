@@ -25,6 +25,16 @@ export function computeCropCanvas(
   const newLayers: Layer[] = [];
 
   for (const layer of doc.layers) {
+    if (layer.type === 'text') {
+      // Text layers: adjust position relative to crop rect — engine re-renders
+      newLayers.push({
+        ...layer,
+        x: Math.round(layer.x - cx),
+        y: Math.round(layer.y - cy),
+      } as Layer);
+      continue;
+    }
+
     if (layer.type !== 'raster') {
       newLayers.push(layer);
       continue;

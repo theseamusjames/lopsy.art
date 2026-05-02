@@ -4,10 +4,12 @@ import type { Point } from '../../types';
 import { useUIStore, type TextEditingState } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
-import { computeTextLayout, rasterizeText, type TextStyle } from './text';
+import { computeTextLayout, type TextStyle } from './text';
 import { hitTestTextLayer } from './text-hit-test';
 import { createTextLayer } from '../../layers/layer-model';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { measureTextBounds } from '../../engine-wasm/wasm-bridge';
 
 const TEXT_DRAG_THRESHOLD = 4;
 
@@ -46,25 +48,19 @@ export function commitTextEditing(): void {
   editorState.pushHistory('Text');
   toolSettings.addRecentColor(textColor);
 
-  const style: TextStyle = {
-    fontSize: toolSettings.textFontSize,
-    fontFamily: toolSettings.textFontFamily,
-    fontWeight: toolSettings.textFontWeight,
-    fontStyle: toolSettings.textFontStyle,
-    color: textColor,
-    lineHeight: 1.4,
-    letterSpacing: 0,
-    textAlign: toolSettings.textAlign,
-  };
-
   const areaWidth = editing.bounds.width;
 
-  // Rasterize onto a canvas sized to fit the rendered glyphs (with padding
-  // for antialiasing and descenders). The layout describes where the canvas
-  // should sit relative to the click anchor (bounds.x/y), so center / right
-  // alignment land their text at the click point and glyphs extending past
-  // the document edge are preserved instead of being silently clipped.
-  const { canvas: textCanvas, layout } = rasterizeText(editing.text, style, areaWidth);
+  // Get the rendered offset from the engine — the last syncTextLayers call already
+  // rendered the text and stored it in the engine's text_layers map.
+  let offsetX = 0, offsetY = 0;
+  const engine = getEngine();
+  if (engine) {
+    const bounds = measureTextBounds(engine, editing.layerId);
+    if (bounds.length >= 4) {
+      offsetX = bounds[2]!;
+      offsetY = bounds[3]!;
+    }
+  }
 
   editorState.updateTextLayerProperties(editing.layerId, {
     text: editing.text,
@@ -75,29 +71,10 @@ export function commitTextEditing(): void {
     color: textColor,
     textAlign: toolSettings.textAlign,
     width: areaWidth,
-    x: editing.bounds.x + layout.offsetX,
-    y: editing.bounds.y + layout.offsetY,
+    x: editing.bounds.x + offsetX,
+    y: editing.bounds.y + offsetY,
     visible: true,
   });
-
-  // Convert to raster BEFORE uploading pixels so cropLayerToContent (called
-  // inside updateLayerPixelData) sees type:'raster' and trims transparent padding.
-  useEditorStore.setState((s) => ({
-    document: {
-      ...s.document,
-      layers: s.document.layers.map((l) =>
-        l.id === editing.layerId
-          ? ({ ...l, type: 'raster', width: layout.width, height: layout.height } as unknown as import('../../types').Layer)
-          : l,
-      ),
-    },
-  }));
-
-  const textCtx = textCanvas.getContext('2d');
-  if (textCtx) {
-    const imageData = textCtx.getImageData(0, 0, layout.width, layout.height);
-    editorState.updateLayerPixelData(editing.layerId, imageData);
-  }
 
   editorState.notifyRender();
 }
