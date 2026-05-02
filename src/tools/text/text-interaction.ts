@@ -9,7 +9,12 @@ import { hitTestTextLayer } from './text-hit-test';
 import { createTextLayer } from '../../layers/layer-model';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { measureTextBounds } from '../../engine-wasm/wasm-bridge';
+import {
+  setTextLayerContent,
+  renderTextLayer,
+  getRenderedTextPixels,
+  uploadLayerPixels,
+} from '../../engine-wasm/wasm-bridge';
 
 const TEXT_DRAG_THRESHOLD = 4;
 
@@ -45,22 +50,50 @@ export function commitTextEditing(): void {
   const toolSettings = useToolSettingsStore.getState();
   const textColor = toolSettings.foregroundColor;
 
-  editorState.pushHistory('Text');
-  toolSettings.addRecentColor(textColor);
-
+  // Explicitly render text to the GPU texture before pushHistory snapshots it.
+  // This ensures the snapshot contains the final text pixels regardless of
+  // whether the rAF-driven syncTextLayers loop had time to fire.
   const areaWidth = editing.bounds.width;
+  let finalX = editing.bounds.x;
+  let finalY = editing.bounds.y;
 
-  // Get the rendered offset from the engine — the last syncTextLayers call already
-  // rendered the text and stored it in the engine's text_layers map.
-  let offsetX = 0, offsetY = 0;
   const engine = getEngine();
   if (engine) {
-    const bounds = measureTextBounds(engine, editing.layerId);
-    if (bounds.length >= 4) {
-      offsetX = bounds[2]!;
-      offsetY = bounds[3]!;
+    const propsJson = JSON.stringify({
+      text: editing.text,
+      fontFamily: toolSettings.textFontFamily,
+      fontSize: toolSettings.textFontSize,
+      fontWeight: toolSettings.textFontWeight,
+      fontStyle: toolSettings.textFontStyle,
+      color: [textColor.r / 255, textColor.g / 255, textColor.b / 255, textColor.a],
+      lineHeight: 1.4,
+      letterSpacing: 0,
+      textAlign: toolSettings.textAlign,
+      areaWidth: areaWidth ?? null,
+    });
+    setTextLayerContent(engine, editing.layerId, propsJson);
+    const boundsResult = renderTextLayer(engine, editing.layerId);
+    if (boundsResult.length === 4) {
+      const width = boundsResult[0]!;
+      const height = boundsResult[1]!;
+      const offsetX = boundsResult[2]!;
+      const offsetY = boundsResult[3]!;
+      const pixels = getRenderedTextPixels(engine, editing.layerId);
+      if (pixels.length > 0) {
+        finalX = editing.bounds.x + offsetX;
+        finalY = editing.bounds.y + offsetY;
+        uploadLayerPixels(engine, editing.layerId, pixels, width, height, finalX, finalY);
+      }
     }
+  } else {
+    // Fallback: use position set by the last syncTextLayers call if engine unavailable.
+    const currentLayer = editorState.document.layers.find((l) => l.id === editing.layerId);
+    finalX = currentLayer?.x ?? editing.bounds.x;
+    finalY = currentLayer?.y ?? editing.bounds.y;
   }
+
+  editorState.pushHistory('Text');
+  toolSettings.addRecentColor(textColor);
 
   editorState.updateTextLayerProperties(editing.layerId, {
     text: editing.text,
@@ -71,8 +104,8 @@ export function commitTextEditing(): void {
     color: textColor,
     textAlign: toolSettings.textAlign,
     width: areaWidth,
-    x: editing.bounds.x + offsetX,
-    y: editing.bounds.y + offsetY,
+    x: finalX,
+    y: finalY,
     visible: true,
   });
 
