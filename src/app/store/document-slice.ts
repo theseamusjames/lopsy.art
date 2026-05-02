@@ -8,7 +8,7 @@ import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
-import { uploadLayerPixels, getLayerTextureDimensions } from '../../engine-wasm/wasm-bridge';
+import { uploadLayerPixels, getLayerTextureDimensions, removeTextLayerState } from '../../engine-wasm/wasm-bridge';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import type { ActionResult, SliceCreator, SparseLayerEntry } from './types';
@@ -233,6 +233,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       id,
     );
     if (!result) return;
+
+    // Clean up text renderer state if this was a text layer.
+    const removedLayer = s.document.layers.find((l) => l.id === id);
+    if (removedLayer?.type === 'text') {
+      const eng = getEngine();
+      if (eng) removeTextLayerState(eng, id);
+    }
+
     s.pushHistory('Delete Layer');
     applyActionResult(set, result);
   },

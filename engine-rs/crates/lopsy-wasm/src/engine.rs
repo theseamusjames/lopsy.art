@@ -538,6 +538,11 @@ impl EngineInner {
         }
         self.adjustments.has_curves = false;
         self.needs_recomposite = true;
+        // Clear text renderer layer state so stale text layouts don't persist
+        // across document switches.
+        if let Some(tr) = self.text_renderer.as_mut() {
+            tr.text_layers.clear();
+        }
     }
 
     pub fn mark_all_dirty(&mut self) {
