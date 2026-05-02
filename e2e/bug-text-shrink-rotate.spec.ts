@@ -262,10 +262,13 @@ test('text does not shrink after: add → change size while editing → commit �
   expect(afterW).toBeGreaterThan(0);
   expect(afterH).toBeGreaterThan(0);
 
-  // Content pixels should not be dramatically fewer than before
+  // Content pixels should not be dramatically fewer than before.
+  // The Rust engine produces a tight bounding box (e.g. 444×68 for "ROTATE ME" at 80px).
+  // For a 6.5:1 aspect-ratio texture, a 30° rotation geometrically clips ~70% of pixels —
+  // arctan(68/444) ≈ 8.7°, so any rotation above ~9° will clip content at the boundaries.
+  // A 20% threshold still catches the original UV-mismatch bug (which produced ~0% survival)
+  // while not failing on legitimate geometric clipping.
   if (beforeContent > 50) {
-    // Allow some variation (anti-aliasing differences during rotation)
-    // but a 50%+ drop indicates the text shrunk or disappeared
-    expect(afterContent).toBeGreaterThan(beforeContent * 0.5);
+    expect(afterContent).toBeGreaterThan(beforeContent * 0.2);
   }
 });
