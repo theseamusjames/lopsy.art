@@ -67,7 +67,12 @@ function githubTtfUrls(family: string, weight: number): string[] {
   const noSpaces = family.replace(/\s+/g, '');
   const weightName = WEIGHT_NAMES[weight] ?? 'Regular';
   const filename = `${noSpaces}-${weightName}.ttf`;
-  return LICENSE_DIRS.map(dir => `${GOOGLE_FONTS_GH_CDN}/${dir}/${slug}/${filename}`);
+  // Variable fonts moved static variants to a `static/` subdirectory. Try
+  // the top-level path first (older/non-variable fonts), then static/.
+  return LICENSE_DIRS.flatMap(dir => [
+    `${GOOGLE_FONTS_GH_CDN}/${dir}/${slug}/${filename}`,
+    `${GOOGLE_FONTS_GH_CDN}/${dir}/${slug}/static/${filename}`,
+  ]);
 }
 
 /**

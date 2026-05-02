@@ -7,7 +7,7 @@ import { useToolSettingsStore } from './app/tool-settings-store';
 import { usePatternStore } from './app/pattern-store';
 import { pixelDataManager } from './engine/pixel-data-manager';
 import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
-import { render as renderWasm, readLayerPixels, getLayerTextureDimensions, initWasm } from './engine-wasm/wasm-bridge';
+import { render as renderWasm, readLayerPixels, getLayerTextureDimensions, initWasm, isFontLoaded } from './engine-wasm/wasm-bridge';
 import {
   syncDocumentSize,
   syncBackgroundColor,
@@ -32,6 +32,7 @@ declare global {
     __pixelData?: typeof pixelDataManager;
     __readCompositedPixels?: () => Promise<ReadPixelsResult>;
     __readLayerPixels?: (layerId?: string) => Promise<ReadPixelsResult>;
+    __isFontLoaded?: (family: string) => boolean;
   }
 }
 
@@ -80,6 +81,11 @@ if (import.meta.env.DEV) {
   };
   // Read a single layer's GPU texture as {width, height, pixels[]}.
   // Syncs layers first so newly created layers are known to the engine.
+  window.__isFontLoaded = (family: string) => {
+    const engine = getEngine();
+    if (!engine) return false;
+    return isFontLoaded(engine, family);
+  };
   window.__readLayerPixels = (layerId?: string) => {
     return new Promise<ReadPixelsResult>((resolve) => {
       requestAnimationFrame(() => {

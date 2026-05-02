@@ -93,7 +93,17 @@ impl TextRendererState {
             serde_json::from_str(props_json).map_err(|e| format!("invalid JSON: {e}"))?;
 
         let text = v["text"].as_str().unwrap_or("");
-        let font_family = v["fontFamily"].as_str().unwrap_or("sans-serif");
+        // CSS font family lists like "'Rubik Moonrocks', sans-serif" — extract
+        // just the first name so it matches what fontdb stores.
+        let font_family_raw = v["fontFamily"].as_str().unwrap_or("sans-serif");
+        let font_family_owned: String = font_family_raw
+            .split(',')
+            .next()
+            .unwrap_or(font_family_raw)
+            .trim()
+            .trim_matches(|c| c == '\'' || c == '"')
+            .to_string();
+        let font_family = font_family_owned.as_str();
         let font_size = v["fontSize"].as_f64().unwrap_or(16.0) as f32;
         let font_weight = v["fontWeight"].as_u64().unwrap_or(400) as u16;
         let font_style = v["fontStyle"].as_str().unwrap_or("normal");
