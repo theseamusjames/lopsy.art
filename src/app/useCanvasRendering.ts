@@ -18,6 +18,7 @@ import {
   syncGroupAdjustments,
   syncMaskEditMode,
   syncBrushTip,
+  syncTextLayers,
   renderEngine,
   markAllLayersDirty,
 } from '../engine-wasm/engine-sync';
@@ -26,9 +27,6 @@ import { renderSelectionAnts, renderTransformHandles } from './rendering/render-
 import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay } from './rendering/render-text-overlay';
-import { rasterizeText } from '../tools/text/text';
-import type { TextStyle } from '../tools/text/text';
-import { uploadLayerPixels } from '../engine-wasm/wasm-bridge';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch } from './rendering/render-guides';
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
@@ -87,41 +85,24 @@ function renderFrameGpu(
   const rulerHover = uiState.rulerHover;
   const guideColor = uiState.guideColor;
 
-  // Live-update text layer pixels during editing so the GPU preview
-  // matches the committed result exactly (same pipeline).
+  // Live-update text layer pixels during editing via the WASM engine (swash software rasterizer).
   const textEditing = uiState.textEditing;
-  if (textEditing && textEditing.text.length > 0) {
-    const ts = toolState;
-    const textStyle: TextStyle = {
-      fontSize: ts.textFontSize,
-      fontFamily: ts.textFontFamily,
-      fontWeight: ts.textFontWeight,
-      fontStyle: ts.textFontStyle,
-      color: toolState.foregroundColor,
-      lineHeight: 1.4,
-      letterSpacing: 0,
-      textAlign: ts.textAlign,
-    };
-    const { canvas: textCanvas, layout } = rasterizeText(
-      textEditing.text,
-      textStyle,
-      textEditing.bounds.width,
-    );
-    const desiredX = textEditing.bounds.x + layout.offsetX;
-    const desiredY = textEditing.bounds.y + layout.offsetY;
-    const layer = layers.find((l) => l.id === textEditing.layerId);
-    // Keep the engine's view of layer.x/y in sync with the rasterized canvas
-    // so the live preview is positioned the same way as the committed result.
-    if (layer && (layer.x !== desiredX || layer.y !== desiredY)) {
-      editorState.updateTextLayerProperties(textEditing.layerId, { x: desiredX, y: desiredY });
-    }
-    const textCtx = textCanvas.getContext('2d');
-    if (textCtx) {
-      const imgData = textCtx.getImageData(0, 0, layout.width, layout.height);
-      const rawBytes = new Uint8Array(imgData.data.buffer, imgData.data.byteOffset, imgData.data.byteLength);
-      uploadLayerPixels(engine, textEditing.layerId, rawBytes, layout.width, layout.height, desiredX, desiredY);
-    }
-  }
+  syncTextLayers(
+    engine,
+    textEditing,
+    toolState.textFontSize,
+    toolState.textFontFamily,
+    toolState.textFontWeight,
+    toolState.textFontStyle,
+    toolState.textAlign,
+    toolState.foregroundColor,
+    (layerId, x, y) => {
+      const layer = layers.find((l) => l.id === layerId);
+      if (layer && (layer.x !== x || layer.y !== y)) {
+        editorState.updateTextLayerProperties(layerId, { x, y });
+      }
+    },
+  );
 
   syncDocumentSize(engine, doc.width, doc.height);
   syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);

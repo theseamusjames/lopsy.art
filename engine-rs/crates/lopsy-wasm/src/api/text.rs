@@ -30,17 +30,35 @@ pub fn set_text_layer_content(
         .map_err(|e| JsError::new(&e))
 }
 
-/// Render the text layer to its GPU texture.
-/// Phase 1 stub — currently a no-op. Phase 3 implements the full pipeline.
+/// Rasterize the text layer via swash and cache the RGBA bytes.
+/// Returns [width, height, offset_x, offset_y] if content was rendered,
+/// or an empty array if the layer has no visible glyphs.
+/// Callers should follow up with getRenderedTextPixels() and uploadLayerPixels().
 #[wasm_bindgen(js_name = "renderTextLayer")]
-pub fn render_text_layer(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
-    if engine.inner.text_renderer.is_none() {
-        return Err(JsError::new(
-            "text renderer not initialized — call loadFontData first",
-        ));
+pub fn render_text_layer(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
+    let tr = match engine.inner.text_renderer.as_mut() {
+        Some(t) => t,
+        None => return vec![],
+    };
+    match tr.render_text_layer_software(layer_id) {
+        Some((pixels, w, h, ox, oy)) => {
+            if let Some(state) = tr.text_layers.get_mut(layer_id) {
+                state.rendered_pixels = Some(pixels);
+            }
+            vec![w as f64, h as f64, ox as f64, oy as f64]
+        }
+        None => vec![],
     }
-    let _ = layer_id;
-    Ok(())
+}
+
+/// Return the cached RGBA pixel bytes from the last renderTextLayer call.
+/// Returns an empty array if no pixels are cached.
+#[wasm_bindgen(js_name = "getRenderedTextPixels")]
+pub fn get_rendered_text_pixels(engine: &mut Engine, layer_id: &str) -> Vec<u8> {
+    match engine.inner.text_renderer.as_ref() {
+        Some(tr) => tr.get_rendered_pixels(layer_id),
+        None => vec![],
+    }
 }
 
 /// Measure the bounding box. Returns [x, y, width, height] as a flat f64 array.

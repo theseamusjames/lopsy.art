@@ -1,10 +1,10 @@
 //! Text rendering state: font loading, shaping, layout, and measurement.
 //!
 //! Phase 1: font loading, text layout, and measurement via cosmic-text.
-//! `render_text_layer` is a stub — Phase 3 implements the GPU pipeline.
+//! Phase 3: software rasterization via swash → RGBA bytes for GPU upload.
 
 use std::collections::HashMap;
-use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Style, SwashCache, Weight, Wrap};
+use cosmic_text::{Align, Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Style, SwashCache, Weight, Wrap};
 
 use crate::glyph_atlas::GlyphAtlas;
 
@@ -13,6 +13,8 @@ pub struct TextLayerState {
     pub color: [f32; 4],
     /// Hash of the last serialized props JSON — skip re-layout when unchanged.
     pub props_hash: u64,
+    /// RGBA pixel bytes from the most recent software render. Cleared on re-layout.
+    pub rendered_pixels: Option<Vec<u8>>,
 }
 
 pub struct TextRendererState {
@@ -31,12 +33,13 @@ fn hash_str(s: &str) -> u64 {
 }
 
 impl TextRendererState {
-    /// Create with an empty FontSystem (no system font scanning — correct for WASM).
+    /// Create with a FontSystem pre-loaded with the bundled Inter Regular font.
     pub fn new() -> Self {
-        let font_system = FontSystem::new_with_locale_and_db(
-            "en-US".to_string(),
-            cosmic_text::fontdb::Database::new(),
+        let mut db = cosmic_text::fontdb::Database::new();
+        db.load_font_data(
+            include_bytes!("fonts/Inter-Regular.ttf").to_vec(),
         );
+        let font_system = FontSystem::new_with_locale_and_db("en-US".to_string(), db);
         Self {
             font_system,
             swash_cache: SwashCache::new(),
@@ -134,6 +137,18 @@ impl TextRendererState {
             .style(style);
 
         buffer.set_text(&mut self.font_system, text, attrs, Shaping::Advanced);
+
+        let text_align_val = v["textAlign"].as_str().unwrap_or("left");
+        let align = match text_align_val {
+            "right" => Some(Align::Right),
+            "center" => Some(Align::Center),
+            "justify" => Some(Align::Justified),
+            _ => Some(Align::Left),
+        };
+        for line in buffer.lines.iter_mut() {
+            line.set_align(align);
+        }
+
         buffer.shape_until_scroll(&mut self.font_system, false);
 
         self.text_layers.insert(
@@ -142,6 +157,7 @@ impl TextRendererState {
                 buffer,
                 color,
                 props_hash: new_hash,
+                rendered_pixels: None,
             },
         );
 
@@ -208,10 +224,146 @@ impl TextRendererState {
         result
     }
 
-    /// Phase 1 stub — no-op. Phase 3 implements the full GPU rendering pipeline.
-    /// The `engine` parameter is present for Phase 3 compatibility; unused here.
-    pub fn render_text_layer(&mut self, _layer_id: &str) -> Result<(), String> {
-        Ok(())
+    /// Rasterize the text layer via swash (software) and return RGBA bytes plus
+    /// layout geometry. Returns `None` if the layer doesn't exist or has no glyphs.
+    ///
+    /// Return value: `(pixels, width, height, offset_x, offset_y)` where
+    /// `offset_x`/`offset_y` are the offsets from the text anchor to the top-left
+    /// of the rendered canvas — callers should set `layer.x = anchor_x + offset_x`.
+    pub fn render_text_layer_software(
+        &mut self,
+        layer_id: &str,
+    ) -> Option<(Vec<u8>, u32, u32, i32, i32)> {
+        let state = self.text_layers.get_mut(layer_id)?;
+
+        // Padding prevents antialiased edges and descenders from clipping.
+        let pad: i32 = 4;
+
+        // Pass 1: measure pixel-space bounding box across all glyphs.
+        let mut min_x = i32::MAX;
+        let mut min_y = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut max_y = i32::MIN;
+
+        for run in state.buffer.layout_runs() {
+            let baseline_y = run.line_y.round() as i32;
+            for glyph in run.glyphs.iter() {
+                let phys = glyph.physical((0.0, run.line_y), 1.0);
+                let img_opt = self.swash_cache.get_image(&mut self.font_system, phys.cache_key);
+                if let Some(img) = img_opt {
+                    if img.placement.width == 0 || img.placement.height == 0 {
+                        continue;
+                    }
+                    let gx = phys.x + img.placement.left;
+                    let gy = baseline_y - img.placement.top;
+                    let gw = img.placement.width as i32;
+                    let gh = img.placement.height as i32;
+                    if gx < min_x { min_x = gx; }
+                    if gy < min_y { min_y = gy; }
+                    if gx + gw > max_x { max_x = gx + gw; }
+                    if gy + gh > max_y { max_y = gy + gh; }
+                }
+            }
+        }
+
+        if min_x == i32::MAX {
+            return None;
+        }
+
+        let canvas_x = min_x - pad;
+        let canvas_y = min_y - pad;
+        let canvas_w = (max_x - min_x + pad * 2).max(1) as u32;
+        let canvas_h = (max_y - min_y + pad * 2).max(1) as u32;
+
+        let mut pixels = vec![0u8; (canvas_w * canvas_h * 4) as usize];
+        let color = state.color;
+
+        // Pass 2: composite each glyph into the RGBA buffer with premultiplied alpha.
+        for run in state.buffer.layout_runs() {
+            let baseline_y = run.line_y.round() as i32;
+            for glyph in run.glyphs.iter() {
+                let phys = glyph.physical((0.0, run.line_y), 1.0);
+                let img_opt = self.swash_cache.get_image(&mut self.font_system, phys.cache_key);
+                let img = match img_opt {
+                    Some(i) if i.placement.width > 0 && i.placement.height > 0 => {
+                        // Clone to avoid holding an immutable borrow during pixel compositing.
+                        i.clone()
+                    }
+                    _ => continue,
+                };
+
+                let gx = phys.x + img.placement.left;
+                let gy = baseline_y - img.placement.top;
+
+                match img.content {
+                    cosmic_text::SwashContent::Mask => {
+                        for (idx, &alpha_byte) in img.data.iter().enumerate() {
+                            if alpha_byte == 0 { continue; }
+                            let bx = idx as i32 % img.placement.width as i32;
+                            let by = idx as i32 / img.placement.width as i32;
+                            let px = gx + bx - canvas_x;
+                            let py = gy + by - canvas_y;
+                            if px < 0 || py < 0 || px >= canvas_w as i32 || py >= canvas_h as i32 {
+                                continue;
+                            }
+                            let base = ((py as u32 * canvas_w + px as u32) * 4) as usize;
+                            // Source alpha: glyph alpha * text color alpha.
+                            let src_a = (alpha_byte as f32 / 255.0) * color[3];
+                            // Alpha-composite over existing pixel (src-over).
+                            let dst_a = pixels[base + 3] as f32 / 255.0;
+                            let out_a = src_a + dst_a * (1.0 - src_a);
+                            if out_a > 0.0 {
+                                pixels[base]     = ((color[0] * src_a + pixels[base]     as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                pixels[base + 1] = ((color[1] * src_a + pixels[base + 1] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                pixels[base + 2] = ((color[2] * src_a + pixels[base + 2] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                pixels[base + 3] = (out_a * 255.0).round() as u8;
+                            }
+                        }
+                    }
+                    cosmic_text::SwashContent::Color => {
+                        let mut i = 0;
+                        for by in 0..img.placement.height as i32 {
+                            for bx in 0..img.placement.width as i32 {
+                                let r = img.data[i];
+                                let g = img.data[i + 1];
+                                let b = img.data[i + 2];
+                                let a = img.data[i + 3];
+                                i += 4;
+                                if a == 0 { continue; }
+                                let px = gx + bx - canvas_x;
+                                let py = gy + by - canvas_y;
+                                if px < 0 || py < 0 || px >= canvas_w as i32 || py >= canvas_h as i32 {
+                                    continue;
+                                }
+                                let base = ((py as u32 * canvas_w + px as u32) * 4) as usize;
+                                let src_a = a as f32 / 255.0;
+                                let dst_a = pixels[base + 3] as f32 / 255.0;
+                                let out_a = src_a + dst_a * (1.0 - src_a);
+                                if out_a > 0.0 {
+                                    pixels[base]     = ((r as f32 / 255.0 * src_a + pixels[base]     as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                    pixels[base + 1] = ((g as f32 / 255.0 * src_a + pixels[base + 1] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                    pixels[base + 2] = ((b as f32 / 255.0 * src_a + pixels[base + 2] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                    pixels[base + 3] = (out_a * 255.0).round() as u8;
+                                }
+                            }
+                        }
+                    }
+                    // SubpixelMask and other variants — skip (rare, not needed for basic rendering).
+                    _ => {}
+                }
+            }
+        }
+
+        Some((pixels, canvas_w, canvas_h, canvas_x, canvas_y))
+    }
+
+    /// Return the cached RGBA pixel bytes from the last render, or empty if none.
+    pub fn get_rendered_pixels(&self, layer_id: &str) -> Vec<u8> {
+        self.text_layers
+            .get(layer_id)
+            .and_then(|s| s.rendered_pixels.as_ref())
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Remove all state for a deleted text layer.
@@ -235,9 +387,9 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_font_system_has_no_inter() {
+    fn test_bundled_inter_is_loaded() {
         let renderer = make_renderer();
-        assert!(!renderer.is_font_loaded("Inter"));
+        assert!(renderer.is_font_loaded("Inter"), "Inter should be bundled in new()");
     }
 
     #[test]
