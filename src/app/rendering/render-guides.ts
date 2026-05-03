@@ -1,4 +1,4 @@
-import type { Guide, RulerHover } from '../ui-store';
+import type { Guide, RulerHover, SnapLine } from '../ui-store';
 import type { Color } from '../../types';
 import { RULER_SIZE } from './ruler-constants';
 
@@ -179,6 +179,41 @@ export function renderGuideColorSwatch(
   ctx.beginPath();
   ctx.roundRect(padding, padding, size, size, 2);
   ctx.stroke();
+}
+
+const SNAP_LINE_COLOR = 'rgba(255, 0, 220, 0.85)';
+
+/**
+ * Render temporary snap alignment lines during move/transform operations.
+ * Called inside the document-space transform.
+ */
+export function renderSnapLines(
+  ctx: CanvasRenderingContext2D,
+  snapLines: readonly SnapLine[],
+  docWidth: number,
+  docHeight: number,
+  zoom: number,
+): void {
+  if (snapLines.length === 0) return;
+
+  ctx.save();
+  ctx.strokeStyle = SNAP_LINE_COLOR;
+  ctx.lineWidth = 1 / zoom;
+  ctx.setLineDash([]);
+
+  for (const line of snapLines) {
+    ctx.beginPath();
+    if (line.orientation === 'vertical') {
+      ctx.moveTo(line.position, 0);
+      ctx.lineTo(line.position, docHeight);
+    } else {
+      ctx.moveTo(0, line.position);
+      ctx.lineTo(docWidth, line.position);
+    }
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
 function drawTooltip(

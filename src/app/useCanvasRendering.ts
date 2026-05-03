@@ -28,7 +28,7 @@ import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './rendering/render-text-overlay';
 import { hitTestTextLayer } from '../tools/text/text-hit-test';
-import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch } from './rendering/render-guides';
+import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './rendering/render-guides';
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 import { getActiveMaskEditBuffer } from './interactions/mask-buffer';
@@ -136,6 +136,7 @@ function renderFrameGpu(
   const gradientPreview = uiState.gradientPreview;
   const showGuides = uiState.showGuides;
   const guides = uiState.guides;
+  const snapLines = uiState.snapLines;
   const selectedGuideId = uiState.selectedGuideId;
   const hoveredGuideId = uiState.hoveredGuideId;
   const rulerHover = uiState.rulerHover;
@@ -258,6 +259,8 @@ function renderFrameGpu(
         : brushCursorInfo.size;
       renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape);
     }
+
+    renderSnapLines(overlayCtx, snapLines, doc.width, doc.height, viewport.zoom);
 
     if (showGuides) {
       renderGuides(overlayCtx, guides, selectedGuideId, doc.width, doc.height, viewport.zoom, guideColor);
