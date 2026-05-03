@@ -306,6 +306,28 @@ pub fn crop_layer_texture(
     ).map_err(|e| JsError::new(&e))
 }
 
+/// Expand a raster layer's GPU texture to full document size so that
+/// transform/stretch operations never clip beyond the original content bounds.
+/// Returns [0, 0, doc_w, doc_h] on success, or [] on error.
+#[wasm_bindgen(js_name = "expandLayerToDocSize")]
+pub fn expand_layer_to_doc_size(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
+    match layer_manager::expand_layer_to_doc_size(&mut engine.inner, layer_id) {
+        Ok([x, y, w, h]) => vec![x as f64, y as f64, w as f64, h as f64],
+        Err(_) => vec![],
+    }
+}
+
+/// Crop a raster layer's GPU texture to the bounding box of its non-transparent
+/// pixels. Returns [new_x, new_y, new_w, new_h] on success, or [] on error.
+/// If fully transparent, returns [x, y, 0, 0].
+#[wasm_bindgen(js_name = "cropLayerToContent")]
+pub fn crop_layer_to_content(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
+    match layer_manager::crop_layer_to_content(&mut engine.inner, layer_id) {
+        Ok([x, y, w, h]) => vec![x as f64, y as f64, w as f64, h as f64],
+        Err(_) => vec![],
+    }
+}
+
 #[wasm_bindgen(js_name = "clipboardCopy")]
 pub fn clipboard_copy(
     engine: &mut Engine,

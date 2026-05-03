@@ -772,6 +772,120 @@ pub fn clipboard_paste(
     Ok(())
 }
 
+/// Expand a layer's GPU texture to the full document size, blitting existing
+/// content to its correct position within the new doc-sized buffer.
+/// Returns [x, y, width, height] = [0, 0, doc_w, doc_h] on success.
+/// Used before transform so stretching beyond original content bounds never clips.
+pub fn expand_layer_to_doc_size(
+    engine: &mut EngineInner,
+    layer_id: &str,
+) -> Result<[i32; 4], String> {
+    let tex_handle = *engine.layer_textures.get(layer_id)
+        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
+    let (lw, lh) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let doc_w = engine.doc_width;
+    let doc_h = engine.doc_height;
+
+    let (layer_x, layer_y) = {
+        let desc = engine.layer_stack.iter().find(|l| l.id == layer_id)
+            .ok_or_else(|| format!("Layer desc {layer_id} not found"))?;
+        (desc.x, desc.y)
+    };
+
+    // Already doc-sized at origin: nothing to do.
+    if lw == doc_w && lh == doc_h && layer_x == 0 && layer_y == 0 {
+        return Ok([0, 0, doc_w as i32, doc_h as i32]);
+    }
+
+    let layer_tex = engine.texture_pool.get(tex_handle).cloned()
+        .ok_or("Layer texture not found")?;
+
+    let new_tex = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
+    let new_gl_tex = engine.texture_pool.get(new_tex).cloned()
+        .ok_or("New texture not found")?;
+
+    // clipboard_copy shader: maps doc-space UV to source layer UV; clips to
+    // the source bounds, leaves transparent outside.
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&new_gl_tex, doc_w as i32, doc_h as i32, |engine| {
+        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+
+        let shader = &engine.shaders.clipboard_copy;
+        engine.gl.use_program(Some(&shader.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        if let Some(loc) = shader.location(&engine.gl, "u_layerTex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), layer_x as f32, layer_y as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), lw as f32, lh as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_boundsOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_boundsSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+        engine.draw_fullscreen_quad();
+    });
+
+    engine.texture_pool.release(tex_handle);
+    engine.layer_textures.insert(layer_id.to_string(), new_tex);
+
+    if let Some(desc) = engine.layer_stack.iter_mut().find(|l| l.id == layer_id) {
+        desc.x = 0;
+        desc.y = 0;
+        desc.width = doc_w;
+        desc.height = doc_h;
+    }
+
+    engine.mark_layer_dirty(layer_id);
+    Ok([0, 0, doc_w as i32, doc_h as i32])
+}
+
+/// Crop a layer's GPU texture to the bounding box of its non-transparent
+/// pixels. Returns [new_x, new_y, new_w, new_h] on success.
+/// If the layer is fully transparent, returns [x, y, 0, 0] (no resize).
+/// Counterpart to expand_layer_to_doc_size — called when a layer is deactivated.
+pub fn crop_layer_to_content(
+    engine: &mut EngineInner,
+    layer_id: &str,
+) -> Result<[i32; 4], String> {
+    let tex_handle = *engine.layer_textures.get(layer_id)
+        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
+    let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+
+    let (layer_x, layer_y) = {
+        let desc = engine.layer_stack.iter().find(|l| l.id == layer_id)
+            .ok_or_else(|| format!("Layer desc {layer_id} not found"))?;
+        (desc.x, desc.y)
+    };
+
+    // read_pixels returns top-down pixels: GL row 0 = image top row (textures
+    // are stored with image-top at GL-bottom, matching document space).
+    let pixels = read_pixels(engine, layer_id)?;
+    let (_, crop_rect) = lopsy_core::pixel_buffer::crop_to_content_bounds(&pixels, tw, th);
+
+    if crop_rect.width == 0 || crop_rect.height == 0 {
+        return Ok([layer_x, layer_y, 0, 0]);
+    }
+
+    let cx = crop_rect.x;
+    let cy = crop_rect.y;
+    let cw = crop_rect.width;
+    let ch = crop_rect.height;
+    let new_x = layer_x + cx;
+    let new_y = layer_y + cy;
+
+    crop_texture(engine, layer_id, layer_x, layer_y, new_x, new_y, cw, ch)?;
+
+    if let Some(desc) = engine.layer_stack.iter_mut().find(|l| l.id == layer_id) {
+        desc.x = new_x;
+        desc.y = new_y;
+        desc.width = cw;
+        desc.height = ch;
+    }
+
+    engine.mark_layer_dirty(layer_id);
+    Ok([new_x, new_y, cw as i32, ch as i32])
+}
+
 /// Lift selected pixels from a layer into a floating texture, clearing them
 /// from the layer. The float can then be moved and composited at different
 /// offsets via `composite_float`.
@@ -782,6 +896,11 @@ pub fn float_selection(
     // Release any existing float
     drop_float(engine);
 
+    // Expand the layer to doc size before creating the float so that
+    // transform/stretch never clips content beyond the original texture bounds.
+    // This is a no-op if the layer is already doc-sized.
+    let _ = expand_layer_to_doc_size(engine, layer_id);
+
     let layer_tex_handle = *engine.layer_textures.get(layer_id)
         .ok_or_else(|| format!("Layer {layer_id} not found"))?;
     let (lw, lh) = engine.texture_pool.get_size(layer_tex_handle).unwrap_or((1, 1));
@@ -789,20 +908,10 @@ pub fn float_selection(
         .ok_or_else(|| format!("Layer desc {layer_id} not found"))?;
     let layer_x = layer_desc.x;
     let layer_y = layer_desc.y;
-    let is_text = layer_desc.layer_type == lopsy_core::layer::LayerType::Text;
 
-    // For text layers, expand float buffer to diagonal size to prevent rotation clipping.
-    // Text layers have tight bounding boxes (e.g., 444×68 for "ROTATE ME" at 80px).
-    // Rotating within the original fw×fh float clips content at large aspect ratios;
-    // a d×d buffer gives full 360° rotation without clipping.
-    let (fw, fh, pad_x, pad_y) = if is_text && (lw != lh) {
-        let d = ((lw as f64).hypot(lh as f64).ceil() as u32 + 2).max(lw).max(lh);
-        let px = (d - lw) / 2;
-        let py = (d - lh) / 2;
-        (d, d, px, py)
-    } else {
-        (lw, lh, 0u32, 0u32)
-    };
+    // After expansion, the layer is always doc-sized at (0,0): no diagonal
+    // padding needed. The float inherits the full doc-sized buffer.
+    let (fw, fh, pad_x, pad_y) = (lw, lh, 0u32, 0u32);
     let new_x = layer_x - pad_x as i32;
     let new_y = layer_y - pad_y as i32;
 

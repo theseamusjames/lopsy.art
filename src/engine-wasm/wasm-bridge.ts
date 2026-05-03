@@ -201,6 +201,8 @@ import init, {
   getGlyphPositions,
   removeTextLayerState,
   isFontLoaded,
+  expandLayerToDocSize,
+  cropLayerToContent,
 } from './pkg/lopsy_wasm';
 
 export type { Engine };
@@ -420,4 +422,6 @@ export {
   getGlyphPositions,
   removeTextLayerState,
   isFontLoaded,
+  expandLayerToDocSize,
+  cropLayerToContent,
 };
