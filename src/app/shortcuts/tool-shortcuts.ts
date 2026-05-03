@@ -1,6 +1,7 @@
 import { useUIStore } from '../ui-store';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { SHORTCUT_TO_TOOL } from '../../tools/tool-registry';
+import { toggleQuickMaskMode } from '../interactions/quick-mask-ops';
 
 /**
  * Color swatches aren't tools but share the single-key shortcut namespace,
@@ -9,6 +10,7 @@ import { SHORTCUT_TO_TOOL } from '../../tools/tool-registry';
 const COLOR_SHORTCUTS: Record<string, () => void> = {
   x: () => useToolSettingsStore.getState().swapColors(),
   d: () => useToolSettingsStore.getState().resetColors(),
+  q: () => toggleQuickMaskMode(),
 };
 
 export function handleToolShortcut(e: KeyboardEvent): boolean {

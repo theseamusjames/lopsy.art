@@ -1,5 +1,6 @@
 import type { Layer, Point, Rect } from '../../types';
 import type { PathAnchor } from '../../tools/path/path';
+import type { QuickMaskBuffer } from '../interactions/quick-mask-buffer';
 
 interface PathOverlaySource {
   anchors: readonly PathAnchor[];
@@ -204,6 +205,52 @@ export function renderGradientPreview(
     ctx.stroke();
   }
 
+  ctx.restore();
+}
+
+/**
+ * Render the Quick Mask overlay onto the document area of the overlay canvas.
+ * The overlay canvas is already transformed so (0,0) is the document's top-left.
+ *
+ * Red (semi-transparent) covers unselected (mask=0) areas.
+ * Selected (mask=255) areas are left clear so the image shows through.
+ */
+export function renderQuickMaskOverlay(
+  ctx: CanvasRenderingContext2D,
+  buf: QuickMaskBuffer,
+  zoom: number,
+): void {
+  const { data, width, height } = buf;
+
+  // Use a temporary ImageData to render the mask as red tint.
+  // Each pixel: red channel with alpha proportional to (255 - mask value).
+  const imageData = ctx.createImageData(width, height);
+  const pixels = imageData.data;
+  for (let i = 0; i < data.length; i++) {
+    const maskVal = data[i] ?? 0;
+    // 0 = fully unselected → full red overlay (alpha 153 ~60%)
+    // 255 = fully selected → no overlay (alpha 0)
+    const alpha = Math.round((1 - maskVal / 255) * 153);
+    const base = i * 4;
+    pixels[base] = 255;      // R
+    pixels[base + 1] = 0;    // G
+    pixels[base + 2] = 0;    // B
+    pixels[base + 3] = alpha;
+  }
+
+  // Draw via offscreen canvas so we can scale it with the viewport zoom.
+  // We draw the image in doc-space (the canvas ctx is already scaled by zoom).
+  // Using imageSmoothingEnabled=false keeps pixel-sharp edges.
+  const offscreen = document.createElement('canvas');
+  offscreen.width = width;
+  offscreen.height = height;
+  const offCtx = offscreen.getContext('2d');
+  if (!offCtx) return;
+  offCtx.putImageData(imageData, 0, 0);
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = zoom < 4;
+  ctx.drawImage(offscreen, 0, 0);
   ctx.restore();
 }
 

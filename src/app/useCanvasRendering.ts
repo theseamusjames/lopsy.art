@@ -25,13 +25,14 @@ import {
 import { renderGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
-import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
+import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor, renderQuickMaskOverlay } from './rendering/render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './rendering/render-text-overlay';
 import { hitTestTextLayer } from '../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch } from './rendering/render-guides';
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 import { getActiveMaskEditBuffer } from './interactions/mask-buffer';
+import { getQuickMaskBuffer } from './interactions/quick-mask-buffer';
 import { uploadLayerMask, expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDimensions, getGlyphPositions } from '../engine-wasm/wasm-bridge';
 
 
@@ -203,6 +204,14 @@ function renderFrameGpu(
 
     if (showGrid) {
       renderGrid(overlayCtx, doc.width, doc.height, gridSize, viewport.zoom);
+    }
+
+    // Quick Mask overlay: render before selection ants so ants appear on top
+    if (uiState.isQuickMaskMode) {
+      const qmBuf = getQuickMaskBuffer();
+      if (qmBuf) {
+        renderQuickMaskOverlay(overlayCtx, qmBuf, viewport.zoom);
+      }
     }
 
     renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhaseRef.current, transform);

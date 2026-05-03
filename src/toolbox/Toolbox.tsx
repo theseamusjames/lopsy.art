@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { IconButton } from '../components/IconButton/IconButton';
 import { useUIStore } from '../app/ui-store';
+import { toggleQuickMaskMode } from '../app/interactions/quick-mask-ops';
 import type { ToolId } from '../types';
 import styles from './Toolbox.module.css';
 
@@ -40,6 +41,15 @@ function MarqueeEllipseIcon({ size }: { size: number }) {
   );
 }
 
+
+function QuickMaskIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3 A9 9 0 0 0 12 21" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
 
 function GradientIcon({ size }: { size: number }) {
   return (
@@ -101,6 +111,7 @@ const toolGroups: ToolDef[][] = [
 export function Toolbox() {
   const activeTool = useUIStore((s) => s.activeTool);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
+  const isQuickMaskMode = useUIStore((s) => s.isQuickMaskMode);
 
   return (
     <div className={styles.toolbox} role="toolbar" aria-label="Drawing tools">
@@ -119,6 +130,15 @@ export function Toolbox() {
             ))}
           </div>
         ))}
+        <div className={styles.group} role="group">
+          <IconButton
+            icon={<QuickMaskIcon size={ICON_SIZE} />}
+            label={isQuickMaskMode ? 'Exit Quick Mask (Q)' : 'Enter Quick Mask (Q)'}
+            isActive={isQuickMaskMode}
+            onClick={toggleQuickMaskMode}
+            data-testid="quick-mask-toggle"
+          />
+        </div>
       </div>
     </div>
   );

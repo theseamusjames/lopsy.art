@@ -98,6 +98,7 @@ interface UIState {
   activeTransformHandle: TransformHandle | null;
   meshWarp: MeshWarpSession | null;
   maskEditMode: boolean;
+  isQuickMaskMode: boolean;
   /** Active modal, or null when nothing is open. Only one at a time. */
   modal: ModalState | null;
   showEffectsDrawer: boolean;
@@ -107,6 +108,7 @@ interface UIState {
   gradientPreview: { start: Point; end: Point } | null;
   setCursorPosition: (pos: Point) => void;
   setMaskEditMode: (mode: boolean) => void;
+  toggleQuickMaskMode: () => void;
   /** Open a modal, replacing any that was already open. */
   openModal: (next: ModalState) => void;
   /** Close whatever modal is open. */
@@ -200,6 +202,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeTransformHandle: null,
   meshWarp: null,
   maskEditMode: false,
+  isQuickMaskMode: false,
   modal: null,
   showEffectsDrawer: false,
   showReferenceModal: false,
@@ -216,6 +219,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   gradientPreview: null,
   setCursorPosition: (pos) => set({ cursorPosition: pos }),
   setMaskEditMode: (mode) => set({ maskEditMode: mode }),
+  toggleQuickMaskMode: () => set((state) => ({ isQuickMaskMode: !state.isQuickMaskMode })),
 
   // ─── Modal slot ────────────────────────────────────────────────────────
   openModal: (next) => set({ modal: next }),

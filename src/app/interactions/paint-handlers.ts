@@ -5,6 +5,7 @@ import { createMaskSurface } from '../../engine/mask-utils';
 import { generateBrushStamp, interpolatePoints, applyBrushDab, interpolatePointsWithScatter, resetScatterSpacingRemainder } from '../../tools/brush/brush';
 import { drawPencilLine } from '../../tools/pencil/pencil';
 import { setActiveMaskEditBuffer } from './mask-buffer';
+import { getQuickMaskBuffer } from './quick-mask-buffer';
 import type { InteractionContext, InteractionState } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -34,7 +35,7 @@ export function handlePaintDown(
   ctx: InteractionContext,
   tool: PaintTool,
 ): InteractionState | undefined {
-  const { layerPos, activeLayer, activeLayerId, shiftKey, lastPaintPointRef } = ctx;
+  const { canvasPos, layerPos, activeLayer, activeLayerId, shiftKey, lastPaintPointRef } = ctx;
   const toolSettings = useToolSettingsStore.getState();
 
   const shiftLine = shiftKey
@@ -44,6 +45,84 @@ export function handlePaintDown(
 
   const editorState = useEditorStore.getState();
   const maskEditMode = useUIStore.getState().maskEditMode;
+  const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+
+  // Quick Mask Mode: paint on the document-sized quick mask buffer in doc-space.
+  // Brush paints white (255 = add to selection), eraser paints black (0 = remove).
+  if (isQuickMaskMode) {
+    const qmBuf = getQuickMaskBuffer();
+    if (qmBuf) {
+      editorState.pushHistory();
+      const maskSurface = createMaskSurface(
+        new Uint8ClampedArray(qmBuf.data.buffer, qmBuf.data.byteOffset, qmBuf.data.byteLength),
+        qmBuf.width,
+        qmBuf.height,
+      );
+      // White = selected (255), black = unselected (0)
+      const paintColor = tool === 'eraser'
+        ? { r: 0, g: 0, b: 0, a: 1 }
+        : { r: 255, g: 255, b: 255, a: 1 };
+
+      // Paint in doc-space (canvasPos), not layer-local coords
+      const qmShiftFrom = shiftLine ? lastPaintPointRef.current!.point : canvasPos;
+
+      const state: InteractionState = {
+        drawing: true,
+        lastPoint: canvasPos,
+        pixelBuffer: maskSurface,
+        originalPixelBuffer: null,
+        layerId: activeLayerId,
+        tool,
+        startPoint: null,
+        layerStartX: 0,
+        layerStartY: 0,
+        ...DEFAULT_TRANSFORM_FIELDS,
+        maskMode: true,
+      };
+
+      if (tool === 'brush') {
+        const size = toolSettings.brushSize;
+        const hardness = toolSettings.brushHardness / 100;
+        const opacity = toolSettings.brushOpacity / 100;
+        const stamp = generateBrushStamp(size, hardness);
+        if (shiftLine) {
+          const spacing = Math.max(1, size * 0.25);
+          const pts = interpolatePoints(qmShiftFrom, canvasPos, spacing);
+          for (const pt of pts) {
+            applyBrushDab(maskSurface, pt, stamp, size, paintColor, opacity, 1);
+          }
+        } else {
+          applyBrushDab(maskSurface, canvasPos, stamp, size, paintColor, opacity, 1);
+        }
+      } else if (tool === 'pencil') {
+        const size = toolSettings.pencilSize;
+        drawPencilLine(maskSurface, qmShiftFrom, canvasPos, paintColor, size);
+      } else {
+        const size = toolSettings.eraserSize;
+        const hardness = 0.8;
+        const opacity = toolSettings.eraserOpacity / 100;
+        const stamp = generateBrushStamp(size, hardness);
+        if (shiftLine) {
+          const spacing = Math.max(1, size * 0.25);
+          const pts = interpolatePoints(qmShiftFrom, canvasPos, spacing);
+          for (const pt of pts) {
+            applyBrushDab(maskSurface, pt, stamp, size, paintColor, opacity, 1);
+          }
+        } else {
+          applyBrushDab(maskSurface, canvasPos, stamp, size, paintColor, opacity, 1);
+        }
+      }
+
+      // Sync mask surface back to the quick mask buffer (R channel = mask value)
+      const raw = maskSurface.rawData;
+      for (let i = 0; i < qmBuf.data.length; i++) {
+        qmBuf.data[i] = raw[i * 4] ?? 0;
+      }
+
+      editorState.notifyRender();
+      return state;
+    }
+  }
 
   // Mask edit mode stays on CPU — small surface, infrequent
   if (maskEditMode && activeLayer.mask) {
@@ -373,7 +452,10 @@ export function handlePaintMove(
   // Mask edit mode stays on CPU
   if (state.maskMode) {
     if (!state.pixelBuffer) return;
-    handleMaskPaintMove(state, layerLocalPos, toolSettings);
+    // Quick Mask Mode uses doc-space (canvasPos); regular mask edit uses layer-local pos
+    const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+    const posForMask = isQuickMaskMode ? ctx.canvasPos : layerLocalPos;
+    handleMaskPaintMove(state, posForMask, toolSettings, isQuickMaskMode);
     return;
   }
 
@@ -485,13 +567,19 @@ export function handlePaintMove(
   }
 }
 
-/** CPU-only mask painting (small internal surface). */
+/** CPU-only mask painting (layer mask surface or quick mask buffer). */
 function handleMaskPaintMove(
   state: InteractionState,
-  layerLocalPos: { x: number; y: number },
+  pos: { x: number; y: number },
   toolSettings: ReturnType<typeof useToolSettingsStore.getState>,
+  isQuickMaskMode: boolean,
 ): void {
   if (!state.pixelBuffer || !state.lastPoint) return;
+
+  // In regular mask edit mode: brush → black (hide), eraser → white (reveal)
+  // In quick mask mode: brush → white (select = add), eraser → black (deselect)
+  const brushColor = isQuickMaskMode ? { r: 255, g: 255, b: 255, a: 1 } : { r: 0, g: 0, b: 0, a: 1 };
+  const eraserColor = isQuickMaskMode ? { r: 0, g: 0, b: 0, a: 1 } : { r: 255, g: 255, b: 255, a: 1 };
 
   switch (state.tool) {
     case 'brush': {
@@ -500,17 +588,15 @@ function handleMaskPaintMove(
       const opacity = toolSettings.brushOpacity / 100;
       const spacing = Math.max(1, size * 0.25);
       const stamp = generateBrushStamp(size, hardness);
-      const color = { r: 0, g: 0, b: 0, a: 1 };
-      const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
+      const points = interpolatePoints(state.lastPoint, pos, spacing);
       for (const pt of points) {
-        applyBrushDab(state.pixelBuffer, pt, stamp, size, color, opacity, 1);
+        applyBrushDab(state.pixelBuffer, pt, stamp, size, brushColor, opacity, 1);
       }
       break;
     }
     case 'pencil': {
-      const color = { r: 0, g: 0, b: 0, a: 1 };
       const size = toolSettings.pencilSize;
-      drawPencilLine(state.pixelBuffer, state.lastPoint, layerLocalPos, color, size);
+      drawPencilLine(state.pixelBuffer, state.lastPoint, pos, brushColor, size);
       break;
     }
     case 'eraser': {
@@ -519,16 +605,27 @@ function handleMaskPaintMove(
       const opacity = toolSettings.eraserOpacity / 100;
       const spacing = Math.max(1, size * 0.25);
       const stamp = generateBrushStamp(size, hardness);
-      const maskColor = { r: 255, g: 255, b: 255, a: 1 };
-      const points = interpolatePoints(state.lastPoint, layerLocalPos, spacing);
+      const points = interpolatePoints(state.lastPoint, pos, spacing);
       for (const pt of points) {
-        applyBrushDab(state.pixelBuffer, pt, stamp, size, maskColor, opacity, 1);
+        applyBrushDab(state.pixelBuffer, pt, stamp, size, eraserColor, opacity, 1);
       }
       break;
     }
     default:
       break;
   }
-  state.lastPoint = layerLocalPos;
+
+  // Sync pixelBuffer back to quick mask buffer when in quick mask mode
+  if (isQuickMaskMode) {
+    const qmBuf = getQuickMaskBuffer();
+    if (qmBuf) {
+      const raw = state.pixelBuffer.rawData;
+      for (let i = 0; i < qmBuf.data.length; i++) {
+        qmBuf.data[i] = raw[i * 4] ?? 0;
+      }
+    }
+  }
+
+  state.lastPoint = pos;
   useEditorStore.getState().notifyRender();
 }
