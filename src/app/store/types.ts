@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { BlendMode, DocumentState, LayerEffects, Rect, TextLayer, ViewportState } from '../../types';
+import type { Artboard, BlendMode, DocumentState, LayerEffects, Rect, TextLayer, ViewportState } from '../../types';
 import type { StoredPath } from '../../types/paths';
 import type { PathAnchor } from '../../tools/path/path';
 import type { AlignEdge } from '../../tools/move/move';
@@ -61,6 +61,13 @@ export interface EditorState {
   documentReady: boolean;
   isDirty: boolean;
   clipboard: ClipboardData | null;
+
+  // Artboards
+  artboards: readonly Artboard[];
+  addArtboard: (artboard: Omit<Artboard, 'id'>) => void;
+  removeArtboard: (id: string) => void;
+  updateArtboard: (id: string, update: Partial<Omit<Artboard, 'id'>>) => void;
+  renameArtboard: (id: string, name: string) => void;
 
   // Paths
   paths: StoredPath[];

@@ -6,6 +6,7 @@ import { createHistorySlice } from './store/history-slice';
 import { createClipboardSlice } from './store/clipboard-slice';
 import { createDocumentSlice } from './store/document-slice';
 import { createPathsSlice } from './store/paths-slice';
+import { createArtboardsSlice } from './store/artboards-slice';
 import type { EditorState } from './store/types';
 
 export type { EditorState };
@@ -18,4 +19,5 @@ export const useEditorStore = create<EditorState>((...a) => ({
   ...createClipboardSlice(...a),
   ...createDocumentSlice(...a),
   ...createPathsSlice(...a),
+  ...createArtboardsSlice(...a),
 }));

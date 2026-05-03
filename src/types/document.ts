@@ -2,6 +2,15 @@ import type { Color } from './color';
 import type { Layer } from './layers';
 import type { Rect } from './geometry';
 
+export interface Artboard {
+  readonly id: string;
+  readonly name: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface DocumentState {
   readonly id: string;
   readonly name: string;
@@ -14,6 +23,7 @@ export interface DocumentState {
   readonly selectedLayerIds: readonly string[];
   readonly backgroundColor: Color;
   readonly rootGroupId?: string | null;
+  readonly artboards: readonly Artboard[];
 }
 
 export interface ViewportState {

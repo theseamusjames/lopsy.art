@@ -24,6 +24,7 @@ function makeDoc(layerCount: number): { doc: DocumentState; pixelData: Map<strin
       activeLayerId: layers[0]!.id,
       selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      artboards: [],
     },
     pixelData,
   };

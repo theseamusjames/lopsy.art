@@ -299,6 +299,95 @@ function finishCanvasExport(
   }, mimeType, qualityFraction);
 }
 
+/**
+ * Export each artboard region as a separate PNG file.
+ * Composites the full document once, then crops to each artboard's bounds.
+ */
+export function exportArtboards(): void {
+  const engine = getEngine();
+  if (!engine) return;
+
+  const state = useEditorStore.getState();
+  const { artboards } = state;
+  if (artboards.length === 0) {
+    notifyError('No artboards defined. Add artboards in the Artboards panel first.');
+    return;
+  }
+
+  finalizePendingStrokeGlobal();
+  flushLayerSync(state);
+
+  const sizeArr = getCompositeSize(engine);
+  const docW = sizeArr[0] ?? 0;
+  const docH = sizeArr[1] ?? 0;
+  if (docW === 0 || docH === 0) return;
+
+  const rawPixels = compositeForExport(engine);
+  const clamped = new Uint8ClampedArray(rawPixels.length);
+  clamped.set(rawPixels);
+
+  for (const ab of artboards) {
+    const x = Math.max(0, Math.round(ab.x));
+    const y = Math.max(0, Math.round(ab.y));
+    const w = Math.min(Math.round(ab.width), docW - x);
+    const h = Math.min(Math.round(ab.height), docH - y);
+    if (w <= 0 || h <= 0) continue;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', contextOptions);
+    if (!ctx) continue;
+
+    const abData = ctx.createImageData(w, h);
+    for (let row = 0; row < h; row++) {
+      const srcOffset = ((y + row) * docW + x) * 4;
+      const dstOffset = row * w * 4;
+      abData.data.set(clamped.subarray(srcOffset, srcOffset + w * 4), dstOffset);
+    }
+    ctx.putImageData(abData, 0, 0);
+
+    // eslint-disable-next-line no-useless-escape
+    const safeName = ab.name.replace(/[\/\\?%*:|"<>]/g, '-');
+    const mimeType = 'image/png';
+
+    const finishExport = (blob: Blob) => {
+      addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE })
+        .then((tagged) => {
+          const url = URL.createObjectURL(tagged);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${safeName}.png`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        })
+        .catch((err) => notifyError(`Failed to export artboard "${ab.name}": ${describeError(err)}`));
+    };
+
+    if (typeof OffscreenCanvas !== 'undefined') {
+      const offscreen = new OffscreenCanvas(w, h);
+      const offCtx = offscreen.getContext('2d', contextOptions);
+      if (offCtx) {
+        offCtx.drawImage(canvas, 0, 0);
+        offscreen
+          .convertToBlob({ type: mimeType } as ImageEncodeOptions)
+          .then(finishExport)
+          .catch((err) => notifyError(`Failed to export artboard "${ab.name}": ${describeError(err)}`));
+        continue;
+      }
+    }
+
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        notifyError(`Failed to export artboard "${ab.name}": browser could not encode image.`);
+        return;
+      }
+      finishExport(blob);
+    }, mimeType);
+  }
+}
+
+
 export const fileMenu: MenuDef = {
   label: 'File',
   items: [

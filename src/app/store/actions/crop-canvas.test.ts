@@ -25,6 +25,7 @@ function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData> } {
       activeLayerId: layer.id,
       selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      artboards: [],
     },
     pixelData,
   };
@@ -60,6 +61,7 @@ describe('computeCropCanvas', () => {
       activeLayerId: raster.id,
       selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      artboards: [],
     };
     const result = computeCropCanvas(doc, new Map(), 0, { x: 20, y: 30, width: 80, height: 70 })!;
     const updated = result.document!.layers.find((l) => l.id === textLayer.id)! as TextLayer;

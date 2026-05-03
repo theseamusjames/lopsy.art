@@ -29,6 +29,7 @@ function makeDoc(effects: LayerEffects): { doc: DocumentState; pixelData: Map<st
       activeLayerId: layer.id,
       selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      artboards: [],
     },
     pixelData,
   };

@@ -1,4 +1,5 @@
 import type { Color, Layer, Point, Rect } from '../../types';
+import type { Artboard } from '../../types/document';
 import type { PathAnchor } from '../../tools/path/path';
 
 interface PathOverlaySource {
@@ -355,6 +356,55 @@ export function renderSymmetryCenter(
   ctx.moveTo(center.x, center.y - cross);
   ctx.lineTo(center.x, center.y + cross);
   ctx.stroke();
+
+  ctx.restore();
+}
+
+const ARTBOARD_BORDER_COLOR = 'rgba(100, 160, 255, 0.9)';
+const ARTBOARD_LABEL_BG = 'rgba(74, 158, 255, 0.15)';
+const ARTBOARD_LABEL_COLOR = 'rgba(100, 160, 255, 1)';
+
+export function renderArtboards(
+  ctx: CanvasRenderingContext2D,
+  artboards: readonly Artboard[],
+  zoom: number,
+): void {
+  if (artboards.length === 0) return;
+
+  ctx.save();
+
+  for (const artboard of artboards) {
+    const { x, y, width, height, name } = artboard;
+
+    // Dashed border
+    ctx.strokeStyle = ARTBOARD_BORDER_COLOR;
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.setLineDash([6 / zoom, 4 / zoom]);
+    ctx.strokeRect(x, y, width, height);
+
+    // Name label above the top-left corner
+    const fontSize = Math.max(10 / zoom, 11);
+    ctx.font = `600 ${fontSize}px Inter, -apple-system, sans-serif`;
+    ctx.setLineDash([]);
+
+    const labelPadX = 4 / zoom;
+    const labelPadY = 3 / zoom;
+    const labelOffsetY = fontSize + labelPadY * 2 + 2 / zoom;
+    const labelText = name;
+    const textMetrics = ctx.measureText(labelText);
+    const labelWidth = textMetrics.width + labelPadX * 2;
+    const labelHeight = fontSize + labelPadY * 2;
+
+    // Background pill
+    ctx.fillStyle = ARTBOARD_LABEL_BG;
+    ctx.beginPath();
+    ctx.roundRect(x, y - labelOffsetY, labelWidth, labelHeight, 2 / zoom);
+    ctx.fill();
+
+    // Label text
+    ctx.fillStyle = ARTBOARD_LABEL_COLOR;
+    ctx.fillText(labelText, x + labelPadX, y - labelOffsetY + fontSize);
+  }
 
   ctx.restore();
 }

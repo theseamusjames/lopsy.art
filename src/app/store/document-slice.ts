@@ -140,6 +140,7 @@ function createInitialDocument() {
     selectedLayerIds: [bg.id] as readonly string[],
     backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
     rootGroupId: rootGroup.id as string | null,
+    artboards: [] as readonly import('../../types/document').Artboard[],
   };
 }
 

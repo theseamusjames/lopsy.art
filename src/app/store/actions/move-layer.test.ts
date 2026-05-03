@@ -20,8 +20,9 @@ function makeDoc(): DocumentState {
     layers,
     layerOrder: layers.map((l) => l.id),
     activeLayerId: layers[0]!.id,
+    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
     selectedLayerIds: [],
-      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    artboards: [],
   };
 }
 
@@ -82,9 +83,10 @@ function makeGroupDoc(): DocumentState {
     layers,
     layerOrder: layers.map((l) => l.id),
     activeLayerId: bg.id,
-    selectedLayerIds: [],
-      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
     rootGroupId: rootGroup.id,
+    selectedLayerIds: [],
+    artboards: [],
   };
 }
 
@@ -114,9 +116,10 @@ function makeTwoGroupDoc(): DocumentState {
     layers,
     layerOrder: layers.map((l) => l.id),
     activeLayerId: bg.id,
-    selectedLayerIds: [],
-      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
     rootGroupId: rootGroup.id,
+    selectedLayerIds: [],
+    artboards: [],
   };
 }
 
