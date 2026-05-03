@@ -98,9 +98,10 @@ import type { PathAnchor, TextEditingState, ChannelVisibility } from '../app/ui-
 import type { SelectionData } from '../app/store/types';
 import type { BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
 import type { Color } from '../types';
-import type { TextLayer } from '../types/layers';
+import type { TextLayer, TextWarpStyle } from '../types/layers';
 import type { StoredPath } from '../types/paths';
 import { renderTextOnPath } from '../tools/text/render-text-on-path';
+import { renderWarpedText } from '../tools/text/text-warp-render';
 import { getTracked } from './sync-state';
 import { syncLayers } from './sync-layers';
 
@@ -759,6 +760,8 @@ export function syncTextLayers(
   color: Color,
   underline: boolean,
   strikethrough: boolean,
+  warpStyle: TextWarpStyle,
+  warpBend: number,
   onPositionChange: (layerId: string, x: number, y: number) => void,
 ): void {
   if (!textEditing) return;
@@ -793,18 +796,39 @@ export function syncTextLayers(
   const boundsResult = renderTextLayer(engine, layerId);
   if (boundsResult.length !== 4) return;
 
-  const width = boundsResult[0]!;
-  const height = boundsResult[1]!;
+  const flatWidth = boundsResult[0]!;
+  const flatHeight = boundsResult[1]!;
   const offsetX = boundsResult[2]!;
   const offsetY = boundsResult[3]!;
 
   const pixels = getRenderedTextPixels(engine, layerId);
   if (pixels.length === 0) return;
 
-  const desiredX = bounds.x + offsetX;
-  const desiredY = bounds.y + offsetY;
+  // Apply warp deformation when active
+  const hasWarp = warpStyle !== 'none' && warpBend !== 0;
+  let finalPixels: Uint8Array;
+  let finalWidth: number;
+  let finalHeight: number;
+  let warpOffsetX = 0;
+  let warpOffsetY = 0;
 
-  uploadLayerPixels(engine, layerId, pixels, width, height, desiredX, desiredY);
+  if (hasWarp) {
+    const warped = renderWarpedText(pixels, flatWidth, flatHeight, warpStyle, warpBend);
+    finalPixels = warped.data;
+    finalWidth = warped.width;
+    finalHeight = warped.height;
+    warpOffsetX = warped.offsetX;
+    warpOffsetY = warped.offsetY;
+  } else {
+    finalPixels = pixels;
+    finalWidth = flatWidth;
+    finalHeight = flatHeight;
+  }
+
+  const desiredX = bounds.x + offsetX + warpOffsetX;
+  const desiredY = bounds.y + offsetY + warpOffsetY;
+
+  uploadLayerPixels(engine, layerId, finalPixels, finalWidth, finalHeight, desiredX, desiredY);
   onPositionChange(layerId, desiredX, desiredY);
 }
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Color, FontStyle, TextAlign } from '../types';
+import type { TextWarpStyle } from '../types/layers';
 import type { GradientStop, GradientType } from '../tools/gradient/gradient';
 import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { DodgeMode } from '../tools/dodge/dodge';
@@ -447,6 +448,8 @@ interface ToolSettings {
   textAlign: TextAlign;
   textUnderline: boolean;
   textStrikethrough: boolean;
+  textWarpStyle: TextWarpStyle;
+  textWarpBend: number;
   brushSpacing: number;
   brushScatter: number;
   brushAngle: number;
@@ -534,6 +537,8 @@ interface ToolSettings {
   setTextAlign: (align: TextAlign) => void;
   setTextUnderline: (underline: boolean) => void;
   setTextStrikethrough: (strikethrough: boolean) => void;
+  setTextWarpStyle: (style: TextWarpStyle) => void;
+  setTextWarpBend: (bend: number) => void;
   /** Brush opacity in **percent**, range `1–100` (not normalised `0–1`). */
   setBrushOpacity: (opacity: number) => void;
   setBrushHardness: (hardness: number) => void;
@@ -636,6 +641,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   textAlign: 'left' as const,
   textUnderline: false,
   textStrikethrough: false,
+  textWarpStyle: 'none' as const,
+  textWarpBend: 0,
   brushSpacing: 0,
   brushScatter: 0,
   brushAngle: 0,
@@ -823,6 +830,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setTextAlign: (align) => set({ textAlign: align }),
   setTextUnderline: (underline) => set({ textUnderline: underline }),
   setTextStrikethrough: (strikethrough) => set({ textStrikethrough: strikethrough }),
+  setTextWarpStyle: (style) => set({ textWarpStyle: style }),
+  setTextWarpBend: (bend) => set({ textWarpBend: Math.max(-100, Math.min(100, bend)) }),
 
   setForegroundColor: (color) => set({ foregroundColor: color }),
   setBackgroundColor: (color) => set({ backgroundColor: color }),

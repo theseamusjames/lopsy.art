@@ -176,6 +176,8 @@ function renderFrameGpu(
       toolState.foregroundColor,
       toolState.textUnderline,
       toolState.textStrikethrough,
+      toolState.textWarpStyle,
+      toolState.textWarpBend,
       (layerId, x, y) => {
         const layer = layers.find((l) => l.id === layerId);
         if (layer && (layer.x !== x || layer.y !== y)) {

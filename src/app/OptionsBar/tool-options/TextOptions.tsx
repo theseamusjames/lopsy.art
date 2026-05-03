@@ -9,6 +9,7 @@ import { extractFamilyName, loadGoogleFont, loadFontBinaryToEngine } from '../..
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { rerenderCommittedTextLayer, invalidatePathTextCache } from '../../../engine-wasm/engine-sync';
 import type { TextLayer, FontStyle, TextAlign } from '../../../types';
+import type { TextWarpStyle } from '../../../types/layers';
 import styles from '../OptionsBar.module.css';
 import decorationStyles from './TextOptions.module.css';
 
@@ -33,6 +34,8 @@ export function TextOptions() {
   const textAlign = useToolSettingsStore((s) => s.textAlign);
   const textUnderline = useToolSettingsStore((s) => s.textUnderline);
   const textStrikethrough = useToolSettingsStore((s) => s.textStrikethrough);
+  const textWarpStyle = useToolSettingsStore((s) => s.textWarpStyle);
+  const textWarpBend = useToolSettingsStore((s) => s.textWarpBend);
   const setTextFontSize = useToolSettingsStore((s) => s.setTextFontSize);
   const setTextFontFamily = useToolSettingsStore((s) => s.setTextFontFamily);
   const setTextFontWeight = useToolSettingsStore((s) => s.setTextFontWeight);
@@ -40,6 +43,8 @@ export function TextOptions() {
   const setTextAlign = useToolSettingsStore((s) => s.setTextAlign);
   const setTextUnderline = useToolSettingsStore((s) => s.setTextUnderline);
   const setTextStrikethrough = useToolSettingsStore((s) => s.setTextStrikethrough);
+  const setTextWarpStyle = useToolSettingsStore((s) => s.setTextWarpStyle);
+  const setTextWarpBend = useToolSettingsStore((s) => s.setTextWarpBend);
 
   const fontEntry = useMemo(() => {
     const family = extractFamilyName(textFontFamily);
@@ -184,6 +189,34 @@ export function TextOptions() {
           <span className={decorationStyles.strikethroughIcon}>S</span>
         </button>
       </div>
+      <label className={styles.label} id="text-warp-label">Warp</label>
+      <select
+        className={styles.select}
+        value={textWarpStyle}
+        onChange={(e) => setTextWarpStyle(e.target.value as TextWarpStyle)}
+        aria-labelledby="text-warp-label"
+        aria-label="Warp style"
+      >
+        <option value="none">None</option>
+        <option value="arc">Arc</option>
+        <option value="arc-lower">Arc Lower</option>
+        <option value="arc-upper">Arc Upper</option>
+        <option value="bulge">Bulge</option>
+        <option value="flag">Flag</option>
+        <option value="wave">Wave</option>
+        <option value="fish">Fish</option>
+        <option value="rise">Rise</option>
+        <option value="squeeze">Squeeze</option>
+      </select>
+      {textWarpStyle !== 'none' && (
+        <Slider
+          label="Bend"
+          value={textWarpBend}
+          min={-100}
+          max={100}
+          onChange={setTextWarpBend}
+        />
+      )}
       {paths.length > 0 && (
         <>
           <label className={styles.label} id="text-path-label">Path</label>

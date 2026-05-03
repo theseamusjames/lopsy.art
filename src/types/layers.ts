@@ -32,6 +32,18 @@ export interface RasterLayer extends LayerBase {
   readonly height: number;
 }
 
+export type TextWarpStyle =
+  | 'none'
+  | 'arc'
+  | 'arc-lower'
+  | 'arc-upper'
+  | 'bulge'
+  | 'flag'
+  | 'wave'
+  | 'fish'
+  | 'rise'
+  | 'squeeze';
+
 export interface TextLayer extends LayerBase {
   readonly type: 'text';
   readonly text: string;
@@ -49,6 +61,8 @@ export interface TextLayer extends LayerBase {
   readonly pathId?: string;
   readonly prePathX?: number;
   readonly prePathY?: number;
+  readonly warpStyle?: TextWarpStyle;
+  readonly warpBend?: number;
 }
 
 export interface ShapeLayer extends LayerBase {

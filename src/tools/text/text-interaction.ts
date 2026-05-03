@@ -14,6 +14,7 @@ import {
   getRenderedTextPixels,
   uploadLayerPixels,
 } from '../../engine-wasm/wasm-bridge';
+import { renderWarpedText } from './text-warp-render';
 
 const TEXT_DRAG_THRESHOLD = 4;
 
@@ -53,6 +54,9 @@ export function commitTextEditing(): void {
   let finalX = editing.bounds.x;
   let finalY = editing.bounds.y;
 
+  const warpStyle = toolSettings.textWarpStyle;
+  const warpBend = toolSettings.textWarpBend;
+
   // Check if this text layer is bound to a path — if so, skip the normal
   // WASM text render (syncPathTextLayers handles the texture) and keep
   // the layer at (0, 0) since path text uses document-space coordinates.
@@ -85,15 +89,23 @@ export function commitTextEditing(): void {
       setTextLayerContent(engine, editing.layerId, propsJson);
       const boundsResult = renderTextLayer(engine, editing.layerId);
       if (boundsResult.length === 4) {
-        const width = boundsResult[0]!;
-        const height = boundsResult[1]!;
+        const flatWidth = boundsResult[0]!;
+        const flatHeight = boundsResult[1]!;
         const offsetX = boundsResult[2]!;
         const offsetY = boundsResult[3]!;
         const pixels = getRenderedTextPixels(engine, editing.layerId);
         if (pixels.length > 0) {
-          finalX = editing.bounds.x + offsetX;
-          finalY = editing.bounds.y + offsetY;
-          uploadLayerPixels(engine, editing.layerId, pixels, width, height, finalX, finalY);
+          const hasWarp = warpStyle !== 'none' && warpBend !== 0;
+          if (hasWarp) {
+            const warped = renderWarpedText(pixels, flatWidth, flatHeight, warpStyle, warpBend);
+            finalX = editing.bounds.x + offsetX + warped.offsetX;
+            finalY = editing.bounds.y + offsetY + warped.offsetY;
+            uploadLayerPixels(engine, editing.layerId, warped.data, warped.width, warped.height, finalX, finalY);
+          } else {
+            finalX = editing.bounds.x + offsetX;
+            finalY = editing.bounds.y + offsetY;
+            uploadLayerPixels(engine, editing.layerId, pixels, flatWidth, flatHeight, finalX, finalY);
+          }
         }
       }
     } else {
@@ -114,6 +126,8 @@ export function commitTextEditing(): void {
     fontStyle: toolSettings.textFontStyle,
     color: textColor,
     textAlign: toolSettings.textAlign,
+    warpStyle,
+    warpBend,
     width: areaWidth,
     x: finalX,
     y: finalY,
@@ -148,6 +162,8 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
     toolSettings.setForegroundColor(hitLayer.color);
     toolSettings.setTextUnderline(hitLayer.underline);
     toolSettings.setTextStrikethrough(hitLayer.strikethrough);
+    toolSettings.setTextWarpStyle(hitLayer.warpStyle ?? 'none');
+    toolSettings.setTextWarpBend(hitLayer.warpBend ?? 0);
 
     editorState.setActiveLayer(hitLayer.id);
 
