@@ -2,12 +2,57 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { FONT_CATALOG, fontsByFamily } from '../../utils/font-catalog';
-import type { FontEntry } from '../../utils/font-catalog';
+import type { FontEntry, FontCategory } from '../../utils/font-catalog';
 import { getPreviewImageUrl, extractFamilyName } from '../../utils/font-loader';
 import { useVirtualScroll } from './useVirtualScroll';
 import styles from './FontPicker.module.css';
 
 const ITEM_HEIGHT = 48;
+
+const CATEGORY_ORDER: readonly FontCategory[] = [
+  'sans-serif',
+  'serif',
+  'display',
+  'handwriting',
+  'monospace',
+];
+
+const CATEGORY_LABELS: Record<FontCategory, string> = {
+  'sans-serif': 'Sans Serif',
+  'serif': 'Serif',
+  'display': 'Display',
+  'handwriting': 'Handwriting',
+  'monospace': 'Monospace',
+};
+
+type ListItem =
+  | { type: 'header'; category: FontCategory; count: number }
+  | { type: 'font'; entry: FontEntry };
+
+function buildGroupedList(fonts: readonly FontEntry[]): ListItem[] {
+  const byCategory = new Map<FontCategory, FontEntry[]>();
+  for (const font of fonts) {
+    let arr = byCategory.get(font.category);
+    if (!arr) {
+      arr = [];
+      byCategory.set(font.category, arr);
+    }
+    arr.push(font);
+  }
+  for (const arr of byCategory.values()) {
+    arr.sort((a, b) => a.family.localeCompare(b.family));
+  }
+  const items: ListItem[] = [];
+  for (const category of CATEGORY_ORDER) {
+    const group = byCategory.get(category);
+    if (!group || group.length === 0) continue;
+    items.push({ type: 'header', category, count: group.length });
+    for (const entry of group) {
+      items.push({ type: 'font', entry });
+    }
+  }
+  return items;
+}
 
 interface FontPickerProps {
   value: string;
@@ -26,14 +71,15 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
   const currentFamily = extractFamilyName(value);
   const currentEntry = fontsByFamily.get(currentFamily);
 
-  const filtered = useMemo(() => {
-    if (!search) return FONT_CATALOG;
-    const q = search.toLowerCase();
-    return FONT_CATALOG.filter((f) => f.family.toLowerCase().includes(q));
+  const items = useMemo(() => {
+    const fonts = search
+      ? FONT_CATALOG.filter((f) => f.family.toLowerCase().includes(search.toLowerCase()))
+      : FONT_CATALOG;
+    return buildGroupedList(fonts);
   }, [search]);
 
   const { totalHeight, offsetY, startIndex, endIndex, scrollRef, scrollToTop } =
-    useVirtualScroll(filtered.length, ITEM_HEIGHT);
+    useVirtualScroll(items.length, ITEM_HEIGHT);
 
   const combinedScrollRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -44,8 +90,8 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
   );
 
   const selectedIndex = useMemo(
-    () => filtered.findIndex((f) => f.family === currentFamily),
-    [filtered, currentFamily],
+    () => items.findIndex((item) => item.type === 'font' && item.entry.family === currentFamily),
+    [items, currentFamily],
   );
 
   const open = useCallback(() => {
@@ -107,23 +153,35 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
           close();
           triggerRef.current?.focus();
           break;
-        case 'ArrowDown':
+        case 'ArrowDown': {
           e.preventDefault();
-          setHighlightIndex((prev) => Math.min(prev + 1, filtered.length - 1));
+          setHighlightIndex((prev) => {
+            let next = prev + 1;
+            while (next < items.length && items[next]!.type === 'header') next++;
+            return next < items.length ? next : prev;
+          });
           break;
-        case 'ArrowUp':
+        }
+        case 'ArrowUp': {
           e.preventDefault();
-          setHighlightIndex((prev) => Math.max(prev - 1, 0));
+          setHighlightIndex((prev) => {
+            let next = prev - 1;
+            while (next >= 0 && items[next]!.type === 'header') next--;
+            return next >= 0 ? next : prev;
+          });
           break;
-        case 'Enter':
+        }
+        case 'Enter': {
           e.preventDefault();
-          if (highlightIndex >= 0 && highlightIndex < filtered.length) {
-            selectEntry(filtered[highlightIndex]!);
+          const item = items[highlightIndex];
+          if (item && item.type === 'font') {
+            selectEntry(item.entry);
           }
           break;
+        }
       }
     },
-    [close, filtered, highlightIndex, selectEntry],
+    [close, items, highlightIndex, selectEntry],
   );
 
   // Scroll highlighted item into view
@@ -154,17 +212,26 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
 
   const visibleItems = [];
   for (let i = startIndex; i < endIndex; i++) {
-    const entry = filtered[i];
-    if (!entry) continue;
-    visibleItems.push(
-      <FontPickerItem
-        key={entry.family}
-        entry={entry}
-        isSelected={i === selectedIndex}
-        isHighlighted={i === highlightIndex}
-        onClick={() => selectEntry(entry)}
-      />,
-    );
+    const item = items[i];
+    if (!item) continue;
+    if (item.type === 'header') {
+      visibleItems.push(
+        <div key={`header-${item.category}`} className={styles.groupHeader}>
+          <span className={styles.groupLabel}>{CATEGORY_LABELS[item.category]}</span>
+          <span className={styles.groupCount}>{item.count}</span>
+        </div>,
+      );
+    } else {
+      visibleItems.push(
+        <FontPickerItem
+          key={item.entry.family}
+          entry={item.entry}
+          isSelected={i === selectedIndex}
+          isHighlighted={i === highlightIndex}
+          onClick={() => selectEntry(item.entry)}
+        />,
+      );
+    }
   }
 
   return (
@@ -203,7 +270,7 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
               />
             </div>
             <div className={styles.listContainer} ref={combinedScrollRef}>
-              {filtered.length === 0 ? (
+              {items.length === 0 ? (
                 <div className={styles.emptyState}>No fonts found</div>
               ) : (
                 <div style={{ height: totalHeight }}>
@@ -263,7 +330,6 @@ function FontPickerItem({ entry, isSelected, isHighlighted, onClick }: FontPicke
       {!showImage && !showSystemPreview && (
         <span className={styles.fallbackText}>{entry.family}</span>
       )}
-      <span className={styles.categoryBadge}>{entry.category}</span>
     </div>
   );
 }
