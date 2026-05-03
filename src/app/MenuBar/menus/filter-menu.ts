@@ -13,6 +13,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Unsharp Mask...', action: () => showFilterDialog('unsharp-mask') },
       { separator: true, label: '' },
       { label: 'Find Edges', action: () => applyFindEdges() },
+      { label: 'Emboss...', action: () => showFilterDialog('emboss') },
       { label: 'Cel Shading...', action: () => showFilterDialog('cel-shading') },
       { label: 'Pixelate...', action: () => showFilterDialog('pixelate') },
       { label: 'Halftone...', action: () => showFilterDialog('halftone') },

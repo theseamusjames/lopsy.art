@@ -26,6 +26,7 @@ export type FilterDialogId =
   | 'threshold'
   | 'motion-blur'
   | 'radial-blur'
+  | 'emboss'
   | 'find-edges'
   | 'cel-shading'
   | 'clouds'

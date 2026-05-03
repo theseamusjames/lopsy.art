@@ -65,6 +65,7 @@ pub const MESH_WARP_FRAG: &str = include_str!("shaders/filters/mesh_warp.glsl");
 pub const BLOOM_THRESHOLD_FRAG: &str = include_str!("shaders/filters/bloom_threshold.glsl");
 pub const BLOOM_COMBINE_FRAG: &str = include_str!("shaders/filters/bloom_combine.glsl");
 pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
+pub const EMBOSS_FRAG: &str = include_str!("shaders/filters/emboss.glsl");
 
 // Brush
 pub const BRUSH_DAB_FRAG: &str = include_str!("shaders/brush/brush_dab.glsl");
@@ -225,6 +226,7 @@ pub struct ShaderPrograms {
     pub bloom_threshold: ShaderProgram,
     pub bloom_combine: ShaderProgram,
     pub selection_mask_blend: ShaderProgram,
+    pub emboss: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab: ShaderProgram,
     pub eraser_dab: ShaderProgram,
@@ -306,6 +308,7 @@ impl ShaderPrograms {
             bloom_threshold: compile_program(gl, v, BLOOM_THRESHOLD_FRAG)?,
             bloom_combine: compile_program(gl, v, BLOOM_COMBINE_FRAG)?,
             selection_mask_blend: compile_program(gl, v, SELECTION_MASK_BLEND_FRAG)?,
+            emboss: compile_program(gl, v, EMBOSS_FRAG)?,
             // Brush — use standard fullscreen quad vert; dab positioning via fragment shader
             brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,
             eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,

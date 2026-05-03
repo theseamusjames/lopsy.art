@@ -167,6 +167,25 @@ pub fn filter_lens_distortion(
     );
 }
 
+#[wasm_bindgen(js_name = "filterEmboss")]
+pub fn filter_emboss(engine: &mut Engine, layer_id: &str, angle_degrees: f32, amount: f32) {
+    let angle_rad = angle_degrees.to_radians();
+    let amount = amount.clamp(1.0, 10.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.emboss,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_angle") {
+                gl.uniform1f(Some(&loc), angle_rad);
+            }
+            if let Some(loc) = shader.location(gl, "u_amount") {
+                gl.uniform1f(Some(&loc), amount);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterFindEdges")]
 pub fn filter_find_edges(engine: &mut Engine, layer_id: &str) {
     filter_gpu::apply_filter(

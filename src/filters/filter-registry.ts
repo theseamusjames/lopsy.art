@@ -8,6 +8,7 @@ import { posterize } from './posterize';
 import { threshold } from './threshold';
 import { motionBlur } from './motion-blur';
 import { radialBlur } from './radial-blur';
+import { emboss } from './emboss';
 import { findEdges } from './find-edges';
 import { celShading } from './cel-shading';
 import { clouds } from './clouds';
@@ -34,6 +35,7 @@ const allFilters: FilterDefinition[] = [
   threshold,
   motionBlur,
   radialBlur,
+  emboss,
   findEdges,
   celShading,
   clouds,
