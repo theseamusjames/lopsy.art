@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Engine } from './wasm-bridge';
 
 // The bridge module pulls in the WASM init code at import time. Mock it before
@@ -38,6 +38,10 @@ vi.mock('./wasm-bridge', () => ({
   setImageLevelsLut: vi.fn(),
   clearImageLevels: vi.fn(),
   clearImageAdjustments: vi.fn(),
+  setGroupAdjustments: vi.fn(),
+  setGroupCurvesLut: vi.fn(),
+  setGroupLevelsLut: vi.fn(),
+  clearGroupAdjustments: vi.fn(),
   setLassoPreview: vi.fn(),
   setPathOverlay: vi.fn(),
   setCropPreview: vi.fn(),
@@ -52,6 +56,7 @@ vi.mock('./wasm-bridge', () => ({
   uploadBrushTip: vi.fn(),
   clearBrushTip: vi.fn(),
   setBrushTipState: vi.fn(),
+  setSeamlessPattern: vi.fn(),
 }));
 
 vi.mock('./engine-state', () => ({
@@ -60,6 +65,7 @@ vi.mock('./engine-state', () => ({
 
 const bridge = await import('./wasm-bridge');
 const sync = await import('./engine-sync');
+const { createGroupLayer, createRasterLayer } = await import('../layers/layer-model');
 
 // A WeakMap key just needs to be an object — Engines are class instances in
 // production, but plain objects suffice here.
@@ -114,5 +120,77 @@ describe('engine-sync tracked state', () => {
     sync.syncGrid(a, true, 16);
     sync.syncGrid(b, true, 16);
     expect(setGrid).toHaveBeenCalledTimes(3); // only A re-pushed
+  });
+});
+
+describe('syncGroupAdjustments — group mask registration', () => {
+  beforeEach(() => {
+    vi.mocked(bridge.setGroupAdjustments).mockClear();
+    vi.mocked(bridge.clearGroupAdjustments).mockClear();
+  });
+
+  it('registers a group with an enabled mask even when it has no adjustments', () => {
+    const engine = makeFakeEngine();
+    const raster = createRasterLayer({ name: 'Layer 1', width: 100, height: 100 });
+    const group = {
+      ...createGroupLayer({ name: 'Group', children: [raster.id] }),
+      mask: {
+        id: 'mask-1',
+        enabled: true,
+        data: new Uint8ClampedArray(100 * 100).fill(128),
+        width: 100,
+        height: 100,
+      },
+    };
+    sync.syncGroupAdjustments(engine, [raster, group]);
+    expect(vi.mocked(bridge.setGroupAdjustments)).toHaveBeenCalledOnce();
+    const [, calledId, childrenJson] = vi.mocked(bridge.setGroupAdjustments).mock.calls[0]!;
+    expect(calledId).toBe(group.id);
+    expect(JSON.parse(childrenJson as string)).toContain(raster.id);
+  });
+
+  it('does not register a group with no mask and no adjustments', () => {
+    const engine = makeFakeEngine();
+    const raster = createRasterLayer({ name: 'Layer 1', width: 100, height: 100 });
+    const group = createGroupLayer({ name: 'Group', children: [raster.id] });
+    sync.syncGroupAdjustments(engine, [raster, group]);
+    expect(vi.mocked(bridge.setGroupAdjustments)).not.toHaveBeenCalled();
+  });
+
+  it('does not register a group with a disabled mask and no adjustments', () => {
+    const engine = makeFakeEngine();
+    const raster = createRasterLayer({ name: 'Layer 1', width: 100, height: 100 });
+    const group = {
+      ...createGroupLayer({ name: 'Group', children: [raster.id] }),
+      mask: {
+        id: 'mask-1',
+        enabled: false, // mask is disabled
+        data: new Uint8ClampedArray(100 * 100).fill(0),
+        width: 100,
+        height: 100,
+      },
+    };
+    sync.syncGroupAdjustments(engine, [raster, group]);
+    expect(vi.mocked(bridge.setGroupAdjustments)).not.toHaveBeenCalled();
+  });
+
+  it('registers a group with both adjustments and a mask once', () => {
+    const engine = makeFakeEngine();
+    const raster = createRasterLayer({ name: 'Layer 1', width: 100, height: 100 });
+    const group = {
+      ...createGroupLayer({ name: 'Group', children: [raster.id] }),
+      adjustmentsEnabled: true,
+      adjustments: [{ id: 'exp-1', type: 'exposure' as const, enabled: true, exposure: 1.0 }],
+      mask: {
+        id: 'mask-1',
+        enabled: true,
+        data: new Uint8ClampedArray(100 * 100).fill(255),
+        width: 100,
+        height: 100,
+      },
+    };
+    sync.syncGroupAdjustments(engine, [raster, group]);
+    // Should be registered exactly once — mask and adjustments don't double-register
+    expect(vi.mocked(bridge.setGroupAdjustments)).toHaveBeenCalledOnce();
   });
 });

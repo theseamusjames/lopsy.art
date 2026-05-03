@@ -104,9 +104,31 @@ pub fn composite(engine: &mut EngineInner) {
                         let adj = ga.adjustments.clone();
                         apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
                     }
-                    // Blend the adjusted group scratch onto composite
+                    // Look up the group's mask (same path as individual layer masks).
+                    // The group FBO is doc-sized so mask offset is (0,0) and size is doc size.
+                    let mask_enabled_in_stack = engine.layer_stack[idx].mask.as_ref().map_or(false, |m| m.enabled);
+                    let group_mask_info = engine.layer_masks.get(&layer_id).copied().and_then(|mask_handle| {
+                        let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
+                        let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
+                        Some((mask_gl, mw, mh, mask_enabled_in_stack))
+                    });
+                    let group_mask_arg = group_mask_info.as_ref().and_then(|(tex, mw, mh, enabled)| {
+                        if *enabled { Some((tex, *mw, *mh)) } else { None }
+                    });
+                    // Blend the adjusted group scratch onto composite with the group's
+                    // opacity, blend mode, and mask applied.
                     if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
-                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None);
+                        blend_onto_composite(
+                            engine,
+                            &gs_gl,
+                            opacity,
+                            blend_mode,
+                            0.0, 0.0,
+                            doc_w, doc_h,
+                            true,
+                            None,
+                            group_mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)),
+                        );
                     }
                     active_group_id = None;
                     // Re-bind composite FBO for subsequent layers
