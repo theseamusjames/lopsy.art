@@ -30,6 +30,7 @@ import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradien
 import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './rendering/render-text-overlay';
 import { hitTestTextLayer } from '../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './rendering/render-guides';
+import { renderTiltShiftOverlay } from './rendering/render-tilt-shift-overlay';
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
@@ -225,6 +226,10 @@ function renderFrameGpu(
     const meshWarp = uiState.meshWarp;
     if (meshWarp) {
       renderMeshWarpOverlay(overlayCtx, meshWarp, viewport.zoom);
+    }
+    const tiltShift = uiState.tiltShift;
+    if (tiltShift) {
+      renderTiltShiftOverlay(overlayCtx, tiltShift, doc.width, doc.height, viewport.zoom);
     }
     const selectedPath = editorState.selectedPathId
       ? editorState.paths.find((p) => p.id === editorState.selectedPathId)

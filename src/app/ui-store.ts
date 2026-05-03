@@ -48,6 +48,16 @@ export interface ShapeSizeClick {
   layerY: number;
 }
 
+export interface TiltShiftSession {
+  focusPosition: number;
+  focusWidth: number;
+  blurRadius: number;
+  angle: number;
+  dragging: 'line1' | 'line2' | 'center' | 'angle' | null;
+  dragAnchor: number;
+  previewActive: boolean;
+}
+
 /**
  * Active inline mesh warp session. The grid lives on the canvas as an overlay
  * (no modal). `bounds` is the document-space rect the grid covers — set from
@@ -106,6 +116,7 @@ interface UIState {
   transform: TransformState | null;
   activeTransformHandle: TransformHandle | null;
   meshWarp: MeshWarpSession | null;
+  tiltShift: TiltShiftSession | null;
   maskEditMode: boolean;
   isQuickMaskMode: boolean;
   /** Active modal, or null when nothing is open. Only one at a time. */
@@ -160,6 +171,9 @@ interface UIState {
   setMeshWarpDragging: (idx: number | null) => void;
   setMeshWarpHovered: (idx: number | null) => void;
   setMeshWarpPreview: (active: boolean) => void;
+  setTiltShift: (session: TiltShiftSession | null) => void;
+  updateTiltShift: (update: Partial<TiltShiftSession>) => void;
+  setTiltShiftDragging: (target: TiltShiftSession['dragging'], anchor?: number) => void;
   /** Backward-compat setter. Reads should use modal directly:
    *  `modal?.kind === 'shapeSize' ? modal.click : null` */
   setPendingShapeClick: (pending: ShapeSizeClick | null) => void;
@@ -217,6 +231,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   transform: null,
   activeTransformHandle: null,
   meshWarp: null,
+  tiltShift: null,
   maskEditMode: false,
   isQuickMaskMode: false,
   modal: null,
@@ -328,6 +343,11 @@ export const useUIStore = create<UIState>((set, get) => ({
     set((s) => (s.meshWarp ? { meshWarp: { ...s.meshWarp, hovered: idx } } : {})),
   setMeshWarpPreview: (active) =>
     set((s) => (s.meshWarp ? { meshWarp: { ...s.meshWarp, previewActive: active } } : {})),
+  setTiltShift: (session) => set({ tiltShift: session }),
+  updateTiltShift: (update) =>
+    set((s) => (s.tiltShift ? { tiltShift: { ...s.tiltShift, ...update } } : {})),
+  setTiltShiftDragging: (target, anchor) =>
+    set((s) => (s.tiltShift ? { tiltShift: { ...s.tiltShift, dragging: target, dragAnchor: anchor ?? s.tiltShift.dragAnchor } } : {})),
   editingAnchorIndex: null,
   setEditingAnchorIndex: (index) => set({ editingAnchorIndex: index }),
   convertingAnchorToSpline: false,

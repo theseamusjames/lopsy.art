@@ -34,6 +34,8 @@ export interface InteractionState {
   selectionOnlyTransform?: boolean;
   /** Set when a mesh warp handle drag is in progress. */
   meshWarpDragging?: boolean;
+  /** Set when a tilt-shift overlay drag is in progress. */
+  tiltShiftDragging?: boolean;
 }
 
 export const DEFAULT_TRANSFORM_FIELDS = {

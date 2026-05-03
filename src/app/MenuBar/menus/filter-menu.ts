@@ -1,4 +1,5 @@
 import { applyInvert, applyDesaturate, applyFindEdges } from '../filter-actions';
+import { beginTiltShiftSession } from '../tilt-shift-actions';
 import type { FilterDialogId } from '../filter-actions';
 import type { MenuDef } from './types';
 
@@ -10,7 +11,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Box Blur...', action: () => showFilterDialog('box-blur') },
       { label: 'Motion Blur...', action: () => showFilterDialog('motion-blur') },
       { label: 'Radial Blur...', action: () => showFilterDialog('radial-blur') },
-      { label: 'Tilt-Shift Blur...', action: () => showFilterDialog('tilt-shift-blur') },
+      { label: 'Tilt-Shift Blur...', action: () => beginTiltShiftSession() },
       { label: 'Unsharp Mask...', action: () => showFilterDialog('unsharp-mask') },
       { separator: true, label: '' },
       { label: 'Find Edges', action: () => applyFindEdges() },

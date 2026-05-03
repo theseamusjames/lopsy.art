@@ -65,8 +65,6 @@ pub const MESH_WARP_FRAG: &str = include_str!("shaders/filters/mesh_warp.glsl");
 pub const BLOOM_THRESHOLD_FRAG: &str = include_str!("shaders/filters/bloom_threshold.glsl");
 pub const BLOOM_COMBINE_FRAG: &str = include_str!("shaders/filters/bloom_combine.glsl");
 pub const TILT_SHIFT_BLUR_FRAG: &str = include_str!("shaders/filters/tilt_shift_blur.glsl");
-pub const BLOOM_THRESHOLD_FRAG: &str = include_str!("shaders/filters/bloom_threshold.glsl");
-pub const BLOOM_COMBINE_FRAG: &str = include_str!("shaders/filters/bloom_combine.glsl");
 pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
 
 // Brush

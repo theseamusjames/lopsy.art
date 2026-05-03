@@ -28,6 +28,7 @@ import { ContextMenu } from '../components/ContextMenu/ContextMenu';
 import { Toasts } from '../components/Toasts/Toasts';
 import { TextActionButtons } from '../components/TextActionButtons/TextActionButtons';
 import { PathActionButtons } from '../components/PathActionButtons/PathActionButtons';
+import { TiltShiftControls } from './OptionsBar/tool-options/TiltShiftControls';
 import { POINTER_IDLE, type PointerMode } from './pointer-mode';
 import { useCanvasPointerHandlers } from './hooks/useCanvasPointerHandlers';
 import { useAppEffects } from './hooks/useAppEffects';
@@ -221,6 +222,7 @@ export function App() {
           <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} aria-hidden="true" />
           <TextActionButtons containerRef={containerRef} />
           <PathActionButtons containerRef={containerRef} />
+          <TiltShiftControls />
           <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </main>
         {contextMenu.visible && (
