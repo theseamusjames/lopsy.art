@@ -39,6 +39,7 @@ export function computeScale(
   switch (handle) {
     case 'right':
       newScaleX = state.scaleX + (deltaX / origW);
+      newTranslateX = state.translateX + deltaX / 2;
       break;
     case 'left':
       newScaleX = state.scaleX - (deltaX / origW);
@@ -46,6 +47,7 @@ export function computeScale(
       break;
     case 'bottom':
       newScaleY = state.scaleY + (deltaY / origH);
+      newTranslateY = state.translateY + deltaY / 2;
       break;
     case 'top':
       newScaleY = state.scaleY - (deltaY / origH);
@@ -54,15 +56,19 @@ export function computeScale(
     case 'bottom-right':
       newScaleX = state.scaleX + (deltaX / origW);
       newScaleY = state.scaleY + (deltaY / origH);
+      newTranslateX = state.translateX + deltaX / 2;
+      newTranslateY = state.translateY + deltaY / 2;
       break;
     case 'bottom-left':
       newScaleX = state.scaleX - (deltaX / origW);
       newScaleY = state.scaleY + (deltaY / origH);
       newTranslateX = state.translateX + deltaX / 2;
+      newTranslateY = state.translateY + deltaY / 2;
       break;
     case 'top-right':
       newScaleX = state.scaleX + (deltaX / origW);
       newScaleY = state.scaleY - (deltaY / origH);
+      newTranslateX = state.translateX + deltaX / 2;
       newTranslateY = state.translateY + deltaY / 2;
       break;
     case 'top-left':

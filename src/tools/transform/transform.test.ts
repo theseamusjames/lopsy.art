@@ -134,6 +134,41 @@ describe('computeScale', () => {
     expect(result.scaleY).toBe(1);
   });
 
+  it('right handle anchors left edge and drags right edge to mouse', () => {
+    // 100x100 bounds at origin, drag right handle (100,50) to (200,50)
+    const state = createTransformState({ x: 0, y: 0, width: 100, height: 100 });
+    const result = computeScale('right', { x: 100, y: 50 }, { x: 200, y: 50 }, state, false);
+    const bounds = getTransformedBounds({ ...state, scaleX: result.scaleX, translateX: result.translateX, scaleY: result.scaleY, translateY: result.translateY });
+    expect(bounds.x).toBeCloseTo(0);        // left edge stays
+    expect(bounds.x + bounds.width).toBeCloseTo(200);  // right edge follows mouse
+  });
+
+  it('left handle anchors right edge and drags left edge to mouse', () => {
+    const state = createTransformState({ x: 0, y: 0, width: 100, height: 100 });
+    const result = computeScale('left', { x: 0, y: 50 }, { x: -50, y: 50 }, state, false);
+    const bounds = getTransformedBounds({ ...state, scaleX: result.scaleX, translateX: result.translateX, scaleY: result.scaleY, translateY: result.translateY });
+    expect(bounds.x + bounds.width).toBeCloseTo(100);  // right edge stays
+    expect(bounds.x).toBeCloseTo(-50);                 // left edge follows mouse
+  });
+
+  it('bottom handle anchors top edge and drags bottom edge to mouse', () => {
+    const state = createTransformState({ x: 0, y: 0, width: 100, height: 100 });
+    const result = computeScale('bottom', { x: 50, y: 100 }, { x: 50, y: 200 }, state, false);
+    const bounds = getTransformedBounds({ ...state, scaleX: result.scaleX, translateX: result.translateX, scaleY: result.scaleY, translateY: result.translateY });
+    expect(bounds.y).toBeCloseTo(0);                    // top edge stays
+    expect(bounds.y + bounds.height).toBeCloseTo(200);  // bottom edge follows mouse
+  });
+
+  it('bottom-right handle anchors top-left and drags corner to mouse', () => {
+    const state = createTransformState({ x: 0, y: 0, width: 100, height: 100 });
+    const result = computeScale('bottom-right', { x: 100, y: 100 }, { x: 200, y: 200 }, state, false);
+    const bounds = getTransformedBounds({ ...state, scaleX: result.scaleX, translateX: result.translateX, scaleY: result.scaleY, translateY: result.translateY });
+    expect(bounds.x).toBeCloseTo(0);
+    expect(bounds.y).toBeCloseTo(0);
+    expect(bounds.x + bounds.width).toBeCloseTo(200);
+    expect(bounds.y + bounds.height).toBeCloseTo(200);
+  });
+
   it('enforces minimum scale', () => {
     const state = createTransformState({ x: 0, y: 0, width: 100, height: 100 });
     const result = computeScale(
