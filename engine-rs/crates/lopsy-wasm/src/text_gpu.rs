@@ -4,7 +4,9 @@
 //! Phase 3: software rasterization via swash → RGBA bytes for GPU upload.
 
 use std::collections::HashMap;
-use cosmic_text::{Align, Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Style, SwashCache, Weight, Wrap};
+use cosmic_text::{Align, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, Style, SwashCache, SwashImage, Weight, Wrap};
+use swash::scale::{ScaleContext, Render, Source, StrikeWith};
+use swash::zeno::{Format, Vector};
 
 use crate::glyph_atlas::GlyphAtlas;
 
@@ -22,6 +24,33 @@ pub struct TextRendererState {
     pub swash_cache: SwashCache,
     pub glyph_atlas: GlyphAtlas,
     pub text_layers: HashMap<String, TextLayerState>,
+    scale_context: ScaleContext,
+    unhinted_cache: HashMap<CacheKey, Option<SwashImage>>,
+}
+
+fn render_glyph_unhinted<'a>(
+    font_system: &mut FontSystem,
+    scale_ctx: &mut ScaleContext,
+    cache: &'a mut HashMap<CacheKey, Option<SwashImage>>,
+    cache_key: CacheKey,
+) -> Option<&'a SwashImage> {
+    cache.entry(cache_key).or_insert_with(|| {
+        let font = font_system.get_font(cache_key.font_id)?;
+        let mut scaler = scale_ctx
+            .builder(font.as_swash())
+            .size(f32::from_bits(cache_key.font_size_bits))
+            .hint(false)
+            .build();
+        let offset = Vector::new(cache_key.x_bin.as_float(), cache_key.y_bin.as_float());
+        Render::new(&[
+            Source::ColorOutline(0),
+            Source::ColorBitmap(StrikeWith::BestFit),
+            Source::Outline,
+        ])
+        .format(Format::Alpha)
+        .offset(offset)
+        .render(&mut scaler, cache_key.glyph_id)
+    }).as_ref()
 }
 
 fn hash_str(s: &str) -> u64 {
@@ -45,6 +74,8 @@ impl TextRendererState {
             swash_cache: SwashCache::new(),
             glyph_atlas: GlyphAtlas::new(),
             text_layers: HashMap::new(),
+            scale_context: ScaleContext::new(),
+            unhinted_cache: HashMap::new(),
         }
     }
 
@@ -255,24 +286,51 @@ impl TextRendererState {
         let mut max_x = i32::MIN;
         let mut max_y = i32::MIN;
 
+        // Collect glyph layout data before rendering (avoids borrow conflicts).
+        struct GlyphLayout {
+            cache_key: CacheKey,
+            x: i32,
+            y: i32,
+        }
+        let mut glyph_layouts: Vec<GlyphLayout> = Vec::new();
         for run in state.buffer.layout_runs() {
-            let baseline_y = run.line_y.round() as i32;
             for glyph in run.glyphs.iter() {
                 let phys = glyph.physical((0.0, run.line_y), 1.0);
-                let img_opt = self.swash_cache.get_image(&mut self.font_system, phys.cache_key);
-                if let Some(img) = img_opt {
-                    if img.placement.width == 0 || img.placement.height == 0 {
-                        continue;
-                    }
-                    let gx = phys.x + img.placement.left;
-                    let gy = baseline_y - img.placement.top;
-                    let gw = img.placement.width as i32;
-                    let gh = img.placement.height as i32;
-                    if gx < min_x { min_x = gx; }
-                    if gy < min_y { min_y = gy; }
-                    if gx + gw > max_x { max_x = gx + gw; }
-                    if gy + gh > max_y { max_y = gy + gh; }
+                glyph_layouts.push(GlyphLayout {
+                    cache_key: phys.cache_key,
+                    x: phys.x,
+                    y: phys.y,
+                });
+            }
+        }
+        let color = state.color;
+
+        // Render all glyphs without hinting for smooth curves.
+        let mut glyph_images: Vec<Option<SwashImage>> = Vec::with_capacity(glyph_layouts.len());
+        for gl in &glyph_layouts {
+            let img = render_glyph_unhinted(
+                &mut self.font_system,
+                &mut self.scale_context,
+                &mut self.unhinted_cache,
+                gl.cache_key,
+            ).cloned();
+            glyph_images.push(img);
+        }
+
+        // Pass 1: measure pixel-space bounding box.
+        for (gl, img_opt) in glyph_layouts.iter().zip(glyph_images.iter()) {
+            if let Some(img) = img_opt {
+                if img.placement.width == 0 || img.placement.height == 0 {
+                    continue;
                 }
+                let gx = gl.x + img.placement.left;
+                let gy = gl.y - img.placement.top;
+                let gw = img.placement.width as i32;
+                let gh = img.placement.height as i32;
+                if gx < min_x { min_x = gx; }
+                if gy < min_y { min_y = gy; }
+                if gx + gw > max_x { max_x = gx + gw; }
+                if gy + gh > max_y { max_y = gy + gh; }
             }
         }
 
@@ -286,81 +344,69 @@ impl TextRendererState {
         let canvas_h = (max_y - min_y + pad * 2).max(1) as u32;
 
         let mut pixels = vec![0u8; (canvas_w * canvas_h * 4) as usize];
-        let color = state.color;
 
-        // Pass 2: composite each glyph into the RGBA buffer with premultiplied alpha.
-        for run in state.buffer.layout_runs() {
-            let baseline_y = run.line_y.round() as i32;
-            for glyph in run.glyphs.iter() {
-                let phys = glyph.physical((0.0, run.line_y), 1.0);
-                let img_opt = self.swash_cache.get_image(&mut self.font_system, phys.cache_key);
-                let img = match img_opt {
-                    Some(i) if i.placement.width > 0 && i.placement.height > 0 => {
-                        // Clone to avoid holding an immutable borrow during pixel compositing.
-                        i.clone()
+        // Pass 2: composite each glyph into the RGBA buffer.
+        for (gl, img_opt) in glyph_layouts.iter().zip(glyph_images.iter()) {
+            let img = match img_opt {
+                Some(i) if i.placement.width > 0 && i.placement.height > 0 => i,
+                _ => continue,
+            };
+
+            let gx = gl.x + img.placement.left;
+            let gy = gl.y - img.placement.top;
+
+            match img.content {
+                cosmic_text::SwashContent::Mask => {
+                    for (idx, &alpha_byte) in img.data.iter().enumerate() {
+                        if alpha_byte == 0 { continue; }
+                        let bx = idx as i32 % img.placement.width as i32;
+                        let by = idx as i32 / img.placement.width as i32;
+                        let px = gx + bx - canvas_x;
+                        let py = gy + by - canvas_y;
+                        if px < 0 || py < 0 || px >= canvas_w as i32 || py >= canvas_h as i32 {
+                            continue;
+                        }
+                        let base = ((py as u32 * canvas_w + px as u32) * 4) as usize;
+                        let src_a = (alpha_byte as f32 / 255.0) * color[3];
+                        let dst_a = pixels[base + 3] as f32 / 255.0;
+                        let out_a = src_a + dst_a * (1.0 - src_a);
+                        if out_a > 0.0 {
+                            pixels[base]     = ((color[0] * src_a + pixels[base]     as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                            pixels[base + 1] = ((color[1] * src_a + pixels[base + 1] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                            pixels[base + 2] = ((color[2] * src_a + pixels[base + 2] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                            pixels[base + 3] = (out_a * 255.0).round() as u8;
+                        }
                     }
-                    _ => continue,
-                };
-
-                let gx = phys.x + img.placement.left;
-                let gy = baseline_y - img.placement.top;
-
-                match img.content {
-                    cosmic_text::SwashContent::Mask => {
-                        for (idx, &alpha_byte) in img.data.iter().enumerate() {
-                            if alpha_byte == 0 { continue; }
-                            let bx = idx as i32 % img.placement.width as i32;
-                            let by = idx as i32 / img.placement.width as i32;
+                }
+                cosmic_text::SwashContent::Color => {
+                    let mut i = 0;
+                    for by in 0..img.placement.height as i32 {
+                        for bx in 0..img.placement.width as i32 {
+                            let r = img.data[i];
+                            let g = img.data[i + 1];
+                            let b = img.data[i + 2];
+                            let a = img.data[i + 3];
+                            i += 4;
+                            if a == 0 { continue; }
                             let px = gx + bx - canvas_x;
                             let py = gy + by - canvas_y;
                             if px < 0 || py < 0 || px >= canvas_w as i32 || py >= canvas_h as i32 {
                                 continue;
                             }
                             let base = ((py as u32 * canvas_w + px as u32) * 4) as usize;
-                            // Source alpha: glyph alpha * text color alpha.
-                            let src_a = (alpha_byte as f32 / 255.0) * color[3];
-                            // Alpha-composite over existing pixel (src-over).
+                            let src_a = a as f32 / 255.0;
                             let dst_a = pixels[base + 3] as f32 / 255.0;
                             let out_a = src_a + dst_a * (1.0 - src_a);
                             if out_a > 0.0 {
-                                pixels[base]     = ((color[0] * src_a + pixels[base]     as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
-                                pixels[base + 1] = ((color[1] * src_a + pixels[base + 1] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
-                                pixels[base + 2] = ((color[2] * src_a + pixels[base + 2] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                pixels[base]     = ((r as f32 / 255.0 * src_a + pixels[base]     as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                pixels[base + 1] = ((g as f32 / 255.0 * src_a + pixels[base + 1] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                pixels[base + 2] = ((b as f32 / 255.0 * src_a + pixels[base + 2] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
                                 pixels[base + 3] = (out_a * 255.0).round() as u8;
                             }
                         }
                     }
-                    cosmic_text::SwashContent::Color => {
-                        let mut i = 0;
-                        for by in 0..img.placement.height as i32 {
-                            for bx in 0..img.placement.width as i32 {
-                                let r = img.data[i];
-                                let g = img.data[i + 1];
-                                let b = img.data[i + 2];
-                                let a = img.data[i + 3];
-                                i += 4;
-                                if a == 0 { continue; }
-                                let px = gx + bx - canvas_x;
-                                let py = gy + by - canvas_y;
-                                if px < 0 || py < 0 || px >= canvas_w as i32 || py >= canvas_h as i32 {
-                                    continue;
-                                }
-                                let base = ((py as u32 * canvas_w + px as u32) * 4) as usize;
-                                let src_a = a as f32 / 255.0;
-                                let dst_a = pixels[base + 3] as f32 / 255.0;
-                                let out_a = src_a + dst_a * (1.0 - src_a);
-                                if out_a > 0.0 {
-                                    pixels[base]     = ((r as f32 / 255.0 * src_a + pixels[base]     as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
-                                    pixels[base + 1] = ((g as f32 / 255.0 * src_a + pixels[base + 1] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
-                                    pixels[base + 2] = ((b as f32 / 255.0 * src_a + pixels[base + 2] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
-                                    pixels[base + 3] = (out_a * 255.0).round() as u8;
-                                }
-                            }
-                        }
-                    }
-                    // SubpixelMask and other variants — skip (rare, not needed for basic rendering).
-                    _ => {}
                 }
+                _ => {}
             }
         }
 

@@ -272,6 +272,7 @@ dependencies = [
  "lopsy-core",
  "serde",
  "serde_json",
+ "swash",
  "wasm-bindgen",
  "web-sys",
 ]

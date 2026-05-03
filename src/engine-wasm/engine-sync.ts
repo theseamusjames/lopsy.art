@@ -64,7 +64,6 @@ import {
   renderTextLayer,
   getRenderedTextPixels,
   uploadLayerPixels,
-  fillWithColor,
 } from './wasm-bridge';
 import type { PathAnchor, TextEditingState } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
@@ -402,9 +401,11 @@ export function syncTextLayers(
 ): void {
   if (!textEditing) return;
 
-  // When text is empty, clear the layer texture so no stale glyph pixels remain.
+  // When text is empty, replace the layer texture with a 1x1 transparent pixel.
+  // fillWithColor can't be used here because it blits from a document-sized
+  // scratch FBO into the small layer texture, sampling stale compositor content.
   if (textEditing.text.length === 0) {
-    fillWithColor(engine, textEditing.layerId, 0, 0, 0, 0);
+    uploadLayerPixels(engine, textEditing.layerId, new Uint8Array(4), 1, 1, 0, 0);
     return;
   }
 
