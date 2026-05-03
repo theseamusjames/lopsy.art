@@ -17,6 +17,8 @@ pub struct TextLayerState {
     pub props_hash: u64,
     /// RGBA pixel bytes from the most recent software render. Cleared on re-layout.
     pub rendered_pixels: Option<Vec<u8>>,
+    pub underline: bool,
+    pub strikethrough: bool,
 }
 
 pub struct TextRendererState {
@@ -150,6 +152,8 @@ impl TextRendererState {
         };
         let line_height = v["lineHeight"].as_f64().unwrap_or(1.4) as f32;
         let area_width = v["areaWidth"].as_f64().map(|w| w as f32);
+        let underline = v["underline"].as_bool().unwrap_or(false);
+        let strikethrough = v["strikethrough"].as_bool().unwrap_or(false);
 
         let line_height_px = font_size * line_height;
         let metrics = Metrics::new(font_size, line_height_px);
@@ -199,6 +203,8 @@ impl TextRendererState {
                 color,
                 props_hash: new_hash,
                 rendered_pixels: None,
+                underline,
+                strikethrough,
             },
         );
 
@@ -265,6 +271,37 @@ impl TextRendererState {
         result
     }
 
+    /// Draw a filled horizontal rectangle into the RGBA pixel buffer.
+    fn fill_rect(
+        pixels: &mut [u8],
+        canvas_w: u32,
+        canvas_h: u32,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        color: [f32; 4],
+    ) {
+        let x_start = x.max(0);
+        let y_start = y.max(0);
+        let x_end = (x + w).min(canvas_w as i32);
+        let y_end = (y + h).min(canvas_h as i32);
+        for py in y_start..y_end {
+            for px in x_start..x_end {
+                let base = ((py as u32 * canvas_w + px as u32) * 4) as usize;
+                let src_a = color[3];
+                let dst_a = pixels[base + 3] as f32 / 255.0;
+                let out_a = src_a + dst_a * (1.0 - src_a);
+                if out_a > 0.0 {
+                    pixels[base]     = ((color[0] * src_a + pixels[base]     as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                    pixels[base + 1] = ((color[1] * src_a + pixels[base + 1] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                    pixels[base + 2] = ((color[2] * src_a + pixels[base + 2] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                    pixels[base + 3] = (out_a * 255.0).round() as u8;
+                }
+            }
+        }
+    }
+
     /// Rasterize the text layer via swash (software) and return RGBA bytes plus
     /// layout geometry. Returns `None` if the layer doesn't exist or has no glyphs.
     ///
@@ -292,18 +329,46 @@ impl TextRendererState {
             x: i32,
             y: i32,
         }
+        // Per-run info for underline/strikethrough decoration.
+        struct RunInfo {
+            /// X of leftmost glyph in this run (integer pixels).
+            x_start: i32,
+            /// X past rightmost glyph in this run.
+            x_end: i32,
+            /// Baseline y (integer pixels, before canvas_y offset).
+            baseline_y: i32,
+            /// Font size in pixels.
+            font_size: f32,
+        }
         let mut glyph_layouts: Vec<GlyphLayout> = Vec::new();
+        let mut run_infos: Vec<RunInfo> = Vec::new();
         for run in state.buffer.layout_runs() {
+            let mut run_x_start = i32::MAX;
+            let mut run_x_end = i32::MIN;
             for glyph in run.glyphs.iter() {
                 let phys = glyph.physical((0.0, run.line_y), 1.0);
+                let gx_start = phys.x;
+                let gx_end = phys.x + glyph.w.ceil() as i32;
+                if gx_start < run_x_start { run_x_start = gx_start; }
+                if gx_end > run_x_end { run_x_end = gx_end; }
                 glyph_layouts.push(GlyphLayout {
                     cache_key: phys.cache_key,
                     x: phys.x,
                     y: phys.y,
                 });
             }
+            if run_x_start <= run_x_end {
+                run_infos.push(RunInfo {
+                    x_start: run_x_start,
+                    x_end: run_x_end,
+                    baseline_y: run.line_y.round() as i32,
+                    font_size: state.buffer.metrics().font_size,
+                });
+            }
         }
         let color = state.color;
+        let do_underline = state.underline;
+        let do_strikethrough = state.strikethrough;
 
         // Render all glyphs without hinting for smooth curves.
         let mut glyph_images: Vec<Option<SwashImage>> = Vec::with_capacity(glyph_layouts.len());
@@ -336,6 +401,27 @@ impl TextRendererState {
 
         if min_x == i32::MAX {
             return None;
+        }
+
+        // Expand bounding box to include decoration lines so they aren't clipped.
+        if do_underline || do_strikethrough {
+            for ri in &run_infos {
+                let thickness = (ri.font_size * 0.08).ceil() as i32;
+                if do_underline {
+                    let ul_y = ri.baseline_y + (ri.font_size * 0.1).ceil() as i32;
+                    if ri.x_start < min_x { min_x = ri.x_start; }
+                    if ri.x_end > max_x { max_x = ri.x_end; }
+                    if ul_y < min_y { min_y = ul_y; }
+                    if ul_y + thickness > max_y { max_y = ul_y + thickness; }
+                }
+                if do_strikethrough {
+                    let st_y = ri.baseline_y - (ri.font_size * 0.32).ceil() as i32;
+                    if ri.x_start < min_x { min_x = ri.x_start; }
+                    if ri.x_end > max_x { max_x = ri.x_end; }
+                    if st_y < min_y { min_y = st_y; }
+                    if st_y + thickness > max_y { max_y = st_y + thickness; }
+                }
+            }
         }
 
         let canvas_x = min_x - pad;
@@ -407,6 +493,25 @@ impl TextRendererState {
                     }
                 }
                 _ => {}
+            }
+        }
+
+        // Pass 3: draw underline and/or strikethrough lines.
+        if do_underline || do_strikethrough {
+            for ri in &run_infos {
+                let thickness = ((ri.font_size * 0.08).ceil() as i32).max(1);
+                let x_rel = ri.x_start - canvas_x;
+                let line_w = (ri.x_end - ri.x_start).max(1);
+                if do_underline {
+                    // Underline sits just below the baseline (CSS spec: ~10% of font-size below).
+                    let ul_y = ri.baseline_y + (ri.font_size * 0.1).ceil() as i32 - canvas_y;
+                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, ul_y, line_w, thickness, color);
+                }
+                if do_strikethrough {
+                    // Strikethrough sits ~32% of font-size above baseline (mid x-height).
+                    let st_y = ri.baseline_y - (ri.font_size * 0.32).ceil() as i32 - canvas_y;
+                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, st_y, line_w, thickness, color);
+                }
             }
         }
 
@@ -505,5 +610,53 @@ mod tests {
         let positions = renderer.get_glyph_positions("layer1");
         // Each glyph is 5 values. "ABC" = at least 3 glyphs.
         assert!(positions.len() >= 15, "expected ≥15 values for 3 glyphs, got {}", positions.len());
+    }
+
+    fn props_with_decorations(text: &str, underline: bool, strikethrough: bool) -> String {
+        format!(
+            r#"{{"text":"{text}","fontFamily":"sans-serif","fontSize":24,"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":0,"textAlign":"left","areaWidth":null,"underline":{underline},"strikethrough":{strikethrough}}}"#
+        )
+    }
+
+    #[test]
+    fn test_underline_produces_more_opaque_pixels_than_plain() {
+        let mut renderer = make_renderer();
+        // Plain text
+        renderer.set_text_content("plain", &basic_props("Hello")).expect("ok");
+        let (plain_px, _, _, _, _) = renderer.render_text_layer_software("plain")
+            .expect("plain render should succeed");
+        let plain_opaque: usize = plain_px.chunks(4).filter(|p| p[3] > 0).count();
+
+        // Underlined text
+        renderer.set_text_content("under", &props_with_decorations("Hello", true, false)).expect("ok");
+        let (under_px, _, _, _, _) = renderer.render_text_layer_software("under")
+            .expect("underline render should succeed");
+        let under_opaque: usize = under_px.chunks(4).filter(|p| p[3] > 0).count();
+
+        // Underline adds pixels below the text baseline, so the total opaque count
+        // must be strictly greater than plain text alone.
+        assert!(under_opaque > plain_opaque,
+            "underline should add opaque pixels; plain={plain_opaque} under={under_opaque}");
+    }
+
+    #[test]
+    fn test_strikethrough_produces_more_opaque_pixels_than_plain() {
+        let mut renderer = make_renderer();
+        // Plain text
+        renderer.set_text_content("plain", &basic_props("Hello")).expect("ok");
+        let (plain_px, _, _, _, _) = renderer.render_text_layer_software("plain")
+            .expect("plain render should succeed");
+        let plain_opaque: usize = plain_px.chunks(4).filter(|p| p[3] > 0).count();
+
+        // Strikethrough text
+        renderer.set_text_content("strike", &props_with_decorations("Hello", false, true)).expect("ok");
+        let (strike_px, _, _, _, _) = renderer.render_text_layer_software("strike")
+            .expect("strikethrough render should succeed");
+        let strike_opaque: usize = strike_px.chunks(4).filter(|p| p[3] > 0).count();
+
+        // Strikethrough adds a horizontal bar through the text, so the total
+        // opaque count must be strictly greater than plain text alone.
+        assert!(strike_opaque > plain_opaque,
+            "strikethrough should add opaque pixels; plain={plain_opaque} strike={strike_opaque}");
     }
 }

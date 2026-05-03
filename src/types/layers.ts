@@ -41,6 +41,8 @@ export interface TextLayer extends LayerBase {
   readonly letterSpacing: number;
   readonly textAlign: TextAlign;
   readonly width: number | null; // null = point text, number = area text
+  readonly underline: boolean;
+  readonly strikethrough: boolean;
 }
 
 export interface ShapeLayer extends LayerBase {

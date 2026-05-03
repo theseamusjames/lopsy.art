@@ -160,6 +160,8 @@ function renderFrameGpu(
     toolState.textFontStyle,
     toolState.textAlign,
     toolState.foregroundColor,
+    toolState.textUnderline,
+    toolState.textStrikethrough,
     (layerId, x, y) => {
       const layer = layers.find((l) => l.id === layerId);
       if (layer && (layer.x !== x || layer.y !== y)) {

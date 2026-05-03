@@ -1,0 +1,43 @@
+.decorationBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.decorationBtn:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+}
+
+.decorationBtnActive {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.decorationBtnActive:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.underlineIcon {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  line-height: 1;
+}
+
+.strikethroughIcon {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-decoration: line-through;
+  line-height: 1;
+}
