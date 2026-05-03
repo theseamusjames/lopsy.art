@@ -1,4 +1,4 @@
-import type { Color, GroupLayer, Layer, LayerEffects, RasterLayer, TextLayer } from '../types';
+import type { Color, FillConfig, FillLayer, GroupLayer, Layer, LayerEffects, RasterLayer, TextLayer } from '../types';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 
 export const DEFAULT_EFFECTS: LayerEffects = {
@@ -62,6 +62,24 @@ export function createTextLayer(params: {
     letterSpacing: 0,
     textAlign: 'left',
     width: null,
+  };
+}
+
+export function createFillLayer(params: { name: string; fill: FillConfig }): FillLayer {
+  return {
+    id: crypto.randomUUID(),
+    name: params.name,
+    type: 'fill',
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    x: 0,
+    y: 0,
+    clipToBelow: false,
+    effects: DEFAULT_EFFECTS,
+    mask: null,
+    fill: params.fill,
   };
 }
 

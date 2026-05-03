@@ -66,7 +66,7 @@ if (import.meta.env.DEV) {
         syncDocumentSize(engine, doc.width, doc.height);
         syncBackgroundColor(engine, bg.r, bg.g, bg.b, bg.a);
         syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH);
-        syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds);
+        syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds, doc.width, doc.height);
         syncSelection(engine, state.selection);
         renderWasm(engine);
         const gl = canvas.getContext('webgl2');
@@ -103,7 +103,7 @@ if (import.meta.env.DEV) {
         syncDocumentSize(engine, doc.width, doc.height);
         syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
         syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH);
-        syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds);
+        syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds, doc.width, doc.height);
         const id = layerId ?? doc.activeLayerId;
         if (!id) { resolve({ width: 0, height: 0, pixels: [] }); return; }
         const dims = getLayerTextureDimensions(engine, id);

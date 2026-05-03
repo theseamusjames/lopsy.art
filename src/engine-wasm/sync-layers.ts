@@ -9,7 +9,7 @@
  */
 
 import type { Engine } from './wasm-bridge';
-import type { Layer, GroupLayer } from '../types';
+import type { FillLayer, Layer, GroupLayer } from '../types';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { buildLayerIndex, isEffectivelyVisible, type LayerIndex } from '../layers/layer-index';
 import { BLEND_MODE_TO_PASCAL as BLEND_MODE_MAP } from '../types/blend-mode-tables';
@@ -24,6 +24,7 @@ import {
   removeLayerMask,
 } from './wasm-bridge';
 import { getTracked } from './sync-state';
+import { generateFillPixels, fillConfigKey } from '../layers/fill-pixels';
 
 const LAYER_TYPE_MAP: Record<string, string> = {
   'raster': 'Raster',
@@ -31,9 +32,12 @@ const LAYER_TYPE_MAP: Record<string, string> = {
   'shape': 'Shape',
   'group': 'Group',
   'adjustment': 'Adjustment',
+  // Fill layers are uploaded as raster textures — map to Raster so the
+  // compositor treats them as a regular raster layer.
+  'fill': 'Raster',
 };
 
-export function layerToDescJson(layer: Layer, effectiveVisible: boolean): string {
+export function layerToDescJson(layer: Layer, effectiveVisible: boolean, docWidth = 0, docHeight = 0): string {
   const effects: Record<string, unknown> = {};
 
   const eff = layer.effects;
@@ -94,8 +98,9 @@ export function layerToDescJson(layer: Layer, effectiveVisible: boolean): string
     };
   }
 
-  const width = 'width' in layer ? (layer.width ?? 0) : 0;
-  const height = 'height' in layer ? (layer.height ?? 0) : 0;
+  // Fill layers have no intrinsic width/height — use document dimensions.
+  const width = layer.type === 'fill' ? docWidth : ('width' in layer ? (layer.width ?? 0) : 0);
+  const height = layer.type === 'fill' ? docHeight : ('height' in layer ? (layer.height ?? 0) : 0);
 
   const desc: Record<string, unknown> = {
     id: layer.id,
@@ -131,6 +136,8 @@ export function syncLayers(
   layers: readonly Layer[],
   layerOrder: readonly string[],
   dirtyLayerIds: Set<string>,
+  docWidth = 0,
+  docHeight = 0,
 ): void {
   const tracked = getTracked(engine);
   const currentIds = new Set(layers.map((l) => l.id));
@@ -153,6 +160,7 @@ export function syncLayers(
       tracked.masksOnEngine.delete(id);
       tracked.pixelDataVersions.delete(id);
       tracked.sparseVersions.delete(id);
+      tracked.fillConfigKeys.delete(id);
     }
   }
 
@@ -174,7 +182,7 @@ export function syncLayers(
 
     let descJson: string | undefined;
     if (!isKnown || !refUnchanged || !visUnchanged) {
-      descJson = layerToDescJson(layer, effectiveVisible);
+      descJson = layerToDescJson(layer, effectiveVisible, docWidth, docHeight);
     }
 
     if (!isKnown) {
@@ -210,7 +218,19 @@ export function syncLayers(
     const pixelChanged = tracked.pixelDataVersions.get(layer.id) !== data;
     const sparseChanged = tracked.sparseVersions.get(layer.id) !== sparseEntry;
 
-    if (data && (pixelChanged || isDirty)) {
+    // Fill layers: generate pixel data from fill config whenever it changes.
+    // This runs before the regular pixel path so the generated data takes
+    // precedence over any stale JS pixel cache.
+    if (layer.type === 'fill' && docWidth > 0 && docHeight > 0) {
+      const fillLayer = layer as FillLayer;
+      const key = fillConfigKey(fillLayer.fill);
+      const prevKey = tracked.fillConfigKeys.get(layer.id);
+      if (prevKey !== key || !isKnown) {
+        const pixels = generateFillPixels(fillLayer.fill, docWidth, docHeight);
+        uploadLayerPixels(engine, layer.id, pixels, docWidth, docHeight, 0, 0);
+        tracked.fillConfigKeys.set(layer.id, key);
+      }
+    } else if (data && (pixelChanged || isDirty)) {
       const rawBytes = new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength);
       uploadLayerPixels(engine, layer.id, rawBytes, data.width, data.height, layer.x, layer.y);
       tracked.pixelDataVersions.set(layer.id, data);

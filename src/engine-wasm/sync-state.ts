@@ -54,6 +54,9 @@ export interface TrackedState {
   levelsRef: unknown;
   /** True when the engine is in "no levels" mode; null on first frame. */
   levelsIdentity: boolean | null;
+  /** Tracks the last-uploaded fill config key per fill layer so we only
+   *  regenerate and re-upload when the config actually changes. */
+  fillConfigKeys: Map<string, string>;
 }
 
 function createTrackedState(): TrackedState {
@@ -88,6 +91,7 @@ function createTrackedState(): TrackedState {
     curvesIdentity: null,
     levelsRef: null,
     levelsIdentity: null,
+    fillConfigKeys: new Map(),
   };
 }
 

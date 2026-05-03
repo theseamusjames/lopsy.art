@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, FolderPlus, GripVertical, Lock, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Type, Unlock, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, FolderPlus, GripVertical, Lock, PaintBucket, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Type, Unlock, X } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
@@ -7,8 +7,10 @@ import { PanelContainer } from '../PanelContainer/PanelContainer';
 import { usePanelCollapse } from '../usePanelCollapse';
 import { LayerThumbnail } from './LayerThumbnail';
 import { MaskThumbnail } from './MaskThumbnail';
+import { FillLayerDialog, GradientFillDialog } from '../../components/FillLayerDialog/FillLayerDialog';
 import { selectLayerAlpha, convertMaskToMarquee } from './layer-selection';
 import { buildFlatDisplayList, isGroupLayer, canMoveToGroup, findParentGroup } from '../../layers/group-utils';
+import type { FillConfig, FillLayer } from '../../types';
 import styles from './LayerPanel.module.css';
 
 interface LayerPanelProps {
@@ -44,8 +46,10 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const setMaskEditMode = useUIStore((s) => s.setMaskEditMode);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
+  const updateFillConfig = useEditorStore((s) => s.updateFillConfig);
   const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [editingFillLayerId, setEditingFillLayerId] = useState<string | null>(null);
 
   const handleThumbnailCmdClick = useCallback((e: React.MouseEvent, layerId: string) => {
     if (!(e.metaKey || e.ctrlKey)) return;
@@ -178,6 +182,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const isRootGroup = (layerId: string) => layerId === rootGroupId;
 
   return (
+    <>
     <PanelContainer title="Layers" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
     <div className={styles.panel}>
       <div
@@ -436,6 +441,17 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
             />
           );
         })()}
+        {activeLayerId && (() => {
+          const activeLayer = layers.find((l) => l.id === activeLayerId);
+          if (!activeLayer || activeLayer.type !== 'fill') return null;
+          return (
+            <IconButton
+              icon={<PaintBucket size={16} />}
+              label="Edit Fill"
+              onClick={() => setEditingFillLayerId(activeLayerId)}
+            />
+          );
+        })()}
         <div className={styles.toolbarSpacer} />
         <IconButton
           icon={<Trash2 size={16} />}
@@ -448,5 +464,31 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       </div>
     </div>
     </PanelContainer>
+    {editingFillLayerId && (() => {
+      const fillLayer = layers.find((l) => l.id === editingFillLayerId) as FillLayer | undefined;
+      if (!fillLayer) return null;
+      const handleApply = (fill: FillConfig) => {
+        updateFillConfig(editingFillLayerId, fill);
+        setEditingFillLayerId(null);
+      };
+      const handleCancel = () => setEditingFillLayerId(null);
+      if (fillLayer.fill.type === 'gradient') {
+        return (
+          <GradientFillDialog
+            initialFill={fillLayer.fill}
+            onApply={handleApply}
+            onCancel={handleCancel}
+          />
+        );
+      }
+      return (
+        <FillLayerDialog
+          initialFill={fillLayer.fill}
+          onApply={handleApply}
+          onCancel={handleCancel}
+        />
+      );
+    })()}
+    </>
   );
 }

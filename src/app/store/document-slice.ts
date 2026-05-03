@@ -19,6 +19,8 @@ import { computeCreateDocument } from './actions/create-document';
 import { computeOpenImage } from './actions/open-image';
 import { computeAddLayer } from './actions/add-layer';
 import { computeAddTextLayer, computeUpdateTextLayerProperties } from './actions/add-text-layer';
+import { computeAddFillLayer } from './actions/add-fill-layer';
+import { computeUpdateFillConfig } from './actions/update-fill-config';
 import { computeRemoveLayer } from './actions/remove-layer';
 import { computeMoveLayer } from './actions/move-layer';
 import { computeDuplicateLayer } from './actions/duplicate-layer';
@@ -147,6 +149,8 @@ export interface DocumentSlice {
   addLayer: () => void;
   addTextLayer: (layer: import('../../types').TextLayer) => void;
   updateTextLayerProperties: (id: string, props: Partial<Omit<import('../../types').TextLayer, 'id' | 'type'>>) => void;
+  addFillLayer: (fill: import('../../types').FillConfig) => void;
+  updateFillConfig: (id: string, fill: import('../../types').FillConfig) => void;
   removeLayer: (id: string) => void;
   setActiveLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
@@ -215,6 +219,19 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const s = get();
     s.pushHistory('Add Text Layer');
     const result = computeAddTextLayer(s.document, layer);
+    if (result) set(result);
+  },
+
+  addFillLayer: (fill) => {
+    const s = get();
+    s.pushHistory('Add Fill Layer');
+    const result = computeAddFillLayer(s.document, fill);
+    if (result) set(result);
+  },
+
+  updateFillConfig: (id, fill) => {
+    const s = get();
+    const result = computeUpdateFillConfig(s.document, s.renderVersion, id, fill);
     if (result) set(result);
   },
 

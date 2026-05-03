@@ -148,7 +148,7 @@ function renderFrameGpu(
   syncViewport(engine, viewport.zoom, viewport.panX, viewport.panY, screenW, screenH);
   // syncLayers must run before syncTextLayers so any new text layer's GPU texture
   // is created before syncTextLayers tries to fill or upload pixels into it.
-  syncLayers(engine, layers, doc.layerOrder, dirtyLayerIds);
+  syncLayers(engine, layers, doc.layerOrder, dirtyLayerIds, doc.width, doc.height);
 
   // Live-update text layer pixels during editing via the WASM engine (swash software rasterizer).
   syncTextLayers(

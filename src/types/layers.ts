@@ -2,8 +2,9 @@ import type { Color, BlendMode } from './color';
 import type { Point } from './geometry';
 import type { LayerEffects, LayerMask } from './effects';
 import type { ImageAdjustments } from '../filters/image-adjustments';
+import type { GradientStop } from '../tools/gradient/gradient';
 
-export type LayerType = 'raster' | 'text' | 'shape' | 'group';
+export type LayerType = 'raster' | 'text' | 'shape' | 'group' | 'fill';
 
 export type FontStyle = 'normal' | 'italic';
 export type TextAlign = 'left' | 'center' | 'right' | 'justify';
@@ -63,6 +64,34 @@ export interface GroupLayer extends LayerBase {
   readonly adjustmentsEnabled: boolean;
 }
 
-export type Layer = RasterLayer | TextLayer | ShapeLayer | GroupLayer;
+export interface SolidColorFill {
+  readonly type: 'solid-color';
+  readonly color: { readonly r: number; readonly g: number; readonly b: number; readonly a: number };
+}
+
+export interface GradientFill {
+  readonly type: 'gradient';
+  readonly stops: readonly GradientStop[];
+  readonly gradientType: 'linear' | 'radial';
+  readonly angle: number;
+  readonly reverse: boolean;
+}
+
+export interface PatternFill {
+  readonly type: 'pattern';
+  readonly patternId: string;
+  readonly scale: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+}
+
+export type FillConfig = SolidColorFill | GradientFill | PatternFill;
+
+export interface FillLayer extends LayerBase {
+  readonly type: 'fill';
+  readonly fill: FillConfig;
+}
+
+export type Layer = RasterLayer | TextLayer | ShapeLayer | GroupLayer | FillLayer;
 
 export type ShapeType = 'rectangle' | 'ellipse' | 'polygon' | 'line' | 'arrow' | 'star';

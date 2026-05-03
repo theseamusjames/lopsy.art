@@ -372,12 +372,12 @@ export function markAllLayersDirty(engine: Engine): void {
  * if JS pixel data hadn't been synced yet via the rAF loop.
  */
 export function flushLayerSync(state: {
-  document: { layers: readonly Layer[]; layerOrder: readonly string[] };
+  document: { layers: readonly Layer[]; layerOrder: readonly string[]; width: number; height: number };
   dirtyLayerIds: Set<string>;
 }): void {
   const engine = getEngine();
   if (!engine) return;
-  syncLayers(engine, state.document.layers, state.document.layerOrder, state.dirtyLayerIds);
+  syncLayers(engine, state.document.layers, state.document.layerOrder, state.dirtyLayerIds, state.document.width, state.document.height);
 }
 
 /**

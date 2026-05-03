@@ -1,13 +1,20 @@
 import { useEditorStore } from '../../editor-store';
 import type { MenuDef } from './types';
 
-export const layerMenu: MenuDef = {
-  label: 'Layer',
-  items: [
-    { label: 'New Layer', shortcut: '\u21E7\u2318N', action: () => useEditorStore.getState().addLayer() },
-    { label: 'Duplicate Layer', shortcut: '\u2318J', action: () => useEditorStore.getState().duplicateLayer() },
-    { separator: true, label: '' },
-    { label: 'Merge Down', shortcut: '\u2318E', action: () => useEditorStore.getState().mergeDown() },
-    { label: 'Flatten Image', action: () => useEditorStore.getState().flattenImage() },
-  ],
-};
+export type FillLayerDialogId = 'solid-color' | 'gradient';
+
+export function createLayerMenu(showFillLayerDialog: (id: FillLayerDialogId) => void): MenuDef {
+  return {
+    label: 'Layer',
+    items: [
+      { label: 'New Layer', shortcut: '⇧⌘N', action: () => useEditorStore.getState().addLayer() },
+      { label: 'Duplicate Layer', shortcut: '⌘J', action: () => useEditorStore.getState().duplicateLayer() },
+      { separator: true, label: '' },
+      { label: 'New Solid Color Fill...', action: () => showFillLayerDialog('solid-color') },
+      { label: 'New Gradient Fill...', action: () => showFillLayerDialog('gradient') },
+      { separator: true, label: '' },
+      { label: 'Merge Down', shortcut: '⌘E', action: () => useEditorStore.getState().mergeDown() },
+      { label: 'Flatten Image', action: () => useEditorStore.getState().flattenImage() },
+    ],
+  };
+}
