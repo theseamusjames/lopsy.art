@@ -123,25 +123,25 @@ test.describe('Quick Mask Mode', () => {
     expect(state.isQuickMaskMode).toBe(false);
   });
 
-  test('entering Quick Mask Mode with no selection shows full red overlay over the document', async ({ page }) => {
+  test('entering Quick Mask Mode with no selection shows full blue overlay over the document', async ({ page }) => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
 
-    // Enter Quick Mask Mode (no existing selection → all red)
+    // Enter Quick Mask Mode (no existing selection → all blue)
     await page.keyboard.press('q');
     await page.waitForTimeout(150);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'quick-mask-enter-no-selection.png') });
 
-    // Sample the overlay at the center of the document — should have red tint
+    // Sample the overlay at the center of the document — should have blue tint
     const centerScreen = await docToScreen(page, 100, 100);
     const overlayPixel = await sampleOverlayPixel(page, centerScreen.x, centerScreen.y);
 
-    // The quick mask overlay paints red (R=255, G=0, B=0) with ~60% opacity (alpha~153)
-    // over unselected areas. Since no selection exists, the whole doc is unselected (red).
-    expect(overlayPixel.r).toBeGreaterThan(200);
-    expect(overlayPixel.g).toBeLessThan(50);
-    expect(overlayPixel.b).toBeLessThan(50);
+    // The quick mask overlay paints blue (R=0, G=100, B=255) with ~60% opacity (alpha~153)
+    // over unselected areas. Since no selection exists, the whole doc is unselected (blue).
+    expect(overlayPixel.r).toBeLessThan(50);
+    expect(overlayPixel.g).toBeGreaterThan(50);
+    expect(overlayPixel.b).toBeGreaterThan(200);
     expect(overlayPixel.a).toBeGreaterThan(100);
 
     // Exit Quick Mask Mode
@@ -182,13 +182,13 @@ test.describe('Quick Mask Mode', () => {
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'quick-mask-with-selection.png') });
 
-    // Left half (unselected) should have red overlay
+    // Left half (unselected) should have blue overlay
     const leftScreen = await docToScreen(page, 50, 100);
     const leftPixel = await sampleOverlayPixel(page, leftScreen.x, leftScreen.y);
-    expect(leftPixel.r).toBeGreaterThan(200);
+    expect(leftPixel.b).toBeGreaterThan(200);
     expect(leftPixel.a).toBeGreaterThan(100);
 
-    // Right half (selected) should be clear (no red overlay)
+    // Right half (selected) should be clear (no blue overlay)
     const rightScreen = await docToScreen(page, 150, 100);
     const rightPixel = await sampleOverlayPixel(page, rightScreen.x, rightScreen.y);
     // Selected areas have alpha = 0 (no overlay)
@@ -219,7 +219,7 @@ test.describe('Quick Mask Mode', () => {
     await createDocument(page, 200, 200, true);
     await fitToView(page);
 
-    // Enter Quick Mask Mode (fully unselected → all red)
+    // Enter Quick Mask Mode (fully unselected → all blue)
     await page.keyboard.press('q');
     await page.waitForTimeout(150);
 
@@ -268,10 +268,10 @@ test.describe('Quick Mask Mode', () => {
     await page.keyboard.press('q');
     await page.waitForTimeout(150);
 
-    // Sample the center before painting — should be red (unselected)
+    // Sample the center before painting — should be blue (unselected)
     const centerScreen = await docToScreen(page, 100, 100);
     const beforePixel = await sampleOverlayPixel(page, centerScreen.x, centerScreen.y);
-    expect(beforePixel.r).toBeGreaterThan(150);
+    expect(beforePixel.b).toBeGreaterThan(150);
     expect(beforePixel.a).toBeGreaterThan(50);
 
     // Paint over the center with brush (white = select)
@@ -286,9 +286,9 @@ test.describe('Quick Mask Mode', () => {
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'quick-mask-painted.png') });
 
-    // Sample center after painting — should have less red (partially selected)
+    // Sample center after painting — should have less blue (partially selected)
     const afterPixel = await sampleOverlayPixel(page, centerScreen.x, centerScreen.y);
-    // Painted area should have lower red alpha than unpainted area
+    // Painted area should have lower blue alpha than unpainted area
     expect(afterPixel.a).toBeLessThan(beforePixel.a);
 
     // Exit

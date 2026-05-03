@@ -69,6 +69,7 @@ pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/select
 // Brush
 pub const BRUSH_DAB_FRAG: &str = include_str!("shaders/brush/brush_dab.glsl");
 pub const ERASER_DAB_FRAG: &str = include_str!("shaders/brush/eraser_dab.glsl");
+pub const QUICK_MASK_DAB_FRAG: &str = include_str!("shaders/brush/quick_mask_dab.glsl");
 pub const DODGE_BURN_FRAG: &str = include_str!("shaders/brush/dodge_burn.glsl");
 pub const DODGE_BURN_DAB_FRAG: &str = include_str!("shaders/brush/dodge_burn_dab.glsl");
 pub const SMUDGE_DAB_FRAG: &str = include_str!("shaders/brush/smudge_dab.glsl");
@@ -225,6 +226,7 @@ pub struct ShaderPrograms {
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab: ShaderProgram,
     pub eraser_dab: ShaderProgram,
+    pub quick_mask_dab: ShaderProgram,
     pub dodge_burn: ShaderProgram,
     pub dodge_burn_dab: ShaderProgram,
     pub smudge_dab: ShaderProgram,
@@ -303,6 +305,7 @@ impl ShaderPrograms {
             // Brush — use standard fullscreen quad vert; dab positioning via fragment shader
             brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,
             eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,
+            quick_mask_dab: compile_program(gl, v, QUICK_MASK_DAB_FRAG)?,
             dodge_burn: compile_program(gl, v, DODGE_BURN_FRAG)?,
             dodge_burn_dab: compile_program(gl, v, DODGE_BURN_DAB_FRAG)?,
             smudge_dab: compile_program(gl, v, SMUDGE_DAB_FRAG)?,

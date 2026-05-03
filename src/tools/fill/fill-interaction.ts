@@ -1,5 +1,6 @@
 import type { InteractionContext } from '../../app/interactions/interaction-types';
 import { useEditorStore } from '../../app/editor-store';
+import { useUIStore } from '../../app/ui-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -7,13 +8,35 @@ import {
   floodFill as wasmFloodFill,
   applyFillToLayer as wasmApplyFillToLayer,
   readLayerPixelsForFill as wasmReadLayerPixelsForFill,
+  fillQuickMask as wasmFillQuickMask,
 } from '../../engine-wasm/wasm-bridge';
 
 /** Down handler for the bucket fill tool. Flood-fills from the click point,
  *  intersected with any active selection, and uploads to the GPU. */
 export function handleFillDown(ctx: InteractionContext): void {
-  const { layerPos, activeLayerId } = ctx;
+  const { layerPos, canvasPos, activeLayerId } = ctx;
   const editorState = useEditorStore.getState();
+  const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+
+  // In quick mask mode: fill the quick mask texture instead of the layer
+  if (isQuickMaskMode) {
+    editorState.pushHistory();
+    const toolSettings = useToolSettingsStore.getState();
+    const tolerance = toolSettings.fillTolerance;
+    const contiguous = toolSettings.fillContiguous;
+
+    const engine = getEngine();
+    if (!engine) return;
+
+    const startX = Math.round(canvasPos.x);
+    const startY = Math.round(canvasPos.y);
+
+    wasmFillQuickMask(engine, startX, startY, tolerance, contiguous, 0);
+    editorState.notifyRender();
+    return;
+  }
+
+  // Normal mode: fill the active layer
   editorState.pushHistory();
   const toolSettings = useToolSettingsStore.getState();
   const color = toolSettings.foregroundColor;

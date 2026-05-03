@@ -132,6 +132,7 @@ pub struct EngineInner {
     pub brush_angle: f32,
     // Selection
     pub selection_mask_texture: Option<TextureHandle>,
+    pub quick_mask_texture: Option<TextureHandle>,
     // Shape preview (stores pre-drag layer content for live preview)
     pub shape_preview_texture: Option<TextureHandle>,
     pub shape_preview_layer_id: Option<String>,
@@ -254,6 +255,7 @@ impl EngineInner {
             brush_has_tip: false,
             brush_angle: 0.0,
             selection_mask_texture: None,
+            quick_mask_texture: None,
             shape_preview_texture: None,
             shape_preview_layer_id: None,
             filter_preview_texture: None,
@@ -476,6 +478,10 @@ impl EngineInner {
         self.brush_has_tip = false;
         // Selection mask
         if let Some(tex) = self.selection_mask_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        // Quick mask
+        if let Some(tex) = self.quick_mask_texture.take() {
             self.texture_pool.release(tex);
         }
         // Shape preview
