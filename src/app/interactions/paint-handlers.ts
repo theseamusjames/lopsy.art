@@ -464,7 +464,7 @@ export function handlePaintMove(
     }
     // Regular layer mask edit: CPU painting
     if (!state.pixelBuffer) return;
-    handleMaskPaintMove(state, layerLocalPos, toolSettings, false);
+    handleMaskPaintMove(state, layerLocalPos, toolSettings);
     return;
   }
 
@@ -581,7 +581,6 @@ function handleMaskPaintMove(
   state: InteractionState,
   pos: { x: number; y: number },
   toolSettings: ReturnType<typeof useToolSettingsStore.getState>,
-  _isQuickMaskMode: boolean,
 ): void {
   if (!state.pixelBuffer || !state.lastPoint) return;
 

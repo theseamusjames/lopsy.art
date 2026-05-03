@@ -354,19 +354,14 @@ pub fn draw_quick_mask_pencil_line(
                 &engine.gl, tex_handle, bx, by, bw as u32, bh as u32, &rgba,
             );
         } else {
-            // Eraser mode: read existing, clear to black
-            let data = engine.texture_pool.read_rgba(&engine.gl, bx, by, bw as u32, bh as u32);
-            if let Ok(mut existing) = data {
-                for j in 0..count {
-                    existing[j * 4] = 0;
-                    existing[j * 4 + 1] = 0;
-                    existing[j * 4 + 2] = 0;
-                    existing[j * 4 + 3] = 255;
-                }
-                let _ = engine.texture_pool.upload_rgba(
-                    &engine.gl, tex_handle, bx, by, bw as u32, bh as u32, &existing,
-                );
+            // Eraser mode: paint black (deselect)
+            let mut rgba = vec![0u8; count * 4];
+            for j in 0..count {
+                rgba[j * 4 + 3] = 255;
             }
+            let _ = engine.texture_pool.upload_rgba(
+                &engine.gl, tex_handle, bx, by, bw as u32, bh as u32, &rgba,
+            );
         }
     }
 
