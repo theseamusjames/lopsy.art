@@ -415,6 +415,7 @@ interface ToolSettings {
   aspectRatioH: number;
   aspectRatioLocked: boolean;
   marqueeFeather: number;
+  cropMode: 'normal' | 'perspective';
   gradientType: GradientType;
   gradientStops: readonly GradientStop[];
   gradientReverse: boolean;
@@ -553,6 +554,7 @@ interface ToolSettings {
   setAspectRatioW: (w: number) => void;
   setAspectRatioH: (h: number) => void;
   setAspectRatioLocked: (locked: boolean) => void;
+  setCropMode: (mode: 'normal' | 'perspective') => void;
   setGradientType: (type: 'linear' | 'radial') => void;
   setGradientStops: (stops: readonly GradientStop[]) => void;
   setGradientReverse: (reverse: boolean) => void;
@@ -601,6 +603,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   aspectRatioH: 1,
   aspectRatioLocked: false,
   marqueeFeather: 0,
+  cropMode: 'normal' as const,
   gradientType: 'linear',
   gradientStops: [
     { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
@@ -756,6 +759,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setAspectRatioW: (w) => set({ aspectRatioW: Math.max(0.01, w) }),
   setAspectRatioH: (h) => set({ aspectRatioH: Math.max(0.01, h) }),
   setAspectRatioLocked: (locked) => set({ aspectRatioLocked: locked }),
+  setCropMode: (mode) => set({ cropMode: mode }),
   setGradientType: (type) => set({ gradientType: type }),
   setGradientStops: (stops) => {
     const clamped = stops.length < 2

@@ -4,8 +4,17 @@ import type { Point } from '../../types';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
+import {
+  handlePerspectiveCropDown,
+  handlePerspectiveCropMove,
+  handlePerspectiveCropUp,
+} from './perspective-crop-interaction';
 
 export function handleCropDown(ctx: InteractionContext): InteractionState {
+  if (useToolSettingsStore.getState().cropMode === 'perspective') {
+    return handlePerspectiveCropDown(ctx);
+  }
+
   const { canvasPos, activeLayerId } = ctx;
   useUIStore.getState().setCropRect(null);
   return {
@@ -23,6 +32,11 @@ export function handleCropDown(ctx: InteractionContext): InteractionState {
 }
 
 export function handleCropMove(state: InteractionState, canvasPos: Point): void {
+  if (useToolSettingsStore.getState().cropMode === 'perspective') {
+    handlePerspectiveCropMove(state, canvasPos);
+    return;
+  }
+
   if (!state.startPoint) return;
   const edDoc = useEditorStore.getState().document;
   const toolSettings = useToolSettingsStore.getState();
@@ -48,6 +62,12 @@ export function handleCropMove(state: InteractionState, canvasPos: Point): void 
 
 export function handleCropUp(state: InteractionState): void {
   if (state.tool !== 'crop') return;
+
+  if (useToolSettingsStore.getState().cropMode === 'perspective') {
+    handlePerspectiveCropUp(state);
+    return;
+  }
+
   const cropRect = useUIStore.getState().cropRect;
   if (cropRect && cropRect.width > 1 && cropRect.height > 1) {
     useEditorStore.getState().cropCanvas(cropRect);

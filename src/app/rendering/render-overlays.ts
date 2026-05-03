@@ -1,5 +1,6 @@
 import type { Color, Layer, Point, Rect } from '../../types';
 import type { PathAnchor } from '../../tools/path/path';
+import type { Quad } from '../../tools/crop/perspective-crop';
 
 interface PathOverlaySource {
   anchors: readonly PathAnchor[];
@@ -198,6 +199,53 @@ export function renderGradientPreview(
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(pt.x, pt.y, pointRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1 / zoom;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+export function renderPerspectiveCropOverlay(
+  ctx: CanvasRenderingContext2D,
+  quad: Quad,
+  zoom: number,
+): void {
+  const corners = [quad.topLeft, quad.topRight, quad.bottomRight, quad.bottomLeft];
+
+  ctx.save();
+
+  // Dark outline for contrast
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = 3 / zoom;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(corners[0]!.x, corners[0]!.y);
+  for (let i = 1; i < 4; i++) {
+    ctx.lineTo(corners[i]!.x, corners[i]!.y);
+  }
+  ctx.closePath();
+  ctx.stroke();
+
+  // White outline on top
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.5 / zoom;
+  ctx.beginPath();
+  ctx.moveTo(corners[0]!.x, corners[0]!.y);
+  for (let i = 1; i < 4; i++) {
+    ctx.lineTo(corners[i]!.x, corners[i]!.y);
+  }
+  ctx.closePath();
+  ctx.stroke();
+
+  // Draw corner handles
+  const handleR = 5 / zoom;
+  for (const corner of corners) {
+    ctx.beginPath();
+    ctx.arc(corner.x, corner.y, handleR, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 1 / zoom;

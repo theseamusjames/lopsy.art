@@ -28,7 +28,7 @@ import {
 import { renderGrid, renderPixelGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
-import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor, renderSymmetryCenter } from './rendering/render-overlays';
+import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor, renderSymmetryCenter, renderPerspectiveCropOverlay } from './rendering/render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './rendering/render-text-overlay';
 import { hitTestTextLayer } from '../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './rendering/render-guides';
@@ -138,6 +138,7 @@ function renderFrameGpu(
   const pathClosed = uiState.pathClosed;
   const lassoPoints = uiState.lassoPoints;
   const cropRect = uiState.cropRect;
+  const perspectiveCropQuad = uiState.perspectiveCropQuad;
   const transform = uiState.transform;
   const gradientPreview = uiState.gradientPreview;
   const showGuides = uiState.showGuides;
@@ -149,6 +150,7 @@ function renderFrameGpu(
   const guideColor = uiState.guideColor;
 
   const textEditing = uiState.textEditing;
+  const artboards = editorState.artboards;
 
   syncDocumentSize(engine, doc.width, doc.height);
   syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
@@ -242,7 +244,11 @@ function renderFrameGpu(
     renderPathOverlay(overlayCtx, pathAnchors, pathClosed, layers, doc.activeLayerId, viewport.zoom, selectedPath?.anchors, selectedPath?.closed);
     renderLassoPreview(overlayCtx, lassoPoints, viewport.zoom);
     renderCropPreview(overlayCtx, cropRect, doc.width, doc.height, viewport.zoom);
+    if (perspectiveCropQuad) {
+      renderPerspectiveCropOverlay(overlayCtx, perspectiveCropQuad, viewport.zoom);
+    }
     renderGradientPreview(overlayCtx, gradientPreview, viewport.zoom);
+    renderArtboards(overlayCtx, artboards, viewport.zoom);
 
     // Text tool overlays
     const textDrag = uiState.textDrag;
