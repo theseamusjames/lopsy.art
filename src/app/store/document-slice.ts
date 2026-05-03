@@ -3,7 +3,7 @@ import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
 import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
 import { createImageData } from '../../engine/color-space';
-import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil } from '../../layers/group-utils';
+import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil, buildFlatDisplayList, findParentGroup, removeFromParentGroup } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
@@ -134,6 +134,7 @@ function createInitialDocument() {
     layers: [bg, rootGroup] as readonly Layer[],
     layerOrder: [bg.id, rootGroup.id] as readonly string[],
     activeLayerId: bg.id as string | null,
+    selectedLayerIds: [bg.id] as readonly string[],
     backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
     rootGroupId: rootGroup.id as string | null,
   };
@@ -175,6 +176,15 @@ export interface DocumentSlice {
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
+
+  // Multi-select
+  toggleLayerSelection: (id: string) => void;
+  addLayerToSelection: (id: string) => void;
+  setLayerSelection: (ids: string[]) => void;
+  clearLayerSelection: () => void;
+  selectLayerRange: (fromId: string, toId: string) => void;
+  removeSelectedLayers: () => void;
+  groupSelectedLayers: () => void;
 }
 
 export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
@@ -287,7 +297,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const layerOrder = [...doc.layerOrder];
     layerOrder.splice(orderIdx, 0, group.id);
     set({
-      document: { ...doc, layers, layerOrder, activeLayerId: group.id },
+      document: { ...doc, layers, layerOrder, activeLayerId: group.id, selectedLayerIds: [group.id] },
     });
   },
 
@@ -573,5 +583,139 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
+  },
+
+  toggleLayerSelection: (id) => {
+    const doc = get().document;
+    const current = doc.selectedLayerIds;
+    const isSelected = current.includes(id);
+    const next = isSelected
+      ? current.filter((sid) => sid !== id)
+      : [...current, id];
+    // Ensure at least the active layer remains selected
+    const activeId = doc.activeLayerId;
+    const finalIds = activeId && !next.includes(activeId) ? [activeId, ...next] : next;
+    set({ document: { ...doc, selectedLayerIds: finalIds } });
+  },
+
+  addLayerToSelection: (id) => {
+    const doc = get().document;
+    if (doc.selectedLayerIds.includes(id)) return;
+    set({ document: { ...doc, selectedLayerIds: [...doc.selectedLayerIds, id] } });
+  },
+
+  setLayerSelection: (ids) => {
+    const doc = get().document;
+    set({ document: { ...doc, selectedLayerIds: ids } });
+  },
+
+  clearLayerSelection: () => {
+    const doc = get().document;
+    const activeId = doc.activeLayerId;
+    set({ document: { ...doc, selectedLayerIds: activeId ? [activeId] : [] } });
+  },
+
+  selectLayerRange: (fromId, toId) => {
+    const doc = get().document;
+    const displayList = buildFlatDisplayList(doc.layers, doc.layerOrder);
+    const ids = displayList.map((e) => e.layer.id);
+    const fromIdx = ids.indexOf(fromId);
+    const toIdx = ids.indexOf(toId);
+    if (fromIdx === -1 || toIdx === -1) {
+      set({ document: { ...doc, selectedLayerIds: [toId] } });
+      return;
+    }
+    const start = Math.min(fromIdx, toIdx);
+    const end = Math.max(fromIdx, toIdx);
+    const rangeIds = ids.slice(start, end + 1);
+    set({ document: { ...doc, selectedLayerIds: rangeIds } });
+  },
+
+  removeSelectedLayers: () => {
+    const s = get();
+    const doc = s.document;
+    const toRemove = doc.selectedLayerIds.filter(
+      (id) => id !== doc.rootGroupId,
+    );
+    if (toRemove.length === 0) return;
+    s.pushHistory('Delete Layers');
+    let currentDoc = doc;
+    for (const id of toRemove) {
+      const result = computeRemoveLayer(
+        currentDoc,
+        pixelDataManager.denseMap() as Map<string, ImageData>,
+        pixelDataManager.sparseMap() as Map<string, SparseLayerEntry>,
+        id,
+      );
+      if (!result || !result.document) continue;
+      currentDoc = result.document as typeof doc;
+    }
+    const activeId = currentDoc.activeLayerId;
+    set({
+      document: {
+        ...currentDoc,
+        selectedLayerIds: activeId ? [activeId] : [],
+      },
+    });
+  },
+
+  groupSelectedLayers: () => {
+    const s = get();
+    const doc = s.document;
+    const idsToGroup = doc.selectedLayerIds.filter(
+      (id) => id !== doc.rootGroupId,
+    );
+    if (idsToGroup.length < 2) {
+      s.addGroup();
+      return;
+    }
+
+    const displayList = buildFlatDisplayList(doc.layers, doc.layerOrder);
+    // Preserve visual order (top→bottom in panel)
+    const orderedIds = displayList
+      .map((e) => e.layer.id)
+      .filter((id) => idsToGroup.includes(id));
+
+    const group = createGroupLayer({
+      name: 'Group',
+      children: [...orderedIds],
+    });
+
+    // Find the parent group to add the new group into
+    const firstId = orderedIds[0]!;
+    const parentGroup = findParentGroup(doc.layers, firstId);
+    const targetGroupId = parentGroup?.id ?? doc.rootGroupId ?? null;
+
+    // Remove selected layers from their current parents, add new group
+    let newLayers = [...doc.layers, group];
+    for (const id of orderedIds) {
+      newLayers = removeFromParentGroup(newLayers, id);
+    }
+    if (targetGroupId) {
+      newLayers = addToGroupUtil(newLayers, group.id, targetGroupId);
+    }
+
+    // Rebuild layerOrder: strip out grouped IDs, insert block before target group
+    const toGroupSet = new Set(orderedIds);
+    const filteredOrder = doc.layerOrder.filter((id) => !toGroupSet.has(id));
+    const targetIdx = targetGroupId ? filteredOrder.indexOf(targetGroupId) : filteredOrder.length;
+    const insertAt = targetIdx !== -1 ? targetIdx : filteredOrder.length;
+    const newOrder = [
+      ...filteredOrder.slice(0, insertAt),
+      ...orderedIds,
+      group.id,
+      ...filteredOrder.slice(insertAt),
+    ];
+
+    s.pushHistory('Group Layers');
+    set({
+      document: {
+        ...doc,
+        layers: newLayers,
+        layerOrder: newOrder,
+        activeLayerId: group.id,
+        selectedLayerIds: [group.id],
+      },
+    });
   },
 });

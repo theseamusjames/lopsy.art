@@ -62,7 +62,7 @@ export function computeDuplicateLayer(
     }
 
     return {
-      document: { ...doc, layers: newLayers, layerOrder: newOrder, activeLayerId: dupRootId },
+      document: { ...doc, layers: newLayers, layerOrder: newOrder, activeLayerId: dupRootId, selectedLayerIds: [dupRootId] },
       layerPixelData: pixelData,
     };
   }
@@ -86,7 +86,7 @@ export function computeDuplicateLayer(
   }
 
   return {
-    document: { ...doc, layers, layerOrder: newOrder, activeLayerId: newId },
+    document: { ...doc, layers, layerOrder: newOrder, activeLayerId: newId, selectedLayerIds: [newId] },
     layerPixelData: pixelData,
   };
 }

@@ -28,6 +28,7 @@ export function computeAddLayer(
       layers,
       layerOrder,
       activeLayerId: newLayer.id,
+      selectedLayerIds: [newLayer.id],
     },
   };
 }

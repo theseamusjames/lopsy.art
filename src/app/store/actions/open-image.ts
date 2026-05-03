@@ -19,6 +19,7 @@ export function computeOpenImage(
       layers: [layer, rootGroup],
       layerOrder: [layer.id, rootGroup.id],
       activeLayerId: layer.id,
+      selectedLayerIds: [layer.id],
       backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
       rootGroupId: rootGroup.id,
     },

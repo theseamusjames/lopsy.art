@@ -27,6 +27,7 @@ function makeDoc(effects: LayerEffects): { doc: DocumentState; pixelData: Map<st
       layers: [layerWithEffects],
       layerOrder: [layer.id],
       activeLayerId: layer.id,
+      selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
     },
     pixelData,

@@ -363,6 +363,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
       layers: newLayers,
       layerOrder: newLayerOrder,
       activeLayerId,
+      selectedLayerIds: activeLayerId ? [activeLayerId] : [],
     },
     dirtyLayerIds: new Set<string>(),
     isDirty: false,

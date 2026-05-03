@@ -16,7 +16,8 @@ function makeDoc(...extraLayers: import('../../../types').Layer[]): DocumentStat
     layers: allLayers,
     layerOrder: allLayers.map((l) => l.id),
     activeLayerId: layer.id,
-    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
   };
 }
 

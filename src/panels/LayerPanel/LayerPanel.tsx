@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, FolderPlus, GripVertical, Lock, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Type, Unlock, X } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
@@ -24,9 +24,9 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const [collapsed, setCollapsed] = usePanelCollapse('layers');
   const layers = useEditorStore((s) => s.document.layers);
   const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
+  const selectedLayerIds = useEditorStore((s) => s.document.selectedLayerIds);
   const onToggleVisibility = useEditorStore((s) => s.toggleLayerVisibility);
   const onAddLayer = useEditorStore((s) => s.addLayer);
-  const onRemoveLayer = useEditorStore((s) => s.removeLayer);
   const onReorderLayer = useEditorStore((s) => s.moveLayer);
   const onUpdateOpacity = useEditorStore((s) => s.updateLayerOpacity);
   const addLayerMask = useEditorStore((s) => s.addLayerMask);
@@ -44,8 +44,14 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const setMaskEditMode = useUIStore((s) => s.setMaskEditMode);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
+  const toggleLayerSelection = useEditorStore((s) => s.toggleLayerSelection);
+  const selectLayerRange = useEditorStore((s) => s.selectLayerRange);
+  const setLayerSelection = useEditorStore((s) => s.setLayerSelection);
+  const removeSelectedLayers = useEditorStore((s) => s.removeSelectedLayers);
+  const groupSelectedLayers = useEditorStore((s) => s.groupSelectedLayers);
   const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const handleThumbnailCmdClick = useCallback((e: React.MouseEvent, layerId: string) => {
     if (!(e.metaKey || e.ctrlKey)) return;
@@ -61,6 +67,54 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
     () => buildFlatDisplayList(layers, layerOrder),
     [layers, layerOrder],
   );
+
+  const handleLayerClick = useCallback((e: React.MouseEvent, layerId: string) => {
+    if (e.metaKey || e.ctrlKey) {
+      // Cmd/Meta+click: toggle layer in multi-selection without changing activeLayerId
+      e.preventDefault();
+      toggleLayerSelection(layerId);
+    } else if (e.shiftKey && activeLayerId) {
+      // Shift+click: select range from activeLayerId to clicked layer
+      e.preventDefault();
+      selectLayerRange(activeLayerId, layerId);
+    } else {
+      // Plain click: select only this layer
+      onSelectLayer(layerId);
+    }
+  }, [toggleLayerSelection, selectLayerRange, onSelectLayer, activeLayerId]);
+
+  // Keyboard shortcuts: Cmd+A to select all, Delete/Backspace to delete selected
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement && document.activeElement !== document.body) {
+        const target = document.activeElement as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+        if (!panel.contains(document.activeElement) && document.activeElement !== document.body) return;
+        e.preventDefault();
+        const allIds = displayList
+          .map((entry) => entry.layer.id)
+          .filter((id) => id !== rootGroupId);
+        setLayerSelection(allIds);
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (!panel.matches(':focus-within') && !panel.contains(document.activeElement)) return;
+        if (document.activeElement?.tagName === 'INPUT') return;
+        e.preventDefault();
+        removeSelectedLayers();
+      }
+    };
+
+    // Attach to document so the panel captures even when focused elements are inside it
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [displayList, rootGroupId, setLayerSelection, removeSelectedLayers]);
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropGap, setDropGap] = useState<number | null>(null);
@@ -179,7 +233,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
 
   return (
     <PanelContainer title="Layers" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
-    <div className={styles.panel}>
+    <div className={styles.panel} ref={panelRef}>
       <div
         ref={listRef}
         className={collapsed ? styles.listCollapsed : styles.list}
@@ -190,6 +244,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
               className={[
                 styles.item,
                 layer.id === activeLayerId ? styles.active : '',
+                layer.id !== activeLayerId && selectedLayerIds.includes(layer.id) ? styles.selected : '',
                 layer.locked ? styles.locked : '',
                 isGroupLayer(layer) ? styles.groupRow : '',
                 isRootGroup(layer.id) ? styles.rootGroup : '',
@@ -204,7 +259,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                 .join(' ')}
               style={{ '--layer-depth': depth } as React.CSSProperties}
               data-layer-id={layer.id}
-              onClick={() => onSelectLayer(layer.id)}
+              onClick={(e) => handleLayerClick(e, layer.id)}
             >
               {!isRootGroup(layer.id) && (
                 <span
@@ -406,6 +461,13 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
           label="New Group"
           onClick={() => addGroup()}
         />
+        {selectedLayerIds.filter((id) => id !== rootGroupId).length >= 2 && (
+          <IconButton
+            icon={<Folder size={16} />}
+            label="Group Layers"
+            onClick={() => groupSelectedLayers()}
+          />
+        )}
         <IconButton
           icon={<Copy size={16} />}
           label="Duplicate Layer"
@@ -441,9 +503,13 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
           icon={<Trash2 size={16} />}
           label="Delete Layer"
           onClick={() => {
-            if (activeLayerId && !isRootGroup(activeLayerId)) onRemoveLayer(activeLayerId);
+            const deletable = selectedLayerIds.filter((id) => !isRootGroup(id));
+            if (deletable.length > 0) removeSelectedLayers();
           }}
-          disabled={layers.length <= 1 || (activeLayerId !== null && isRootGroup(activeLayerId))}
+          disabled={
+            layers.length <= 1 ||
+            selectedLayerIds.filter((id) => !isRootGroup(id)).length === 0
+          }
         />
       </div>
     </div>

@@ -10,6 +10,8 @@ export interface DocumentState {
   readonly layers: readonly Layer[];
   readonly layerOrder: readonly string[]; // bottom to top
   readonly activeLayerId: string | null;
+  /** Full set of selected layer IDs. Always includes activeLayerId when non-null. */
+  readonly selectedLayerIds: readonly string[];
   readonly backgroundColor: Color;
   readonly rootGroupId?: string | null;
 }

@@ -76,6 +76,15 @@
   background: var(--color-accent-subtle);
 }
 
+/* Multi-select: non-active selected layers get a lighter highlight */
+.selected {
+  background: color-mix(in srgb, var(--color-accent-subtle) 50%, var(--color-bg-secondary) 50%);
+}
+
+.selected:hover {
+  background: color-mix(in srgb, var(--color-accent-subtle) 65%, var(--color-bg-secondary) 35%);
+}
+
 .thumbnail {
   width: 24px;
   height: 24px;
