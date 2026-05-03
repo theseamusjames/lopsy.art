@@ -1,31 +1,39 @@
 import { useUIStore } from '../ui-store';
 import { useToolSettingsStore } from '../tool-settings-store';
-import { SHORTCUT_TO_TOOL } from '../../tools/tool-registry';
+import { toolRegistry } from '../../tools/tool-registry';
+import { useShortcutStore, buildKeyToActionMap, NON_TOOL_ACTION_IDS } from '../store/shortcut-store';
 import { toggleQuickMaskMode } from '../interactions/quick-mask-ops';
+import type { ToolId } from '../../types';
 
-/**
- * Color swatches aren't tools but share the single-key shortcut namespace,
- * so they live alongside the tool map.
- */
-const COLOR_SHORTCUTS: Record<string, () => void> = {
-  x: () => useToolSettingsStore.getState().swapColors(),
-  d: () => useToolSettingsStore.getState().resetColors(),
-  q: () => toggleQuickMaskMode(),
+/** Actions that aren't tool selections but live in the single-key namespace. */
+const NON_TOOL_ACTIONS: Record<string, () => void> = {
+  'swap-colors': () => useToolSettingsStore.getState().swapColors(),
+  'reset-colors': () => useToolSettingsStore.getState().resetColors(),
+  'toggle-quick-mask': () => toggleQuickMaskMode(),
 };
+
+const NON_TOOL_ACTION_SET = new Set<string>(NON_TOOL_ACTION_IDS);
+const TOOL_ID_SET = new Set<string>(Object.keys(toolRegistry));
 
 export function handleToolShortcut(e: KeyboardEvent): boolean {
   const key = e.key.toLowerCase();
+  const { customShortcuts } = useShortcutStore.getState();
+  const keyToAction = buildKeyToActionMap(customShortcuts);
 
-  const toolId = SHORTCUT_TO_TOOL.get(key);
-  if (toolId) {
-    useUIStore.getState().setActiveTool(toolId);
+  const actionId = keyToAction.get(key);
+  if (!actionId) return false;
+
+  if (TOOL_ID_SET.has(actionId)) {
+    useUIStore.getState().setActiveTool(actionId as ToolId);
     return true;
   }
 
-  const colorAction = COLOR_SHORTCUTS[key];
-  if (colorAction) {
-    colorAction();
-    return true;
+  if (NON_TOOL_ACTION_SET.has(actionId)) {
+    const action = NON_TOOL_ACTIONS[actionId];
+    if (action) {
+      action();
+      return true;
+    }
   }
 
   return false;
