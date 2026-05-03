@@ -7,18 +7,29 @@ import {
 } from './blend-mode-tables';
 import type { BlendMode } from './color';
 
-// The TS union in ./color.ts. If this array drifts from the union, the
-// Record<BlendMode, _> tables below stop compiling.
-const UNION_TAGS: readonly BlendMode[] = [
+// All modes that correspond to a Rust/WASM BlendMode discriminant and a PSD index.
+// pass-through is intentionally excluded: it is group-only, handled in JS, and
+// has no Rust discriminant or PSD file-format index.
+const PSD_TAGS: readonly BlendMode[] = [
   'normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten',
   'color-dodge', 'color-burn', 'hard-light', 'soft-light',
   'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity',
 ];
 
+// Every mode in the BlendMode union (including pass-through).
+const ALL_TAGS: readonly BlendMode[] = [
+  ...PSD_TAGS,
+  'pass-through',
+];
+
 describe('blend-mode-tables', () => {
-  it('BLEND_MODES_BY_PSD_INDEX contains every tag in the union exactly once', () => {
-    expect(new Set(BLEND_MODES_BY_PSD_INDEX)).toEqual(new Set(UNION_TAGS));
-    expect(BLEND_MODES_BY_PSD_INDEX).toHaveLength(UNION_TAGS.length);
+  it('BLEND_MODES_BY_PSD_INDEX contains every PSD-backed tag exactly once', () => {
+    expect(new Set(BLEND_MODES_BY_PSD_INDEX)).toEqual(new Set(PSD_TAGS));
+    expect(BLEND_MODES_BY_PSD_INDEX).toHaveLength(PSD_TAGS.length);
+  });
+
+  it('pass-through is absent from BLEND_MODES_BY_PSD_INDEX (no PSD discriminant)', () => {
+    expect(BLEND_MODES_BY_PSD_INDEX).not.toContain('pass-through');
   });
 
   it('BLEND_MODE_TO_PSD_INDEX is the inverse of BLEND_MODES_BY_PSD_INDEX', () => {
@@ -28,16 +39,19 @@ describe('blend-mode-tables', () => {
     }
   });
 
-  it('every table has an entry for every tag', () => {
-    for (const tag of UNION_TAGS) {
-      expect(BLEND_MODE_TO_PSD_INDEX[tag]).toBeTypeOf('number');
+  it('pass-through has no PSD index', () => {
+    expect(BLEND_MODE_TO_PSD_INDEX['pass-through']).toBeUndefined();
+  });
+
+  it('every display table has an entry for every tag including pass-through', () => {
+    for (const tag of ALL_TAGS) {
       expect(BLEND_MODE_TO_PASCAL[tag]).toBeTypeOf('string');
       expect(BLEND_MODE_TO_DISPLAY[tag]).toBeTypeOf('string');
     }
   });
 
   it('pascal names are PascalCase and display names are title-cased', () => {
-    for (const tag of UNION_TAGS) {
+    for (const tag of PSD_TAGS) {
       const pascal = BLEND_MODE_TO_PASCAL[tag];
       expect(pascal[0]).toBe(pascal[0]?.toUpperCase());
       expect(pascal).not.toContain('-');
@@ -49,6 +63,10 @@ describe('blend-mode-tables', () => {
       // kebab hyphens.
       expect(display).not.toContain('-');
     }
+  });
+
+  it('pass-through display name is "Pass Through"', () => {
+    expect(BLEND_MODE_TO_DISPLAY['pass-through']).toBe('Pass Through');
   });
 
   it('canonical PSD order is the 16 modes Photoshop expects (first-level sanity)', () => {

@@ -21,6 +21,10 @@ import type { BlendMode } from './color';
  * PSD-index stored in the file format and the Rust `#[repr(u8)]`
  * discriminant. DO NOT reorder — run the blend-mode-tables test to
  * confirm alignment with Rust after any change.
+ *
+ * `pass-through` is intentionally absent: it is a group-only mode handled
+ * entirely in JS (engine-sync flattens pass-through groups before the WASM
+ * engine sees them) and has no PSD-index or Rust discriminant.
  */
 export const BLEND_MODES_BY_PSD_INDEX: readonly BlendMode[] = [
   'normal',
@@ -41,13 +45,16 @@ export const BLEND_MODES_BY_PSD_INDEX: readonly BlendMode[] = [
   'luminosity',
 ];
 
-/** Map from blend-mode tag → PSD file-format index. */
-export const BLEND_MODE_TO_PSD_INDEX: Record<BlendMode, number> = Object.fromEntries(
+/** Map from blend-mode tag → PSD file-format index.
+ *  `pass-through` is excluded — use `BLEND_MODES_BY_PSD_INDEX` for exhaustive PSD handling. */
+export const BLEND_MODE_TO_PSD_INDEX: Partial<Record<BlendMode, number>> = Object.fromEntries(
   BLEND_MODES_BY_PSD_INDEX.map((m, i) => [m, i]),
-) as Record<BlendMode, number>;
+);
 
 /** Map from blend-mode tag → PascalCase serde variant name used across
- *  the WASM bridge's JSON payloads (engine-sync, PSD writer, etc.). */
+ *  the WASM bridge's JSON payloads (engine-sync, PSD writer, etc.).
+ *  `pass-through` maps to 'Normal' as a safe fallback — the WASM engine
+ *  never sees it directly (the JS sync layer flattens pass-through groups). */
 export const BLEND_MODE_TO_PASCAL: Record<BlendMode, string> = {
   'normal': 'Normal',
   'multiply': 'Multiply',
@@ -65,6 +72,7 @@ export const BLEND_MODE_TO_PASCAL: Record<BlendMode, string> = {
   'saturation': 'Saturation',
   'color': 'Color',
   'luminosity': 'Luminosity',
+  'pass-through': 'Normal',
 };
 
 /** Human-readable labels for the blend-mode dropdown. */
@@ -85,4 +93,5 @@ export const BLEND_MODE_TO_DISPLAY: Record<BlendMode, string> = {
   'saturation': 'Saturation',
   'color': 'Color',
   'luminosity': 'Luminosity',
+  'pass-through': 'Pass Through',
 };

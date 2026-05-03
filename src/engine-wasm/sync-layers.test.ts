@@ -14,8 +14,9 @@ vi.mock('./wasm-bridge', () => ({
   removeLayerMask: vi.fn(),
 }));
 
-const { layerToDescJson, syncLayers } = await import('./sync-layers');
+const { layerToDescJson, buildPassThroughOpacityMap, syncLayers } = await import('./sync-layers');
 const { DEFAULT_EFFECTS, createGroupLayer } = await import('../layers/layer-model');
+const { buildLayerIndex } = await import('../layers/layer-index');
 const bridge = await import('./wasm-bridge');
 type TextLayer = import('../types').TextLayer;
 type RasterLayer = import('../types').RasterLayer;
@@ -212,7 +213,6 @@ describe('syncLayers — group mask upload', () => {
         height: 300,
       },
     };
-    // syncLayers requires addLayer to succeed; the mock does nothing by default
     syncLayers(engine, [group], [group.id], new Set());
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledOnce();
     const [calledEngine, calledId, , calledW, calledH] = vi.mocked(bridge.uploadLayerMask).mock.calls[0]!;
@@ -246,7 +246,6 @@ describe('syncLayers — group mask upload', () => {
       },
     };
     syncLayers(engine, [raster, group], [group.id, raster.id], new Set());
-    // Both layers must trigger a mask upload
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(2);
     const uploadedIds = vi.mocked(bridge.uploadLayerMask).mock.calls.map((c) => c[1]);
     expect(uploadedIds).toContain(raster.id);
@@ -258,5 +257,123 @@ describe('syncLayers — group mask upload', () => {
     const group = createGroupLayer({ name: 'Group' });
     syncLayers(engine, [group], [group.id], new Set());
     expect(vi.mocked(bridge.uploadLayerMask)).not.toHaveBeenCalled();
+  });
+});
+
+const baseGroup: GroupLayer = {
+  id: 'group-1',
+  name: 'Group 1',
+  type: 'group',
+  visible: true,
+  locked: false,
+  opacity: 1,
+  blendMode: 'pass-through',
+  x: 0,
+  y: 0,
+  clipToBelow: false,
+  effects: DEFAULT_EFFECTS,
+  mask: null,
+  children: ['raster-1'],
+  collapsed: false,
+  adjustments: [],
+  adjustmentsEnabled: true,
+};
+
+describe('layerToDescJson — pass-through blend mode', () => {
+  it('serializes pass-through group with empty children (no group-scratch routing)', () => {
+    const desc = JSON.parse(layerToDescJson(baseGroup, true, 1.0, true));
+    expect(desc.children).toEqual([]);
+  });
+
+  it('serializes normal group with its actual children', () => {
+    const normalGroup: GroupLayer = { ...baseGroup, blendMode: 'normal' };
+    const desc = JSON.parse(layerToDescJson(normalGroup, true, 1.0, false));
+    expect(desc.children).toEqual(['raster-1']);
+  });
+
+  it('multiplies opacity by pass-through multiplier in the descriptor', () => {
+    const child: RasterLayer = { ...baseRasterLayer, opacity: 0.8 };
+    const desc = JSON.parse(layerToDescJson(child, true, 0.5));
+    expect(desc.opacity).toBeCloseTo(0.4);
+  });
+
+  it('leaves opacity unchanged when multiplier is 1.0', () => {
+    const child: RasterLayer = { ...baseRasterLayer, opacity: 0.7 };
+    const desc = JSON.parse(layerToDescJson(child, true, 1.0));
+    expect(desc.opacity).toBeCloseTo(0.7);
+  });
+});
+
+describe('buildPassThroughOpacityMap', () => {
+  it('returns 1.0 for layers with no pass-through ancestors', () => {
+    const layers = [baseRasterLayer, { ...baseGroup, blendMode: 'normal' as const }];
+    const index = buildLayerIndex(layers);
+    const map = buildPassThroughOpacityMap(layers, index);
+    expect(map.get('raster-1')).toBe(1.0);
+    expect(map.get('group-1')).toBe(1.0);
+  });
+
+  it('returns group opacity as multiplier for direct children of pass-through group', () => {
+    const group: GroupLayer = { ...baseGroup, opacity: 0.6, blendMode: 'pass-through' };
+    const child: RasterLayer = { ...baseRasterLayer };
+    const layers = [child, group];
+    const index = buildLayerIndex(layers);
+    const map = buildPassThroughOpacityMap(layers, index);
+    expect(map.get('raster-1')).toBeCloseTo(0.6);
+  });
+
+  it('multiplies opacity across nested pass-through groups', () => {
+    const outerGroup: GroupLayer = {
+      ...baseGroup,
+      id: 'outer',
+      opacity: 0.8,
+      blendMode: 'pass-through',
+      children: ['inner'],
+    };
+    const innerGroup: GroupLayer = {
+      ...baseGroup,
+      id: 'inner',
+      opacity: 0.5,
+      blendMode: 'pass-through',
+      children: ['raster-1'],
+    };
+    const child: RasterLayer = { ...baseRasterLayer };
+    const layers = [child, innerGroup, outerGroup];
+    const index = buildLayerIndex(layers);
+    const map = buildPassThroughOpacityMap(layers, index);
+    expect(map.get('raster-1')).toBeCloseTo(0.4);
+    expect(map.get('inner')).toBeCloseTo(0.8);
+  });
+
+  it('stops multiplying at a non-pass-through group boundary', () => {
+    const outerGroup: GroupLayer = {
+      ...baseGroup,
+      id: 'outer',
+      opacity: 0.5,
+      blendMode: 'normal',
+      children: ['inner'],
+    };
+    const innerGroup: GroupLayer = {
+      ...baseGroup,
+      id: 'inner',
+      opacity: 0.8,
+      blendMode: 'pass-through',
+      children: ['raster-1'],
+    };
+    const child: RasterLayer = { ...baseRasterLayer };
+    const layers = [child, innerGroup, outerGroup];
+    const index = buildLayerIndex(layers);
+    const map = buildPassThroughOpacityMap(layers, index);
+    expect(map.get('raster-1')).toBeCloseTo(0.8);
+    expect(map.get('inner')).toBe(1.0);
+  });
+
+  it('returns 1.0 for the pass-through group itself (no self-multiplication)', () => {
+    const group: GroupLayer = { ...baseGroup, opacity: 0.6, blendMode: 'pass-through' };
+    const child: RasterLayer = { ...baseRasterLayer };
+    const layers = [child, group];
+    const index = buildLayerIndex(layers);
+    const map = buildPassThroughOpacityMap(layers, index);
+    expect(map.get('group-1')).toBe(1.0);
   });
 });
