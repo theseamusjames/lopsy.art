@@ -13,6 +13,7 @@ import {
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   floodFill as wasmFloodFill,
+  floodFillGraduated as wasmFloodFillGraduated,
   readLayerPixelsForFill as wasmReadLayerPixelsForFill,
   magneticLassoBegin as wasmMagneticLassoBegin,
   magneticLassoSnap as wasmMagneticLassoSnap,
@@ -195,17 +196,16 @@ export function handleSelectionDown(
     const toolSettings = useToolSettingsStore.getState();
     const wandTolerance = toolSettings.wandTolerance;
     const wandContiguous = toolSettings.wandContiguous;
+    const wandGraduated = toolSettings.wandGraduated;
     const editorState = useEditorStore.getState();
     const { width: docW, height: docH } = editorState.document;
     // Read layer pixels from GPU for flood fill region detection
     const pixelData = wasmReadLayerPixelsForFill(engine, activeLayerId);
     const cx = Math.round(canvasPos.x);
     const cy = Math.round(canvasPos.y);
-    const wandMaskRaw = wasmFloodFill(
-      pixelData, docW, docH,
-      cx, cy, 0, 0, 0, 0,
-      wandTolerance, wandContiguous,
-    );
+    const wandMaskRaw = wandGraduated
+      ? wasmFloodFillGraduated(pixelData, docW, docH, cx, cy, wandTolerance, wandContiguous)
+      : wasmFloodFill(pixelData, docW, docH, cx, cy, 0, 0, 0, 0, wandTolerance, wandContiguous);
     const wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
     const wandBounds = selectionBounds(wandMask, docW, docH);
     if (wandBounds) {

@@ -26,7 +26,7 @@ import { ImageSizeModal } from '../../components/ImageSizeModal/ImageSizeModal';
 import { KeyboardShortcutsModal } from '../../components/KeyboardShortcutsModal/KeyboardShortcutsModal';
 import { AboutModal } from '../../components/AboutModal/AboutModal';
 import { useEditorStore } from '../editor-store';
-import { growSelection, shrinkSelection, selectionBounds } from '../../selection/selection';
+import { growSelection, shrinkSelection, featherSelection, selectionBounds } from '../../selection/selection';
 import { createTransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
 import styles from './MenuBar.module.css';
@@ -174,7 +174,9 @@ export function MenuBar() {
     const { width: docW, height: docH } = editor.document;
     const newMask = selectDialog === 'grow'
       ? growSelection(sel.mask, docW, docH, amount)
-      : shrinkSelection(sel.mask, docW, docH, amount);
+      : selectDialog === 'shrink'
+      ? shrinkSelection(sel.mask, docW, docH, amount)
+      : featherSelection(sel.mask, docW, docH, amount);
     const newBounds = selectionBounds(newMask, docW, docH);
     if (newBounds) {
       editor.setSelection(newBounds, newMask, docW, docH);
@@ -283,8 +285,19 @@ export function MenuBar() {
       )}
       {selectDialog && (
         <FilterDialog
-          title={selectDialog === 'grow' ? 'Grow Selection' : 'Shrink Selection'}
-          params={[{ key: 'amount', label: 'Amount (px)', min: 1, max: 100, step: 1, defaultValue: 1 }]}
+          title={
+            selectDialog === 'grow' ? 'Grow Selection' :
+            selectDialog === 'shrink' ? 'Shrink Selection' :
+            'Feather Selection'
+          }
+          params={[{
+            key: 'amount',
+            label: selectDialog === 'feather' ? 'Radius (px)' : 'Amount (px)',
+            min: 1,
+            max: selectDialog === 'feather' ? 250 : 100,
+            step: 1,
+            defaultValue: 1,
+          }]}
           onApply={handleSelectDialogApply}
           onCancel={() => setSelectDialog(null)}
         />
