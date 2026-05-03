@@ -119,6 +119,13 @@ export function useKeyboardShortcuts({
         return;
       }
 
+      // Shift+R resets canvas rotation to 0°
+      if (e.key === 'R' && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        useUIStore.getState().resetCanvasRotation();
+        return;
+      }
+
       if (e.key === 'Escape') {
         const uiState = useUIStore.getState();
         if (uiState.activeTool === 'path' && uiState.pathAnchors.length > 0) {

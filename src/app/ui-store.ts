@@ -81,6 +81,10 @@ export type ModalState =
 
 interface UIState {
   activeTool: ToolId;
+  /** Canvas view rotation in radians. Non-destructive — does not modify pixel data. */
+  canvasRotation: number;
+  setCanvasRotation: (angle: number) => void;
+  resetCanvasRotation: () => void;
   showGrid: boolean;
   showRulers: boolean;
   showGuides: boolean;
@@ -183,6 +187,9 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set, get) => ({
   activeTool: 'move',
+  canvasRotation: 0,
+  setCanvasRotation: (angle) => set({ canvasRotation: angle }),
+  resetCanvasRotation: () => set({ canvasRotation: 0 }),
   showGrid: false,
   showRulers: true,
   showGuides: true,

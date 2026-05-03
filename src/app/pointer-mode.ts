@@ -14,6 +14,17 @@ export type PointerMode =
       startScreenY: number;
       startPanX: number;
       startPanY: number;
+    }
+  | {
+      /** Alt+drag to rotate the canvas view around the viewport center. */
+      kind: 'rotating';
+      /** Viewport center in screen coords at drag start. */
+      centerX: number;
+      centerY: number;
+      /** Angle from center to cursor at drag start (radians). */
+      startAngle: number;
+      /** canvasRotation value at drag start (radians). */
+      startRotation: number;
     };
 
 export const POINTER_IDLE: PointerMode = { kind: 'idle' };
@@ -21,6 +32,10 @@ export const POINTER_SPACE_HELD: PointerMode = { kind: 'spaceHeld' };
 
 export function isPanning(mode: PointerMode): boolean {
   return mode.kind === 'panning';
+}
+
+export function isRotating(mode: PointerMode): boolean {
+  return mode.kind === 'rotating';
 }
 
 /**

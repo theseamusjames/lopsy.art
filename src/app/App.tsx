@@ -18,6 +18,7 @@ import { ModalHost } from '../components/ModalHost/ModalHost';
 import { GuideColorPicker } from '../components/GuideColorPicker/GuideColorPicker';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
+import { screenToDoc } from '../utils/viewport-transform';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
@@ -130,17 +131,25 @@ export function App() {
     showEffectsDrawer,
   });
 
-  // Screen to canvas coordinate transform
+  const canvasRotation = useUIStore((s) => s.canvasRotation);
+
+  // Screen to canvas coordinate transform — accounts for pan, zoom, and view rotation.
   const screenToCanvas = useCallback(
     (screenX: number, screenY: number) => {
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
-
-      const x = (screenX - viewport.panX - canvas.width / 2) / viewport.zoom + doc.width / 2;
-      const y = (screenY - viewport.panY - canvas.height / 2) / viewport.zoom + doc.height / 2;
-      return { x: Math.round(x), y: Math.round(y) };
+      return screenToDoc(screenX, screenY, {
+        panX: viewport.panX,
+        panY: viewport.panY,
+        zoom: viewport.zoom,
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
+        docWidth: doc.width,
+        docHeight: doc.height,
+        rotation: canvasRotation,
+      });
     },
-    [viewport, doc.width, doc.height],
+    [viewport, doc.width, doc.height, canvasRotation],
   );
 
   // Canvas interaction (drawing tools)
@@ -215,8 +224,17 @@ export function App() {
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
-          <canvas ref={canvasRef} aria-label="Drawing canvas" />
-          <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} aria-hidden="true" />
+          <canvas
+            ref={canvasRef}
+            aria-label="Drawing canvas"
+            style={canvasRotation !== 0 ? { transform: `rotate(${canvasRotation}rad)` } : undefined}
+          />
+          <canvas
+            ref={overlayCanvasRef}
+            className={styles.overlayCanvas}
+            aria-hidden="true"
+            style={canvasRotation !== 0 ? { transform: `rotate(${canvasRotation}rad)` } : undefined}
+          />
           <TextActionButtons containerRef={containerRef} />
           <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </main>

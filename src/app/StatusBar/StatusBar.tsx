@@ -11,6 +11,10 @@ export function StatusBar() {
   const docHeight = useEditorStore((s) => s.document.height);
   const cursorX = useUIStore((s) => s.cursorPosition.x);
   const cursorY = useUIStore((s) => s.cursorPosition.y);
+  const canvasRotation = useUIStore((s) => s.canvasRotation);
+  const resetCanvasRotation = useUIStore((s) => s.resetCanvasRotation);
+
+  const rotationDeg = Math.round((canvasRotation * 180) / Math.PI);
 
   return (
     <footer className={styles.bar} role="status" aria-label="Status bar">
@@ -33,6 +37,22 @@ export function StatusBar() {
         <span className={styles.number}>{docWidth}</span> x{' '}
         <span className={styles.number}>{docHeight}</span> px
       </span>
+      {canvasRotation !== 0 && (
+        <>
+          <span className={styles.divider} />
+          <span
+            className={styles.rotationItem}
+            role="button"
+            tabIndex={0}
+            onClick={resetCanvasRotation}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') resetCanvasRotation(); }}
+            aria-label={`Canvas rotated ${rotationDeg}°, click to reset`}
+            data-testid="rotation-indicator"
+          >
+            <span className={styles.number}>{rotationDeg}°</span> ↺
+          </span>
+        </>
+      )}
       <span className={styles.spacer} />
       <span className={styles.item}>{colorSpaceLabel}</span>
     </footer>

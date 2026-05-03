@@ -30,3 +30,11 @@
   background: var(--color-border);
 }
 
+.rotationItem {
+  font-size: var(--font-size-xs);
+  color: var(--color-accent, #4e9eff);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+

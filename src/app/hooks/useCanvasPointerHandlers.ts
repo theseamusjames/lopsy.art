@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
-import { isPanning, POINTER_IDLE, type PointerMode } from '../pointer-mode';
+import { isPanning, isRotating, POINTER_IDLE, type PointerMode } from '../pointer-mode';
 import { RULER_SIZE } from '../rendering/ruler-constants';
 
 interface Point {
@@ -88,6 +88,8 @@ export function useCanvasPointerHandlers({
   const openModal = useUIStore((s) => s.openModal);
   const closeModal = useUIStore((s) => s.closeModal);
   const closeModalOfKind = useUIStore((s) => s.closeModalOfKind);
+  const canvasRotation = useUIStore((s) => s.canvasRotation);
+  const setCanvasRotation = useUIStore((s) => s.setCanvasRotation);
 
   const pointersRef = useRef<Map<number, PointerState>>(new Map());
   const gestureRef = useRef<GestureState>({
@@ -111,6 +113,7 @@ export function useCanvasPointerHandlers({
     showRulers, showGuides, guides,
     addGuide, setHoveredGuide, setRulerHover,
     openModal, closeModal, closeModalOfKind,
+    canvasRotation, setCanvasRotation,
   });
   depsRef.current = {
     containerRef, screenToCanvas, pointerMode, setPointerMode,
@@ -119,6 +122,7 @@ export function useCanvasPointerHandlers({
     showRulers, showGuides, guides,
     addGuide, setHoveredGuide, setRulerHover,
     openModal, closeModal, closeModalOfKind,
+    canvasRotation, setCanvasRotation,
   };
 
   const pendingCursorRef = useRef<Point | null>(null);
@@ -211,6 +215,22 @@ export function useCanvasPointerHandlers({
         return;
       }
 
+      // Alt+primary-click starts canvas rotation around the viewport center.
+      if (e.button === 0 && e.altKey && !e.shiftKey) {
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+        deps.setPointerMode({
+          kind: 'rotating',
+          centerX,
+          centerY,
+          startAngle,
+          startRotation: deps.canvasRotation,
+        });
+        e.preventDefault();
+        return;
+      }
+
       if (deps.showRulers && e.button === 0) {
         const screenX = e.clientX - rect.left;
         const screenY = e.clientY - rect.top;
@@ -282,8 +302,10 @@ export function useCanvasPointerHandlers({
       const isToolPointer = toolPointerIdRef.current === e.pointerId;
       const isPan = deps.pointerMode.kind === 'panning';
 
+      const isRotate = isRotating(deps.pointerMode);
+
       // Outside canvas and not driving any active interaction — ignore.
-      if (!inside && !isToolPointer && !isPan) {
+      if (!inside && !isToolPointer && !isPan && !isRotate) {
         deps.setRulerHover(null);
         return;
       }
@@ -314,7 +336,14 @@ export function useCanvasPointerHandlers({
         }
       }
 
-      if (deps.pointerMode.kind === 'panning') {
+      if (deps.pointerMode.kind === 'rotating') {
+        const currentAngle = Math.atan2(
+          e.clientY - deps.pointerMode.centerY,
+          e.clientX - deps.pointerMode.centerX,
+        );
+        const delta = currentAngle - deps.pointerMode.startAngle;
+        deps.setCanvasRotation(deps.pointerMode.startRotation + delta);
+      } else if (deps.pointerMode.kind === 'panning') {
         const dx = e.clientX - deps.pointerMode.startScreenX;
         const dy = e.clientY - deps.pointerMode.startScreenY;
         deps.setPan(deps.pointerMode.startPanX + dx, deps.pointerMode.startPanY + dy);
@@ -349,6 +378,10 @@ export function useCanvasPointerHandlers({
           gestureRef.current.active = false;
         }
         return;
+      }
+
+      if (deps.pointerMode.kind === 'rotating') {
+        deps.setPointerMode((prev) => prev.kind === 'rotating' ? POINTER_IDLE : prev);
       }
 
       if (deps.pointerMode.kind === 'panning') {
