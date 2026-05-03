@@ -1,0 +1,221 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.recordButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.recordButton:hover {
+  background: var(--color-bg-hover);
+}
+
+.recordButtonActive {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.recordButtonActive:hover {
+  background: rgba(244, 67, 54, 0.1);
+}
+
+.recordDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-round);
+  background: var(--color-error);
+  flex-shrink: 0;
+}
+
+.recordingBadge {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.empty {
+  padding: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-disabled);
+  text-align: center;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.actionList {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.actionRow {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.actionRow:last-child {
+  border-bottom: none;
+}
+
+.actionHeader {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.expandButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 1;
+  padding: var(--space-1) var(--space-1);
+  background: none;
+  border: none;
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.expandButton:hover {
+  background: var(--color-bg-hover);
+}
+
+.expandIcon {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.actionName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stepCount {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-round);
+  padding: 0 var(--space-1);
+  min-width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.actionButtons {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding-right: var(--space-1);
+}
+
+.stepList {
+  list-style: none;
+  padding: 0 var(--space-2) var(--space-1) var(--space-5);
+  margin: 0;
+  background: var(--color-bg-primary);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.stepItem {
+  padding: var(--space-1) 0;
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.stepItem:last-child {
+  border-bottom: none;
+}
+
+.stopForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.nameInput {
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+}
+
+.nameInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.stopFormButtons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.saveButton {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.saveButton:hover {
+  background: var(--color-accent-hover);
+}
+
+.cancelButton {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.cancelButton:hover {
+  background: var(--color-bg-hover);
+}

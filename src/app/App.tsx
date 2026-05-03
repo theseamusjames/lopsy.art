@@ -12,6 +12,7 @@ import { PathsPanel } from '../panels/PathsPanel/PathsPanel';
 import { NavigatorPanel } from '../panels/NavigatorPanel/NavigatorPanel';
 import { ChannelsPanel } from '../panels/ChannelsPanel/ChannelsPanel';
 import { ReferenceImagePanel } from '../panels/ReferenceImagePanel/ReferenceImagePanel';
+import { ActionsPanel } from '../panels/ActionsPanel/ActionsPanel';
 import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
 import { MenuBar } from './MenuBar/MenuBar';
 import { OptionsBar } from './OptionsBar/OptionsBar';
@@ -276,6 +277,7 @@ export function App() {
                 {visiblePanels.has('channels') && <ChannelsPanel />}
                 {visiblePanels.has('history') && <HistoryPanel />}
                 {visiblePanels.has('paths') && <PathsPanel />}
+                {visiblePanels.has('actions') && <ActionsPanel />}
               </div>
               <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
                 {visiblePanels.has('layers') && <LayerPanel onSelectLayer={handleSelectLayer} />}

@@ -15,6 +15,7 @@ import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pix
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { filterRegistry } from '../../filters/filter-registry';
 import type { FilterDefinition } from '../../filters/filter-types';
+import { recordStep } from '../../actions/recording-hook';
 
 export type FilterDialogId =
   | 'gaussian-blur'
@@ -70,6 +71,7 @@ export function applyGenericFilter(id: FilterDialogId, values: Record<string, nu
   filter.applyGpu(engine, activeId, values);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
+  recordStep({ type: 'filter', filter: id, params: values });
 }
 
 /** Begin a filter preview session — saves the current layer GPU texture. */
@@ -142,6 +144,7 @@ export function applyGenericFilterWithPreview(id: FilterDialogId, values: Record
 
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
+  recordStep({ type: 'filter', filter: id, params: values });
 }
 
 export function applyInvert(): void {
@@ -155,6 +158,7 @@ export function applyInvert(): void {
   filterInvert(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
+  recordStep({ type: 'filter', filter: 'invert', params: {} });
 }
 
 export function applyDesaturate(): void {
@@ -168,6 +172,7 @@ export function applyDesaturate(): void {
   filterDesaturate(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
+  recordStep({ type: 'filter', filter: 'desaturate', params: {} });
 }
 
 export function applyAddNoise(amount: number, monochrome: boolean): void {
@@ -207,4 +212,5 @@ export function applyFindEdges(): void {
   filterFindEdges(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
+  recordStep({ type: 'filter', filter: 'find-edges', params: {} });
 }

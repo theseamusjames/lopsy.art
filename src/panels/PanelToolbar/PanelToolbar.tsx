@@ -1,4 +1,4 @@
-import { Palette, Layers, History, Info, Spline, ImagePlus, Map, Columns3 } from 'lucide-react';
+import { Palette, Layers, History, Info, Spline, ImagePlus, Map, Columns3, Zap } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useUIStore } from '../../app/ui-store';
 import styles from './PanelToolbar.module.css';
@@ -19,6 +19,7 @@ const panels: PanelDef[] = [
   { id: 'channels', icon: <Columns3 size={ICON_SIZE} />, label: 'Channels' },
   { id: 'history', icon: <History size={ICON_SIZE} />, label: 'History' },
   { id: 'paths', icon: <Spline size={ICON_SIZE} />, label: 'Paths' },
+  { id: 'actions', icon: <Zap size={ICON_SIZE} />, label: 'Actions' },
 ];
 
 export function PanelToolbar() {

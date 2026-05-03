@@ -19,6 +19,9 @@ import {
 import { finalizePendingStrokeGlobal } from './app/interactions/pending-stroke';
 import { saveProject } from './io/project-save';
 import { loadProject } from './io/project-load';
+// Initialize the action store early so the recording hook is wired before
+// any filter is applied.
+import { useActionStore } from './app/store/action-store';
 import './styles/tokens.css';
 import './styles/reset.css';
 
@@ -32,6 +35,7 @@ declare global {
     __toolSettingsStore?: typeof useToolSettingsStore;
     __brushPresetStore?: typeof useToolSettingsStore;
     __patternStore?: typeof usePatternStore;
+    __actionStore?: typeof useActionStore;
     __pixelData?: typeof pixelDataManager;
     __readCompositedPixels?: () => Promise<ReadPixelsResult>;
     __readLayerPixels?: (layerId?: string) => Promise<ReadPixelsResult>;
@@ -50,6 +54,7 @@ if (import.meta.env.DEV) {
   // merged tool-settings store has the same shape for preset access.
   window.__brushPresetStore = useToolSettingsStore;
   window.__patternStore = usePatternStore;
+  window.__actionStore = useActionStore;
   // Pixel-data Maps used to live on the store; they live on the manager now.
   // E2e tests that read or mutate pixel state go through this singleton.
   window.__pixelData = pixelDataManager;
