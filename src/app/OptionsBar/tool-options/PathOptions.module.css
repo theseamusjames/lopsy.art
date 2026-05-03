@@ -1,0 +1,38 @@
+.booleanGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.booleanBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.booleanBtn:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  color: var(--color-text-primary);
+}
+
+.booleanBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.separator {
+  width: 1px;
+  height: 16px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
