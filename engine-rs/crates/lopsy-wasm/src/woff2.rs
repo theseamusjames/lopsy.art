@@ -67,7 +67,6 @@ fn read_uint_base128(data: &[u8], pos: &mut usize) -> Option<u32> {
 }
 
 /// Read a 255UInt16 variable-length integer from the WOFF2 glyph data.
-#[allow(dead_code)]
 fn read_255_uint16(data: &[u8], pos: &mut usize) -> Option<u16> {
     let code = read_u8(data, pos)?;
     match code {
@@ -254,7 +253,9 @@ pub fn decode_woff2(woff2_data: &[u8]) -> Option<Vec<u8>> {
     // Reconstruct table data (apply inverse transforms if needed)
     let mut table_data: Vec<(u32, Vec<u8>)> = Vec::with_capacity(tables.len());
     let mut head_index_hint: Option<usize> = None;
-    let mut _loca_format: i16 = 0; // from head table
+    let mut glyf_table_idx: Option<usize> = None;
+    let mut loca_table_idx: Option<usize> = None;
+    let mut glyf_transformed: Option<Vec<u8>> = None;
 
     for (i, entry) in tables.iter().enumerate() {
         let raw = &decompressed[entry.data_start..entry.data_start + entry.data_len];
@@ -264,29 +265,41 @@ pub fn decode_woff2(woff2_data: &[u8]) -> Option<Vec<u8>> {
             head_index_hint = Some(table_data.len());
         }
 
-        let data = if entry.transform_length.is_some() && transform_version != 0 {
-            // Transform present — only glyf/loca use transforms in practice.
-            // glyf/loca transforms (triplet encoding) are complex to decode.
-            // CFF fonts (Roboto, Lato, Open Sans, etc.) never have a glyf transform;
-            // they work perfectly. For TrueType glyf, emit empty so build_sfnt skips
-            // the table — fontdb will reject the font and the engine falls back to Inter.
-            match entry.tag {
-                TAG_GLYF | TAG_LOCA => vec![],
-                _ => raw.to_vec(),
+        let data = match entry.tag {
+            TAG_GLYF if entry.transform_length.is_some() => {
+                glyf_table_idx = Some(table_data.len());
+                glyf_transformed = Some(raw.to_vec());
+                vec![]
             }
-        } else {
-            raw.to_vec()
+            TAG_LOCA if entry.transform_length.is_some() => {
+                loca_table_idx = Some(table_data.len());
+                vec![]
+            }
+            _ if entry.transform_length.is_some() && transform_version != 0 => {
+                raw.to_vec()
+            }
+            _ => raw.to_vec(),
         };
 
         table_data.push((entry.tag, data));
-        let _ = (head_index_hint, _loca_format, i);
+        let _ = (head_index_hint, i);
     }
 
-    // Read indexToLocFormat from head table so we can fix loca if needed
-    if let Some(hi) = head_index_hint {
-        let head = &table_data[hi].1;
-        if head.len() >= 52 {
-            _loca_format = i16::from_be_bytes([head[50], head[51]]);
+    if let (Some(gi), Some(transformed)) = (glyf_table_idx, glyf_transformed) {
+        if let Some((glyf, loca, idx_fmt)) = reconstruct_glyf_loca(&transformed) {
+            table_data[gi].1 = glyf;
+            if let Some(li) = loca_table_idx {
+                table_data[li].1 = loca;
+            } else {
+                table_data.push((TAG_LOCA, loca));
+            }
+            if let Some(hi) = head_index_hint {
+                let head = &mut table_data[hi].1;
+                if head.len() >= 52 {
+                    head[50] = (idx_fmt >> 8) as u8;
+                    head[51] = idx_fmt as u8;
+                }
+            }
         }
     }
 
@@ -302,6 +315,357 @@ fn has_transform(tag: u32, transform_version: u8) -> bool {
         TAG_GLYF | TAG_LOCA => transform_version != 3,
         _ => transform_version != 0,
     }
+}
+
+fn decode_triplet(flag: usize, data: &[u8], pos: &mut usize) -> Option<(i32, i32)> {
+    fn with_sign(positive: bool, val: i32) -> i32 {
+        if positive { val } else { -val }
+    }
+
+    if flag < 10 {
+        let b0 = *data.get(*pos)? as i32;
+        *pos += 1;
+        let dy = with_sign(flag & 1 != 0, ((flag as i32 & 14) << 7) + b0);
+        Some((0, dy))
+    } else if flag < 20 {
+        let b0 = *data.get(*pos)? as i32;
+        *pos += 1;
+        let f = (flag - 10) as i32;
+        let dx = with_sign(flag & 1 != 0, ((f & 14) << 7) + b0);
+        Some((dx, 0))
+    } else if flag < 84 {
+        let b1 = *data.get(*pos)? as i32;
+        *pos += 1;
+        let b0 = (flag - 20) as i32;
+        let dx = with_sign(flag & 1 != 0, 1 + (b0 & 0x30) + (b1 >> 4));
+        let dy = with_sign((flag >> 1) & 1 != 0, 1 + ((b0 & 0x0C) << 2) + (b1 & 0x0F));
+        Some((dx, dy))
+    } else if flag < 120 {
+        let d0 = *data.get(*pos)? as i32;
+        let d1 = *data.get(*pos + 1)? as i32;
+        *pos += 2;
+        let b0 = (flag - 84) as i32;
+        let dx = with_sign(flag & 1 != 0, 1 + ((b0 / 12) << 8) + d0);
+        let dy = with_sign((flag >> 1) & 1 != 0, 1 + (((b0 % 12) >> 2) << 8) + d1);
+        Some((dx, dy))
+    } else if flag < 124 {
+        let d0 = *data.get(*pos)? as i32;
+        let d1 = *data.get(*pos + 1)? as i32;
+        let d2 = *data.get(*pos + 2)? as i32;
+        *pos += 3;
+        let dx = with_sign(flag & 1 != 0, 1 + (d0 << 4) + (d1 >> 4));
+        let dy = with_sign((flag >> 1) & 1 != 0, 1 + ((d1 & 0x0F) << 8) + d2);
+        Some((dx, dy))
+    } else {
+        let d0 = *data.get(*pos)? as i32;
+        let d1 = *data.get(*pos + 1)? as i32;
+        let d2 = *data.get(*pos + 2)? as i32;
+        let d3 = *data.get(*pos + 3)? as i32;
+        *pos += 4;
+        let dx = with_sign(flag & 1 != 0, 1 + (d0 << 8) + d1);
+        let dy = with_sign((flag >> 1) & 1 != 0, 1 + (d2 << 8) + d3);
+        Some((dx, dy))
+    }
+}
+
+/// Reconstruct standard glyf and loca tables from WOFF2 transformed glyf data.
+/// Returns `(glyf_bytes, loca_bytes, index_format)`.
+fn reconstruct_glyf_loca(transformed: &[u8]) -> Option<(Vec<u8>, Vec<u8>, u16)> {
+    if transformed.len() < 36 {
+        return None;
+    }
+
+    let mut pos = 0;
+    let version = read_u32_be(transformed, &mut pos)?;
+    if version != 0 {
+        return None;
+    }
+    let _reserved = read_u16_be(transformed, &mut pos)?;
+    let option_flags = read_u16_be(transformed, &mut pos)?;
+    let num_glyphs = read_u16_be(transformed, &mut pos)? as usize;
+    let index_format = read_u16_be(transformed, &mut pos)?;
+
+    let nc_size = read_u32_be(transformed, &mut pos)? as usize;
+    let np_size = read_u32_be(transformed, &mut pos)? as usize;
+    let fl_size = read_u32_be(transformed, &mut pos)? as usize;
+    let gl_size = read_u32_be(transformed, &mut pos)? as usize;
+    let co_size = read_u32_be(transformed, &mut pos)? as usize;
+    let bb_size = read_u32_be(transformed, &mut pos)? as usize;
+    let in_size = read_u32_be(transformed, &mut pos)? as usize;
+
+    let total = nc_size + np_size + fl_size + gl_size + co_size + bb_size + in_size;
+    if pos + total > transformed.len() {
+        return None;
+    }
+
+    let nc_stream = &transformed[pos..pos + nc_size];
+    let np_stream = &transformed[pos + nc_size..pos + nc_size + np_size];
+    let fl_stream = &transformed[pos + nc_size + np_size..pos + nc_size + np_size + fl_size];
+    let gl_stream = &transformed[pos + nc_size + np_size + fl_size..pos + nc_size + np_size + fl_size + gl_size];
+    let co_stream = &transformed[pos + nc_size + np_size + fl_size + gl_size..pos + nc_size + np_size + fl_size + gl_size + co_size];
+    let bb_stream = &transformed[pos + nc_size + np_size + fl_size + gl_size + co_size..pos + nc_size + np_size + fl_size + gl_size + co_size + bb_size];
+    let in_stream = &transformed[pos + nc_size + np_size + fl_size + gl_size + co_size + bb_size..pos + total];
+
+    let mut contour_counts: Vec<i16> = Vec::with_capacity(num_glyphs);
+    let mut nc_pos = 0;
+    for _ in 0..num_glyphs {
+        let val = read_u16_be(nc_stream, &mut nc_pos)? as i16;
+        contour_counts.push(val);
+    }
+
+    let bbox_bitmap_len = if bb_size > 0 { (num_glyphs + 7) / 8 } else { 0 };
+    if bb_stream.len() < bbox_bitmap_len {
+        return None;
+    }
+
+    let mut np_pos: usize = 0;
+    let mut fl_pos: usize = 0;
+    let mut gl_pos: usize = 0;
+    let mut co_pos: usize = 0;
+    let mut bb_pos: usize = bbox_bitmap_len;
+    let mut in_pos: usize = 0;
+
+    let overlap_bit = (option_flags & 1) != 0;
+
+    let mut glyf = Vec::new();
+    let mut offsets: Vec<u32> = Vec::with_capacity(num_glyphs + 1);
+
+    for i in 0..num_glyphs {
+        offsets.push(glyf.len() as u32);
+        let nc = contour_counts[i];
+
+        let has_bbox = if bbox_bitmap_len > 0 {
+            (bb_stream[i / 8] >> (7 - (i % 8))) & 1 != 0
+        } else {
+            false
+        };
+
+        if nc == 0 {
+            continue;
+        }
+
+        if nc > 0 {
+            // Simple glyph
+            let num_c = nc as usize;
+            let mut pts_per_contour = Vec::with_capacity(num_c);
+            let mut total_pts = 0usize;
+            for _ in 0..num_c {
+                let n = read_255_uint16(np_stream, &mut np_pos)? as usize;
+                total_pts += n;
+                pts_per_contour.push(n);
+            }
+
+            let mut xs: Vec<i16> = Vec::with_capacity(total_pts);
+            let mut ys: Vec<i16> = Vec::with_capacity(total_pts);
+            let mut on_curves: Vec<bool> = Vec::with_capacity(total_pts);
+            let mut x_acc: i32 = 0;
+            let mut y_acc: i32 = 0;
+
+            for _ in 0..total_pts {
+                let flag = *fl_stream.get(fl_pos)?;
+                fl_pos += 1;
+                let on_curve = (flag & 0x80) == 0;
+                let (dx, dy) = decode_triplet((flag & 0x7F) as usize, gl_stream, &mut gl_pos)?;
+                x_acc += dx;
+                y_acc += dy;
+                xs.push(x_acc as i16);
+                ys.push(y_acc as i16);
+                on_curves.push(on_curve);
+            }
+
+            let instr_len = read_255_uint16(gl_stream, &mut gl_pos)? as usize;
+
+            let (x_min, y_min, x_max, y_max) = if has_bbox {
+                let xn = read_u16_be(bb_stream, &mut bb_pos)? as i16;
+                let yn = read_u16_be(bb_stream, &mut bb_pos)? as i16;
+                let xx = read_u16_be(bb_stream, &mut bb_pos)? as i16;
+                let yx = read_u16_be(bb_stream, &mut bb_pos)? as i16;
+                (xn, yn, xx, yx)
+            } else {
+                let mut xn = i16::MAX;
+                let mut yn = i16::MAX;
+                let mut xx = i16::MIN;
+                let mut yx = i16::MIN;
+                for j in 0..total_pts {
+                    xn = xn.min(xs[j]);
+                    yn = yn.min(ys[j]);
+                    xx = xx.max(xs[j]);
+                    yx = yx.max(ys[j]);
+                }
+                if total_pts == 0 { (0, 0, 0, 0) } else { (xn, yn, xx, yx) }
+            };
+
+            // glyf header
+            glyf.extend_from_slice(&nc.to_be_bytes());
+            glyf.extend_from_slice(&x_min.to_be_bytes());
+            glyf.extend_from_slice(&y_min.to_be_bytes());
+            glyf.extend_from_slice(&x_max.to_be_bytes());
+            glyf.extend_from_slice(&y_max.to_be_bytes());
+
+            // endPtsOfContours
+            let mut cumulative: usize = 0;
+            for &n in &pts_per_contour {
+                cumulative += n;
+                if cumulative == 0 {
+                    return None;
+                }
+                glyf.extend_from_slice(&((cumulative - 1) as u16).to_be_bytes());
+            }
+
+            // instructions
+            glyf.extend_from_slice(&(instr_len as u16).to_be_bytes());
+            if instr_len > 0 {
+                if in_pos + instr_len > in_stream.len() {
+                    return None;
+                }
+                glyf.extend_from_slice(&in_stream[in_pos..in_pos + instr_len]);
+                in_pos += instr_len;
+            }
+
+            // delta-encode coordinates for standard glyf format
+            let mut prev_x: i16 = 0;
+            let mut prev_y: i16 = 0;
+            let mut glyf_flags: Vec<u8> = Vec::with_capacity(total_pts);
+            let mut x_data: Vec<u8> = Vec::new();
+            let mut y_data: Vec<u8> = Vec::new();
+
+            for j in 0..total_pts {
+                let dx = xs[j].wrapping_sub(prev_x);
+                let dy = ys[j].wrapping_sub(prev_y);
+                prev_x = xs[j];
+                prev_y = ys[j];
+
+                let mut flag: u8 = 0;
+                if on_curves[j] {
+                    flag |= 0x01;
+                }
+                if j == 0 && overlap_bit {
+                    flag |= 0x40;
+                }
+
+                if dx == 0 {
+                    flag |= 0x10;
+                } else if (-255..=255).contains(&dx) {
+                    flag |= 0x02;
+                    if dx > 0 {
+                        flag |= 0x10;
+                    }
+                    x_data.push(dx.unsigned_abs() as u8);
+                } else {
+                    x_data.extend_from_slice(&dx.to_be_bytes());
+                }
+
+                if dy == 0 {
+                    flag |= 0x20;
+                } else if (-255..=255).contains(&dy) {
+                    flag |= 0x04;
+                    if dy > 0 {
+                        flag |= 0x20;
+                    }
+                    y_data.push(dy.unsigned_abs() as u8);
+                } else {
+                    y_data.extend_from_slice(&dy.to_be_bytes());
+                }
+
+                glyf_flags.push(flag);
+            }
+
+            glyf.extend_from_slice(&glyf_flags);
+            glyf.extend_from_slice(&x_data);
+            glyf.extend_from_slice(&y_data);
+
+            if glyf.len() % 2 != 0 {
+                glyf.push(0);
+            }
+        } else {
+            // Composite glyph (nc == -1)
+            let (x_min, y_min, x_max, y_max) = if has_bbox {
+                let xn = read_u16_be(bb_stream, &mut bb_pos)? as i16;
+                let yn = read_u16_be(bb_stream, &mut bb_pos)? as i16;
+                let xx = read_u16_be(bb_stream, &mut bb_pos)? as i16;
+                let yx = read_u16_be(bb_stream, &mut bb_pos)? as i16;
+                (xn, yn, xx, yx)
+            } else {
+                (0i16, 0i16, 0i16, 0i16)
+            };
+
+            glyf.extend_from_slice(&(-1i16).to_be_bytes());
+            glyf.extend_from_slice(&x_min.to_be_bytes());
+            glyf.extend_from_slice(&y_min.to_be_bytes());
+            glyf.extend_from_slice(&x_max.to_be_bytes());
+            glyf.extend_from_slice(&y_max.to_be_bytes());
+
+            let mut last_flags_offset: usize;
+            loop {
+                if co_pos + 4 > co_stream.len() {
+                    return None;
+                }
+                last_flags_offset = glyf.len();
+                let flags = u16::from_be_bytes([co_stream[co_pos], co_stream[co_pos + 1]]);
+                let more = (flags & 0x0020) != 0;
+
+                glyf.extend_from_slice(&co_stream[co_pos..co_pos + 4]);
+                co_pos += 4;
+
+                let arg_size = if flags & 0x0001 != 0 { 4 } else { 2 };
+                let xform_size = if flags & 0x0008 != 0 {
+                    2
+                } else if flags & 0x0040 != 0 {
+                    4
+                } else if flags & 0x0080 != 0 {
+                    8
+                } else {
+                    0
+                };
+                let extra = arg_size + xform_size;
+                if co_pos + extra > co_stream.len() {
+                    return None;
+                }
+                glyf.extend_from_slice(&co_stream[co_pos..co_pos + extra]);
+                co_pos += extra;
+
+                if !more {
+                    break;
+                }
+            }
+
+            let instr_len = read_255_uint16(gl_stream, &mut gl_pos)? as usize;
+            if instr_len > 0 {
+                let old = u16::from_be_bytes([glyf[last_flags_offset], glyf[last_flags_offset + 1]]);
+                let patched = old | 0x0100;
+                glyf[last_flags_offset] = (patched >> 8) as u8;
+                glyf[last_flags_offset + 1] = patched as u8;
+                glyf.extend_from_slice(&(instr_len as u16).to_be_bytes());
+                if in_pos + instr_len > in_stream.len() {
+                    return None;
+                }
+                glyf.extend_from_slice(&in_stream[in_pos..in_pos + instr_len]);
+                in_pos += instr_len;
+            }
+
+            if glyf.len() % 2 != 0 {
+                glyf.push(0);
+            }
+        }
+    }
+
+    offsets.push(glyf.len() as u32);
+
+    let loca = if index_format == 0 {
+        let mut l = Vec::with_capacity(offsets.len() * 2);
+        for &off in &offsets {
+            l.extend_from_slice(&((off / 2) as u16).to_be_bytes());
+        }
+        l
+    } else {
+        let mut l = Vec::with_capacity(offsets.len() * 4);
+        for &off in &offsets {
+            l.extend_from_slice(&off.to_be_bytes());
+        }
+        l
+    };
+
+    Some((glyf, loca, index_format))
 }
 
 /// Build an SFNT binary from a list of (tag, data) pairs.

@@ -18,6 +18,14 @@ void main() {
     vec2 center = u_resolution * 0.5;
     vec2 canvasPos = (screenPos - center - u_pan) / u_zoom + u_docSize * 0.5;
 
+    // At integer zoom levels, snap to texel centers so GL_LINEAR doesn't
+    // interpolate between adjacent composited pixels. Without this, fractional
+    // pan offsets cause visible artifacts on anti-aliased edges (text curves).
+    float nearestIntZoom = floor(u_zoom + 0.5);
+    if (abs(u_zoom - nearestIntZoom) < 0.01) {
+        canvasPos = floor(canvasPos) + 0.5;
+    }
+
     vec2 docUV = canvasPos / u_docSize;
 
     bool seamless = u_seamlessEnabled > 0.5;
