@@ -154,6 +154,7 @@ export interface DocumentSlice {
   toggleLayerVisibility: (id: string) => void;
   toggleLayerLock: (id: string) => void;
   renameLayer: (id: string, name: string) => void;
+  setLayerColorTag: (id: string, tag: import('../../types/layers').LayerColorTag | null) => void;
   addGroup: (name?: string) => void;
   toggleGroupCollapsed: (groupId: string) => void;
   moveLayerToGroup: (layerId: string, targetGroupId: string, insertIndex?: number) => void;
@@ -285,6 +286,15 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const doc = get().document;
     const layers = doc.layers.map((l) =>
       l.id === id ? { ...l, name } : l,
+    );
+    set({ document: { ...doc, layers } });
+  },
+
+  // No history — color tag is visual organization metadata, not a pixel-level edit
+  setLayerColorTag: (id, tag) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) =>
+      l.id === id ? { ...l, colorTag: tag } : l,
     );
     set({ document: { ...doc, layers } });
   },
