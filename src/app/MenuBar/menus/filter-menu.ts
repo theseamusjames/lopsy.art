@@ -1,12 +1,15 @@
 import { applyInvert, applyDesaturate, applyFindEdges } from '../filter-actions';
 import { beginTiltShiftSession } from '../tilt-shift-actions';
 import type { FilterDialogId } from '../filter-actions';
+import { openLiquify } from '../liquify-actions';
 import type { MenuDef } from './types';
 
 export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void): MenuDef {
   return {
     label: 'Filter',
     items: [
+      { label: 'Liquify...', shortcut: '⌘⇧X', action: () => openLiquify() },
+      { separator: true, label: '' },
       { label: 'Gaussian Blur...', action: () => showFilterDialog('gaussian-blur') },
       { label: 'Box Blur...', action: () => showFilterDialog('box-blur') },
       { label: 'Motion Blur...', action: () => showFilterDialog('motion-blur') },

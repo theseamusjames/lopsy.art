@@ -36,6 +36,12 @@ import {
   handleTiltShiftMove,
   handleTiltShiftUp,
 } from './interactions/tilt-shift-handlers';
+import {
+  isLiquifyActive,
+  handleLiquifyDown,
+  handleLiquifyMove,
+  handleLiquifyUp,
+} from './interactions/liquify-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 import { createTransformState } from '../tools/transform/transform';
@@ -149,6 +155,16 @@ export function useCanvasInteraction(
           ts.setSymmetryCenter({ x: canvasPos.x, y: canvasPos.y });
           return;
         }
+      }
+
+      if (isLiquifyActive()) {
+        const layerPos = (() => {
+          const layer = editorState.document.layers.find((l) => l.id === activeLayerId);
+          return layer ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y } : canvasPos;
+        })();
+        handleLiquifyDown(layerPos);
+        stateRef.current = { ...INITIAL_STATE, drawing: true, layerId: activeLayerId };
+        return;
       }
 
       // Pre-tool: mesh warp handle drag. Captures the click before the
@@ -358,6 +374,15 @@ export function useCanvasInteraction(
         return;
       }
 
+      // Liquify painting — all moves feed the displacement map.
+      if (isLiquifyActive()) {
+        const editorState = useEditorStore.getState();
+        const layer = editorState.document.layers.find((l) => l.id === state.layerId);
+        const layerPos = layer ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y } : canvasPos;
+        handleLiquifyMove(layerPos);
+        return;
+      }
+
       // Mesh warp drag (not tool-routed)
       if (state.meshWarpDragging) {
         handleMeshWarpMove(canvasPos);
@@ -502,6 +527,13 @@ export function useCanvasInteraction(
     // Tilt-shift drag end — short-circuit before regular tool teardown.
     if (state.tiltShiftDragging) {
       handleTiltShiftUp();
+      stateRef.current = { ...INITIAL_STATE };
+      return;
+    }
+
+    // Liquify stroke end — short-circuit before regular tool teardown.
+    if (isLiquifyActive()) {
+      handleLiquifyUp();
       stateRef.current = { ...INITIAL_STATE };
       return;
     }

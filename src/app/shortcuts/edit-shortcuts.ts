@@ -1,12 +1,19 @@
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { selectAll, invertSelectionAction } from '../MenuBar/menus/select-menu';
+import { openLiquify } from '../MenuBar/liquify-actions';
 import { scheduleFallbackPaste } from '../useKeyboardShortcuts';
 
 export function handleEditShortcut(
   e: KeyboardEvent,
   clearPersistentTransform: () => void,
 ): boolean {
+  // Cmd+Shift+X — open Liquify
+  if ((e.key === 'x' || e.key === 'X') && e.shiftKey) {
+    e.preventDefault();
+    openLiquify();
+    return true;
+  }
   if (e.key === 'c' || e.key === 'C') {
     e.preventDefault();
     if (e.shiftKey) {
