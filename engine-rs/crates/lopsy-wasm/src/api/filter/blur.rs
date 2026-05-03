@@ -204,6 +204,25 @@ pub fn filter_tilt_shift_blur(
     );
 }
 
+#[wasm_bindgen(js_name = "filterSurfaceBlur")]
+pub fn filter_surface_blur(engine: &mut Engine, layer_id: &str, radius: u32, threshold: f32) {
+    if radius == 0 { return; }
+    let threshold = threshold.clamp(1.0, 255.0) / 255.0;
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.surface_blur,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_radius") {
+                gl.uniform1i(Some(&loc), radius as i32);
+            }
+            if let Some(loc) = shader.location(gl, "u_threshold") {
+                gl.uniform1f(Some(&loc), threshold);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterRadialBlur")]
 pub fn filter_radial_blur(engine: &mut Engine, layer_id: &str, amount: u32) {
     if amount == 0 { return; }

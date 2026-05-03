@@ -24,6 +24,7 @@ import { bloom } from './bloom';
 import { tiltShiftBlur } from './tilt-shift-blur';
 import { emboss } from './emboss';
 import { voronoiFilter } from './voronoi';
+import { surfaceBlur } from './surface-blur';
 
 export type { FilterDefinition };
 
@@ -53,6 +54,7 @@ const allFilters: FilterDefinition[] = [
   tiltShiftBlur,
   emboss,
   voronoiFilter,
+  surfaceBlur,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(
