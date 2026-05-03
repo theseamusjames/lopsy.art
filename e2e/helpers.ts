@@ -288,7 +288,7 @@ export async function redo(page: Page): Promise<void> {
 const TOOL_SHORTCUTS: Record<string, string> = {
   move: 'v', brush: 'b', pencil: 'n', eraser: 'e', fill: 'g',
   eyedropper: 'i', stamp: 's', dodge: 'o', smudge: 'r', spray: 'j',
-  'marquee-rect': 'm', lasso: 'l', wand: 'w',
+  'marquee-rect': 'm', lasso: 'l', wand: 'w', 'quick-select': 'q',
   shape: 'u', text: 't', crop: 'c', path: 'p',
 };
 

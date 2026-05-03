@@ -337,6 +337,10 @@ interface ToolSettings {
   wandTolerance: number;
   wandContiguous: boolean;
   wandGraduated: boolean;
+  quickSelectSize: number;
+  quickSelectTolerance: number;
+  quickSelectEdgeStrength: number;
+  quickSelectMode: 'add' | 'subtract';
   magneticLassoWidth: number;
   magneticLassoContrast: number;
   magneticLassoFrequency: number;
@@ -389,6 +393,10 @@ interface ToolSettings {
   setWandContiguous: (contiguous: boolean) => void;
   setWandGraduated: (graduated: boolean) => void;
   setMarqueeFeather: (feather: number) => void;
+  setQuickSelectSize: (size: number) => void;
+  setQuickSelectTolerance: (tolerance: number) => void;
+  setQuickSelectEdgeStrength: (strength: number) => void;
+  setQuickSelectMode: (mode: 'add' | 'subtract') => void;
   setMagneticLassoWidth: (width: number) => void;
   setMagneticLassoContrast: (contrast: number) => void;
   setMagneticLassoFrequency: (frequency: number) => void;
@@ -476,6 +484,10 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   wandTolerance: 32,
   wandContiguous: true,
   wandGraduated: false,
+  quickSelectSize: 20,
+  quickSelectTolerance: 32,
+  quickSelectEdgeStrength: 50,
+  quickSelectMode: 'add' as const,
   magneticLassoWidth: 10,
   magneticLassoContrast: 40,
   magneticLassoFrequency: 40,
@@ -623,6 +635,10 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setWandContiguous: (contiguous) => set({ wandContiguous: contiguous }),
   setWandGraduated: (graduated) => set({ wandGraduated: graduated }),
   setMarqueeFeather: (feather) => set({ marqueeFeather: Math.max(0, Math.min(250, Math.round(feather))) }),
+  setQuickSelectSize: (size) => set({ quickSelectSize: Math.max(1, Math.min(100, Math.round(size))) }),
+  setQuickSelectTolerance: (tolerance) => set({ quickSelectTolerance: Math.max(0, Math.min(255, Math.round(tolerance))) }),
+  setQuickSelectEdgeStrength: (strength) => set({ quickSelectEdgeStrength: Math.max(0, Math.min(100, Math.round(strength))) }),
+  setQuickSelectMode: (mode) => set({ quickSelectMode: mode }),
   setMagneticLassoWidth: (width) => set({ magneticLassoWidth: Math.max(1, Math.min(40, Math.round(width))) }),
   setMagneticLassoContrast: (contrast) => set({ magneticLassoContrast: Math.max(1, Math.min(100, Math.round(contrast))) }),
   setMagneticLassoFrequency: (frequency) => set({ magneticLassoFrequency: Math.max(0, Math.min(200, Math.round(frequency))) }),

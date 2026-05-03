@@ -6,6 +6,7 @@ import { handleMoveDown, handleMoveMove, handleMoveUp } from '../app/interaction
 import { handlePaintDown, handlePaintMove } from '../app/interactions/paint-handlers';
 import { handleSelectionDown, handleSelectionMove, handleSelectionUp } from '../app/interactions/selection-handlers';
 import { handleFillDown } from './fill/fill-interaction';
+import { handleQuickSelectDown, handleQuickSelectMove, handleQuickSelectUp } from './quick-select/quick-select-interaction';
 import { handleEyedropperDown, handleEyedropperMove } from './eyedropper/eyedropper-interaction';
 import { handleDodgeDown, handleDodgeMove, handleDodgeUp } from './dodge/dodge-interaction';
 import { handleSmudgeDown, handleSmudgeMove } from './smudge/smudge-interaction';
@@ -24,6 +25,7 @@ import { PencilOptions } from '../app/OptionsBar/tool-options/PencilOptions';
 import { EraserOptions } from '../app/OptionsBar/tool-options/EraserOptions';
 import { FillOptions } from '../app/OptionsBar/tool-options/FillOptions';
 import { WandOptions } from '../app/OptionsBar/tool-options/WandOptions';
+import { QuickSelectOptions } from './quick-select/QuickSelectOptions';
 import { MarqueeOptions } from '../app/OptionsBar/tool-options/MarqueeOptions';
 import { DodgeOptions } from '../app/OptionsBar/tool-options/DodgeOptions';
 import { SmudgeOptions } from '../app/OptionsBar/tool-options/SmudgeOptions';
@@ -238,6 +240,17 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     optionsComponent: WandOptions,
     handler: {
       down: (ctx) => handleSelectionDown(ctx, 'wand'),
+    },
+  },
+  'quick-select': {
+    id: 'quick-select',
+    label: 'Quick Selection',
+    shortcut: 'q',
+    optionsComponent: QuickSelectOptions,
+    handler: {
+      down: (ctx) => handleQuickSelectDown(ctx),
+      move: (ctx, state) => handleQuickSelectMove(state, ctx.canvasPos),
+      up: () => handleQuickSelectUp(),
     },
   },
   shape: {
