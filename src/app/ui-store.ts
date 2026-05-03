@@ -119,6 +119,8 @@ export interface ChannelVisibility {
   a: boolean;
 }
 
+export type SoftProofMode = 'off' | 'srgb-clamp' | 'cmyk-sim';
+
 interface UIState {
   activeTool: ToolId;
   showGrid: boolean;
@@ -131,6 +133,10 @@ interface UIState {
   snapToLayers: boolean;
   /** Temporary snap alignment lines shown during move/transform. */
   snapLines: readonly SnapLine[];
+  softProofMode: SoftProofMode;
+  showGamutWarning: boolean;
+  setSoftProofMode: (mode: SoftProofMode) => void;
+  toggleGamutWarning: () => void;
   gridSize: number;
   guideColor: Color;
   sidebarCollapsed: boolean;
@@ -255,6 +261,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   snapToGrid: false,
   snapToLayers: false,
   snapLines: [],
+  softProofMode: 'off',
+  showGamutWarning: false,
+  setSoftProofMode: (mode) => set({ softProofMode: mode }),
+  toggleGamutWarning: () => set((state) => ({ showGamutWarning: !state.showGamutWarning })),
   gridSize: 16,
   guideColor: { r: 0, g: 180, b: 255, a: 1 },
   sidebarCollapsed: false,

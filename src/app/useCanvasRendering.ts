@@ -30,6 +30,7 @@ import { renderSelectionAnts, renderTransformHandles } from './rendering/render-
 import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor, renderSymmetryCenter } from './rendering/render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './rendering/render-text-overlay';
+import { renderGamutWarning, renderSoftProof } from './rendering/render-soft-proof';
 import { hitTestTextLayer } from '../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './rendering/render-guides';
 import { renderTiltShiftOverlay } from './rendering/render-tilt-shift-overlay';
@@ -48,6 +49,7 @@ function renderFrameGpu(
   container: HTMLDivElement,
   antPhaseRef: { current: number },
   prevActiveLayerRef: { current: string | null },
+  glCanvas: HTMLCanvasElement,
 ): void {
   const engine = getEngine();
   if (!engine) return;
@@ -145,6 +147,8 @@ function renderFrameGpu(
   const snapLines = uiState.snapLines;
   const selectedGuideId = uiState.selectedGuideId;
   const hoveredGuideId = uiState.hoveredGuideId;
+  const softProofMode = uiState.softProofMode;
+  const showGamutWarning = uiState.showGamutWarning;
   const rulerHover = uiState.rulerHover;
   const guideColor = uiState.guideColor;
 
@@ -315,6 +319,16 @@ function renderFrameGpu(
         renderGuideColorSwatch(overlayCtx, guideColor);
       }
     }
+
+    // Soft proof and gamut warning overlays — drawn on top of everything else.
+    // Soft proof replaces the visual appearance of the frame; gamut warning
+    // highlights out-of-gamut pixels with magenta.
+    if (softProofMode !== 'off') {
+      renderSoftProof(overlayCtx, glCanvas, softProofMode, viewport, doc.width, doc.height);
+    }
+    if (showGamutWarning) {
+      renderGamutWarning(overlayCtx, glCanvas, viewport, doc.width, doc.height);
+    }
   }
 }
 
@@ -326,9 +340,10 @@ function renderFrame(
   container: HTMLDivElement,
   antPhaseRef: { current: number },
   prevActiveLayerRef: { current: string | null },
+  glCanvas: HTMLCanvasElement,
 ): void {
   clearFrameCache();
-  renderFrameGpu(overlayCanvas, container, antPhaseRef, prevActiveLayerRef);
+  renderFrameGpu(overlayCanvas, container, antPhaseRef, prevActiveLayerRef, glCanvas);
 }
 
 export function useCanvasRendering(
@@ -443,9 +458,10 @@ export function useCanvasRendering(
         dirtyRef.current = false;
         const overlay = overlayCanvasRef.current;
         const container = containerRef.current;
-        if (overlay && container) {
+        const glCanvas = canvasRef.current;
+        if (overlay && container && glCanvas) {
           try {
-            renderFrame(overlay, container, antPhaseRef, prevActiveLayerRef);
+            renderFrame(overlay, container, antPhaseRef, prevActiveLayerRef, glCanvas);
           } catch (e) {
             console.error('[Lopsy] Render error (recovering):', e);
           }

@@ -78,6 +78,33 @@ export function createViewMenu(): MenuDef {
         checked: ui.showSeamlessPattern,
         action: () => useUIStore.getState().toggleSeamlessPattern(),
       },
+      { separator: true, label: '' },
+      {
+        label: 'Proof Colors: Off',
+        checked: ui.softProofMode === 'off',
+        action: () => useUIStore.getState().setSoftProofMode('off'),
+      },
+      {
+        label: 'Proof Colors: sRGB',
+        checked: ui.softProofMode === 'srgb-clamp',
+        action: () => {
+          const store = useUIStore.getState();
+          store.setSoftProofMode(store.softProofMode === 'srgb-clamp' ? 'off' : 'srgb-clamp');
+        },
+      },
+      {
+        label: 'Proof Colors: CMYK',
+        checked: ui.softProofMode === 'cmyk-sim',
+        action: () => {
+          const store = useUIStore.getState();
+          store.setSoftProofMode(store.softProofMode === 'cmyk-sim' ? 'off' : 'cmyk-sim');
+        },
+      },
+      {
+        label: 'Gamut Warning',
+        checked: ui.showGamutWarning,
+        action: () => useUIStore.getState().toggleGamutWarning(),
+      },
     ],
   };
 }
