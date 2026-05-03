@@ -88,7 +88,8 @@
 
 ### Text Tool
 - **Font size**: 1 - 500
-- **Font family**: Inter, Arial, Helvetica, Georgia, Times New Roman, Courier New, JetBrains Mono, Verdana, Trebuchet MS, Impact, Comic Sans MS, Palatino, Garamond, Brush Script
+- **Font family**: ~1900 fonts — system fonts (Inter, Arial, Helvetica, Georgia, Times New Roman, Courier New, JetBrains Mono, Verdana, Trebuchet MS, Impact, Comic Sans MS, Palatino, Garamond, Brush Script) plus the full Google Fonts catalog. Google Fonts TTFs are fetched on demand from jsDelivr (with the WOFF2 CSS API as a fallback) and decoded server-side-free in the WASM engine.
+- **Font picker**: virtual-scrolling grid grouped by category (Sans Serif, Serif, Display, Handwriting, Monospace) with sticky section headers and live search across all categories
 - **Font weight**: normal (400) or bold (700)
 - **Font style**: normal or italic
 - **Text align**: left, center, right, justify
@@ -98,6 +99,13 @@
 - **Strikethrough (`S`)**: toggle a horizontal stroke 32% of the font size above the baseline, 8% of font-size thick
 - **Mode**: point text (no wrap) or area text (fixed width with wrapping)
 - **Bind to path**: a Path dropdown in the text options bar lists every stored path. Once bound, glyphs are placed one by one along the path's arc-length and rotated to match the local Bezier tangent (works on both open and closed paths). Live editing (typing) re-flows the type along the curve in real time, and editing the path's anchors invalidates the cached layout so the text follows. Selecting "None" unbinds and restores the layer's pre-bind position.
+- **Rendering**: native software rasterizer in the WASM engine (cosmic-text + swash + etagere glyph atlas) — no JS/canvas measurement or rasterization in the hot path
+- **Re-edit committed text**: clicking a committed text layer with the Text tool active enters edit mode at the click point with all properties (font, size, weight, style, color, align) restored to the picker
+- **Hover bounds**: dashed bounding box highlights the text layer the cursor is over while the Text tool is active (sized from the engine's GPU texture, so it matches the rendered glyphs exactly)
+- **Tab** or **Shift+Enter**: commits the current edit and exits edit mode (the next single-key shortcut switches tools normally)
+- **Esc**: cancels editing — discards a brand-new layer entirely; reverts an edited layer to its prior committed state
+- **Layer type**: text layers persist as `text` after commit (re-editable indefinitely); use the **Rasterize Layer** button on the layer panel toolbar (Type icon, only shown when a text layer is active) to bake them into a raster layer so paint/filters apply to the pixels
+- **Cmd/Ctrl+A** while editing: select all text inside the active edit session
 
 ---
 
@@ -226,6 +234,9 @@
 
 ### Color Overlay
 - **Color**: RGBA
+
+### Rasterize Layer Style
+- A **Rasterize Layer Style** button at the bottom of the Layer Effects panel bakes the current effects (drop shadow, glows, stroke, color overlay) into the layer's pixels and clears the effects, freezing the look so it can be painted on, filtered, or transformed independently of the original layer.
 
 ---
 
@@ -387,6 +398,17 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 
 ---
 
+## File I/O
+
+- **Open** (`Cmd/Ctrl+O`): PSD, DNG (raw), and any browser-supported image format (PNG, JPEG, WebP, BMP, GIF, etc.). PSD imports preserve layers and most properties; DNG files are decoded by a WASM raw-image pipeline.
+- **New document** (`Cmd/Ctrl+N`): opens the new-document modal (with a dirty-state confirmation if needed).
+- **Export PNG** (`Shift+Cmd/Ctrl+E`), **Export JPEG**, **Export WebP**, **Export BMP**, **Export PSD** (16-bit). PNG export goes through the engine's 16-bit path so wide-gamut color is preserved when supported.
+- **Drag-and-drop**: drop image files directly onto the app to open or paste them as a layer.
+- **Paste image from system clipboard** (`Cmd/Ctrl+V`): falls back to an internal-buffer paste if the browser doesn't fire a paste event on the canvas (e.g. Firefox).
+- **No backend**: every import/export runs in the browser; nothing is uploaded.
+
+---
+
 ## Viewport & Workspace
 
 ### Viewport
@@ -419,6 +441,12 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - **Mask edit mode**: on/off
 - **Draggable modals & panels**: filter dialogs, pattern fill, layer effects, adjustments, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked)
 - **Filter / pattern preview overlay**: when live preview is enabled the dim backdrop is removed and pointer-events on the overlay are disabled so the canvas is fully visible while the modal stays interactive
+
+### Info Panel
+- Live readout of the cursor position (X / Y in document coords).
+- Document dimensions (W / H).
+- Active layer position and size, when applicable.
+- When a marquee selection is active, the cursor coords are replaced with the selection's bounding-box origin so it can be read off without leaving the panel.
 
 ---
 
@@ -468,6 +496,81 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 - **Color spaces**: sRGB, Display P3, Rec. 2020, Linear sRGB
 - **FP16 / wide gamut**: RGBA16F textures when GPU supports `EXT_color_buffer_float`
 - **EDR passthrough**: unclamped values for extended dynamic range displays
+
+---
+
+## Keyboard Shortcuts
+
+Cmd on macOS, Ctrl elsewhere. Single-key shortcuts only fire when no modifier is held and no text field has focus.
+
+### Tool selection (single key)
+| Key | Tool |
+|-----|------|
+| `V` | Move |
+| `B` | Brush |
+| `N` | Pencil |
+| `E` | Eraser |
+| `G` | Paint Bucket (fill) |
+| `I` | Eyedropper |
+| `S` | Clone Stamp |
+| `O` | Dodge / Burn |
+| `R` | Smudge |
+| `J` | Spray |
+| `M` | Rectangular Marquee |
+| `L` | Lasso |
+| `W` | Magic Wand |
+| `U` | Shape |
+| `T` | Text |
+| `C` | Crop |
+| `P` | Pen Tool |
+
+(Tools without a single-key shortcut — Elliptical Marquee, Magnetic Lasso, Gradient — are selected from the toolbox.)
+
+### Brush size
+- `[` / `]`: shrink / grow the active tool's brush size by 1 px. Supported on brush, pencil, eraser, smudge, dodge/burn, clone stamp, shape stroke, and pen-tool stroke.
+
+### Color
+- `X`: swap foreground and background colors
+- `D`: reset to default colors (black FG, white BG)
+
+### Edit
+- `Cmd+Z` / `Cmd+Shift+Z`: undo / redo
+- `Cmd+C` / `Cmd+X` / `Cmd+V`: copy / cut / paste (paste accepts files dragged from Finder/Explorer too)
+- `Cmd+Shift+C`: copy merged (composites visible layers within the selection)
+- `Cmd+E`: merge active layer down
+- `Cmd+A`: select all
+- `Cmd+D`: deselect (also clears the pending transform)
+- `Cmd+Shift+I`: invert selection
+- `Backspace` / `Delete`: delete the selection's pixels, or the active layer if no selection
+
+### View
+- `+` / `=`: zoom in 1.5×
+- `-`: zoom out 1.5×
+- `0`: fit document to window (90% padding)
+- `1`: 100% / 1:1 zoom
+- `'`: toggle grid (and grid snapping with it)
+- `;`: toggle guides
+- `Cmd+Scroll`: zoom centered on cursor; plain scroll pans
+- `Space+drag` or middle-mouse drag: temporary pan from any tool
+
+### Selection / Move
+- `Arrow` keys: nudge by 1 px (or by the grid size when grid snap is on). Active when the Move tool or any selection tool is selected. Move-tool nudge translates the active layer; selection-tool nudge moves the marquee mask.
+- `Esc`: clear selection / cancel pending transform / abort an in-progress pen-tool path
+
+### Pen tool
+- `Enter`: stroke the current path with the configured stroke width and color
+- `Esc`: cancel the in-progress path
+
+### Text editing
+- `Tab` or `Shift+Enter`: commit the active text edit (Tab also swallows the browser focus shift)
+- `Esc`: cancel the active text edit (deletes the layer if it was new; reverts to prior state if it existed)
+- `Cmd/Ctrl+A`: select all text in the active edit session
+- `Backspace` / `Delete`, arrow keys, `Home` / `End` work as standard inside an edit session
+
+### File
+- `Cmd+N`: new document
+- `Cmd+O`: open file (PSD, DNG, or any standard image)
+- `Shift+Cmd+E`: export PNG
 
 ---
 
