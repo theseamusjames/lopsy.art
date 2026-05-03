@@ -64,6 +64,7 @@ import {
   renderTextLayer,
   getRenderedTextPixels,
   uploadLayerPixels,
+  fillWithColor,
 } from './wasm-bridge';
 import type { PathAnchor, TextEditingState } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
@@ -399,7 +400,13 @@ export function syncTextLayers(
   color: Color,
   onPositionChange: (layerId: string, x: number, y: number) => void,
 ): void {
-  if (!textEditing || textEditing.text.length === 0) return;
+  if (!textEditing) return;
+
+  // When text is empty, clear the layer texture so no stale glyph pixels remain.
+  if (textEditing.text.length === 0) {
+    fillWithColor(engine, textEditing.layerId, 0, 0, 0, 0);
+    return;
+  }
 
   const { layerId, bounds, text } = textEditing;
 

@@ -13,7 +13,6 @@ import {
   renderTextLayer,
   getRenderedTextPixels,
   uploadLayerPixels,
-  measureTextBounds,
 } from '../../engine-wasm/wasm-bridge';
 
 const TEXT_DRAG_THRESHOLD = 4;
@@ -166,7 +165,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
         areaWidth: hitLayer.width ?? null,
       });
       setTextLayerContent(reEditEngine, hitLayer.id, reEditPropsJson);
-      const boundsResult = measureTextBounds(reEditEngine, hitLayer.id);
+      const boundsResult = renderTextLayer(reEditEngine, hitLayer.id);
       if (boundsResult.length === 4) {
         boundsX = hitLayer.x - (boundsResult[2] ?? 0);
         boundsY = hitLayer.y - (boundsResult[3] ?? 0);

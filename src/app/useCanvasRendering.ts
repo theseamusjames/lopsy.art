@@ -26,12 +26,13 @@ import { renderGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
-import { renderTextDragOverlay, renderTextEditOverlay } from './rendering/render-text-overlay';
+import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './rendering/render-text-overlay';
+import { hitTestTextLayer } from '../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch } from './rendering/render-guides';
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 import { getActiveMaskEditBuffer } from './interactions/mask-buffer';
-import { uploadLayerMask } from '../engine-wasm/wasm-bridge';
+import { uploadLayerMask, expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDimensions, getGlyphPositions } from '../engine-wasm/wasm-bridge';
 
 
 
@@ -42,6 +43,7 @@ function renderFrameGpu(
   overlayCanvas: HTMLCanvasElement,
   container: HTMLDivElement,
   antPhaseRef: { current: number },
+  prevActiveLayerRef: { current: string | null },
 ): void {
   const engine = getEngine();
   if (!engine) return;
@@ -53,6 +55,60 @@ function renderFrameGpu(
   if (overlayCanvas.width !== screenW || overlayCanvas.height !== screenH) {
     overlayCanvas.width = screenW;
     overlayCanvas.height = screenH;
+  }
+
+  // Expand newly-active raster layer to doc size so transform/stretch never clips.
+  // Crop the previously-active raster layer back to its content bounds to save memory.
+  // This runs before syncLayers so the Zustand state update is reflected immediately.
+  // Skip while a float (transform) is in progress — the float system owns the texture.
+  const currentActiveId = useEditorStore.getState().document.activeLayerId;
+  if (currentActiveId !== prevActiveLayerRef.current && !hasFloat(engine)) {
+    const oldId = prevActiveLayerRef.current;
+    const newId = currentActiveId;
+    const storeState = useEditorStore.getState();
+    const doc = storeState.document;
+
+    if (oldId) {
+      const oldLayer = doc.layers.find((l) => l.id === oldId);
+      if (oldLayer?.type === 'raster') {
+        const result = cropLayerToContent(engine, oldId);
+        if (result.length === 4 && (result[2] ?? 0) > 0) {
+          useEditorStore.setState((s) => ({
+            document: {
+              ...s.document,
+              layers: s.document.layers.map((l) =>
+                l.id === oldId
+                  ? { ...l, x: result[0]!, y: result[1]!, width: result[2]!, height: result[3]! }
+                  : l
+              ),
+            },
+            renderVersion: s.renderVersion + 1,
+          }));
+        }
+      }
+    }
+
+    if (newId) {
+      const newLayer = doc.layers.find((l) => l.id === newId);
+      if (newLayer?.type === 'raster') {
+        const result = expandLayerToDocSize(engine, newId);
+        if (result.length === 4) {
+          useEditorStore.setState((s) => ({
+            document: {
+              ...s.document,
+              layers: s.document.layers.map((l) =>
+                l.id === newId
+                  ? { ...l, x: 0, y: 0, width: result[2]!, height: result[3]! }
+                  : l
+              ),
+            },
+            renderVersion: s.renderVersion + 1,
+          }));
+        }
+      }
+    }
+
+    prevActiveLayerRef.current = currentActiveId;
   }
 
   const editorState = useEditorStore.getState();
@@ -85,8 +141,16 @@ function renderFrameGpu(
   const rulerHover = uiState.rulerHover;
   const guideColor = uiState.guideColor;
 
-  // Live-update text layer pixels during editing via the WASM engine (swash software rasterizer).
   const textEditing = uiState.textEditing;
+
+  syncDocumentSize(engine, doc.width, doc.height);
+  syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
+  syncViewport(engine, viewport.zoom, viewport.panX, viewport.panY, screenW, screenH);
+  // syncLayers must run before syncTextLayers so any new text layer's GPU texture
+  // is created before syncTextLayers tries to fill or upload pixels into it.
+  syncLayers(engine, layers, doc.layerOrder, dirtyLayerIds);
+
+  // Live-update text layer pixels during editing via the WASM engine (swash software rasterizer).
   syncTextLayers(
     engine,
     textEditing,
@@ -103,11 +167,6 @@ function renderFrameGpu(
       }
     },
   );
-
-  syncDocumentSize(engine, doc.width, doc.height);
-  syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
-  syncViewport(engine, viewport.zoom, viewport.panX, viewport.panY, screenW, screenH);
-  syncLayers(engine, layers, doc.layerOrder, dirtyLayerIds);
   syncSelection(engine, selection);
   syncGrid(engine, showGrid, gridSize);
   syncRulers(engine, showRulers);
@@ -166,8 +225,18 @@ function renderFrameGpu(
     if (textDrag) {
       renderTextDragOverlay(overlayCtx, textDrag, viewport.zoom);
     }
+    if (activeTool === 'text' && !textEditing && !textDrag) {
+      const hoveredText = hitTestTextLayer(layers, cursorPosition);
+      if (hoveredText) {
+        const dims = getLayerTextureDimensions(engine, hoveredText.id);
+        const texW = dims?.[0] ?? hoveredText.width ?? hoveredText.text.length * hoveredText.fontSize * 0.6;
+        const texH = dims?.[1] ?? hoveredText.fontSize * hoveredText.lineHeight * (hoveredText.text.split('\n').length || 1);
+        renderTextHoverBounds(overlayCtx, hoveredText, viewport.zoom, texW, texH);
+      }
+    }
     if (textEditing) {
       const ts = toolState;
+      const glyphPositions = Array.from(getGlyphPositions(engine, textEditing.layerId));
       renderTextEditOverlay(overlayCtx, textEditing, {
         fontSize: ts.textFontSize,
         fontFamily: ts.textFontFamily,
@@ -177,7 +246,7 @@ function renderFrameGpu(
         lineHeight: 1.4,
         letterSpacing: 0,
         textAlign: ts.textAlign,
-      }, viewport.zoom, antPhaseRef.current);
+      }, viewport.zoom, antPhaseRef.current, glyphPositions);
     }
 
     const brushCursorInfo = getBrushCursorInfo(activeTool);
@@ -216,9 +285,10 @@ function renderFrame(
   overlayCanvas: HTMLCanvasElement,
   container: HTMLDivElement,
   antPhaseRef: { current: number },
+  prevActiveLayerRef: { current: string | null },
 ): void {
   clearFrameCache();
-  renderFrameGpu(overlayCanvas, container, antPhaseRef);
+  renderFrameGpu(overlayCanvas, container, antPhaseRef, prevActiveLayerRef);
 }
 
 export function useCanvasRendering(
@@ -229,6 +299,7 @@ export function useCanvasRendering(
   const dirtyRef = useRef(true);
   const engineReadyRef = useRef(false);
   const antPhaseRef = useRef(0);
+  const prevActiveLayerRef = useRef<string | null>(null);
 
   // Initialize WASM engine on mount
   useEffect(() => {
@@ -334,7 +405,7 @@ export function useCanvasRendering(
         const container = containerRef.current;
         if (overlay && container) {
           try {
-            renderFrame(overlay, container, antPhaseRef);
+            renderFrame(overlay, container, antPhaseRef, prevActiveLayerRef);
           } catch (e) {
             console.error('[Lopsy] Render error (recovering):', e);
           }

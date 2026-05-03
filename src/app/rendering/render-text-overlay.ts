@@ -1,9 +1,30 @@
 import type { TextEditingState, TextDragState } from '../ui-store';
 import { wrapText, alignLineX, buildFontString } from '../../tools/text/text';
 import type { TextStyle } from '../../tools/text/text';
+import type { TextLayer } from '../../types';
 
 const BORDER_COLOR = '#2196F3';
 const CURSOR_COLOR = '#2196F3';
+const HOVER_COLOR = 'rgba(33,150,243,0.6)';
+
+/**
+ * Render a subtle bounding box around a text layer to indicate it's clickable.
+ * Shown when the text tool is active and the cursor hovers over the layer.
+ */
+export function renderTextHoverBounds(
+  ctx: CanvasRenderingContext2D,
+  layer: TextLayer,
+  zoom: number,
+  texW: number,
+  texH: number,
+): void {
+  ctx.save();
+  ctx.strokeStyle = HOVER_COLOR;
+  ctx.lineWidth = 1.5 / zoom;
+  ctx.setLineDash([4 / zoom, 4 / zoom]);
+  ctx.strokeRect(layer.x, layer.y, texW, texH);
+  ctx.restore();
+}
 
 /**
  * Render the text area drag preview (just the box outline, no text).
@@ -39,6 +60,7 @@ export function renderTextEditOverlay(
   style: TextStyle,
   zoom: number,
   cursorBlinkPhase: number,
+  glyphPositions?: number[],
 ): void {
   const { bounds, text, cursorPos } = editing;
 
@@ -88,11 +110,42 @@ export function renderTextEditOverlay(
       }
     }
 
-    const lineText = lines[cursorLine] ?? '';
-    const textBeforeCursor = lineText.slice(0, cursorLineOffset);
-    const cursorX = bounds.x + measureWidth(textBeforeCursor) +
-      alignLineX(measureWidth(lineText), bounds.width, style.textAlign);
     const cursorY = bounds.y + cursorLine * lineH;
+
+    // Use engine glyph positions for accurate cursor X (matches swash rendering metrics).
+    // Falls back to canvas measureText if positions unavailable (e.g. empty text).
+    let cursorX: number;
+    if (glyphPositions && glyphPositions.length >= 5) {
+      // Glyph data: [x, y, w, h, cluster, ...] — 5 values per glyph
+      // x,y are layout-space coords relative to bounds.x/y; cluster is byte offset
+      const lineGlyphs: { x: number; w: number; cluster: number }[] = [];
+      for (let i = 0; i + 4 < glyphPositions.length; i += 5) {
+        const gy = glyphPositions[i + 1]!;
+        if (Math.abs(gy - cursorLine * lineH) < lineH * 0.75) {
+          lineGlyphs.push({
+            x: glyphPositions[i]!,
+            w: glyphPositions[i + 2]!,
+            cluster: glyphPositions[i + 4]!,
+          });
+        }
+      }
+      const glyphsBefore = lineGlyphs.filter((g) => g.cluster < cursorPos);
+      if (glyphsBefore.length > 0) {
+        const last = glyphsBefore.reduce((max, g) => g.x > max.x ? g : max);
+        cursorX = bounds.x + last.x + last.w;
+      } else {
+        // Cursor before first glyph on this line — use leftmost glyph x or alignment
+        const first = lineGlyphs.length > 0
+          ? lineGlyphs.reduce((min, g) => g.x < min.x ? g : min)
+          : null;
+        cursorX = bounds.x + (first?.x ?? alignLineX(0, bounds.width, style.textAlign));
+      }
+    } else {
+      const lineText = lines[cursorLine] ?? '';
+      const textBeforeCursor = lineText.slice(0, cursorLineOffset);
+      cursorX = bounds.x + measureWidth(textBeforeCursor) +
+        alignLineX(measureWidth(lineText), bounds.width, style.textAlign);
+    }
 
     ctx.strokeStyle = CURSOR_COLOR;
     ctx.lineWidth = 1.5 / zoom;
