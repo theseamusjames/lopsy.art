@@ -126,6 +126,80 @@ export function renderRulers(
   ctx.restore();
 }
 
+const PIXEL_GRID_ZOOM_THRESHOLD = 8; // 800%
+
+export function calcPixelGridRange(
+  canvasWidth: number,
+  canvasHeight: number,
+  viewport: { panX: number; panY: number; zoom: number },
+  docWidth: number,
+  docHeight: number,
+): { startX: number; endX: number; startY: number; endY: number } {
+  const { panX, panY, zoom } = viewport;
+  // Screen-space origin of the document's top-left corner
+  const originX = panX + canvasWidth / 2 - (docWidth / 2) * zoom;
+  const originY = panY + canvasHeight / 2 - (docHeight / 2) * zoom;
+
+  // Convert screen bounds to document-space pixel indices
+  const startX = Math.max(0, Math.ceil(-originX / zoom));
+  const endX = Math.min(docWidth, Math.floor((canvasWidth - originX) / zoom));
+  const startY = Math.max(0, Math.ceil(-originY / zoom));
+  const endY = Math.min(docHeight, Math.floor((canvasHeight - originY) / zoom));
+
+  return { startX, endX, startY, endY };
+}
+
+export function renderPixelGrid(
+  ctx: CanvasRenderingContext2D,
+  canvasWidth: number,
+  canvasHeight: number,
+  viewport: { panX: number; panY: number; zoom: number },
+  docWidth: number,
+  docHeight: number,
+): void {
+  const { zoom } = viewport;
+  if (zoom <= PIXEL_GRID_ZOOM_THRESHOLD) return;
+
+  const { startX, endX, startY, endY } = calcPixelGridRange(
+    canvasWidth,
+    canvasHeight,
+    viewport,
+    docWidth,
+    docHeight,
+  );
+
+  if (startX >= endX || startY >= endY) return;
+
+  const { panX, panY } = viewport;
+  const originX = panX + canvasWidth / 2 - (docWidth / 2) * zoom;
+  const originY = panY + canvasHeight / 2 - (docHeight / 2) * zoom;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(128, 128, 128, 0.3)';
+  ctx.lineWidth = 1;
+
+  ctx.beginPath();
+
+  for (let x = startX; x <= endX; x++) {
+    const screenX = Math.round(originX + x * zoom) + 0.5;
+    const topY = Math.round(originY + startY * zoom);
+    const bottomY = Math.round(originY + endY * zoom);
+    ctx.moveTo(screenX, topY);
+    ctx.lineTo(screenX, bottomY);
+  }
+
+  for (let y = startY; y <= endY; y++) {
+    const screenY = Math.round(originY + y * zoom) + 0.5;
+    const leftX = Math.round(originX + startX * zoom);
+    const rightX = Math.round(originX + endX * zoom);
+    ctx.moveTo(leftX, screenY);
+    ctx.lineTo(rightX, screenY);
+  }
+
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function renderGrid(
   ctx: CanvasRenderingContext2D,
   docWidth: number,

@@ -22,7 +22,7 @@ import {
   renderEngine,
   markAllLayersDirty,
 } from '../engine-wasm/engine-sync';
-import { renderGrid, renderRulers } from './rendering/render-grid';
+import { renderGrid, renderPixelGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
@@ -124,6 +124,7 @@ function renderFrameGpu(
   const activeTool = uiState.activeTool;
   const cursorPosition = uiState.cursorPosition;
   const showGrid = uiState.showGrid;
+  const showPixelGrid = uiState.showPixelGrid;
   const showRulers = uiState.showRulers;
   const gridSize = uiState.gridSize;
   const adjustments = uiState.adjustments;
@@ -267,6 +268,10 @@ function renderFrameGpu(
     }
 
     overlayCtx.restore();
+
+    if (showPixelGrid) {
+      renderPixelGrid(overlayCtx, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height);
+    }
 
     if (showRulers) {
       renderRulers(overlayCtx, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height, cursorPosition, guideColor);
