@@ -326,6 +326,8 @@ interface ToolSettings {
   gradientStops: readonly GradientStop[];
   gradientReverse: boolean;
   stampSize: number;
+  healingSize: number;
+  healingOpacity: number;
   pathStrokeWidth: number;
   dodgeExposure: number;
   dodgeMode: DodgeMode;
@@ -371,6 +373,9 @@ interface ToolSettings {
   setBrushAngle: (angle: number) => void;
   setActiveBrushTip: (tip: BrushTipData | null) => void;
   setStampSize: (size: number) => void;
+  setHealingSize: (size: number) => void;
+  /** Healing opacity in **percent**, range `1–100` (not normalised `0–1`). */
+  setHealingOpacity: (opacity: number) => void;
   setPathStrokeWidth: (width: number) => void;
   setDodgeExposure: (exposure: number) => void;
   setDodgeMode: (mode: DodgeMode) => void;
@@ -452,6 +457,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   ],
   gradientReverse: false,
   stampSize: 20,
+  healingSize: 20,
+  healingOpacity: 100,
   pathStrokeWidth: 2,
   dodgeExposure: 50,
   dodgeMode: 'dodge',
@@ -561,6 +568,11 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setSymmetryHorizontal: (enabled) => set({ symmetryHorizontal: enabled }),
   setSymmetryVertical: (enabled) => set({ symmetryVertical: enabled }),
   setStampSize: (size) => set({ stampSize: Math.max(1, Math.min(5000, size)) }),
+  setHealingSize: (size) => set({ healingSize: Math.max(1, Math.min(5000, size)) }),
+  setHealingOpacity: (opacity) => {
+    warnIfNormalisedOpacity('setHealingOpacity', opacity);
+    set({ healingOpacity: Math.max(1, Math.min(100, opacity)) });
+  },
   setPathStrokeWidth: (width) => set({ pathStrokeWidth: Math.max(1, Math.min(50, width)) }),
   setDodgeExposure: (exposure) => set({ dodgeExposure: Math.max(1, Math.min(100, exposure)) }),
   setDodgeMode: (mode) => set({ dodgeMode: mode }),

@@ -46,6 +46,8 @@ export function handleSizeShortcut(e: KeyboardEvent): boolean {
     ts.setEraserSize(ts.eraserSize + delta);
   } else if (tool === 'stamp') {
     ts.setStampSize(ts.stampSize + delta);
+  } else if (tool === 'healing') {
+    ts.setHealingSize(ts.healingSize + delta);
   } else if (tool === 'path') {
     ts.setPathStrokeWidth(ts.pathStrokeWidth + delta);
   } else if (tool === 'shape') {
