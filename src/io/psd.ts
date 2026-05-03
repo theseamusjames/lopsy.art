@@ -24,7 +24,6 @@ import { pixelDataManager } from '../engine/pixel-data-manager';
 import type { Layer, GroupLayer, RasterLayer } from '../types/layers';
 import type { LayerEffects } from '../types/effects';
 import { DEFAULT_EFFECTS, hasEnabledEffects } from '../layers/layer-model';
-import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
 import { BLEND_MODE_TO_PSD_INDEX, BLEND_MODES_BY_PSD_INDEX } from '../types/blend-mode-tables';
 
@@ -289,7 +288,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
         mask: null,
         children: groupInfo?.children ?? [],
         collapsed: psdLayer.groupKind === 2,
-        adjustments: { ...DEFAULT_ADJUSTMENTS },
+        adjustments: [],
         adjustmentsEnabled: true,
       };
       newLayers.push(groupLayer);

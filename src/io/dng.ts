@@ -59,6 +59,7 @@ import { notifyError } from '../app/notifications-store';
 import { DEFAULT_ADJUSTMENTS, type ImageAdjustments } from '../filters/image-adjustments';
 import { IDENTITY_CURVES } from '../filters/curves';
 import { IDENTITY_LEVELS, type Levels } from '../filters/levels';
+import { migrateFromLegacy } from '../filters/adjustment-node-utils';
 
 interface DngMeta {
   width: number;
@@ -127,9 +128,17 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
   // DNG standard metadata alone produces. See module doc comment for why.
   const rootGroupId = useEditorStore.getState().document.rootGroupId;
   if (rootGroupId) {
-    const store = useEditorStore.getState();
-    store.setGroupAdjustments(rootGroupId, RAW_DEFAULT_ADJUSTMENTS);
-    store.setGroupAdjustmentsEnabled(rootGroupId, true);
+    const nodes = migrateFromLegacy(RAW_DEFAULT_ADJUSTMENTS);
+    useEditorStore.setState((s) => ({
+      document: {
+        ...s.document,
+        layers: s.document.layers.map((l) =>
+          l.id === rootGroupId && l.type === 'group'
+            ? { ...l, adjustments: nodes, adjustmentsEnabled: true }
+            : l,
+        ),
+      },
+    }));
   }
 
   // The DNG decoder uploaded pixels directly to the GPU texture. Clear the

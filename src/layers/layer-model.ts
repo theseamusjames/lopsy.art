@@ -1,5 +1,4 @@
 import type { Color, GroupLayer, Layer, LayerEffects, RasterLayer, TextLayer } from '../types';
-import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 
 export const DEFAULT_EFFECTS: LayerEffects = {
   stroke: { enabled: false, color: { r: 0, g: 0, b: 0, a: 1 }, width: 2, position: 'outside' },
@@ -81,7 +80,7 @@ export function createGroupLayer(params: { name: string; children?: string[] }):
     mask: null,
     children: params.children ?? [],
     collapsed: false,
-    adjustments: { ...DEFAULT_ADJUSTMENTS },
+    adjustments: [],
     adjustmentsEnabled: true,
   };
 }

@@ -1,10 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const port = Number(process.env.VITE_PORT ?? 5174);
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 60000,
   use: {
-    baseURL: 'http://localhost:5181',
+    baseURL: `http://localhost:${port}`,
     headless: true,
     viewport: { width: 1280, height: 720 },
   },
@@ -47,8 +49,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npx vite --port 5181',
-    port: 5181,
+    command: `npx vite --port ${port}`,
+    port,
     reuseExistingServer: true,
   },
 });
