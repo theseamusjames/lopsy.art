@@ -81,6 +81,7 @@ export function commitTextEditing(): void {
         areaWidth: areaWidth ?? null,
         underline: toolSettings.textUnderline,
         strikethrough: toolSettings.textStrikethrough,
+        baselineShift: toolSettings.textBaselineShift,
       });
       setTextLayerContent(engine, editing.layerId, propsJson);
       const boundsResult = renderTextLayer(engine, editing.layerId);
@@ -120,6 +121,7 @@ export function commitTextEditing(): void {
     visible: true,
     underline: toolSettings.textUnderline,
     strikethrough: toolSettings.textStrikethrough,
+    baselineShift: toolSettings.textBaselineShift,
   });
 
   editorState.notifyRender();
@@ -148,6 +150,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
     toolSettings.setForegroundColor(hitLayer.color);
     toolSettings.setTextUnderline(hitLayer.underline);
     toolSettings.setTextStrikethrough(hitLayer.strikethrough);
+    toolSettings.setTextBaselineShift(hitLayer.baselineShift);
 
     editorState.setActiveLayer(hitLayer.id);
 
@@ -179,6 +182,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
         letterSpacing: hitLayer.letterSpacing,
         textAlign: hitLayer.textAlign,
         areaWidth: hitLayer.width ?? null,
+        baselineShift: hitLayer.baselineShift,
       });
       setTextLayerContent(reEditEngine, hitLayer.id, reEditPropsJson);
       const boundsResult = renderTextLayer(reEditEngine, hitLayer.id);

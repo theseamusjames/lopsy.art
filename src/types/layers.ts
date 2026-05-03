@@ -49,6 +49,7 @@ export interface TextLayer extends LayerBase {
   readonly pathId?: string;
   readonly prePathX?: number;
   readonly prePathY?: number;
+  readonly baselineShift: number;
 }
 
 export interface ShapeLayer extends LayerBase {

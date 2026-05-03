@@ -759,6 +759,7 @@ export function syncTextLayers(
   color: Color,
   underline: boolean,
   strikethrough: boolean,
+  baselineShift: number,
   onPositionChange: (layerId: string, x: number, y: number) => void,
 ): void {
   if (!textEditing) return;
@@ -786,6 +787,7 @@ export function syncTextLayers(
     areaWidth: bounds.width ?? null,
     underline,
     strikethrough,
+    baselineShift,
   });
 
   setTextLayerContent(engine, layerId, propsJson);

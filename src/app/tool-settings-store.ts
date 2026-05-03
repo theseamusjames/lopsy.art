@@ -447,6 +447,7 @@ interface ToolSettings {
   textAlign: TextAlign;
   textUnderline: boolean;
   textStrikethrough: boolean;
+  textBaselineShift: number;
   brushSpacing: number;
   brushScatter: number;
   brushAngle: number;
@@ -534,6 +535,7 @@ interface ToolSettings {
   setTextAlign: (align: TextAlign) => void;
   setTextUnderline: (underline: boolean) => void;
   setTextStrikethrough: (strikethrough: boolean) => void;
+  setTextBaselineShift: (shift: number) => void;
   /** Brush opacity in **percent**, range `1–100` (not normalised `0–1`). */
   setBrushOpacity: (opacity: number) => void;
   setBrushHardness: (hardness: number) => void;
@@ -636,6 +638,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   textAlign: 'left' as const,
   textUnderline: false,
   textStrikethrough: false,
+  textBaselineShift: 0,
   brushSpacing: 0,
   brushScatter: 0,
   brushAngle: 0,
@@ -823,6 +826,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setTextAlign: (align) => set({ textAlign: align }),
   setTextUnderline: (underline) => set({ textUnderline: underline }),
   setTextStrikethrough: (strikethrough) => set({ textStrikethrough: strikethrough }),
+  setTextBaselineShift: (shift) => set({ textBaselineShift: Math.max(-100, Math.min(100, shift)) }),
 
   setForegroundColor: (color) => set({ foregroundColor: color }),
   setBackgroundColor: (color) => set({ backgroundColor: color }),

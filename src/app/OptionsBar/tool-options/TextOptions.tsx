@@ -33,6 +33,7 @@ export function TextOptions() {
   const textAlign = useToolSettingsStore((s) => s.textAlign);
   const textUnderline = useToolSettingsStore((s) => s.textUnderline);
   const textStrikethrough = useToolSettingsStore((s) => s.textStrikethrough);
+  const textBaselineShift = useToolSettingsStore((s) => s.textBaselineShift);
   const setTextFontSize = useToolSettingsStore((s) => s.setTextFontSize);
   const setTextFontFamily = useToolSettingsStore((s) => s.setTextFontFamily);
   const setTextFontWeight = useToolSettingsStore((s) => s.setTextFontWeight);
@@ -40,6 +41,7 @@ export function TextOptions() {
   const setTextAlign = useToolSettingsStore((s) => s.setTextAlign);
   const setTextUnderline = useToolSettingsStore((s) => s.setTextUnderline);
   const setTextStrikethrough = useToolSettingsStore((s) => s.setTextStrikethrough);
+  const setTextBaselineShift = useToolSettingsStore((s) => s.setTextBaselineShift);
 
   const fontEntry = useMemo(() => {
     const family = extractFamilyName(textFontFamily);
@@ -124,6 +126,7 @@ export function TextOptions() {
   return (
     <>
       <Slider label="Size" value={textFontSize} min={1} max={500} onChange={setTextFontSize} />
+      <Slider label="Baseline" value={textBaselineShift} min={-100} max={100} onChange={setTextBaselineShift} />
       <label className={styles.label} id="text-font-label">Font</label>
       <FontPicker value={textFontFamily} onChange={handleFontChange} />
       <select

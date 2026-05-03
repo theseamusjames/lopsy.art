@@ -31,6 +31,16 @@ describe('createTextLayer', () => {
     expect(l.fontFamily).toBe('Inter');
     expect(l.fontSize).toBe(24);
   });
+
+  it('defaults baselineShift to 0', () => {
+    const l = createTextLayer({ name: 'Text', text: 'Hello' });
+    expect(l.baselineShift).toBe(0);
+  });
+
+  it('includes baselineShift in the layer object', () => {
+    const l = createTextLayer({ name: 'Shifted', text: 'Hi' });
+    expect(Object.prototype.hasOwnProperty.call(l, 'baselineShift')).toBe(true);
+  });
 });
 
 describe('createGroupLayer', () => {

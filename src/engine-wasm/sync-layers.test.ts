@@ -49,6 +49,7 @@ const baseTextLayer: TextLayer = {
   width: null,
   underline: false,
   strikethrough: false,
+  baselineShift: 0,
 };
 
 const baseRasterLayer: RasterLayer = {

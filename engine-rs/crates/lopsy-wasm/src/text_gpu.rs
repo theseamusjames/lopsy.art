@@ -13,6 +13,8 @@ use crate::glyph_atlas::GlyphAtlas;
 pub struct TextLayerState {
     pub buffer: Buffer,
     pub color: [f32; 4],
+    /// Baseline shift in pixels: positive offsets text upward, negative downward.
+    pub baseline_shift: f32,
     /// Hash of the last serialized props JSON — skip re-layout when unchanged.
     pub props_hash: u64,
     /// RGBA pixel bytes from the most recent software render. Cleared on re-layout.
@@ -106,7 +108,8 @@ impl TextRendererState {
     ///   "fontWeight": u16, "fontStyle": "normal"|"italic",
     ///   "color": [r, g, b, a], "lineHeight": f32, "letterSpacing": f32,
     ///   "textAlign": "left"|"center"|"right"|"justify",
-    ///   "areaWidth": f32 | null }
+    ///   "areaWidth": f32 | null,
+    ///   "baselineShift": f32 }
     /// ```
     pub fn set_text_content(
         &mut self,
@@ -152,8 +155,13 @@ impl TextRendererState {
         };
         let line_height = v["lineHeight"].as_f64().unwrap_or(1.4) as f32;
         let area_width = v["areaWidth"].as_f64().map(|w| w as f32);
+<<<<<<< HEAD
         let underline = v["underline"].as_bool().unwrap_or(false);
         let strikethrough = v["strikethrough"].as_bool().unwrap_or(false);
+=======
+        // Positive baseline shift moves text up (negative y offset in canvas space).
+        let baseline_shift = v["baselineShift"].as_f64().unwrap_or(0.0) as f32;
+>>>>>>> b1f13d2 (feat(text): add baseline shift property for vertical text offset)
 
         let line_height_px = font_size * line_height;
         let metrics = Metrics::new(font_size, line_height_px);
@@ -201,6 +209,7 @@ impl TextRendererState {
             TextLayerState {
                 buffer,
                 color,
+                baseline_shift,
                 props_hash: new_hash,
                 rendered_pixels: None,
                 underline,
@@ -329,6 +338,7 @@ impl TextRendererState {
             x: i32,
             y: i32,
         }
+<<<<<<< HEAD
         // Per-run info for underline/strikethrough decoration.
         struct RunInfo {
             /// X of leftmost glyph in this run (integer pixels).
@@ -340,6 +350,10 @@ impl TextRendererState {
             /// Font size in pixels.
             font_size: f32,
         }
+=======
+        // Positive baseline_shift moves text up — subtract from y (screen y increases downward).
+        let baseline_shift_px = state.baseline_shift.round() as i32;
+>>>>>>> b1f13d2 (feat(text): add baseline shift property for vertical text offset)
         let mut glyph_layouts: Vec<GlyphLayout> = Vec::new();
         let mut run_infos: Vec<RunInfo> = Vec::new();
         for run in state.buffer.layout_runs() {
@@ -354,7 +368,7 @@ impl TextRendererState {
                 glyph_layouts.push(GlyphLayout {
                     cache_key: phys.cache_key,
                     x: phys.x,
-                    y: phys.y,
+                    y: phys.y - baseline_shift_px,
                 });
             }
             if run_x_start <= run_x_end {
@@ -612,6 +626,7 @@ mod tests {
         assert!(positions.len() >= 15, "expected ≥15 values for 3 glyphs, got {}", positions.len());
     }
 
+<<<<<<< HEAD
     fn props_with_decorations(text: &str, underline: bool, strikethrough: bool) -> String {
         format!(
             r#"{{"text":"{text}","fontFamily":"sans-serif","fontSize":24,"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":0,"textAlign":"left","areaWidth":null,"underline":{underline},"strikethrough":{strikethrough}}}"#
@@ -658,5 +673,57 @@ mod tests {
         // opaque count must be strictly greater than plain text alone.
         assert!(strike_opaque > plain_opaque,
             "strikethrough should add opaque pixels; plain={plain_opaque} strike={strike_opaque}");
+=======
+    #[test]
+    fn test_baseline_shift_zero_is_default() {
+        let mut renderer = make_renderer();
+        renderer
+            .set_text_content("layer1", &basic_props("Hello"))
+            .expect("ok");
+        let state = &renderer.text_layers["layer1"];
+        assert_eq!(state.baseline_shift, 0.0, "default baseline_shift should be 0");
+    }
+
+    #[test]
+    fn test_baseline_shift_stored_from_props() {
+        let mut renderer = make_renderer();
+        let props = r#"{"text":"Hi","fontFamily":"sans-serif","fontSize":16,"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":0,"textAlign":"left","areaWidth":null,"baselineShift":20}"#;
+        renderer.set_text_content("layer1", props).expect("ok");
+        let state = &renderer.text_layers["layer1"];
+        assert_eq!(state.baseline_shift, 20.0, "baseline_shift should be stored from props JSON");
+    }
+
+    #[test]
+    fn test_baseline_shift_offsets_render_y() {
+        // Render the same text with and without baseline shift.
+        // The version with positive shift should have a smaller (higher) canvas_y offset
+        // because glyphs are shifted upward (lower y value in screen space).
+        let mut renderer = make_renderer();
+
+        let props_zero = r#"{"text":"A","fontFamily":"sans-serif","fontSize":32,"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":0,"textAlign":"left","areaWidth":null,"baselineShift":0}"#;
+        let props_shifted = r#"{"text":"A","fontFamily":"sans-serif","fontSize":32,"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":0,"textAlign":"left","areaWidth":null,"baselineShift":20}"#;
+
+        renderer.set_text_content("layer_zero", props_zero).expect("ok");
+        let result_zero = renderer.render_text_layer_software("layer_zero");
+        assert!(result_zero.is_some(), "zero-shift render should succeed");
+        let (_, _, _, _, offset_y_zero) = result_zero.unwrap();
+
+        renderer.set_text_content("layer_shifted", props_shifted).expect("ok");
+        let result_shifted = renderer.render_text_layer_software("layer_shifted");
+        assert!(result_shifted.is_some(), "shifted render should succeed");
+        let (_, _, _, _, offset_y_shifted) = result_shifted.unwrap();
+
+        // Positive baseline shift moves text up: canvas_y should be smaller (more negative).
+        assert!(
+            offset_y_shifted < offset_y_zero,
+            "positive baseline shift should move canvas_y up: shifted={offset_y_shifted} zero={offset_y_zero}",
+        );
+        // The difference should be close to 20px.
+        let diff = offset_y_zero - offset_y_shifted;
+        assert!(
+            diff >= 18 && diff <= 22,
+            "y offset difference should be ~20px, got {diff}",
+        );
+>>>>>>> b1f13d2 (feat(text): add baseline shift property for vertical text offset)
     }
 }
