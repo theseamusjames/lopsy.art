@@ -748,7 +748,7 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
     const pngDownloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
-    await page.getByRole('menuitem', { name: 'Export PNG' }).click();
+    await page.getByRole('menuitem', { name: 'Quick Export PNG' }).click();
     const pngDownload = await pngDownloadPromise;
     expect(pngDownload.suggestedFilename()).toMatch(/\.png$/);
 

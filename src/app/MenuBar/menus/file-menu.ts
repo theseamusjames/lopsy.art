@@ -21,6 +21,12 @@ export { importPsdFile, exportPsdFile };
 
 import { importDngFile } from '../../../io/dng';
 
+// Re-export ExportFormat and ExportOptions from export-logic so the rest of
+// the codebase imports from one place.
+export type { ExportFormat, ExportOptions } from '../export-logic';
+import type { ExportFormat, ExportOptions } from '../export-logic';
+import { qualityToFraction, FORMAT_EXT, FORMAT_MIME } from '../export-logic';
+
 const METADATA_NOTE = 'Made with Lopsy — http://lopsy.art';
 
 function confirmIfDirty(): boolean {
@@ -82,32 +88,112 @@ export function openFileFromDisk(): void {
   input.click();
 }
 
-export type ExportFormat = 'png' | 'jpeg' | 'webp' | 'bmp';
+/** Callback registry so MenuBar.tsx can open the Export dialog in response to
+ *  a File-menu action without creating a circular import. MenuBar registers
+ *  its setter once on mount. */
+let openExportDialogFn: (() => void) | null = null;
+export function registerOpenExportDialog(fn: () => void): void {
+  openExportDialogFn = fn;
+}
+export function unregisterOpenExportDialog(): void {
+  openExportDialogFn = null;
+}
 
-/** Export using the WASM engine's GPU compositor. */
+/** Quick-export using the WASM engine's GPU compositor (no dialog). */
 export function exportCanvas(format: ExportFormat): void {
   const engine = getEngine();
   if (!engine) return;
   finalizePendingStrokeGlobal();
   flushLayerSync(useEditorStore.getState());
-  exportViaEngine(engine, format);
+  const docName = useEditorStore.getState().document.name;
+  exportViaEngine(engine, { format, quality: 92, scale: 1, filename: docName || 'lopsy' });
 }
 
-function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, format: ExportFormat): void {
+/**
+ * Full export triggered from the Export dialog. Accepts quality (1–100) and
+ * scale multiplier; PNG bypasses the quality parameter.
+ */
+export function exportCanvasWithOptions(options: ExportOptions): void {
+  const engine = getEngine();
+  if (!engine) return;
+  finalizePendingStrokeGlobal();
+  flushLayerSync(useEditorStore.getState());
+  exportViaEngine(engine, options);
+}
+
+/**
+ * Build a preview thumbnail blob URL for the export dialog. Runs the
+ * compositor, applies the chosen format/quality, and returns an object URL.
+ * Caller must revoke the URL when done.
+ */
+export async function buildExportPreview(options: ExportOptions): Promise<string | null> {
+  const engine = getEngine();
+  if (!engine) return null;
+  finalizePendingStrokeGlobal();
+  flushLayerSync(useEditorStore.getState());
   const sizeArr = getCompositeSize(engine);
   const width = sizeArr[0] ?? 0;
   const height = sizeArr[1] ?? 0;
-  if (width === 0 || height === 0) return;
+  if (width === 0 || height === 0) return null;
 
-  // PNG uses the 16-bit WASM path — composites at full precision and encodes
-  // directly in Rust, bypassing the 8-bit canvas.toBlob pipeline.
-  if (format === 'png') {
+  const rawPixels = compositeForExport(engine);
+  const clamped = new Uint8ClampedArray(width * height * 4);
+  clamped.set(rawPixels);
+  const imageData = createImageDataFromArray(clamped, width, height);
+
+  // Scale to a thumbnail ≤ 220px for the preview pane
+  const THUMB_MAX = 220;
+  const thumbScale = Math.min(1, THUMB_MAX / Math.max(width, height));
+  const thumbW = Math.max(1, Math.round(width * thumbScale));
+  const thumbH = Math.max(1, Math.round(height * thumbScale));
+
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = width;
+  srcCanvas.height = height;
+  const srcCtx = srcCanvas.getContext('2d', contextOptions);
+  if (!srcCtx) return null;
+  srcCtx.putImageData(imageData, 0, 0);
+
+  const thumbCanvas = document.createElement('canvas');
+  thumbCanvas.width = thumbW;
+  thumbCanvas.height = thumbH;
+  const thumbCtx = thumbCanvas.getContext('2d', contextOptions);
+  if (!thumbCtx) return null;
+  thumbCtx.drawImage(srcCanvas, 0, 0, thumbW, thumbH);
+
+  // Encode at the chosen format/quality so JPEG artifacts appear in preview.
+  // BMP has no canvas.toBlob support, so use PNG for BMP previews.
+  const mimeType = FORMAT_MIME[options.format === 'bmp' ? 'png' : options.format];
+  const qualityFraction = qualityToFraction(options.quality);
+
+  return new Promise<string | null>((resolve) => {
+    thumbCanvas.toBlob(
+      (blob) => resolve(blob ? URL.createObjectURL(blob) : null),
+      mimeType,
+      qualityFraction,
+    );
+  });
+}
+
+function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, options: ExportOptions): void {
+  const { format, quality, scale, filename } = options;
+  const sizeArr = getCompositeSize(engine);
+  const srcWidth = sizeArr[0] ?? 0;
+  const srcHeight = sizeArr[1] ?? 0;
+  if (srcWidth === 0 || srcHeight === 0) return;
+
+  const outWidth = Math.max(1, Math.round(srcWidth * scale));
+  const outHeight = Math.max(1, Math.round(srcHeight * scale));
+
+  // PNG at 1x uses the 16-bit WASM path — composites at full precision and
+  // encodes directly in Rust, bypassing the 8-bit canvas.toBlob pipeline.
+  if (format === 'png' && scale === 1) {
     try {
       const colorSpace: number = isWideGamut() ? 1 : 0;
       const pngBytes = exportPng16(engine, colorSpace);
       const blob = new Blob([pngBytes as BlobPart], { type: 'image/png' });
       addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE })
-        .then(downloadBlob)
+        .then((b) => downloadBlob(b, 'png', filename))
         .catch((err) => notifyError(`Failed to export: ${describeError(err)}`));
     } catch (err) {
       notifyError(`Failed to export PNG: ${describeError(err)}`);
@@ -116,60 +202,56 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, form
   }
 
   const rawPixels = compositeForExport(engine);
-  const clamped = new Uint8ClampedArray(width * height * 4);
+  const clamped = new Uint8ClampedArray(srcWidth * srcHeight * 4);
   clamped.set(rawPixels);
-  const imageData = createImageDataFromArray(clamped, width, height);
+  const imageData = createImageDataFromArray(clamped, srcWidth, srcHeight);
 
-  // Group adjustments are applied by the compositor during compositing,
-  // so no post-composite JS-side adjustment is needed here.
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = srcWidth;
+  srcCanvas.height = srcHeight;
+  const srcCtx = srcCanvas.getContext('2d', contextOptions);
+  if (!srcCtx) return;
+  srcCtx.putImageData(imageData, 0, 0);
 
-  // GPU output is in the working color space (P3 on capable displays).
-  // Create the export canvas in the same color space and putImageData
-  // directly — no intermediate conversion needed.
+  // Apply scale by drawing into an output-sized canvas
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = outWidth;
+  canvas.height = outHeight;
   const ctx = canvas.getContext('2d', contextOptions);
   if (!ctx) return;
-  ctx.putImageData(imageData, 0, 0);
+  ctx.drawImage(srcCanvas, 0, 0, outWidth, outHeight);
 
-  finishCanvasExport(canvas, width, height, format);
+  finishCanvasExport(canvas, outWidth, outHeight, format, quality, filename);
 }
 
-const FORMAT_MIME: Record<ExportFormat, string> = {
-  png: 'image/png',
-  jpeg: 'image/jpeg',
-  webp: 'image/webp',
-  bmp: 'image/bmp',
-};
-
-const FORMAT_EXT: Record<ExportFormat, string> = {
-  png: 'png',
-  jpeg: 'jpg',
-  webp: 'webp',
-  bmp: 'bmp',
-};
-
-function downloadBlob(blob: Blob, ext = 'png'): void {
+function downloadBlob(blob: Blob, ext = 'png', filename = 'lopsy'): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `lopsy.${ext}`;
+  a.download = `${filename}.${ext}`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
   useEditorStore.getState().markClean();
 }
 
-function finishCanvasExport(canvas: HTMLCanvasElement, width: number, height: number, format: ExportFormat): void {
+function finishCanvasExport(
+  canvas: HTMLCanvasElement,
+  width: number,
+  height: number,
+  format: ExportFormat,
+  quality: number,
+  filename: string,
+): void {
   const mimeType = FORMAT_MIME[format];
   const ext = FORMAT_EXT[format];
+  const qualityFraction = qualityToFraction(quality);
 
   // BMP is encoded on the JS side — no canvas.toBlob support
   if (format === 'bmp') {
     const ctx = canvas.getContext('2d', contextOptions);
     if (!ctx) return;
     const imageData = ctx.getImageData(0, 0, width, height);
-    downloadBlob(encodeBMP(imageData), ext);
+    downloadBlob(encodeBMP(imageData), ext, filename);
     return;
   }
 
@@ -180,18 +262,18 @@ function finishCanvasExport(canvas: HTMLCanvasElement, width: number, height: nu
         : format === 'jpeg'
           ? await addJpegComment(blob, METADATA_NOTE)
           : blob;
-    downloadBlob(tagged, ext);
+    downloadBlob(tagged, ext, filename);
   };
 
   // Prefer OffscreenCanvas.convertToBlob which passes colorSpace to the
-  // encoder, producing a color-space-aware blob.  Fall back to toBlob.
+  // encoder, producing a color-space-aware blob. Fall back to toBlob.
   if (typeof OffscreenCanvas !== 'undefined') {
     const offscreen = new OffscreenCanvas(width, height);
     const offCtx = offscreen.getContext('2d', contextOptions);
     if (offCtx) {
       offCtx.drawImage(canvas, 0, 0);
       offscreen
-        .convertToBlob({ type: mimeType, quality: 0.92, colorSpace: canvasColorSpace } as ImageEncodeOptions)
+        .convertToBlob({ type: mimeType, quality: qualityFraction, colorSpace: canvasColorSpace } as ImageEncodeOptions)
         .then(finishExport)
         .catch((err) => notifyError(`Failed to export: ${describeError(err)}`));
       return;
@@ -204,17 +286,18 @@ function finishCanvasExport(canvas: HTMLCanvasElement, width: number, height: nu
       return;
     }
     finishExport(blob).catch((err) => notifyError(`Failed to export: ${describeError(err)}`));
-  }, mimeType, 0.92);
+  }, mimeType, qualityFraction);
 }
-
 
 export const fileMenu: MenuDef = {
   label: 'File',
   items: [
-    { label: 'New', shortcut: '\u2318N', action: () => { if (confirmIfDirty()) useUIStore.getState().setShowNewDocumentModal(true); } },
-    { label: 'Open...', shortcut: '\u2318O', action: () => openFileFromDisk() },
+    { label: 'New', shortcut: '⌘N', action: () => { if (confirmIfDirty()) useUIStore.getState().setShowNewDocumentModal(true); } },
+    { label: 'Open...', shortcut: '⌘O', action: () => openFileFromDisk() },
     { separator: true, label: '' },
-    { label: 'Export PNG', shortcut: '\u21E7\u2318E', action: () => exportCanvas('png') },
+    { label: 'Export As…', shortcut: '⌥⇧⌘E', action: () => openExportDialogFn?.() },
+    { label: 'Quick Export PNG', shortcut: '⇧⌘E', action: () => exportCanvas('png') },
+    { separator: true, label: '' },
     { label: 'Export JPEG', action: () => exportCanvas('jpeg') },
     { label: 'Export WebP', action: () => exportCanvas('webp') },
     { label: 'Export BMP', action: () => exportCanvas('bmp') },
