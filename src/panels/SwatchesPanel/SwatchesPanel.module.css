@@ -1,0 +1,101 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 var(--space-1);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(22px, 1fr));
+  gap: 3px;
+  padding: var(--space-1) var(--space-1);
+}
+
+.swatchWrapper {
+  position: relative;
+}
+
+.swatch {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.swatch:hover {
+  transform: scale(1.15);
+  box-shadow: var(--shadow-sm);
+  z-index: 1;
+  position: relative;
+}
+
+.swatch:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+.empty {
+  padding: var(--space-3) var(--space-2);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-disabled);
+  text-align: center;
+}
+
+.renameInput {
+  width: 100%;
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  padding: 1px var(--space-1);
+  outline: none;
+}
+
+/* Context menu */
+.contextOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-popover) - 1);
+}
+
+.contextMenu {
+  position: fixed;
+  z-index: var(--z-popover);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  min-width: 120px;
+}
+
+.contextItem {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.contextItem:hover {
+  background: var(--color-bg-hover);
+}

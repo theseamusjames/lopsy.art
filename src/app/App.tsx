@@ -12,6 +12,7 @@ import { PathsPanel } from '../panels/PathsPanel/PathsPanel';
 import { NavigatorPanel } from '../panels/NavigatorPanel/NavigatorPanel';
 import { ChannelsPanel } from '../panels/ChannelsPanel/ChannelsPanel';
 import { ReferenceImagePanel } from '../panels/ReferenceImagePanel/ReferenceImagePanel';
+import { SwatchesPanel } from '../panels/SwatchesPanel/SwatchesPanel';
 import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
 import { MenuBar } from './MenuBar/MenuBar';
 import { OptionsBar } from './OptionsBar/OptionsBar';
@@ -274,6 +275,7 @@ export function App() {
                 {visiblePanels.has('info') && <InfoPanel />}
                 {visiblePanels.has('color') && <ColorPanel />}
                 {visiblePanels.has('channels') && <ChannelsPanel />}
+                {visiblePanels.has('swatches') && <SwatchesPanel />}
                 {visiblePanels.has('history') && <HistoryPanel />}
                 {visiblePanels.has('paths') && <PathsPanel />}
               </div>
