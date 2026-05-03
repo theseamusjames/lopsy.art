@@ -70,6 +70,9 @@ import type { PathAnchor, TextEditingState } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
 import type { BrushTipData } from '../types/brush';
 import type { Color } from '../types';
+import type { TextLayer } from '../types/layers';
+import type { StoredPath } from '../types/paths';
+import { renderTextOnPath } from '../tools/text/render-text-on-path';
 import { getTracked } from './sync-state';
 import { syncLayers } from './sync-layers';
 
@@ -386,6 +389,61 @@ export function flushLayerSync(state: {
   const engine = getEngine();
   if (!engine) return;
   syncLayers(engine, state.document.layers, state.document.layerOrder, state.dirtyLayerIds);
+}
+
+/**
+ * Re-render path-text layers (TextLayer.pathId is set) using Canvas2D composition.
+ * Called each frame; only uploads when the layer's content key has changed
+ * (text, font, color, or the path's anchors).
+ */
+export function syncPathTextLayers(
+  engine: Engine,
+  layers: readonly TextLayer[],
+  paths: readonly StoredPath[],
+  docWidth: number,
+  docHeight: number,
+): void {
+  const tracked = getTracked(engine);
+  if (!tracked.pathTextKeys) {
+    tracked.pathTextKeys = new Map<string, string>();
+  }
+
+  for (const layer of layers) {
+    if (!layer.pathId) continue;
+
+    const path = paths.find((p) => p.id === layer.pathId);
+    if (!path) continue;
+
+    // Build a cheap cache key from layer content + path anchors
+    const anchorSummary = path.anchors.map((a) => `${a.point.x},${a.point.y}`).join('|');
+    const key = [
+      layer.text,
+      layer.fontFamily,
+      layer.fontSize,
+      layer.fontWeight,
+      layer.fontStyle,
+      layer.color.r,
+      layer.color.g,
+      layer.color.b,
+      layer.color.a,
+      layer.letterSpacing,
+      path.closed,
+      anchorSummary,
+      docWidth,
+      docHeight,
+    ].join('\0');
+
+    if (tracked.pathTextKeys.get(layer.id) === key) continue;
+
+    const result = renderTextOnPath(layer, path.anchors, path.closed, docWidth, docHeight);
+    if (result) {
+      uploadLayerPixels(engine, layer.id, result.pixels, result.width, result.height, result.x, result.y);
+    } else {
+      // Empty result — clear the layer texture
+      uploadLayerPixels(engine, layer.id, new Uint8Array(4), 1, 1, 0, 0);
+    }
+    tracked.pathTextKeys.set(layer.id, key);
+  }
 }
 
 /**

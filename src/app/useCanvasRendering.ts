@@ -19,6 +19,7 @@ import {
   syncMaskEditMode,
   syncBrushTip,
   syncTextLayers,
+  syncPathTextLayers,
   renderEngine,
   markAllLayersDirty,
 } from '../engine-wasm/engine-sync';
@@ -172,6 +173,15 @@ function renderFrameGpu(
       }
     },
   );
+
+  // Render path-text layers (TextLayer.pathId set) using Canvas2D composition.
+  const textLayersWithPath = layers.filter(
+    (l): l is import('../types').TextLayer => l.type === 'text' && !!(l as import('../types').TextLayer).pathId,
+  );
+  if (textLayersWithPath.length > 0) {
+    syncPathTextLayers(engine, textLayersWithPath, editorState.paths, doc.width, doc.height);
+  }
+
   syncSelection(engine, selection);
   syncGrid(engine, showGrid, gridSize);
   syncRulers(engine, showRulers);

@@ -1,5 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useToolSettingsStore } from '../../tool-settings-store';
+import { useEditorStore } from '../../editor-store';
+import { useUIStore } from '../../ui-store';
 import { Slider } from '../../../components/Slider/Slider';
 import { FontPicker } from '../../../components/FontPicker/FontPicker';
 import { fontsByFamily } from '../../../utils/font-catalog';
@@ -43,6 +45,26 @@ export function TextOptions() {
   }, [textFontFamily]);
 
   const availableWeights = fontEntry?.weights ?? [400, 700];
+
+  // Path-on-text: the currently editing / active text layer + available paths
+  const textEditing = useUIStore((s) => s.textEditing);
+  const paths = useEditorStore((s) => s.paths);
+  const updateTextLayerProperties = useEditorStore((s) => s.updateTextLayerProperties);
+  const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
+  const layers = useEditorStore((s) => s.document.layers);
+
+  const editingLayerId = textEditing?.layerId ?? activeLayerId;
+  const editingLayer = layers.find((l) => l.id === editingLayerId && l.type === 'text');
+  const currentPathId = editingLayer?.type === 'text' ? (editingLayer.pathId ?? '') : '';
+
+  const handlePathChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      if (!editingLayerId) return;
+      const val = e.target.value;
+      updateTextLayerProperties(editingLayerId, { pathId: val || undefined });
+    },
+    [editingLayerId, updateTextLayerProperties],
+  );
 
   const handleFontChange = useCallback(
     (value: string) => {
@@ -133,6 +155,23 @@ export function TextOptions() {
       >
         <span className={decorationStyles.strikethroughIcon}>S</span>
       </button>
+      {paths.length > 0 && (
+        <>
+          <label className={styles.label} id="text-path-label">Path</label>
+          <select
+            className={styles.select}
+            value={currentPathId}
+            onChange={handlePathChange}
+            aria-labelledby="text-path-label"
+            aria-label="Text path"
+          >
+            <option value="">None</option>
+            {paths.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </>
+      )}
     </>
   );
 }
