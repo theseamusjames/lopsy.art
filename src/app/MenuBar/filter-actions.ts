@@ -40,6 +40,7 @@ export type FilterDialogId =
   | 'chromatic-aberration'
   | 'pixel-stretch'
   | 'lens-distortion'
+  | 'spherize'
   | 'bloom'
   | 'surface-blur'
   | 'pattern-fill'

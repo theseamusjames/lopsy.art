@@ -6,9 +6,18 @@ import { useEditorStore } from '../../app/editor-store';
 import { docScaledMax } from '../../utils/slider-ranges';
 import styles from './FilterDialog.module.css';
 
-interface FilterParam {
+interface FilterParamSelect {
   key: string;
   label: string;
+  type: 'select';
+  options: { label: string; value: number }[];
+  defaultValue: number;
+}
+
+interface FilterParamSlider {
+  key: string;
+  label: string;
+  type?: 'slider';
   min: number;
   max: number;
   step?: number;
@@ -16,6 +25,8 @@ interface FilterParam {
   /** When 'doc', max scales to 1.5x max(docW, docH) capped at 5000, with `max` as the floor. */
   dynamicMax?: 'doc';
 }
+
+type FilterParam = FilterParamSlider | FilterParamSelect;
 
 interface FilterDialogProps {
   title: string;
@@ -126,6 +137,22 @@ export function FilterDialog({ title, params, showRegenerate, onApply, onCancel,
         </div>
         <div className={styles.body}>
           {params.map((param) => {
+            if (param.type === 'select') {
+              return (
+                <div key={param.key} className={styles.paramRow}>
+                  <label className={styles.paramLabel}>{param.label}</label>
+                  <select
+                    className={styles.paramSelect}
+                    value={values[param.key] ?? param.defaultValue}
+                    onChange={(e) => handleChange(param.key, Number(e.target.value))}
+                  >
+                    {param.options.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            }
             const max = param.dynamicMax === 'doc'
               ? docScaledMax(docWidth, docHeight, param.max)
               : param.max;

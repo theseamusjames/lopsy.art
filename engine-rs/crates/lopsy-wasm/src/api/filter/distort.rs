@@ -1,4 +1,4 @@
-//! Distortion filters: mesh warp, liquify warp.
+//! Distortion filters: mesh warp, liquify warp, spherize/pinch.
 
 use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
@@ -240,4 +240,26 @@ pub fn liquify_release(engine: &mut Engine) {
     if let Some(tex) = engine.inner.liquify_disp_texture.take() {
         engine.inner.texture_pool.release(tex);
     }
+}
+
+/// Spherize / Pinch radial distortion.
+///
+/// - `amount`: -1.0 (full pinch) to +1.0 (full spherize)
+/// - `mode`: 0 = normal (radial), 1 = horizontal only, 2 = vertical only
+#[wasm_bindgen(js_name = "filterSpherize")]
+pub fn filter_spherize(engine: &mut Engine, layer_id: &str, amount: f32, mode: u32) {
+    let amount = amount.clamp(-1.0, 1.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.spherize,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_amount") {
+                gl.uniform1f(Some(&loc), amount);
+            }
+            if let Some(loc) = shader.location(gl, "u_mode") {
+                gl.uniform1i(Some(&loc), mode as i32);
+            }
+        },
+    );
 }

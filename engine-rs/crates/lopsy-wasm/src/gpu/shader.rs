@@ -60,6 +60,7 @@ pub const OIL_PAINT_FRAG: &str = include_str!("shaders/filters/oil_paint.glsl");
 pub const CHROMATIC_ABERRATION_FRAG: &str = include_str!("shaders/filters/chromatic_aberration.glsl");
 pub const PIXEL_STRETCH_FRAG: &str = include_str!("shaders/filters/pixel_stretch.glsl");
 pub const LENS_DISTORTION_FRAG: &str = include_str!("shaders/filters/lens_distortion.glsl");
+pub const SPHERIZE_FRAG: &str = include_str!("shaders/filters/spherize.glsl");
 pub const PATTERN_FILL_FRAG: &str = include_str!("shaders/filters/pattern_fill.glsl");
 pub const MESH_WARP_FRAG: &str = include_str!("shaders/filters/mesh_warp.glsl");
 pub const LIQUIFY_WARP_FRAG: &str = include_str!("shaders/filters/liquify_warp.glsl");
@@ -231,6 +232,7 @@ pub struct ShaderPrograms {
     pub chromatic_aberration: ShaderProgram,
     pub pixel_stretch: ShaderProgram,
     pub lens_distortion: ShaderProgram,
+    pub spherize: ShaderProgram,
     pub pattern_fill: ShaderProgram,
     pub mesh_warp: ShaderProgram,
     pub liquify_warp: ShaderProgram,
@@ -321,6 +323,7 @@ impl ShaderPrograms {
             chromatic_aberration: compile_program(gl, v, CHROMATIC_ABERRATION_FRAG)?,
             pixel_stretch: compile_program(gl, v, PIXEL_STRETCH_FRAG)?,
             lens_distortion: compile_program(gl, v, LENS_DISTORTION_FRAG)?,
+            spherize: compile_program(gl, v, SPHERIZE_FRAG)?,
             pattern_fill: compile_program(gl, v, PATTERN_FILL_FRAG)?,
             mesh_warp: compile_program(gl, v, MESH_WARP_FRAG)?,
             liquify_warp: compile_program(gl, v, LIQUIFY_WARP_FRAG)?,

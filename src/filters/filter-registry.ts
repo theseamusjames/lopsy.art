@@ -20,6 +20,7 @@ import { oilPaint } from './oil-paint';
 import { chromaticAberration } from './chromatic-aberration';
 import { pixelStretch } from './pixel-stretch';
 import { lensDistortion } from './lens-distortion';
+import { spherize } from './spherize';
 import { bloom } from './bloom';
 import { tiltShiftBlur } from './tilt-shift-blur';
 import { emboss } from './emboss';
@@ -51,6 +52,7 @@ const allFilters: FilterDefinition[] = [
   chromaticAberration,
   pixelStretch,
   lensDistortion,
+  spherize,
   bloom,
   tiltShiftBlur,
   emboss,
