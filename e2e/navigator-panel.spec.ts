@@ -90,16 +90,13 @@ test.describe('Navigator Panel', () => {
     const boxBefore = await indicator.boundingBox();
     expect(boxBefore).not.toBeNull();
 
-    // Pan by holding space and dragging
-    await page.keyboard.down('Space');
-    const canvasBox = await container.boundingBox();
-    const cx = canvasBox!.x + canvasBox!.width / 2;
-    const cy = canvasBox!.y + canvasBox!.height / 2;
-    await page.mouse.move(cx, cy);
-    await page.mouse.down();
-    await page.mouse.move(cx + 80, cy + 60, { steps: 10 });
-    await page.mouse.up();
-    await page.keyboard.up('Space');
+    // Set pan via store — no UI path for programmatic pan by a known amount
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { setPan: (x: number, y: number) => void };
+      };
+      store.getState().setPan(150, 100);
+    });
 
     await page.waitForTimeout(100);
 
