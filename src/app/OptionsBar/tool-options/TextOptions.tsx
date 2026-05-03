@@ -41,6 +41,26 @@ export function TextOptions() {
   const setTextUnderline = useToolSettingsStore((s) => s.setTextUnderline);
   const setTextStrikethrough = useToolSettingsStore((s) => s.setTextStrikethrough);
 
+  // Path-on-text: the currently editing / active text layer + available paths
+  const textEditing = useUIStore((s) => s.textEditing);
+  const paths = useEditorStore((s) => s.paths);
+  const updateTextLayerProperties = useEditorStore((s) => s.updateTextLayerProperties);
+  const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
+  const layers = useEditorStore((s) => s.document.layers);
+
+  const editingLayerId = textEditing?.layerId ?? activeLayerId;
+  const editingLayer = layers.find((l) => l.id === editingLayerId && l.type === 'text');
+  const currentPathId = editingLayer?.type === 'text' ? (editingLayer.pathId ?? '') : '';
+
+  const handlePathChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      if (!editingLayerId) return;
+      const val = e.target.value;
+      updateTextLayerProperties(editingLayerId, { pathId: val || undefined });
+    },
+    [editingLayerId, updateTextLayerProperties],
+  );
+
   const fontEntry = useMemo(() => {
     const family = extractFamilyName(textFontFamily);
     return fontsByFamily.get(family);
