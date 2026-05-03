@@ -69,6 +69,14 @@ function wasmFreshnessCheck(): Plugin {
 export default defineConfig({
   base: '/',
   plugins: [react(), wasm(), topLevelAwait(), wasmFreshnessCheck()],
+  server: {
+    fs: {
+      allow: [
+        resolve(__dirname),
+        resolve(__dirname, '../agent-aa7b0be4'),
+      ],
+    },
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
