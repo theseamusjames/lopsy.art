@@ -1,5 +1,6 @@
 import { useEditorStore } from '../../editor-store';
 import { createRectSelection, invertSelection } from '../../../selection/selection';
+import { selectionToPath } from '../../../selection/selection-to-path';
 import type { MenuDef } from './types';
 
 export type SelectDialogId = 'grow' | 'shrink' | 'feather';
@@ -21,6 +22,15 @@ export function invertSelectionAction(): void {
   state.setSelection({ x: 0, y: 0, width, height }, inverted, sel.maskWidth, sel.maskHeight);
 }
 
+export function selectionToPathAction(): void {
+  const state = useEditorStore.getState();
+  const sel = state.selection;
+  if (!sel.active || !sel.mask) return;
+  const anchors = selectionToPath(sel.mask, sel.maskWidth, sel.maskHeight);
+  if (anchors.length === 0) return;
+  state.addPath(anchors, true);
+}
+
 export function createSelectMenu(showDialog: (id: SelectDialogId) => void): MenuDef {
   return {
     label: 'Select',
@@ -32,6 +42,12 @@ export function createSelectMenu(showDialog: (id: SelectDialogId) => void): Menu
       { label: 'Grow…', action: () => showDialog('grow') },
       { label: 'Shrink…', action: () => showDialog('shrink') },
       { label: 'Feather…', action: () => showDialog('feather') },
+      { separator: true, label: '' },
+      {
+        label: 'Selection → Path',
+        action: () => selectionToPathAction(),
+        disabled: !useEditorStore.getState().selection.active,
+      },
     ],
   };
 }
