@@ -3,12 +3,15 @@ import { FilterDialog } from '../../components/FilterDialog/FilterDialog';
 import { NoiseDialog, FillNoiseDialog } from '../../components/FilterDialog/NoiseDialog';
 import { PatternFillDialog } from '../../components/PatternFillDialog/PatternFillDialog';
 import { ExportDialog } from '../../components/ExportDialog/ExportDialog';
+import { TileOffsetDialog } from '../../components/TileOffsetDialog/TileOffsetDialog';
+import type { TileOffsetSettings } from '../../components/TileOffsetDialog/TileOffsetDialog';
 import {
   type FilterDialogId,
   getFilterDialogConfig,
   applyGenericFilter,
   applyAddNoise,
   applyFillWithNoise,
+  applyTileOffsetFilter,
   beginFilterPreview,
   previewGenericFilter,
   cancelFilterPreviewSession,
@@ -146,6 +149,11 @@ export function MenuBar() {
     setActiveDialog(null);
   }, []);
 
+  const handleTileOffsetApply = useCallback((settings: TileOffsetSettings) => {
+    applyTileOffsetFilter(settings.offsetX, settings.offsetY, settings.wrap);
+    setActiveDialog(null);
+  }, []);
+
   useEffect(() => {
     if (openMenu === null) return;
     const handleClick = (e: MouseEvent) => {
@@ -220,7 +228,11 @@ export function MenuBar() {
     setSelectDialog(null);
   }, [selectDialog]);
 
-  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill'
+  const filterDef = activeDialog
+    && activeDialog !== 'add-noise'
+    && activeDialog !== 'fill-noise'
+    && activeDialog !== 'pattern-fill'
+    && activeDialog !== 'tile-offset'
     ? getFilterDialogConfig(activeDialog)
     : null;
 
@@ -292,6 +304,12 @@ export function MenuBar() {
         <FillNoiseDialog
           title="Fill with Noise"
           onApply={handleFillNoiseApply}
+          onCancel={handleDialogCancel}
+        />
+      )}
+      {activeDialog === 'tile-offset' && (
+        <TileOffsetDialog
+          onApply={handleTileOffsetApply}
           onCancel={handleDialogCancel}
         />
       )}

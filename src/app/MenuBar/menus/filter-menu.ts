@@ -30,6 +30,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { separator: true, label: '' },
       { label: 'Bloom...', action: () => showFilterDialog('bloom') },
       { label: 'Voronoi...', action: () => showFilterDialog('voronoi') },
+      { label: 'Offset...', action: () => showFilterDialog('tile-offset') },
       { separator: true, label: '' },
       { label: 'Add Noise...', action: () => showFilterDialog('add-noise') },
       { label: 'Fill with Noise...', action: () => showFilterDialog('fill-noise') },

@@ -45,7 +45,8 @@ export type FilterDialogId =
   | 'pattern-fill'
   | 'emboss'
   | 'voronoi'
-  | 'fibers';
+  | 'fibers'
+  | 'tile-offset';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;
@@ -207,4 +208,8 @@ export function applyFindEdges(): void {
   filterFindEdges(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
+}
+
+export function applyTileOffsetFilter(offsetX: number, offsetY: number, wrap: boolean): void {
+  applyGenericFilter('tile-offset', { offsetX, offsetY, wrap: wrap ? 1 : 0 });
 }
