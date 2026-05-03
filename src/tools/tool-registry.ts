@@ -13,6 +13,7 @@ import { handleSpongeDown, handleSpongeMove, handleSpongeUp } from './sponge/spo
 import { handleSmudgeDown, handleSmudgeMove } from './smudge/smudge-interaction';
 import { handleStampDown, handleStampMove } from './stamp/stamp-interaction';
 import { handleHealingDown, handleHealingMove } from './healing/healing-interaction';
+import { handleHistoryBrushDown, handleHistoryBrushMove, handleHistoryBrushUp } from './history-brush/history-brush-interaction';
 import { handleTextDown, handleTextMove, handleTextUp, commitTextEditing } from './text/text-interaction';
 import { handleCropDown, handleCropMove, handleCropUp } from './crop/crop-interaction';
 import { handlePathDown, handlePathMove, handlePathUp } from './path/path-interaction';
@@ -35,6 +36,7 @@ import { ShapeOptions } from '../app/OptionsBar/tool-options/ShapeOptions';
 import { GradientOptions } from '../app/OptionsBar/tool-options/GradientOptions';
 import { StampOptions } from '../app/OptionsBar/tool-options/StampOptions';
 import { HealingOptions } from './healing/HealingOptions';
+import { HistoryBrushOptions } from './history-brush/HistoryBrushOptions';
 import { PathOptions } from '../app/OptionsBar/tool-options/PathOptions';
 import { TextOptions } from '../app/OptionsBar/tool-options/TextOptions';
 import { MagneticLassoOptions } from '../app/OptionsBar/tool-options/MagneticLassoOptions';
@@ -331,6 +333,18 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
       down: (ctx) => handleSprayDown(ctx),
       move: (ctx, state) => handleSprayMove(ctx, state),
       up: () => handleSprayUp(),
+    },
+  },
+  'history-brush': {
+    id: 'history-brush',
+    label: 'History Brush',
+    shortcut: 'y',
+    optionsComponent: HistoryBrushOptions,
+    isPaint: true,
+    handler: {
+      down: (ctx) => handleHistoryBrushDown(ctx),
+      move: (ctx, state) => handleHistoryBrushMove(state, ctx),
+      up: (ctx, state) => handleHistoryBrushUp(ctx, state),
     },
   },
 };

@@ -153,10 +153,13 @@ interface UIState {
   cursorPosition: Point;
   cursorOnCanvas: boolean;
   gradientPreview: { start: Point; end: Point } | null;
+  /** Index into undoStack (1-based, 0 = initial state) for the history brush source. null = unset. */
+  historyBrushSourceIndex: number | null;
   setCursorPosition: (pos: Point) => void;
   setCursorOnCanvas: (onCanvas: boolean) => void;
   setMaskEditMode: (mode: boolean) => void;
   toggleQuickMaskMode: () => void;
+  setHistoryBrushSourceIndex: (index: number | null) => void;
   /** Open a modal, replacing any that was already open. */
   openModal: (next: ModalState) => void;
   /** Close whatever modal is open. */
@@ -284,10 +287,12 @@ export const useUIStore = create<UIState>((set, get) => ({
   setAdjustments: (adj) => set({ adjustments: adj }),
   setAdjustmentsEnabled: (enabled) => set({ adjustmentsEnabled: enabled }),
   gradientPreview: null,
+  historyBrushSourceIndex: null,
   setCursorPosition: (pos) => set({ cursorPosition: pos }),
   setCursorOnCanvas: (onCanvas) => set({ cursorOnCanvas: onCanvas }),
   setMaskEditMode: (mode) => set({ maskEditMode: mode }),
   toggleQuickMaskMode: () => set((state) => ({ isQuickMaskMode: !state.isQuickMaskMode })),
+  setHistoryBrushSourceIndex: (index) => set({ historyBrushSourceIndex: index }),
 
   // ─── Modal slot ────────────────────────────────────────────────────────
   openModal: (next) => set({ modal: next }),

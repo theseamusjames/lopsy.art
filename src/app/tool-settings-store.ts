@@ -475,6 +475,9 @@ interface ToolSettings {
   brushTextureBlendMode: BrushTextureBlendMode;
   brushTextureScale: number;
   brushTextures: BrushTextureData[];
+  historyBrushSize: number;
+  historyBrushOpacity: number;
+  historyBrushHardness: number;
   presets: BrushPreset[];
   activePresetId: string | null;
   activeSubBrushes: SubBrush[];
@@ -491,6 +494,10 @@ interface ToolSettings {
   setBrushTextureScale: (scale: number) => void;
   addBrushTexture: (texture: BrushTextureData) => void;
   removeBrushTexture: (id: string) => void;
+  setHistoryBrushSize: (size: number) => void;
+  /** History Brush opacity in **percent**, range `1–100`. */
+  setHistoryBrushOpacity: (opacity: number) => void;
+  setHistoryBrushHardness: (hardness: number) => void;
   setSpraySize: (size: number) => void;
   setSprayDensity: (density: number) => void;
   /** Spray opacity in **percent**, range `1–100` (not normalised `0–1`). */
@@ -678,6 +685,9 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     { r: 255, g: 130, b: 0,   a: 1 },
     { r: 0,   g: 200, b: 200, a: 1 },
   ],
+  historyBrushSize: 20,
+  historyBrushOpacity: 100,
+  historyBrushHardness: 80,
   spraySize: 40,
   sprayDensity: 20,
   sprayOpacity: 60,
@@ -712,6 +722,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     brushTextures: s.brushTextures.filter((t) => t.id !== id),
     brushTextureData: s.brushTextureData?.id === id ? null : s.brushTextureData,
   })),
+  setHistoryBrushSize: (size) => set({ historyBrushSize: Math.max(1, Math.min(5000, size)) }),
+  setHistoryBrushOpacity: (opacity) => {
+    warnIfNormalisedOpacity('setHistoryBrushOpacity', opacity);
+    set({ historyBrushOpacity: Math.max(1, Math.min(100, opacity)) });
+  },
+  setHistoryBrushHardness: (hardness) => set({ historyBrushHardness: Math.max(0, Math.min(100, hardness)) }),
   setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(5000, size)) }),
   setSprayDensity: (density) => set({ sprayDensity: Math.max(1, Math.min(100, density)) }),
   setSprayOpacity: (opacity) => {

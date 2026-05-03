@@ -19,6 +19,7 @@ import {
   SprayCan,
   Bandage,
   Droplets,
+  History,
 } from 'lucide-react';
 import { IconButton } from '../components/IconButton/IconButton';
 import { useUIStore } from '../app/ui-store';
@@ -88,6 +89,7 @@ const toolGroups: ToolDef[][] = [
   ],
   [
     { id: 'brush', icon: <Paintbrush size={ICON_SIZE} />, label: 'Brush (B)' },
+    { id: 'history-brush', icon: <History size={ICON_SIZE} />, label: 'History Brush (Y)' },
     { id: 'pencil', icon: <Pen size={ICON_SIZE} />, label: 'Pencil (N)' },
     { id: 'spray', icon: <SprayCan size={ICON_SIZE} />, label: 'Spray (J)' },
     { id: 'eraser', icon: <Eraser size={ICON_SIZE} />, label: 'Eraser (E)' },

@@ -290,6 +290,7 @@ const TOOL_SHORTCUTS: Record<string, string> = {
   eyedropper: 'i', stamp: 's', dodge: 'o', sponge: 'y', smudge: 'r', spray: 'j',
   'marquee-rect': 'm', lasso: 'l', wand: 'w', 'quick-select': 'q',
   shape: 'u', text: 't', crop: 'c', path: 'p',
+  'history-brush': 'y',
 };
 
 export async function selectTool(page: Page, toolId: string): Promise<void> {
