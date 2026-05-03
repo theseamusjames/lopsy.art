@@ -14,3 +14,4 @@ pub mod compress;
 pub mod decode;
 pub mod dng;
 pub mod psd;
+pub mod text_types;

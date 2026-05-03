@@ -90,6 +90,9 @@ pub const MARCHING_ANTS_FRAG: &str = include_str!("shaders/selection/marching_an
 pub const COLOR_CONVERT_FRAG: &str = include_str!("shaders/color/color_convert.glsl");
 pub const TONEMAP_FRAG: &str = include_str!("shaders/color/tonemap.glsl");
 
+// Text
+pub const TEXT_GLYPH_FRAG: &str = include_str!("shaders/text/text_glyph.glsl");
+
 pub struct ShaderProgram {
     pub program: WebGlProgram,
     uniforms: RefCell<HashMap<String, Option<WebGlUniformLocation>>>,
@@ -238,6 +241,8 @@ pub struct ShaderPrograms {
     // Color
     pub color_convert: ShaderProgram,
     pub tonemap: ShaderProgram,
+    // Text
+    pub text_glyph: ShaderProgram,
 }
 
 impl ShaderPrograms {
@@ -314,6 +319,8 @@ impl ShaderPrograms {
             // Color
             color_convert: compile_program(gl, v, COLOR_CONVERT_FRAG)?,
             tonemap: compile_program(gl, v, TONEMAP_FRAG)?,
+            // Text
+            text_glyph: compile_program(gl, v, TEXT_GLYPH_FRAG)?,
         })
     }
 }

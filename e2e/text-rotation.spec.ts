@@ -44,13 +44,13 @@ test('text layer rotation: content stays centered and does not scale', async ({ 
 
   await page.screenshot({ path: 'e2e/screenshots/text-rotation-02-committed.png' });
 
-  // Check the text layer was rasterized
+  // Check the text layer type
   const layers = await page.evaluate(() => {
     const s = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { document: { layers: Array<{ id: string; x: number; y: number; width: number; height: number; type: string; name: string }> } };
+      getState: () => { document: { layers: Array<{ id: string; x: number; y: number; width: number | null; height?: number; fontSize?: number; type: string; name: string }> } };
     };
     return s.getState().document.layers.map(l => ({
-      id: l.id, x: l.x, y: l.y, width: l.width, height: l.height, type: l.type, name: l.name,
+      id: l.id, x: l.x, y: l.y, width: l.width, height: l.height, fontSize: l.fontSize, type: l.type, name: l.name,
     }));
   });
   const textLayer = layers.find(l => l.name.startsWith('Text'));
@@ -58,19 +58,22 @@ test('text layer rotation: content stays centered and does not scale', async ({ 
   console.log('Text layer:', JSON.stringify(textLayer));
 
   // If no text layer, the text didn't render (font missing in headless) — skip
-  if (!textLayer || textLayer.width === 0) {
-    console.log('SKIP: Text layer not found or empty (font likely missing in headless)');
+  if (!textLayer) {
+    console.log('SKIP: Text layer not found (font likely missing in headless)');
     return;
   }
-  expect(textLayer.type).toBe('raster');
+  expect(textLayer.type).toBe('text');
 
   // --- Step 3: Select the text layer and marquee around it ---
   await page.locator(`[data-layer-id="${textLayer.id}"]`).click();
   await page.waitForTimeout(100);
 
   const m = 10;
+  // TextLayer has no height property; use a generous estimate based on fontSize
+  const estimatedWidth = (textLayer.width ?? textLayer.fontSize * 8) + m * 2;
+  const estimatedHeight = textLayer.fontSize * 2 + m * 2;
   const s1 = d2s(textLayer.x - m, textLayer.y - m);
-  const s2 = d2s(textLayer.x + textLayer.width + m, textLayer.y + textLayer.height + m);
+  const s2 = d2s(textLayer.x + estimatedWidth, textLayer.y + estimatedHeight);
   await page.mouse.move(s1.x, s1.y);
   await page.mouse.down();
   await page.mouse.move(s2.x, s2.y, { steps: 5 });

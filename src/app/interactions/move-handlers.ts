@@ -83,8 +83,18 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       setSelectionMask(engine, maskBytes, selNow.maskWidth, selNow.maskHeight);
 
       // First move: float the selection on the GPU
-      floatSelection(engine, activeLayerId);
+      const floatBoundsMove = floatSelection(engine, activeLayerId);
       compositeFloat(engine, 0, 0);
+
+      // Sync expanded position to Zustand (text layers expand to diagonal size).
+      if (floatBoundsMove.length >= 4) {
+        const newX = floatBoundsMove[0]!;
+        const newY = floatBoundsMove[1]!;
+        const curLayer = useEditorStore.getState().document.layers.find(l => l.id === activeLayerId);
+        if (curLayer && (curLayer.x !== newX || curLayer.y !== newY)) {
+          useEditorStore.getState().updateLayerPosition(activeLayerId, newX, newY);
+        }
+      }
 
       // Option+drag: restore the float base so selected pixels remain in
       // place — floatSelection cuts them, but option means "copy, don't cut".
@@ -257,8 +267,18 @@ export function handleNudgeMove(
       const maskBytes = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
       setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
 
-      floatSelection(engine, activeId);
+      const floatBoundsDup = floatSelection(engine, activeId);
       compositeFloat(engine, 0, 0);
+
+      // Sync expanded position to Zustand (text layers expand to diagonal size).
+      if (floatBoundsDup.length >= 4) {
+        const newX = floatBoundsDup[0]!;
+        const newY = floatBoundsDup[1]!;
+        const curLayer = useEditorStore.getState().document.layers.find(l => l.id === activeId);
+        if (curLayer && (curLayer.x !== newX || curLayer.y !== newY)) {
+          useEditorStore.getState().updateLayerPosition(activeId, newX, newY);
+        }
+      }
 
       clearJsPixelData(activeId);
 

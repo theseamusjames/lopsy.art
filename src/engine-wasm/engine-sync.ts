@@ -60,10 +60,16 @@ import {
   uploadBrushTip,
   clearBrushTip,
   setBrushTipState,
+  setTextLayerContent,
+  renderTextLayer,
+  getRenderedTextPixels,
+  uploadLayerPixels,
+  fillWithColor,
 } from './wasm-bridge';
-import type { PathAnchor } from '../app/ui-store';
+import type { PathAnchor, TextEditingState } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
 import type { BrushTipData } from '../types/brush';
+import type { Color } from '../types';
 import { getTracked } from './sync-state';
 import { syncLayers } from './sync-layers';
 
@@ -373,4 +379,66 @@ export function flushLayerSync(state: {
   const engine = getEngine();
   if (!engine) return;
   syncLayers(engine, state.document.layers, state.document.layerOrder, state.dirtyLayerIds);
+}
+
+/**
+ * Sync the active text editing layer to the WASM engine for live preview.
+ * Replaces the JS canvas rasterization path that previously used CanvasRenderingContext2D.
+ * Calls setTextLayerContent → renderTextLayer → getRenderedTextPixels → uploadLayerPixels.
+ *
+ * @param onPositionChange - called when the rendered canvas offset changes so the
+ *   caller can update the Zustand layer.x/y to match the GPU texture position.
+ */
+export function syncTextLayers(
+  engine: Engine,
+  textEditing: TextEditingState | null,
+  fontSize: number,
+  fontFamily: string,
+  fontWeight: number,
+  fontStyle: string,
+  textAlign: string,
+  color: Color,
+  onPositionChange: (layerId: string, x: number, y: number) => void,
+): void {
+  if (!textEditing) return;
+
+  // When text is empty, clear the layer texture so no stale glyph pixels remain.
+  if (textEditing.text.length === 0) {
+    fillWithColor(engine, textEditing.layerId, 0, 0, 0, 0);
+    return;
+  }
+
+  const { layerId, bounds, text } = textEditing;
+
+  const propsJson = JSON.stringify({
+    text,
+    fontFamily,
+    fontSize,
+    fontWeight,
+    fontStyle,
+    color: [color.r / 255, color.g / 255, color.b / 255, color.a],
+    lineHeight: 1.4,
+    letterSpacing: 0,
+    textAlign,
+    areaWidth: bounds.width ?? null,
+  });
+
+  setTextLayerContent(engine, layerId, propsJson);
+
+  const boundsResult = renderTextLayer(engine, layerId);
+  if (boundsResult.length !== 4) return;
+
+  const width = boundsResult[0]!;
+  const height = boundsResult[1]!;
+  const offsetX = boundsResult[2]!;
+  const offsetY = boundsResult[3]!;
+
+  const pixels = getRenderedTextPixels(engine, layerId);
+  if (pixels.length === 0) return;
+
+  const desiredX = bounds.x + offsetX;
+  const desiredY = bounds.y + offsetY;
+
+  uploadLayerPixels(engine, layerId, pixels, width, height, desiredX, desiredY);
+  onPositionChange(layerId, desiredX, desiredY);
 }

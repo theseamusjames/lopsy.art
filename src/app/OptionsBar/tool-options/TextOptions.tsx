@@ -3,7 +3,7 @@ import { useToolSettingsStore } from '../../tool-settings-store';
 import { Slider } from '../../../components/Slider/Slider';
 import { FontPicker } from '../../../components/FontPicker/FontPicker';
 import { fontsByFamily } from '../../../utils/font-catalog';
-import { extractFamilyName, loadGoogleFont } from '../../../utils/font-loader';
+import { extractFamilyName, loadGoogleFont, loadFontBinaryToEngine } from '../../../utils/font-loader';
 import type { FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
 
@@ -53,6 +53,14 @@ export function TextOptions() {
         }
         if (entry.source === 'google') {
           loadGoogleFont(family, entry.weights);
+          // Load binary for the currently selected weight so the engine can
+          // render this font natively. Other weights load on-demand below.
+          const targetWeight = entry.weights.includes(textFontWeight)
+            ? textFontWeight
+            : entry.weights.reduce((prev, curr) =>
+                Math.abs(curr - textFontWeight) < Math.abs(prev - textFontWeight) ? curr : prev,
+              );
+          loadFontBinaryToEngine(family, targetWeight);
         }
       }
     },
@@ -67,7 +75,14 @@ export function TextOptions() {
       <select
         className={styles.select}
         value={textFontWeight}
-        onChange={(e) => setTextFontWeight(Number(e.target.value))}
+        onChange={(e) => {
+          const w = Number(e.target.value);
+          setTextFontWeight(w);
+          if (fontEntry?.source === 'google') {
+            const family = extractFamilyName(textFontFamily);
+            loadFontBinaryToEngine(family, w);
+          }
+        }}
         aria-label="Font weight"
       >
         {availableWeights.map((w) => (

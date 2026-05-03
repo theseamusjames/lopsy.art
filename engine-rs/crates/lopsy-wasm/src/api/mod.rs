@@ -14,3 +14,4 @@ pub mod overlay;
 pub mod paint;
 pub mod psd;
 pub mod selection;
+pub mod text;

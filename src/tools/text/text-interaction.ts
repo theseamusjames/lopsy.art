@@ -4,10 +4,16 @@ import type { Point } from '../../types';
 import { useUIStore, type TextEditingState } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
-import { computeTextLayout, rasterizeText, type TextStyle } from './text';
 import { hitTestTextLayer } from './text-hit-test';
 import { createTextLayer } from '../../layers/layer-model';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
+import { getEngine } from '../../engine-wasm/engine-state';
+import {
+  setTextLayerContent,
+  renderTextLayer,
+  getRenderedTextPixels,
+  uploadLayerPixels,
+} from '../../engine-wasm/wasm-bridge';
 
 const TEXT_DRAG_THRESHOLD = 4;
 
@@ -43,28 +49,50 @@ export function commitTextEditing(): void {
   const toolSettings = useToolSettingsStore.getState();
   const textColor = toolSettings.foregroundColor;
 
+  // Explicitly render text to the GPU texture before pushHistory snapshots it.
+  // This ensures the snapshot contains the final text pixels regardless of
+  // whether the rAF-driven syncTextLayers loop had time to fire.
+  const areaWidth = editing.bounds.width;
+  let finalX = editing.bounds.x;
+  let finalY = editing.bounds.y;
+
+  const engine = getEngine();
+  if (engine) {
+    const propsJson = JSON.stringify({
+      text: editing.text,
+      fontFamily: toolSettings.textFontFamily,
+      fontSize: toolSettings.textFontSize,
+      fontWeight: toolSettings.textFontWeight,
+      fontStyle: toolSettings.textFontStyle,
+      color: [textColor.r / 255, textColor.g / 255, textColor.b / 255, textColor.a],
+      lineHeight: 1.4,
+      letterSpacing: 0,
+      textAlign: toolSettings.textAlign,
+      areaWidth: areaWidth ?? null,
+    });
+    setTextLayerContent(engine, editing.layerId, propsJson);
+    const boundsResult = renderTextLayer(engine, editing.layerId);
+    if (boundsResult.length === 4) {
+      const width = boundsResult[0]!;
+      const height = boundsResult[1]!;
+      const offsetX = boundsResult[2]!;
+      const offsetY = boundsResult[3]!;
+      const pixels = getRenderedTextPixels(engine, editing.layerId);
+      if (pixels.length > 0) {
+        finalX = editing.bounds.x + offsetX;
+        finalY = editing.bounds.y + offsetY;
+        uploadLayerPixels(engine, editing.layerId, pixels, width, height, finalX, finalY);
+      }
+    }
+  } else {
+    // Fallback: use position set by the last syncTextLayers call if engine unavailable.
+    const currentLayer = editorState.document.layers.find((l) => l.id === editing.layerId);
+    finalX = currentLayer?.x ?? editing.bounds.x;
+    finalY = currentLayer?.y ?? editing.bounds.y;
+  }
+
   editorState.pushHistory('Text');
   toolSettings.addRecentColor(textColor);
-
-  const style: TextStyle = {
-    fontSize: toolSettings.textFontSize,
-    fontFamily: toolSettings.textFontFamily,
-    fontWeight: toolSettings.textFontWeight,
-    fontStyle: toolSettings.textFontStyle,
-    color: textColor,
-    lineHeight: 1.4,
-    letterSpacing: 0,
-    textAlign: toolSettings.textAlign,
-  };
-
-  const areaWidth = editing.bounds.width;
-
-  // Rasterize onto a canvas sized to fit the rendered glyphs (with padding
-  // for antialiasing and descenders). The layout describes where the canvas
-  // should sit relative to the click anchor (bounds.x/y), so center / right
-  // alignment land their text at the click point and glyphs extending past
-  // the document edge are preserved instead of being silently clipped.
-  const { canvas: textCanvas, layout } = rasterizeText(editing.text, style, areaWidth);
 
   editorState.updateTextLayerProperties(editing.layerId, {
     text: editing.text,
@@ -75,29 +103,10 @@ export function commitTextEditing(): void {
     color: textColor,
     textAlign: toolSettings.textAlign,
     width: areaWidth,
-    x: editing.bounds.x + layout.offsetX,
-    y: editing.bounds.y + layout.offsetY,
+    x: finalX,
+    y: finalY,
     visible: true,
   });
-
-  // Convert to raster BEFORE uploading pixels so cropLayerToContent (called
-  // inside updateLayerPixelData) sees type:'raster' and trims transparent padding.
-  useEditorStore.setState((s) => ({
-    document: {
-      ...s.document,
-      layers: s.document.layers.map((l) =>
-        l.id === editing.layerId
-          ? ({ ...l, type: 'raster', width: layout.width, height: layout.height } as unknown as import('../../types').Layer)
-          : l,
-      ),
-    },
-  }));
-
-  const textCtx = textCanvas.getContext('2d');
-  if (textCtx) {
-    const imageData = textCtx.getImageData(0, 0, layout.width, layout.height);
-    editorState.updateLayerPixelData(editing.layerId, imageData);
-  }
 
   editorState.notifyRender();
 }
@@ -133,25 +142,41 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
 
     // Recover the original click anchor (which `bounds.x/y` represents during
     // editing) from the saved layer's top-left position. commitTextEditing
-    // shifts the layer by `layout.offset*` so that center / right alignment
-    // and descender padding can extend the rasterized canvas; we invert that
-    // shift here so re-editing preserves the click anchor semantics.
-    const hitStyle: TextStyle = {
-      fontSize: hitLayer.fontSize,
-      fontFamily: hitLayer.fontFamily,
-      fontWeight: hitLayer.fontWeight,
-      fontStyle: hitLayer.fontStyle,
-      color: hitLayer.color,
-      lineHeight: hitLayer.lineHeight,
-      letterSpacing: hitLayer.letterSpacing,
-      textAlign: hitLayer.textAlign,
-    };
-    const hitLayout = computeTextLayout(hitLayer.text, hitStyle, hitLayer.width);
+    // shifts the layer by the engine's offsetX/offsetY; we invert that shift
+    // here so re-editing preserves the click anchor semantics.
+    //
+    // Use the Rust engine for measurement — it uses the same layout/padding as
+    // commit time, whereas the JS canvas uses different padding (fontSize*0.5
+    // vs 2px), which would give wrong anchor recovery.
+    let boundsX = hitLayer.x;
+    let boundsY = hitLayer.y;
+    const reEditEngine = getEngine();
+    if (reEditEngine && hitLayer.text.trim().length > 0) {
+      const reEditPropsJson = JSON.stringify({
+        text: hitLayer.text,
+        fontFamily: hitLayer.fontFamily,
+        fontSize: hitLayer.fontSize,
+        fontWeight: hitLayer.fontWeight,
+        fontStyle: hitLayer.fontStyle,
+        color: [hitLayer.color.r / 255, hitLayer.color.g / 255, hitLayer.color.b / 255, hitLayer.color.a],
+        lineHeight: hitLayer.lineHeight,
+        letterSpacing: hitLayer.letterSpacing,
+        textAlign: hitLayer.textAlign,
+        areaWidth: hitLayer.width ?? null,
+      });
+      setTextLayerContent(reEditEngine, hitLayer.id, reEditPropsJson);
+      const boundsResult = renderTextLayer(reEditEngine, hitLayer.id);
+      if (boundsResult.length === 4) {
+        boundsX = hitLayer.x - (boundsResult[2] ?? 0);
+        boundsY = hitLayer.y - (boundsResult[3] ?? 0);
+      }
+    }
+
     const editingState: TextEditingState = {
       layerId: hitLayer.id,
       bounds: {
-        x: hitLayer.x - hitLayout.offsetX,
-        y: hitLayer.y - hitLayout.offsetY,
+        x: boundsX,
+        y: boundsY,
         width: hitLayer.width,
         height: null,
       },

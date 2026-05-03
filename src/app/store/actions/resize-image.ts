@@ -19,6 +19,16 @@ export function computeResizeImage(
   const newLayers: Layer[] = [];
 
   for (const layer of doc.layers) {
+    if (layer.type === 'text') {
+      // Text layers: scale position only — engine re-renders at new coordinates
+      newLayers.push({
+        ...layer,
+        x: Math.round(layer.x * scaleX),
+        y: Math.round(layer.y * scaleY),
+      } as Layer);
+      continue;
+    }
+
     if (layer.type !== 'raster') {
       newLayers.push(layer);
       continue;

@@ -16,6 +16,7 @@ import {
   parsePsd,
   decodeAndUploadPsdLayer,
   getPsdLayerMask,
+  getLayerTextureDimensions,
   initWasm,
 } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState, flushLayerSync } from '../engine-wasm/engine-sync';
@@ -136,8 +137,16 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
       blendMode: BLEND_MODE_TO_U8[layer.blendMode] ?? 0,
       x: Math.round(layer.x),
       y: Math.round(layer.y),
-      width: (layer.type === 'raster' || layer.type === 'shape') ? (layer as RasterLayer).width : 0,
-      height: (layer.type === 'raster' || layer.type === 'shape') ? (layer as RasterLayer).height : 0,
+      width: (layer.type === 'raster' || layer.type === 'shape')
+        ? (layer as RasterLayer).width
+        : layer.type === 'text' && engine
+          ? (getLayerTextureDimensions(engine, layer.id)[0] ?? 0)
+          : 0,
+      height: (layer.type === 'raster' || layer.type === 'shape')
+        ? (layer as RasterLayer).height
+        : layer.type === 'text' && engine
+          ? (getLayerTextureDimensions(engine, layer.id)[1] ?? 0)
+          : 0,
       clipToBelow: layer.clipToBelow,
       groupKind,
       effectsJson: hasEnabledEffects(layer.effects)

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, FolderPlus, GripVertical, Lock, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Unlock, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, FolderPlus, GripVertical, Lock, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Type, Unlock, X } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
@@ -35,6 +35,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const toggleLayerLock = useEditorStore((s) => s.toggleLayerLock);
   const renameLayer = useEditorStore((s) => s.renameLayer);
   const addGroup = useEditorStore((s) => s.addGroup);
+  const rasterizeTextLayer = useEditorStore((s) => s.rasterizeTextLayer);
   const toggleGroupCollapsed = useEditorStore((s) => s.toggleGroupCollapsed);
   const moveLayerToGroup = useEditorStore((s) => s.moveLayerToGroup);
   const rootGroupId = useEditorStore((s) => s.document.rootGroupId);
@@ -421,6 +422,17 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
               icon={<RectangleCircle size={16} />}
               label="Add Mask"
               onClick={() => addLayerMask(activeLayerId)}
+            />
+          );
+        })()}
+        {activeLayerId && (() => {
+          const activeLayer = layers.find((l) => l.id === activeLayerId);
+          if (!activeLayer || activeLayer.type !== 'text') return null;
+          return (
+            <IconButton
+              icon={<Type size={16} />}
+              label="Rasterize Layer"
+              onClick={() => rasterizeTextLayer()}
             />
           );
         })()}

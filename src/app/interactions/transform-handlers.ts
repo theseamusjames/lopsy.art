@@ -124,8 +124,20 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
       const maskBytes = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
       setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
 
-      floatSelection(engine, activeLayerId);
+      // floatSelection returns [new_x, new_y, fw, fh] — for text layers it
+      // expands the buffer to the diagonal size to prevent rotation clipping.
+      const floatBounds = floatSelection(engine, activeLayerId);
       compositeFloat(engine, 0, 0);
+
+      // Sync expanded position to Zustand so engine-sync doesn't override it.
+      if (floatBounds.length >= 4) {
+        const newX = floatBounds[0]!;
+        const newY = floatBounds[1]!;
+        const currentLayer = useEditorStore.getState().document.layers.find(l => l.id === activeLayerId);
+        if (currentLayer && (currentLayer.x !== newX || currentLayer.y !== newY)) {
+          useEditorStore.getState().updateLayerPosition(activeLayerId, newX, newY);
+        }
+      }
 
       clearJsPixelData(activeLayerId);
     }
