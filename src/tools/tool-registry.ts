@@ -19,6 +19,7 @@ import { handlePathDown, handlePathMove, handlePathUp } from './path/path-intera
 import { handleShapeDown, handleShapeMove, handleShapeUp } from './shape/shape-interaction';
 import { handleGradientDown, handleGradientMove, handleGradientUp } from './gradient/gradient-interaction';
 import { handleSprayDown, handleSprayMove, handleSprayUp } from './spray/spray-interaction';
+import { handleColorReplaceDown, handleColorReplaceMove } from './color-replace/color-replace-interaction';
 
 import { MoveOptions } from '../app/OptionsBar/tool-options/MoveOptions';
 import { BrushOptions } from '../app/OptionsBar/tool-options/BrushOptions';
@@ -40,6 +41,7 @@ import { TextOptions } from '../app/OptionsBar/tool-options/TextOptions';
 import { MagneticLassoOptions } from '../app/OptionsBar/tool-options/MagneticLassoOptions';
 import { CropOptions } from '../app/OptionsBar/tool-options/CropOptions';
 import { SprayOptions } from '../app/OptionsBar/tool-options/SprayOptions';
+import { ColorReplaceOptions } from './color-replace/ColorReplaceOptions';
 
 import { useToolSettingsStore } from '../app/tool-settings-store';
 
@@ -331,6 +333,16 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
       down: (ctx) => handleSprayDown(ctx),
       move: (ctx, state) => handleSprayMove(ctx, state),
       up: () => handleSprayUp(),
+    },
+  },
+  'color-replace': {
+    id: 'color-replace',
+    label: 'Color Replace',
+    optionsComponent: ColorReplaceOptions,
+    isPaint: true,
+    handler: {
+      down: (ctx) => handleColorReplaceDown(ctx),
+      move: (ctx, state) => handleColorReplaceMove(state, ctx.layerPos),
     },
   },
 };

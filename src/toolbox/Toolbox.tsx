@@ -4,6 +4,7 @@ import {
   Wand2,
   MousePointerClick,
   Paintbrush,
+  PaintbrushVertical,
   Pen,
   Eraser,
   PaintBucket,
@@ -90,6 +91,7 @@ const toolGroups: ToolDef[][] = [
     { id: 'brush', icon: <Paintbrush size={ICON_SIZE} />, label: 'Brush (B)' },
     { id: 'pencil', icon: <Pen size={ICON_SIZE} />, label: 'Pencil (N)' },
     { id: 'spray', icon: <SprayCan size={ICON_SIZE} />, label: 'Spray (J)' },
+    { id: 'color-replace', icon: <PaintbrushVertical size={ICON_SIZE} />, label: 'Color Replace' },
     { id: 'eraser', icon: <Eraser size={ICON_SIZE} />, label: 'Eraser (E)' },
   ],
   [

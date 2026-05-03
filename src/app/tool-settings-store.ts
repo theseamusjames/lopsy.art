@@ -460,6 +460,9 @@ interface ToolSettings {
   foregroundColor: Color;
   backgroundColor: Color;
   recentColors: readonly Color[];
+  colorReplaceSize: number;
+  colorReplaceTolerance: number;
+  colorReplaceOpacity: number;
   spraySize: number;
   sprayDensity: number;
   sprayOpacity: number;
@@ -491,6 +494,10 @@ interface ToolSettings {
   setBrushTextureScale: (scale: number) => void;
   addBrushTexture: (texture: BrushTextureData) => void;
   removeBrushTexture: (id: string) => void;
+  setColorReplaceSize: (size: number) => void;
+  setColorReplaceTolerance: (tolerance: number) => void;
+  /** Color Replace opacity in **percent**, range `1–100` (not normalised `0–1`). */
+  setColorReplaceOpacity: (opacity: number) => void;
   setSpraySize: (size: number) => void;
   setSprayDensity: (density: number) => void;
   /** Spray opacity in **percent**, range `1–100` (not normalised `0–1`). */
@@ -678,6 +685,9 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     { r: 255, g: 130, b: 0,   a: 1 },
     { r: 0,   g: 200, b: 200, a: 1 },
   ],
+  colorReplaceSize: 30,
+  colorReplaceTolerance: 32,
+  colorReplaceOpacity: 100,
   spraySize: 40,
   sprayDensity: 20,
   sprayOpacity: 60,
@@ -712,6 +722,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     brushTextures: s.brushTextures.filter((t) => t.id !== id),
     brushTextureData: s.brushTextureData?.id === id ? null : s.brushTextureData,
   })),
+  setColorReplaceSize: (size) => set({ colorReplaceSize: Math.max(1, Math.min(200, size)) }),
+  setColorReplaceTolerance: (tolerance) => set({ colorReplaceTolerance: Math.max(0, Math.min(255, tolerance)) }),
+  setColorReplaceOpacity: (opacity) => {
+    warnIfNormalisedOpacity('setColorReplaceOpacity', opacity);
+    set({ colorReplaceOpacity: Math.max(1, Math.min(100, opacity)) });
+  },
   setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(5000, size)) }),
   setSprayDensity: (density) => set({ sprayDensity: Math.max(1, Math.min(100, density)) }),
   setSprayOpacity: (opacity) => {

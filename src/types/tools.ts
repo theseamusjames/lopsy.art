@@ -23,7 +23,8 @@ export type ToolId =
   | 'crop'
   | 'path'
   | 'spray'
-  | 'healing';
+  | 'healing'
+  | 'color-replace';
 
 export interface PixelSurface {
   readonly width: number;
