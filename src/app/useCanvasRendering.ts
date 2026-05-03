@@ -253,7 +253,7 @@ function renderFrameGpu(
     }
     if (textEditing && !editingLayerIsPathText) {
       const ts = toolState;
-      const glyphPositions = Array.from(getGlyphPositions(engine, textEditing.layerId));
+      const glyphPositions = Array.from(getGlyphPositions(engine, textEditing.layerId)) as number[];
       renderTextEditOverlay(overlayCtx, textEditing, {
         fontSize: ts.textFontSize,
         fontFamily: ts.textFontFamily,

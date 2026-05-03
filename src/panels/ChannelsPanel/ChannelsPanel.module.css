@@ -1,0 +1,108 @@
+.panel {
+  padding: var(--space-1) 0;
+}
+
+.channelList {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.row:hover {
+  background: var(--color-bg-hover);
+}
+
+.rowActive {
+  background: var(--color-accent-subtle);
+}
+
+.rowActive .channelName {
+  color: var(--color-accent);
+}
+
+.rowDisabled {
+  opacity: 0.45;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-round);
+  flex-shrink: 0;
+}
+
+.dotRgb {
+  background: linear-gradient(135deg, #e06060 33%, #60c060 66%, #6090e0 100%);
+}
+
+.dotR {
+  background: #e06060;
+}
+
+.dotG {
+  background: #60c060;
+}
+
+.dotB {
+  background: #6090e0;
+}
+
+.dotA {
+  background: repeating-conic-gradient(#606060 0% 25%, #404040 0% 50%) 0 0 / 6px 6px;
+  border-radius: var(--radius-round);
+}
+
+.channelName {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.thumbnail {
+  width: 40px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #111;
+}
+
+.thumbnailCanvas {
+  width: 40px;
+  height: 20px;
+  display: block;
+  image-rendering: pixelated;
+}
+
+.visibilityBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+}
+
+.visibilityBtn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
