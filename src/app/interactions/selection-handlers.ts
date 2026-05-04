@@ -9,7 +9,6 @@ import {
   createEllipseSelection as tsCreateEllipseSelection,
   selectionBounds as tsSelectionBounds,
   getSelectionMaskValue,
-  featherSelection,
 } from '../../selection/selection';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
@@ -20,6 +19,8 @@ import {
   magneticLassoSnap as wasmMagneticLassoSnap,
   magneticLassoSnapPoint as wasmMagneticLassoSnapPoint,
   magneticLassoEnd as wasmMagneticLassoEnd,
+  setSelectionMask as wasmSetSelectionMask,
+  featherSelectionMask as wasmFeatherSelectionMask,
   hasFloat,
   dropFloat,
 } from '../../engine-wasm/wasm-bridge';
@@ -62,6 +63,16 @@ function makeMagneticSnapFn(): SnapFn {
     const flat = wasmMagneticLassoSnap(engine, from.x, from.y, to.x, to.y, radius, threshold);
     return pointsFromFloat32(flat);
   };
+}
+
+function applyGpuFeather(mask: Uint8ClampedArray, maskW: number, maskH: number): void {
+  const featherRadius = useToolSettingsStore.getState().marqueeFeather;
+  if (featherRadius <= 0) return;
+  const engine = getEngine();
+  if (!engine) return;
+  const bytes = new Uint8Array(mask.buffer, mask.byteOffset, mask.byteLength);
+  wasmSetSelectionMask(engine, bytes, maskW, maskH);
+  wasmFeatherSelectionMask(engine, featherRadius);
 }
 
 function updateMagneticLassoPreview(state: MagneticLassoState): void {
@@ -207,14 +218,11 @@ export function handleSelectionDown(
     const wandMaskRaw = wandGraduated
       ? wasmFloodFillGraduated(pixelData, docW, docH, cx, cy, wandTolerance, wandContiguous)
       : wasmFloodFill(pixelData, docW, docH, cx, cy, 0, 0, 0, 0, wandTolerance, wandContiguous);
-    let wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
-    const featherRadius = toolSettings.marqueeFeather;
-    if (featherRadius > 0) {
-      wandMask = featherSelection(wandMask, docW, docH, featherRadius);
-    }
+    const wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
     const wandBounds = selectionBounds(wandMask, docW, docH);
     if (wandBounds) {
       editorState.setSelection(wandBounds, wandMask, docW, docH);
+      applyGpuFeather(wandMask, docW, docH);
       useUIStore.getState().setTransform(createTransformState(wandBounds));
     }
     return undefined;
@@ -324,13 +332,9 @@ export function handleSelectionMove(
 
     if (w > 0 && h > 0) {
       const selRect = { x, y, width: w, height: h };
-      let mask = state.tool === 'marquee-rect'
+      const mask = state.tool === 'marquee-rect'
         ? createRectSelection(selRect, editorState.document.width, editorState.document.height)
         : createEllipseSelection(selRect, editorState.document.width, editorState.document.height);
-      const featherRadius = toolSettings.marqueeFeather;
-      if (featherRadius > 0) {
-        mask = featherSelection(mask, editorState.document.width, editorState.document.height, featherRadius);
-      }
       editorState.setSelection(selRect, mask, editorState.document.width, editorState.document.height);
       useUIStore.getState().setTransform(createTransformState(selRect));
     }
@@ -389,6 +393,11 @@ export function handleSelectionUp(
         if (dx < 2 && dy < 2) {
           useEditorStore.getState().clearSelection();
           useUIStore.getState().setTransform(null);
+        } else {
+          const sel = useEditorStore.getState().selection;
+          if (sel.active && sel.mask) {
+            applyGpuFeather(sel.mask, sel.maskWidth, sel.maskHeight);
+          }
         }
       }
     }
@@ -400,14 +409,11 @@ export function handleSelectionUp(
     if (lassoPoints.length >= 3) {
       const editorState = useEditorStore.getState();
       const { width: docW, height: docH } = editorState.document;
-      let lassoMask = createPolygonMask(lassoPoints, docW, docH);
-      const featherRadius = useToolSettingsStore.getState().marqueeFeather;
-      if (featherRadius > 0) {
-        lassoMask = featherSelection(lassoMask, docW, docH, featherRadius);
-      }
+      const lassoMask = createPolygonMask(lassoPoints, docW, docH);
       const lassoBounds = selectionBounds(lassoMask, docW, docH);
       if (lassoBounds) {
         editorState.setSelection(lassoBounds, lassoMask, docW, docH);
+        applyGpuFeather(lassoMask, docW, docH);
         useUIStore.getState().setTransform(createTransformState(lassoBounds));
       }
     }
@@ -430,14 +436,11 @@ export function handleSelectionUp(
       if (polyline.length >= 3) {
         const editorState = useEditorStore.getState();
         const { width: docW, height: docH } = editorState.document;
-        let mask = createPolygonMask(polyline, docW, docH);
-        const featherRadius = useToolSettingsStore.getState().marqueeFeather;
-        if (featherRadius > 0) {
-          mask = featherSelection(mask, docW, docH, featherRadius);
-        }
+        const mask = createPolygonMask(polyline, docW, docH);
         const bounds = selectionBounds(mask, docW, docH);
         if (bounds) {
           editorState.setSelection(bounds, mask, docW, docH);
+          applyGpuFeather(mask, docW, docH);
           useUIStore.getState().setTransform(createTransformState(bounds));
         }
       }
