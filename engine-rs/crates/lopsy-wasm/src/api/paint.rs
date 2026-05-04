@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
-use crate::{brush_gpu, clone_stamp_gpu, dodge_burn_gpu, smudge_gpu};
+use crate::{brush_gpu, clone_stamp_gpu, dodge_burn_gpu, healing_brush_gpu, smudge_gpu};
 
 // ============================================================
 // Brush / Paint Operations
@@ -282,4 +282,27 @@ pub fn apply_stamp_dab_batch(
     points: &[f64], source_offset_x: f64, source_offset_y: f64, size: f32,
 ) {
     clone_stamp_gpu::apply_clone_stamp_dab_batch(&mut engine.inner, layer_id, points, source_offset_x, source_offset_y, size);
+}
+
+// ============================================================
+// Healing Brush
+// ============================================================
+
+#[wasm_bindgen(js_name = "applyHealingDab")]
+pub fn apply_healing_dab(
+    engine: &mut Engine, layer_id: &str,
+    dest_x: f64, dest_y: f64,
+    source_offset_x: f64, source_offset_y: f64,
+    size: f32, opacity: f32,
+) {
+    healing_brush_gpu::apply_healing_dab(&mut engine.inner, layer_id, dest_x, dest_y, source_offset_x, source_offset_y, size, opacity);
+}
+
+#[wasm_bindgen(js_name = "applyHealingDabBatch")]
+pub fn apply_healing_dab_batch(
+    engine: &mut Engine, layer_id: &str,
+    points: &[f64], source_offset_x: f64, source_offset_y: f64,
+    size: f32, opacity: f32,
+) {
+    healing_brush_gpu::apply_healing_dab_batch(&mut engine.inner, layer_id, points, source_offset_x, source_offset_y, size, opacity);
 }

@@ -74,6 +74,8 @@ pub const DODGE_BURN_FRAG: &str = include_str!("shaders/brush/dodge_burn.glsl");
 pub const DODGE_BURN_DAB_FRAG: &str = include_str!("shaders/brush/dodge_burn_dab.glsl");
 pub const SMUDGE_DAB_FRAG: &str = include_str!("shaders/brush/smudge_dab.glsl");
 pub const CLONE_STAMP_FRAG: &str = include_str!("shaders/brush/clone_stamp.glsl");
+pub const HEALING_DAB_FRAG: &str = include_str!("shaders/brush/healing_dab.glsl");
+pub const HEALING_MEAN_FRAG: &str = include_str!("shaders/brush/healing_mean.glsl");
 pub const OPACITY_CLAMP_FRAG: &str = include_str!("shaders/brush/opacity_clamp.glsl");
 
 // Gradient
@@ -231,6 +233,8 @@ pub struct ShaderPrograms {
     pub dodge_burn_dab: ShaderProgram,
     pub smudge_dab: ShaderProgram,
     pub clone_stamp: ShaderProgram,
+    pub healing_dab: ShaderProgram,
+    pub healing_mean: ShaderProgram,
     pub opacity_clamp: ShaderProgram,
     // Gradient
     pub gradient_linear: ShaderProgram,
@@ -310,6 +314,8 @@ impl ShaderPrograms {
             dodge_burn_dab: compile_program(gl, v, DODGE_BURN_DAB_FRAG)?,
             smudge_dab: compile_program(gl, v, SMUDGE_DAB_FRAG)?,
             clone_stamp: compile_program(gl, v, CLONE_STAMP_FRAG)?,
+            healing_dab: compile_program(gl, v, HEALING_DAB_FRAG)?,
+            healing_mean: compile_program(gl, v, HEALING_MEAN_FRAG)?,
             opacity_clamp: compile_program(gl, v, OPACITY_CLAMP_FRAG)?,
             // Gradient
             gradient_linear: compile_program(gl, v, GRADIENT_LINEAR_FRAG)?,

@@ -16,6 +16,7 @@ import {
   Magnet,
   Pointer,
   SprayCan,
+  Bandage,
 } from 'lucide-react';
 import { IconButton } from '../components/IconButton/IconButton';
 import { useUIStore } from '../app/ui-store';
@@ -92,6 +93,7 @@ const toolGroups: ToolDef[][] = [
     { id: 'fill', icon: <PaintBucket size={ICON_SIZE} />, label: 'Fill (G)' },
     { id: 'gradient', icon: <GradientIcon size={ICON_SIZE} />, label: 'Gradient' },
     { id: 'stamp', icon: <Stamp size={ICON_SIZE} />, label: 'Clone Stamp (S)' },
+    { id: 'healing', icon: <Bandage size={ICON_SIZE} />, label: 'Healing Brush (H)' },
   ],
   [
     { id: 'dodge', icon: <Sun size={ICON_SIZE} />, label: 'Dodge/Burn (O)' },

@@ -10,6 +10,7 @@ import { handleEyedropperDown, handleEyedropperMove } from './eyedropper/eyedrop
 import { handleDodgeDown, handleDodgeMove, handleDodgeUp } from './dodge/dodge-interaction';
 import { handleSmudgeDown, handleSmudgeMove } from './smudge/smudge-interaction';
 import { handleStampDown, handleStampMove } from './stamp/stamp-interaction';
+import { handleHealingDown, handleHealingMove } from './healing/healing-interaction';
 import { handleTextDown, handleTextMove, handleTextUp, commitTextEditing } from './text/text-interaction';
 import { handleCropDown, handleCropMove, handleCropUp } from './crop/crop-interaction';
 import { handlePathDown, handlePathMove, handlePathUp } from './path/path-interaction';
@@ -29,6 +30,7 @@ import { SmudgeOptions } from '../app/OptionsBar/tool-options/SmudgeOptions';
 import { ShapeOptions } from '../app/OptionsBar/tool-options/ShapeOptions';
 import { GradientOptions } from '../app/OptionsBar/tool-options/GradientOptions';
 import { StampOptions } from '../app/OptionsBar/tool-options/StampOptions';
+import { HealingOptions } from './healing/HealingOptions';
 import { PathOptions } from '../app/OptionsBar/tool-options/PathOptions';
 import { TextOptions } from '../app/OptionsBar/tool-options/TextOptions';
 import { MagneticLassoOptions } from '../app/OptionsBar/tool-options/MagneticLassoOptions';
@@ -152,6 +154,17 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     handler: {
       down: (ctx) => handleStampDown(ctx),
       move: (ctx, state) => handleStampMove(state, ctx.layerPos, ctx.stampOffsetRef),
+    },
+  },
+  healing: {
+    id: 'healing',
+    label: 'Healing Brush',
+    shortcut: 'h',
+    optionsComponent: HealingOptions,
+    isPaint: true,
+    handler: {
+      down: (ctx) => handleHealingDown(ctx),
+      move: (ctx, state) => handleHealingMove(state, ctx.layerPos, ctx.stampOffsetRef),
     },
   },
   dodge: {
