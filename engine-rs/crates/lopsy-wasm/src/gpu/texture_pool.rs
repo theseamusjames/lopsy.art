@@ -194,6 +194,22 @@ impl TexturePool {
         }
     }
 
+    pub fn set_linear_filter(&self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
+        if let Some(entry) = self.entries.get(handle.0) {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&entry.texture));
+            gl.tex_parameteri(
+                WebGl2RenderingContext::TEXTURE_2D,
+                WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+                WebGl2RenderingContext::LINEAR as i32,
+            );
+            gl.tex_parameteri(
+                WebGl2RenderingContext::TEXTURE_2D,
+                WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+                WebGl2RenderingContext::LINEAR as i32,
+            );
+        }
+    }
+
     /// Upload u8 RGBA data to a texture, converting to f32 if using float textures.
     pub fn upload_rgba(
         &self,

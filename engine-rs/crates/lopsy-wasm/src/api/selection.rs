@@ -17,6 +17,11 @@ pub fn set_selection_mask(
     selection_gpu::set_selection_mask(&mut engine.inner, mask_data, width, height);
 }
 
+#[wasm_bindgen(js_name = "featherSelectionMask")]
+pub fn feather_selection_mask(engine: &mut Engine, radius: u32) {
+    selection_gpu::feather_selection_mask(&mut engine.inner, radius);
+}
+
 #[wasm_bindgen(js_name = "clearSelection")]
 pub fn clear_selection(engine: &mut Engine) {
     if let Some(tex) = engine.inner.selection_mask_texture.take() {
