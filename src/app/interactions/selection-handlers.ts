@@ -9,6 +9,7 @@ import {
   createEllipseSelection as tsCreateEllipseSelection,
   selectionBounds as tsSelectionBounds,
   getSelectionMaskValue,
+  featherSelection,
 } from '../../selection/selection';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
@@ -206,7 +207,11 @@ export function handleSelectionDown(
     const wandMaskRaw = wandGraduated
       ? wasmFloodFillGraduated(pixelData, docW, docH, cx, cy, wandTolerance, wandContiguous)
       : wasmFloodFill(pixelData, docW, docH, cx, cy, 0, 0, 0, 0, wandTolerance, wandContiguous);
-    const wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
+    let wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
+    const featherRadius = toolSettings.marqueeFeather;
+    if (featherRadius > 0) {
+      wandMask = featherSelection(wandMask, docW, docH, featherRadius);
+    }
     const wandBounds = selectionBounds(wandMask, docW, docH);
     if (wandBounds) {
       editorState.setSelection(wandBounds, wandMask, docW, docH);
@@ -319,9 +324,13 @@ export function handleSelectionMove(
 
     if (w > 0 && h > 0) {
       const selRect = { x, y, width: w, height: h };
-      const mask = state.tool === 'marquee-rect'
+      let mask = state.tool === 'marquee-rect'
         ? createRectSelection(selRect, editorState.document.width, editorState.document.height)
         : createEllipseSelection(selRect, editorState.document.width, editorState.document.height);
+      const featherRadius = toolSettings.marqueeFeather;
+      if (featherRadius > 0) {
+        mask = featherSelection(mask, editorState.document.width, editorState.document.height, featherRadius);
+      }
       editorState.setSelection(selRect, mask, editorState.document.width, editorState.document.height);
       useUIStore.getState().setTransform(createTransformState(selRect));
     }
@@ -391,7 +400,11 @@ export function handleSelectionUp(
     if (lassoPoints.length >= 3) {
       const editorState = useEditorStore.getState();
       const { width: docW, height: docH } = editorState.document;
-      const lassoMask = createPolygonMask(lassoPoints, docW, docH);
+      let lassoMask = createPolygonMask(lassoPoints, docW, docH);
+      const featherRadius = useToolSettingsStore.getState().marqueeFeather;
+      if (featherRadius > 0) {
+        lassoMask = featherSelection(lassoMask, docW, docH, featherRadius);
+      }
       const lassoBounds = selectionBounds(lassoMask, docW, docH);
       if (lassoBounds) {
         editorState.setSelection(lassoBounds, lassoMask, docW, docH);
@@ -417,7 +430,11 @@ export function handleSelectionUp(
       if (polyline.length >= 3) {
         const editorState = useEditorStore.getState();
         const { width: docW, height: docH } = editorState.document;
-        const mask = createPolygonMask(polyline, docW, docH);
+        let mask = createPolygonMask(polyline, docW, docH);
+        const featherRadius = useToolSettingsStore.getState().marqueeFeather;
+        if (featherRadius > 0) {
+          mask = featherSelection(mask, docW, docH, featherRadius);
+        }
         const bounds = selectionBounds(mask, docW, docH);
         if (bounds) {
           editorState.setSelection(bounds, mask, docW, docH);
