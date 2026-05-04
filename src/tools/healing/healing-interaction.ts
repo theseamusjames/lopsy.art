@@ -5,69 +5,35 @@ import type { Point } from '../../types';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { readLayerPixels, getLayerTextureDimensions, uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
+import { applyHealingDab, applyHealingDabBatch } from '../../engine-wasm/wasm-bridge';
 import { interpolateFlat } from '../common/dab-interpolation';
-import { applyHealingDab } from './healing';
-import { PixelBuffer } from '../../engine/pixel-data';
-
-/**
- * Read the current layer pixels from the GPU into a PixelBuffer, or null
- * if the layer has no GPU texture.
- */
-function readLayerBuffer(layerId: string): { buffer: PixelBuffer; width: number; height: number; docX: number; docY: number } | null {
-  const engine = getEngine();
-  if (!engine) return null;
-
-  let dims: Uint32Array | undefined;
-  try {
-    dims = getLayerTextureDimensions(engine, layerId);
-  } catch {
-    return null;
-  }
-  const width = dims?.[0] ?? 0;
-  const height = dims?.[1] ?? 0;
-  if (width === 0 || height === 0) return null;
-
-  const pixels = readLayerPixels(engine, layerId);
-  if (!pixels || pixels.length === 0) return null;
-
-  const clamped = new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength);
-  const buffer = PixelBuffer.fromData(clamped, width, height);
-
-  // Retrieve layer position from the store
-  const layers = useEditorStore.getState().document.layers;
-  const layer = layers.find((l) => l.id === layerId);
-  const docX = layer?.x ?? 0;
-  const docY = layer?.y ?? 0;
-
-  return { buffer, width, height, docX, docY };
-}
 
 /**
  * Apply a healing dab at doc-space position `pos` on the given layer,
- * sampling source from `pos + offset`.
- *
- * This is a JS-side healing: reads GPU texture, applies color-corrected
- * clone math, and re-uploads the modified pixels.
+ * sampling source from `pos + offset`. Runs entirely on the GPU via
+ * the WASM engine to preserve FP16 color precision.
  */
 function applyHealDab(layerId: string, pos: Point, offset: Point, size: number, opacity: number): void {
   const engine = getEngine();
   if (!engine) return;
 
-  const layerData = readLayerBuffer(layerId);
-  if (!layerData) return;
+  const layer = useEditorStore.getState().document.layers.find((l) => l.id === layerId);
+  const docX = layer?.x ?? 0;
+  const docY = layer?.y ?? 0;
 
-  const { buffer, width, height, docX, docY } = layerData;
+  // Convert to layer-local coordinates
+  const localX = pos.x - docX;
+  const localY = pos.y - docY;
 
-  // Convert doc-space position to layer-local position
-  const localPos: Point = { x: pos.x - docX, y: pos.y - docY };
-  // Source is always sampled from the same layer (like clone stamp same-layer)
-  const localSrc: PixelBuffer = buffer;
+  applyHealingDab(engine, layerId, localX, localY, offset.x, offset.y, size, opacity / 100);
+  useEditorStore.getState().notifyRender();
+}
 
-  applyHealingDab(buffer, localSrc, localPos, offset, size, opacity / 100);
+function applyHealDabBatch(layerId: string, points: Float64Array, offset: Point, size: number, opacity: number): void {
+  const engine = getEngine();
+  if (!engine) return;
 
-  uploadLayerPixels(engine, layerId, new Uint8Array(buffer.rawData.buffer, buffer.rawData.byteOffset, buffer.rawData.byteLength), width, height, docX, docY);
-
+  applyHealingDabBatch(engine, layerId, points, offset.x, offset.y, size, opacity / 100);
   useEditorStore.getState().notifyRender();
 }
 
@@ -97,9 +63,15 @@ export function handleHealingDown(ctx: InteractionContext): InteractionState | u
   if (shiftKey && ctx.lastPaintPointRef.current && ctx.lastPaintPointRef.current.layerId === activeLayerId) {
     const spacing = Math.max(1, healingSize * 0.25);
     const pts = interpolateFlat(ctx.lastPaintPointRef.current.point, layerPos, spacing);
+    const layer = activeLayer;
+    const docX = layer?.x ?? 0;
+    const docY = layer?.y ?? 0;
+    const localPts = new Float64Array(pts.length);
     for (let i = 0; i < pts.length; i += 2) {
-      applyHealDab(activeLayerId, { x: pts[i]!, y: pts[i + 1]! }, ctx.stampOffsetRef.current, healingSize, healingOpacity);
+      localPts[i] = pts[i]! - docX;
+      localPts[i + 1] = pts[i + 1]! - docY;
     }
+    applyHealDabBatch(activeLayerId, localPts, ctx.stampOffsetRef.current, healingSize, healingOpacity);
   } else {
     applyHealDab(activeLayerId, layerPos, ctx.stampOffsetRef.current, healingSize, healingOpacity);
   }
@@ -130,9 +102,15 @@ export function handleHealingMove(
   const spacing = Math.max(1, healingSize * 0.25);
 
   const pts = interpolateFlat(state.lastPoint, layerLocalPos, spacing);
+  const layer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
+  const docX = layer?.x ?? 0;
+  const docY = layer?.y ?? 0;
+  const localPts = new Float64Array(pts.length);
   for (let i = 0; i < pts.length; i += 2) {
-    applyHealDab(state.layerId, { x: pts[i]!, y: pts[i + 1]! }, stampOffsetRef.current, healingSize, healingOpacity);
+    localPts[i] = pts[i]! - docX;
+    localPts[i + 1] = pts[i + 1]! - docY;
   }
+  applyHealDabBatch(state.layerId, localPts, stampOffsetRef.current, healingSize, healingOpacity);
 
   state.lastPoint = layerLocalPos;
 }

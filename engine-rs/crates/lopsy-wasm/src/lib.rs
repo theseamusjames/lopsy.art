@@ -10,6 +10,7 @@ pub mod selection_gpu;
 pub mod dodge_burn_gpu;
 pub mod smudge_gpu;
 pub mod clone_stamp_gpu;
+pub mod healing_brush_gpu;
 pub mod overlay_renderer;
 pub mod color_mgmt;
 pub mod glyph_atlas;
