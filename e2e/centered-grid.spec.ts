@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Page } from './fixtures';
-import { waitForStore, createDocument, getEditorState } from './helpers';
+import { waitForStore, createDocument, getEditorState, addLayer, drawRect, setActiveLayer, docToScreen } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -171,7 +171,7 @@ test.describe('Centered grid with edge snapping (#126)', () => {
   });
 
   test('drag-move snaps the layer to nearest centred grid line', async ({ page }) => {
-    await createDocument(page, 500, 400, false);
+    await createDocument(page, 500, 400, true);
     await page.waitForTimeout(200);
 
     // Enable grid + snap via keyboard shortcut, then set a coarse size so snap moves are large.
@@ -190,71 +190,33 @@ test.describe('Centered grid with edge snapping (#126)', () => {
     });
     await page.waitForTimeout(100);
 
-    // Add a layer with a 60×60 red square painted at doc coords (100..160).
-    // After auto-crop, the layer will sit at x=100, y=100 with width=60.
-    const layerId = await page.evaluate(() => {
-      const ed = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          addLayer: () => void;
-          document: { activeLayerId: string; width: number; height: number };
-          updateLayerPixelData: (id: string, data: ImageData) => void;
-          pushHistory: (label?: string) => void;
-        };
-      };
-      const state = ed.getState();
-      state.pushHistory('Add');
-      state.addLayer();
-      const id = state.document.activeLayerId;
-      const data = new ImageData(state.document.width, state.document.height);
-      for (let y = 100; y < 160; y++) {
-        for (let x = 100; x < 160; x++) {
-          const i = (y * data.width + x) * 4;
-          data.data[i] = 255; data.data[i + 1] = 0; data.data[i + 2] = 0; data.data[i + 3] = 255;
-        }
-      }
-      state.updateLayerPixelData(id, data);
-      return id;
-    });
+    // Add a layer with a 60×60 red square at doc (100,100)–(160,160).
+    // drawRect handles GPU/JS pixel sync so data is available for the move handler.
+    await addLayer(page);
+    const state0 = await getEditorState(page);
+    const layerId = state0.document.activeLayerId;
+    await drawRect(page, 100, 100, 60, 60, { r: 255, g: 0, b: 0 });
     expect(layerId).toBeTruthy();
 
-    // After auto-crop, layer.x and y should be 100 (top-left of painted area).
+    // After auto-crop, layer position should be approximately (100, 100).
+    // drawRect uses mouse events which may have ±1px rounding.
     const before = await getEditorState(page);
     const layerBefore = before.document.layers.find((l) => l.id === layerId)!;
-    expect(layerBefore.x).toBe(100);
-    expect(layerBefore.y).toBe(100);
+    expect(layerBefore.x).toBeGreaterThanOrEqual(99);
+    expect(layerBefore.x).toBeLessThanOrEqual(101);
+    expect(layerBefore.y).toBeGreaterThanOrEqual(99);
+    expect(layerBefore.y).toBeLessThanOrEqual(101);
 
-    // Make the painted layer the active layer (it already is, but make
-    // it explicit). Switch to the move tool. The move tool drags whatever
-    // is currently the active layer.
-    await page.locator(`[data-layer-id="${layerId}"]`).click();
+    // Switch to the move tool.
+    await setActiveLayer(page, layerId);
     await page.keyboard.press('v');
     await page.waitForTimeout(100);
-
-    // Use the same docToScreen pattern as other working e2e tests
-    // (tools.spec.ts, move-layer.spec.ts) — based on container bounding rect.
-    const docToScreen = async (docX: number, docY: number) =>
-      page.evaluate(({ dx, dy }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            document: { width: number; height: number };
-            viewport: { zoom: number; panX: number; panY: number };
-          };
-        };
-        const state = store.getState();
-        const container = document.querySelector('[data-testid="canvas-container"]') as HTMLElement;
-        const rect = container.getBoundingClientRect();
-        const cx = rect.width / 2;
-        const cy = rect.height / 2;
-        const screenX = (dx - state.document.width / 2) * state.viewport.zoom + state.viewport.panX + cx;
-        const screenY = (dy - state.document.height / 2) * state.viewport.zoom + state.viewport.panY + cy;
-        return { x: rect.left + screenX, y: rect.top + screenY };
-      }, { dx: docX, dy: docY });
 
     // Click in the centre of the painted square at doc (130, 130) and drag
     // the layer by +27 doc px in X. With a centred 50px grid, the pre-snap
     // post-drag x = 100 + 27 = 127, which snaps to 150 (nearest line).
-    const start = await docToScreen(130, 130);
-    const end = await docToScreen(157, 130);
+    const start = await docToScreen(page, 130, 130);
+    const end = await docToScreen(page, 157, 130);
 
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
