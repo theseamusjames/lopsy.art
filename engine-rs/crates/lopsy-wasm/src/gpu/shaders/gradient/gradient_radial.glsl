@@ -38,7 +38,12 @@ void main() {
         vec2 docPos = u_layerOffset + v_uv * u_texSize;
         vec2 maskUV = docPos / u_docSize;
         float maskVal = texture(u_maskTex, maskUV).r;
-        fragColor = mix(existing, gradColor, maskVal);
+        vec4 masked = vec4(gradColor.rgb, gradColor.a * maskVal);
+        float outA = masked.a + existing.a * (1.0 - masked.a);
+        vec3 outRGB = outA > 0.0
+            ? (masked.rgb * masked.a + existing.rgb * existing.a * (1.0 - masked.a)) / outA
+            : vec3(0.0);
+        fragColor = vec4(outRGB, outA);
     } else {
         fragColor = gradColor;
     }

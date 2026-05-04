@@ -47,11 +47,20 @@ export function handleFillDown(ctx: InteractionContext): void {
   const engine = getEngine();
   if (!engine) return;
 
-  const pixelData = wasmReadLayerPixelsForFill(engine, activeLayerId);
   const { width: docW, height: docH } = editorState.document;
   const layer = editorState.document.layers.find((l) => l.id === activeLayerId);
   const canvasX = Math.round(layerPos.x + (layer?.x ?? 0));
   const canvasY = Math.round(layerPos.y + (layer?.y ?? 0));
+
+  const { selection } = editorState;
+  if (selection.active && selection.mask) {
+    const idx = canvasY * docW + canvasX;
+    if (idx >= 0 && idx < selection.mask.length && (selection.mask[idx] ?? 0) < 1) {
+      return;
+    }
+  }
+
+  const pixelData = wasmReadLayerPixelsForFill(engine, activeLayerId);
   const fillMask = wasmFloodFill(
     pixelData, docW, docH,
     canvasX, canvasY,
@@ -59,13 +68,10 @@ export function handleFillDown(ctx: InteractionContext): void {
     tolerance, contiguous,
   );
 
-  const { selection } = editorState;
   if (selection.active && selection.mask) {
     const selMask = selection.mask;
     for (let i = 0; i < fillMask.length && i < selMask.length; i++) {
-      if (selMask[i] === 0) {
-        fillMask[i] = 0;
-      }
+      fillMask[i] = Math.round((fillMask[i]! * (selMask[i] ?? 0)) / 255);
     }
   }
 

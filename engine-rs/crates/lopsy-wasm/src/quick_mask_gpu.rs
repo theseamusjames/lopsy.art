@@ -57,7 +57,7 @@ pub fn fill_quick_mask(
 
     // Get seed value
     if start_x >= w || start_y >= h { return; }
-    let seed_idx = (start_y as usize * w as usize + start_x as usize);
+    let seed_idx = start_y as usize * w as usize + start_x as usize;
     let seed_val = mask[seed_idx];
 
     // Flood fill: find all pixels within tolerance of the seed
@@ -70,7 +70,7 @@ pub fn fill_quick_mask(
         let mut stack = vec![(start_x as i32, start_y as i32)];
         while let Some((px, py)) = stack.pop() {
             if px < 0 || px >= w as i32 || py < 0 || py >= h as i32 { continue; }
-            let idx = (py as usize * w as usize + px as usize);
+            let idx = py as usize * w as usize + px as usize;
             if visited[idx] { continue; }
             visited[idx] = true;
             let val = mask[idx] as i32;

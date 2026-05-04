@@ -9,6 +9,7 @@ import {
   createEllipseSelection as tsCreateEllipseSelection,
   selectionBounds as tsSelectionBounds,
   getSelectionMaskValue,
+  featherSelection,
 } from '../../selection/selection';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
@@ -19,8 +20,6 @@ import {
   magneticLassoSnap as wasmMagneticLassoSnap,
   magneticLassoSnapPoint as wasmMagneticLassoSnapPoint,
   magneticLassoEnd as wasmMagneticLassoEnd,
-  setSelectionMask as wasmSetSelectionMask,
-  featherSelectionMask as wasmFeatherSelectionMask,
   hasFloat,
   dropFloat,
 } from '../../engine-wasm/wasm-bridge';
@@ -65,14 +64,25 @@ function makeMagneticSnapFn(): SnapFn {
   };
 }
 
-function applyGpuFeather(mask: Uint8ClampedArray, maskW: number, maskH: number): void {
+function commitFeatheredSelection(
+  bounds: { x: number; y: number; width: number; height: number },
+  mask: Uint8ClampedArray,
+  docW: number,
+  docH: number,
+): void {
   const featherRadius = useToolSettingsStore.getState().marqueeFeather;
-  if (featherRadius <= 0) return;
-  const engine = getEngine();
-  if (!engine) return;
-  const bytes = new Uint8Array(mask.buffer, mask.byteOffset, mask.byteLength);
-  wasmSetSelectionMask(engine, bytes, maskW, maskH);
-  wasmFeatherSelectionMask(engine, featherRadius);
+  const editorState = useEditorStore.getState();
+  if (featherRadius > 0) {
+    const feathered = featherSelection(mask, docW, docH, featherRadius);
+    const newBounds = selectionBounds(feathered, docW, docH);
+    if (newBounds) {
+      editorState.setSelection(newBounds, feathered, docW, docH);
+      useUIStore.getState().setTransform(createTransformState(newBounds));
+      return;
+    }
+  }
+  editorState.setSelection(bounds, mask, docW, docH);
+  useUIStore.getState().setTransform(createTransformState(bounds));
 }
 
 function updateMagneticLassoPreview(state: MagneticLassoState): void {
@@ -221,9 +231,7 @@ export function handleSelectionDown(
     const wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
     const wandBounds = selectionBounds(wandMask, docW, docH);
     if (wandBounds) {
-      editorState.setSelection(wandBounds, wandMask, docW, docH);
-      applyGpuFeather(wandMask, docW, docH);
-      useUIStore.getState().setTransform(createTransformState(wandBounds));
+      commitFeatheredSelection(wandBounds, wandMask, docW, docH);
     }
     return undefined;
   }
@@ -396,7 +404,8 @@ export function handleSelectionUp(
         } else {
           const sel = useEditorStore.getState().selection;
           if (sel.active && sel.mask) {
-            applyGpuFeather(sel.mask, sel.maskWidth, sel.maskHeight);
+            const { width: docW, height: docH } = useEditorStore.getState().document;
+            commitFeatheredSelection(sel.bounds!, sel.mask, docW, docH);
           }
         }
       }
@@ -412,9 +421,7 @@ export function handleSelectionUp(
       const lassoMask = createPolygonMask(lassoPoints, docW, docH);
       const lassoBounds = selectionBounds(lassoMask, docW, docH);
       if (lassoBounds) {
-        editorState.setSelection(lassoBounds, lassoMask, docW, docH);
-        applyGpuFeather(lassoMask, docW, docH);
-        useUIStore.getState().setTransform(createTransformState(lassoBounds));
+        commitFeatheredSelection(lassoBounds, lassoMask, docW, docH);
       }
     }
     useUIStore.getState().clearLassoPoints();
@@ -439,9 +446,7 @@ export function handleSelectionUp(
         const mask = createPolygonMask(polyline, docW, docH);
         const bounds = selectionBounds(mask, docW, docH);
         if (bounds) {
-          editorState.setSelection(bounds, mask, docW, docH);
-          applyGpuFeather(mask, docW, docH);
-          useUIStore.getState().setTransform(createTransformState(bounds));
+          commitFeatheredSelection(bounds, mask, docW, docH);
         }
       }
     }

@@ -18,8 +18,6 @@ void main() {
         vec2 docPos = u_layerOffset + v_uv * u_layerSize;
         vec2 maskUV = docPos / u_docSize;
         maskVal = texture(u_maskTex, maskUV).r;
-        if (maskVal < 0.5) maskVal = 0.0;
-        else maskVal = 1.0;
     }
 
     // Blend fill color over existing using standard alpha compositing
