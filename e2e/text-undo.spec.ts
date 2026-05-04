@@ -53,7 +53,7 @@ async function getLayers(page: import('@playwright/test').Page) {
 }
 
 test('undo after text commit removes the text layer', async ({ page }) => {
-  await page.goto('http://localhost:5174');
+  await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 300, false);
   await page.waitForTimeout(500);
@@ -96,7 +96,7 @@ test('undo after text commit removes the text layer', async ({ page }) => {
 });
 
 test('undo after text commit does not move other layers', async ({ page }) => {
-  await page.goto('http://localhost:5174');
+  await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 300, false);
   await page.waitForTimeout(500);
@@ -144,7 +144,7 @@ test('undo after text commit does not move other layers', async ({ page }) => {
 });
 
 test('undo after text commit does not move cropped layers at non-zero positions', async ({ page }) => {
-  await page.goto('http://localhost:5174');
+  await page.goto('/');
   await waitForStore(page);
   // Transparent background so painted layers get cropped to content bounds
   await createDocument(page, 400, 300, true);
@@ -190,7 +190,7 @@ test('undo after text commit does not move cropped layers at non-zero positions'
 });
 
 test('undo + redo after text commit preserves text correctly', async ({ page }) => {
-  await page.goto('http://localhost:5174');
+  await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 300, false);
   await page.waitForTimeout(500);

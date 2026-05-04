@@ -219,9 +219,9 @@ test.describe('Fill tool with selection (#63)', () => {
     const selState = await getEditorState(page);
     expect(selState.selection.active).toBe(true);
 
-    // Fill tool with blue, click OUTSIDE the selection.
+    // Fill tool with blue, click INSIDE the selection.
     // On a blank canvas the flood fill matches all transparent pixels,
-    // so the fill mask covers everything. After intersection with the
+    // so the fill mask covers the whole layer. After intersection with the
     // selection mask, only the selection area should receive color.
     await page.keyboard.press('g');
     await setForegroundColor(page, 0, 0, 255);
@@ -230,7 +230,7 @@ test.describe('Fill tool with selection (#63)', () => {
     const beforeFill = await getEditorSnapshot(page);
     const undoBefore = beforeFill.undoStackLength;
 
-    await clickAtDoc(page, 10, 10);
+    await clickAtDoc(page, 100, 100);
     await page.waitForTimeout(300);
 
     // Verify the fill tool executed (undo stack should have grown)

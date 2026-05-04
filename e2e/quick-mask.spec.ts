@@ -47,27 +47,52 @@ async function getSelectionState(page: Page) {
 }
 
 /**
- * Sample the overlay canvas at a given screen position.
- * Returns { r, g, b, a } of the pixel at (screenX, screenY).
+ * Sample the composited WebGL output at a given doc position.
+ * The quick mask overlay is rendered by the Rust compositor on the
+ * WebGL canvas, not the 2D overlay canvas, so we read from
+ * __readCompositedPixels instead.
  */
-async function sampleOverlayPixel(page: Page, screenX: number, screenY: number) {
+async function sampleCompositedPixelAtDoc(page: Page, docX: number, docY: number) {
   return page.evaluate(
-    ({ sx, sy }) => {
-      const all = Array.from(document.querySelectorAll('canvas')) as HTMLCanvasElement[];
-      const overlay = all.find((c) => /overlayCanvas/.test(c.className));
-      if (!overlay) return { r: 0, g: 0, b: 0, a: 0 };
-      const rect = overlay.getBoundingClientRect();
-      const x = Math.round(sx - rect.left);
-      const y = Math.round(sy - rect.top);
-      if (x < 0 || y < 0 || x >= overlay.width || y >= overlay.height) {
+    async ({ dx, dy }) => {
+      type ReadFn = () => Promise<{ width: number; height: number; pixels: number[] }>;
+      const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as ReadFn | undefined;
+      if (!readFn) return { r: 0, g: 0, b: 0, a: 0 };
+      const comp = await readFn();
+
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { width: number; height: number };
+          viewport: { zoom: number; panX: number; panY: number };
+        };
+      };
+      const { document: d, viewport: v } = store.getState();
+
+      const el = document.querySelector('[data-testid="canvas-container"]');
+      if (!el) return { r: 0, g: 0, b: 0, a: 0 };
+      const rect = el.getBoundingClientRect();
+
+      const cx = (dx - d.width / 2) * v.zoom + v.panX + rect.width / 2;
+      const cy = (dy - d.height / 2) * v.zoom + v.panY + rect.height / 2;
+
+      const scaleX = comp.width / rect.width;
+      const scaleY = comp.height / rect.height;
+      const bx = Math.round(cx * scaleX);
+      const by = comp.height - 1 - Math.round(cy * scaleY);
+
+      if (bx < 0 || by < 0 || bx >= comp.width || by >= comp.height) {
         return { r: 0, g: 0, b: 0, a: 0 };
       }
-      const ctx = overlay.getContext('2d');
-      if (!ctx) return { r: 0, g: 0, b: 0, a: 0 };
-      const data = ctx.getImageData(x, y, 1, 1).data;
-      return { r: data[0]!, g: data[1]!, b: data[2]!, a: data[3]! };
+
+      const idx = (by * comp.width + bx) * 4;
+      return {
+        r: comp.pixels[idx] ?? 0,
+        g: comp.pixels[idx + 1] ?? 0,
+        b: comp.pixels[idx + 2] ?? 0,
+        a: comp.pixels[idx + 3] ?? 0,
+      };
     },
-    { sx: screenX, sy: screenY },
+    { dx: docX, dy: docY },
   );
 }
 
@@ -124,7 +149,7 @@ test.describe('Quick Mask Mode', () => {
   });
 
   test('entering Quick Mask Mode with no selection shows full blue overlay over the document', async ({ page }) => {
-    await createDocument(page, 200, 200, true);
+    await createDocument(page, 200, 200, false);
     await fitToView(page);
 
     // Enter Quick Mask Mode (no existing selection → all blue)
@@ -133,16 +158,16 @@ test.describe('Quick Mask Mode', () => {
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'quick-mask-enter-no-selection.png') });
 
-    // Sample the overlay at the center of the document — should have blue tint
-    const centerScreen = await docToScreen(page, 100, 100);
-    const overlayPixel = await sampleOverlayPixel(page, centerScreen.x, centerScreen.y);
+    // Sample the composited output at the center — should have blue tint.
+    // The quick mask overlay is rendered on the WebGL canvas by the Rust
+    // compositor, so we read composited pixels. The overlay blends blue
+    // (0, 0.39, 1.0) at 50% over the white background, producing a visible
+    // blue tint: B > R by a wide margin.
+    const overlayPixel = await sampleCompositedPixelAtDoc(page, 100, 100);
 
-    // The quick mask overlay paints blue (R=0, G=100, B=255) with ~60% opacity (alpha~153)
-    // over unselected areas. Since no selection exists, the whole doc is unselected (blue).
-    expect(overlayPixel.r).toBeLessThan(50);
-    expect(overlayPixel.g).toBeGreaterThan(50);
+    expect(overlayPixel.b - overlayPixel.r).toBeGreaterThan(50);
     expect(overlayPixel.b).toBeGreaterThan(200);
-    expect(overlayPixel.a).toBeGreaterThan(100);
+    expect(overlayPixel.a).toBeGreaterThan(200);
 
     // Exit Quick Mask Mode
     await page.keyboard.press('q');
@@ -150,7 +175,7 @@ test.describe('Quick Mask Mode', () => {
   });
 
   test('entering Quick Mask Mode with an existing selection shows clear area for selected region', async ({ page }) => {
-    await createDocument(page, 200, 200, true);
+    await createDocument(page, 200, 200, false);
     await fitToView(page);
 
     // Create a rectangular selection covering the right half of the document
@@ -182,17 +207,16 @@ test.describe('Quick Mask Mode', () => {
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'quick-mask-with-selection.png') });
 
-    // Left half (unselected) should have blue overlay
-    const leftScreen = await docToScreen(page, 50, 100);
-    const leftPixel = await sampleOverlayPixel(page, leftScreen.x, leftScreen.y);
+    // Left half (unselected) should have blue overlay (B > R by a wide margin)
+    const leftPixel = await sampleCompositedPixelAtDoc(page, 50, 100);
+    expect(leftPixel.b - leftPixel.r).toBeGreaterThan(50);
     expect(leftPixel.b).toBeGreaterThan(200);
-    expect(leftPixel.a).toBeGreaterThan(100);
 
-    // Right half (selected) should be clear (no blue overlay)
-    const rightScreen = await docToScreen(page, 150, 100);
-    const rightPixel = await sampleOverlayPixel(page, rightScreen.x, rightScreen.y);
-    // Selected areas have alpha = 0 (no overlay)
-    expect(rightPixel.a).toBeLessThan(30);
+    // Right half (selected) should be white (no overlay): R ≈ G ≈ B ≈ 255
+    const rightPixel = await sampleCompositedPixelAtDoc(page, 150, 100);
+    expect(rightPixel.r).toBeGreaterThan(240);
+    expect(rightPixel.g).toBeGreaterThan(240);
+    expect(rightPixel.b).toBeGreaterThan(240);
 
     // Exit
     await page.keyboard.press('q');
@@ -261,23 +285,23 @@ test.describe('Quick Mask Mode', () => {
   });
 
   test('painting in Quick Mask Mode updates the overlay visually', async ({ page }) => {
-    await createDocument(page, 200, 200, true);
+    await createDocument(page, 200, 200, false);
     await fitToView(page);
 
     // Enter Quick Mask Mode
     await page.keyboard.press('q');
     await page.waitForTimeout(150);
 
-    // Sample the center before painting — should be blue (unselected)
-    const centerScreen = await docToScreen(page, 100, 100);
-    const beforePixel = await sampleOverlayPixel(page, centerScreen.x, centerScreen.y);
-    expect(beforePixel.b).toBeGreaterThan(150);
-    expect(beforePixel.a).toBeGreaterThan(50);
+    // Sample the center before painting — should have blue tint (unselected)
+    const beforePixel = await sampleCompositedPixelAtDoc(page, 100, 100);
+    const beforeBlueTint = beforePixel.b - beforePixel.r;
+    expect(beforeBlueTint).toBeGreaterThan(50);
 
     // Paint over the center with brush (white = select)
     await page.keyboard.press('b');
     await page.waitForTimeout(50);
 
+    const centerScreen = await docToScreen(page, 100, 100);
     await page.mouse.move(centerScreen.x - 20, centerScreen.y);
     await page.mouse.down();
     await page.mouse.move(centerScreen.x + 20, centerScreen.y, { steps: 10 });
@@ -286,10 +310,11 @@ test.describe('Quick Mask Mode', () => {
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'quick-mask-painted.png') });
 
-    // Sample center after painting — should have less blue (partially selected)
-    const afterPixel = await sampleOverlayPixel(page, centerScreen.x, centerScreen.y);
-    // Painted area should have lower blue alpha than unpainted area
-    expect(afterPixel.a).toBeLessThan(beforePixel.a);
+    // Sample center after painting — painted area becomes "selected" so blue
+    // tint diminishes (B - R decreases toward 0 = white).
+    const afterPixel = await sampleCompositedPixelAtDoc(page, 100, 100);
+    const afterBlueTint = afterPixel.b - afterPixel.r;
+    expect(afterBlueTint).toBeLessThan(beforeBlueTint);
 
     // Exit
     await page.keyboard.press('q');
