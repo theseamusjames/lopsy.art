@@ -7,6 +7,7 @@ pub mod filter_gpu;
 pub mod gradient_gpu;
 pub mod shape_gpu;
 pub mod selection_gpu;
+pub mod quick_mask_gpu;
 pub mod dodge_burn_gpu;
 pub mod smudge_gpu;
 pub mod clone_stamp_gpu;

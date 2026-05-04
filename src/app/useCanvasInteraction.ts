@@ -156,14 +156,16 @@ export function useCanvasInteraction(
       const engine = getEngine();
       const isPaintTool = PAINT_TOOLS.has(activeTool);
       const maskEditMode = useUIStore.getState().maskEditMode;
+      const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
 
       // Fall back to CPU when:
       // - mask edit mode (paints on mask surface)
+      // - quick mask mode (paints on the doc-sized quick mask buffer)
       // - tool doesn't have a GPU path
       // GPU brush/eraser shaders clip to the selection mask, so an active
       // selection does NOT force the CPU path.
       const isGpuTool = GPU_TOOLS.has(activeTool);
-      const useGpu = engine && isGpuTool && !maskEditMode;
+      const useGpu = engine && isGpuTool && !maskEditMode && !isQuickMaskMode;
       const useGpuStroke = useGpu && isPaintTool;
 
       let pixelBuffer: PixelBuffer;
@@ -256,7 +258,9 @@ export function useCanvasInteraction(
         // eyedropper, and selection tools don't need pixel data and expanding
         // would destructively change layer bounds before pushHistory captures
         // them — causing undo to restore the wrong positions.
-        const needsPixelData = isPaintTool || activeTool === 'move' || activeTool === 'fill';
+        // Quick Mask Mode paints on the quick mask buffer (not the layer), so
+        // no pixel data expansion is needed — same as non-paint tools.
+        const needsPixelData = (isPaintTool && !isQuickMaskMode) || activeTool === 'move' || activeTool === 'fill';
         if (needsPixelData) {
           const imageData = editorState.expandLayerForEditing(activeLayerId);
           expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
@@ -532,12 +536,17 @@ export function useCanvasInteraction(
 
     // Sync mask drawing buffer back to mask data
     if (state.maskMode && state.pixelBuffer && state.layerId) {
-      const layer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
-      if (layer?.mask) {
-        const newMaskData = extractMaskFromSurface(state.pixelBuffer, layer.mask.width, layer.mask.height);
-        useEditorStore.getState().updateLayerMaskData(state.layerId, newMaskData);
+      const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+      if (!isQuickMaskMode) {
+        // Regular mask edit: sync pixel buffer back to the layer mask
+        const layer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
+        if (layer?.mask) {
+          const newMaskData = extractMaskFromSurface(state.pixelBuffer, layer.mask.width, layer.mask.height);
+          useEditorStore.getState().updateLayerMaskData(state.layerId, newMaskData);
+        }
+        clearActiveMaskEditBuffer();
       }
-      clearActiveMaskEditBuffer();
+      // Quick Mask Mode: qmBuf.data was synced in handleMaskPaintMove — no layer mask update needed
     }
 
     stateRef.current = { ...INITIAL_STATE };

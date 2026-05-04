@@ -32,6 +32,7 @@ import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuide
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 import { getActiveMaskEditBuffer } from './interactions/mask-buffer';
+
 import { uploadLayerMask, expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDimensions, getGlyphPositions } from '../engine-wasm/wasm-bridge';
 
 

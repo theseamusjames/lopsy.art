@@ -68,6 +68,9 @@ const ALLOWLIST = {
   'src/engine-wasm/gpu-pixel-access.ts': 4,
   'src/app/store/history-worker.ts': 2,
 
+  // Quick mask GPU readback — selection mask from GPU texture.
+  'src/app/interactions/quick-mask-ops.ts': 1,
+
   // Export / file I/O — produce raw buffers for encoders.
   'src/app/MenuBar/menus/file-menu.ts': 1,
   'src/io/psd.ts': 1,

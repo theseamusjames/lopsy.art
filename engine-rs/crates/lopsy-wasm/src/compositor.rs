@@ -269,6 +269,11 @@ pub fn composite(engine: &mut EngineInner) {
     // 4. Apply image adjustments (exposure, contrast, etc.) if any are active
     apply_image_adjustments(engine);
 
+    // 4b. Quick mask overlay: translucent blue tint over unselected areas
+    if engine.quick_mask_texture.is_some() {
+        render_quick_mask_overlay(engine);
+    }
+
     // 5. Final blit to screen canvas
     engine.fbo_pool.unbind(&engine.gl);
     let canvas = engine.gl.canvas().unwrap();
@@ -485,6 +490,58 @@ fn render_mask_overlay(
     if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 1); }
+
+    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    engine.draw_fullscreen_quad();
+
+    // Break feedback loop and blit back to composite
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+
+    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    engine.gl.use_program(Some(&engine.shaders.blit.program));
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex));
+    }
+    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+    engine.draw_fullscreen_quad();
+}
+
+/// Render the quick mask as a translucent blue overlay on top of the composite.
+/// Blue covers unselected areas (mask=0), selected areas (mask=255) are clear.
+fn render_quick_mask_overlay(engine: &mut EngineInner) {
+    let Some(tex_handle) = engine.quick_mask_texture else { return };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((engine.doc_width, engine.doc_height));
+    let mask_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    let doc_w = engine.doc_width as f32;
+    let doc_h = engine.doc_height as f32;
+
+    engine.gl.use_program(Some(&engine.shaders.blend.program));
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    if let Some(comp_tex) = engine.texture_pool.get(engine.composite_texture) {
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(comp_tex));
+    }
+    let shader = &engine.shaders.blend;
+    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
+    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), w as f32, h as f32); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
