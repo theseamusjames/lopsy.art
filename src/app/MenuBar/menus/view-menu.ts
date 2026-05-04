@@ -52,6 +52,11 @@ export function createViewMenu(): MenuDef {
         action: () => useUIStore.getState().toggleGrid(),
       },
       {
+        label: 'Show Pixel Grid',
+        checked: ui.showPixelGrid,
+        action: () => useUIStore.getState().togglePixelGrid(),
+      },
+      {
         label: 'Show Guides', shortcut: '\u2318;',
         checked: ui.showGuides,
         action: () => useUIStore.getState().toggleGuides(),

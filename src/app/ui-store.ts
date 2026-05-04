@@ -82,6 +82,7 @@ export type ModalState =
 interface UIState {
   activeTool: ToolId;
   showGrid: boolean;
+  showPixelGrid: boolean;
   showRulers: boolean;
   showGuides: boolean;
   showSeamlessPattern: boolean;
@@ -125,6 +126,7 @@ interface UIState {
   setGradientPreview: (preview: { start: Point; end: Point } | null) => void;
   setActiveTool: (tool: ToolId) => void;
   toggleGrid: () => void;
+  togglePixelGrid: () => void;
   toggleRulers: () => void;
   toggleGuides: () => void;
   toggleSeamlessPattern: () => void;
@@ -186,6 +188,7 @@ interface UIState {
 export const useUIStore = create<UIState>((set, get) => ({
   activeTool: 'move',
   showGrid: false,
+  showPixelGrid: true,
   showRulers: true,
   showGuides: true,
   showSeamlessPattern: false,
@@ -275,6 +278,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     const showGrid = !state.showGrid;
     return showGrid ? { showGrid, snapToGrid: true } : { showGrid };
   }),
+  togglePixelGrid: () => set((state) => ({ showPixelGrid: !state.showPixelGrid })),
   toggleRulers: () => set((state) => ({ showRulers: !state.showRulers })),
   toggleGuides: () => set((state) => ({ showGuides: !state.showGuides })),
   toggleSeamlessPattern: () => set((state) => ({ showSeamlessPattern: !state.showSeamlessPattern })),
