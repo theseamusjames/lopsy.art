@@ -28,9 +28,7 @@ void main() {
     if (u_hasMask == 1) {
         vec2 maskUV = docPos / u_docSize;
         float maskVal = texture(u_maskTex, maskUV).r;
-        if (maskVal <= 0.0) {
-            color = vec4(0.0);
-        }
+        color.a *= maskVal;
     }
 
     fragColor = color;
