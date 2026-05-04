@@ -322,6 +322,7 @@ interface ToolSettings {
   aspectRatioW: number;
   aspectRatioH: number;
   aspectRatioLocked: boolean;
+  marqueeFeather: number;
   gradientType: GradientType;
   gradientStops: readonly GradientStop[];
   gradientReverse: boolean;
@@ -380,6 +381,7 @@ interface ToolSettings {
   setWandTolerance: (tolerance: number) => void;
   setWandContiguous: (contiguous: boolean) => void;
   setWandGraduated: (graduated: boolean) => void;
+  setMarqueeFeather: (feather: number) => void;
   setMagneticLassoWidth: (width: number) => void;
   setMagneticLassoContrast: (contrast: number) => void;
   setMagneticLassoFrequency: (frequency: number) => void;
@@ -447,6 +449,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   aspectRatioW: 1,
   aspectRatioH: 1,
   aspectRatioLocked: false,
+  marqueeFeather: 0,
   gradientType: 'linear',
   gradientStops: [
     { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
@@ -572,6 +575,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setWandTolerance: (tolerance) => set({ wandTolerance: Math.max(0, Math.min(255, tolerance)) }),
   setWandContiguous: (contiguous) => set({ wandContiguous: contiguous }),
   setWandGraduated: (graduated) => set({ wandGraduated: graduated }),
+  setMarqueeFeather: (feather) => set({ marqueeFeather: Math.max(0, Math.min(250, Math.round(feather))) }),
   setMagneticLassoWidth: (width) => set({ magneticLassoWidth: Math.max(1, Math.min(40, Math.round(width))) }),
   setMagneticLassoContrast: (contrast) => set({ magneticLassoContrast: Math.max(1, Math.min(100, Math.round(contrast))) }),
   setMagneticLassoFrequency: (frequency) => set({ magneticLassoFrequency: Math.max(0, Math.min(200, Math.round(frequency))) }),
