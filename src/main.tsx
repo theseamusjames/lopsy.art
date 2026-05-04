@@ -67,7 +67,7 @@ if (import.meta.env.DEV) {
         syncBackgroundColor(engine, bg.r, bg.g, bg.b, bg.a);
         syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH);
         syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds);
-        syncSelection(engine, state.selection);
+        syncSelection(engine, state.selection, useToolSettingsStore.getState().marqueeFeather);
         renderWasm(engine);
         const gl = canvas.getContext('webgl2');
         if (!gl) { resolve(null); return; }

@@ -36,6 +36,7 @@ export interface TrackedState {
   layerOrder: string;
   selectionActive: boolean;
   selectionMask: Uint8ClampedArray | null;
+  selectionFeather: number;
   showGrid: boolean;
   gridSize: number;
   showRulers: boolean;
@@ -76,6 +77,7 @@ function createTrackedState(): TrackedState {
     layerOrder: '',
     selectionActive: false,
     selectionMask: null,
+    selectionFeather: 0,
     showGrid: false,
     gridSize: 0,
     showRulers: false,

@@ -195,7 +195,7 @@ export function useCanvasInteraction(
             const currentState = useEditorStore.getState();
             syncDocumentSize(engine, currentState.document.width, currentState.document.height);
             flushLayerSync(currentState);
-            syncSelection(engine, currentState.selection);
+            syncSelection(engine, currentState.selection, useToolSettingsStore.getState().marqueeFeather);
             beginStroke(engine, activeLayerId);
 
             // beginStroke calls ensure_layer_full_size on the WASM side,
@@ -422,7 +422,7 @@ export function useCanvasInteraction(
           resetTrackedState(eng);
           const smoothState = useEditorStore.getState();
           flushLayerSync(smoothState);
-          syncSelection(eng, smoothState.selection);
+          syncSelection(eng, smoothState.selection, useToolSettingsStore.getState().marqueeFeather);
 
           beginStroke(eng, layerId);
           const arr = new Float64Array(result.sampledPoints.length * 2);

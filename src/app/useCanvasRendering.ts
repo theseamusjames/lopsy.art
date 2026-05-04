@@ -169,7 +169,7 @@ function renderFrameGpu(
       }
     },
   );
-  syncSelection(engine, selection);
+  syncSelection(engine, selection, useToolSettingsStore.getState().marqueeFeather);
   syncGrid(engine, showGrid, gridSize);
   syncRulers(engine, showRulers);
   syncSeamlessPattern(engine, uiState.showSeamlessPattern, uiState.dimSeamlessPattern);
