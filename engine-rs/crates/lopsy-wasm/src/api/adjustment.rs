@@ -64,6 +64,18 @@ pub fn set_image_vibrance(engine: &mut Engine, value: f32) {
     engine.inner.needs_recomposite = true;
 }
 
+#[wasm_bindgen(js_name = "setImageTemperature")]
+pub fn set_image_temperature(engine: &mut Engine, value: f32) {
+    engine.inner.adjustments.temperature = value;
+    engine.inner.needs_recomposite = true;
+}
+
+#[wasm_bindgen(js_name = "setImageTint")]
+pub fn set_image_tint(engine: &mut Engine, value: f32) {
+    engine.inner.adjustments.tint = value;
+    engine.inner.needs_recomposite = true;
+}
+
 #[wasm_bindgen(js_name = "clearImageAdjustments")]
 pub fn clear_image_adjustments(engine: &mut Engine) {
     engine.inner.adjustments.exposure = 0.0;
@@ -75,6 +87,8 @@ pub fn clear_image_adjustments(engine: &mut Engine) {
     engine.inner.adjustments.vignette = 0.0;
     engine.inner.adjustments.saturation = 0.0;
     engine.inner.adjustments.vibrance = 0.0;
+    engine.inner.adjustments.temperature = 0.0;
+    engine.inner.adjustments.tint = 0.0;
     if let Some(tex) = engine.inner.adjustments.curves_texture.take() {
         engine.inner.texture_pool.release(tex);
     }
@@ -296,6 +310,8 @@ pub fn set_group_adjustments(
     saturation: f32,
     vibrance: f32,
     vignette: f32,
+    temperature: f32,
+    tint: f32,
 ) -> Result<(), JsError> {
     let child_ids: Vec<String> = serde_json::from_str(child_ids_json)
         .map_err(|e| JsError::new(&format!("Invalid child IDs JSON: {e}")))?;
@@ -309,6 +325,8 @@ pub fn set_group_adjustments(
         saturation,
         vibrance,
         vignette,
+        temperature,
+        tint,
         ..Default::default()
     };
     engine.inner.group_adjustments.insert(

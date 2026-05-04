@@ -299,6 +299,7 @@ Available node types (Add menu):
 - **Contrast** — -100 to +100
 - **Highlights / Shadows** — Highlights -100 to +100, Shadows -100 to +100, Whites -100 to +100, Blacks -100 to +100
 - **Saturation** — Saturation -100 to +100, Vibrance -100 to +100
+- **Temperature / Tint** — Temperature -100 to +100 (negative = cool/blue, positive = warm/orange), Tint -100 to +100 (negative = magenta, positive = green)
 - **Vignette** — 0 to 100 (now correctly piped through the per-group adjustment pipeline)
 - **Curves** — per-channel tone curves (RGB master + R / G / B), evaluated as
   monotone cubic Hermite splines. Master applies to every channel first,

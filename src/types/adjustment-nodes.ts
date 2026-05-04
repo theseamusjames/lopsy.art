@@ -31,6 +31,12 @@ export interface SaturationNode extends BaseAdjustmentNode {
   readonly vibrance: number;
 }
 
+export interface TemperatureTintNode extends BaseAdjustmentNode {
+  readonly type: 'temperature-tint';
+  readonly temperature: number;
+  readonly tint: number;
+}
+
 export interface VignetteNode extends BaseAdjustmentNode {
   readonly type: 'vignette';
   readonly vignette: number;
@@ -100,6 +106,7 @@ export type AdjustmentNode =
   | ContrastNode
   | HighlightsShadowsNode
   | SaturationNode
+  | TemperatureTintNode
   | VignetteNode
   | CurvesNode
   | LevelsNode

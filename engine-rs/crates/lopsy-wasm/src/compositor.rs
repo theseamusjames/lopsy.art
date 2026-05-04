@@ -1530,6 +1530,8 @@ fn set_adjustment_uniforms(
     if let Some(loc) = shader.location(gl, "u_blacks")     { gl.uniform1f(Some(&loc), adj.blacks); }
     if let Some(loc) = shader.location(gl, "u_saturation") { gl.uniform1f(Some(&loc), adj.saturation / 100.0); }
     if let Some(loc) = shader.location(gl, "u_vibrance")   { gl.uniform1f(Some(&loc), adj.vibrance / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_temperature"){ gl.uniform1f(Some(&loc), adj.temperature / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_tint")       { gl.uniform1f(Some(&loc), adj.tint / 100.0); }
     // Hue/Saturation
     if let Some(loc) = shader.location(gl, "u_hue_shift")       { gl.uniform1f(Some(&loc), adj.hue_shift); }
     if let Some(loc) = shader.location(gl, "u_hsl_saturation")  { gl.uniform1f(Some(&loc), adj.hsl_saturation); }
@@ -1620,6 +1622,8 @@ fn has_any_adjustment(adj: &crate::engine::ImageAdjustmentState) -> bool {
         || adj.blacks.abs() > 1e-6
         || adj.saturation.abs() > 1e-6
         || adj.vibrance.abs() > 1e-6
+        || adj.temperature.abs() > 1e-6
+        || adj.tint.abs() > 1e-6
         || adj.has_curves
         || adj.has_levels
         || adj.hue_shift.abs() > 1e-6

@@ -38,6 +38,8 @@ import {
   setImageVignette,
   setImageSaturation,
   setImageVibrance,
+  setImageTemperature,
+  setImageTint,
   setImageCurvesLut,
   clearImageCurves,
   setImageLevelsLut,
@@ -254,6 +256,8 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
   setImageVignette(engine, adjustments.vignette);
   setImageSaturation(engine, adjustments.saturation);
   setImageVibrance(engine, adjustments.vibrance);
+  setImageTemperature(engine, adjustments.temperature);
+  setImageTint(engine, adjustments.tint);
 
   const levels = adjustments.levels;
   if (!levels || isIdentityLevels(levels)) {
@@ -383,6 +387,8 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       Math.abs(adj.saturation) > 1e-6 ||
       Math.abs(adj.vibrance) > 1e-6 ||
       Math.abs(adj.vignette) > 1e-6 ||
+      Math.abs(adj.temperature) > 1e-6 ||
+      Math.abs(adj.tint) > 1e-6 ||
       hasCurves || hasLevels ||
       !!adj.invert ||
       (adj.hueSatHue ?? 0) !== 0 || (adj.hueSatSaturation ?? 0) !== 0 || (adj.hueSatLightness ?? 0) !== 0 ||
@@ -408,6 +414,8 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       adj?.saturation ?? 0,
       adj?.vibrance ?? 0,
       adj?.vignette ?? 0,
+      adj?.temperature ?? 0,
+      adj?.tint ?? 0,
     );
     if (hasCurves && adj?.curves) {
       const lut = buildCurvesLutRgba(adj.curves);

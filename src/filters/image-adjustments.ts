@@ -16,6 +16,8 @@ export interface ImageAdjustments {
   vignette: number;
   saturation: number;
   vibrance: number;
+  temperature: number;
+  tint: number;
   curves?: Curves;
   levels?: Levels;
   // Hue/Saturation (HSL-space)
@@ -59,6 +61,8 @@ export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
   vignette: 0,
   saturation: 0,
   vibrance: 0,
+  temperature: 0,
+  tint: 0,
   curves: IDENTITY_CURVES,
   levels: IDENTITY_LEVELS,
 };
@@ -66,7 +70,7 @@ export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
 export function aggregateGroupAdjustments(
   layers: readonly { type: string; visible: boolean; adjustments?: readonly AdjustmentNode[]; adjustmentsEnabled?: boolean }[],
 ): ImageAdjustments | null {
-  const agg: ImageAdjustments = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0, saturation: 0, vibrance: 0 };
+  const agg: ImageAdjustments = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0 };
   let found = false;
   // Curves and Levels don't compose linearly — pick the first non-identity
   // set we find. This matches how groups stack adjustment layers in
@@ -85,6 +89,8 @@ export function aggregateGroupAdjustments(
       agg.vignette += flat.vignette;
       agg.saturation += flat.saturation ?? 0;
       agg.vibrance += flat.vibrance ?? 0;
+      agg.temperature += flat.temperature ?? 0;
+      agg.tint += flat.tint ?? 0;
       if (!pickedCurves && flat.curves && !isIdentityCurves(flat.curves)) {
         pickedCurves = flat.curves;
       }
@@ -110,6 +116,8 @@ export function hasActiveAdjustments(adj: ImageAdjustments): boolean {
     adj.vignette !== 0 ||
     adj.saturation !== 0 ||
     adj.vibrance !== 0 ||
+    adj.temperature !== 0 ||
+    adj.tint !== 0 ||
     !isIdentityCurves(adj.curves) ||
     !isIdentityLevels(adj.levels)
   );
@@ -221,6 +229,23 @@ function applyVibrance(imageData: ImageData, vibrance: number): void {
   }
 }
 
+function applyTemperatureTint(imageData: ImageData, temperature: number, tint: number): void {
+  const data = imageData.data;
+  const t = temperature / 100;
+  const n = tint / 100;
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i]! / 255;
+    let g = data[i + 1]! / 255;
+    let b = data[i + 2]! / 255;
+    r += t * 0.1;
+    b -= t * 0.1;
+    g += n * 0.1;
+    data[i] = Math.max(0, Math.min(255, Math.round(r * 255)));
+    data[i + 1] = Math.max(0, Math.min(255, Math.round(g * 255)));
+    data[i + 2] = Math.max(0, Math.min(255, Math.round(b * 255)));
+  }
+}
+
 export function applyAdjustmentsToImageData(
   imageData: ImageData,
   adj: ImageAdjustments,
@@ -249,6 +274,10 @@ export function applyAdjustmentsToImageData(
 
   if (adj.vibrance !== 0) {
     applyVibrance(imageData, adj.vibrance);
+  }
+
+  if (adj.temperature !== 0 || adj.tint !== 0) {
+    applyTemperatureTint(imageData, adj.temperature, adj.tint);
   }
 
   if (adj.vignette !== 0) {

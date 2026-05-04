@@ -41,6 +41,14 @@ export function migrateFromLegacy(adj: ImageAdjustments): AdjustmentNode[] {
       vibrance: adj.vibrance,
     });
   }
+  if (adj.temperature !== 0 || adj.tint !== 0) {
+    nodes.push({
+      id: crypto.randomUUID(), enabled: true,
+      type: 'temperature-tint',
+      temperature: adj.temperature,
+      tint: adj.tint,
+    });
+  }
   if (adj.vignette !== 0) {
     nodes.push({ id: crypto.randomUUID(), enabled: true, type: 'vignette', vignette: adj.vignette });
   }
@@ -82,6 +90,10 @@ export function nodesToLegacyAdjustments(nodes: readonly AdjustmentNode[]): Imag
       case 'saturation':
         result.saturation += node.saturation;
         result.vibrance += node.vibrance;
+        break;
+      case 'temperature-tint':
+        result.temperature += node.temperature;
+        result.tint += node.tint;
         break;
       case 'vignette':
         result.vignette += node.vignette;
@@ -165,6 +177,8 @@ export function createDefaultNode(type: AdjustmentNodeType): AdjustmentNode {
       return { id, enabled: true, type: 'highlights-shadows', highlights: 0, shadows: 0, whites: 0, blacks: 0 };
     case 'saturation':
       return { id, enabled: true, type: 'saturation', saturation: 0, vibrance: 0 };
+    case 'temperature-tint':
+      return { id, enabled: true, type: 'temperature-tint', temperature: 0, tint: 0 };
     case 'vignette':
       return { id, enabled: true, type: 'vignette', vignette: 0 };
     case 'curves':
@@ -194,6 +208,7 @@ export const ADJUSTMENT_NODE_LABELS: Record<AdjustmentNodeType, string> = {
   'contrast': 'Contrast',
   'highlights-shadows': 'Highlights & Shadows',
   'saturation': 'Saturation & Vibrance',
+  'temperature-tint': 'Temperature & Tint',
   'vignette': 'Vignette',
   'curves': 'Curves',
   'levels': 'Levels',

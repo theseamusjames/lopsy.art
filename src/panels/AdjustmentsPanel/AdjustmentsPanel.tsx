@@ -24,6 +24,7 @@ import type {
   ContrastNode,
   HighlightsShadowsNode,
   SaturationNode,
+  TemperatureTintNode,
   VignetteNode,
   CurvesNode,
   LevelsNode,
@@ -65,6 +66,7 @@ const ADD_MENU_TYPES: AdjustmentNodeType[] = [
   'contrast',
   'highlights-shadows',
   'saturation',
+  'temperature-tint',
   'vignette',
   'curves',
   'levels',
@@ -323,6 +325,8 @@ function NodeControls({ node, onChange }: NodeControlsProps) {
       return <HighlightsShadowsControls node={node} onChange={onChange} />;
     case 'saturation':
       return <SaturationControls node={node} onChange={onChange} />;
+    case 'temperature-tint':
+      return <TemperatureTintControls node={node} onChange={onChange} />;
     case 'vignette':
       return <VignetteControls node={node} onChange={onChange} />;
     case 'curves':
@@ -388,6 +392,17 @@ function SaturationControls({ node, onChange }: { node: SaturationNode; onChange
         onChange={(v) => onChange({ saturation: v })} />
       <Slider label="Vibrance" value={node.vibrance} min={-100} max={100} step={1} defaultValue={0}
         onChange={(v) => onChange({ vibrance: v })} />
+    </div>
+  );
+}
+
+function TemperatureTintControls({ node, onChange }: { node: TemperatureTintNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  return (
+    <div className={styles.sliders}>
+      <Slider label="Temperature" value={node.temperature} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ temperature: v })} />
+      <Slider label="Tint" value={node.tint} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ tint: v })} />
     </div>
   );
 }

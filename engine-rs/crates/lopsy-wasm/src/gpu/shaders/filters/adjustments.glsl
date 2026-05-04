@@ -11,6 +11,8 @@ uniform float u_whites;
 uniform float u_blacks;
 uniform float u_saturation;
 uniform float u_vibrance;
+uniform float u_temperature;
+uniform float u_tint;
 // Levels: 256x1 RGBA texture. R/G/B = per-channel Levels LUTs,
 // A = master RGB Levels LUT. u_hasLevels=0 skips the lookups.
 // Levels are applied before Curves (matches Photoshop compositing order).
@@ -110,6 +112,14 @@ void main() {
         float boost = u_vibrance * (1.0 - sat);
         float gray2 = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
         c.rgb = mix(vec3(gray2), c.rgb, 1.0 + boost);
+    }
+
+    // Temperature: shift warm (orange) / cool (blue)
+    // Tint: shift green / magenta
+    if (abs(u_temperature) > 0.001 || abs(u_tint) > 0.001) {
+        c.r += u_temperature * 0.1;
+        c.b -= u_temperature * 0.1;
+        c.g += u_tint * 0.1;
     }
 
     c.rgb = clamp(c.rgb, 0.0, 1.0);
