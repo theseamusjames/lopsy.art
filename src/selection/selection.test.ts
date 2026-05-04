@@ -7,6 +7,7 @@ import {
   selectionBounds,
   isEmptySelection,
   getSelectionEdges,
+  featherSelection,
 } from './selection';
 
 describe('createRectSelection', () => {
@@ -99,6 +100,54 @@ describe('isEmptySelection', () => {
     const mask = new Uint8ClampedArray(10);
     mask[5] = 1;
     expect(isEmptySelection(mask)).toBe(false);
+  });
+});
+
+describe('featherSelection', () => {
+  it('returns copy when radius is 0', () => {
+    const mask = new Uint8ClampedArray([0, 255, 0, 255]);
+    const result = featherSelection(mask, 4, 1, 0);
+    expect(result[0]).toBe(0);
+    expect(result[1]).toBe(255);
+  });
+
+  it('produces intermediate values at a hard edge', () => {
+    // 10x1 mask: left half selected, right half not
+    const mask = new Uint8ClampedArray(10);
+    for (let i = 0; i < 5; i++) mask[i] = 255;
+    const result = featherSelection(mask, 10, 1, 4);
+    // Pixels well inside the selected region should remain near 255
+    expect(result[0]!).toBeGreaterThan(200);
+    // Pixels well outside should remain near 0
+    expect(result[9]!).toBeLessThan(55);
+    // Pixels at the edge (index 4 and 5) should be intermediate
+    expect(result[4]!).toBeGreaterThan(0);
+    expect(result[4]!).toBeLessThan(255);
+    expect(result[5]!).toBeGreaterThan(0);
+    expect(result[5]!).toBeLessThan(255);
+  });
+
+  it('feathers a hard-edged rectangle: center is max, edge pixels have falloff', () => {
+    // 10x10 with a central 4x4 rectangle selected
+    const mask = new Uint8ClampedArray(100);
+    for (let y = 3; y < 7; y++) {
+      for (let x = 3; x < 7; x++) {
+        mask[y * 10 + x] = 255;
+      }
+    }
+    const result = featherSelection(mask, 10, 10, 2);
+    const centerVal = result[5 * 10 + 5]!;
+    const edgeVal = result[2 * 10 + 5]!;
+    const cornerVal = result[0]!;
+    // Center of selection has the highest value
+    expect(centerVal).toBeGreaterThan(edgeVal);
+    // Pixel just outside the rect is still partially selected (feathered)
+    expect(edgeVal).toBeGreaterThan(0);
+    // Corner is less than center (farther from selection)
+    expect(cornerVal).toBeLessThan(centerVal);
+    // Feathered values are in 0-255 range
+    expect(centerVal).toBeLessThanOrEqual(255);
+    expect(cornerVal).toBeGreaterThanOrEqual(0);
   });
 });
 

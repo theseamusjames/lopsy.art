@@ -216,6 +216,81 @@ export function shrinkSelection(
 }
 
 /**
+ * Feather a selection mask by applying a separable Gaussian approximation
+ * (three passes of box blur) to the mask values.
+ * radius is in pixels; larger values produce softer edges.
+ */
+export function featherSelection(
+  mask: Uint8ClampedArray,
+  width: number,
+  height: number,
+  radius: number,
+): Uint8ClampedArray {
+  if (radius <= 0) return new Uint8ClampedArray(mask);
+
+  // Three-pass box blur approximates a Gaussian. Box kernel half-width derived
+  // from the target standard deviation: sigma ≈ radius/2, box_r ≈ sigma.
+  const boxR = Math.max(1, Math.round(radius / 2));
+
+  let src = new Float32Array(width * height);
+  for (let i = 0; i < mask.length; i++) {
+    src[i] = (mask[i] ?? 0) / 255;
+  }
+
+  for (let pass = 0; pass < 3; pass++) {
+    const tmp = new Float32Array(width * height);
+    // Horizontal pass
+    for (let y = 0; y < height; y++) {
+      let sum = 0;
+      let count = 0;
+      for (let x = 0; x < Math.min(boxR, width); x++) {
+        sum += src[y * width + x]!;
+        count++;
+      }
+      for (let x = 0; x < width; x++) {
+        if (x + boxR < width) {
+          sum += src[y * width + x + boxR]!;
+          count++;
+        }
+        if (x - boxR - 1 >= 0) {
+          sum -= src[y * width + x - boxR - 1]!;
+          count--;
+        }
+        tmp[y * width + x] = sum / count;
+      }
+    }
+    const tmp2 = new Float32Array(width * height);
+    // Vertical pass
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      let count = 0;
+      for (let y = 0; y < Math.min(boxR, height); y++) {
+        sum += tmp[y * width + x]!;
+        count++;
+      }
+      for (let y = 0; y < height; y++) {
+        if (y + boxR < height) {
+          sum += tmp[(y + boxR) * width + x]!;
+          count++;
+        }
+        if (y - boxR - 1 >= 0) {
+          sum -= tmp[(y - boxR - 1) * width + x]!;
+          count--;
+        }
+        tmp2[y * width + x] = sum / count;
+      }
+    }
+    src = tmp2;
+  }
+
+  const result = new Uint8ClampedArray(width * height);
+  for (let i = 0; i < result.length; i++) {
+    result[i] = Math.round(Math.min(1, Math.max(0, src[i]!)) * 255);
+  }
+  return result;
+}
+
+/**
  * Extract edge segments from a selection mask for marching ants rendering.
  * Returns arrays of horizontal and vertical line segments at pixel boundaries
  * where selected pixels border unselected pixels.

@@ -210,6 +210,7 @@ import init, {
   isFontLoaded,
   expandLayerToDocSize,
   cropLayerToContent,
+  floodFillGraduated,
 } from './pkg/lopsy_wasm';
 
 export type { Engine };
@@ -438,4 +439,5 @@ export {
   isFontLoaded,
   expandLayerToDocSize,
   cropLayerToContent,
+  floodFillGraduated,
 };

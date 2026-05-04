@@ -333,6 +333,7 @@ interface ToolSettings {
   smudgeStrength: number;
   wandTolerance: number;
   wandContiguous: boolean;
+  wandGraduated: boolean;
   magneticLassoWidth: number;
   magneticLassoContrast: number;
   magneticLassoFrequency: number;
@@ -378,6 +379,7 @@ interface ToolSettings {
   setSmudgeStrength: (strength: number) => void;
   setWandTolerance: (tolerance: number) => void;
   setWandContiguous: (contiguous: boolean) => void;
+  setWandGraduated: (graduated: boolean) => void;
   setMagneticLassoWidth: (width: number) => void;
   setMagneticLassoContrast: (contrast: number) => void;
   setMagneticLassoFrequency: (frequency: number) => void;
@@ -459,6 +461,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   smudgeStrength: 50,
   wandTolerance: 32,
   wandContiguous: true,
+  wandGraduated: false,
   magneticLassoWidth: 10,
   magneticLassoContrast: 40,
   magneticLassoFrequency: 40,
@@ -568,6 +571,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setSmudgeStrength: (strength) => set({ smudgeStrength: Math.max(0, Math.min(100, strength)) }),
   setWandTolerance: (tolerance) => set({ wandTolerance: Math.max(0, Math.min(255, tolerance)) }),
   setWandContiguous: (contiguous) => set({ wandContiguous: contiguous }),
+  setWandGraduated: (graduated) => set({ wandGraduated: graduated }),
   setMagneticLassoWidth: (width) => set({ magneticLassoWidth: Math.max(1, Math.min(40, Math.round(width))) }),
   setMagneticLassoContrast: (contrast) => set({ magneticLassoContrast: Math.max(1, Math.min(100, Math.round(contrast))) }),
   setMagneticLassoFrequency: (frequency) => set({ magneticLassoFrequency: Math.max(0, Math.min(200, Math.round(frequency))) }),

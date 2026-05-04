@@ -21,6 +21,15 @@ pub fn flood_fill(
     lopsy_core::flood_fill::flood_fill(pixel_data, width, height, start_x, start_y, tolerance, contiguous)
 }
 
+#[wasm_bindgen(js_name = "floodFillGraduated")]
+pub fn flood_fill_graduated(
+    pixel_data: &[u8], width: u32, height: u32,
+    start_x: u32, start_y: u32,
+    tolerance: u32, contiguous: bool,
+) -> Vec<u8> {
+    lopsy_core::flood_fill::flood_fill_graduated(pixel_data, width, height, start_x, start_y, tolerance, contiguous)
+}
+
 #[wasm_bindgen(js_name = "applyFillToLayer")]
 pub fn apply_fill_to_layer(
     engine: &mut Engine, layer_id: &str,

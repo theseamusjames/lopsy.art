@@ -5,8 +5,10 @@ import styles from '../OptionsBar.module.css';
 export function WandOptions() {
   const wandTolerance = useToolSettingsStore((s) => s.wandTolerance);
   const wandContiguous = useToolSettingsStore((s) => s.wandContiguous);
+  const wandGraduated = useToolSettingsStore((s) => s.wandGraduated);
   const setWandTolerance = useToolSettingsStore((s) => s.setWandTolerance);
   const setWandContiguous = useToolSettingsStore((s) => s.setWandContiguous);
+  const setWandGraduated = useToolSettingsStore((s) => s.setWandGraduated);
 
   return (
     <>
@@ -18,6 +20,14 @@ export function WandOptions() {
           onChange={(e) => setWandContiguous(e.target.checked)}
         />
         Contiguous
+      </label>
+      <label className={styles.checkbox}>
+        <input
+          type="checkbox"
+          checked={wandGraduated}
+          onChange={(e) => setWandGraduated(e.target.checked)}
+        />
+        Graduated
       </label>
     </>
   );
