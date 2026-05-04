@@ -8,6 +8,7 @@ import { HistoryPanel } from '../panels/HistoryPanel/HistoryPanel';
 import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
 import { AdjustmentsPanel } from '../panels/AdjustmentsPanel/AdjustmentsPanel';
 import { PathsPanel } from '../panels/PathsPanel/PathsPanel';
+import { NavigatorPanel } from '../panels/NavigatorPanel/NavigatorPanel';
 import { ReferenceImagePanel } from '../panels/ReferenceImagePanel/ReferenceImagePanel';
 import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
 import { MenuBar } from './MenuBar/MenuBar';
@@ -256,6 +257,7 @@ export function App() {
           {visiblePanels.size > 0 && (
             <div className={styles.sidebar}>
               <div className={styles.sidebarScroll}>
+                {visiblePanels.has('navigator') && <NavigatorPanel />}
                 {visiblePanels.has('info') && <InfoPanel />}
                 {visiblePanels.has('color') && <ColorPanel />}
                 {visiblePanels.has('history') && <HistoryPanel />}
