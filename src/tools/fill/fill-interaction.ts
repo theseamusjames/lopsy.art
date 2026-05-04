@@ -63,9 +63,7 @@ export function handleFillDown(ctx: InteractionContext): void {
   if (selection.active && selection.mask) {
     const selMask = selection.mask;
     for (let i = 0; i < fillMask.length && i < selMask.length; i++) {
-      if (selMask[i] === 0) {
-        fillMask[i] = 0;
-      }
+      fillMask[i] = Math.round((fillMask[i]! * (selMask[i] ?? 0)) / 255);
     }
   }
 

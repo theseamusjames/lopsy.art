@@ -3,7 +3,6 @@ import { getInsertionGroupId, getInsertionOrderIndex, addToGroup } from '../../l
 import { clearJsPixelData } from './clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { syncSelection } from '../../engine-wasm/engine-sync';
-import { useToolSettingsStore } from '../tool-settings-store';
 import {
   clipboardCopy,
   clipboardCut,
@@ -64,7 +63,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     // Ensure selection mask is uploaded to GPU before copying
     if (hasSelection) {
-      syncSelection(engine, sel, useToolSettingsStore.getState().marqueeFeather);
+      syncSelection(engine, sel);
     }
 
     const bx = hasSelection && sel.bounds ? Math.round(sel.bounds.x) : 0;
@@ -152,7 +151,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     // Ensure selection mask is uploaded to GPU before cutting
     if (hasSelection) {
-      syncSelection(engine, sel, useToolSettingsStore.getState().marqueeFeather);
+      syncSelection(engine, sel);
     }
 
     const bx = hasSelection && sel.bounds ? Math.round(sel.bounds.x) : 0;

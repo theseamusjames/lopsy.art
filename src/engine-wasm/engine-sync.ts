@@ -23,7 +23,6 @@ import {
   render,
   markAllDirty,
   setSelectionMask,
-  featherSelectionMask,
   clearSelection,
   setGridVisible,
   setGridSize,
@@ -116,24 +115,19 @@ export function syncViewport(
   tracked.viewportHeight = screenH;
 }
 
-export function syncSelection(engine: Engine, selection: SelectionData, featherRadius = 0): void {
+export function syncSelection(engine: Engine, selection: SelectionData): void {
   const tracked = getTracked(engine);
   if (selection.active && selection.mask) {
-    if (tracked.selectionMask !== selection.mask || tracked.selectionFeather !== featherRadius) {
+    if (tracked.selectionMask !== selection.mask) {
       const bytes = new Uint8Array(selection.mask.buffer, selection.mask.byteOffset, selection.mask.byteLength);
       setSelectionMask(engine, bytes, selection.maskWidth, selection.maskHeight);
-      if (featherRadius > 0) {
-        featherSelectionMask(engine, featherRadius);
-      }
       tracked.selectionMask = selection.mask;
-      tracked.selectionFeather = featherRadius;
       tracked.selectionActive = true;
     }
   } else if (tracked.selectionActive) {
     clearSelection(engine);
     tracked.selectionActive = false;
     tracked.selectionMask = null;
-    tracked.selectionFeather = 0;
   }
 }
 
