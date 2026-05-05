@@ -134,7 +134,7 @@ export function NavigatorPanel() {
   const zoomPercent = Math.round(viewport.zoom * 100);
 
   const ZOOM_MIN = 0.1;
-  const ZOOM_MAX = 5.0;
+  const ZOOM_MAX = 6.0;
 
   const handleZoomSliderChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
