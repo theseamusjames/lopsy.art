@@ -284,7 +284,8 @@ export const fileMenu: MenuDef = {
     { label: 'New', shortcut: '⌘N', action: () => { if (confirmIfDirty()) useUIStore.getState().setShowNewDocumentModal(true); } },
     { label: 'Open...', shortcut: '⌘O', action: () => openFileFromDisk() },
     { separator: true, label: '' },
-    { label: 'Export…', shortcut: '⇧⌘E', action: () => openExportDialogFn?.() },
+    { label: 'Export…', shortcut: '⌥⇧⌘E', action: () => openExportDialogFn?.() },
+    { label: 'Quick Export PNG', shortcut: '⇧⌘E', action: () => exportCanvas('png') },
     { label: 'Export PSD', action: () => exportPsdFile(16) },
   ],
 };
