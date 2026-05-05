@@ -2,6 +2,8 @@ import type { Curves } from './curves';
 import { IDENTITY_CURVES, isIdentityCurves, applyCurvesToImageData } from './curves';
 import type { Levels } from './levels';
 import { IDENTITY_LEVELS, isIdentityLevels, applyLevelsToImageData } from './levels';
+import type { AdjustmentNode } from '../types/adjustment-nodes';
+import { nodesToLegacyAdjustments } from './adjustment-node-utils';
 
 export interface ImageAdjustments {
   exposure: number;
@@ -41,7 +43,7 @@ export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
 };
 
 export function aggregateGroupAdjustments(
-  layers: readonly { type: string; visible: boolean; adjustments?: ImageAdjustments; adjustmentsEnabled?: boolean }[],
+  layers: readonly { type: string; visible: boolean; adjustments?: readonly AdjustmentNode[]; adjustmentsEnabled?: boolean }[],
 ): ImageAdjustments | null {
   const agg: ImageAdjustments = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0, saturation: 0, vibrance: 0 };
   let found = false;
@@ -52,20 +54,21 @@ export function aggregateGroupAdjustments(
   let pickedLevels: Levels | undefined;
   for (const l of layers) {
     if (l.type === 'group' && l.adjustments && l.adjustmentsEnabled !== false && l.visible) {
-      agg.exposure += l.adjustments.exposure;
-      agg.contrast += l.adjustments.contrast;
-      agg.highlights += l.adjustments.highlights;
-      agg.shadows += l.adjustments.shadows;
-      agg.whites += l.adjustments.whites;
-      agg.blacks += l.adjustments.blacks;
-      agg.vignette += l.adjustments.vignette;
-      agg.saturation += l.adjustments.saturation ?? 0;
-      agg.vibrance += l.adjustments.vibrance ?? 0;
-      if (!pickedCurves && l.adjustments.curves && !isIdentityCurves(l.adjustments.curves)) {
-        pickedCurves = l.adjustments.curves;
+      const flat = nodesToLegacyAdjustments(l.adjustments);
+      agg.exposure += flat.exposure;
+      agg.contrast += flat.contrast;
+      agg.highlights += flat.highlights;
+      agg.shadows += flat.shadows;
+      agg.whites += flat.whites;
+      agg.blacks += flat.blacks;
+      agg.vignette += flat.vignette;
+      agg.saturation += flat.saturation ?? 0;
+      agg.vibrance += flat.vibrance ?? 0;
+      if (!pickedCurves && flat.curves && !isIdentityCurves(flat.curves)) {
+        pickedCurves = flat.curves;
       }
-      if (!pickedLevels && l.adjustments.levels && !isIdentityLevels(l.adjustments.levels)) {
-        pickedLevels = l.adjustments.levels;
+      if (!pickedLevels && flat.levels && !isIdentityLevels(flat.levels)) {
+        pickedLevels = flat.levels;
       }
       found = true;
     }

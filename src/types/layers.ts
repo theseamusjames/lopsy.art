@@ -1,7 +1,7 @@
 import type { Color, BlendMode } from './color';
 import type { Point } from './geometry';
 import type { LayerEffects, LayerMask } from './effects';
-import type { ImageAdjustments } from '../filters/image-adjustments';
+import type { AdjustmentNode } from './adjustment-nodes';
 
 export type LayerType = 'raster' | 'text' | 'shape' | 'group';
 
@@ -59,7 +59,7 @@ export interface GroupLayer extends LayerBase {
   readonly type: 'group';
   readonly children: readonly string[]; // layer IDs
   readonly collapsed: boolean;
-  readonly adjustments: ImageAdjustments;
+  readonly adjustments: readonly AdjustmentNode[];
   readonly adjustmentsEnabled: boolean;
 }
 

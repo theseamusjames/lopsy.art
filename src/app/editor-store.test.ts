@@ -130,45 +130,112 @@ describe('editor-store history', () => {
   });
 });
 
-describe('setGroupAdjustments — issue #241 (partial object black screen)', () => {
+describe('adjustment node actions — dynamic AdjustmentNode list on groups', () => {
   beforeEach(() => {
     useEditorStore.getState().createDocument(10, 10, false);
   });
 
-  it('merges a partial adjustments object with defaults so missing fields stay 0', () => {
+  it('addAdjustmentNode appends a new enabled node with defaults', () => {
     const state = useEditorStore.getState();
     state.addGroup('Test Group');
     const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group')!.id;
 
-    state.setGroupAdjustments(groupId, { exposure: 0.15, contrast: 15, vignette: 40 });
+    state.addAdjustmentNode(groupId, 'exposure');
+    state.addAdjustmentNode(groupId, 'contrast');
 
     const group = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
     if (!group || group.type !== 'group') throw new Error('group missing');
-    expect(group.adjustments.exposure).toBe(0.15);
-    expect(group.adjustments.contrast).toBe(15);
-    expect(group.adjustments.vignette).toBe(40);
-    // The fields the caller omitted must NOT be undefined — that's what
-    // produces the all-black GPU output. They have to be 0 (from defaults).
-    expect(group.adjustments.highlights).toBe(0);
-    expect(group.adjustments.shadows).toBe(0);
-    expect(group.adjustments.whites).toBe(0);
-    expect(group.adjustments.blacks).toBe(0);
-    expect(group.adjustments.saturation).toBe(0);
-    expect(group.adjustments.vibrance).toBe(0);
+    expect(group.adjustments.length).toBe(2);
+    const expNode = group.adjustments[0];
+    expect(expNode?.type).toBe('exposure');
+    expect(expNode?.enabled).toBe(true);
+    const conNode = group.adjustments[1];
+    expect(conNode?.type).toBe('contrast');
   });
 
-  it('preserves previously-set adjustment fields when called with a partial follow-up object', () => {
+  it('updateAdjustmentNode changes node params without affecting other nodes', () => {
     const state = useEditorStore.getState();
     state.addGroup('Test Group');
     const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group')!.id;
 
-    state.setGroupAdjustments(groupId, { exposure: 0.5, saturation: 30 });
-    state.setGroupAdjustments(groupId, { exposure: 0.25 });
+    state.addAdjustmentNode(groupId, 'exposure');
+    state.addAdjustmentNode(groupId, 'saturation');
+
+    const midGroup = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
+    if (!midGroup || midGroup.type !== 'group') throw new Error('group missing');
+    const nodeId = midGroup.adjustments[0]!.id;
+
+    state.updateAdjustmentNode(groupId, nodeId, { exposure: 0.5 });
 
     const group = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
     if (!group || group.type !== 'group') throw new Error('group missing');
-    expect(group.adjustments.exposure).toBe(0.25);
-    // saturation from the first call must be preserved across the partial second call.
-    expect(group.adjustments.saturation).toBe(30);
+    const expNode = group.adjustments.find((n) => n.type === 'exposure');
+    if (!expNode || expNode.type !== 'exposure') throw new Error('exposure node missing');
+    expect(expNode.exposure).toBe(0.5);
+    // Other nodes are untouched.
+    expect(group.adjustments.find((n) => n.type === 'saturation')).toBeDefined();
+  });
+
+  it('removeAdjustmentNode removes only the specified node', () => {
+    const state = useEditorStore.getState();
+    state.addGroup('Test Group');
+    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group')!.id;
+
+    state.addAdjustmentNode(groupId, 'exposure');
+    state.addAdjustmentNode(groupId, 'vignette');
+
+    const midGroup = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
+    if (!midGroup || midGroup.type !== 'group') throw new Error('group missing');
+    const nodeId = midGroup.adjustments[0]!.id;
+    state.removeAdjustmentNode(groupId, nodeId);
+
+    const group = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
+    if (!group || group.type !== 'group') throw new Error('group missing');
+    expect(group.adjustments.length).toBe(1);
+    expect(group.adjustments[0]?.type).toBe('vignette');
+  });
+
+  it('toggleAdjustmentNode flips the enabled field', () => {
+    const state = useEditorStore.getState();
+    state.addGroup('Test Group');
+    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group')!.id;
+
+    state.addAdjustmentNode(groupId, 'exposure');
+    const midGroup = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
+    if (!midGroup || midGroup.type !== 'group') throw new Error('group missing');
+    const nodeId = midGroup.adjustments[0]!.id;
+
+    state.toggleAdjustmentNode(groupId, nodeId);
+    const group = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
+    if (!group || group.type !== 'group') throw new Error('group missing');
+    expect(group.adjustments[0]?.enabled).toBe(false);
+
+    state.toggleAdjustmentNode(groupId, nodeId);
+    const group2 = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
+    if (!group2 || group2.type !== 'group') throw new Error('group missing');
+    expect(group2.adjustments[0]?.enabled).toBe(true);
+  });
+
+  it('reorderAdjustmentNodes reorders nodes to the requested sequence', () => {
+    const state = useEditorStore.getState();
+    state.addGroup('Test Group');
+    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group')!.id;
+
+    state.addAdjustmentNode(groupId, 'exposure');
+    state.addAdjustmentNode(groupId, 'contrast');
+    state.addAdjustmentNode(groupId, 'vignette');
+
+    const beforeGroup = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
+    if (!beforeGroup || beforeGroup.type !== 'group') throw new Error('group missing');
+    const [expId, conId, vigId] = beforeGroup.adjustments.map((n) => n.id);
+
+    // Reverse the order
+    state.reorderAdjustmentNodes(groupId, [vigId!, conId!, expId!]);
+
+    const afterGroup = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
+    if (!afterGroup || afterGroup.type !== 'group') throw new Error('group missing');
+    expect(afterGroup.adjustments[0]?.type).toBe('vignette');
+    expect(afterGroup.adjustments[1]?.type).toBe('contrast');
+    expect(afterGroup.adjustments[2]?.type).toBe('exposure');
   });
 });

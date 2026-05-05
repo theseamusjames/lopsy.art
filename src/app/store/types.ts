@@ -87,8 +87,12 @@ export interface EditorState {
   addGroup: (name?: string) => void;
   toggleGroupCollapsed: (groupId: string) => void;
   moveLayerToGroup: (layerId: string, targetGroupId: string, insertIndex?: number) => void;
-  setGroupAdjustments: (groupId: string, adjustments: Partial<import('../../filters/image-adjustments').ImageAdjustments>) => void;
   setGroupAdjustmentsEnabled: (groupId: string, enabled: boolean) => void;
+  addAdjustmentNode: (groupId: string, nodeType: import('../../types/adjustment-nodes').AdjustmentNodeType) => void;
+  removeAdjustmentNode: (groupId: string, nodeId: string) => void;
+  updateAdjustmentNode: (groupId: string, nodeId: string, params: Partial<import('../../types/adjustment-nodes').AdjustmentNode>) => void;
+  toggleAdjustmentNode: (groupId: string, nodeId: string) => void;
+  reorderAdjustmentNodes: (groupId: string, nodeIds: readonly string[]) => void;
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;

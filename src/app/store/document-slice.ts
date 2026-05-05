@@ -1,7 +1,8 @@
 import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
+import type { AdjustmentNodeType, AdjustmentNode } from '../../types/adjustment-nodes';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
-import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
+import { createDefaultNode } from '../../filters/adjustment-node-utils';
 import { createImageData } from '../../engine/color-space';
 import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
@@ -155,8 +156,12 @@ export interface DocumentSlice {
   addGroup: (name?: string) => void;
   toggleGroupCollapsed: (groupId: string) => void;
   moveLayerToGroup: (layerId: string, targetGroupId: string, insertIndex?: number) => void;
-  setGroupAdjustments: (groupId: string, adjustments: Partial<import('../../filters/image-adjustments').ImageAdjustments>) => void;
   setGroupAdjustmentsEnabled: (groupId: string, enabled: boolean) => void;
+  addAdjustmentNode: (groupId: string, nodeType: AdjustmentNodeType) => void;
+  removeAdjustmentNode: (groupId: string, nodeId: string) => void;
+  updateAdjustmentNode: (groupId: string, nodeId: string, params: Partial<AdjustmentNode>) => void;
+  toggleAdjustmentNode: (groupId: string, nodeId: string) => void;
+  reorderAdjustmentNodes: (groupId: string, nodeIds: readonly string[]) => void;
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
@@ -327,18 +332,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set({ document: { ...doc, layers: newLayers, layerOrder: newOrder } });
   },
 
-  // No history — adjustment sliders fire continuously; history is pushed on commit
-  setGroupAdjustments: (groupId, adjustments) => {
-    const doc = get().document;
-    const layers = doc.layers.map((l) =>
-      l.id === groupId && l.type === 'group'
-        ? { ...l, adjustments: { ...DEFAULT_ADJUSTMENTS, ...l.adjustments, ...adjustments } }
-        : l,
-    );
-    set({ document: { ...doc, layers } });
-  },
-
-  // No history — toggle is paired with setGroupAdjustments which handles commit
+  // No history — toggle is paired with adjustment actions which handle commit
   setGroupAdjustmentsEnabled: (groupId, enabled) => {
     const doc = get().document;
     const layers = doc.layers.map((l) =>
@@ -346,6 +340,66 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
         ? { ...l, adjustmentsEnabled: enabled }
         : l,
     );
+    set({ document: { ...doc, layers } });
+  },
+
+  // No history — node edits fire continuously; history is pushed on commit
+  addAdjustmentNode: (groupId, nodeType) => {
+    const doc = get().document;
+    const node = createDefaultNode(nodeType);
+    const layers = doc.layers.map((l) =>
+      l.id === groupId && l.type === 'group'
+        ? { ...l, adjustments: [...l.adjustments, node] }
+        : l,
+    );
+    set({ document: { ...doc, layers } });
+  },
+
+  removeAdjustmentNode: (groupId, nodeId) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) =>
+      l.id === groupId && l.type === 'group'
+        ? { ...l, adjustments: l.adjustments.filter((n) => n.id !== nodeId) }
+        : l,
+    );
+    set({ document: { ...doc, layers } });
+  },
+
+  // No history — param sliders fire continuously; history is pushed on commit
+  updateAdjustmentNode: (groupId, nodeId, params) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) => {
+      if (l.id !== groupId || l.type !== 'group') return l;
+      const adjustments = l.adjustments.map((n) =>
+        n.id === nodeId ? ({ ...n, ...params } as AdjustmentNode) : n,
+      );
+      return { ...l, adjustments };
+    });
+    set({ document: { ...doc, layers } });
+  },
+
+  toggleAdjustmentNode: (groupId, nodeId) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) => {
+      if (l.id !== groupId || l.type !== 'group') return l;
+      const adjustments = l.adjustments.map((n) =>
+        n.id === nodeId ? ({ ...n, enabled: !n.enabled } as AdjustmentNode) : n,
+      );
+      return { ...l, adjustments };
+    });
+    set({ document: { ...doc, layers } });
+  },
+
+  reorderAdjustmentNodes: (groupId, nodeIds) => {
+    const doc = get().document;
+    const layers = doc.layers.map((l) => {
+      if (l.id !== groupId || l.type !== 'group') return l;
+      const nodeMap = new Map(l.adjustments.map((n) => [n.id, n]));
+      const adjustments = nodeIds
+        .map((id) => nodeMap.get(id))
+        .filter((n): n is AdjustmentNode => n !== undefined);
+      return { ...l, adjustments };
+    });
     set({ document: { ...doc, layers } });
   },
 

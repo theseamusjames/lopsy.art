@@ -624,7 +624,8 @@ export async function openEffectsPanel(page: Page): Promise<void> {
   // render LayerEffectsPanel which IS keyed by blend-mode-label. Wait for
   // the appropriate sentinel based on which layer type is active.
   if (isGroup) {
-    await page.locator('[role="tablist"][aria-label="Adjustment type"]').waitFor({ state: 'visible', timeout: 5000 });
+    // The adjustments panel shows an "Add Adjustment" button in the footer.
+    await page.locator('[aria-label="Add Adjustment"]').waitFor({ state: 'visible', timeout: 5000 });
   } else {
     await page.locator('[aria-labelledby="blend-mode-label"]').waitFor({ state: 'visible', timeout: 5000 });
   }

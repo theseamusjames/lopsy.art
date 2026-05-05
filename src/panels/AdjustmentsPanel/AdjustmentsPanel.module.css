@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .header {
@@ -165,4 +165,135 @@
 .textBtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ─── Add adjustment menu ──────────────────────────────────────────────────── */
+
+.addMenuWrapper {
+  position: relative;
+}
+
+.addMenu {
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  left: 0;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  min-width: 180px;
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: var(--z-popover);
+  box-shadow: var(--shadow-md);
+}
+
+.addMenuItem {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-ui);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.addMenuItem:hover {
+  background: var(--color-bg-hover);
+}
+
+.comingSoon {
+  color: var(--color-text-disabled);
+  font-size: var(--font-size-xs);
+}
+
+.comingSoonNote {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-disabled);
+  padding: var(--space-2) 0;
+  margin: 0;
+  text-align: center;
+}
+
+/* ─── Node rows ────────────────────────────────────────────────────────────── */
+
+.nodeRow {
+  border-bottom: 1px solid var(--color-border);
+  transition: background var(--transition-fast);
+}
+
+.nodeRow:last-child {
+  border-bottom: none;
+}
+
+.nodeRowDragOver {
+  background: var(--color-bg-active);
+}
+
+.nodeHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-1);
+  cursor: grab;
+  user-select: none;
+}
+
+.nodeExpandBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+
+.nodeExpandBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.nodeLabel {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeLabelDisabled {
+  color: var(--color-text-disabled);
+}
+
+.nodeIconBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+
+.nodeIconBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.nodeControls {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.emptyHint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-disabled);
+  text-align: center;
+  padding: var(--space-4) 0;
+  margin: 0;
 }

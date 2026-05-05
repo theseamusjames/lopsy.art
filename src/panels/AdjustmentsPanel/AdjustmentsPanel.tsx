@@ -1,14 +1,12 @@
 import { useState } from 'react';
-import { Eye, EyeOff, X } from 'lucide-react';
+import { Eye, EyeOff, X, ChevronDown, ChevronRight, Trash2, Plus } from 'lucide-react';
 import { Slider } from '../../components/Slider/Slider';
 import { IconButton } from '../../components/IconButton/IconButton';
 import type { DragProps } from '../../app/hooks/useDraggablePanel';
 import { CurveEditor } from '../../components/CurveEditor/CurveEditor';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
-import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
 import {
-  IDENTITY_CURVES,
   IDENTITY_POINTS,
   isIdentityCurve,
   type CurveChannel,
@@ -19,6 +17,21 @@ import { IDENTITY_LEVELS } from '../../filters/levels';
 import type { Levels } from '../../filters/levels';
 import { LevelsEditor } from './LevelsEditor';
 import type { GroupLayer } from '../../types';
+import type {
+  AdjustmentNode,
+  AdjustmentNodeType,
+  ExposureNode,
+  ContrastNode,
+  HighlightsShadowsNode,
+  SaturationNode,
+  VignetteNode,
+  CurvesNode,
+  LevelsNode,
+} from '../../types/adjustment-nodes';
+import {
+  ADJUSTMENT_NODE_LABELS,
+  createDefaultNode,
+} from '../../filters/adjustment-node-utils';
 import styles from './AdjustmentsPanel.module.css';
 
 const CHANNEL_COLORS: Record<CurveChannel, string> = {
@@ -35,34 +48,33 @@ const CHANNEL_LABELS: Record<CurveChannel, string> = {
   b: 'B',
 };
 
-type ScalarAdjustmentKey =
-  | 'exposure' | 'contrast' | 'highlights' | 'shadows'
-  | 'whites' | 'blacks' | 'vignette' | 'saturation' | 'vibrance';
-
-interface AdjustmentSliderDef {
-  key: ScalarAdjustmentKey;
-  label: string;
-  min: number;
-  max: number;
-  step: number;
-}
-
-const VALUE_SLIDERS: AdjustmentSliderDef[] = [
-  { key: 'exposure', label: 'Exposure', min: -5, max: 5, step: 0.1 },
-  { key: 'contrast', label: 'Contrast', min: -100, max: 100, step: 1 },
-  { key: 'highlights', label: 'Highlights', min: -100, max: 100, step: 1 },
-  { key: 'shadows', label: 'Shadows', min: -100, max: 100, step: 1 },
-  { key: 'whites', label: 'Whites', min: -100, max: 100, step: 1 },
-  { key: 'blacks', label: 'Blacks', min: -100, max: 100, step: 1 },
-  { key: 'vignette', label: 'Vignette', min: 0, max: 100, step: 1 },
+/** Node types available in the Add menu. New types (color-balance, etc.) are
+ *  listed with a "(coming soon)" suffix but are still addable — their controls
+ *  will show a placeholder until GPU shaders are wired up. */
+const ADD_MENU_TYPES: AdjustmentNodeType[] = [
+  'exposure',
+  'contrast',
+  'highlights-shadows',
+  'saturation',
+  'vignette',
+  'curves',
+  'levels',
+  'hue-saturation',
+  'color-balance',
+  'invert',
+  'black-white',
+  'photo-filter',
+  'channel-mixer',
+  'gradient-map',
 ];
 
-const COLOR_SLIDERS: AdjustmentSliderDef[] = [
-  { key: 'saturation', label: 'Saturation', min: -100, max: 100, step: 1 },
-  { key: 'vibrance', label: 'Vibrance', min: -100, max: 100, step: 1 },
-];
-
-type TabId = 'values' | 'levels' | 'colors';
+const LEGACY_ONLY_TYPES = new Set<AdjustmentNodeType>([
+  'color-balance',
+  'gradient-map',
+  'black-white',
+  'photo-filter',
+  'channel-mixer',
+]);
 
 function useActiveGroup(): GroupLayer | null {
   return useEditorStore((s) => {
@@ -87,47 +99,62 @@ interface AdjustmentsPanelProps {
 
 export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProps = {}) {
   const group = useActiveGroup();
-  const setGroupAdjustments = useEditorStore((s) => s.setGroupAdjustments);
   const setGroupAdjustmentsEnabled = useEditorStore((s) => s.setGroupAdjustmentsEnabled);
+  const addAdjustmentNode = useEditorStore((s) => s.addAdjustmentNode);
+  const removeAdjustmentNode = useEditorStore((s) => s.removeAdjustmentNode);
+  const updateAdjustmentNode = useEditorStore((s) => s.updateAdjustmentNode);
+  const toggleAdjustmentNode = useEditorStore((s) => s.toggleAdjustmentNode);
+  const reorderAdjustmentNodes = useEditorStore((s) => s.reorderAdjustmentNodes);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
-  const [activeTab, setActiveTab] = useState<TabId>('values');
+
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   if (!group) return null;
 
-  const adjustments = group.adjustments ?? DEFAULT_ADJUSTMENTS;
+  const nodes = group.adjustments;
   const adjustmentsEnabled = group.adjustmentsEnabled ?? true;
 
-  const handleChange = (key: ScalarAdjustmentKey, value: number) => {
-    setGroupAdjustments(group.id, { ...adjustments, [key]: value });
+  const handleAddNode = (type: AdjustmentNodeType) => {
+    setShowAddMenu(false);
+    addAdjustmentNode(group.id, type);
+    // Auto-expand the new node.
+    const newNode = createDefaultNode(type);
+    setExpandedNodeId(newNode.id);
   };
 
-  const handleReset = () => {
-    setGroupAdjustments(group.id, { ...DEFAULT_ADJUSTMENTS });
+  const handleDragStart = (idx: number) => {
+    setDraggedIndex(idx);
   };
 
-  const curves: Curves = adjustments.curves ?? IDENTITY_CURVES;
-  const handleCurveChange = (channel: CurveChannel, points: CurvePoint[]) => {
-    setGroupAdjustments(group.id, {
-      ...adjustments,
-      curves: { ...curves, [channel]: points },
-    });
-  };
-  const handleResetCurve = (channel: CurveChannel) => {
-    setGroupAdjustments(group.id, {
-      ...adjustments,
-      curves: { ...curves, [channel]: IDENTITY_POINTS },
-    });
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    setDragOverIndex(idx);
   };
 
-  const levels: Levels = adjustments.levels ?? IDENTITY_LEVELS;
-  const handleLevelsChange = (newLevels: Levels) => {
-    setGroupAdjustments(group.id, { ...adjustments, levels: newLevels });
-  };
-  const handleResetLevels = () => {
-    setGroupAdjustments(group.id, { ...adjustments, levels: IDENTITY_LEVELS });
+  const handleDrop = (e: React.DragEvent, dropIdx: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIdx) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    const ids = nodes.map((n) => n.id);
+    const [moved] = ids.splice(draggedIndex, 1);
+    if (moved !== undefined) {
+      ids.splice(dropIdx, 0, moved);
+    }
+    reorderAdjustmentNodes(group.id, ids);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
-  const sliders = activeTab === 'values' ? VALUE_SLIDERS : COLOR_SLIDERS;
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
 
   return (
     <div className={styles.panel}>
@@ -141,87 +168,58 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
           />
         </div>
       )}
-      <div className={styles.tabs} role="tablist" aria-label="Adjustment type">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'values'}
-          className={`${styles.tab} ${activeTab === 'values' ? styles.tabActive : ''}`}
-          onClick={() => setActiveTab('values')}
-        >
-          Values
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'levels'}
-          className={`${styles.tab} ${activeTab === 'levels' ? styles.tabActive : ''}`}
-          onClick={() => setActiveTab('levels')}
-        >
-          Levels
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'colors'}
-          className={`${styles.tab} ${activeTab === 'colors' ? styles.tabActive : ''}`}
-          onClick={() => setActiveTab('colors')}
-        >
-          Colors
-        </button>
-      </div>
       <div className={styles.scrollArea}>
-        {activeTab === 'values' && (
-          <div className={styles.sliders}>
-            {sliders.map((s) => (
-              <Slider
-                key={s.key}
-                label={s.label}
-                value={adjustments[s.key]}
-                min={s.min}
-                max={s.max}
-                step={s.step}
-                defaultValue={0}
-                onChange={(v) => handleChange(s.key, v)}
-              />
-            ))}
-          </div>
+        {nodes.length === 0 && (
+          <p className={styles.emptyHint}>No adjustments yet. Add one below.</p>
         )}
-        {activeTab === 'levels' && (
-          <LevelsEditor
-            levels={levels}
-            onChange={handleLevelsChange}
-            onReset={handleResetLevels}
+        {nodes.map((node, idx) => (
+          <AdjustmentNodeRow
+            key={node.id}
+            node={node}
+            isExpanded={expandedNodeId === node.id}
+            isDragOver={dragOverIndex === idx}
+            onToggleExpand={() => setExpandedNodeId(expandedNodeId === node.id ? null : node.id)}
+            onToggleEnabled={() => toggleAdjustmentNode(group.id, node.id)}
+            onRemove={() => removeAdjustmentNode(group.id, node.id)}
+            onChange={(params) => updateAdjustmentNode(group.id, node.id, params)}
+            onDragStart={() => handleDragStart(idx)}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDrop={(e) => handleDrop(e, idx)}
+            onDragEnd={handleDragEnd}
           />
-        )}
-        {activeTab === 'colors' && (
-          <>
-            <div className={styles.sliders}>
-              {sliders.map((s) => (
-                <Slider
-                  key={s.key}
-                  label={s.label}
-                  value={adjustments[s.key]}
-                  min={s.min}
-                  max={s.max}
-                  step={s.step}
-                  defaultValue={0}
-                  onChange={(v) => handleChange(s.key, v)}
-                />
-              ))}
-            </div>
-            <CurvesSection
-              curves={curves}
-              onChange={handleCurveChange}
-              onReset={handleResetCurve}
-            />
-          </>
-        )}
+        ))}
       </div>
       <div className={styles.footer}>
-        <button type="button" className={styles.textBtn} onClick={handleReset}>
-          Reset
-        </button>
+        <div className={styles.addMenuWrapper}>
+          <button
+            type="button"
+            className={styles.textBtn}
+            onClick={() => setShowAddMenu(!showAddMenu)}
+            aria-label="Add Adjustment"
+            aria-expanded={showAddMenu}
+          >
+            <Plus size={12} style={{ marginRight: 4 }} />
+            Add Adjustment
+          </button>
+          {showAddMenu && (
+            <div className={styles.addMenu} role="menu">
+              {ADD_MENU_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  role="menuitem"
+                  className={styles.addMenuItem}
+                  onClick={() => handleAddNode(type)}
+                >
+                  {ADJUSTMENT_NODE_LABELS[type]}
+                  {LEGACY_ONLY_TYPES.has(type) && (
+                    <span className={styles.comingSoon}> (soon)</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           className={`${styles.iconBtn} ${!adjustmentsEnabled ? styles.iconBtnOff : ''}`}
@@ -235,22 +233,168 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
   );
 }
 
-interface CurvesSectionProps {
-  curves: Curves;
-  onChange: (channel: CurveChannel, points: CurvePoint[]) => void;
-  onReset: (channel: CurveChannel) => void;
+// ─── Node row ───────────────────────────────────────────────────────────────
+
+interface NodeRowProps {
+  node: AdjustmentNode;
+  isExpanded: boolean;
+  isDragOver: boolean;
+  onToggleExpand: () => void;
+  onToggleEnabled: () => void;
+  onRemove: () => void;
+  onChange: (params: Partial<AdjustmentNode>) => void;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
 }
 
-function CurvesSection({ curves, onChange, onReset }: CurvesSectionProps) {
+function AdjustmentNodeRow({
+  node, isExpanded, isDragOver,
+  onToggleExpand, onToggleEnabled, onRemove, onChange,
+  onDragStart, onDragOver, onDrop, onDragEnd,
+}: NodeRowProps) {
+  return (
+    <div
+      className={`${styles.nodeRow} ${isDragOver ? styles.nodeRowDragOver : ''}`}
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+    >
+      <div className={styles.nodeHeader}>
+        <button type="button" className={styles.nodeExpandBtn} onClick={onToggleExpand} aria-label={isExpanded ? 'Collapse' : 'Expand'}>
+          {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        </button>
+        <span className={`${styles.nodeLabel} ${!node.enabled ? styles.nodeLabelDisabled : ''}`}>
+          {ADJUSTMENT_NODE_LABELS[node.type]}
+        </span>
+        <button
+          type="button"
+          className={`${styles.nodeIconBtn} ${!node.enabled ? styles.iconBtnOff : ''}`}
+          onClick={onToggleEnabled}
+          aria-label={node.enabled ? 'Disable node' : 'Enable node'}
+        >
+          {node.enabled ? <Eye size={12} /> : <EyeOff size={12} />}
+        </button>
+        <button
+          type="button"
+          className={styles.nodeIconBtn}
+          onClick={onRemove}
+          aria-label="Remove node"
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
+      {isExpanded && (
+        <div className={styles.nodeControls}>
+          <NodeControls node={node} onChange={onChange} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Per-type controls ───────────────────────────────────────────────────────
+
+interface NodeControlsProps {
+  node: AdjustmentNode;
+  onChange: (params: Partial<AdjustmentNode>) => void;
+}
+
+function NodeControls({ node, onChange }: NodeControlsProps) {
+  switch (node.type) {
+    case 'exposure':
+      return <ExposureControls node={node} onChange={onChange} />;
+    case 'contrast':
+      return <ContrastControls node={node} onChange={onChange} />;
+    case 'highlights-shadows':
+      return <HighlightsShadowsControls node={node} onChange={onChange} />;
+    case 'saturation':
+      return <SaturationControls node={node} onChange={onChange} />;
+    case 'vignette':
+      return <VignetteControls node={node} onChange={onChange} />;
+    case 'curves':
+      return <CurvesControls node={node} onChange={onChange} />;
+    case 'levels':
+      return <LevelsControls node={node} onChange={onChange} />;
+    default:
+      return <p className={styles.comingSoonNote}>Controls for this adjustment type are coming soon.</p>;
+  }
+}
+
+function ExposureControls({ node, onChange }: { node: ExposureNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  return (
+    <div className={styles.sliders}>
+      <Slider label="Exposure" value={node.exposure} min={-5} max={5} step={0.1} defaultValue={0}
+        onChange={(v) => onChange({ exposure: v })} />
+    </div>
+  );
+}
+
+function ContrastControls({ node, onChange }: { node: ContrastNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  return (
+    <div className={styles.sliders}>
+      <Slider label="Contrast" value={node.contrast} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ contrast: v })} />
+    </div>
+  );
+}
+
+function HighlightsShadowsControls({ node, onChange }: { node: HighlightsShadowsNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  return (
+    <div className={styles.sliders}>
+      <Slider label="Highlights" value={node.highlights} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ highlights: v })} />
+      <Slider label="Shadows" value={node.shadows} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ shadows: v })} />
+      <Slider label="Whites" value={node.whites} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ whites: v })} />
+      <Slider label="Blacks" value={node.blacks} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ blacks: v })} />
+    </div>
+  );
+}
+
+function SaturationControls({ node, onChange }: { node: SaturationNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  return (
+    <div className={styles.sliders}>
+      <Slider label="Saturation" value={node.saturation} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ saturation: v })} />
+      <Slider label="Vibrance" value={node.vibrance} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ vibrance: v })} />
+    </div>
+  );
+}
+
+function VignetteControls({ node, onChange }: { node: VignetteNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  return (
+    <div className={styles.sliders}>
+      <Slider label="Vignette" value={node.vignette} min={0} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ vignette: v })} />
+    </div>
+  );
+}
+
+function CurvesControls({ node, onChange }: { node: CurvesNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
   const [channel, setChannel] = useState<CurveChannel>('rgb');
-  const channels: CurveChannel[] = ['rgb', 'r', 'g', 'b'];
+  const curves: Curves = node.curves;
   const points = curves[channel];
   const isIdentity = isIdentityCurve(points);
+  const channels: CurveChannel[] = ['rgb', 'r', 'g', 'b'];
+
+  const handleCurveChange = (ch: CurveChannel, pts: CurvePoint[]) => {
+    onChange({ curves: { ...curves, [ch]: pts } });
+  };
+
+  const handleResetCurve = (ch: CurveChannel) => {
+    onChange({ curves: { ...curves, [ch]: IDENTITY_POINTS } });
+  };
 
   return (
     <div className={styles.curvesSection}>
       <div className={styles.curvesHeader}>
-        <span className={styles.label}>Curves</span>
         <div className={styles.channelTabs} role="tablist" aria-label="Curve channel">
           {channels.map((c) => (
             <button
@@ -269,7 +413,7 @@ function CurvesSection({ curves, onChange, onReset }: CurvesSectionProps) {
         <button
           type="button"
           className={styles.textBtn}
-          onClick={() => onReset(channel)}
+          onClick={() => handleResetCurve(channel)}
           disabled={isIdentity}
         >
           Reset
@@ -278,8 +422,19 @@ function CurvesSection({ curves, onChange, onReset }: CurvesSectionProps) {
       <CurveEditor
         points={points}
         color={CHANNEL_COLORS[channel]}
-        onChange={(pts) => onChange(channel, pts)}
+        onChange={(pts) => handleCurveChange(channel, pts)}
       />
     </div>
+  );
+}
+
+function LevelsControls({ node, onChange }: { node: LevelsNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  const levels: Levels = node.levels;
+  return (
+    <LevelsEditor
+      levels={levels}
+      onChange={(newLevels) => onChange({ levels: newLevels })}
+      onReset={() => onChange({ levels: IDENTITY_LEVELS })}
+    />
   );
 }

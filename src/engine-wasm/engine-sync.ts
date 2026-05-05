@@ -16,6 +16,7 @@ import type { Layer } from '../types';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
+import { nodesToLegacyAdjustments } from '../filters/adjustment-node-utils';
 import {
   setDocumentSize,
   setViewport,
@@ -219,8 +220,11 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
   for (const layer of layers) {
     if (layer.type !== 'group') continue;
     const group = layer as import('../types').GroupLayer;
-    if (!group.adjustmentsEnabled || !group.adjustments) continue;
-    const adj = group.adjustments;
+    if (!group.adjustmentsEnabled || !group.adjustments || group.adjustments.length === 0) continue;
+
+    // Convert the dynamic node array to the flat format the engine bridge expects.
+    const adj = nodesToLegacyAdjustments(group.adjustments);
+
     const hasCurves = adj.curves && !isIdentityCurves(adj.curves);
     const hasLevels = adj.levels && !isIdentityLevels(adj.levels);
     const hasAny =
