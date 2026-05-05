@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, EyeOff, X, ChevronDown, ChevronRight, Trash2, Plus } from 'lucide-react';
+import { Eye, EyeOff, X, ChevronDown, ChevronRight, GripVertical, Trash2, Plus } from 'lucide-react';
 import { Slider } from '../../components/Slider/Slider';
 import { IconButton } from '../../components/IconButton/IconButton';
 import type { DragProps } from '../../app/hooks/useDraggablePanel';
@@ -267,6 +267,9 @@ function AdjustmentNodeRow({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >
+        <span className={styles.nodeGrip} aria-hidden="true">
+          <GripVertical size={12} />
+        </span>
         <button type="button" className={styles.nodeExpandBtn} onClick={onToggleExpand} aria-label={isExpanded ? 'Collapse' : 'Expand'}>
           {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>

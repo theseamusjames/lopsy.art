@@ -21,7 +21,7 @@ function hexToColor(hex: string): Color | null {
 }
 
 export function ColorPanel() {
-  const [collapsed, setCollapsed] = usePanelCollapse('color');
+  const [collapsed, setCollapsed] = usePanelCollapse('color', true);
   const foregroundColor = useToolSettingsStore((s) => s.foregroundColor);
   const backgroundColor = useToolSettingsStore((s) => s.backgroundColor);
   const recentColors = useToolSettingsStore((s) => s.recentColors);
@@ -107,20 +107,18 @@ export function ColorPanel() {
               size="sm"
             />
           </div>
-          {recentColors.length > 0 && (
-            <div className={styles.recentSwatches} data-testid="recent-swatches">
-              {recentColors.map((color, i) => (
-                <ColorSwatch
-                  key={i}
-                  color={color}
-                  size="sm"
-                  onClick={() => handleRecentClick(color)}
-                />
-              ))}
-            </div>
-          )}
+          <div className={styles.recentSwatches} data-testid="recent-swatches">
+            {recentColors.map((color, i) => (
+              <ColorSwatch
+                key={i}
+                color={color}
+                size="sm"
+                onClick={() => handleRecentClick(color)}
+              />
+            ))}
+          </div>
         </div>
-        {!collapsed && <ColorPicker color={activeColor} onChange={handlePickerChange} />}
+        <ColorPicker color={activeColor} onChange={handlePickerChange} compact={collapsed} />
         {!collapsed && <div className={styles.hexRow}>
           <span className={styles.hexLabel} aria-hidden="true">#</span>
           <input

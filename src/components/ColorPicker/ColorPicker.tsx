@@ -7,18 +7,22 @@ import styles from './ColorPicker.module.css';
 interface ColorPickerProps {
   color: Color;
   onChange: (color: Color) => void;
+  compact?: boolean;
 }
 
-export function ColorPicker({ color, onChange }: ColorPickerProps) {
+export function ColorPicker({ color, onChange, compact = false }: ColorPickerProps) {
   const svCanvasRef = useRef<HTMLCanvasElement>(null);
   const svContainerRef = useRef<HTMLDivElement>(null);
   const hueCanvasRef = useRef<HTMLCanvasElement>(null);
   const hueContainerRef = useRef<HTMLDivElement>(null);
   const alphaCanvasRef = useRef<HTMLCanvasElement>(null);
   const alphaContainerRef = useRef<HTMLDivElement>(null);
+  const spectrumCanvasRef = useRef<HTMLCanvasElement>(null);
+  const spectrumContainerRef = useRef<HTMLDivElement>(null);
   const isDraggingSV = useRef(false);
   const isDraggingHue = useRef(false);
   const isDraggingAlpha = useRef(false);
+  const isDraggingSpectrum = useRef(false);
   const hsvRef = useRef(rgbToHsv(color));
 
   // Keep HSV in sync with external color changes
@@ -130,16 +134,51 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
     ctx.fillRect(0, 0, width, height);
   }, []);
 
-  // Initial draws and redraw on color change
+  // Draw spectrum bar (full rainbow at full saturation/brightness)
+  const drawSpectrum = useCallback(() => {
+    const canvas = spectrumCanvasRef.current;
+    const container = spectrumContainerRef.current;
+    if (!canvas || !container) return;
+
+    const rect = container.getBoundingClientRect();
+    const width = Math.round(rect.width);
+    const height = Math.round(rect.height);
+    if (width === 0 || height === 0) return;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d', contextOptions);
+    if (!ctx) return;
+
+    const grad = ctx.createLinearGradient(0, 0, width, 0);
+    const stops = [
+      [0, '#ff0000'],
+      [1 / 6, '#ffff00'],
+      [2 / 6, '#00ff00'],
+      [3 / 6, '#00ffff'],
+      [4 / 6, '#0000ff'],
+      [5 / 6, '#ff00ff'],
+      [1, '#ff0000'],
+    ] as const;
+    for (const [pos, c] of stops) {
+      grad.addColorStop(pos, c);
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  }, []);
+
+  // Initial draws and redraw on color change or compact toggle
   useEffect(() => {
     drawSV();
     drawHue();
     drawAlpha();
-  }, [color, drawSV, drawHue, drawAlpha]);
+    drawSpectrum();
+  }, [color, compact, drawSV, drawHue, drawAlpha, drawSpectrum]);
 
-  // Resize observer for canvases
+  // Resize observer for canvases — re-create when compact changes
   useEffect(() => {
-    const containers = [svContainerRef.current, hueContainerRef.current, alphaContainerRef.current].filter(
+    const containers = [svContainerRef.current, hueContainerRef.current, alphaContainerRef.current, spectrumContainerRef.current].filter(
       (c): c is HTMLDivElement => c !== null,
     );
 
@@ -147,13 +186,14 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
       drawSV();
       drawHue();
       drawAlpha();
+      drawSpectrum();
     });
 
     for (const c of containers) {
       observer.observe(c);
     }
     return () => observer.disconnect();
-  }, [drawSV, drawHue, drawAlpha]);
+  }, [compact, drawSV, drawHue, drawAlpha, drawSpectrum]);
 
   const emitColor = useCallback(
     (hsv: { h: number; s: number; v: number }) => {
@@ -231,6 +271,30 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
     [handleAlphaInteraction],
   );
 
+  // Spectrum interaction — picks a full color at 100% saturation/brightness
+  const handleSpectrumInteraction = useCallback(
+    (clientX: number) => {
+      const container = spectrumContainerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const h = x * 360;
+      hsvRef.current = { h, s: 100, v: 100 };
+      const rgb = hsvToRgb({ h, s: 100, v: 100 });
+      onChange({ ...rgb, a: color.a });
+    },
+    [onChange, color.a],
+  );
+
+  const handleSpectrumDown = useCallback(
+    (e: React.MouseEvent) => {
+      isDraggingSpectrum.current = true;
+      handleSpectrumInteraction(e.clientX);
+      e.preventDefault();
+    },
+    [handleSpectrumInteraction],
+  );
+
   // Global mouse move / up
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
@@ -240,6 +304,8 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
         handleHueInteraction(e.clientX);
       } else if (isDraggingAlpha.current) {
         handleAlphaInteraction(e.clientX);
+      } else if (isDraggingSpectrum.current) {
+        handleSpectrumInteraction(e.clientX);
       }
     };
 
@@ -247,6 +313,7 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
       isDraggingSV.current = false;
       isDraggingHue.current = false;
       isDraggingAlpha.current = false;
+      isDraggingSpectrum.current = false;
     };
 
     window.addEventListener('mousemove', handleMove);
@@ -255,7 +322,7 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
     };
-  }, [handleSVInteraction, handleHueInteraction, handleAlphaInteraction]);
+  }, [handleSVInteraction, handleHueInteraction, handleAlphaInteraction, handleSpectrumInteraction]);
 
   const hsv = hsvRef.current;
   const svCursorX = `${hsv.s}%`;
@@ -265,18 +332,30 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
 
   return (
     <div className={styles.picker} role="group" aria-label="Color picker">
-      <div ref={svContainerRef} className={styles.svArea} onMouseDown={handleSVDown} role="slider" aria-label="Saturation and brightness" aria-valuetext={`Saturation ${Math.round(hsv.s)}%, Brightness ${Math.round(hsv.v)}%`} tabIndex={0}>
-        <canvas ref={svCanvasRef} aria-hidden="true" />
-        <div className={styles.svCursor} style={{ left: svCursorX, top: svCursorY }} />
-      </div>
-      <div ref={hueContainerRef} className={styles.hueBar} onMouseDown={handleHueDown} role="slider" aria-label="Hue" aria-valuemin={0} aria-valuemax={360} aria-valuenow={Math.round(hsv.h)} tabIndex={0}>
-        <canvas ref={hueCanvasRef} aria-hidden="true" />
-        <div className={styles.hueCursor} style={{ left: hueCursorX }} />
-      </div>
-      <div ref={alphaContainerRef} className={styles.alphaBar} onMouseDown={handleAlphaDown} role="slider" aria-label="Opacity" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(color.a * 100)} tabIndex={0}>
-        <canvas ref={alphaCanvasRef} aria-hidden="true" />
-        <div className={styles.alphaCursor} style={{ left: alphaCursorX }} />
-      </div>
+      {!compact && (
+        <div ref={svContainerRef} className={styles.svArea} onMouseDown={handleSVDown} role="slider" aria-label="Saturation and brightness" aria-valuetext={`Saturation ${Math.round(hsv.s)}%, Brightness ${Math.round(hsv.v)}%`} tabIndex={0}>
+          <canvas ref={svCanvasRef} aria-hidden="true" />
+          <div className={styles.svCursor} style={{ left: svCursorX, top: svCursorY }} />
+        </div>
+      )}
+      {!compact && (
+        <div ref={hueContainerRef} className={styles.hueBar} onMouseDown={handleHueDown} role="slider" aria-label="Hue" aria-valuemin={0} aria-valuemax={360} aria-valuenow={Math.round(hsv.h)} tabIndex={0}>
+          <canvas ref={hueCanvasRef} aria-hidden="true" />
+          <div className={styles.hueCursor} style={{ left: hueCursorX }} />
+        </div>
+      )}
+      {compact && (
+        <div ref={spectrumContainerRef} className={styles.hueBar} onMouseDown={handleSpectrumDown} role="slider" aria-label="Color spectrum" tabIndex={0}>
+          <canvas ref={spectrumCanvasRef} aria-hidden="true" />
+          <div className={styles.hueCursor} style={{ left: hueCursorX }} />
+        </div>
+      )}
+      {!compact && (
+        <div ref={alphaContainerRef} className={styles.alphaBar} onMouseDown={handleAlphaDown} role="slider" aria-label="Opacity" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(color.a * 100)} tabIndex={0}>
+          <canvas ref={alphaCanvasRef} aria-hidden="true" />
+          <div className={styles.alphaCursor} style={{ left: alphaCursorX }} />
+        </div>
+      )}
     </div>
   );
 }

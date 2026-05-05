@@ -108,6 +108,8 @@
 }
 
 .effectsDrawer {
+  right: auto;
+  left: -420px;
   width: 420px;
   min-width: 280px;
   min-height: 200px;

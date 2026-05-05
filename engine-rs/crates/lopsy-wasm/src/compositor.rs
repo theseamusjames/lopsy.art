@@ -1612,16 +1612,42 @@ fn apply_adjustments_to_texture(
 
     engine.draw_fullscreen_quad();
 
-    // Copy scratch_a → dst
-    engine.fbo_pool.bind(&engine.gl, dst_fbo);
-    engine.gl.viewport(0, 0, doc_w, doc_h);
-    engine.gl.use_program(Some(&engine.shaders.blit.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
+    // Vignette pass: scratch_a → scratch_b (if needed), then copy result → dst
+    if adj.vignette.abs() > 1e-6 {
+        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
+        engine.gl.viewport(0, 0, doc_w, doc_h);
+        let shader = &engine.shaders.vignette;
+        engine.gl.use_program(Some(&shader.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_amount") { engine.gl.uniform1f(Some(&loc), adj.vignette); }
+        engine.draw_fullscreen_quad();
+
+        // Copy scratch_b → dst
+        engine.fbo_pool.bind(&engine.gl, dst_fbo);
+        engine.gl.viewport(0, 0, doc_w, doc_h);
+        engine.gl.use_program(Some(&engine.shaders.blit.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_b) {
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
+        }
+        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+        engine.draw_fullscreen_quad();
+    } else {
+        // No vignette — copy scratch_a → dst
+        engine.fbo_pool.bind(&engine.gl, dst_fbo);
+        engine.gl.viewport(0, 0, doc_w, doc_h);
+        engine.gl.use_program(Some(&engine.shaders.blit.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
+        }
+        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+        engine.draw_fullscreen_quad();
     }
-    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-    engine.draw_fullscreen_quad();
 }
 
 use wasm_bindgen::JsCast;

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../app/editor-store';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { readCompositeThumbnail } from '../../engine-wasm/wasm-bridge';
 import { PanelContainer } from '../PanelContainer/PanelContainer';
 import { usePanelCollapse } from '../usePanelCollapse';
 import { computeViewportRect, thumbnailPointToDocPoint, docPointToPan } from './navigator-math';
@@ -27,7 +29,7 @@ export function NavigatorPanel() {
     if (!container || docWidth <= 0 || docHeight <= 0) return;
 
     const maxW = container.clientWidth;
-    const maxH = 140;
+    const maxH = 300;
     const aspect = docWidth / docHeight;
     let w = maxW;
     let h = maxW / aspect;
@@ -38,33 +40,35 @@ export function NavigatorPanel() {
     setThumbnailSize({ width: Math.round(w), height: Math.round(h) });
   }, [docWidth, docHeight]);
 
-  // Throttled thumbnail update by drawing the main WebGL canvas into the small canvas
+  // Throttled thumbnail update by reading the composite texture from the engine
   useEffect(() => {
     if (collapsed) return;
 
     const update = () => {
       const thumbCanvas = thumbnailCanvasRef.current;
       if (!thumbCanvas) return;
+      const engine = getEngine();
+      if (!engine) return;
 
-      // Find the main WebGL canvas — the non-overlay canvas inside the canvas container
-      const container = document.querySelector('[data-testid="canvas-container"]');
-      if (!container) return;
+      const maxDim = Math.max(thumbnailSize.width, thumbnailSize.height);
+      if (maxDim === 0) return;
 
-      const allCanvases = container.querySelectorAll('canvas');
-      let mainCanvas: HTMLCanvasElement | null = null;
-      for (const c of allCanvases) {
-        if (!c.className.includes('overlayCanvas')) {
-          mainCanvas = c;
-          break;
-        }
-      }
-      if (!mainCanvas || mainCanvas.width === 0 || mainCanvas.height === 0) return;
+      const data = readCompositeThumbnail(engine, maxDim);
+      if (data.length < 8) return;
 
+      const tw = data[0]! | (data[1]! << 8) | (data[2]! << 16) | (data[3]! << 24);
+      const th = data[4]! | (data[5]! << 8) | (data[6]! << 16) | (data[7]! << 24);
+      if (tw === 0 || th === 0) return;
+
+      const pixels = new Uint8ClampedArray(tw * th * 4);
+      pixels.set(new Uint8Array(data.buffer, data.byteOffset + 8, tw * th * 4));
+      const imageData = new ImageData(pixels, tw, th);
+
+      thumbCanvas.width = tw;
+      thumbCanvas.height = th;
       const ctx = thumbCanvas.getContext('2d');
       if (!ctx) return;
-
-      ctx.clearRect(0, 0, thumbCanvas.width, thumbCanvas.height);
-      ctx.drawImage(mainCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+      ctx.putImageData(imageData, 0, 0);
     };
 
     update();
@@ -133,60 +137,64 @@ export function NavigatorPanel() {
 
   const zoomPercent = Math.round(viewport.zoom * 100);
 
+  const ZOOM_MIN = 0.1;
+  const ZOOM_MAX = 6.0;
+
   const handleZoomSliderChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const rawPercent = Number(e.target.value);
-      // Slider is log-scale: map [0,100] → [1%, 6400%]
-      const zoom = Math.pow(64, rawPercent / 100);
+      // Log-scale: map [0,100] → [10%, 500%]
+      const zoom = ZOOM_MIN * Math.pow(ZOOM_MAX / ZOOM_MIN, rawPercent / 100);
       setZoom(zoom);
     },
     [setZoom],
   );
 
-  // Convert zoom to slider position (inverse of the log mapping above)
-  const sliderValue = Math.log(Math.max(0.01, viewport.zoom)) / Math.log(64) * 100;
+  const sliderValue = Math.log(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, viewport.zoom)) / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN) * 100;
 
   return (
     <PanelContainer title="Navigator" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
       <div className={styles.panel}>
-        <div
-          ref={containerRef}
-          className={styles.minimapContainer}
-          data-testid="navigator-minimap-container"
-        >
-          {thumbnailSize.width > 0 && thumbnailSize.height > 0 && (
-            <div
-              className={styles.minimapWrapper}
-              style={{
-                width: thumbnailSize.width,
-                height: thumbnailSize.height,
-              }}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              role="presentation"
-            >
-              <canvas
-                ref={thumbnailCanvasRef}
-                className={styles.thumbnail}
-                width={thumbnailSize.width}
-                height={thumbnailSize.height}
-                aria-hidden="true"
-                data-testid="navigator-thumbnail"
-              />
+        {!collapsed && (
+          <div
+            ref={containerRef}
+            className={styles.minimapContainer}
+            data-testid="navigator-minimap-container"
+          >
+            {thumbnailSize.width > 0 && thumbnailSize.height > 0 && (
               <div
-                className={styles.viewportIndicator}
-                data-testid="navigator-viewport-indicator"
+                className={styles.minimapWrapper}
                 style={{
-                  left: vpRect.x,
-                  top: vpRect.y,
-                  width: Math.max(4, vpRect.width),
-                  height: Math.max(4, vpRect.height),
+                  width: thumbnailSize.width,
+                  height: thumbnailSize.height,
                 }}
-              />
-            </div>
-          )}
-        </div>
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                role="presentation"
+              >
+                <canvas
+                  ref={thumbnailCanvasRef}
+                  className={styles.thumbnail}
+                  width={thumbnailSize.width}
+                  height={thumbnailSize.height}
+                  aria-hidden="true"
+                  data-testid="navigator-thumbnail"
+                />
+                <div
+                  className={styles.viewportIndicator}
+                  data-testid="navigator-viewport-indicator"
+                  style={{
+                    left: vpRect.x,
+                    top: vpRect.y,
+                    width: Math.max(4, vpRect.width),
+                    height: Math.max(4, vpRect.height),
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
         <div className={styles.zoomRow}>
           <input
             type="range"
