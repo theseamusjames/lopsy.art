@@ -114,7 +114,7 @@
   min-width: 280px;
   min-height: 200px;
   max-height: 80vh;
-  resize: horizontal;
+  resize: both;
   overflow: auto;
 }
 
