@@ -564,7 +564,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   updateLayerEffects: (id: string, effects, skipHistory?: boolean) => {
     finalizePendingStrokeGlobal();
     const s = get();
-    if (!skipHistory) s.pushHistory('Update Effects');
+    if (!skipHistory) s.pushHistory('Edit Effect');
     set(computeUpdateEffects(s.document, s.renderVersion, id, effects));
   },
 

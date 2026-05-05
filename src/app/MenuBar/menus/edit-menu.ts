@@ -16,7 +16,7 @@ export function fillSelection(): void {
   const engine = getEngine();
   if (!engine) return;
 
-  state.pushHistory();
+  state.pushHistory('Fill');
   const color = useToolSettingsStore.getState().foregroundColor;
 
   // GPU fill: uses the engine's selection mask if active

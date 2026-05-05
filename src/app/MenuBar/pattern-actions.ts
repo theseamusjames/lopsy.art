@@ -93,7 +93,7 @@ export function applyPatternFill(patternId: string, scale: number, offsetX: numb
   const engine = getEngine();
   if (!engine) return;
 
-  useEditorStore.getState().pushHistory();
+  useEditorStore.getState().pushHistory('Pattern Fill');
   filterPatternFill(
     engine,
     activeId,
@@ -166,7 +166,7 @@ export function applyPatternFillWithPreview(patternId: string, scale: number, of
   restoreFilterPreview(engine);
   clearFilterPreview(engine);
 
-  useEditorStore.getState().pushHistory();
+  useEditorStore.getState().pushHistory('Pattern Fill');
   filterPatternFill(
     engine,
     activeId,

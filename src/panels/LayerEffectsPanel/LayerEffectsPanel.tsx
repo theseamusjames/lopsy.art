@@ -60,26 +60,31 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
     [activeLayerId, effects, updateLayerEffects],
   );
 
+  const effectLabel = (key: EffectKey): string =>
+    EFFECT_LIST.find((e) => e.key === key)?.label ?? 'Effect';
+
   // Committed update: push a single undo entry (for toggles, color picks, dropdowns)
   const update = useCallback(
-    (partial: Partial<LayerEffects>) => {
+    (partial: Partial<LayerEffects>, label?: string) => {
       if (!activeLayerId || !effects) return;
-      updateLayerEffects(activeLayerId, { ...effects, ...partial });
+      useEditorStore.getState().pushHistory(label ?? `Edit ${effectLabel(selectedEffect)}`);
+      updateLayerEffects(activeLayerId, { ...effects, ...partial }, true);
     },
-    [activeLayerId, effects, updateLayerEffects],
+    [activeLayerId, effects, updateLayerEffects, selectedEffect],
   );
 
   // Push one undo entry at the START of a slider drag so undo restores
   // the pre-drag state (not the post-drag state).
   const beginEffectsDrag = useCallback(() => {
-    useEditorStore.getState().pushHistory('Update Effects');
-  }, []);
+    useEditorStore.getState().pushHistory(`Edit ${effectLabel(selectedEffect)}`);
+  }, [selectedEffect]);
 
   const handleToggle = useCallback(
     (key: EffectKey) => {
       if (!effects) return;
       const current = effects[key];
-      update({ [key]: { ...current, enabled: !current.enabled } });
+      const verb = current.enabled ? 'Disable' : 'Enable';
+      update({ [key]: { ...current, enabled: !current.enabled } }, `${verb} ${effectLabel(key)}`);
     },
     [effects, update],
   );

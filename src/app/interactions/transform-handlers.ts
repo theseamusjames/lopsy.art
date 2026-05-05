@@ -88,7 +88,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     ? computeRotation(canvasPos, currentTransform) - currentTransform.rotation
     : 0;
 
-  editorState.pushHistory();
+  editorState.pushHistory('Transform');
 
   // Clear floating selection ref when entering transform mode.
   floatingSelectionRef.current = null;

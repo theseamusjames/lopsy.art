@@ -25,9 +25,9 @@ function dodgeModeToU32(mode: DodgeMode): number {
 export function handleDodgeDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer, shiftKey } = ctx;
   const editorState = useEditorStore.getState();
-  editorState.pushHistory();
   const toolSettings = useToolSettingsStore.getState();
   const dodgeMode = toolSettings.dodgeMode;
+  editorState.pushHistory(dodgeMode === 'dodge' ? 'Dodge' : 'Burn');
   const exposure = toolSettings.dodgeExposure / 100;
   const dodgeSize = toolSettings.brushSize;
   const dodgeShiftLine = shiftKey

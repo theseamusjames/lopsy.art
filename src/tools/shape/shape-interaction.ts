@@ -44,7 +44,7 @@ function constrainToAspectRatio(center: Point, edge: Point): Point {
 export function handleShapeDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer } = ctx;
   const editorState = useEditorStore.getState();
-  editorState.pushHistory();
+  editorState.pushHistory('Shape');
 
   const ts = useToolSettingsStore.getState();
   if (ts.shapeFillColor) ts.addRecentColor(ts.shapeFillColor);
@@ -111,7 +111,7 @@ export function confirmShapeSize(width: number, height: number, click: ShapeSize
   const surface = wrapWithSelectionMask(pixelBuffer, click.layerX, click.layerY);
   const ts = useToolSettingsStore.getState();
 
-  editorState.pushHistory();
+  editorState.pushHistory('Shape');
   if (ts.shapeFillColor) ts.addRecentColor(ts.shapeFillColor);
   if (ts.shapeStrokeColor) ts.addRecentColor(ts.shapeStrokeColor);
 

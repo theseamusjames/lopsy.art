@@ -20,7 +20,7 @@ export function handleFillDown(ctx: InteractionContext): void {
 
   // In quick mask mode: fill the quick mask texture instead of the layer
   if (isQuickMaskMode) {
-    editorState.pushHistory();
+    editorState.pushHistory('Quick Mask Fill');
     const toolSettings = useToolSettingsStore.getState();
     const tolerance = toolSettings.fillTolerance;
     const contiguous = toolSettings.fillContiguous;
@@ -37,7 +37,7 @@ export function handleFillDown(ctx: InteractionContext): void {
   }
 
   // Normal mode: fill the active layer
-  editorState.pushHistory();
+  editorState.pushHistory('Bucket Fill');
   const toolSettings = useToolSettingsStore.getState();
   const color = toolSettings.foregroundColor;
   toolSettings.addRecentColor(color);

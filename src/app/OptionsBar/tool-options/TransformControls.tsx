@@ -32,7 +32,7 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
   const activeLayerId = editorState.document.activeLayerId;
   if (!activeLayerId) return;
 
-  editorState.pushHistory();
+  editorState.pushHistory('Transform');
 
   // Float if needed
   if (!hasFloat(engine)) {

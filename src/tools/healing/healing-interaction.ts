@@ -48,7 +48,7 @@ export function handleHealingDown(ctx: InteractionContext): InteractionState | u
   if (!ctx.stampSourceRef.current) return undefined;
 
   const editorState = useEditorStore.getState();
-  editorState.pushHistory();
+  editorState.pushHistory('Healing Brush');
 
   if (!ctx.stampOffsetRef.current) {
     ctx.stampOffsetRef.current = {

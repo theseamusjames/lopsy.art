@@ -14,8 +14,8 @@ import {
 export function handleGradientDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer } = ctx;
   const editorState = useEditorStore.getState();
-  editorState.pushHistory();
   const ts = useToolSettingsStore.getState();
+  editorState.pushHistory(ts.gradientType === 'radial' ? 'Radial Gradient' : 'Linear Gradient');
   ts.addRecentColor(ts.foregroundColor);
   ts.addRecentColor(ts.backgroundColor);
 
