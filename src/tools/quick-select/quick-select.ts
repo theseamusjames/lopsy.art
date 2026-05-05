@@ -1,12 +1,13 @@
 /**
- * Quick Selection tool — paint-to-select with edge-aware expansion.
+ * Quick Selection tool — paint-to-select with edge-aware flood fill.
  *
- * Algorithm per stroke segment:
+ * Algorithm per stroke point:
  *   1. Sample the seed color from the image at the brush center.
- *   2. For every pixel within the brush radius of any point on the stroke:
- *      a. Compute the color distance from the pixel to the seed color.
- *      b. Compute the gradient magnitude at that pixel (Sobel).
- *      c. If color distance <= tolerance AND gradient < edgeThreshold, mark selected.
+ *   2. Flood fill outward from the brush center:
+ *      a. For each candidate pixel, check color distance to seed.
+ *      b. Check Sobel gradient magnitude at that pixel.
+ *      c. If color is similar AND gradient is below the edge threshold, select it and continue expanding.
+ *      d. Stop expanding at edges or when color diverges.
  *   3. The selection mask is merged (add/subtract) into the existing mask.
  *
  * All logic is pure — no DOM, no React, no rendering.
@@ -17,7 +18,7 @@ export interface QuickSelectParams {
   pixels: Uint8ClampedArray;
   width: number;
   height: number;
-  /** Brush radius in pixels (1–100). */
+  /** Brush radius in pixels — controls seed sampling area and max flood distance. */
   radius: number;
   /** Color distance threshold (0–255). Higher = select more. */
   tolerance: number;
@@ -34,10 +35,6 @@ export interface QuickSelectStrokeInput {
   mode: 'add' | 'subtract';
 }
 
-/**
- * Compute the squared Euclidean color distance between two RGBA pixels.
- * Alpha is ignored — we match on visible color only.
- */
 function colorDistanceSq(
   r1: number, g1: number, b1: number,
   r2: number, g2: number, b2: number,
@@ -48,10 +45,6 @@ function colorDistanceSq(
   return dr * dr + dg * dg + db * db;
 }
 
-/**
- * Compute the Sobel gradient magnitude at pixel (x, y).
- * Returns a value in [0, ~1443] (sqrt(3) * 255^2 capped).
- */
 function sobelMagnitude(
   pixels: Uint8ClampedArray,
   width: number,
@@ -59,7 +52,6 @@ function sobelMagnitude(
   x: number,
   y: number,
 ): number {
-  // Clamp-to-border sampling
   const sample = (cx: number, cy: number): [number, number, number] => {
     const sx = Math.max(0, Math.min(width - 1, cx));
     const sy = Math.max(0, Math.min(height - 1, cy));
@@ -67,7 +59,6 @@ function sobelMagnitude(
     return [pixels[idx]!, pixels[idx + 1]!, pixels[idx + 2]!];
   };
 
-  // 3×3 Sobel kernel on luminance
   const lum = (r: number, g: number, b: number) =>
     0.299 * r + 0.587 * g + 0.114 * b;
 
@@ -85,11 +76,6 @@ function sobelMagnitude(
   return Math.sqrt(gx * gx + gy * gy);
 }
 
-/**
- * Sample the average RGBA color within the brush footprint of a point,
- * clamped to image bounds. Falls back to the single center pixel when the
- * radius is 0.
- */
 function sampleSeedColor(
   pixels: Uint8ClampedArray,
   width: number,
@@ -100,7 +86,7 @@ function sampleSeedColor(
 ): { r: number; g: number; b: number } {
   const px = Math.round(cx);
   const py = Math.round(cy);
-  const r = Math.max(1, Math.round(radius / 3)); // sample from inner 1/3 of brush
+  const r = Math.max(1, Math.round(radius / 3));
   let sumR = 0, sumG = 0, sumB = 0, count = 0;
 
   for (let dy = -r; dy <= r; dy++) {
@@ -132,61 +118,60 @@ function sampleSeedColor(
 }
 
 /**
- * Paint one brush footprint into the selection mask.
- *
- * For each pixel within `radius` of center (cx, cy):
- * - If its color distance to `seed` is within `tolerance` AND
- *   its Sobel gradient is below `edgeThreshold`, include it.
+ * Flood fill outward from (cx, cy), selecting connected pixels that
+ * match the seed color and don't cross strong edges.
  */
-function paintBrushFootprint(
+function floodFillSelect(
   pixels: Uint8ClampedArray,
   width: number,
   height: number,
+  visited: Uint8Array,
   mask: Uint8ClampedArray,
   cx: number,
   cy: number,
-  radius: number,
   seed: { r: number; g: number; b: number },
   toleranceSq: number,
   edgeThreshold: number,
   mode: 'add' | 'subtract',
 ): void {
-  const px = Math.round(cx);
-  const py = Math.round(cy);
-  const irad = Math.ceil(radius);
+  const startX = Math.round(cx);
+  const startY = Math.round(cy);
+  if (startX < 0 || startX >= width || startY < 0 || startY >= height) return;
 
-  for (let dy = -irad; dy <= irad; dy++) {
-    for (let dx = -irad; dx <= irad; dx++) {
-      if (dx * dx + dy * dy > radius * radius) continue;
-      const sx = px + dx;
-      const sy = py + dy;
-      if (sx < 0 || sx >= width || sy < 0 || sy >= height) continue;
+  const stack: number[] = [startX, startY];
+  const fillVal = mode === 'add' ? 255 : 0;
 
-      const idx = (sy * width + sx) * 4;
-      const pr = pixels[idx]!;
-      const pg = pixels[idx + 1]!;
-      const pb = pixels[idx + 2]!;
+  while (stack.length > 0) {
+    const py = stack.pop()!;
+    const px = stack.pop()!;
 
-      const dist = colorDistanceSq(pr, pg, pb, seed.r, seed.g, seed.b);
-      if (dist > toleranceSq) continue;
+    if (px < 0 || px >= width || py < 0 || py >= height) continue;
+    const idx = py * width + px;
+    if (visited[idx]) continue;
+    visited[idx] = 1;
 
-      const gradient = sobelMagnitude(pixels, width, height, sx, sy);
-      if (gradient > edgeThreshold) continue;
+    const pIdx = idx * 4;
+    const pr = pixels[pIdx]!;
+    const pg = pixels[pIdx + 1]!;
+    const pb = pixels[pIdx + 2]!;
 
-      const maskIdx = sy * width + sx;
-      if (mode === 'add') {
-        mask[maskIdx] = 255;
-      } else {
-        mask[maskIdx] = 0;
-      }
-    }
+    const dist = colorDistanceSq(pr, pg, pb, seed.r, seed.g, seed.b);
+    if (dist > toleranceSq) continue;
+
+    const gradient = sobelMagnitude(pixels, width, height, px, py);
+    if (gradient > edgeThreshold) continue;
+
+    mask[idx] = fillVal;
+
+    stack.push(px - 1, py);
+    stack.push(px + 1, py);
+    stack.push(px, py - 1);
+    stack.push(px, py + 1);
   }
 }
 
 /**
  * Apply a quick-selection stroke to produce an updated selection mask.
- *
- * @returns A new `Uint8ClampedArray` selection mask of size `width * height`.
  */
 export function applyQuickSelectStroke(
   params: QuickSelectParams,
@@ -195,32 +180,26 @@ export function applyQuickSelectStroke(
   const { pixels, width, height, radius, tolerance, edgeStrength } = params;
   const { points, existingMask, mode } = stroke;
 
-  // Copy or create the mask to mutate
   const mask = existingMask
     ? new Uint8ClampedArray(existingMask)
     : new Uint8ClampedArray(width * height);
 
   if (points.length === 0) return mask;
 
-  // Convert edge strength (0-100) to a Sobel threshold.
-  // edgeStrength=0 means ignore edges (very high threshold),
-  // edgeStrength=100 means stop at even faint edges.
-  // Sobel magnitude on 8-bit luminance has a max of ~360 (=sqrt(2)*255).
   const edgeThreshold = edgeStrength === 0
     ? Infinity
     : (1 - edgeStrength / 100) * 360 + 5;
 
-  // tolerance is a per-channel value; convert to squared distance in 3D RGB space
   const toleranceSq = tolerance * tolerance * 3;
 
-  // Sample seed color from the first stroke point
-  const seed = sampleSeedColor(pixels, width, height, points[0]!.x, points[0]!.y, radius);
+  const visited = new Uint8Array(width * height);
 
   for (const pt of points) {
-    paintBrushFootprint(
-      pixels, width, height, mask,
+    const seed = sampleSeedColor(pixels, width, height, pt.x, pt.y, radius);
+    floodFillSelect(
+      pixels, width, height, visited, mask,
       pt.x, pt.y,
-      radius, seed, toleranceSq, edgeThreshold,
+      seed, toleranceSq, edgeThreshold,
       mode,
     );
   }

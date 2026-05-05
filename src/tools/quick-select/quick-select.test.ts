@@ -39,14 +39,14 @@ function countSelected(mask: Uint8ClampedArray): number {
 // ---------------------------------------------------------------------------
 
 describe('applyQuickSelectStroke', () => {
-  it('selects pixels matching the seed color within the brush radius', () => {
-    // 10×10 solid red image
+  it('flood fills the entire uniform-color region from the seed point', () => {
+    // 10×10 solid red image — should select ALL pixels
     const pixels = makeImage(10, 10, () => [255, 0, 0, 255]);
     const mask = applyQuickSelectStroke(
       { pixels, width: 10, height: 10, radius: 3, tolerance: 10, edgeStrength: 0 },
       { points: [{ x: 5, y: 5 }], existingMask: null, mode: 'add' },
     );
-    expect(countSelected(mask)).toBeGreaterThan(0);
+    expect(countSelected(mask)).toBe(100);
   });
 
   it('does not select pixels whose color differs beyond the tolerance', () => {
@@ -117,16 +117,17 @@ describe('applyQuickSelectStroke', () => {
     expect(countSelected(subtracted)).toBeLessThan(addedCount);
   });
 
-  it('accumulates across multiple stroke points', () => {
-    // Uniform blue image
-    const pixels = makeImage(50, 10, () => [0, 100, 200, 255]);
+  it('accumulates across multiple stroke points in different regions', () => {
+    // Left: red, right: blue — two separate color regions
+    const pixels = makeImage(50, 10, (x) => x < 25 ? [255, 0, 0, 255] : [0, 0, 255, 255]);
     const onePoint = applyQuickSelectStroke(
       { pixels, width: 50, height: 10, radius: 3, tolerance: 10, edgeStrength: 0 },
       { points: [{ x: 10, y: 5 }], existingMask: null, mode: 'add' },
     );
+    // Second stroke in the blue region expands the selection
     const multiPoint = applyQuickSelectStroke(
-      { pixels, width: 50, height: 10, radius: 3, tolerance: 10, edgeStrength: 0 },
-      { points: [{ x: 10, y: 5 }, { x: 30, y: 5 }, { x: 40, y: 5 }], existingMask: null, mode: 'add' },
+      { pixels, width: 50, height: 10, radius: 3, tolerance: 255, edgeStrength: 0 },
+      { points: [{ x: 10, y: 5 }, { x: 40, y: 5 }], existingMask: null, mode: 'add' },
     );
     expect(countSelected(multiPoint)).toBeGreaterThan(countSelected(onePoint));
   });
