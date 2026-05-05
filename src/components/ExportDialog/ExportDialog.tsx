@@ -28,7 +28,7 @@ export function ExportDialog({ onExport, onCancel, onPreviewRequest }: ExportDia
   const [format, setFormat] = useState<ExportFormat>('png');
   const [quality, setQuality] = useState(92);
   const [highQuality, setHighQuality] = useState(false);
-  const [filename, setFilename] = useState(docName || 'export');
+  const [filename, setFilename] = useState(docName || 'lopsy');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);

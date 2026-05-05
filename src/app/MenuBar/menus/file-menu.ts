@@ -284,12 +284,7 @@ export const fileMenu: MenuDef = {
     { label: 'New', shortcut: '⌘N', action: () => { if (confirmIfDirty()) useUIStore.getState().setShowNewDocumentModal(true); } },
     { label: 'Open...', shortcut: '⌘O', action: () => openFileFromDisk() },
     { separator: true, label: '' },
-    { label: 'Export As…', shortcut: '⌥⇧⌘E', action: () => openExportDialogFn?.() },
-    { label: 'Quick Export PNG', shortcut: '⇧⌘E', action: () => exportCanvas('png') },
-    { separator: true, label: '' },
-    { label: 'Export JPEG', action: () => exportCanvas('jpeg') },
-    { label: 'Export WebP', action: () => exportCanvas('webp') },
-    { label: 'Export BMP', action: () => exportCanvas('bmp') },
+    { label: 'Export…', shortcut: '⇧⌘E', action: () => openExportDialogFn?.() },
     { label: 'Export PSD', action: () => exportPsdFile(16) },
   ],
 };
