@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilterDialog } from '../../components/FilterDialog/FilterDialog';
 import { NoiseDialog, FillNoiseDialog } from '../../components/FilterDialog/NoiseDialog';
 import { PatternFillDialog } from '../../components/PatternFillDialog/PatternFillDialog';
+import { ExportDialog } from '../../components/ExportDialog/ExportDialog';
 import {
   type FilterDialogId,
   getFilterDialogConfig,
@@ -20,6 +21,13 @@ import {
   cancelPatternPreview,
   applyPatternFillWithPreview,
 } from './pattern-actions';
+import {
+  exportCanvasWithOptions,
+  buildExportPreview,
+  registerOpenExportDialog,
+  unregisterOpenExportDialog,
+} from './menus/file-menu';
+import type { ExportOptions } from './export-logic';
 import { getMenus, type MenuItem, type ImageDialogId, type HelpDialogId, type SelectDialogId } from './menus';
 import { CanvasSizeModal } from '../../components/CanvasSizeModal/CanvasSizeModal';
 import { ImageSizeModal } from '../../components/ImageSizeModal/ImageSizeModal';
@@ -37,8 +45,19 @@ export function MenuBar() {
   const [imageDialog, setImageDialog] = useState<ImageDialogId | null>(null);
   const [helpDialog, setHelpDialog] = useState<HelpDialogId | null>(null);
   const [selectDialog, setSelectDialog] = useState<SelectDialogId | null>(null);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const previewActiveRef = useRef(false);
+
+  // Register the export-dialog opener so file-menu can trigger it without
+  // creating a circular dependency.
+  useEffect(() => {
+    registerOpenExportDialog(() => {
+      setOpenMenu(null);
+      setShowExportDialog(true);
+    });
+    return () => unregisterOpenExportDialog();
+  }, []);
 
   const showFilterDialog = useCallback((id: FilterDialogId) => {
     setOpenMenu(null);
@@ -163,6 +182,19 @@ export function MenuBar() {
   const handlePatternPreviewChange = useCallback((patternId: string, scale: number, offsetX: number, offsetY: number) => {
     if (!previewActiveRef.current) return;
     previewPatternFill(patternId, scale, offsetX, offsetY);
+  }, []);
+
+  const handleExportDialogExport = useCallback((options: ExportOptions) => {
+    setShowExportDialog(false);
+    exportCanvasWithOptions(options);
+  }, []);
+
+  const handleExportDialogCancel = useCallback(() => {
+    setShowExportDialog(false);
+  }, []);
+
+  const handleExportDialogPreview = useCallback((options: ExportOptions) => {
+    return buildExportPreview(options);
   }, []);
 
   const handleSelectDialogApply = useCallback((values: Record<string, number>) => {
@@ -300,6 +332,13 @@ export function MenuBar() {
           }]}
           onApply={handleSelectDialogApply}
           onCancel={() => setSelectDialog(null)}
+        />
+      )}
+      {showExportDialog && (
+        <ExportDialog
+          onExport={handleExportDialogExport}
+          onCancel={handleExportDialogCancel}
+          onPreviewRequest={handleExportDialogPreview}
         />
       )}
     </>

@@ -129,7 +129,7 @@ function createInitialDocument() {
   pixelDataManager.setDense(bg.id, imgData);
   return {
     id: crypto.randomUUID(),
-    name: 'Untitled' as const,
+    name: 'lopsy' as const,
     width: 800,
     height: 600,
     layers: [bg, rootGroup] as readonly Layer[],

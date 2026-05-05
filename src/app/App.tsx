@@ -97,7 +97,7 @@ export function App() {
     const isPWA = window.matchMedia('(display-mode: standalone)').matches;
     if (!isPWA) return;
     const name = doc.name;
-    document.title = name === 'Untitled' ? 'Lopsy' : `Lopsy — ${name}`;
+    document.title = name === 'lopsy' ? 'Lopsy' : `Lopsy — ${name}`;
   }, [doc.name]);
 
   const visiblePanels = useUIStore((s) => s.visiblePanels);

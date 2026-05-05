@@ -78,7 +78,7 @@ async function exportPng(page: Page, saveTo: string): Promise<void> {
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'File' }).click();
   await page.waitForTimeout(100);
-  await page.getByRole('menuitem', { name: 'Export PNG' }).click();
+  await page.getByRole('menuitem', { name: 'Quick Export PNG' }).click();
   const download = await downloadPromise;
   const tmpPath = await download.path();
   if (tmpPath) {

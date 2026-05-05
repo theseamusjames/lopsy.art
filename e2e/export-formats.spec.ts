@@ -15,7 +15,8 @@ test.describe('Export formats (#57)', () => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
 
-    await expect(page.getByRole('menuitem', { name: 'Export PNG' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export As…' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Quick Export PNG' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Export JPEG' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Export WebP' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Export BMP' })).toBeVisible();
@@ -31,7 +32,8 @@ test.describe('Export formats (#57)', () => {
     await page.getByRole('menuitem', { name: 'Export WebP' }).click();
 
     const download = await downloadPromise;
-    expect(download.suggestedFilename()).toBe('lopsy.webp');
+    // Filename is <docName>.<ext>; createDocument produces 'Untitled'
+    expect(download.suggestedFilename()).toBe('Untitled.webp');
 
     await page.screenshot({ path: 'test-results/screenshots/export-webp-menu.png' });
   });
@@ -44,7 +46,8 @@ test.describe('Export formats (#57)', () => {
     await page.getByRole('menuitem', { name: 'Export BMP' }).click();
 
     const download = await downloadPromise;
-    expect(download.suggestedFilename()).toBe('lopsy.bmp');
+    // Filename is <docName>.<ext>; createDocument produces 'Untitled'
+    expect(download.suggestedFilename()).toBe('Untitled.bmp');
 
     await page.screenshot({ path: 'test-results/screenshots/export-bmp-menu.png' });
   });
