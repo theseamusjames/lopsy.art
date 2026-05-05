@@ -6,7 +6,7 @@ import type { DodgeMode } from '../tools/dodge/dodge';
 import type { BrushPreset, BrushTipData } from '../types/brush';
 import { colorEquals } from '../utils/color';
 
-const MAX_RECENT_COLORS = 20;
+const MAX_RECENT_COLORS = 28;
 
 // Opacity setters in this store take **percent** (1–100), not normalised
 // 0–1. Callers reaching for normalised opacity (which is what colours and
@@ -490,7 +490,36 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   symmetryVertical: false,
   foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
   backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
-  recentColors: Array.from({ length: MAX_RECENT_COLORS }, () => ({ r: 46, g: 46, b: 46, a: 1 })),
+  recentColors: [
+    { r: 255, g: 255, b: 255, a: 1 },
+    { r: 0,   g: 0,   b: 0,   a: 1 },
+    { r: 128, g: 128, b: 128, a: 1 },
+    { r: 255, g: 0,   b: 0,   a: 1 },
+    { r: 255, g: 100, b: 0,   a: 1 },
+    { r: 255, g: 200, b: 0,   a: 1 },
+    { r: 0,   g: 200, b: 0,   a: 1 },
+    { r: 0,   g: 150, b: 255, a: 1 },
+    { r: 80,  g: 0,   b: 255, a: 1 },
+    { r: 200, g: 0,   b: 200, a: 1 },
+    { r: 255, g: 180, b: 180, a: 1 },
+    { r: 255, g: 220, b: 180, a: 1 },
+    { r: 255, g: 255, b: 180, a: 1 },
+    { r: 180, g: 255, b: 180, a: 1 },
+    { r: 180, g: 220, b: 255, a: 1 },
+    { r: 200, g: 180, b: 255, a: 1 },
+    { r: 80,  g: 50,  b: 20,  a: 1 },
+    { r: 150, g: 100, b: 50,  a: 1 },
+    { r: 0,   g: 80,  b: 80,  a: 1 },
+    { r: 50,  g: 50,  b: 80,  a: 1 },
+    { r: 180, g: 0,   b: 0,   a: 1 },
+    { r: 0,   g: 100, b: 0,   a: 1 },
+    { r: 0,   g: 0,   b: 180, a: 1 },
+    { r: 255, g: 150, b: 200, a: 1 },
+    { r: 200, g: 200, b: 200, a: 1 },
+    { r: 100, g: 100, b: 100, a: 1 },
+    { r: 255, g: 130, b: 0,   a: 1 },
+    { r: 0,   g: 200, b: 200, a: 1 },
+  ],
   spraySize: 40,
   sprayDensity: 20,
   sprayOpacity: 60,

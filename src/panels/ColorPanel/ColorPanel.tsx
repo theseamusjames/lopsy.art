@@ -107,18 +107,16 @@ export function ColorPanel() {
               size="sm"
             />
           </div>
-          {recentColors.length > 0 && (
-            <div className={styles.recentSwatches} data-testid="recent-swatches">
-              {recentColors.map((color, i) => (
-                <ColorSwatch
-                  key={i}
-                  color={color}
-                  size="sm"
-                  onClick={() => handleRecentClick(color)}
-                />
-              ))}
-            </div>
-          )}
+          <div className={styles.recentSwatches} data-testid="recent-swatches">
+            {recentColors.map((color, i) => (
+              <ColorSwatch
+                key={i}
+                color={color}
+                size="sm"
+                onClick={() => handleRecentClick(color)}
+              />
+            ))}
+          </div>
         </div>
         <ColorPicker color={activeColor} onChange={handlePickerChange} compact={collapsed} />
         {!collapsed && <div className={styles.hexRow}>
