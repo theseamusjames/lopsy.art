@@ -30,7 +30,6 @@ import type {
 } from '../../types/adjustment-nodes';
 import {
   ADJUSTMENT_NODE_LABELS,
-  createDefaultNode,
 } from '../../filters/adjustment-node-utils';
 import styles from './AdjustmentsPanel.module.css';
 
@@ -120,9 +119,11 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
   const handleAddNode = (type: AdjustmentNodeType) => {
     setShowAddMenu(false);
     addAdjustmentNode(group.id, type);
-    // Auto-expand the new node.
-    const newNode = createDefaultNode(type);
-    setExpandedNodeId(newNode.id);
+    const updated = useEditorStore.getState().document.layers.find(
+      (l) => l.id === group.id && l.type === 'group',
+    ) as GroupLayer | undefined;
+    const lastNode = updated?.adjustments[updated.adjustments.length - 1];
+    if (lastNode) setExpandedNodeId(lastNode.id);
   };
 
   const handleDragStart = (idx: number) => {
