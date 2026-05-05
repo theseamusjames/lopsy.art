@@ -10,7 +10,7 @@
   align-items: center;
   background: var(--color-bg-canvas);
   border-radius: var(--radius-sm);
-  padding: var(--space-2);
+  padding: 2px;
   min-height: 80px;
 }
 
