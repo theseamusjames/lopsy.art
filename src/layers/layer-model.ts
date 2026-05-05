@@ -61,6 +61,8 @@ export function createTextLayer(params: {
     letterSpacing: 0,
     textAlign: 'left',
     width: null,
+    underline: false,
+    strikethrough: false,
   };
 }
 

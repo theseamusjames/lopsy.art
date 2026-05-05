@@ -403,6 +403,8 @@ export function syncTextLayers(
   fontStyle: string,
   textAlign: string,
   color: Color,
+  underline: boolean,
+  strikethrough: boolean,
   onPositionChange: (layerId: string, x: number, y: number) => void,
 ): void {
   if (!textEditing) return;
@@ -428,6 +430,8 @@ export function syncTextLayers(
     letterSpacing: 0,
     textAlign,
     areaWidth: bounds.width ?? null,
+    underline,
+    strikethrough,
   });
 
   setTextLayerContent(engine, layerId, propsJson);

@@ -346,6 +346,8 @@ interface ToolSettings {
   textFontWeight: number;
   textFontStyle: FontStyle;
   textAlign: TextAlign;
+  textUnderline: boolean;
+  textStrikethrough: boolean;
   brushSpacing: number;
   brushScatter: number;
   brushAngle: number;
@@ -396,6 +398,8 @@ interface ToolSettings {
   setTextFontWeight: (weight: number) => void;
   setTextFontStyle: (style: FontStyle) => void;
   setTextAlign: (align: TextAlign) => void;
+  setTextUnderline: (underline: boolean) => void;
+  setTextStrikethrough: (strikethrough: boolean) => void;
   /** Brush opacity in **percent**, range `1–100` (not normalised `0–1`). */
   setBrushOpacity: (opacity: number) => void;
   setBrushHardness: (hardness: number) => void;
@@ -481,6 +485,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   textFontWeight: 400,
   textFontStyle: 'normal' as const,
   textAlign: 'left' as const,
+  textUnderline: false,
+  textStrikethrough: false,
   brushSpacing: 0,
   brushScatter: 0,
   brushAngle: 0,
@@ -626,6 +632,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setTextFontWeight: (weight) => set({ textFontWeight: weight }),
   setTextFontStyle: (style) => set({ textFontStyle: style }),
   setTextAlign: (align) => set({ textAlign: align }),
+  setTextUnderline: (underline) => set({ textUnderline: underline }),
+  setTextStrikethrough: (strikethrough) => set({ textStrikethrough: strikethrough }),
 
   setForegroundColor: (color) => set({ foregroundColor: color }),
   setBackgroundColor: (color) => set({ backgroundColor: color }),

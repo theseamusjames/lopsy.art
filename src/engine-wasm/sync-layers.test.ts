@@ -41,6 +41,8 @@ const baseTextLayer: TextLayer = {
   letterSpacing: 0,
   textAlign: 'left',
   width: null,
+  underline: false,
+  strikethrough: false,
 };
 
 const baseRasterLayer: RasterLayer = {

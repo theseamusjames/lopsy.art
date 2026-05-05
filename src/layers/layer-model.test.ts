@@ -29,6 +29,12 @@ describe('createTextLayer', () => {
     expect(l.fontFamily).toBe('Inter');
     expect(l.fontSize).toBe(24);
   });
+
+  it('defaults underline and strikethrough to false', () => {
+    const l = createTextLayer({ name: 'Text', text: 'Hello' });
+    expect(l.underline).toBe(false);
+    expect(l.strikethrough).toBe(false);
+  });
 });
 
 describe('createGroupLayer', () => {

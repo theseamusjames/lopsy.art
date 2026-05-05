@@ -6,6 +6,7 @@ import { fontsByFamily } from '../../../utils/font-catalog';
 import { extractFamilyName, loadGoogleFont, loadFontBinaryToEngine } from '../../../utils/font-loader';
 import type { FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
+import decorationStyles from './TextOptions.module.css';
 
 const WEIGHT_LABELS: Record<number, string> = {
   100: 'Thin',
@@ -26,11 +27,15 @@ export function TextOptions() {
   const textFontWeight = useToolSettingsStore((s) => s.textFontWeight);
   const textFontStyle = useToolSettingsStore((s) => s.textFontStyle);
   const textAlign = useToolSettingsStore((s) => s.textAlign);
+  const textUnderline = useToolSettingsStore((s) => s.textUnderline);
+  const textStrikethrough = useToolSettingsStore((s) => s.textStrikethrough);
   const setTextFontSize = useToolSettingsStore((s) => s.setTextFontSize);
   const setTextFontFamily = useToolSettingsStore((s) => s.setTextFontFamily);
   const setTextFontWeight = useToolSettingsStore((s) => s.setTextFontWeight);
   const setTextFontStyle = useToolSettingsStore((s) => s.setTextFontStyle);
   const setTextAlign = useToolSettingsStore((s) => s.setTextAlign);
+  const setTextUnderline = useToolSettingsStore((s) => s.setTextUnderline);
+  const setTextStrikethrough = useToolSettingsStore((s) => s.setTextStrikethrough);
 
   const fontEntry = useMemo(() => {
     const family = extractFamilyName(textFontFamily);
@@ -110,6 +115,24 @@ export function TextOptions() {
         <option value="right">Right</option>
         <option value="justify">Justify</option>
       </select>
+      <button
+        className={`${decorationStyles.decorationBtn} ${textUnderline ? decorationStyles.decorationBtnActive : ''}`}
+        onClick={() => setTextUnderline(!textUnderline)}
+        aria-label="Toggle underline"
+        aria-pressed={textUnderline}
+        title="Underline"
+      >
+        <span className={decorationStyles.underlineIcon}>U</span>
+      </button>
+      <button
+        className={`${decorationStyles.decorationBtn} ${textStrikethrough ? decorationStyles.decorationBtnActive : ''}`}
+        onClick={() => setTextStrikethrough(!textStrikethrough)}
+        aria-label="Toggle strikethrough"
+        aria-pressed={textStrikethrough}
+        title="Strikethrough"
+      >
+        <span className={decorationStyles.strikethroughIcon}>S</span>
+      </button>
     </>
   );
 }
