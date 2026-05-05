@@ -27,7 +27,7 @@ export function NavigatorPanel() {
     if (!container || docWidth <= 0 || docHeight <= 0) return;
 
     const maxW = container.clientWidth;
-    const maxH = 180;
+    const maxH = 300;
     const aspect = docWidth / docHeight;
     let w = maxW;
     let h = maxW / aspect;
