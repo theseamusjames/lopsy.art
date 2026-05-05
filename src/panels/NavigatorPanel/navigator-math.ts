@@ -17,8 +17,8 @@ export interface ViewportRect {
  * centred on screen.  panX/panY are pixel offsets from centre, so the
  * visible document region in doc-space is:
  *
- *   left  = docWidth/2  - (viewportWidth/2  - panX) / zoom
- *   top   = docHeight/2 - (viewportHeight/2 - panY) / zoom
+ *   left  = docWidth/2  - (viewportWidth/2  + panX) / zoom
+ *   top   = docHeight/2 - (viewportHeight/2 + panY) / zoom
  *   right = left + viewportWidth  / zoom
  *   bot   = top  + viewportHeight / zoom
  *

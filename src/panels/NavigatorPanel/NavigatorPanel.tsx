@@ -150,6 +150,10 @@ export function NavigatorPanel() {
     [setZoom],
   );
 
+  const handleZoomSliderDoubleClick = useCallback(() => {
+    setZoom(1);
+  }, [setZoom]);
+
   const sliderValue = Math.log(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, viewport.zoom)) / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN) * 100;
 
   return (
@@ -204,6 +208,7 @@ export function NavigatorPanel() {
             step={0.5}
             value={sliderValue}
             onChange={handleZoomSliderChange}
+            onDoubleClick={handleZoomSliderDoubleClick}
             aria-label="Zoom level"
           />
           <span className={styles.zoomValue} data-testid="navigator-zoom-value">

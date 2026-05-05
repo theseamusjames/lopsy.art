@@ -12,6 +12,7 @@ interface SliderProps {
   scale?: 'linear' | 'log';
   onChange: (value: number) => void;
   onCommit?: () => void;
+  onDragStart?: () => void;
   showValue?: boolean;
   suffix?: string;
 }
@@ -53,6 +54,7 @@ export function Slider({
   scale = 'linear',
   onChange,
   onCommit,
+  onDragStart,
   showValue = true,
   suffix,
 }: SliderProps) {
@@ -116,6 +118,7 @@ export function Slider({
           const v = scale === 'log' ? valLog(iv, min, max) : iv;
           onChange(v);
         }}
+        onPointerDown={() => onDragStart?.()}
         onPointerUp={() => onCommit?.()}
         onKeyUp={() => onCommit?.()}
       />

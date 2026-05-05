@@ -255,6 +255,7 @@ export function ReferenceImagePanel() {
         <div
           className={`${styles.dropZone} ${isDragOver ? styles.dropZoneDragOver : ''}`}
           onClick={handleFileInput}
+          onPointerDown={(e) => e.stopPropagation()}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}

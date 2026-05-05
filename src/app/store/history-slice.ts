@@ -20,6 +20,11 @@ export interface HistorySlice {
 // On restore, these layers get their texture cleared to transparent.
 const EMPTY_LAYER_SENTINEL = new Uint8Array(0);
 
+// After a restore (undo/redo), the GPU pixels are identical to the restored
+// snapshot's blobs. Track this so sequential undo/redo can reuse blobs
+// instead of re-reading from GPU.
+let lastRestoredSnapshot: HistorySnapshot | null = null;
+
 /**
  * Snapshot GPU textures as cropped blobs.
  * GPU is the single source of truth for pixel data.
@@ -83,52 +88,12 @@ function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
   }
 }
 
-/**
- * Snapshot the current live state for the undo/redo opposite stack.
- */
-function snapshotCurrentState(
-  state: {
-    document: HistorySnapshot['document'];
-    dirtyLayerIds: Set<string>;
-  },
-  label: string,
-  metadataOnly: boolean,
-  prevSnapshot: HistorySnapshot | undefined,
-): HistorySnapshot {
-  if (metadataOnly) {
-    return {
-      document: state.document,
-      gpuSnapshots: new Map(),
-      layerPixelData: new Map(),
-      layerCropInfo: new Map(),
-      sparseLayerData: new Map(),
-      label,
-      metadataOnly: true,
-    };
-  }
-
-  // For the opposite stack, all layers are "dirty" since we need a full snapshot
-  const allDirty = new Set(state.document.layerOrder);
-  const gpuSnapshots = snapshotGpuLayers(state.document.layerOrder, allDirty, prevSnapshot);
-
-  return {
-    document: state.document,
-    gpuSnapshots,
-    layerPixelData: new Map(),
-    layerCropInfo: new Map(),
-    sparseLayerData: new Map(),
-    label,
-    metadataOnly: false,
-  };
-}
-
 export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   undoStack: [],
   redoStack: [],
   isDirty: false,
 
   undo: () => {
-    // Finalize any deferred GPU stroke so the snapshot captures it
     finalizePendingStrokeGlobal();
 
     const state = get();
@@ -136,16 +101,52 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const previous = state.undoStack[state.undoStack.length - 1];
     if (!previous) return;
 
-    // Save current state to redo — match the snapshot type
-    const currentSnapshot = snapshotCurrentState(state, previous.label, previous.metadataOnly, undefined);
+    let currentSnapshot: HistorySnapshot;
+    if (previous.metadataOnly) {
+      currentSnapshot = {
+        document: state.document,
+        gpuSnapshots: new Map(),
+        layerPixelData: new Map(),
+        layerCropInfo: new Map(),
+        sparseLayerData: new Map(),
+        label: previous.label,
+        metadataOnly: true,
+      };
+    } else if (lastRestoredSnapshot) {
+      // GPU state matches the last restored snapshot — reuse blobs directly
+      currentSnapshot = {
+        document: state.document,
+        gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
+        layerPixelData: new Map(),
+        layerCropInfo: new Map(),
+        sparseLayerData: new Map(),
+        label: previous.label,
+        metadataOnly: false,
+      };
+    } else {
+      // First undo from user-edited state — only read dirty layers from GPU,
+      // reuse clean-layer blobs from the snapshot we're restoring to
+      const gpuSnapshots = snapshotGpuLayers(
+        state.document.layerOrder,
+        state.dirtyLayerIds,
+        previous,
+      );
+      currentSnapshot = {
+        document: state.document,
+        gpuSnapshots,
+        layerPixelData: new Map(),
+        layerCropInfo: new Map(),
+        sparseLayerData: new Map(),
+        label: previous.label,
+        metadataOnly: false,
+      };
+    }
 
-    // Restore GPU textures from the snapshot, then reset sync tracking
-    // so syncLayers re-pushes all layer positions/dimensions to the engine.
     restoreGpuFromSnapshot(previous);
+    lastRestoredSnapshot = previous;
     const eng = getEngine();
     if (eng) resetTrackedState(eng);
 
-    // Clear JS pixel data — GPU is the source of truth after a restore.
     pixelDataManager.clearAll();
     set({
       undoStack: state.undoStack.slice(0, -1),
@@ -162,14 +163,49 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const next = state.redoStack[state.redoStack.length - 1];
     if (!next) return;
 
-    const currentSnapshot = snapshotCurrentState(state, next.label, next.metadataOnly, undefined);
+    let currentSnapshot: HistorySnapshot;
+    if (next.metadataOnly) {
+      currentSnapshot = {
+        document: state.document,
+        gpuSnapshots: new Map(),
+        layerPixelData: new Map(),
+        layerCropInfo: new Map(),
+        sparseLayerData: new Map(),
+        label: next.label,
+        metadataOnly: true,
+      };
+    } else if (lastRestoredSnapshot) {
+      currentSnapshot = {
+        document: state.document,
+        gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
+        layerPixelData: new Map(),
+        layerCropInfo: new Map(),
+        sparseLayerData: new Map(),
+        label: next.label,
+        metadataOnly: false,
+      };
+    } else {
+      const gpuSnapshots = snapshotGpuLayers(
+        state.document.layerOrder,
+        state.dirtyLayerIds,
+        next,
+      );
+      currentSnapshot = {
+        document: state.document,
+        gpuSnapshots,
+        layerPixelData: new Map(),
+        layerCropInfo: new Map(),
+        sparseLayerData: new Map(),
+        label: next.label,
+        metadataOnly: false,
+      };
+    }
 
-    // Restore GPU textures from the snapshot, then reset sync tracking
     restoreGpuFromSnapshot(next);
+    lastRestoredSnapshot = next;
     const eng = getEngine();
     if (eng) resetTrackedState(eng);
 
-    // Clear JS pixel data — GPU is the source of truth after a restore.
     pixelDataManager.clearAll();
     set({
       redoStack: state.redoStack.slice(0, -1),
@@ -182,6 +218,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
 
   pushHistory: (label = 'Edit') => {
     const state = get();
+    lastRestoredSnapshot = null;
 
     // Flush any pending JS pixel data to the GPU before snapshotting.
     // The GPU is the single source of truth — if JS has data that hasn't

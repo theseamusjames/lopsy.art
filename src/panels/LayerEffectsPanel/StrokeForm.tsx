@@ -8,10 +8,10 @@ import styles from './LayerEffectsPanel.module.css';
 interface StrokeFormProps {
   stroke: StrokeEffect;
   onChange: (s: StrokeEffect) => void;
-  onCommit?: () => void;
+  onDragStart?: () => void;
 }
 
-export function StrokeForm({ stroke, onChange, onCommit }: StrokeFormProps) {
+export function StrokeForm({ stroke, onChange, onDragStart }: StrokeFormProps) {
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
   const widthMax = docScaledMax(docWidth, docHeight, 50);
@@ -32,7 +32,7 @@ export function StrokeForm({ stroke, onChange, onCommit }: StrokeFormProps) {
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
-          <Slider label="Width" value={stroke.width} min={1} max={widthMax} onChange={(v) => onChange({ ...stroke, width: v })} onCommit={onCommit} />
+          <Slider label="Width" value={stroke.width} min={1} max={widthMax} onChange={(v) => onChange({ ...stroke, width: v })} onDragStart={onDragStart} />
         </div>
       </div>
       <div className={styles.row}>
