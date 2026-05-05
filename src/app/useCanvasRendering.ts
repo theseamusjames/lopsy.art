@@ -262,7 +262,7 @@ function renderFrameGpu(
         renderTextHoverBounds(overlayCtx, hoveredText, viewport.zoom, texW, texH);
       }
     }
-    if (textEditing) {
+    if (textEditing && !editingLayerIsPathText) {
       const ts = toolState;
       const glyphPositions = Array.from(getGlyphPositions(engine, textEditing.layerId));
       renderTextEditOverlay(overlayCtx, textEditing, {
