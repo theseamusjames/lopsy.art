@@ -257,13 +257,15 @@ function AdjustmentNodeRow({
   return (
     <div
       className={`${styles.nodeRow} ${isDragOver ? styles.nodeRowDragOver : ''}`}
-      draggable
-      onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      onDragEnd={onDragEnd}
     >
-      <div className={styles.nodeHeader}>
+      <div
+        className={styles.nodeHeader}
+        draggable
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+      >
         <button type="button" className={styles.nodeExpandBtn} onClick={onToggleExpand} aria-label={isExpanded ? 'Collapse' : 'Expand'}>
           {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
