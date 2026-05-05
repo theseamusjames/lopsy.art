@@ -40,6 +40,14 @@
 - **Alt/Cmd+click**: set the source sample point
 - **Shift+click**: stamps along a straight line from the previous stroke endpoint, preserving source offset
 
+### Healing Brush
+- **Size**: 1 px – document-scaled max (default cap 200 px, scales with canvas size)
+- **Opacity**: 1 - 100%
+- **Alt/Cmd+click**: set the healing source sample point
+- **Shift+click**: heals along a straight line from the previous stroke endpoint, preserving source offset
+- Color-correction healing: subtracts the source mean color and adds the destination mean color, so texture is borrowed from the source while tone matches the destination
+- Soft quadratic falloff at the dab edge for seamless blending
+
 ### Smudge
 - **Size**: 1 - 200 px
 - **Strength**: 0 - 100% (how far pixels are pulled along the stroke)
@@ -94,9 +102,11 @@
 
 ### Rectangular Marquee
 - **Aspect ratio lock**: width/height constraint
+- **Feather**: 0 - 250 px (soft edge applied after the marquee is committed; three-pass separable box blur on the GPU approximating Gaussian falloff)
 
 ### Elliptical Marquee
 - **Aspect ratio lock**: width/height constraint
+- **Feather**: 0 - 250 px (same GPU feather pipeline as the rectangular marquee)
 
 ### Lasso (Freehand)
 - No configurable parameters
@@ -110,6 +120,8 @@
 ### Magic Wand
 - **Tolerance**: 0 - 255
 - **Contiguous**: on/off
+- **Graduated**: on/off — when enabled, the wand uses a gradient-aware flood fill that produces partial-coverage selection edges across smooth color transitions, instead of a hard threshold cut
+- **Feather**: 0 - 250 px (shared marquee feather slider; applied after the wand fill)
 
 ### Selection Operations
 - Add, subtract, intersect (combine modes)
@@ -118,6 +130,13 @@
 - Deselect
 - Selection from layer alpha (non-transparent pixels)
 - Path to selection
+
+### Quick Mask Mode
+- Shortcut: `Q` (toggle)
+- Paints the active selection as a translucent red overlay on the canvas; brush, pencil, and eraser then edit the selection mask directly
+- White paint adds to the selection, black (or the eraser) subtracts; intermediate gray values produce partial selection coverage
+- Exiting Quick Mask reads the painted mask back from the GPU and replaces the selection (with feather applied if a feather radius is set on the marquee)
+- Works regardless of the active layer — painting only affects the selection mask, not pixels
 
 ---
 
@@ -346,6 +365,7 @@ Applied globally or per-group. All default to 0.
 - **Fit to view**: auto-zoom with padding
 - **Space+drag** or **middle-click drag**: temporarily pan from any tool
 - **Cmd/Ctrl+scroll**: zoom centered on the cursor; plain scroll pans
+- **Pixel grid**: automatically rendered as a 1-CSS-px translucent gray lattice when the viewport zoom exceeds 800% (8×), so individual document pixels are visible while pixel-accurate editing
 
 ### Grid
 - **Show grid**: on/off
@@ -392,6 +412,16 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 - Operations: add, remove, select, rename, update anchors
 - Stroke path to pixels
 - Convert path to selection
+
+---
+
+## Navigator Panel
+
+- Live thumbnail of the composited canvas (refreshed by copying the main WebGL canvas; throttled to ~5 Hz so it stays cheap during heavy strokes)
+- **Viewport indicator**: a translucent rectangle showing the current viewport bounds inside the document; click anywhere on the minimap to recenter the viewport, or drag the indicator rectangle to pan
+- **Zoom slider**: log-scaled, mapping slider position to `64^(value/100)` so the full 0.01× – 64× zoom range is reachable without coarse jumps
+- **Zoom readout**: displays the current zoom as a percentage
+- Collapsible; collapsed state persists in localStorage
 
 ---
 
