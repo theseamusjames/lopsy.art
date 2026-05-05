@@ -353,6 +353,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 
 ### Halftone
 - **Halftone**: dot size 2 - 32 px, angle 0 - 180 degrees, softness 0 - 4
+- **CMYK Color Halftone**: separates the image into Cyan, Magenta, Yellow, and Black channels, rendering each as halftone dots at independent screen angles — dot size 2 - 32 px, per-channel angles (cyan 0 - 180°, magenta 0 - 180°, yellow 0 - 180°, black 0 - 180°), softness 0 - 4 (produces a classic CMYK print / comic book / newspaper effect with visible color rosette patterns)
 
 ### Stylize
 - **Find Edges**: Sobel edge detection, no parameters

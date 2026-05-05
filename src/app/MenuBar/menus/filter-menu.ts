@@ -22,6 +22,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Cel Shading...', action: () => showFilterDialog('cel-shading') },
       { label: 'Pixelate...', action: () => showFilterDialog('pixelate') },
       { label: 'Halftone...', action: () => showFilterDialog('halftone') },
+      { label: 'CMYK Color Halftone...', action: () => showFilterDialog('cmyk-halftone') },
       { label: 'Kaleidoscope...', action: () => showFilterDialog('kaleidoscope') },
       { label: 'Oil Paint...', action: () => showFilterDialog('oil-paint') },
       { label: 'Chromatic Aberration...', action: () => showFilterDialog('chromatic-aberration') },

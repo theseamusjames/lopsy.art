@@ -51,6 +51,48 @@ pub fn filter_halftone(engine: &mut Engine, layer_id: &str, dot_size: f32, densi
     );
 }
 
+#[wasm_bindgen(js_name = "filterCmykHalftone")]
+pub fn filter_cmyk_halftone(
+    engine: &mut Engine,
+    layer_id: &str,
+    dot_size: f32,
+    cyan_angle: f32,
+    magenta_angle: f32,
+    yellow_angle: f32,
+    black_angle: f32,
+    softness: f32,
+) {
+    if dot_size < 2.0 {
+        return;
+    }
+    let softness = softness.clamp(0.0, 4.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.cmyk_halftone,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_dotSize") {
+                gl.uniform1f(Some(&loc), dot_size);
+            }
+            if let Some(loc) = shader.location(gl, "u_cyanAngle") {
+                gl.uniform1f(Some(&loc), cyan_angle);
+            }
+            if let Some(loc) = shader.location(gl, "u_magentaAngle") {
+                gl.uniform1f(Some(&loc), magenta_angle);
+            }
+            if let Some(loc) = shader.location(gl, "u_yellowAngle") {
+                gl.uniform1f(Some(&loc), yellow_angle);
+            }
+            if let Some(loc) = shader.location(gl, "u_blackAngle") {
+                gl.uniform1f(Some(&loc), black_angle);
+            }
+            if let Some(loc) = shader.location(gl, "u_softness") {
+                gl.uniform1f(Some(&loc), softness);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterKaleidoscope")]
 pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, rotation_degrees: f32) {
     filter_gpu::apply_filter(

@@ -54,6 +54,7 @@ pub const CLOUDS_FRAG: &str = include_str!("shaders/filters/clouds.glsl");
 pub const SMOKE_FRAG: &str = include_str!("shaders/filters/smoke.glsl");
 pub const PIXELATE_FRAG: &str = include_str!("shaders/filters/pixelate.glsl");
 pub const HALFTONE_FRAG: &str = include_str!("shaders/filters/halftone.glsl");
+pub const CMYK_HALFTONE_FRAG: &str = include_str!("shaders/filters/cmyk_halftone.glsl");
 pub const SOLARIZE_FRAG: &str = include_str!("shaders/filters/solarize.glsl");
 pub const KALEIDOSCOPE_FRAG: &str = include_str!("shaders/filters/kaleidoscope.glsl");
 pub const OIL_PAINT_FRAG: &str = include_str!("shaders/filters/oil_paint.glsl");
@@ -225,6 +226,7 @@ pub struct ShaderPrograms {
     pub smoke: ShaderProgram,
     pub pixelate: ShaderProgram,
     pub halftone: ShaderProgram,
+    pub cmyk_halftone: ShaderProgram,
     pub solarize: ShaderProgram,
     pub kaleidoscope: ShaderProgram,
     pub oil_paint: ShaderProgram,
@@ -315,6 +317,7 @@ impl ShaderPrograms {
             smoke: compile_program(gl, v, SMOKE_FRAG)?,
             pixelate: compile_program(gl, v, PIXELATE_FRAG)?,
             halftone: compile_program(gl, v, HALFTONE_FRAG)?,
+            cmyk_halftone: compile_program(gl, v, CMYK_HALFTONE_FRAG)?,
             solarize: compile_program(gl, v, SOLARIZE_FRAG)?,
             kaleidoscope: compile_program(gl, v, KALEIDOSCOPE_FRAG)?,
             oil_paint: compile_program(gl, v, OIL_PAINT_FRAG)?,
