@@ -58,6 +58,7 @@
   border-radius: var(--radius-sm);
   overflow: hidden;
   width: fit-content;
+  align-self: center;
 }
 
 .hexLabel {
