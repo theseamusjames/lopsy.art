@@ -16,6 +16,7 @@ export type ToolId =
   | 'lasso'
   | 'lasso-magnetic'
   | 'wand'
+  | 'quick-select'
   | 'shape'
   | 'text'
   | 'crop'

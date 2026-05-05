@@ -11,7 +11,7 @@ import type { ToolId } from '../types';
 const ALL_TOOL_IDS: ToolId[] = [
   'move', 'brush', 'pencil', 'eraser', 'fill', 'gradient', 'eyedropper',
   'stamp', 'dodge', 'smudge', 'marquee-rect', 'marquee-ellipse',
-  'lasso', 'lasso-magnetic', 'wand', 'shape', 'text', 'crop', 'path',
+  'lasso', 'lasso-magnetic', 'wand', 'quick-select', 'shape', 'text', 'crop', 'path', 'spray',
 ];
 
 describe('tool registry', () => {
@@ -25,13 +25,13 @@ describe('tool registry', () => {
 
   it('exposes the same paint set the manual constant used to', () => {
     expect(new Set(PAINT_TOOLS)).toEqual(new Set<ToolId>([
-      'brush', 'pencil', 'eraser', 'dodge', 'stamp',
+      'brush', 'pencil', 'eraser', 'dodge', 'stamp', 'spray',
     ]));
   });
 
   it('exposes the same GPU set the manual constant used to', () => {
     expect(new Set(GPU_TOOLS)).toEqual(new Set<ToolId>([
-      'brush', 'pencil', 'eraser', 'dodge', 'stamp', 'gradient', 'shape',
+      'brush', 'pencil', 'eraser', 'dodge', 'stamp', 'gradient', 'shape', 'spray',
     ]));
   });
 
@@ -48,11 +48,13 @@ describe('tool registry', () => {
       m: 'marquee-rect',
       l: 'lasso',
       w: 'wand',
+      q: 'quick-select',
       c: 'crop',
       p: 'path',
       s: 'stamp',
       o: 'dodge',
       r: 'smudge',
+      j: 'spray',
     };
     for (const [key, id] of Object.entries(expected)) {
       expect(SHORTCUT_TO_TOOL.get(key)).toBe(id);
