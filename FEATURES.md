@@ -87,6 +87,7 @@
 - **Line height**: configurable
 - **Letter spacing**: configurable
 - **Mode**: point text (no wrap) or area text (fixed width with wrapping)
+- **Text on path**: bind text to a stored Bézier path so glyphs follow the curve. Select a path from the Path dropdown in the options bar; each glyph is positioned and rotated along the arc-length of the path. Switching back to "None" restores the text to its original position. Live editing (typing) updates the path text in real time.
 
 ---
 
