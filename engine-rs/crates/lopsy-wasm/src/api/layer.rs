@@ -739,3 +739,46 @@ pub fn read_layer_thumbnail(engine: &Engine, layer_id: &str, max_size: u32) -> V
     result.extend_from_slice(&thumb);
     result
 }
+
+/// Read the composited document (all layers flattened) as a thumbnail.
+/// Reads the composite FBO which holds the document at native resolution
+/// before viewport transform, then downscales to max_size.
+/// Returns 8-byte header [width_u32_le, height_u32_le] + RGBA pixels.
+#[wasm_bindgen(js_name = "readCompositeThumbnail")]
+pub fn read_composite_thumbnail(engine: &Engine, max_size: u32) -> Vec<u8> {
+    let w = engine.inner.doc_width;
+    let h = engine.inner.doc_height;
+    if w == 0 || h == 0 { return Vec::new(); }
+
+    // Bind composite FBO and read its pixels
+    engine.inner.fbo_pool.bind(&engine.inner.gl, engine.inner.composite_fbo);
+    let pixels = match engine.inner.texture_pool.read_rgba(
+        &engine.inner.gl, 0, 0, w, h,
+    ) {
+        Ok(p) => p,
+        Err(_) => {
+            engine.inner.fbo_pool.unbind(&engine.inner.gl);
+            return Vec::new();
+        }
+    };
+    engine.inner.fbo_pool.unbind(&engine.inner.gl);
+
+    let (tw, th) = if w <= max_size && h <= max_size {
+        (w, h)
+    } else {
+        let scale = (max_size as f64) / (w.max(h) as f64);
+        (((w as f64 * scale).round() as u32).max(1), ((h as f64 * scale).round() as u32).max(1))
+    };
+
+    let thumb = if tw == w && th == h {
+        pixels
+    } else {
+        lopsy_core::pixel_buffer::scale_pixel_data(&pixels, w, h, tw, th)
+    };
+
+    let mut result = Vec::with_capacity(8 + thumb.len());
+    result.extend_from_slice(&tw.to_le_bytes());
+    result.extend_from_slice(&th.to_le_bytes());
+    result.extend_from_slice(&thumb);
+    result
+}

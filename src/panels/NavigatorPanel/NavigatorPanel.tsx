@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../app/editor-store';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { readCompositeThumbnail } from '../../engine-wasm/wasm-bridge';
 import { PanelContainer } from '../PanelContainer/PanelContainer';
 import { usePanelCollapse } from '../usePanelCollapse';
 import { computeViewportRect, thumbnailPointToDocPoint, docPointToPan } from './navigator-math';
@@ -38,33 +40,35 @@ export function NavigatorPanel() {
     setThumbnailSize({ width: Math.round(w), height: Math.round(h) });
   }, [docWidth, docHeight]);
 
-  // Throttled thumbnail update by drawing the main WebGL canvas into the small canvas
+  // Throttled thumbnail update by reading the composite texture from the engine
   useEffect(() => {
     if (collapsed) return;
 
     const update = () => {
       const thumbCanvas = thumbnailCanvasRef.current;
       if (!thumbCanvas) return;
+      const engine = getEngine();
+      if (!engine) return;
 
-      // Find the main WebGL canvas — the non-overlay canvas inside the canvas container
-      const container = document.querySelector('[data-testid="canvas-container"]');
-      if (!container) return;
+      const maxDim = Math.max(thumbnailSize.width, thumbnailSize.height);
+      if (maxDim === 0) return;
 
-      const allCanvases = container.querySelectorAll('canvas');
-      let mainCanvas: HTMLCanvasElement | null = null;
-      for (const c of allCanvases) {
-        if (!c.className.includes('overlayCanvas')) {
-          mainCanvas = c;
-          break;
-        }
-      }
-      if (!mainCanvas || mainCanvas.width === 0 || mainCanvas.height === 0) return;
+      const data = readCompositeThumbnail(engine, maxDim);
+      if (data.length < 8) return;
 
+      const tw = data[0]! | (data[1]! << 8) | (data[2]! << 16) | (data[3]! << 24);
+      const th = data[4]! | (data[5]! << 8) | (data[6]! << 16) | (data[7]! << 24);
+      if (tw === 0 || th === 0) return;
+
+      const pixels = new Uint8ClampedArray(tw * th * 4);
+      pixels.set(new Uint8Array(data.buffer, data.byteOffset + 8, tw * th * 4));
+      const imageData = new ImageData(pixels, tw, th);
+
+      thumbCanvas.width = tw;
+      thumbCanvas.height = th;
       const ctx = thumbCanvas.getContext('2d');
       if (!ctx) return;
-
-      ctx.clearRect(0, 0, thumbCanvas.width, thumbCanvas.height);
-      ctx.drawImage(mainCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+      ctx.putImageData(imageData, 0, 0);
     };
 
     update();
