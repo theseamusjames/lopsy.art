@@ -60,8 +60,14 @@ export function NavigatorPanel() {
       const th = data[4]! | (data[5]! << 8) | (data[6]! << 16) | (data[7]! << 24);
       if (tw === 0 || th === 0) return;
 
+      const raw = new Uint8Array(data.buffer, data.byteOffset + 8, tw * th * 4);
       const pixels = new Uint8ClampedArray(tw * th * 4);
-      pixels.set(new Uint8Array(data.buffer, data.byteOffset + 8, tw * th * 4));
+      const rowBytes = tw * 4;
+      for (let y = 0; y < th; y++) {
+        const srcOff = (th - 1 - y) * rowBytes;
+        const dstOff = y * rowBytes;
+        pixels.set(raw.subarray(srcOff, srcOff + rowBytes), dstOff);
+      }
       const imageData = new ImageData(pixels, tw, th);
 
       thumbCanvas.width = tw;
