@@ -43,6 +43,9 @@ export interface TextLayer extends LayerBase {
   readonly width: number | null; // null = point text, number = area text
   readonly underline: boolean;
   readonly strikethrough: boolean;
+  readonly pathId?: string;
+  readonly prePathX?: number;
+  readonly prePathY?: number;
 }
 
 export interface ShapeLayer extends LayerBase {

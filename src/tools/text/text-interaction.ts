@@ -49,48 +49,58 @@ export function commitTextEditing(): void {
   const toolSettings = useToolSettingsStore.getState();
   const textColor = toolSettings.foregroundColor;
 
-  // Explicitly render text to the GPU texture before pushHistory snapshots it.
-  // This ensures the snapshot contains the final text pixels regardless of
-  // whether the rAF-driven syncTextLayers loop had time to fire.
   const areaWidth = editing.bounds.width;
   let finalX = editing.bounds.x;
   let finalY = editing.bounds.y;
 
-  const engine = getEngine();
-  if (engine) {
-    const propsJson = JSON.stringify({
-      text: editing.text,
-      fontFamily: toolSettings.textFontFamily,
-      fontSize: toolSettings.textFontSize,
-      fontWeight: toolSettings.textFontWeight,
-      fontStyle: toolSettings.textFontStyle,
-      color: [textColor.r / 255, textColor.g / 255, textColor.b / 255, textColor.a],
-      lineHeight: 1.4,
-      letterSpacing: 0,
-      textAlign: toolSettings.textAlign,
-      areaWidth: areaWidth ?? null,
-      underline: toolSettings.textUnderline,
-      strikethrough: toolSettings.textStrikethrough,
-    });
-    setTextLayerContent(engine, editing.layerId, propsJson);
-    const boundsResult = renderTextLayer(engine, editing.layerId);
-    if (boundsResult.length === 4) {
-      const width = boundsResult[0]!;
-      const height = boundsResult[1]!;
-      const offsetX = boundsResult[2]!;
-      const offsetY = boundsResult[3]!;
-      const pixels = getRenderedTextPixels(engine, editing.layerId);
-      if (pixels.length > 0) {
-        finalX = editing.bounds.x + offsetX;
-        finalY = editing.bounds.y + offsetY;
-        uploadLayerPixels(engine, editing.layerId, pixels, width, height, finalX, finalY);
-      }
-    }
+  // Check if this text layer is bound to a path — if so, skip the normal
+  // WASM text render (syncPathTextLayers handles the texture) and keep
+  // the layer at (0, 0) since path text uses document-space coordinates.
+  const currentLayer = editorState.document.layers.find((l) => l.id === editing.layerId);
+  const isPathText = currentLayer?.type === 'text' && !!(currentLayer as import('../../types').TextLayer).pathId;
+
+  if (isPathText) {
+    finalX = 0;
+    finalY = 0;
   } else {
-    // Fallback: use position set by the last syncTextLayers call if engine unavailable.
-    const currentLayer = editorState.document.layers.find((l) => l.id === editing.layerId);
-    finalX = currentLayer?.x ?? editing.bounds.x;
-    finalY = currentLayer?.y ?? editing.bounds.y;
+    // Explicitly render text to the GPU texture before pushHistory snapshots it.
+    // This ensures the snapshot contains the final text pixels regardless of
+    // whether the rAF-driven syncTextLayers loop had time to fire.
+    const engine = getEngine();
+    if (engine) {
+      const propsJson = JSON.stringify({
+        text: editing.text,
+        fontFamily: toolSettings.textFontFamily,
+        fontSize: toolSettings.textFontSize,
+        fontWeight: toolSettings.textFontWeight,
+        fontStyle: toolSettings.textFontStyle,
+        color: [textColor.r / 255, textColor.g / 255, textColor.b / 255, textColor.a],
+        lineHeight: 1.4,
+        letterSpacing: 0,
+        textAlign: toolSettings.textAlign,
+        areaWidth: areaWidth ?? null,
+        underline: toolSettings.textUnderline,
+        strikethrough: toolSettings.textStrikethrough,
+      });
+      setTextLayerContent(engine, editing.layerId, propsJson);
+      const boundsResult = renderTextLayer(engine, editing.layerId);
+      if (boundsResult.length === 4) {
+        const width = boundsResult[0]!;
+        const height = boundsResult[1]!;
+        const offsetX = boundsResult[2]!;
+        const offsetY = boundsResult[3]!;
+        const pixels = getRenderedTextPixels(engine, editing.layerId);
+        if (pixels.length > 0) {
+          finalX = editing.bounds.x + offsetX;
+          finalY = editing.bounds.y + offsetY;
+          uploadLayerPixels(engine, editing.layerId, pixels, width, height, finalX, finalY);
+        }
+      }
+    } else {
+      // Fallback: use position set by the last syncTextLayers call if engine unavailable.
+      finalX = currentLayer?.x ?? editing.bounds.x;
+      finalY = currentLayer?.y ?? editing.bounds.y;
+    }
   }
 
   editorState.pushHistory('Text');

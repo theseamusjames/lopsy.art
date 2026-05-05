@@ -1,3 +1,9 @@
+.decorationGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .decorationBtn {
   display: flex;
   align-items: center;

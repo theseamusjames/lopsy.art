@@ -1,10 +1,14 @@
 import { useCallback, useMemo } from 'react';
 import { useToolSettingsStore } from '../../tool-settings-store';
+import { useEditorStore } from '../../editor-store';
+import { useUIStore } from '../../ui-store';
 import { Slider } from '../../../components/Slider/Slider';
 import { FontPicker } from '../../../components/FontPicker/FontPicker';
 import { fontsByFamily } from '../../../utils/font-catalog';
 import { extractFamilyName, loadGoogleFont, loadFontBinaryToEngine } from '../../../utils/font-loader';
-import type { FontStyle, TextAlign } from '../../../types';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { rerenderCommittedTextLayer, invalidatePathTextCache } from '../../../engine-wasm/engine-sync';
+import type { TextLayer, FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
 import decorationStyles from './TextOptions.module.css';
 
@@ -43,6 +47,51 @@ export function TextOptions() {
   }, [textFontFamily]);
 
   const availableWeights = fontEntry?.weights ?? [400, 700];
+
+  // Path-on-text: the currently editing / active text layer + available paths
+  const textEditing = useUIStore((s) => s.textEditing);
+  const paths = useEditorStore((s) => s.paths);
+  const updateTextLayerProperties = useEditorStore((s) => s.updateTextLayerProperties);
+  const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
+  const layers = useEditorStore((s) => s.document.layers);
+
+  const editingLayerId = textEditing?.layerId ?? activeLayerId;
+  const editingLayer = layers.find((l) => l.id === editingLayerId && l.type === 'text');
+  const currentPathId = editingLayer?.type === 'text' ? (editingLayer.pathId ?? '') : '';
+
+  const handlePathChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      if (!editingLayerId || !editingLayer || editingLayer.type !== 'text') return;
+      const val = e.target.value;
+      if (val) {
+        updateTextLayerProperties(editingLayerId, {
+          pathId: val,
+          prePathX: editingLayer.prePathX ?? editingLayer.x,
+          prePathY: editingLayer.prePathY ?? editingLayer.y,
+        });
+      } else {
+        const restoreX = editingLayer.prePathX ?? editingLayer.x;
+        const restoreY = editingLayer.prePathY ?? editingLayer.y;
+        invalidatePathTextCache(editingLayerId);
+        updateTextLayerProperties(editingLayerId, {
+          pathId: undefined,
+          prePathX: undefined,
+          prePathY: undefined,
+          x: restoreX,
+          y: restoreY,
+        });
+        const engine = getEngine();
+        if (engine) {
+          const restored = { ...editingLayer, x: restoreX, y: restoreY, pathId: undefined } as TextLayer;
+          const pos = rerenderCommittedTextLayer(engine, restored);
+          if (pos) {
+            updateTextLayerProperties(editingLayerId, { x: pos.x, y: pos.y });
+          }
+        }
+      }
+    },
+    [editingLayerId, editingLayer, updateTextLayerProperties],
+  );
 
   const handleFontChange = useCallback(
     (value: string) => {
@@ -115,24 +164,43 @@ export function TextOptions() {
         <option value="right">Right</option>
         <option value="justify">Justify</option>
       </select>
-      <button
-        className={`${decorationStyles.decorationBtn} ${textUnderline ? decorationStyles.decorationBtnActive : ''}`}
-        onClick={() => setTextUnderline(!textUnderline)}
-        aria-label="Toggle underline"
-        aria-pressed={textUnderline}
-        title="Underline"
-      >
-        <span className={decorationStyles.underlineIcon}>U</span>
-      </button>
-      <button
-        className={`${decorationStyles.decorationBtn} ${textStrikethrough ? decorationStyles.decorationBtnActive : ''}`}
-        onClick={() => setTextStrikethrough(!textStrikethrough)}
-        aria-label="Toggle strikethrough"
-        aria-pressed={textStrikethrough}
-        title="Strikethrough"
-      >
-        <span className={decorationStyles.strikethroughIcon}>S</span>
-      </button>
+      <div className={decorationStyles.decorationGroup}>
+        <button
+          className={`${decorationStyles.decorationBtn} ${textUnderline ? decorationStyles.decorationBtnActive : ''}`}
+          onClick={() => setTextUnderline(!textUnderline)}
+          aria-label="Toggle underline"
+          aria-pressed={textUnderline}
+          title="Underline"
+        >
+          <span className={decorationStyles.underlineIcon}>U</span>
+        </button>
+        <button
+          className={`${decorationStyles.decorationBtn} ${textStrikethrough ? decorationStyles.decorationBtnActive : ''}`}
+          onClick={() => setTextStrikethrough(!textStrikethrough)}
+          aria-label="Toggle strikethrough"
+          aria-pressed={textStrikethrough}
+          title="Strikethrough"
+        >
+          <span className={decorationStyles.strikethroughIcon}>S</span>
+        </button>
+      </div>
+      {paths.length > 0 && (
+        <>
+          <label className={styles.label} id="text-path-label">Path</label>
+          <select
+            className={styles.select}
+            value={currentPathId}
+            onChange={handlePathChange}
+            aria-labelledby="text-path-label"
+            aria-label="Text path"
+          >
+            <option value="">None</option>
+            {paths.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </>
+      )}
     </>
   );
 }

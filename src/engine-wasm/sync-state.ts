@@ -54,6 +54,11 @@ export interface TrackedState {
   levelsRef: unknown;
   /** True when the engine is in "no levels" mode; null on first frame. */
   levelsIdentity: boolean | null;
+  /**
+   * Cache keys for path-text layers so we only re-upload when content or
+   * path geometry actually changes. Maps layerId → last-rendered key string.
+   */
+  pathTextKeys: Map<string, string> | null;
 }
 
 function createTrackedState(): TrackedState {
@@ -88,6 +93,7 @@ function createTrackedState(): TrackedState {
     curvesIdentity: null,
     levelsRef: null,
     levelsIdentity: null,
+    pathTextKeys: null,
   };
 }
 

@@ -70,11 +70,21 @@ import type { PathAnchor, TextEditingState } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
 import type { BrushTipData } from '../types/brush';
 import type { Color } from '../types';
+import type { TextLayer } from '../types/layers';
+import type { StoredPath } from '../types/paths';
+import { renderTextOnPath } from '../tools/text/render-text-on-path';
 import { getTracked } from './sync-state';
 import { syncLayers } from './sync-layers';
 
 export { resetTrackedState, markPixelDataSynced } from './sync-state';
 export { syncLayers } from './sync-layers';
+
+export function invalidatePathTextCache(layerId: string): void {
+  const engine = getEngine();
+  if (!engine) return;
+  const tracked = getTracked(engine);
+  tracked.pathTextKeys?.delete(layerId);
+}
 
 export function syncDocumentSize(engine: Engine, width: number, height: number): void {
   const tracked = getTracked(engine);
@@ -389,6 +399,74 @@ export function flushLayerSync(state: {
 }
 
 /**
+ * Re-render path-text layers (TextLayer.pathId is set) using Canvas2D composition.
+ * Called each frame; only uploads when the layer's content key has changed
+ * (text, font, color, or the path's anchors).
+ */
+export function syncPathTextLayers(
+  engine: Engine,
+  layers: readonly TextLayer[],
+  paths: readonly StoredPath[],
+  docWidth: number,
+  docHeight: number,
+  textEditing?: TextEditingState | null,
+): void {
+  const tracked = getTracked(engine);
+  if (!tracked.pathTextKeys) {
+    tracked.pathTextKeys = new Map<string, string>();
+  }
+
+  for (const layer of layers) {
+    if (!layer.pathId) continue;
+
+    const path = paths.find((p) => p.id === layer.pathId);
+    if (!path) continue;
+
+    // Use live editing text if this layer is being edited
+    const liveText = (textEditing && textEditing.layerId === layer.id)
+      ? textEditing.text
+      : layer.text;
+
+    // Build a cheap cache key from layer content + path anchors + handles
+    const anchorSummary = path.anchors.map((a) => {
+      const hi = a.handleIn;
+      const ho = a.handleOut;
+      return `${a.point.x},${a.point.y},${hi ? `${hi.x},${hi.y}` : ''},${ho ? `${ho.x},${ho.y}` : ''}`;
+    }).join('|');
+    const key = [
+      liveText,
+      layer.fontFamily,
+      layer.fontSize,
+      layer.fontWeight,
+      layer.fontStyle,
+      layer.color.r,
+      layer.color.g,
+      layer.color.b,
+      layer.color.a,
+      layer.letterSpacing,
+      path.closed,
+      anchorSummary,
+      docWidth,
+      docHeight,
+    ].join('\0');
+
+    if (tracked.pathTextKeys.get(layer.id) === key) continue;
+
+    const layerWithLiveText = liveText !== layer.text
+      ? { ...layer, text: liveText }
+      : layer;
+    const result = renderTextOnPath(layerWithLiveText, path.anchors, path.closed, docWidth, docHeight);
+    if (result) {
+      uploadLayerPixels(engine, layer.id, result.pixels, result.width, result.height, result.x, result.y);
+    } else {
+      // Empty result — clear the layer texture
+      uploadLayerPixels(engine, layer.id, new Uint8Array(4), 1, 1, 0, 0);
+    }
+    tracked.pathTextKeys.set(layer.id, key);
+  }
+}
+
+/**
  * Sync the active text editing layer to the WASM engine for live preview.
  * Replaces the JS canvas rasterization path that previously used CanvasRenderingContext2D.
  * Calls setTextLayerContent → renderTextLayer → getRenderedTextPixels → uploadLayerPixels.
@@ -454,4 +532,46 @@ export function syncTextLayers(
 
   uploadLayerPixels(engine, layerId, pixels, width, height, desiredX, desiredY);
   onPositionChange(layerId, desiredX, desiredY);
+}
+
+/**
+ * Re-render a committed text layer from its stored properties using the WASM
+ * text engine and upload the result. Used when a text layer loses its path
+ * binding and needs its texture restored outside of editing mode.
+ */
+export function rerenderCommittedTextLayer(
+  engine: Engine,
+  layer: TextLayer,
+): { x: number; y: number } | null {
+  const propsJson = JSON.stringify({
+    text: layer.text,
+    fontFamily: layer.fontFamily,
+    fontSize: layer.fontSize,
+    fontWeight: layer.fontWeight,
+    fontStyle: layer.fontStyle,
+    color: [layer.color.r / 255, layer.color.g / 255, layer.color.b / 255, layer.color.a],
+    lineHeight: layer.lineHeight,
+    letterSpacing: layer.letterSpacing,
+    textAlign: layer.textAlign,
+    areaWidth: layer.width ?? null,
+    underline: layer.underline,
+    strikethrough: layer.strikethrough,
+  });
+
+  setTextLayerContent(engine, layer.id, propsJson);
+  const boundsResult = renderTextLayer(engine, layer.id);
+  if (boundsResult.length !== 4) return null;
+
+  const width = boundsResult[0]!;
+  const height = boundsResult[1]!;
+  const offsetX = boundsResult[2]!;
+  const offsetY = boundsResult[3]!;
+
+  const pixels = getRenderedTextPixels(engine, layer.id);
+  if (pixels.length === 0) return null;
+
+  const x = layer.x + offsetX;
+  const y = layer.y + offsetY;
+  uploadLayerPixels(engine, layer.id, pixels, width, height, x, y);
+  return { x, y };
 }
