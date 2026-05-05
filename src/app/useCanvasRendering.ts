@@ -154,32 +154,45 @@ function renderFrameGpu(
   // is created before syncTextLayers tries to fill or upload pixels into it.
   syncLayers(engine, layers, doc.layerOrder, dirtyLayerIds);
 
+  // Check if the currently-editing text layer is bound to a path.
+  // If so, skip syncTextLayers (which renders normal horizontal text) and
+  // let syncPathTextLayers handle it instead.
+  const editingLayerIsPathText = textEditing
+    && layers.some((l) => l.id === textEditing.layerId && l.type === 'text' && (l as import('../types').TextLayer).pathId);
+
   // Live-update text layer pixels during editing via the WASM engine (swash software rasterizer).
-  syncTextLayers(
-    engine,
-    textEditing,
-    toolState.textFontSize,
-    toolState.textFontFamily,
-    toolState.textFontWeight,
-    toolState.textFontStyle,
-    toolState.textAlign,
-    toolState.foregroundColor,
-    toolState.textUnderline,
-    toolState.textStrikethrough,
-    (layerId, x, y) => {
-      const layer = layers.find((l) => l.id === layerId);
-      if (layer && (layer.x !== x || layer.y !== y)) {
-        editorState.updateTextLayerProperties(layerId, { x, y });
-      }
-    },
-  );
+  if (!editingLayerIsPathText) {
+    syncTextLayers(
+      engine,
+      textEditing,
+      toolState.textFontSize,
+      toolState.textFontFamily,
+      toolState.textFontWeight,
+      toolState.textFontStyle,
+      toolState.textAlign,
+      toolState.foregroundColor,
+      toolState.textUnderline,
+      toolState.textStrikethrough,
+      (layerId, x, y) => {
+        const layer = layers.find((l) => l.id === layerId);
+        if (layer && (layer.x !== x || layer.y !== y)) {
+          editorState.updateTextLayerProperties(layerId, { x, y });
+        }
+      },
+    );
+  }
 
   // Render path-text layers (TextLayer.pathId set) using Canvas2D composition.
   const textLayersWithPath = layers.filter(
     (l): l is import('../types').TextLayer => l.type === 'text' && !!(l as import('../types').TextLayer).pathId,
   );
   if (textLayersWithPath.length > 0) {
-    syncPathTextLayers(engine, textLayersWithPath, editorState.paths, doc.width, doc.height);
+    syncPathTextLayers(engine, textLayersWithPath, editorState.paths, doc.width, doc.height, textEditing);
+    for (const tl of textLayersWithPath) {
+      if (tl.x !== 0 || tl.y !== 0) {
+        editorState.updateTextLayerProperties(tl.id, { x: 0, y: 0 });
+      }
+    }
   }
 
   syncSelection(engine, selection);

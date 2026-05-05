@@ -6,7 +6,9 @@ import { Slider } from '../../../components/Slider/Slider';
 import { FontPicker } from '../../../components/FontPicker/FontPicker';
 import { fontsByFamily } from '../../../utils/font-catalog';
 import { extractFamilyName, loadGoogleFont, loadFontBinaryToEngine } from '../../../utils/font-loader';
-import type { FontStyle, TextAlign } from '../../../types';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { rerenderCommittedTextLayer, invalidatePathTextCache } from '../../../engine-wasm/engine-sync';
+import type { TextLayer, FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
 import decorationStyles from './TextOptions.module.css';
 
@@ -59,11 +61,36 @@ export function TextOptions() {
 
   const handlePathChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
-      if (!editingLayerId) return;
+      if (!editingLayerId || !editingLayer || editingLayer.type !== 'text') return;
       const val = e.target.value;
-      updateTextLayerProperties(editingLayerId, { pathId: val || undefined });
+      if (val) {
+        updateTextLayerProperties(editingLayerId, {
+          pathId: val,
+          prePathX: editingLayer.prePathX ?? editingLayer.x,
+          prePathY: editingLayer.prePathY ?? editingLayer.y,
+        });
+      } else {
+        const restoreX = editingLayer.prePathX ?? editingLayer.x;
+        const restoreY = editingLayer.prePathY ?? editingLayer.y;
+        invalidatePathTextCache(editingLayerId);
+        updateTextLayerProperties(editingLayerId, {
+          pathId: undefined,
+          prePathX: undefined,
+          prePathY: undefined,
+          x: restoreX,
+          y: restoreY,
+        });
+        const engine = getEngine();
+        if (engine) {
+          const restored = { ...editingLayer, x: restoreX, y: restoreY, pathId: undefined } as TextLayer;
+          const pos = rerenderCommittedTextLayer(engine, restored);
+          if (pos) {
+            updateTextLayerProperties(editingLayerId, { x: pos.x, y: pos.y });
+          }
+        }
+      }
     },
-    [editingLayerId, updateTextLayerProperties],
+    [editingLayerId, editingLayer, updateTextLayerProperties],
   );
 
   const handleFontChange = useCallback(
