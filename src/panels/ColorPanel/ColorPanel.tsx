@@ -21,7 +21,7 @@ function hexToColor(hex: string): Color | null {
 }
 
 export function ColorPanel() {
-  const [collapsed, setCollapsed] = usePanelCollapse('color');
+  const [collapsed, setCollapsed] = usePanelCollapse('color', true);
   const foregroundColor = useToolSettingsStore((s) => s.foregroundColor);
   const backgroundColor = useToolSettingsStore((s) => s.backgroundColor);
   const recentColors = useToolSettingsStore((s) => s.recentColors);
@@ -120,8 +120,8 @@ export function ColorPanel() {
             </div>
           )}
         </div>
-        {!collapsed && <ColorPicker color={activeColor} onChange={handlePickerChange} />}
-        {!collapsed && <div className={styles.hexRow}>
+        <ColorPicker color={activeColor} onChange={handlePickerChange} compact={collapsed} />
+        <div className={styles.hexRow}>
           <span className={styles.hexLabel} aria-hidden="true">#</span>
           <input
             className={styles.hexInput}
@@ -132,7 +132,7 @@ export function ColorPanel() {
             maxLength={6}
             aria-label="Hex color value"
           />
-        </div>}
+        </div>
         {!collapsed && <div className={styles.sliders}>
           <Slider
             label="R"
