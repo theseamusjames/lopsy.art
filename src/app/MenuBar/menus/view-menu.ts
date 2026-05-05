@@ -63,6 +63,17 @@ export function createViewMenu(): MenuDef {
       },
       { separator: true, label: '' },
       {
+        label: 'Snap to Grid',
+        checked: ui.snapToGrid,
+        action: () => useUIStore.getState().toggleSnapToGrid(),
+      },
+      {
+        label: 'Snap to Layers',
+        checked: ui.snapToLayers,
+        action: () => useUIStore.getState().toggleSnapToLayers(),
+      },
+      { separator: true, label: '' },
+      {
         label: 'Show Seamless Pattern',
         checked: ui.showSeamlessPattern,
         action: () => useUIStore.getState().toggleSeamlessPattern(),

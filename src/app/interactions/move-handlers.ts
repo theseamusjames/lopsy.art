@@ -1,6 +1,6 @@
 import type { MutableRefObject } from 'react';
 import type { Point } from '../../types';
-import { snapPositionToGrid } from '../../tools/move/move';
+import { snapPositionToGrid, snapPositionToLayers } from '../../tools/move/move';
 import { createTransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
@@ -214,6 +214,32 @@ export function handleMoveMove(
       newX = snapped.x;
       newY = snapped.y;
     }
+    if (uiState.snapToLayers) {
+      const edState = useEditorStore.getState();
+      const movingLayer = edState.document.layers.find((l) => l.id === state.layerId);
+      const otherLayers = edState.document.layers.filter(
+        (l) => l.id !== state.layerId && l.visible,
+      );
+      const movingWidth = movingLayer && movingLayer.type !== 'group' ? (movingLayer.width ?? 0) : 0;
+      const movingHeight = movingLayer && movingLayer.type !== 'group' ? ((movingLayer as { height?: number }).height ?? 0) : 0;
+      const snapResult = snapPositionToLayers(
+        newX,
+        newY,
+        movingWidth,
+        movingHeight,
+        otherLayers,
+        5,
+      );
+      newX = snapResult.x;
+      newY = snapResult.y;
+      const lines = [
+        ...snapResult.snapLinesX.map((pos) => ({ orientation: 'vertical' as const, position: pos })),
+        ...snapResult.snapLinesY.map((pos) => ({ orientation: 'horizontal' as const, position: pos })),
+      ];
+      uiState.setSnapLines(lines);
+    } else {
+      uiState.clearSnapLines();
+    }
     useEditorStore.getState().updateLayerPosition(
       state.layerId!,
       newX,
@@ -228,6 +254,7 @@ export function handleMoveUp(
   floatingSelectionRef: MutableRefObject<FloatingSelection | null>,
   _persistentTransformRef: MutableRefObject<PersistentTransform | null>,
 ): void {
+  useUIStore.getState().clearSnapLines();
   if (!floatingSelectionRef.current || !state.startPoint) return;
 
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);

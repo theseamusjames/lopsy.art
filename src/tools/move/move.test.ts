@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { computeLayerMove, computeNudge, snapToGuide, computeAlign, getContentBounds } from './move';
+import { computeLayerMove, computeNudge, snapToGuide, computeAlign, getContentBounds, snapPositionToLayers } from './move';
+import type { Layer } from '../../types';
+import { DEFAULT_EFFECTS } from '../../layers/layer-model';
 
 describe('computeLayerMove', () => {
   it('calculates correct delta', () => {
@@ -98,6 +100,95 @@ describe('getContentBounds', () => {
     }
     const result = getContentBounds(data, 10, 20);
     expect(result).toEqual({ x: 12, y: 23, width: 3, height: 2 });
+  });
+});
+
+describe('snapPositionToLayers', () => {
+  function makeRasterLayer(id: string, x: number, y: number, w: number, h: number): Layer {
+    return {
+      id,
+      name: id,
+      type: 'raster',
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      x,
+      y,
+      width: w,
+      height: h,
+      clipToBelow: false,
+      effects: DEFAULT_EFFECTS,
+      mask: null,
+    };
+  }
+
+  const threshold = 5;
+
+  it('does not snap when no layers are nearby', () => {
+    const other = makeRasterLayer('b', 200, 200, 50, 50);
+    const result = snapPositionToLayers(10, 10, 50, 50, [other], threshold);
+    expect(result.x).toBe(10);
+    expect(result.y).toBe(10);
+    expect(result.snapLinesX).toHaveLength(0);
+    expect(result.snapLinesY).toHaveLength(0);
+  });
+
+  it('snaps left edge to candidate right edge', () => {
+    // Moving layer left edge at 103, candidate right edge at 100
+    const other = makeRasterLayer('b', 50, 50, 50, 50); // right edge at 100
+    const result = snapPositionToLayers(103, 50, 50, 50, [other], threshold);
+    expect(result.x).toBe(100); // left snaps to 100
+    expect(result.snapLinesX).toContain(100);
+  });
+
+  it('snaps right edge to candidate left edge', () => {
+    // Moving layer right edge at 103 (x=53, w=50), candidate left edge at 100
+    const other = makeRasterLayer('b', 100, 50, 50, 50);
+    const result = snapPositionToLayers(53, 50, 50, 50, [other], threshold);
+    // right edge = 53+50=103, candidate left = 100, diff=3 <= 5 → snap: x = 100 - 50 = 50
+    expect(result.x).toBe(50);
+    expect(result.snapLinesX).toContain(100);
+  });
+
+  it('snaps top edge to candidate bottom edge', () => {
+    const other = makeRasterLayer('b', 0, 0, 50, 100); // bottom at 100
+    const result = snapPositionToLayers(0, 103, 50, 50, [other], threshold);
+    expect(result.y).toBe(100);
+    expect(result.snapLinesY).toContain(100);
+  });
+
+  it('snaps center-x to candidate center-x', () => {
+    // Moving layer: x=95, w=50 → centerX=120. Candidate: x=100, w=40 → centerX=120
+    const other = makeRasterLayer('b', 100, 200, 40, 40); // centerX=120
+    const result = snapPositionToLayers(95, 200, 50, 50, [other], threshold);
+    expect(result.x).toBe(95); // centerX already == 120, no change needed
+    expect(result.snapLinesX).toContain(120);
+  });
+
+  it('produces no snap lines when threshold is exactly exceeded', () => {
+    const other = makeRasterLayer('b', 200, 200, 50, 50); // left=200
+    // Moving: x=194, w=50 → left=194, dist=6 > threshold=5
+    const result = snapPositionToLayers(194, 200, 50, 50, [other], threshold);
+    expect(result.x).toBe(194);
+    expect(result.snapLinesX).toHaveLength(0);
+  });
+
+  it('ignores invisible layers', () => {
+    const other: Layer = { ...makeRasterLayer('b', 50, 50, 50, 50), visible: false };
+    const result = snapPositionToLayers(53, 50, 50, 50, [other], threshold);
+    expect(result.x).toBe(53);
+    expect(result.snapLinesX).toHaveLength(0);
+  });
+
+  it('returns correct snap lines for both axes simultaneously', () => {
+    const other = makeRasterLayer('b', 100, 100, 50, 50); // left=100, top=100
+    // Moving: x=103, y=103, w=50, h=50 → left=103 near 100, top=103 near 100
+    const result = snapPositionToLayers(103, 103, 50, 50, [other], threshold);
+    expect(result.x).toBe(100);
+    expect(result.y).toBe(100);
+    expect(result.snapLinesX).toContain(100);
+    expect(result.snapLinesY).toContain(100);
   });
 });
 

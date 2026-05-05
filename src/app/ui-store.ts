@@ -79,6 +79,11 @@ export type ModalState =
   | { kind: 'brush' }
   | { kind: 'loading'; message: string };
 
+export interface SnapLine {
+  orientation: 'vertical' | 'horizontal';
+  position: number;
+}
+
 interface UIState {
   activeTool: ToolId;
   showGrid: boolean;
@@ -88,6 +93,9 @@ interface UIState {
   showSeamlessPattern: boolean;
   dimSeamlessPattern: boolean;
   snapToGrid: boolean;
+  snapToLayers: boolean;
+  /** Temporary snap alignment lines shown during move/transform. */
+  snapLines: readonly SnapLine[];
   gridSize: number;
   guideColor: Color;
   sidebarCollapsed: boolean;
@@ -132,6 +140,9 @@ interface UIState {
   toggleSeamlessPattern: () => void;
   toggleDimSeamlessPattern: () => void;
   toggleSnapToGrid: () => void;
+  toggleSnapToLayers: () => void;
+  setSnapLines: (lines: readonly SnapLine[]) => void;
+  clearSnapLines: () => void;
   setGridSize: (size: number) => void;
   setGuideColor: (color: Color) => void;
   toggleSidebar: () => void;
@@ -194,6 +205,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   showSeamlessPattern: false,
   dimSeamlessPattern: true,
   snapToGrid: false,
+  snapToLayers: false,
+  snapLines: [],
   gridSize: 16,
   guideColor: { r: 0, g: 180, b: 255, a: 1 },
   sidebarCollapsed: false,
@@ -284,6 +297,9 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleSeamlessPattern: () => set((state) => ({ showSeamlessPattern: !state.showSeamlessPattern })),
   toggleDimSeamlessPattern: () => set((state) => ({ dimSeamlessPattern: !state.dimSeamlessPattern })),
   toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),
+  toggleSnapToLayers: () => set((state) => ({ snapToLayers: !state.snapToLayers })),
+  setSnapLines: (lines) => set({ snapLines: lines }),
+  clearSnapLines: () => set({ snapLines: [] }),
   setGridSize: (size) => set({ gridSize: size }),
   setGuideColor: (color) => set({ guideColor: color }),
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
