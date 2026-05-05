@@ -245,7 +245,6 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
   'quick-select': {
     id: 'quick-select',
     label: 'Quick Selection',
-    shortcut: 'q',
     optionsComponent: QuickSelectOptions,
     handler: {
       down: (ctx) => handleQuickSelectDown(ctx),
