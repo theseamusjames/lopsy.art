@@ -398,7 +398,7 @@ export function useCanvasInteraction(
           // restores the freehand stroke (not the pre-stroke blank).
           // Stack was: [..., pre-stroke]. After push: [..., pre-stroke, freehand].
           const editor = useEditorStore.getState();
-          editor.pushHistory();
+          editor.pushHistory('Brush');
 
           // Restore the layer to its pre-stroke pixels so we can draw
           // the smooth stroke on a clean slate. We read the pre-stroke

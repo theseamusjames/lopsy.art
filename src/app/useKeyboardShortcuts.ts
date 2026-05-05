@@ -267,7 +267,7 @@ function handleDeleteKey(): void {
     const selNow = useEditorStore.getState().selection;
     if (!selNow.active || !selNow.mask) return;
 
-    editor.pushHistory();
+    editor.pushHistory('Clear Selection');
     const bx = selNow.bounds ? Math.round(selNow.bounds.x) : 0;
     const by = selNow.bounds ? Math.round(selNow.bounds.y) : 0;
     const bw = selNow.bounds ? Math.round(selNow.bounds.width) : 0;

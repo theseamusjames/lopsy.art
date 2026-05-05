@@ -18,7 +18,7 @@ export function rasterizePathToLayer(
   color: Color,
 ): void {
   const editorState = useEditorStore.getState();
-  editorState.pushHistory();
+  editorState.pushHistory('Stroke Path');
   const imageData = editorState.getOrCreateLayerPixelData(layerId);
   const buf = PixelBuffer.fromImageData(imageData);
   useToolSettingsStore.getState().addRecentColor(color);

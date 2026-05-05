@@ -24,9 +24,8 @@ import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
   const editorState = useEditorStore.getState();
-  editorState.pushHistory();
-
   const sel = editorState.selection;
+  editorState.pushHistory(ctx.altKey && !(sel.active && sel.mask) ? 'Duplicate Layer' : 'Move');
   const {
     canvasPos,
     altKey,
@@ -282,7 +281,7 @@ export function handleNudgeMove(
   if (!layer || layer.locked) return;
 
   const sel = editor.selection;
-  editor.pushHistory();
+  editor.pushHistory('Nudge');
 
   if (sel.active && sel.mask) {
     const engine = getEngine();

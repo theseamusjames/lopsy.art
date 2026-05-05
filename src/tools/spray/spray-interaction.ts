@@ -64,7 +64,7 @@ export function handleSprayDown(
   const toolSettings = useToolSettingsStore.getState();
   const editorState = useEditorStore.getState();
 
-  editorState.pushHistory();
+  editorState.pushHistory('Spray');
 
   const strokeColor = toolSettings.foregroundColor;
   const state: InteractionState = {

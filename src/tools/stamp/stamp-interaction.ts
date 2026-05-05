@@ -22,7 +22,7 @@ export function handleStampDown(ctx: InteractionContext): InteractionState | und
   if (!ctx.stampSourceRef.current) return undefined;
 
   const editorState = useEditorStore.getState();
-  editorState.pushHistory();
+  editorState.pushHistory('Clone Stamp');
 
   if (!ctx.stampOffsetRef.current) {
     ctx.stampOffsetRef.current = {

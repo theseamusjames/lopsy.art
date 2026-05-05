@@ -60,7 +60,7 @@ export function applyGenericFilter(id: FilterDialogId, values: Record<string, nu
   const engine = getEngine();
   if (!engine) return;
 
-  useEditorStore.getState().pushHistory();
+  useEditorStore.getState().pushHistory(filter.title);
   filter.applyGpu(engine, activeId, values);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
@@ -118,7 +118,7 @@ export function applyGenericFilterWithPreview(id: FilterDialogId, values: Record
   clearFilterPreview(engine);
 
   // Now apply for real with history
-  useEditorStore.getState().pushHistory();
+  useEditorStore.getState().pushHistory(filter.title);
   filter.applyGpu(engine, activeId, values);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
@@ -131,7 +131,7 @@ export function applyInvert(): void {
   const engine = getEngine();
   if (!engine) return;
 
-  useEditorStore.getState().pushHistory();
+  useEditorStore.getState().pushHistory('Invert');
   filterInvert(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
@@ -144,7 +144,7 @@ export function applyDesaturate(): void {
   const engine = getEngine();
   if (!engine) return;
 
-  useEditorStore.getState().pushHistory();
+  useEditorStore.getState().pushHistory('Desaturate');
   filterDesaturate(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
@@ -157,7 +157,7 @@ export function applyAddNoise(amount: number, monochrome: boolean): void {
   const engine = getEngine();
   if (!engine) return;
 
-  useEditorStore.getState().pushHistory();
+  useEditorStore.getState().pushHistory('Add Noise');
   filterAddNoise(engine, activeId, amount, monochrome);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
@@ -170,7 +170,7 @@ export function applyFillWithNoise(monochrome: boolean): void {
   const engine = getEngine();
   if (!engine) return;
 
-  useEditorStore.getState().pushHistory();
+  useEditorStore.getState().pushHistory('Fill with Noise');
   filterFillWithNoise(engine, activeId, monochrome);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
@@ -183,7 +183,7 @@ export function applyFindEdges(): void {
   const engine = getEngine();
   if (!engine) return;
 
-  useEditorStore.getState().pushHistory();
+  useEditorStore.getState().pushHistory('Find Edges');
   filterFindEdges(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();

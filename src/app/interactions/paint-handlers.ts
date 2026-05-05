@@ -52,7 +52,7 @@ export function handlePaintDown(
   // Quick Mask Mode: paint on the GPU quick mask texture in doc-space.
   // Brush paints white (add to selection), eraser paints black (remove).
   if (isQuickMaskMode) {
-    editorState.pushHistory();
+    editorState.pushHistory(tool === 'eraser' ? 'Quick Mask Erase' : 'Quick Mask Paint');
     const engine = getEngine();
 
     // Paint in doc-space (canvasPos), not layer-local coords
@@ -129,7 +129,7 @@ export function handlePaintDown(
 
   // Mask edit mode stays on CPU — small surface, infrequent
   if (maskEditMode && activeLayer.mask) {
-    editorState.pushHistory();
+    editorState.pushHistory(tool === 'eraser' ? 'Mask Erase' : 'Mask Paint');
     const maskBuf = createMaskSurface(activeLayer.mask.data, activeLayer.mask.width, activeLayer.mask.height);
     const maskColor = tool === 'eraser'
       ? { r: 255, g: 255, b: 255, a: 1 }
@@ -188,7 +188,8 @@ export function handlePaintDown(
   }
 
   if (!ctx.isStrokeContinuation) {
-    editorState.pushHistory();
+    const toolLabel = tool === 'brush' ? 'Brush' : tool === 'pencil' ? 'Pencil' : 'Eraser';
+    editorState.pushHistory(toolLabel);
   }
   resetScatterSpacingRemainder();
 

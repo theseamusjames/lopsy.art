@@ -17,7 +17,7 @@ export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
   const engine = getEngine();
   if (!engine) return;
 
-  state.pushHistory();
+  state.pushHistory(axis === 'horizontal' ? 'Flip Horizontal' : 'Flip Vertical');
   flipLayer(engine, activeId, axis === 'horizontal');
 
   // GPU is now source of truth — clear stale JS pixel data.
@@ -39,7 +39,7 @@ export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
   const layer = state.document.layers.find((l) => l.id === activeId);
   if (!layer || layer.type !== 'raster') return;
 
-  state.pushHistory();
+  state.pushHistory(direction === 'cw' ? 'Rotate Layer 90° CW' : 'Rotate Layer 90° CCW');
   rotateLayer90(engine, activeId, direction === 'cw');
 
   const cx = layer.x + layer.width / 2;
@@ -67,7 +67,7 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
   const engine = getEngine();
   if (!engine) return;
 
-  state.pushHistory();
+  state.pushHistory(direction === 'cw' ? 'Rotate Image 90° CW' : 'Rotate Image 90° CCW');
 
   const newWidth = doc.height;
   const newHeight = doc.width;

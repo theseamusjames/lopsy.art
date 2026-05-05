@@ -13,7 +13,7 @@ import { interpolateFlat } from '../common/dab-interpolation';
 export function handleSmudgeDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer, shiftKey } = ctx;
   const editorState = useEditorStore.getState();
-  editorState.pushHistory();
+  editorState.pushHistory('Smudge');
   const toolSettings = useToolSettingsStore.getState();
   const size = toolSettings.smudgeSize;
   const strength = toolSettings.smudgeStrength / 100;
