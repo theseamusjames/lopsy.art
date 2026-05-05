@@ -171,6 +171,7 @@ pub fn set_group_adjustments(
     blacks: f32,
     saturation: f32,
     vibrance: f32,
+    vignette: f32,
 ) -> Result<(), JsError> {
     let child_ids: Vec<String> = serde_json::from_str(child_ids_json)
         .map_err(|e| JsError::new(&format!("Invalid child IDs JSON: {e}")))?;
@@ -183,6 +184,7 @@ pub fn set_group_adjustments(
         blacks,
         saturation,
         vibrance,
+        vignette,
         ..Default::default()
     };
     engine.inner.group_adjustments.insert(

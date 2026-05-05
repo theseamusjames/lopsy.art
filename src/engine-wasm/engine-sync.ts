@@ -236,6 +236,7 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       Math.abs(adj.blacks) > 1e-6 ||
       Math.abs(adj.saturation) > 1e-6 ||
       Math.abs(adj.vibrance) > 1e-6 ||
+      Math.abs(adj.vignette) > 1e-6 ||
       hasCurves ||
       hasLevels;
     if (!hasAny) continue;
@@ -251,6 +252,7 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       adj.blacks,
       adj.saturation,
       adj.vibrance,
+      adj.vignette,
     );
     if (hasCurves) {
       const lut = buildCurvesLutRgba(adj.curves!);
