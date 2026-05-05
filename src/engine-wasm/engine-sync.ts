@@ -220,14 +220,11 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
   for (const layer of layers) {
     if (layer.type !== 'group') continue;
     const group = layer as import('../types').GroupLayer;
-    if (!group.adjustmentsEnabled || !group.adjustments || group.adjustments.length === 0) continue;
-
-    // Convert the dynamic node array to the flat format the engine bridge expects.
-    const adj = nodesToLegacyAdjustments(group.adjustments);
-
-    const hasCurves = adj.curves && !isIdentityCurves(adj.curves);
-    const hasLevels = adj.levels && !isIdentityLevels(adj.levels);
-    const hasAny =
+    const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
+    const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
+    const hasCurves = adj?.curves != null && !isIdentityCurves(adj.curves);
+    const hasLevels = adj?.levels != null && !isIdentityLevels(adj.levels);
+    const hasAdjustments = adj != null && (
       Math.abs(adj.exposure) > 1e-6 ||
       Math.abs(adj.contrast) > 1e-6 ||
       Math.abs(adj.highlights) > 1e-6 ||
@@ -238,28 +235,33 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       Math.abs(adj.vibrance) > 1e-6 ||
       Math.abs(adj.vignette) > 1e-6 ||
       hasCurves ||
-      hasLevels;
-    if (!hasAny) continue;
+      hasLevels
+    );
+    const hasMask = group.mask != null && group.mask.enabled;
+    // Register this group with the engine if it has adjustments OR a mask.
+    // Groups with masks need the group scratch FBO path so the mask can be
+    // applied to the composited group output before blending into the parent.
+    if (!hasAdjustments && !hasMask) continue;
     setGroupAdjustments(
       engine,
       group.id,
       JSON.stringify(group.children),
-      adj.exposure,
-      adj.contrast,
-      adj.highlights,
-      adj.shadows,
-      adj.whites,
-      adj.blacks,
-      adj.saturation,
-      adj.vibrance,
-      adj.vignette,
+      adj?.exposure ?? 0,
+      adj?.contrast ?? 0,
+      adj?.highlights ?? 0,
+      adj?.shadows ?? 0,
+      adj?.whites ?? 0,
+      adj?.blacks ?? 0,
+      adj?.saturation ?? 0,
+      adj?.vibrance ?? 0,
+      adj?.vignette ?? 0,
     );
-    if (hasCurves) {
-      const lut = buildCurvesLutRgba(adj.curves!);
+    if (hasCurves && adj?.curves) {
+      const lut = buildCurvesLutRgba(adj.curves);
       setGroupCurvesLut(engine, group.id, lut);
     }
-    if (hasLevels) {
-      const lut = buildLevelsLutRgba(adj.levels!);
+    if (hasLevels && adj?.levels) {
+      const lut = buildLevelsLutRgba(adj.levels);
       setGroupLevelsLut(engine, group.id, lut);
     }
   }

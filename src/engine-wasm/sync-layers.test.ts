@@ -1,4 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Engine } from './wasm-bridge';
 
 // The bridge module pulls in the WASM init code at import time. Mock it
 // before importing sync-layers so this stays a pure unit test.
@@ -13,10 +14,14 @@ vi.mock('./wasm-bridge', () => ({
   removeLayerMask: vi.fn(),
 }));
 
-const { layerToDescJson } = await import('./sync-layers');
-const { DEFAULT_EFFECTS } = await import('../layers/layer-model');
+const { layerToDescJson, syncLayers } = await import('./sync-layers');
+const { DEFAULT_EFFECTS, createGroupLayer } = await import('../layers/layer-model');
+const bridge = await import('./wasm-bridge');
 type TextLayer = import('../types').TextLayer;
 type RasterLayer = import('../types').RasterLayer;
+type GroupLayer = import('../types').GroupLayer;
+
+const makeFakeEngine = () => ({}) as unknown as Engine;
 
 const baseTextLayer: TextLayer = {
   id: 'text-1',
@@ -152,5 +157,106 @@ describe('layerToDescJson — issue #239 (floating-point layer positions)', () =
     const desc = JSON.parse(layerToDescJson(layer, true));
     expect(desc.x).toBe(42);
     expect(desc.y).toBe(7);
+  });
+});
+
+describe('layerToDescJson — group layer mask serialization', () => {
+  it('includes mask field in descriptor when group has a mask', () => {
+    const group: GroupLayer = {
+      ...createGroupLayer({ name: 'Group' }),
+      mask: {
+        id: 'mask-1',
+        enabled: true,
+        data: new Uint8ClampedArray(400 * 300).fill(255),
+        width: 400,
+        height: 300,
+      },
+    };
+    const desc = JSON.parse(layerToDescJson(group, true));
+    expect(desc.mask).not.toBeNull();
+    expect(desc.mask.enabled).toBe(true);
+    expect(desc.mask.width).toBe(400);
+    expect(desc.mask.height).toBe(300);
+  });
+
+  it('includes null mask field when group has no mask', () => {
+    const group = createGroupLayer({ name: 'Group' });
+    const desc = JSON.parse(layerToDescJson(group, true));
+    expect(desc.mask).toBeNull();
+  });
+
+  it('serializes group layer type as "Group"', () => {
+    const group = createGroupLayer({ name: 'Group' });
+    const desc = JSON.parse(layerToDescJson(group, true));
+    expect(desc.layer_type).toBe('Group');
+  });
+});
+
+describe('syncLayers — group mask upload', () => {
+  beforeEach(() => {
+    vi.mocked(bridge.addLayer).mockClear();
+    vi.mocked(bridge.uploadLayerMask).mockClear();
+    vi.mocked(bridge.removeLayerMask).mockClear();
+  });
+
+  it('calls uploadLayerMask for a group layer that has a mask', () => {
+    const engine = makeFakeEngine();
+    const maskData = new Uint8ClampedArray(400 * 300).fill(255);
+    const group: GroupLayer = {
+      ...createGroupLayer({ name: 'Group' }),
+      mask: {
+        id: 'mask-1',
+        enabled: true,
+        data: maskData,
+        width: 400,
+        height: 300,
+      },
+    };
+    // syncLayers requires addLayer to succeed; the mock does nothing by default
+    syncLayers(engine, [group], [group.id], new Set());
+    expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledOnce();
+    const [calledEngine, calledId, , calledW, calledH] = vi.mocked(bridge.uploadLayerMask).mock.calls[0]!;
+    expect(calledEngine).toBe(engine);
+    expect(calledId).toBe(group.id);
+    expect(calledW).toBe(400);
+    expect(calledH).toBe(300);
+  });
+
+  it('calls uploadLayerMask for both a raster layer and a group layer when both have masks', () => {
+    const engine = makeFakeEngine();
+    const raster: RasterLayer = {
+      ...baseRasterLayer,
+      id: 'r1',
+      mask: {
+        id: 'mask-r',
+        enabled: true,
+        data: new Uint8ClampedArray(400 * 300).fill(200),
+        width: 400,
+        height: 300,
+      },
+    };
+    const group: GroupLayer = {
+      ...createGroupLayer({ name: 'Group', children: [raster.id] }),
+      mask: {
+        id: 'mask-g',
+        enabled: true,
+        data: new Uint8ClampedArray(400 * 300).fill(128),
+        width: 400,
+        height: 300,
+      },
+    };
+    syncLayers(engine, [raster, group], [group.id, raster.id], new Set());
+    // Both layers must trigger a mask upload
+    expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(2);
+    const uploadedIds = vi.mocked(bridge.uploadLayerMask).mock.calls.map((c) => c[1]);
+    expect(uploadedIds).toContain(raster.id);
+    expect(uploadedIds).toContain(group.id);
+  });
+
+  it('does not call uploadLayerMask for a group without a mask', () => {
+    const engine = makeFakeEngine();
+    const group = createGroupLayer({ name: 'Group' });
+    syncLayers(engine, [group], [group.id], new Set());
+    expect(vi.mocked(bridge.uploadLayerMask)).not.toHaveBeenCalled();
   });
 });

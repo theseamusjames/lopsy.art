@@ -14,6 +14,7 @@ import {
   syncViewport,
   syncLayers,
   syncSelection,
+  syncGroupAdjustments,
 } from './engine-wasm/engine-sync';
 import { finalizePendingStrokeGlobal } from './app/interactions/pending-stroke';
 import './styles/tokens.css';
@@ -67,6 +68,7 @@ if (import.meta.env.DEV) {
         syncBackgroundColor(engine, bg.r, bg.g, bg.b, bg.a);
         syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH);
         syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds);
+        syncGroupAdjustments(engine, doc.layers);
         syncSelection(engine, state.selection);
         renderWasm(engine);
         const gl = canvas.getContext('webgl2');
