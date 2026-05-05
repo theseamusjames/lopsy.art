@@ -164,24 +164,26 @@ export function TextOptions() {
         <option value="right">Right</option>
         <option value="justify">Justify</option>
       </select>
-      <button
-        className={`${decorationStyles.decorationBtn} ${textUnderline ? decorationStyles.decorationBtnActive : ''}`}
-        onClick={() => setTextUnderline(!textUnderline)}
-        aria-label="Toggle underline"
-        aria-pressed={textUnderline}
-        title="Underline"
-      >
-        <span className={decorationStyles.underlineIcon}>U</span>
-      </button>
-      <button
-        className={`${decorationStyles.decorationBtn} ${textStrikethrough ? decorationStyles.decorationBtnActive : ''}`}
-        onClick={() => setTextStrikethrough(!textStrikethrough)}
-        aria-label="Toggle strikethrough"
-        aria-pressed={textStrikethrough}
-        title="Strikethrough"
-      >
-        <span className={decorationStyles.strikethroughIcon}>S</span>
-      </button>
+      <div className={decorationStyles.decorationGroup}>
+        <button
+          className={`${decorationStyles.decorationBtn} ${textUnderline ? decorationStyles.decorationBtnActive : ''}`}
+          onClick={() => setTextUnderline(!textUnderline)}
+          aria-label="Toggle underline"
+          aria-pressed={textUnderline}
+          title="Underline"
+        >
+          <span className={decorationStyles.underlineIcon}>U</span>
+        </button>
+        <button
+          className={`${decorationStyles.decorationBtn} ${textStrikethrough ? decorationStyles.decorationBtnActive : ''}`}
+          onClick={() => setTextStrikethrough(!textStrikethrough)}
+          aria-label="Toggle strikethrough"
+          aria-pressed={textStrikethrough}
+          title="Strikethrough"
+        >
+          <span className={decorationStyles.strikethroughIcon}>S</span>
+        </button>
+      </div>
       {paths.length > 0 && (
         <>
           <label className={styles.label} id="text-path-label">Path</label>
