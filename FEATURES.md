@@ -94,8 +94,10 @@
 - **Text align**: left, center, right, justify
 - **Line height**: configurable
 - **Letter spacing**: configurable
+- **Underline (`U`)**: toggle a horizontal stroke 10% of the font size below the baseline, 8% of font-size thick
+- **Strikethrough (`S`)**: toggle a horizontal stroke 32% of the font size above the baseline, 8% of font-size thick
 - **Mode**: point text (no wrap) or area text (fixed width with wrapping)
-- **Text on path**: bind text to a stored Bézier path so glyphs follow the curve. Select a path from the Path dropdown in the options bar; each glyph is positioned and rotated along the arc-length of the path. Switching back to "None" restores the text to its original position. Live editing (typing) updates the path text in real time.
+- **Bind to path**: a Path dropdown in the text options bar lists every stored path. Once bound, glyphs are placed one by one along the path's arc-length and rotated to match the local Bezier tangent (works on both open and closed paths). Live editing (typing) re-flows the type along the curve in real time, and editing the path's anchors invalidates the cached layout so the text follows. Selecting "None" unbinds and restores the layer's pre-bind position.
 
 ---
 
@@ -124,13 +126,24 @@
 - **Graduated**: on/off — when enabled, the wand uses a gradient-aware flood fill that produces partial-coverage selection edges across smooth color transitions, instead of a hard threshold cut
 - **Feather**: 0 - 250 px (shared marquee feather slider; applied after the wand fill)
 
+### Quick Selection
+- **Size**: 1 - 100 px (brush radius for the paint stroke; default 20)
+- **Tolerance**: 0 - 255 (per-channel color distance threshold; default 32)
+- **Edge Strength**: 0 - 100 (Sobel gradient threshold — higher values stop the grow at stronger edges; default 50)
+- **Mode**: add or subtract
+- Paint over the canvas to grow (or shrink) the selection: each pointer-move samples the seed color under the cursor and runs a flood-fill region-grow constrained by the brush radius, the tolerance, and the edge strength. Strokes accumulate across many sample points so dragging across a region progressively absorbs it. The pre-stroke mask is preserved so a single undo restores the prior selection.
+
 ### Selection Operations
 - Add, subtract, intersect (combine modes)
-- Invert selection
-- Select all
-- Deselect
-- Selection from layer alpha (non-transparent pixels)
-- Path to selection
+- Invert selection (`⇧⌘I`)
+- Select all (`⌘A`)
+- Deselect (`⌘D`)
+- Selection from layer alpha — `Cmd/Ctrl+click` a layer thumbnail (non-transparent pixels become the selection)
+- Path → Selection (from the Paths panel)
+- **Selection → Path**: traces the selection mask with marching squares, simplifies the contour with Douglas-Peucker, and fits smooth cubic Bezier anchors using Catmull-Rom tangents. The result is added to the Paths panel as a new path. Disabled when nothing is selected.
+- **Grow…**: expands the selection by an integer pixel amount (1 - 100 px)
+- **Shrink…**: contracts the selection (1 - 100 px)
+- **Feather…**: softens the selection edge with a Gaussian-approximation blur (radius 1 - 250 px)
 
 ### Quick Mask Mode
 - Shortcut: `Q` (toggle)
@@ -162,6 +175,7 @@
 - Arrow key nudge
 - Snap to grid
 - Snap to guides
+- **Snap to layers** (View menu → "Snap to Layers"): while dragging, the moving layer's left/right/top/bottom edges and X/Y centers attract to the matching edges and centers of every other visible layer within a 5 px threshold. Magenta alignment guides span the document while a snap is engaged and clear on mouse-up.
 - **Align**: left, center-h, right, top, center-v, bottom
 - **Alt/Option+drag**: with no active selection, duplicates the active layer before moving; with an active marquee, leaves the original pixels behind and moves a floating copy
 - **Cmd/Meta+drag (transform handles)**: constrains aspect ratio when scaling and snaps rotation to 15° increments. Grid + snap-to-grid also forces snapping automatically during the transform.
@@ -217,28 +231,35 @@
 
 ## Image Adjustments (Non-Destructive)
 
-Applied globally or per-group. All default to 0.
+The Adjustments panel is a reorderable, stackable list of adjustment **nodes** attached to a group layer (the root group acts as the document-level adjustment stack when no group is active). Each node has its own enable toggle, expand/collapse state, and per-type controls. The panel is resizable from its bottom-left corner.
 
-- **Exposure**: stops (multiplier = 2^value)
-- **Contrast**: -100 to +100
-- **Highlights**: -100 to +100
-- **Shadows**: -100 to +100
-- **Whites**: -100 to +100
-- **Blacks**: -100 to +100
-- **Saturation**: -100 to +100
-- **Vibrance**: -100 to +100
-- **Vignette**: 0 to 100
-- **Curves**: per-channel tone curves (RGB master + R / G / B), evaluated as
+Per-node controls (header):
+- **Eye** icon — enable / disable this node without removing it
+- **Trash** — remove
+- **Chevron** — expand / collapse the node's body
+- Drag the header (grip) to reorder; sliders inside the body don't trigger the reorder drag
+- New nodes auto-expand on creation
+
+Available node types (Add menu):
+- **Exposure** — stops (multiplier = 2^value)
+- **Contrast** — -100 to +100
+- **Highlights / Shadows** — Highlights -100 to +100, Shadows -100 to +100, Whites -100 to +100, Blacks -100 to +100
+- **Saturation** — Saturation -100 to +100, Vibrance -100 to +100
+- **Vignette** — 0 to 100 (now correctly piped through the per-group adjustment pipeline)
+- **Curves** — per-channel tone curves (RGB master + R / G / B), evaluated as
   monotone cubic Hermite splines. Master applies to every channel first,
   then per-channel curves remap their own value. Edited via the
   `CurveEditor` (drag points, click to add, double-click or yank to remove).
   Runs as a single 256×1 RGBA LUT texture sampled in the GPU adjustments
   shader; identity curves bypass the lookup.
-- **Levels**: per-channel input/output remap (RGB master + R / G / B) with
+- **Levels** — per-channel input/output remap (RGB master + R / G / B) with
   Input Black, Input White, Gamma (0.01 – 10, log slider), Output Black,
   and Output White controls. Master is applied first, then per-channel
   levels. Compiled to a 256×1 LUT and shares the GPU adjustments path with
   Curves; identity levels bypass the lookup.
+- **Hue / Saturation**, **Color Balance**, **Invert**, **Black & White**, **Photo Filter**, **Channel Mixer**, **Gradient Map** — listed in the Add menu and addable to the stack; their detailed controls are still landing (the node body shows a "Controls coming soon" note while the engine wiring matures).
+
+Internally the node list compiles down to the legacy flat `ImageAdjustments` shape so the GPU compositor's adjustment pass is unchanged.
 
 ---
 
@@ -340,8 +361,16 @@ Applied globally or per-group. All default to 0.
 - Move to group (reparent)
 - Rename
 - Align (left, center-h, right, top, center-v, bottom)
-- Add/remove/toggle mask
+- Add/remove/toggle mask — works on raster, text, shape, and **group** layers; group masks are sampled at composite time so the entire group is masked as a single unit (with the group's own opacity and blend mode applied on top)
 - **Cmd/Ctrl+click a layer thumbnail**: loads that layer's alpha as a marquee selection (non-transparent pixels become the selection)
+
+### Multi-Select in the Layers Panel
+- **Plain click**: selects only the clicked layer (standard behavior)
+- **Cmd/Ctrl+click**: toggles a layer in/out of the current multi-selection without changing which layer is "active"
+- **Shift+click**: selects the contiguous range from the active layer to the clicked layer
+- **Cmd/Ctrl+A** (Layers panel focused): selects every layer in the document
+- **Delete / Backspace** (Layers panel focused): removes every selected layer
+- Selected layers can be grouped or reordered together; the active layer remains the target for tool operations
 
 ### Clipboard
 - Copy, cut, paste (respects selection)
@@ -456,3 +485,30 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 - **Dimensions**: width x height
 - **Background**: solid color or transparent
 - Entirely client-side, no backend
+
+---
+
+## File I/O & Export
+
+### Open / Save
+- **New** (`⌘N`): blank document with width/height/background prompt
+- **Open…** (`⌘O`): open a PNG/JPEG/WebP/BMP/PSD from disk
+- **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust)
+- **Save PSD**: serialises the current document via the PSD writer
+
+### Export Dialog (`⌥⇧⌘E`)
+A modal dialog with a live thumbnail preview (debounced ~200 ms) and inline options:
+
+- **Format**: PNG, JPEG, WebP, BMP
+- **Quality** (JPEG / WebP only): 1 - 100% slider, default 92
+- **PNG Quality**: two-button toggle —
+  - **Regular** — 8-bit PNG via `canvas.toBlob`
+  - **High** — 16-bit PNG via the Rust engine, preserving FP16 precision for wide-gamut workflows
+- **Filename**: editable text field; the document name is used by default and the format-appropriate extension (`.png`, `.jpg`, `.webp`, `.bmp`) is appended automatically
+- **Enter** confirms; **Escape** cancels
+
+### Quick Export (`⇧⌘E`)
+One-shot PNG export through the GPU compositor — no dialog, no preview, uses the document name as the filename and quality 92.
+
+### DNG / RAW Import
+Camera RAW (DNG) files are decoded entirely in Rust (demosaic, LJPEG, TIFF) before being uploaded to a GPU layer.
