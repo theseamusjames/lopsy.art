@@ -41,8 +41,16 @@ export function computeRemoveLayer(
     sparse.delete(rid);
   }
 
+  // Remove deleted IDs from selection, ensure active layer remains selected
+  const selectedLayerIds = (doc.selectedLayerIds ?? [doc.activeLayerId]).filter(
+    (sid): sid is string => sid !== null && !idsToRemove.has(sid),
+  );
+  const finalSelectedIds = activeLayerId && !selectedLayerIds.includes(activeLayerId)
+    ? [activeLayerId, ...selectedLayerIds]
+    : selectedLayerIds;
+
   return {
-    document: { ...doc, layers, layerOrder, activeLayerId },
+    document: { ...doc, layers, layerOrder, activeLayerId, selectedLayerIds: finalSelectedIds },
     layerPixelData: pixelData,
     sparseLayerData: sparse,
   };

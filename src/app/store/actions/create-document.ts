@@ -48,6 +48,7 @@ export function computeCreateDocument(
       layers,
       layerOrder,
       activeLayerId,
+      selectedLayerIds: [activeLayerId],
       backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
       rootGroupId: rootGroup.id,
     },

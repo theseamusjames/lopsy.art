@@ -22,6 +22,7 @@ function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData> } {
       layers: [layer],
       layerOrder: [layer.id],
       activeLayerId: layer.id,
+      selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
     },
     pixelData,
@@ -50,6 +51,7 @@ describe('computeResizeCanvas', () => {
       layers: [raster, textLayer],
       layerOrder: [raster.id, textLayer.id],
       activeLayerId: raster.id,
+      selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
     };
     // Resize to 8x8, anchor top-left (0,0) → offsetX = 0, offsetY = 0

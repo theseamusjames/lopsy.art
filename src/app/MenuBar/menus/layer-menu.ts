@@ -6,6 +6,7 @@ export const layerMenu: MenuDef = {
   items: [
     { label: 'New Layer', shortcut: '\u21E7\u2318N', action: () => useEditorStore.getState().addLayer() },
     { label: 'Duplicate Layer', shortcut: '\u2318J', action: () => useEditorStore.getState().duplicateLayer() },
+    { label: 'Group Layers', shortcut: '\u2318G', action: () => useEditorStore.getState().groupSelectedLayers() },
     { separator: true, label: '' },
     { label: 'Merge Down', shortcut: '\u2318E', action: () => useEditorStore.getState().mergeDown() },
     { label: 'Flatten Image', action: () => useEditorStore.getState().flattenImage() },

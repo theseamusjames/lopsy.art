@@ -26,7 +26,8 @@ function makeDoc(): DocumentState {
     layers: [layer],
     layerOrder: [layer.id],
     activeLayerId: layer.id,
-    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
   };
 }
 
@@ -48,7 +49,8 @@ function makeDocWithMask(enabled: boolean): DocumentState {
     layers: [layerWithMask],
     layerOrder: [layer.id],
     activeLayerId: layer.id,
-    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
   };
 }
 

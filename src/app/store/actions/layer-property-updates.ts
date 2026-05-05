@@ -7,7 +7,7 @@ export function computeSetActiveLayer(
   id: string,
 ): ActionResult {
   return {
-    document: { ...doc, activeLayerId: id },
+    document: { ...doc, activeLayerId: id, selectedLayerIds: [id] },
   };
 }
 

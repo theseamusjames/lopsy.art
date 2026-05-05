@@ -211,6 +211,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
         layers,
         layerOrder: newOrder,
         activeLayerId: newLayer.id,
+        selectedLayerIds: [newLayer.id],
       },
       renderVersion: state.renderVersion + 1,
     });
@@ -236,6 +237,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
         layers: layers2,
         layerOrder: newOrder,
         activeLayerId: newLayer.id,
+        selectedLayerIds: [newLayer.id],
       },
       renderVersion: state.renderVersion + 1,
     });
@@ -268,6 +270,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
         layers: layers3,
         layerOrder: newOrder,
         activeLayerId: newLayer.id,
+        selectedLayerIds: [newLayer.id],
       },
       renderVersion: state.renderVersion + 1,
     });

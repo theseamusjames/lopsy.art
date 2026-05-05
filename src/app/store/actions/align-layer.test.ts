@@ -23,6 +23,7 @@ function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData>; sel
       layers: [layer],
       layerOrder: [layer.id],
       activeLayerId: layer.id,
+      selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
     },
     pixelData,

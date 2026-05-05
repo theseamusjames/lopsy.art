@@ -109,6 +109,15 @@ export interface EditorState {
   toggleLayerMask: (id: string) => void;
   updateLayerMaskData: (layerId: string, maskData: Uint8ClampedArray) => void;
 
+  // Multi-select
+  toggleLayerSelection: (id: string) => void;
+  addLayerToSelection: (id: string) => void;
+  setLayerSelection: (ids: string[]) => void;
+  clearLayerSelection: () => void;
+  selectLayerRange: (fromId: string, toId: string) => void;
+  removeSelectedLayers: () => void;
+  groupSelectedLayers: () => void;
+
   // Selection
   setSelection: (bounds: Rect, mask: Uint8ClampedArray, maskWidth: number, maskHeight: number) => void;
   clearSelection: () => void;
