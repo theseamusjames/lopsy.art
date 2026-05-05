@@ -251,9 +251,15 @@ export async function addLayer(page: Page): Promise<string> {
 }
 
 export async function setActiveLayer(page: Page, layerId: string): Promise<void> {
-  const locator = page.locator(`[data-layer-id="${layerId}"]`);
-  await locator.waitFor({ state: 'visible', timeout: 10000 });
-  await locator.click();
+  await page.evaluate(
+    (id) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { setActiveLayer: (id: string) => void };
+      };
+      store.getState().setActiveLayer(id);
+    },
+    layerId,
+  );
 }
 
 export async function moveLayer(page: Page, layerId: string, x: number, y: number): Promise<void> {
@@ -309,16 +315,15 @@ export async function setToolOption(page: Page, label: string, value: number): P
 }
 
 export async function setForegroundColor(page: Page, r: number, g: number, b: number, a?: number): Promise<void> {
-  const hex = [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
-  const input = page.locator('[aria-label="Hex color value"]');
-  await input.fill(hex);
-  await input.press('Enter');
-  if (a !== undefined && a < 1) {
-    const alphaInput = page.locator('[aria-label="A value"]');
-    await alphaInput.fill(String(Math.round(a * 100)));
-    await alphaInput.press('Enter');
-  }
-  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await page.evaluate(
+    ({ r, g, b, a }) => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+      };
+      store.getState().setForegroundColor({ r, g, b, a: a ?? 1 });
+    },
+    { r, g, b, a },
+  );
 }
 
 export async function openBrushModal(page: Page): Promise<void> {

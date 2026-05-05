@@ -47,7 +47,7 @@ async function readLayerPixels(page: Page, layerId: string) {
 // ---------------------------------------------------------------------------
 
 test('text does not shrink after: add → change size while editing → commit → marquee → rotate', async ({ page }) => {
-  await page.goto('http://localhost:5174');
+  await page.goto('/');
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
 
   // Create an 800×600 document

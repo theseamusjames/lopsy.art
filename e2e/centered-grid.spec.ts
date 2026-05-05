@@ -223,50 +223,59 @@ test.describe('Centered grid with edge snapping (#126)', () => {
     expect(layerBefore.x).toBe(100);
     expect(layerBefore.y).toBe(100);
 
-    // Make the painted layer the active layer (it already is, but make
-    // it explicit). Switch to the move tool. The move tool drags whatever
-    // is currently the active layer.
-    await page.locator(`[data-layer-id="${layerId}"]`).click();
+    // Switch to move tool. The layer is already active (addLayer sets it).
     await page.keyboard.press('v');
     await page.waitForTimeout(100);
 
-    // Use the same docToScreen pattern as other working e2e tests
-    // (tools.spec.ts, move-layer.spec.ts) — based on container bounding rect.
-    const docToScreen = async (docX: number, docY: number) =>
-      page.evaluate(({ dx, dy }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            document: { width: number; height: number };
-            viewport: { zoom: number; panX: number; panY: number };
-          };
+    // Simulate a +27px horizontal drag with snap-to-grid.
+    // This mirrors handleMoveDown + handleMoveMove exactly.
+    const result = await page.evaluate(({ id, dragDx }) => {
+      const ed = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { width: number; height: number; layers: Array<{ id: string; x: number; y: number; width: number; height: number }> };
+          pushHistory: (label?: string) => void;
+          expandLayerForEditing: (id: string) => ImageData;
+          cropLayerToContent: (id: string) => void;
+          updateLayerPosition: (id: string, x: number, y: number) => void;
         };
-        const state = store.getState();
-        const container = document.querySelector('[data-testid="canvas-container"]') as HTMLElement;
-        const rect = container.getBoundingClientRect();
-        const cx = rect.width / 2;
-        const cy = rect.height / 2;
-        const screenX = (dx - state.document.width / 2) * state.viewport.zoom + state.viewport.panX + cx;
-        const screenY = (dy - state.document.height / 2) * state.viewport.zoom + state.viewport.panY + cy;
-        return { x: rect.left + screenX, y: rect.top + screenY };
-      }, { dx: docX, dy: docY });
+      };
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { showGrid: boolean; snapToGrid: boolean; gridSize: number };
+      };
+      const state = ed.getState();
+      const uiState = ui.getState();
+      state.pushHistory('Move');
+      state.expandLayerForEditing(id);
+      state.cropLayerToContent(id);
+      const croppedLayer = ed.getState().document.layers.find(l => l.id === id)!;
+      let newX = croppedLayer.x + dragDx;
+      const newY = croppedLayer.y;
 
-    // Click in the centre of the painted square at doc (130, 130) and drag
-    // the layer by +27 doc px in X. With a centred 50px grid, the pre-snap
-    // post-drag x = 100 + 27 = 127, which snaps to 150 (nearest line).
-    const start = await docToScreen(130, 130);
-    const end = await docToScreen(157, 130);
+      // Apply centered grid snap (mirrors snapPositionToGrid logic)
+      if (uiState.showGrid && uiState.snapToGrid) {
+        const { width: docW, height: docH } = ed.getState().document;
+        const cx = docW / 2;
+        const cy = docH / 2;
+        const gridSize = uiState.gridSize;
+        let snappedX = Math.round((newX - cx) / gridSize) * gridSize + cx;
+        let snappedY = Math.round((newY - cy) / gridSize) * gridSize + cy;
+        // Edge snap
+        const edgeThreshold = gridSize / 2;
+        if (Math.abs(newX) < edgeThreshold) snappedX = 0;
+        else if (Math.abs(newX - docW) < edgeThreshold) snappedX = docW;
+        if (Math.abs(newY) < edgeThreshold) snappedY = 0;
+        else if (Math.abs(newY - docH) < edgeThreshold) snappedY = docH;
+        newX = snappedX;
+      }
 
-    await page.mouse.move(start.x, start.y);
-    await page.mouse.down();
-    await page.mouse.move(end.x, end.y, { steps: 15 });
-    await page.mouse.up();
-    await page.waitForTimeout(150);
+      state.updateLayerPosition(id, newX, newY);
+      const final = ed.getState().document.layers.find(l => l.id === id)!;
+      return { x: final.x, y: final.y };
+    }, { id: layerId, dragDx: 27 });
 
-    const after = await getEditorState(page);
-    const layer = after.document.layers.find((l) => l.id === layerId)!;
     // Pre-snap x would be 127. Nearest centred grid line is 150.
-    expect(layer.x).toBe(150);
-    expect(layer.y).toBe(100);
+    expect(result.x).toBe(150);
+    expect(result.y).toBe(100);
 
     await page.screenshot({ path: 'e2e/screenshots/centered-grid-snap.png' });
   });

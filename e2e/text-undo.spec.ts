@@ -53,7 +53,7 @@ async function getLayers(page: import('@playwright/test').Page) {
 }
 
 test('undo after text commit removes the text layer', async ({ page }) => {
-  await page.goto('http://localhost:5174');
+  await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 300, false);
   await page.waitForTimeout(500);
@@ -96,7 +96,7 @@ test('undo after text commit removes the text layer', async ({ page }) => {
 });
 
 test('undo after text commit does not move other layers', async ({ page }) => {
-  await page.goto('http://localhost:5174');
+  await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 300, false);
   await page.waitForTimeout(500);
@@ -144,18 +144,33 @@ test('undo after text commit does not move other layers', async ({ page }) => {
 });
 
 test('undo after text commit does not move cropped layers at non-zero positions', async ({ page }) => {
-  await page.goto('http://localhost:5174');
+  await page.goto('/');
   await waitForStore(page);
   // Transparent background so painted layers get cropped to content bounds
   await createDocument(page, 400, 300, true);
   await page.waitForTimeout(500);
 
-  // Paint a small rect at (50, 50) — after cropLayerToContent, the layer
-  // should be at (50, 50) with a small width/height, NOT at (0, 0).
+  // Paint a small rect at (50, 50) via store for pixel-exact positioning.
   const state = await getEditorState(page);
   const activeId = state.document.activeLayerId;
   await setActiveLayer(page, activeId);
-  await drawRect(page, 50, 50, 80, 60, { r: 255, g: 0, b: 0 });
+  await page.evaluate(({ id }) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { width: number; height: number };
+        updateLayerPixelData: (id: string, data: ImageData) => void;
+      };
+    };
+    const s = store.getState();
+    const data = new ImageData(s.document.width, s.document.height);
+    for (let y = 50; y < 110; y++) {
+      for (let x = 50; x < 130; x++) {
+        const i = (y * data.width + x) * 4;
+        data.data[i] = 255; data.data[i + 1] = 0; data.data[i + 2] = 0; data.data[i + 3] = 255;
+      }
+    }
+    s.updateLayerPixelData(id, data);
+  }, { id: activeId });
   await page.waitForTimeout(500);
 
   // Verify the layer is cropped to a non-zero position
@@ -190,7 +205,7 @@ test('undo after text commit does not move cropped layers at non-zero positions'
 });
 
 test('undo + redo after text commit preserves text correctly', async ({ page }) => {
-  await page.goto('http://localhost:5174');
+  await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 300, false);
   await page.waitForTimeout(500);

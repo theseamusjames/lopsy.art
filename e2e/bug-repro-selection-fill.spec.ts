@@ -11,9 +11,7 @@
 import { test, expect } from '@playwright/test';
 import {
   createDocument,
-  setForegroundColor,
   selectTool,
-  setToolOption,
   docToScreen,
   getPixelAt,
   waitForStore,
@@ -24,7 +22,12 @@ test('issue #222 — small ellipse marquee + fill stays inside selection (was: s
   await waitForStore(page);
   await createDocument(page, 800, 1200, true);
 
-  await page.locator('[aria-label="Add Layer"]').click();
+  await page.evaluate(() => {
+    const s = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { addLayer: () => void };
+    };
+    s.getState().addLayer();
+  });
   await page.waitForTimeout(50);
 
   // 20×20 ellipse at low zoom — pre-fix this was inside every transform
@@ -38,9 +41,19 @@ test('issue #222 — small ellipse marquee + fill stays inside selection (was: s
   await page.mouse.up();
   await page.waitForTimeout(120);
 
-  await setForegroundColor(page, 180, 200, 220);
+  await page.evaluate(() => {
+    const s = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+    };
+    s.getState().setForegroundColor({ r: 180, g: 200, b: 220, a: 1 });
+  });
   await selectTool(page, 'fill');
-  await setToolOption(page, 'Tolerance', 255);
+  await page.evaluate(() => {
+    const s = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setFillTolerance: (n: number) => void };
+    };
+    s.getState().setFillTolerance(255);
+  });
   const click = await docToScreen(page, 260, 560);
   await page.mouse.click(click.x, click.y);
   await page.waitForTimeout(150);
@@ -63,7 +76,12 @@ test('issue #222 — elliptical marquee + fill on a fresh layer (mid-size)', asy
   await waitForStore(page);
   await createDocument(page, 800, 600, true);
 
-  await page.locator('[aria-label="Add Layer"]').click();
+  await page.evaluate(() => {
+    const s = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { addLayer: () => void };
+    };
+    s.getState().addLayer();
+  });
   await page.waitForTimeout(50);
 
   await selectTool(page, 'marquee-ellipse');
@@ -75,9 +93,19 @@ test('issue #222 — elliptical marquee + fill on a fresh layer (mid-size)', asy
   await page.mouse.up();
   await page.waitForTimeout(100);
 
-  await setForegroundColor(page, 255, 0, 100);
+  await page.evaluate(() => {
+    const s = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+    };
+    s.getState().setForegroundColor({ r: 255, g: 0, b: 100, a: 1 });
+  });
   await selectTool(page, 'fill');
-  await setToolOption(page, 'Tolerance', 255);
+  await page.evaluate(() => {
+    const s = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setFillTolerance: (n: number) => void };
+    };
+    s.getState().setFillTolerance(255);
+  });
   const click = await docToScreen(page, 400, 300);
   await page.mouse.click(click.x, click.y);
   await page.waitForTimeout(150);
@@ -98,7 +126,12 @@ test('issue #222 — freehand lasso polygon + fill stays inside selection', asyn
   await waitForStore(page);
   await createDocument(page, 400, 400, true);
 
-  await page.locator('[aria-label="Add Layer"]').click();
+  await page.evaluate(() => {
+    const s = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { addLayer: () => void };
+    };
+    s.getState().addLayer();
+  });
   await page.waitForTimeout(50);
 
   await selectTool(page, 'lasso');
@@ -121,9 +154,19 @@ test('issue #222 — freehand lasso polygon + fill stays inside selection', asyn
   await page.mouse.up();
   await page.waitForTimeout(150);
 
-  await setForegroundColor(page, 255, 0, 100);
+  await page.evaluate(() => {
+    const s = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+    };
+    s.getState().setForegroundColor({ r: 255, g: 0, b: 100, a: 1 });
+  });
   await selectTool(page, 'fill');
-  await setToolOption(page, 'Tolerance', 255);
+  await page.evaluate(() => {
+    const s = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setFillTolerance: (n: number) => void };
+    };
+    s.getState().setFillTolerance(255);
+  });
   const click = await docToScreen(page, 320, 300);
   await page.mouse.click(click.x, click.y);
   await page.waitForTimeout(150);

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { waitForStore, createDocument } from './helpers';
 
 test('text layer rotation: content stays centered and does not scale', async ({ page }) => {
-  await page.goto('http://localhost:5174');
+  await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 300, false);
   await page.waitForTimeout(500);
@@ -65,7 +65,12 @@ test('text layer rotation: content stays centered and does not scale', async ({ 
   expect(textLayer.type).toBe('text');
 
   // --- Step 3: Select the text layer and marquee around it ---
-  await page.locator(`[data-layer-id="${textLayer.id}"]`).click();
+  await page.evaluate((id) => {
+    const s = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { setActiveLayer: (id: string) => void };
+    };
+    s.getState().setActiveLayer(id);
+  }, textLayer.id);
   await page.waitForTimeout(100);
 
   const m = 10;
