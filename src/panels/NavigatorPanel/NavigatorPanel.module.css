@@ -17,6 +17,7 @@
 .minimapWrapper {
   position: relative;
   cursor: crosshair;
+  overflow: hidden;
   /* Prevent the page from scrolling while dragging on the minimap */
   touch-action: none;
 }
