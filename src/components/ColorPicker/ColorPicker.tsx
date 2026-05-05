@@ -131,14 +131,14 @@ export function ColorPicker({ color, onChange, compact = false }: ColorPickerPro
     ctx.fillRect(0, 0, width, height);
   }, []);
 
-  // Initial draws and redraw on color change
+  // Initial draws and redraw on color change or compact toggle
   useEffect(() => {
     drawSV();
     drawHue();
     drawAlpha();
-  }, [color, drawSV, drawHue, drawAlpha]);
+  }, [color, compact, drawSV, drawHue, drawAlpha]);
 
-  // Resize observer for canvases
+  // Resize observer for canvases — re-create when compact changes
   useEffect(() => {
     const containers = [svContainerRef.current, hueContainerRef.current, alphaContainerRef.current].filter(
       (c): c is HTMLDivElement => c !== null,
@@ -154,7 +154,7 @@ export function ColorPicker({ color, onChange, compact = false }: ColorPickerPro
       observer.observe(c);
     }
     return () => observer.disconnect();
-  }, [drawSV, drawHue, drawAlpha]);
+  }, [compact, drawSV, drawHue, drawAlpha]);
 
   const emitColor = useCallback(
     (hsv: { h: number; s: number; v: number }) => {
