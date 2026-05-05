@@ -5,12 +5,10 @@
 
 export type ExportFormat = 'png' | 'jpeg' | 'webp' | 'bmp';
 
-export type ScalePreset = '0.5x' | '1x' | '2x' | '3x' | 'custom';
-
 export interface ExportOptions {
   format: ExportFormat;
   quality: number; // 1–100
-  scale: number; // e.g. 0.5, 1.0, 2.0, 3.0
+  highQuality: boolean; // PNG: true = 16-bit, false = 8-bit
   filename: string;
 }
 
@@ -20,18 +18,6 @@ export const LOSSY_FORMATS: ReadonlySet<ExportFormat> = new Set(['jpeg', 'webp']
 /** Whether a format's quality slider should be shown. */
 export function isLossyFormat(format: ExportFormat): boolean {
   return LOSSY_FORMATS.has(format);
-}
-
-/** Compute output dimensions after scaling. */
-export function computeExportDimensions(
-  docWidth: number,
-  docHeight: number,
-  scale: number,
-): { width: number; height: number } {
-  return {
-    width: Math.round(docWidth * scale),
-    height: Math.round(docHeight * scale),
-  };
 }
 
 /** Clamp quality to valid range. Quality is irrelevant for lossless formats. */

@@ -5,17 +5,9 @@ import {
   type ExportFormat,
   type ExportOptions,
   isLossyFormat,
-  computeExportDimensions,
   FORMAT_LABEL,
 } from '../../app/MenuBar/export-logic';
 import styles from './ExportDialog.module.css';
-
-const SCALE_PRESETS: { label: string; value: number }[] = [
-  { label: '0.5×', value: 0.5 },
-  { label: '1×', value: 1 },
-  { label: '2×', value: 2 },
-  { label: '3×', value: 3 },
-];
 
 const FORMATS: ExportFormat[] = ['png', 'jpeg', 'webp', 'bmp'];
 
@@ -35,21 +27,17 @@ export function ExportDialog({ onExport, onCancel, onPreviewRequest }: ExportDia
 
   const [format, setFormat] = useState<ExportFormat>('png');
   const [quality, setQuality] = useState(92);
-  const [scale, setScale] = useState(1);
-  const [customScaleInput, setCustomScaleInput] = useState('100');
-  const [isCustomScale, setIsCustomScale] = useState(false);
+  const [highQuality, setHighQuality] = useState(false);
   const [filename, setFilename] = useState(docName || 'export');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevPreviewUrl = useRef<string | null>(null);
 
-  const { width: outWidth, height: outHeight } = computeExportDimensions(docWidth, docHeight, scale);
-
   const currentOptions: ExportOptions = {
     format,
     quality: isLossyFormat(format) ? quality : 100,
-    scale,
+    highQuality,
     filename,
   };
 
@@ -78,7 +66,7 @@ export function ExportDialog({ onExport, onCancel, onPreviewRequest }: ExportDia
   useEffect(() => {
     requestPreview(currentOptions);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [format, quality, scale, requestPreview]);
+  }, [format, quality, highQuality, requestPreview]);
 
   // Revoke preview URL on unmount
   useEffect(() => {
@@ -91,28 +79,6 @@ export function ExportDialog({ onExport, onCancel, onPreviewRequest }: ExportDia
   const handleFormatChange = useCallback((f: ExportFormat) => {
     setFormat(f);
   }, []);
-
-  const handleScalePreset = useCallback((value: number) => {
-    setScale(value);
-    setCustomScaleInput(String(Math.round(value * 100)));
-    setIsCustomScale(false);
-  }, []);
-
-  const handleCustomScaleChange = useCallback((raw: string) => {
-    setCustomScaleInput(raw);
-    setIsCustomScale(true);
-    const parsed = parseFloat(raw);
-    if (!isNaN(parsed) && parsed > 0) {
-      setScale(parsed / 100);
-    }
-  }, []);
-
-  const handleCustomScaleBlur = useCallback(() => {
-    const parsed = parseFloat(customScaleInput);
-    if (isNaN(parsed) || parsed <= 0) {
-      setCustomScaleInput(String(Math.round(scale * 100)));
-    }
-  }, [customScaleInput, scale]);
 
   const handleExport = useCallback(() => {
     onExport(currentOptions);
@@ -127,8 +93,6 @@ export function ExportDialog({ onExport, onCancel, onPreviewRequest }: ExportDia
       onCancel();
     }
   }, [handleExport, onCancel]);
-
-  const isPresetActive = (value: number) => !isCustomScale && scale === value;
 
   return (
     <div className={styles.overlay} role="presentation" onKeyDown={handleKeyDown}>
@@ -154,7 +118,7 @@ export function ExportDialog({ onExport, onCancel, onPreviewRequest }: ExportDia
               )}
             </div>
             <div className={styles.previewDims}>
-              {outWidth} × {outHeight} px
+              {docWidth} × {docHeight} px
             </div>
           </div>
 
@@ -192,37 +156,28 @@ export function ExportDialog({ onExport, onCancel, onPreviewRequest }: ExportDia
               </div>
             )}
 
-            {/* Scale */}
-            <div className={styles.section}>
-              <span className={styles.sectionLabel}>Scale</span>
-              <div className={styles.scaleRow}>
-                {SCALE_PRESETS.map((preset) => (
+            {/* PNG Quality toggle */}
+            {format === 'png' && (
+              <div className={styles.section}>
+                <span className={styles.sectionLabel}>Quality</span>
+                <div className={styles.scaleRow}>
                   <button
-                    key={preset.label}
                     type="button"
-                    className={`${styles.scaleButton} ${isPresetActive(preset.value) ? styles.scaleButtonActive : ''}`}
-                    onClick={() => handleScalePreset(preset.value)}
+                    className={`${styles.scaleButton} ${!highQuality ? styles.scaleButtonActive : ''}`}
+                    onClick={() => setHighQuality(false)}
                   >
-                    {preset.label}
+                    Regular
                   </button>
-                ))}
-                <div className={styles.customScaleWrapper}>
-                  <input
-                    type="number"
-                    className={`${styles.customScaleInput} ${isCustomScale ? styles.customScaleInputActive : ''}`}
-                    value={customScaleInput}
-                    min="1"
-                    max="1000"
-                    step="1"
-                    aria-label="Custom scale percentage"
-                    onChange={(e) => handleCustomScaleChange(e.target.value)}
-                    onBlur={handleCustomScaleBlur}
-                    onFocus={() => setIsCustomScale(true)}
-                  />
-                  <span className={styles.customScaleSuffix}>%</span>
+                  <button
+                    type="button"
+                    className={`${styles.scaleButton} ${highQuality ? styles.scaleButtonActive : ''}`}
+                    onClick={() => setHighQuality(true)}
+                  >
+                    High
+                  </button>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Filename */}
             <div className={styles.section}>

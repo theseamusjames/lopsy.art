@@ -1,33 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  computeExportDimensions,
   isLossyFormat,
   normaliseQuality,
   qualityToFraction,
 } from './export-logic';
-
-describe('computeExportDimensions', () => {
-  it('returns original size at 1x', () => {
-    expect(computeExportDimensions(1000, 800, 1)).toEqual({ width: 1000, height: 800 });
-  });
-
-  it('doubles dimensions at 2x', () => {
-    expect(computeExportDimensions(1000, 800, 2)).toEqual({ width: 2000, height: 1600 });
-  });
-
-  it('halves dimensions at 0.5x', () => {
-    expect(computeExportDimensions(1000, 800, 0.5)).toEqual({ width: 500, height: 400 });
-  });
-
-  it('triples dimensions at 3x', () => {
-    expect(computeExportDimensions(1000, 800, 3)).toEqual({ width: 3000, height: 2400 });
-  });
-
-  it('rounds fractional pixels', () => {
-    expect(computeExportDimensions(100, 100, 1.5)).toEqual({ width: 150, height: 150 });
-    expect(computeExportDimensions(99, 99, 0.5)).toEqual({ width: 50, height: 50 });
-  });
-});
 
 describe('isLossyFormat', () => {
   it('returns true for jpeg and webp', () => {

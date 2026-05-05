@@ -106,7 +106,7 @@ export function exportCanvas(format: ExportFormat): void {
   finalizePendingStrokeGlobal();
   flushLayerSync(useEditorStore.getState());
   const docName = useEditorStore.getState().document.name;
-  exportViaEngine(engine, { format, quality: 92, scale: 1, filename: docName || 'lopsy' });
+  exportViaEngine(engine, { format, quality: 92, highQuality: false, filename: docName || 'lopsy' });
 }
 
 /**
@@ -176,18 +176,15 @@ export async function buildExportPreview(options: ExportOptions): Promise<string
 }
 
 function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, options: ExportOptions): void {
-  const { format, quality, scale, filename } = options;
+  const { format, quality, highQuality, filename } = options;
   const sizeArr = getCompositeSize(engine);
   const srcWidth = sizeArr[0] ?? 0;
   const srcHeight = sizeArr[1] ?? 0;
   if (srcWidth === 0 || srcHeight === 0) return;
 
-  const outWidth = Math.max(1, Math.round(srcWidth * scale));
-  const outHeight = Math.max(1, Math.round(srcHeight * scale));
-
-  // PNG at 1x uses the 16-bit WASM path — composites at full precision and
-  // encodes directly in Rust, bypassing the 8-bit canvas.toBlob pipeline.
-  if (format === 'png' && scale === 1) {
+  // PNG with high quality uses the 16-bit WASM path — composites at full
+  // precision and encodes directly in Rust, bypassing the 8-bit canvas.toBlob.
+  if (format === 'png' && highQuality) {
     try {
       const colorSpace: number = isWideGamut() ? 1 : 0;
       const pngBytes = exportPng16(engine, colorSpace);
@@ -206,22 +203,14 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, opti
   clamped.set(rawPixels);
   const imageData = createImageDataFromArray(clamped, srcWidth, srcHeight);
 
-  const srcCanvas = document.createElement('canvas');
-  srcCanvas.width = srcWidth;
-  srcCanvas.height = srcHeight;
-  const srcCtx = srcCanvas.getContext('2d', contextOptions);
-  if (!srcCtx) return;
-  srcCtx.putImageData(imageData, 0, 0);
-
-  // Apply scale by drawing into an output-sized canvas
   const canvas = document.createElement('canvas');
-  canvas.width = outWidth;
-  canvas.height = outHeight;
+  canvas.width = srcWidth;
+  canvas.height = srcHeight;
   const ctx = canvas.getContext('2d', contextOptions);
   if (!ctx) return;
-  ctx.drawImage(srcCanvas, 0, 0, outWidth, outHeight);
+  ctx.putImageData(imageData, 0, 0);
 
-  finishCanvasExport(canvas, outWidth, outHeight, format, quality, filename);
+  finishCanvasExport(canvas, srcWidth, srcHeight, format, quality, filename);
 }
 
 function downloadBlob(blob: Blob, ext = 'png', filename = 'lopsy'): void {
