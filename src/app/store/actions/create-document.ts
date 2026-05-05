@@ -42,7 +42,7 @@ export function computeCreateDocument(
   return {
     document: {
       id: crypto.randomUUID(),
-      name: 'Untitled',
+      name: 'lopsy',
       width,
       height,
       layers,
