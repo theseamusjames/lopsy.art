@@ -221,12 +221,13 @@ export type { Engine };
 
 let initPromise: Promise<void> | null = null;
 let initError: unknown = null;
+let wasmMemory: WebAssembly.Memory | null = null;
 
 export async function initWasm(): Promise<void> {
   if (initError) throw initError;
   if (!initPromise) {
     initPromise = init()
-      .then(() => {})
+      .then((output) => { wasmMemory = output.memory; })
       .catch((err) => {
         initError = err;
         initPromise = null;
@@ -234,6 +235,10 @@ export async function initWasm(): Promise<void> {
       });
   }
   await initPromise;
+}
+
+export function getWasmMemoryBytes(): number {
+  return wasmMemory ? wasmMemory.buffer.byteLength : 0;
 }
 
 // Re-export everything with the same names

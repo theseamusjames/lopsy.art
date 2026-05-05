@@ -8,10 +8,10 @@ import styles from './LayerEffectsPanel.module.css';
 interface GlowFormProps {
   glow: GlowEffect;
   onChange: (g: GlowEffect) => void;
-  onCommit?: () => void;
+  onDragStart?: () => void;
 }
 
-export function GlowForm({ glow, onChange, onCommit }: GlowFormProps) {
+export function GlowForm({ glow, onChange, onDragStart }: GlowFormProps) {
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
   const sizeMax = docScaledMax(docWidth, docHeight, 100);
@@ -33,12 +33,12 @@ export function GlowForm({ glow, onChange, onCommit }: GlowFormProps) {
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
-          <Slider label="Size" value={glow.size} min={0} max={sizeMax} onChange={(v) => onChange({ ...glow, size: v })} onCommit={onCommit} />
+          <Slider label="Size" value={glow.size} min={0} max={sizeMax} onChange={(v) => onChange({ ...glow, size: v })} onDragStart={onDragStart} />
         </div>
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
-          <Slider label="Spread" value={glow.spread} min={0} max={spreadMax} onChange={(v) => onChange({ ...glow, spread: v })} onCommit={onCommit} />
+          <Slider label="Spread" value={glow.spread} min={0} max={spreadMax} onChange={(v) => onChange({ ...glow, spread: v })} onDragStart={onDragStart} />
         </div>
       </div>
       <div className={styles.row}>
@@ -49,7 +49,7 @@ export function GlowForm({ glow, onChange, onCommit }: GlowFormProps) {
             min={0}
             max={100}
             onChange={(v) => onChange({ ...glow, opacity: v / 100 })}
-            onCommit={onCommit}
+            onDragStart={onDragStart}
           />
         </div>
       </div>

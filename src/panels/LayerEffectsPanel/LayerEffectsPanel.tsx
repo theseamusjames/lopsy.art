@@ -69,8 +69,9 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
     [activeLayerId, effects, updateLayerEffects],
   );
 
-  // Push one undo entry to cover the entire slider drag
-  const commitEffects = useCallback(() => {
+  // Push one undo entry at the START of a slider drag so undo restores
+  // the pre-drag state (not the post-drag state).
+  const beginEffectsDrag = useCallback(() => {
     useEditorStore.getState().pushHistory('Update Effects');
   }, []);
 
@@ -123,19 +124,19 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
     switch (selectedEffect) {
       case 'dropShadow':
         return shadow ? (
-          <DropShadowForm shadow={shadow} onChange={(s) => updateLive({ dropShadow: s })} onCommit={commitEffects} />
+          <DropShadowForm shadow={shadow} onChange={(s) => updateLive({ dropShadow: s })} onDragStart={beginEffectsDrag} />
         ) : null;
       case 'stroke':
         return stroke ? (
-          <StrokeForm stroke={stroke} onChange={(s) => updateLive({ stroke: s })} onCommit={commitEffects} />
+          <StrokeForm stroke={stroke} onChange={(s) => updateLive({ stroke: s })} onDragStart={beginEffectsDrag} />
         ) : null;
       case 'outerGlow':
         return outerGlow ? (
-          <GlowForm glow={outerGlow} onChange={(g) => updateLive({ outerGlow: g })} onCommit={commitEffects} />
+          <GlowForm glow={outerGlow} onChange={(g) => updateLive({ outerGlow: g })} onDragStart={beginEffectsDrag} />
         ) : null;
       case 'innerGlow':
         return innerGlow ? (
-          <GlowForm glow={innerGlow} onChange={(g) => updateLive({ innerGlow: g })} onCommit={commitEffects} />
+          <GlowForm glow={innerGlow} onChange={(g) => updateLive({ innerGlow: g })} onDragStart={beginEffectsDrag} />
         ) : null;
       case 'colorOverlay':
         return colorOverlay ? (

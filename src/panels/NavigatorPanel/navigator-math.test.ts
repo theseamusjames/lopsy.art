@@ -31,17 +31,17 @@ describe('computeViewportRect', () => {
     expect(rect.height).toBeCloseTo(300);
   });
 
-  it('shifts the rect right when panX is positive', () => {
-    // pan right by 100 screen px at zoom=1 → visible doc region shifts left
+  it('shifts the rect left when panX is positive', () => {
+    // positive panX = doc shifted right on screen → visible region is left of doc
     const rect = computeViewportRect(400, 300, 400, 300, 1, 100, 0, 200, 150);
-    // doc-left = 400/2 - (400/2 - 100)/1 = 200 - 100 = 100 → thumb x = 100 * (200/400) = 50
-    expect(rect.x).toBeCloseTo(50);
+    // docLeft = 400/2 - (400/2 + 100)/1 = 200 - 300 = -100 → thumb x = -100 * (200/400) = -50
+    expect(rect.x).toBeCloseTo(-50);
   });
 
-  it('shifts the rect down when panY is positive', () => {
+  it('shifts the rect up when panY is positive', () => {
     const rect = computeViewportRect(400, 300, 400, 300, 1, 0, 60, 200, 150);
-    // doc-top = 300/2 - (300/2 - 60)/1 = 150 - 90 = 60 → thumb y = 60 * (150/300) = 30
-    expect(rect.y).toBeCloseTo(30);
+    // docTop = 300/2 - (300/2 + 60)/1 = 150 - 210 = -60 → thumb y = -60 * (150/300) = -30
+    expect(rect.y).toBeCloseTo(-30);
   });
 
   it('returns full thumbnail when doc dimensions are zero', () => {
