@@ -133,60 +133,64 @@ export function NavigatorPanel() {
 
   const zoomPercent = Math.round(viewport.zoom * 100);
 
+  const ZOOM_MIN = 0.1;
+  const ZOOM_MAX = 5.0;
+
   const handleZoomSliderChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const rawPercent = Number(e.target.value);
-      // Slider is log-scale: map [0,100] → [1%, 6400%]
-      const zoom = Math.pow(64, rawPercent / 100);
+      // Log-scale: map [0,100] → [10%, 500%]
+      const zoom = ZOOM_MIN * Math.pow(ZOOM_MAX / ZOOM_MIN, rawPercent / 100);
       setZoom(zoom);
     },
     [setZoom],
   );
 
-  // Convert zoom to slider position (inverse of the log mapping above)
-  const sliderValue = Math.log(Math.max(0.01, viewport.zoom)) / Math.log(64) * 100;
+  const sliderValue = Math.log(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, viewport.zoom)) / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN) * 100;
 
   return (
     <PanelContainer title="Navigator" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
       <div className={styles.panel}>
-        <div
-          ref={containerRef}
-          className={styles.minimapContainer}
-          data-testid="navigator-minimap-container"
-        >
-          {thumbnailSize.width > 0 && thumbnailSize.height > 0 && (
-            <div
-              className={styles.minimapWrapper}
-              style={{
-                width: thumbnailSize.width,
-                height: thumbnailSize.height,
-              }}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              role="presentation"
-            >
-              <canvas
-                ref={thumbnailCanvasRef}
-                className={styles.thumbnail}
-                width={thumbnailSize.width}
-                height={thumbnailSize.height}
-                aria-hidden="true"
-                data-testid="navigator-thumbnail"
-              />
+        {!collapsed && (
+          <div
+            ref={containerRef}
+            className={styles.minimapContainer}
+            data-testid="navigator-minimap-container"
+          >
+            {thumbnailSize.width > 0 && thumbnailSize.height > 0 && (
               <div
-                className={styles.viewportIndicator}
-                data-testid="navigator-viewport-indicator"
+                className={styles.minimapWrapper}
                 style={{
-                  left: vpRect.x,
-                  top: vpRect.y,
-                  width: Math.max(4, vpRect.width),
-                  height: Math.max(4, vpRect.height),
+                  width: thumbnailSize.width,
+                  height: thumbnailSize.height,
                 }}
-              />
-            </div>
-          )}
-        </div>
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                role="presentation"
+              >
+                <canvas
+                  ref={thumbnailCanvasRef}
+                  className={styles.thumbnail}
+                  width={thumbnailSize.width}
+                  height={thumbnailSize.height}
+                  aria-hidden="true"
+                  data-testid="navigator-thumbnail"
+                />
+                <div
+                  className={styles.viewportIndicator}
+                  data-testid="navigator-viewport-indicator"
+                  style={{
+                    left: vpRect.x,
+                    top: vpRect.y,
+                    width: Math.max(4, vpRect.width),
+                    height: Math.max(4, vpRect.height),
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
         <div className={styles.zoomRow}>
           <input
             type="range"
