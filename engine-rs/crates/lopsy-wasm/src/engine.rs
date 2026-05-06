@@ -139,6 +139,9 @@ pub struct EngineInner {
     // Filter preview (stores pre-filter layer content for live preview)
     pub filter_preview_texture: Option<TextureHandle>,
     pub filter_preview_layer_id: Option<String>,
+    // Gradient preview (stores pre-drag layer content for live preview)
+    pub gradient_preview_texture: Option<TextureHandle>,
+    pub gradient_preview_layer_id: Option<String>,
     // Clipboard
     pub clipboard_texture: Option<TextureHandle>,
     pub clipboard_width: u32,
@@ -260,6 +263,8 @@ impl EngineInner {
             shape_preview_layer_id: None,
             filter_preview_texture: None,
             filter_preview_layer_id: None,
+            gradient_preview_texture: None,
+            gradient_preview_layer_id: None,
             clipboard_texture: None,
             clipboard_width: 0,
             clipboard_height: 0,
@@ -494,6 +499,11 @@ impl EngineInner {
             self.texture_pool.release(tex);
         }
         self.filter_preview_layer_id = None;
+        // Gradient preview
+        if let Some(tex) = self.gradient_preview_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        self.gradient_preview_layer_id = None;
         // Clipboard
         if let Some(tex) = self.clipboard_texture.take() {
             self.texture_pool.release(tex);

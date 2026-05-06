@@ -11,6 +11,100 @@ struct GradientStop {
     a: f32,
 }
 
+/// Snapshot the layer's current content into a preview texture so each
+/// subsequent gradient render reads from the pre-drag pixels rather than
+/// from the previously-rendered (and now contaminated) layer texture.
+/// Without this, dragging the gradient back and forth — particularly when a
+/// stop has alpha 0 — leaves visible artifacts inside the marquee because
+/// the shader's alpha-over math preserves the previous frame's pixels
+/// wherever the new gradient is transparent.
+pub fn save_gradient_preview(engine: &mut EngineInner, layer_id: &str) {
+    let _ = engine.ensure_layer_full_size(layer_id);
+
+    let tex_handle = match engine.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let layer_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    if let Some(old) = engine.gradient_preview_texture.take() {
+        engine.texture_pool.release(old);
+    }
+    let preview_handle = match engine.texture_pool.acquire(&engine.gl, w, h) {
+        Ok(h) => h,
+        Err(_) => return,
+    };
+    let preview_tex = match engine.texture_pool.get(preview_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&preview_tex, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        gl.use_program(Some(&engine.shaders.blit.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        engine.draw_fullscreen_quad();
+    });
+
+    engine.gradient_preview_texture = Some(preview_handle);
+    engine.gradient_preview_layer_id = Some(layer_id.to_string());
+}
+
+pub fn end_gradient_preview(engine: &mut EngineInner) {
+    if let Some(h) = engine.gradient_preview_texture.take() {
+        engine.texture_pool.release(h);
+    }
+    engine.gradient_preview_layer_id = None;
+}
+
+/// If a gradient preview snapshot exists for this layer, copy it over the
+/// layer texture so the gradient renders against the original (pre-drag)
+/// content. Returns true when restored. Falls back to the previous behavior
+/// (a per-frame copy of the current layer into scratch_a, sampled as the
+/// "existing" texture) when no preview is active.
+fn restore_layer_from_preview(engine: &mut EngineInner, layer_id: &str) -> bool {
+    let has_preview = engine.gradient_preview_layer_id.as_deref() == Some(layer_id)
+        && engine.gradient_preview_texture.is_some();
+    if !has_preview {
+        return false;
+    }
+    let tex_handle = match engine.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return false,
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let layer_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return false,
+    };
+    let preview_tex = engine.texture_pool.get(
+        engine.gradient_preview_texture.unwrap()
+    ).cloned();
+    let ptex = match preview_tex { Some(t) => t, None => return false };
+
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        gl.use_program(Some(&engine.shaders.blit.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&ptex));
+        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        engine.draw_fullscreen_quad();
+    });
+    true
+}
+
 pub fn render_linear_gradient(
     engine: &mut EngineInner,
     layer_id: &str,
@@ -26,6 +120,10 @@ pub fn render_linear_gradient(
     };
 
     let _ = engine.ensure_layer_full_size(layer_id);
+
+    // If we have a snapshot from gradient_down, restore the layer from it so
+    // subsequent gradient renders during the same drag don't accumulate.
+    restore_layer_from_preview(engine, layer_id);
 
     let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {
@@ -119,6 +217,8 @@ pub fn render_radial_gradient(
     };
 
     let _ = engine.ensure_layer_full_size(layer_id);
+
+    restore_layer_from_preview(engine, layer_id);
 
     let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {

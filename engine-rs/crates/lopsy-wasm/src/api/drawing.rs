@@ -29,6 +29,16 @@ pub fn render_radial_gradient(
     gradient_gpu::render_radial_gradient(&mut engine.inner, layer_id, cx, cy, radius, stops_json);
 }
 
+#[wasm_bindgen(js_name = "saveGradientPreview")]
+pub fn save_gradient_preview(engine: &mut Engine, layer_id: &str) {
+    gradient_gpu::save_gradient_preview(&mut engine.inner, layer_id);
+}
+
+#[wasm_bindgen(js_name = "endGradientPreview")]
+pub fn end_gradient_preview(engine: &mut Engine) {
+    gradient_gpu::end_gradient_preview(&mut engine.inner);
+}
+
 #[wasm_bindgen(js_name = "interpolateGradient")]
 pub fn interpolate_gradient(stops_json: &str, t: f64) -> Vec<u8> {
     gradient_gpu::interpolate_gradient(stops_json, t)

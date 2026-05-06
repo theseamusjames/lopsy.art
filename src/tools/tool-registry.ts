@@ -16,7 +16,7 @@ import { handleTextDown, handleTextMove, handleTextUp, commitTextEditing } from 
 import { handleCropDown, handleCropMove, handleCropUp } from './crop/crop-interaction';
 import { handlePathDown, handlePathMove, handlePathUp } from './path/path-interaction';
 import { handleShapeDown, handleShapeMove, handleShapeUp } from './shape/shape-interaction';
-import { handleGradientDown, handleGradientMove } from './gradient/gradient-interaction';
+import { handleGradientDown, handleGradientMove, handleGradientUp } from './gradient/gradient-interaction';
 import { handleSprayDown, handleSprayMove, handleSprayUp } from './spray/spray-interaction';
 
 import { MoveOptions } from '../app/OptionsBar/tool-options/MoveOptions';
@@ -135,6 +135,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     handler: {
       down: (ctx) => handleGradientDown(ctx),
       move: (ctx, state) => handleGradientMove(state, ctx.layerPos, ctx.metaKey),
+      up: (_ctx, state) => handleGradientUp(state),
     },
   },
   eyedropper: {

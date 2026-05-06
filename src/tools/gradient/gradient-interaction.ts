@@ -9,6 +9,8 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import {
   renderLinearGradient as gpuRenderLinearGradient,
   renderRadialGradient as gpuRenderRadialGradient,
+  saveGradientPreview as gpuSaveGradientPreview,
+  endGradientPreview as gpuEndGradientPreview,
 } from '../../engine-wasm/wasm-bridge';
 
 export function handleGradientDown(ctx: InteractionContext): InteractionState {
@@ -18,6 +20,14 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   editorState.pushHistory(ts.gradientType === 'radial' ? 'Radial Gradient' : 'Linear Gradient');
   ts.addRecentColor(ts.foregroundColor);
   ts.addRecentColor(ts.backgroundColor);
+
+  // Snapshot the layer's current pixels so each render during the drag
+  // composites against the pre-drag state instead of the previous frame's
+  // gradient. Without this, alpha-0 stops leave artifacts inside marquees
+  // because the shader's alpha-over math preserves whatever the previous
+  // frame wrote wherever the new gradient is transparent.
+  const engine = getEngine();
+  if (engine) gpuSaveGradientPreview(engine, activeLayerId);
 
   return {
     drawing: true,
@@ -31,6 +41,12 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
     layerStartY: activeLayer.y,
     ...DEFAULT_TRANSFORM_FIELDS,
   };
+}
+
+export function handleGradientUp(_state: InteractionState): void {
+  const engine = getEngine();
+  if (engine) gpuEndGradientPreview(engine);
+  useUIStore.getState().setGradientPreview(null);
 }
 
 export function handleGradientMove(state: InteractionState, layerLocalPos: Point, metaKey = false): void {
