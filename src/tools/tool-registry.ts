@@ -199,7 +199,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     optionsComponent: MarqueeOptions,
     handler: {
       down: (ctx) => handleSelectionDown(ctx, 'marquee-rect'),
-      move: (_ctx, state) => handleSelectionMove(state, _ctx.canvasPos),
+      move: (ctx, state) => handleSelectionMove(state, ctx.canvasPos, ctx.metaKey),
       up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos, ctx.screenToCanvas!, ctx.containerRef!, ctx),
     },
   },
@@ -209,7 +209,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     optionsComponent: MarqueeOptions,
     handler: {
       down: (ctx) => handleSelectionDown(ctx, 'marquee-ellipse'),
-      move: (_ctx, state) => handleSelectionMove(state, _ctx.canvasPos),
+      move: (ctx, state) => handleSelectionMove(state, ctx.canvasPos, ctx.metaKey),
       up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos, ctx.screenToCanvas!, ctx.containerRef!, ctx),
     },
   },
@@ -219,7 +219,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     shortcut: 'l',
     handler: {
       down: (ctx) => handleSelectionDown(ctx, 'lasso'),
-      move: (_ctx, state) => handleSelectionMove(state, _ctx.canvasPos),
+      move: (ctx, state) => handleSelectionMove(state, ctx.canvasPos, ctx.metaKey),
       up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos, ctx.screenToCanvas!, ctx.containerRef!, ctx),
     },
   },
@@ -229,7 +229,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     optionsComponent: MagneticLassoOptions,
     handler: {
       down: (ctx) => handleSelectionDown(ctx, 'lasso-magnetic'),
-      move: (_ctx, state) => handleSelectionMove(state, _ctx.canvasPos),
+      move: (ctx, state) => handleSelectionMove(state, ctx.canvasPos, ctx.metaKey),
       up: (ctx, state) => handleSelectionUp(state, ctx.canvasPos, ctx.screenToCanvas!, ctx.containerRef!, ctx),
     },
   },

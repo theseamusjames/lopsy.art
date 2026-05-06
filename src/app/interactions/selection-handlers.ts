@@ -50,6 +50,37 @@ import {
  */
 let magneticLassoTrace: MagneticLassoState | null = null;
 
+/**
+ * Constrains a marquee width/height to an aspect ratio. When `metaPressed` is
+ * true, forces a 1:1 ratio regardless of the persistent aspect-lock setting
+ * (the cmd/meta key is a temporary square-lock, like shift in many editors).
+ * Otherwise honors the persistent `aspectRatioLocked` toggle.
+ */
+export function constrainMarqueeSize(
+  rawW: number,
+  rawH: number,
+  options: {
+    metaPressed: boolean;
+    aspectRatioLocked: boolean;
+    aspectRatioW: number;
+    aspectRatioH: number;
+  },
+): { w: number; h: number } {
+  const w0 = Math.abs(rawW);
+  const h0 = Math.abs(rawH);
+  const useLock = options.metaPressed
+    || (options.aspectRatioLocked && options.aspectRatioW > 0 && options.aspectRatioH > 0);
+  if (!useLock) return { w: w0, h: h0 };
+  const ratio = options.metaPressed
+    ? 1
+    : options.aspectRatioW / options.aspectRatioH;
+  if (h0 === 0) return { w: 0, h: 0 };
+  if (w0 / h0 > ratio) {
+    return { w: h0 * ratio, h: h0 };
+  }
+  return { w: w0, h: w0 / ratio };
+}
+
 function makeMagneticSnapFn(): SnapFn {
   const engine = getEngine();
   const settings = useToolSettingsStore.getState();
@@ -288,6 +319,7 @@ export function handleSelectionDown(
 export function handleSelectionMove(
   state: InteractionState,
   canvasPos: Point,
+  metaKey = false,
 ): void {
   if (state.tool === 'marquee-rect' || state.tool === 'marquee-ellipse') {
     if (!state.startPoint) return;
@@ -325,16 +357,16 @@ export function handleSelectionMove(
       mEnd = snapPositionToGrid(mEnd.x, mEnd.y, uiMarquee.gridSize, dw, dh);
     }
     const toolSettings = useToolSettingsStore.getState();
-    let w = Math.abs(mEnd.x - mStart.x);
-    let h = Math.abs(mEnd.y - mStart.y);
-    if (toolSettings.aspectRatioLocked && toolSettings.aspectRatioW > 0 && toolSettings.aspectRatioH > 0) {
-      const ratio = toolSettings.aspectRatioW / toolSettings.aspectRatioH;
-      if (w / h > ratio) {
-        w = h * ratio;
-      } else {
-        h = w / ratio;
-      }
-    }
+    const { w, h } = constrainMarqueeSize(
+      mEnd.x - mStart.x,
+      mEnd.y - mStart.y,
+      {
+        metaPressed: metaKey,
+        aspectRatioLocked: toolSettings.aspectRatioLocked,
+        aspectRatioW: toolSettings.aspectRatioW,
+        aspectRatioH: toolSettings.aspectRatioH,
+      },
+    );
     const x = mEnd.x >= mStart.x ? mStart.x : mStart.x - w;
     const y = mEnd.y >= mStart.y ? mStart.y : mStart.y - h;
 
