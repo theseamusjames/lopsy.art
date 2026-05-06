@@ -14,14 +14,6 @@ async function openSwatchesPanel(page: import('./fixtures').Page): Promise<void>
   }
 }
 
-async function ensureColorPanelVisible(page: import('./fixtures').Page): Promise<void> {
-  const colorPanel = page.locator('[aria-label="Color panel"]');
-  if (!(await colorPanel.isVisible())) {
-    await page.locator('[aria-label="Color"]').click();
-    await page.waitForTimeout(150);
-  }
-}
-
 async function getForegroundColor(page: import('./fixtures').Page): Promise<SwatchColor> {
   return page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
@@ -73,10 +65,12 @@ test.describe('Swatches Panel', () => {
   test('clicking the Black swatch sets foreground color to black', async ({ page }) => {
     await openSwatchesPanel(page);
     // First set foreground to something other than black so the change is detectable
-    await ensureColorPanelVisible(page);
-    const hexInput = page.locator('[aria-label="Hex color value"]');
-    await hexInput.fill('ff6600');
-    await hexInput.press('Enter');
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+      };
+      store.getState().setForegroundColor({ r: 255, g: 102, b: 0, a: 1 });
+    });
     await page.waitForTimeout(100);
 
     const grid = page.locator('[data-testid="swatches-grid"]');
@@ -95,10 +89,12 @@ test.describe('Swatches Panel', () => {
   test('clicking the White swatch sets foreground color to white', async ({ page }) => {
     await openSwatchesPanel(page);
     // Set fg to non-white first
-    await ensureColorPanelVisible(page);
-    const hexInput = page.locator('[aria-label="Hex color value"]');
-    await hexInput.fill('000000');
-    await hexInput.press('Enter');
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+      };
+      store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
+    });
     await page.waitForTimeout(100);
 
     const grid = page.locator('[data-testid="swatches-grid"]');
@@ -115,10 +111,12 @@ test.describe('Swatches Panel', () => {
   test('add swatch button adds current foreground color', async ({ page }) => {
     await openSwatchesPanel(page);
     // Set a known foreground color
-    await ensureColorPanelVisible(page);
-    const hexInput = page.locator('[aria-label="Hex color value"]');
-    await hexInput.fill('ff6600');
-    await hexInput.press('Enter');
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+      };
+      store.getState().setForegroundColor({ r: 255, g: 102, b: 0, a: 1 });
+    });
     await page.waitForTimeout(100);
 
     const grid = page.locator('[data-testid="swatches-grid"]');
