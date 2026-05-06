@@ -5,6 +5,8 @@ import type { AdjustmentNode } from './adjustment-nodes';
 
 export type LayerType = 'raster' | 'text' | 'shape' | 'group';
 
+export type LayerColorTag = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'gray';
+
 export type FontStyle = 'normal' | 'italic';
 export type TextAlign = 'left' | 'center' | 'right' | 'justify';
 
@@ -21,6 +23,7 @@ export interface LayerBase {
   readonly clipToBelow: boolean;
   readonly effects: LayerEffects;
   readonly mask: LayerMask | null;
+  readonly colorTag?: LayerColorTag | null;
 }
 
 export interface RasterLayer extends LayerBase {

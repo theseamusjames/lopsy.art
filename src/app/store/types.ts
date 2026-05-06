@@ -84,6 +84,7 @@ export interface EditorState {
   toggleLayerVisibility: (id: string) => void;
   toggleLayerLock: (id: string) => void;
   renameLayer: (id: string, name: string) => void;
+  setLayerColorTag: (id: string, tag: import('../../types/layers').LayerColorTag | null) => void;
   addGroup: (name?: string) => void;
   toggleGroupCollapsed: (groupId: string) => void;
   moveLayerToGroup: (layerId: string, targetGroupId: string, insertIndex?: number) => void;

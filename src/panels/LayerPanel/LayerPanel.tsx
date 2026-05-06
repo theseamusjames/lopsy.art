@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, FolderPlus, GripVertical, Lock, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Type, Unlock, X } from 'lucide-react';
+import type { LayerColorTag } from '../../types/layers';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
@@ -38,6 +39,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const rasterizeTextLayer = useEditorStore((s) => s.rasterizeTextLayer);
   const toggleGroupCollapsed = useEditorStore((s) => s.toggleGroupCollapsed);
   const moveLayerToGroup = useEditorStore((s) => s.moveLayerToGroup);
+  const setLayerColorTag = useEditorStore((s) => s.setLayerColorTag);
   const rootGroupId = useEditorStore((s) => s.document.rootGroupId);
   const layerOrder = useEditorStore((s) => s.document.layerOrder);
   const maskEditMode = useUIStore((s) => s.maskEditMode);
@@ -52,6 +54,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; layerId: string } | null>(null);
 
   const handleThumbnailCmdClick = useCallback((e: React.MouseEvent, layerId: string) => {
     if (!(e.metaKey || e.ctrlKey)) return;
@@ -231,7 +234,29 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
 
   const isRootGroup = (layerId: string) => layerId === rootGroupId;
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, layerId: string) => {
+    if (isRootGroup(layerId)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, layerId });
+  }, [rootGroupId]);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = () => closeContextMenu();
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContextMenu(); });
+    return () => {
+      document.removeEventListener('mousedown', handler);
+    };
+  }, [contextMenu, closeContextMenu]);
+
   return (
+    <>
     <PanelContainer title="Layers" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
     <div className={styles.panel} ref={panelRef}>
       <div
@@ -260,7 +285,15 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
               style={{ '--layer-depth': depth } as React.CSSProperties}
               data-layer-id={layer.id}
               onClick={(e) => handleLayerClick(e, layer.id)}
+              onContextMenu={(e) => handleContextMenu(e, layer.id)}
             >
+              {layer.colorTag && (
+                <div
+                  className={styles.colorTagBar}
+                  data-tag={layer.colorTag}
+                  aria-hidden="true"
+                />
+              )}
               {!isRootGroup(layer.id) && (
                 <span
                   className={styles.dragHandle}
@@ -514,5 +547,102 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       </div>
     </div>
     </PanelContainer>
+    {contextMenu && (
+      <LayerContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        layerId={contextMenu.layerId}
+        currentTag={layers.find((l) => l.id === contextMenu.layerId)?.colorTag ?? null}
+        onSetColorTag={(tag) => {
+          setLayerColorTag(contextMenu.layerId, tag);
+          closeContextMenu();
+        }}
+        onClose={closeContextMenu}
+      />
+    )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LayerContextMenu
+// ---------------------------------------------------------------------------
+
+const COLOR_TAG_OPTIONS: Array<{ tag: LayerColorTag; color: string; label: string }> = [
+  { tag: 'red',    color: '#e05555', label: 'Red' },
+  { tag: 'orange', color: '#e07c30', label: 'Orange' },
+  { tag: 'yellow', color: '#c9a820', label: 'Yellow' },
+  { tag: 'green',  color: '#4caf50', label: 'Green' },
+  { tag: 'blue',   color: '#4a9eff', label: 'Blue' },
+  { tag: 'purple', color: '#9c6edd', label: 'Purple' },
+  { tag: 'gray',   color: '#808080', label: 'Gray' },
+];
+
+interface LayerContextMenuProps {
+  x: number;
+  y: number;
+  layerId: string;
+  currentTag: LayerColorTag | null | undefined;
+  onSetColorTag: (tag: LayerColorTag | null) => void;
+  onClose: () => void;
+}
+
+function LayerContextMenu({ x, y, currentTag, onSetColorTag, onClose }: LayerContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Stop the mousedown from propagating so the outside-click handler
+  // on the document doesn't immediately close the menu.
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+  }, []);
+
+  return (
+    <div
+      ref={menuRef}
+      className={styles.contextMenu}
+      style={{ left: x, top: y }}
+      onMouseDown={handleMouseDown}
+      role="menu"
+      aria-label="Layer options"
+      data-testid="layer-context-menu"
+    >
+      <div className={styles.contextMenuLabel}>Color Tag</div>
+      <div className={styles.colorTagGrid}>
+        {COLOR_TAG_OPTIONS.map(({ tag, color, label }) => (
+          <button
+            key={tag}
+            className={[
+              styles.colorTagSwatch,
+              currentTag === tag ? styles.colorTagSwatchActive : '',
+            ].filter(Boolean).join(' ')}
+            style={{ background: color }}
+            onClick={() => onSetColorTag(tag)}
+            type="button"
+            aria-label={label}
+            title={label}
+            data-testid={`color-tag-${tag}`}
+          />
+        ))}
+        <button
+          className={[styles.colorTagSwatch, styles.colorTagSwatchNone, currentTag === null || currentTag === undefined ? styles.colorTagSwatchActive : ''].filter(Boolean).join(' ')}
+          onClick={() => onSetColorTag(null)}
+          type="button"
+          aria-label="No color"
+          title="No color"
+          data-testid="color-tag-none"
+        >
+          ✕
+        </button>
+      </div>
+      <div className={styles.contextMenuDivider} />
+      <button
+        className={styles.contextMenuItem}
+        onClick={onClose}
+        type="button"
+        role="menuitem"
+      >
+        Cancel
+      </button>
+    </div>
   );
 }
