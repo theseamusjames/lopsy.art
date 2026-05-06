@@ -32,9 +32,8 @@ import { hitTestTextLayer } from '../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './rendering/render-guides';
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
-import { getActiveMaskEditBuffer } from './interactions/mask-buffer';
 
-import { uploadLayerMask, expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDimensions, getGlyphPositions } from '../engine-wasm/wasm-bridge';
+import { expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDimensions, getGlyphPositions } from '../engine-wasm/wasm-bridge';
 
 
 
@@ -203,19 +202,6 @@ function renderFrameGpu(
   syncGroupAdjustments(engine, layers);
   syncMaskEditMode(engine, uiState.maskEditMode, doc.activeLayerId);
   syncBrushTip(engine, toolState.activeBrushTip, toolState.brushAngle * Math.PI / 180);
-
-  // Upload in-progress mask edit buffer to GPU so the overlay updates live
-  if (uiState.maskEditMode) {
-    const maskBuf = getActiveMaskEditBuffer();
-    if (maskBuf) {
-      const raw = maskBuf.buf.rawData;
-      const maskGray = new Uint8Array(maskBuf.maskWidth * maskBuf.maskHeight);
-      for (let i = 0; i < maskGray.length; i++) {
-        maskGray[i] = raw[i * 4] ?? 0;
-      }
-      uploadLayerMask(engine, maskBuf.layerId, maskGray, maskBuf.maskWidth, maskBuf.maskHeight);
-    }
-  }
 
   renderEngine(engine);
 
