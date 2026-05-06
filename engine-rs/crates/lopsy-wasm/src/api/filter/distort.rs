@@ -1,4 +1,4 @@
-//! Distortion filters: mesh warp, liquify warp.
+//! Distortion filters: mesh warp, liquify warp, twirl.
 
 use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
@@ -240,4 +240,33 @@ pub fn liquify_release(engine: &mut Engine) {
     if let Some(tex) = engine.inner.liquify_disp_texture.take() {
         engine.inner.texture_pool.release(tex);
     }
+}
+
+#[wasm_bindgen(js_name = "filterTwirl")]
+pub fn filter_twirl(
+    engine: &mut Engine,
+    layer_id: &str,
+    angle: f32,
+    radius: f32,
+    falloff: f32,
+) {
+    let angle = angle.clamp(-12.566, 12.566);
+    let radius = radius.clamp(0.0, 1.0);
+    let falloff = falloff.clamp(0.5, 4.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.twirl,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_angle") {
+                gl.uniform1f(Some(&loc), angle);
+            }
+            if let Some(loc) = shader.location(gl, "u_radius") {
+                gl.uniform1f(Some(&loc), radius);
+            }
+            if let Some(loc) = shader.location(gl, "u_falloff") {
+                gl.uniform1f(Some(&loc), falloff);
+            }
+        },
+    );
 }

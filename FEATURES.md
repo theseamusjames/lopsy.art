@@ -369,11 +369,15 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Pixel Stretch**: amount 1 - 200 px, bands 2 - 50, seed 0 - 999, RGB split 0 - 1.0 (shifts horizontal scan-line bands by random offsets with per-channel separation, creating glitch / VHS corruption effects)
 - **Lens Distortion**: strength -100 to +100 (negative = pincushion, positive = barrel), zoom 50 - 200%, chromatic fringing 0 - 100% (applies barrel or pincushion radial distortion with optional per-channel color separation at edges, simulating real camera lens effects)
 - **Mesh Warp**: interactive grid-based distortion overlaid directly on the canvas. Activated from the Move tool's options bar; grid handles are draggable in document space, with bilinear interpolation between points handled on the GPU. When a marquee selection is active, the warp is constrained to the selection's bounding box (pixels outside pass through unchanged); otherwise the warp covers the whole layer. Grid sizes 3×3 to 6×6 with live preview, reset, and undo support.
+<<<<<<< HEAD
 - **Liquify** (Filter menu → "Liquify…" or `⌘⇧X`): opens a floating, modal-style session that paints into a per-pixel displacement map sampled by the GPU on each frame. Apply commits the warp to a new history snapshot; Cancel discards the displacement map.
   - **Modes**: `push` (drag pixels along the cursor direction), `twirl CW` / `twirl CCW` (rotate pixels around the brush center), `bloat` (push outward), `pinch` (pull inward)
   - **Brush Size**: 4 - 500 px
   - **Pressure**: 1 - 100% (multiplier for displacement intensity)
   - Quintic radial falloff inside each dab so the warp eases off smoothly at the brush edge
+=======
+- **Twirl**: angle -720 to +720 degrees, radius 1 - 100%, falloff 50 - 400% (spirals pixels around the image center with a smooth power-curve falloff — stronger at the center, fading to zero at the radius boundary. Pixels mapped outside the texture become transparent. Classic Photoshop-style distortion for creating swirl, vortex, and whirlpool effects)
+>>>>>>> 0195bd7 (feat(filter): add Twirl distortion GPU filter)
 
 ### Render
 - **Clouds**: scale, seed
