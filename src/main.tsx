@@ -17,6 +17,8 @@ import {
   syncGroupAdjustments,
 } from './engine-wasm/engine-sync';
 import { finalizePendingStrokeGlobal } from './app/interactions/pending-stroke';
+import { saveProject } from './io/project-save';
+import { loadProject } from './io/project-load';
 import './styles/tokens.css';
 import './styles/reset.css';
 
@@ -34,6 +36,8 @@ declare global {
     __readCompositedPixels?: () => Promise<ReadPixelsResult>;
     __readLayerPixels?: (layerId?: string) => Promise<ReadPixelsResult>;
     __isFontLoaded?: (family: string) => boolean;
+    __saveProject?: () => Promise<void>;
+    __loadProject?: (file: File) => Promise<void>;
   }
 }
 
@@ -88,6 +92,8 @@ if (import.meta.env.DEV) {
     if (!engine) return false;
     return isFontLoaded(engine, family);
   };
+  window.__saveProject = saveProject;
+  window.__loadProject = loadProject;
   window.__readLayerPixels = (layerId?: string) => {
     return new Promise<ReadPixelsResult>((resolve) => {
       requestAnimationFrame(() => {

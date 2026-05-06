@@ -20,6 +20,8 @@ import { flushLayerSync } from '../../../engine-wasm/engine-sync';
 export { importPsdFile, exportPsdFile };
 
 import { importDngFile } from '../../../io/dng';
+import { saveProject } from '../../../io/project-save';
+import { loadProject } from '../../../io/project-load';
 
 // Re-export ExportFormat and ExportOptions from export-logic so the rest of
 // the codebase imports from one place.
@@ -34,14 +36,33 @@ function confirmIfDirty(): boolean {
   return window.confirm('You have unsaved changes. Are you sure you want to continue?');
 }
 
+export function openProjectFromDisk(): void {
+  if (!confirmIfDirty()) return;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.lopsy';
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    loadProject(file).catch((err) => notifyError(`Failed to open project: ${describeError(err)}`));
+  };
+  input.click();
+}
+
 export function openFileFromDisk(): void {
   if (!confirmIfDirty()) return;
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/*,.psd,.dng';
+  input.accept = 'image/*,.psd,.dng,.lopsy';
   input.onchange = () => {
     const file = input.files?.[0];
     if (!file) return;
+
+    // Route .lopsy project files to the project loader
+    if (/\.lopsy$/i.test(file.name)) {
+      loadProject(file).catch((err) => notifyError(`Failed to open project: ${describeError(err)}`));
+      return;
+    }
 
     // Route PSD files to the PSD importer
     if (/\.psd$/i.test(file.name)) {
@@ -283,6 +304,9 @@ export const fileMenu: MenuDef = {
   items: [
     { label: 'New', shortcut: '⌘N', action: () => { if (confirmIfDirty()) useUIStore.getState().setShowNewDocumentModal(true); } },
     { label: 'Open...', shortcut: '⌘O', action: () => openFileFromDisk() },
+    { separator: true, label: '' },
+    { label: 'Save Project', shortcut: '⌘S', action: () => { saveProject().catch((err) => notifyError(`Save failed: ${describeError(err)}`)); } },
+    { label: 'Open Project...', action: () => openProjectFromDisk() },
     { separator: true, label: '' },
     { label: 'Export…', shortcut: '⌥⇧⌘E', action: () => openExportDialogFn?.() },
     { label: 'Quick Export PNG', shortcut: '⇧⌘E', action: () => exportCanvas('png') },
