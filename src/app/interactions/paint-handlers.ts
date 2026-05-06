@@ -1,10 +1,7 @@
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
-import { createMaskSurface } from '../../engine/mask-utils';
-import { generateBrushStamp, interpolatePoints, applyBrushDab, interpolatePointsWithScatter, resetScatterSpacingRemainder } from '../../tools/brush/brush';
-import { drawPencilLine } from '../../tools/pencil/pencil';
-import { setActiveMaskEditBuffer } from './mask-buffer';
+import { interpolatePoints, interpolatePointsWithScatter, resetScatterSpacingRemainder } from '../../tools/brush/brush';
 import type { InteractionContext, InteractionState } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -17,6 +14,10 @@ import {
   paintQuickMaskDab as gpuQuickMaskDab,
   paintQuickMaskDabBatch as gpuQuickMaskDabBatch,
   drawQuickMaskPencilLine as gpuQuickMaskPencil,
+  paintMaskDab as gpuMaskDab,
+  paintMaskDabBatch as gpuMaskDabBatch,
+  drawMaskPencilLine as gpuMaskPencilLine,
+  uploadLayerMask,
 } from '../../engine-wasm/wasm-bridge';
 import type { SymmetryConfig } from '../../tools/symmetry';
 import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from '../../tools/symmetry';
@@ -127,18 +128,15 @@ export function handlePaintDown(
     return state;
   }
 
-  // Mask edit mode stays on CPU — small surface, infrequent
+  // Mask edit mode: GPU painting on the layer mask texture
   if (maskEditMode && activeLayer.mask) {
     editorState.pushHistory(tool === 'eraser' ? 'Mask Erase' : 'Mask Paint');
-    const maskBuf = createMaskSurface(activeLayer.mask.data, activeLayer.mask.width, activeLayer.mask.height);
-    const maskColor = tool === 'eraser'
-      ? { r: 255, g: 255, b: 255, a: 1 }
-      : { r: 0, g: 0, b: 0, a: 1 };
+    const engine = getEngine();
 
     const state: InteractionState = {
       drawing: true,
       lastPoint: layerPos,
-      pixelBuffer: maskBuf,
+      pixelBuffer: null,
       originalPixelBuffer: null,
       layerId: activeLayerId,
       tool,
@@ -149,40 +147,59 @@ export function handlePaintDown(
       maskMode: true,
     };
 
+    if (!engine) {
+      editorState.notifyRender();
+      return state;
+    }
+
+    // Ensure mask texture is on GPU before painting
+    const maskBytes = new Uint8Array(activeLayer.mask.data.buffer, activeLayer.mask.data.byteOffset, activeLayer.mask.data.byteLength);
+    uploadLayerMask(engine, activeLayerId, maskBytes, activeLayer.mask.width, activeLayer.mask.height);
+
+    // Inverted from quick mask: brush=1 (subtract/hide), eraser=0 (add/reveal)
+    const mode = tool === 'eraser' ? 0 : 1;
+
     if (tool === 'brush') {
       const size = toolSettings.brushSize;
       const hardness = toolSettings.brushHardness / 100;
       const opacity = toolSettings.brushOpacity / 100;
-      const stamp = generateBrushStamp(size, hardness);
       if (shiftLine) {
         const spacing = Math.max(1, size * 0.25);
         const pts = interpolatePoints(lineFrom, layerPos, spacing);
-        for (const pt of pts) {
-          applyBrushDab(maskBuf, pt, stamp, size, maskColor, opacity, 1);
+        const arr = new Float64Array(pts.length * 2);
+        for (let i = 0; i < pts.length; i++) {
+          arr[i * 2] = pts[i]!.x;
+          arr[i * 2 + 1] = pts[i]!.y;
         }
+        gpuMaskDabBatch(engine, activeLayerId, arr, size, hardness, opacity, mode);
       } else {
-        applyBrushDab(maskBuf, layerPos, stamp, size, maskColor, opacity, 1);
+        gpuMaskDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, opacity, mode);
       }
     } else if (tool === 'pencil') {
       const size = toolSettings.pencilSize;
-      drawPencilLine(maskBuf, lineFrom, layerPos, maskColor, size);
+      gpuMaskPencilLine(
+        engine, activeLayerId,
+        lineFrom.x, lineFrom.y, layerPos.x, layerPos.y,
+        1.0, size, mode,
+      );
     } else {
       const size = toolSettings.eraserSize;
       const hardness = 0.8;
       const opacity = toolSettings.eraserOpacity / 100;
-      const stamp = generateBrushStamp(size, hardness);
       if (shiftLine) {
         const spacing = Math.max(1, size * 0.25);
         const pts = interpolatePoints(lineFrom, layerPos, spacing);
-        for (const pt of pts) {
-          applyBrushDab(maskBuf, pt, stamp, size, maskColor, opacity, 1);
+        const arr = new Float64Array(pts.length * 2);
+        for (let i = 0; i < pts.length; i++) {
+          arr[i * 2] = pts[i]!.x;
+          arr[i * 2 + 1] = pts[i]!.y;
         }
+        gpuMaskDabBatch(engine, activeLayerId, arr, size, hardness, opacity, mode);
       } else {
-        applyBrushDab(maskBuf, layerPos, stamp, size, maskColor, opacity, 1);
+        gpuMaskDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, opacity, mode);
       }
     }
 
-    setActiveMaskEditBuffer({ layerId: activeLayerId, buf: maskBuf, maskWidth: activeLayer.mask.width, maskHeight: activeLayer.mask.height });
     editorState.notifyRender();
     return state;
   }
@@ -453,19 +470,16 @@ export function handlePaintMove(
   const toolSettings = useToolSettingsStore.getState();
   const layerLocalPos = ctx.layerPos;
 
-  // Mask edit mode stays on CPU for layer masks; quick mask routes to GPU
+  // Mask modes: quick mask and layer mask both route to GPU
   if (state.maskMode) {
     const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+    const engine = getEngine();
+    if (!engine) return;
     if (isQuickMaskMode) {
-      // Quick mask mode: GPU painting
-      const engine = getEngine();
-      if (!engine) return;
       handleQuickMaskPaintMove(engine, state, ctx.canvasPos, toolSettings);
-      return;
+    } else {
+      handleMaskPaintMoveGpu(engine, state, layerLocalPos, toolSettings);
     }
-    // Regular layer mask edit: CPU painting
-    if (!state.pixelBuffer) return;
-    handleMaskPaintMove(state, layerLocalPos, toolSettings);
     return;
   }
 
@@ -577,17 +591,17 @@ export function handlePaintMove(
   }
 }
 
-/** CPU-only mask painting (layer mask surface only). */
-function handleMaskPaintMove(
+/** GPU mask painting — brush/eraser/pencil on the layer mask texture. */
+function handleMaskPaintMoveGpu(
+  engine: ReturnType<typeof getEngine>,
   state: InteractionState,
   pos: { x: number; y: number },
   toolSettings: ReturnType<typeof useToolSettingsStore.getState>,
 ): void {
-  if (!state.pixelBuffer || !state.lastPoint) return;
+  if (!state.lastPoint || !engine || !state.layerId) return;
 
-  // In regular mask edit mode: brush → black (hide), eraser → white (reveal)
-  const brushColor = { r: 0, g: 0, b: 0, a: 1 };
-  const eraserColor = { r: 255, g: 255, b: 255, a: 1 };
+  // Inverted from quick mask: brush=1 (subtract/hide), eraser=0 (add/reveal)
+  const mode = state.tool === 'eraser' ? 0 : 1;
 
   switch (state.tool) {
     case 'brush': {
@@ -595,16 +609,22 @@ function handleMaskPaintMove(
       const hardness = toolSettings.brushHardness / 100;
       const opacity = toolSettings.brushOpacity / 100;
       const spacing = Math.max(1, size * 0.25);
-      const stamp = generateBrushStamp(size, hardness);
-      const points = interpolatePoints(state.lastPoint, pos, spacing);
-      for (const pt of points) {
-        applyBrushDab(state.pixelBuffer, pt, stamp, size, brushColor, opacity, 1);
+      const pts = interpolatePoints(state.lastPoint, pos, spacing);
+      const arr = new Float64Array(pts.length * 2);
+      for (let i = 0; i < pts.length; i++) {
+        arr[i * 2] = pts[i]!.x;
+        arr[i * 2 + 1] = pts[i]!.y;
       }
+      gpuMaskDabBatch(engine, state.layerId, arr, size, hardness, opacity, mode);
       break;
     }
     case 'pencil': {
       const size = toolSettings.pencilSize;
-      drawPencilLine(state.pixelBuffer, state.lastPoint, pos, brushColor, size);
+      gpuMaskPencilLine(
+        engine, state.layerId,
+        state.lastPoint.x, state.lastPoint.y, pos.x, pos.y,
+        1.0, size, mode,
+      );
       break;
     }
     case 'eraser': {
@@ -612,11 +632,13 @@ function handleMaskPaintMove(
       const hardness = 0.8;
       const opacity = toolSettings.eraserOpacity / 100;
       const spacing = Math.max(1, size * 0.25);
-      const stamp = generateBrushStamp(size, hardness);
-      const points = interpolatePoints(state.lastPoint, pos, spacing);
-      for (const pt of points) {
-        applyBrushDab(state.pixelBuffer, pt, stamp, size, eraserColor, opacity, 1);
+      const pts = interpolatePoints(state.lastPoint, pos, spacing);
+      const arr = new Float64Array(pts.length * 2);
+      for (let i = 0; i < pts.length; i++) {
+        arr[i * 2] = pts[i]!.x;
+        arr[i * 2 + 1] = pts[i]!.y;
       }
+      gpuMaskDabBatch(engine, state.layerId, arr, size, hardness, opacity, mode);
       break;
     }
     default:

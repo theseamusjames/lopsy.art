@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
-use crate::{brush_gpu, clone_stamp_gpu, dodge_burn_gpu, healing_brush_gpu, smudge_gpu};
+use crate::{brush_gpu, clone_stamp_gpu, dodge_burn_gpu, healing_brush_gpu, mask_paint_gpu, smudge_gpu};
 
 // ============================================================
 // Brush / Paint Operations
@@ -305,4 +305,65 @@ pub fn apply_healing_dab_batch(
     size: f32, opacity: f32,
 ) {
     healing_brush_gpu::apply_healing_dab_batch(&mut engine.inner, layer_id, points, source_offset_x, source_offset_y, size, opacity);
+}
+
+// ============================================================
+// Layer Mask GPU Painting
+// ============================================================
+
+#[wasm_bindgen(js_name = "paintMaskDab")]
+pub fn paint_mask_dab(
+    engine: &mut Engine, layer_id: &str,
+    cx: f64, cy: f64,
+    size: f32, hardness: f32, opacity: f32, mode: u32,
+) {
+    mask_paint_gpu::paint_mask_dab(&mut engine.inner, layer_id, cx, cy, size, hardness, opacity, mode);
+}
+
+#[wasm_bindgen(js_name = "paintMaskDabBatch")]
+pub fn paint_mask_dab_batch(
+    engine: &mut Engine, layer_id: &str,
+    points: &[f64],
+    size: f32, hardness: f32, opacity: f32, mode: u32,
+) {
+    mask_paint_gpu::paint_mask_dab_batch(&mut engine.inner, layer_id, points, size, hardness, opacity, mode);
+}
+
+#[wasm_bindgen(js_name = "drawMaskPencilLine")]
+pub fn draw_mask_pencil_line(
+    engine: &mut Engine, layer_id: &str,
+    x0: f64, y0: f64, x1: f64, y1: f64,
+    a: f32, size: f32, mode: u32,
+) {
+    mask_paint_gpu::draw_mask_pencil_line(&mut engine.inner, layer_id, x0, y0, x1, y1, a, size, mode);
+}
+
+#[wasm_bindgen(js_name = "fillMask")]
+pub fn fill_mask(
+    engine: &mut Engine, layer_id: &str,
+    start_x: u32, start_y: u32,
+    tolerance: u32, contiguous: bool, mode: u32,
+) {
+    mask_paint_gpu::fill_mask(&mut engine.inner, layer_id, start_x, start_y, tolerance, contiguous, mode);
+}
+
+#[wasm_bindgen(js_name = "renderMaskLinearGradient")]
+pub fn render_mask_linear_gradient(
+    engine: &mut Engine, layer_id: &str,
+    start_x: f64, start_y: f64, end_x: f64, end_y: f64, stops_json: &str,
+) {
+    mask_paint_gpu::render_mask_linear_gradient(&mut engine.inner, layer_id, start_x, start_y, end_x, end_y, stops_json);
+}
+
+#[wasm_bindgen(js_name = "renderMaskRadialGradient")]
+pub fn render_mask_radial_gradient(
+    engine: &mut Engine, layer_id: &str,
+    cx: f64, cy: f64, radius: f64, stops_json: &str,
+) {
+    mask_paint_gpu::render_mask_radial_gradient(&mut engine.inner, layer_id, cx, cy, radius, stops_json);
+}
+
+#[wasm_bindgen(js_name = "readMaskTexture")]
+pub fn read_mask_texture(engine: &mut Engine, layer_id: &str) -> Option<Vec<u8>> {
+    mask_paint_gpu::read_mask_texture(&mut engine.inner, layer_id)
 }

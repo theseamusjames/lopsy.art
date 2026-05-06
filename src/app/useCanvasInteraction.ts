@@ -3,7 +3,6 @@ import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { PixelBuffer } from '../engine/pixel-data';
 import { invalidateBitmapCache, createPaintingCanvas, destroyPaintingCanvas } from '../engine/bitmap-cache';
-import { extractMaskFromSurface } from '../engine/mask-utils';
 import { getEngine } from '../engine-wasm/engine-state';
 import {
   beginStroke, endStroke, hasFloat, dropFloat,
@@ -11,6 +10,7 @@ import {
   uploadLayerPixels,
   getLayerTextureDimensions,
   setSelectionMask,
+  readMaskTexture,
 } from '../engine-wasm/wasm-bridge';
 import { flushLayerSync, resetTrackedState, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
 import { uploadCompressed } from '../engine-wasm/gpu-pixel-access';
@@ -18,7 +18,6 @@ import { smoothStroke, HOLD_TIMEOUT_MS } from '../tools/smooth-line/smooth-line'
 import { mirrorBatchPoints } from '../tools/symmetry';
 import { useToolSettingsStore } from './tool-settings-store';
 
-import { clearActiveMaskEditBuffer } from './interactions/mask-buffer';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { clearPendingStroke } from './interactions/pending-stroke';
@@ -41,7 +40,6 @@ import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 import { PAINT_TOOLS, GPU_TOOLS } from '../tools/tool-registry';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 
-export { getActiveMaskEditBuffer } from './interactions/mask-buffer';
 export { strokeCurrentPath } from './interactions/path-stroke';
 
 import type { Point, Layer } from '../types';
@@ -534,19 +532,21 @@ export function useCanvasInteraction(
       useUIStore.getState().setGradientPreview(null);
     }
 
-    // Sync mask drawing buffer back to mask data
-    if (state.maskMode && state.pixelBuffer && state.layerId) {
+    // Sync mask GPU texture back to store
+    if (state.maskMode && state.layerId) {
       const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
       if (!isQuickMaskMode) {
-        // Regular mask edit: sync pixel buffer back to the layer mask
-        const layer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
-        if (layer?.mask) {
-          const newMaskData = extractMaskFromSurface(state.pixelBuffer, layer.mask.width, layer.mask.height);
-          useEditorStore.getState().updateLayerMaskData(state.layerId, newMaskData);
+        const engine = getEngine();
+        if (engine) {
+          const maskData = readMaskTexture(engine, state.layerId);
+          if (maskData) {
+            const layer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
+            if (layer?.mask) {
+              useEditorStore.getState().updateLayerMaskData(state.layerId, new Uint8ClampedArray(maskData));
+            }
+          }
         }
-        clearActiveMaskEditBuffer();
       }
-      // Quick Mask Mode: qmBuf.data was synced in handleMaskPaintMove — no layer mask update needed
     }
 
     stateRef.current = { ...INITIAL_STATE };

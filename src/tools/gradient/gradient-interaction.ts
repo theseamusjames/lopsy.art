@@ -11,23 +11,32 @@ import {
   renderRadialGradient as gpuRenderRadialGradient,
   saveGradientPreview as gpuSaveGradientPreview,
   endGradientPreview as gpuEndGradientPreview,
+  renderMaskLinearGradient as gpuRenderMaskLinearGradient,
+  renderMaskRadialGradient as gpuRenderMaskRadialGradient,
+  uploadLayerMask,
 } from '../../engine-wasm/wasm-bridge';
 
 export function handleGradientDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer } = ctx;
   const editorState = useEditorStore.getState();
   const ts = useToolSettingsStore.getState();
-  editorState.pushHistory(ts.gradientType === 'radial' ? 'Radial Gradient' : 'Linear Gradient');
+  const maskEditMode = useUIStore.getState().maskEditMode;
+
+  const engine = getEngine();
+
+  if (maskEditMode && activeLayer.mask) {
+    editorState.pushHistory(ts.gradientType === 'radial' ? 'Mask Radial Gradient' : 'Mask Linear Gradient');
+    if (engine) {
+      const maskBytes = new Uint8Array(activeLayer.mask.data.buffer, activeLayer.mask.data.byteOffset, activeLayer.mask.data.byteLength);
+      uploadLayerMask(engine, activeLayerId, maskBytes, activeLayer.mask.width, activeLayer.mask.height);
+    }
+  } else {
+    editorState.pushHistory(ts.gradientType === 'radial' ? 'Radial Gradient' : 'Linear Gradient');
+  }
   ts.addRecentColor(ts.foregroundColor);
   ts.addRecentColor(ts.backgroundColor);
 
-  // Snapshot the layer's current pixels so each render during the drag
-  // composites against the pre-drag state instead of the previous frame's
-  // gradient. Without this, alpha-0 stops leave artifacts inside marquees
-  // because the shader's alpha-over math preserves whatever the previous
-  // frame wrote wherever the new gradient is transparent.
-  const engine = getEngine();
-  if (engine) gpuSaveGradientPreview(engine, activeLayerId);
+  if (engine && !maskEditMode) gpuSaveGradientPreview(engine, activeLayerId);
 
   return {
     drawing: true,
@@ -40,6 +49,7 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
     layerStartX: activeLayer.x,
     layerStartY: activeLayer.y,
     ...DEFAULT_TRANSFORM_FIELDS,
+    maskMode: maskEditMode && !!activeLayer.mask,
   };
 }
 
@@ -85,16 +95,27 @@ export function handleGradientMove(state: InteractionState, layerLocalPos: Point
     endY = startY + dist * Math.sin(snappedAngle);
   }
 
-  if (gradType === 'linear') {
-    gpuRenderLinearGradient(engine, state.layerId, startX, startY, endX, endY, stopsJson);
+  if (state.maskMode) {
+    if (gradType === 'linear') {
+      gpuRenderMaskLinearGradient(engine, state.layerId, startX, startY, endX, endY, stopsJson);
+    } else {
+      const dx = endX - startX;
+      const dy = endY - startY;
+      const radius = Math.sqrt(dx * dx + dy * dy);
+      gpuRenderMaskRadialGradient(engine, state.layerId, startX, startY, radius, stopsJson);
+    }
   } else {
-    const dx = endX - startX;
-    const dy = endY - startY;
-    const radius = Math.sqrt(dx * dx + dy * dy);
-    gpuRenderRadialGradient(engine, state.layerId, startX, startY, radius, stopsJson);
+    if (gradType === 'linear') {
+      gpuRenderLinearGradient(engine, state.layerId, startX, startY, endX, endY, stopsJson);
+    } else {
+      const dx = endX - startX;
+      const dy = endY - startY;
+      const radius = Math.sqrt(dx * dx + dy * dy);
+      gpuRenderRadialGradient(engine, state.layerId, startX, startY, radius, stopsJson);
+    }
+    clearJsPixelData(state.layerId);
   }
 
-  clearJsPixelData(state.layerId);
   useEditorStore.getState().notifyRender();
 
   useUIStore.getState().setGradientPreview({

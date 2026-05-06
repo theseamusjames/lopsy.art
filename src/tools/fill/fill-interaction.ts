@@ -9,6 +9,9 @@ import {
   applyFillToLayer as wasmApplyFillToLayer,
   readLayerPixelsForFill as wasmReadLayerPixelsForFill,
   fillQuickMask as wasmFillQuickMask,
+  fillMask as wasmFillMask,
+  uploadLayerMask,
+  readMaskTexture,
 } from '../../engine-wasm/wasm-bridge';
 
 /** Down handler for the bucket fill tool. Flood-fills from the click point,
@@ -32,6 +35,35 @@ export function handleFillDown(ctx: InteractionContext): void {
     const startY = Math.round(canvasPos.y);
 
     wasmFillQuickMask(engine, startX, startY, tolerance, contiguous, 0);
+    editorState.notifyRender();
+    return;
+  }
+
+  // Mask edit mode: fill the layer mask texture
+  const maskEditMode = useUIStore.getState().maskEditMode;
+  const maskLayer = editorState.document.layers.find((l) => l.id === activeLayerId);
+  if (maskEditMode && maskLayer?.mask) {
+    editorState.pushHistory('Mask Fill');
+    const toolSettings = useToolSettingsStore.getState();
+    const tolerance = toolSettings.fillTolerance;
+    const contiguous = toolSettings.fillContiguous;
+
+    const engine = getEngine();
+    if (!engine) return;
+
+    const maskBytes = new Uint8Array(maskLayer.mask.data.buffer, maskLayer.mask.data.byteOffset, maskLayer.mask.data.byteLength);
+    uploadLayerMask(engine, activeLayerId, maskBytes, maskLayer.mask.width, maskLayer.mask.height);
+
+    const startX = Math.round(layerPos.x);
+    const startY = Math.round(layerPos.y);
+
+    // mode 1 = fill black (hide), matching brush behavior
+    wasmFillMask(engine, activeLayerId, startX, startY, tolerance, contiguous, 1);
+
+    const maskData = readMaskTexture(engine, activeLayerId);
+    if (maskData) {
+      editorState.updateLayerMaskData(activeLayerId, new Uint8ClampedArray(maskData));
+    }
     editorState.notifyRender();
     return;
   }

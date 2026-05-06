@@ -3,7 +3,7 @@ use crate::engine::EngineInner;
 use crate::gpu::shader::ShaderProgram;
 
 #[derive(serde::Deserialize)]
-struct GradientStop {
+pub struct GradientStop {
     position: f32,
     r: f32,
     g: f32,
@@ -296,7 +296,7 @@ pub fn render_radial_gradient(
     engine.mark_layer_dirty(layer_id);
 }
 
-fn set_gradient_uniforms(
+pub fn set_gradient_uniforms(
     gl: &WebGl2RenderingContext,
     shader: &ShaderProgram,
     stops: &[GradientStop],
