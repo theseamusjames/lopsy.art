@@ -223,7 +223,7 @@ export function KeyboardShortcutsModal({ onClose }: KeyboardShortcutsModalProps)
                               }
                               aria-label={
                                 isListening
-                                  ? `Listening for new key — press a key or Escape`
+                                  ? `${shortcut.label} shortcut: listening — press a key or Escape`
                                   : `${shortcut.label} shortcut: ${activeKey ?? 'none'}. Click to rebind.`
                               }
                             >
