@@ -85,6 +85,7 @@
 - Stroke path to pixels
 - Convert path to selection
 - **Cmd/Meta+click an anchor**: toggles between corner (no handles) and smooth spline (double-click does the same)
+- **Commit / Cancel buttons**: once two or more anchors are placed, a floating ✓ (commit) and ✗ (cancel) appear next to the first anchor — mirrors the text tool's confirm pattern. Clicking ✓ rasterises the path; ✗ clears the in-progress anchors
 
 ### Text Tool
 - **Font size**: 1 - 500
@@ -363,6 +364,9 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - Align (left, center-h, right, top, center-v, bottom)
 - Add/remove/toggle mask — works on raster, text, shape, and **group** layers; group masks are sampled at composite time so the entire group is masked as a single unit (with the group's own opacity and blend mode applied on top)
 - **Cmd/Ctrl+click a layer thumbnail**: loads that layer's alpha as a marquee selection (non-transparent pixels become the selection)
+- **Click a mask thumbnail**: enters mask edit mode for that layer (always enters, never toggles off — selecting the mask reliably switches focus to it)
+- **Convert mask → selection** button: a small action button next to the mask thumbnail converts the grayscale mask to a marquee selection without altering the mask itself
+- **Double-click a layer name**: opens an inline rename input; **Enter** commits, **Escape** cancels
 
 ### Multi-Select in the Layers Panel
 - **Plain click**: selects only the clicked layer (standard behavior)
@@ -419,6 +423,20 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - **Mask edit mode**: on/off
 - **Draggable modals & panels**: filter dialogs, pattern fill, layer effects, adjustments, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked)
 - **Filter / pattern preview overlay**: when live preview is enabled the dim backdrop is removed and pointer-events on the overlay are disabled so the canvas is fully visible while the modal stays interactive
+- **Sliders**: every slider (tool options, effects, adjustments, navigator zoom) supports **double-click to reset** to its default value (or its minimum if no default is configured)
+- **New Document splash**: the LOPSY logo appears on the new-document modal so the splash screen brands the workspace before the first canvas is created
+
+---
+
+## Status Bar
+
+Always visible along the bottom of the workspace.
+
+- **Zoom %**: shows the current viewport zoom; **double-click** to reset to 100%
+- **Cursor X / Y**: live document-space cursor position
+- **Document dimensions**: width × height in pixels
+- **Memory usage**: combined WASM heap + JS heap (sampled every 2 s; hidden when the browser doesn't expose `performance.memory`)
+- **Color space**: "Display P3" or "sRGB" depending on the canvas's working color space
 
 ---
 
@@ -449,7 +467,7 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 
 - Live thumbnail of the composited canvas (refreshed by copying the main WebGL canvas; throttled to ~5 Hz so it stays cheap during heavy strokes)
 - **Viewport indicator**: a translucent rectangle showing the current viewport bounds inside the document; click anywhere on the minimap to recenter the viewport, or drag the indicator rectangle to pan
-- **Zoom slider**: log-scaled, mapping slider position to `64^(value/100)` so the full 0.01× – 64× zoom range is reachable without coarse jumps
+- **Zoom slider**: log-scaled, mapping slider position to `64^(value/100)` so the full 0.01× – 64× zoom range is reachable without coarse jumps. **Double-click** the slider to reset zoom to 100%
 - **Zoom readout**: displays the current zoom as a percentage
 - Collapsible; collapsed state persists in localStorage
 
@@ -476,6 +494,7 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 - Unlimited undo/redo with labeled snapshots
 - RLE-compressed GPU texture snapshots
 - Metadata-only snapshots for lightweight operations
+- **Tool-specific labels** on every snapshot — instead of generic "Edit" / "Update Effects", the History panel shows the action that produced each entry (e.g. "Brush Stroke", "Linear Gradient", "Quick Mask Paint", "Drop Shadow", "Move Layer", "Apply Filter: Gaussian Blur"). Effects sliders push their undo entry on drag-start so a single Ctrl/⌘+Z reverts the change rather than producing no-op entries
 
 ---
 
@@ -512,3 +531,55 @@ One-shot PNG export through the GPU compositor — no dialog, no preview, uses t
 
 ### DNG / RAW Import
 Camera RAW (DNG) files are decoded entirely in Rust (demosaic, LJPEG, TIFF) before being uploaded to a GPU layer.
+
+---
+
+## Keyboard Shortcuts
+
+### Tool size
+- **`[`** — decrease the active tool's size by 1
+- **`]`** — increase the active tool's size by 1
+- Applies to brush, dodge/burn, smudge, pencil, eraser, clone stamp, healing brush, plus path stroke width and shape stroke width
+
+### Selection / move nudge
+- **Arrow keys** with the Move tool: nudge the active layer by 1 px (or by the grid size when grid + snap-to-grid are enabled)
+- **Arrow keys** with a selection tool active (rectangular / elliptical marquee, lasso, magnetic lasso, magic wand): nudge the marquee itself by 1 px (or by the grid size when grid + snap-to-grid are enabled)
+
+### Color
+- **`X`** — swap foreground / background colors
+- **`D`** — reset colors to default (black foreground, white background)
+- **`Q`** — toggle Quick Mask mode
+
+### Selection
+- **`⌘A`** — select all
+- **`⌘D`** — deselect
+- **`⇧⌘I`** — invert selection
+
+### Document & layers
+- **`⌘N`** — new document
+- **`⌘O`** — open file
+- **`⇧⌘E`** — quick PNG export
+- **`⌥⇧⌘E`** — open Export dialog
+- **`⌘C` / `⌘X` / `⌘V`** — copy / cut / paste (respects selection)
+- **`⇧⌘C`** — copy merged (flattened RGBA snapshot of the visible layers within the selection)
+- **`⌘A`** with the Layers panel focused — select every layer
+- **`Delete` / `Backspace`** with the Layers panel focused — remove every selected layer
+
+### Text editing (while a text layer is being edited)
+- **`Enter`** — newline
+- **`⇧Enter`** or **`Tab`** — commit text and exit edit mode
+- **`Escape`** — cancel edits
+- **`⌘A`** — select all text in the active text layer
+
+### Path editing
+- **`Enter`** — commit the in-progress path
+- **`Escape`** — discard in-progress anchors
+
+### Edit
+- **`⌘Z`** — undo
+- **`⇧⌘Z`** — redo
+- **`⌘E`** — merge down
+
+### View
+- **`⌘'`** — toggle grid
+- **`⌘;`** — toggle guides
