@@ -4,6 +4,7 @@ Read SPEC.md for the full product specification.
 
 ## Additional Guides
 e2e/GUIDE.md - Read this before writing any e2e tests.
+MEMORY.md - good for storing small facts about the code base.
 
 ## Language & Types
 
