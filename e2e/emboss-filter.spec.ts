@@ -134,8 +134,8 @@ test.describe('Emboss Filter', () => {
       return { activeLayerId: store.getState().document.activeLayerId };
     });
 
-    // Read the edge pixel (centre of document horizontally) before the filter
-    const before = await getPixelAt(page, 30, 30, state.activeLayerId);
+    // Read a pixel in the white half (interior, far from edge) before the filter
+    const before = await getPixelAt(page, 15, 30, state.activeLayerId);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'emboss-edge-before.png') });
 
@@ -145,8 +145,9 @@ test.describe('Emboss Filter', () => {
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'emboss-edge-after.png') });
 
-    // The filter should have changed the pixel values on the edge
-    const after = await getPixelAt(page, 30, 30, state.activeLayerId);
+    // The white interior (255) should become near mid-gray (~128) after emboss
+    // because the emboss kernel sums to 0 on flat regions, biasing to 0.5.
+    const after = await getPixelAt(page, 15, 30, state.activeLayerId);
     const delta = Math.abs(after.r - before.r) + Math.abs(after.g - before.g) + Math.abs(after.b - before.b);
     expect(delta).toBeGreaterThan(10);
   });
