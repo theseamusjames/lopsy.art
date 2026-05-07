@@ -33,7 +33,15 @@ const LAYER_TYPE_MAP: Record<string, string> = {
   'adjustment': 'Adjustment',
 };
 
-export function layerToDescJson(layer: Layer, effectiveVisible: boolean): string {
+export function layerToDescJson(
+  layer: Layer,
+  effectiveVisible: boolean,
+  /** Opacity multiplier from pass-through ancestor groups (1.0 = no change). */
+  passThroughOpacityMultiplier = 1.0,
+  /** For pass-through groups: send empty children so the Rust compositor
+   *  doesn't route descendants into a group scratch FBO. */
+  isPassThroughGroup = false,
+): string {
   const effects: Record<string, unknown> = {};
 
   const eff = layer.effects;
@@ -103,7 +111,9 @@ export function layerToDescJson(layer: Layer, effectiveVisible: boolean): string
     layer_type: LAYER_TYPE_MAP[layer.type] ?? 'Raster',
     visible: effectiveVisible,
     locked: layer.locked,
-    opacity: layer.opacity,
+    // Multiply by pass-through ancestor opacity so the compositor sees the
+    // correct effective opacity without a group FBO mediating it.
+    opacity: layer.opacity * passThroughOpacityMultiplier,
     blend_mode: BLEND_MODE_MAP[layer.blendMode] ?? 'Normal',
     x: Math.round(layer.x),
     y: Math.round(layer.y),
@@ -120,10 +130,54 @@ export function layerToDescJson(layer: Layer, effectiveVisible: boolean): string
   };
 
   if (layer.type === 'group' && 'children' in layer) {
-    desc.children = (layer as GroupLayer).children;
+    // Pass-through groups: send empty children so the Rust compositor never
+    // routes descendants into a group-scratch FBO. The children blend
+    // directly onto the parent composite using their own blend modes and
+    // the accumulated opacity from this group.
+    desc.children = isPassThroughGroup ? [] : (layer as GroupLayer).children;
   }
 
   return JSON.stringify(desc);
+}
+
+/**
+ * Computes the accumulated pass-through opacity multiplier for each layer.
+ *
+ * When a group has `pass-through` blend mode, its opacity is "absorbed" by
+ * the children — each child's effective opacity is multiplied by every
+ * pass-through ancestor's opacity. Non-pass-through groups reset the chain
+ * to 1.0 since they pre-composite their children into a group FBO.
+ *
+ * Returns a map from layer id → multiplier (1.0 for layers with no
+ * pass-through ancestors).
+ */
+export function buildPassThroughOpacityMap(
+  layers: readonly Layer[],
+  index: LayerIndex,
+): Map<string, number> {
+  const result = new Map<string, number>();
+
+  for (const layer of layers) {
+    let multiplier = 1.0;
+    let currentId: string | null = index.parentOf.get(layer.id) ?? null;
+
+    while (currentId) {
+      const ancestor = index.byId.get(currentId);
+      if (!ancestor || ancestor.type !== 'group') break;
+      if (ancestor.blendMode === 'pass-through') {
+        multiplier *= ancestor.opacity;
+      } else {
+        // Non-pass-through group: it pre-composites its subtree, so
+        // the chain resets — no further multiplication.
+        break;
+      }
+      currentId = index.parentOf.get(currentId) ?? null;
+    }
+
+    result.set(layer.id, multiplier);
+  }
+
+  return result;
 }
 
 export function syncLayers(
@@ -138,6 +192,9 @@ export function syncLayers(
   // Build a per-sync LayerIndex so ancestor-visibility checks are O(depth)
   // per layer instead of the O(n²) nested walk this used to do.
   const index: LayerIndex = buildLayerIndex(layers);
+
+  // Build pass-through opacity multipliers once per sync (O(n*depth)).
+  const passThroughOpacity = buildPassThroughOpacityMap(layers, index);
 
   // Remove layers no longer present
   for (const id of tracked.layerIds) {
@@ -163,6 +220,8 @@ export function syncLayers(
   // Add or update layers
   for (const layer of layers) {
     const effectiveVisible = isEffectivelyVisible(index, layer.id);
+    const isPassThrough = layer.type === 'group' && layer.blendMode === 'pass-through';
+    const opacityMultiplier = passThroughOpacity.get(layer.id) ?? 1.0;
 
     // Fast path: if both the layer reference and its effective visibility
     // are unchanged since last sync, the descriptor JSON is also unchanged.
@@ -174,7 +233,7 @@ export function syncLayers(
 
     let descJson: string | undefined;
     if (!isKnown || !refUnchanged || !visUnchanged) {
-      descJson = layerToDescJson(layer, effectiveVisible);
+      descJson = layerToDescJson(layer, effectiveVisible, opacityMultiplier, isPassThrough);
     }
 
     if (!isKnown) {

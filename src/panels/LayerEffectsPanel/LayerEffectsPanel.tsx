@@ -26,6 +26,12 @@ const BLEND_MODE_GROUPS: { label: string; modes: BlendMode[] }[] = [
   { label: 'Composite', modes: ['hue', 'saturation', 'color', 'luminosity'] },
 ];
 
+// Pass Through is only valid on group layers and appears at the top of the list.
+const GROUP_BLEND_MODE_GROUPS: { label: string; modes: BlendMode[] }[] = [
+  { label: 'Pass Through', modes: ['pass-through'] },
+  ...BLEND_MODE_GROUPS,
+];
+
 const EFFECT_LIST: { key: EffectKey; label: string }[] = [
   { key: 'dropShadow', label: 'Drop Shadow' },
   { key: 'stroke', label: 'Stroke' },
@@ -170,7 +176,7 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
           onChange={handleBlendModeChange}
           aria-labelledby="blend-mode-label"
         >
-          {BLEND_MODE_GROUPS.map((group) => (
+          {(activeLayer.type === 'group' ? GROUP_BLEND_MODE_GROUPS : BLEND_MODE_GROUPS).map((group) => (
             <optgroup key={group.label} label={group.label}>
               {group.modes.map((mode) => (
                 <option key={mode} value={mode}>

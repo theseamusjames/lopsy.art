@@ -74,7 +74,9 @@ export function createGroupLayer(params: { name: string; children?: string[] }):
     visible: true,
     locked: false,
     opacity: 1,
-    blendMode: 'normal',
+    // Pass-through is the Photoshop default: children blend directly onto the
+    // parent composite without pre-compositing into a group FBO.
+    blendMode: 'pass-through',
     x: 0,
     y: 0,
     clipToBelow: false,

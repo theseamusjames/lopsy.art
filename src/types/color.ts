@@ -28,4 +28,8 @@ export type BlendMode =
   | 'hue'
   | 'saturation'
   | 'color'
-  | 'luminosity';
+  | 'luminosity'
+  /** Only valid on group layers. Children blend directly into the parent
+   *  composite as if the group folder were invisible — the group acts as an
+   *  organisational container only. Matches Photoshop's default group mode. */
+  | 'pass-through';
