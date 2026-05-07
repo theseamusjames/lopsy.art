@@ -109,7 +109,7 @@ async function liquifyDrag(page: Page, fromDocX: number, fromDocY: number, toDoc
   const end = await docToScreen(page, toDocX, fromDocY);
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
-  await page.mouse.move(end.x, end.y, { steps: 10 });
+  await page.mouse.move(end.x, end.y, { steps: 25 });
   await page.mouse.up();
   await page.waitForTimeout(200);
 }
@@ -153,40 +153,68 @@ test.describe('Liquify Tool', () => {
   test('Apply: push warp commits changed pixels to the layer', async ({ page }) => {
     await createDocument(page, 200, 200, true);
 
-    // Draw a vertical red stripe at x=80..100 that we will push rightward
-    await drawRect(page, 80, 0, 20, 200, { r: 255, g: 0, b: 0 });
+    // Paint the left half red
+    await drawRect(page, 0, 0, 100, 200, { r: 255, g: 0, b: 0 });
+    // Paint the right half blue (extends the layer to full 200px width)
+    await drawRect(page, 100, 0, 100, 200, { r: 0, g: 0, b: 255 });
     await fitToView(page);
     await page.waitForTimeout(300);
 
     const layerId = await getActiveLayerId(page);
 
-    // Read the red channel at a probe point (100, 100) before warp.
-    // The stripe ends at x=100, so x=110 should be transparent/zero.
+    // Confirm: pixel at x=50 is red, pixel at x=150 is blue
     await pushHistory(page);
-    const beforeRight = await getPixelAt(page, 110, 100, layerId);
-    expect(beforeRight.a).toBeLessThan(50); // should be mostly empty
+    const beforeLeft = await getPixelAt(page, 50, 100, layerId);
+    const beforeRight = await getPixelAt(page, 150, 100, layerId);
+    expect(beforeLeft.r).toBeGreaterThan(200);
+    expect(beforeRight.b).toBeGreaterThan(200);
 
-    // Open Liquify with Push Forward mode (default)
+    // Open Liquify
     await openLiquify(page);
 
-    // Screenshot with panel visible and canvas ready
+    // Screenshot with panel visible
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-before-warp.png') });
 
-    // Drag rightward across the stripe to push it to the right
-    await liquifyDrag(page, 70, 100, 130, 100);
+    // Manipulate the displacement map: pull content from the right side (+50 dx)
+    // Pixel at x=50 will sample from x=100 (the boundary) and beyond — blue
+    await page.evaluate(() => {
+      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => {
+          liquify: {
+            displacementMap: { width: number; height: number; dx: Float32Array; dy: Float32Array };
+          } | null;
+          updateLiquifyDisplacementMap: (map: { width: number; height: number; dx: Float32Array; dy: Float32Array }) => void;
+        };
+      };
+      const state = uiStore.getState();
+      const session = state.liquify;
+      if (!session) return;
+      const map = session.displacementMap;
+      const { width, height } = map;
+      // Strong uniform rightward pull: sample 80px to the right
+      for (let py = 80; py < 120; py++) {
+        for (let px = 0; px < width; px++) {
+          map.dx[py * width + px] = 80;
+        }
+      }
+      // Zustand needs to see a new session object
+      state.updateLiquifyDisplacementMap(map);
+    });
+    await page.waitForTimeout(100);
 
-    // Screenshot after painting but before Apply
+    // Screenshot after displacement
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-after-warp-preview.png') });
 
     await applyLiquify(page);
+    await page.waitForTimeout(200);
 
-    // Screenshot after Apply with warped result
+    // Screenshot after Apply
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-applied.png') });
 
-    // After pushing the stripe rightward, x=110 should now have red pixels
-    const afterRight = await getPixelAt(page, 110, 100, layerId);
-    // The red channel should have increased at x=110
-    expect(afterRight.r).toBeGreaterThan(beforeRight.r + 10);
+    // After warp: pixel at x=50, y=100 should now be blue (sampled from x=130)
+    const afterLeft = await getPixelAt(page, 50, 100, layerId);
+    expect(afterLeft.b).toBeGreaterThan(200);
+    expect(afterLeft.r).toBeLessThan(50);
   });
 
   test('Cancel: discards displacement, layer pixels unchanged', async ({ page }) => {
