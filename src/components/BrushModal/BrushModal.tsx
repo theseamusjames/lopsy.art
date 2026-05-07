@@ -6,7 +6,7 @@ import { Slider } from '../Slider/Slider';
 import { AngleControl } from './AngleControl';
 import { BrushPreview } from './BrushPreview';
 import { BrushThumbnail } from './BrushThumbnail';
-import type { BrushTipData } from '../../types/brush';
+import type { BrushTipData, BrushTextureBlendMode } from '../../types/brush';
 import { describeError, notifyError } from '../../app/notifications-store';
 import { docScaledMax } from '../../utils/slider-ranges';
 import styles from './BrushModal.module.css';
@@ -35,6 +35,23 @@ export function BrushModal() {
   const setBrushSpacing = useToolSettingsStore((s) => s.setBrushSpacing);
   const setBrushScatter = useToolSettingsStore((s) => s.setBrushScatter);
   const setBrushAngle = useToolSettingsStore((s) => s.setBrushAngle);
+
+  const sizeJitter = useToolSettingsStore((s) => s.brushSizeJitter);
+  const angleJitter = useToolSettingsStore((s) => s.brushAngleJitter);
+  const opacityJitter = useToolSettingsStore((s) => s.brushOpacityJitter);
+  const speedSize = useToolSettingsStore((s) => s.brushSpeedSize);
+  const setSizeJitter = useToolSettingsStore((s) => s.setBrushSizeJitter);
+  const setAngleJitter = useToolSettingsStore((s) => s.setBrushAngleJitter);
+  const setOpacityJitter = useToolSettingsStore((s) => s.setBrushOpacityJitter);
+  const setSpeedSize = useToolSettingsStore((s) => s.setBrushSpeedSize);
+
+  const textureData = useToolSettingsStore((s) => s.brushTextureData);
+  const textureBlendMode = useToolSettingsStore((s) => s.brushTextureBlendMode);
+  const textureScale = useToolSettingsStore((s) => s.brushTextureScale);
+  const textures = useToolSettingsStore((s) => s.brushTextures);
+  const setTextureData = useToolSettingsStore((s) => s.setBrushTextureData);
+  const setTextureBlendMode = useToolSettingsStore((s) => s.setBrushTextureBlendMode);
+  const setTextureScale = useToolSettingsStore((s) => s.setBrushTextureScale);
 
   const activePreset = presets.find((p) => p.id === activePresetId);
   const isActiveCustom = activePreset?.isCustom ?? false;
@@ -103,6 +120,20 @@ export function BrushModal() {
     }
   }, [activePresetId, isActiveCustom, removePreset]);
 
+  const handleTextureChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value;
+    if (id === 'none') {
+      setTextureData(null);
+    } else {
+      const tex = textures.find((t) => t.id === id);
+      if (tex) setTextureData(tex);
+    }
+  }, [textures, setTextureData]);
+
+  const handleBlendModeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setTextureBlendMode(e.target.value as BrushTextureBlendMode);
+  }, [setTextureBlendMode]);
+
   return (
     <div className={styles.overlay} onMouseDown={handleOverlayClick}>
       <div className={styles.modal} role="dialog" aria-label="Brushes">
@@ -163,6 +194,44 @@ export function BrushModal() {
                 opacity={brushOpacity}
                 tip={activeBrushTip}
               />
+            </div>
+
+            <div className={styles.sectionLabel}>Dynamics</div>
+            <div className={styles.sliderSection}>
+              <Slider label="Size Jitter" value={sizeJitter} min={0} max={100} onChange={setSizeJitter} />
+              <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
+              <Slider label="Opacity Jitter" value={opacityJitter} min={0} max={100} onChange={setOpacityJitter} />
+              <Slider label="Speed Size" value={speedSize} min={0} max={100} onChange={setSpeedSize} />
+            </div>
+
+            <div className={styles.sectionLabel}>Texture</div>
+            <div className={styles.textureSection}>
+              <select
+                className={styles.select}
+                value={textureData?.id ?? 'none'}
+                onChange={handleTextureChange}
+                title="Brush texture"
+              >
+                <option value="none">No Texture</option>
+                {textures.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              {textureData && (
+                <>
+                  <select
+                    className={styles.select}
+                    value={textureBlendMode}
+                    onChange={handleBlendModeChange}
+                    title="Texture blend mode"
+                  >
+                    <option value="multiply">Multiply</option>
+                    <option value="subtract">Subtract</option>
+                    <option value="overlay">Overlay</option>
+                  </select>
+                  <Slider label="Scale" value={textureScale} min={10} max={200} onChange={setTextureScale} />
+                </>
+              )}
             </div>
           </div>
         </div>
