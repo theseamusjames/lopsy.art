@@ -526,9 +526,11 @@ export function handlePaintMove(
         const maxSpeed = 5;
         const normalizedSpeed = Math.min(rawSpeed / maxSpeed, 1);
 
+        const maWindow = toolSettings.brushSpeedSensitivity === 'high' ? 2
+          : toolSettings.brushSpeedSensitivity === 'low' ? 6 : 3;
         if (!state.speedHistory) state.speedHistory = [];
         state.speedHistory.push(normalizedSpeed);
-        if (state.speedHistory.length > 3) state.speedHistory.shift();
+        if (state.speedHistory.length > maWindow) state.speedHistory.shift();
 
         const avgSpeed = state.speedHistory.reduce((a, b) => a + b, 0) / state.speedHistory.length;
 

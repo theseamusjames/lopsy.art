@@ -54,11 +54,13 @@ export function BrushModal() {
   const opacityJitter = useToolSettingsStore((s) => s.brushOpacityJitter);
   const speedSize = useToolSettingsStore((s) => s.brushSpeedSize);
   const speedSizeInvert = useToolSettingsStore((s) => s.brushSpeedSizeInvert);
+  const speedSensitivity = useToolSettingsStore((s) => s.brushSpeedSensitivity);
   const setSizeJitter = useToolSettingsStore((s) => s.setBrushSizeJitter);
   const setAngleJitter = useToolSettingsStore((s) => s.setBrushAngleJitter);
   const setOpacityJitter = useToolSettingsStore((s) => s.setBrushOpacityJitter);
   const setSpeedSize = useToolSettingsStore((s) => s.setBrushSpeedSize);
   const setSpeedSizeInvert = useToolSettingsStore((s) => s.setBrushSpeedSizeInvert);
+  const setSpeedSensitivity = useToolSettingsStore((s) => s.setBrushSpeedSensitivity);
 
   const textureData = useToolSettingsStore((s) => s.brushTextureData);
   const textureBlendMode = useToolSettingsStore((s) => s.brushTextureBlendMode);
@@ -225,6 +227,29 @@ export function BrushModal() {
                 >
                   Wider
                 </button>
+              </div>
+              <div className={styles.speedToggleRow}>
+                <span className={styles.speedToggleLabel}>Sensitivity</span>
+                <div className={styles.speedToggleGroup}>
+                  <button
+                    className={`${styles.speedToggle}${speedSensitivity === 'low' ? ` ${styles.speedToggleActive}` : ''}`}
+                    onClick={() => setSpeedSensitivity('low')}
+                  >
+                    Low
+                  </button>
+                  <button
+                    className={`${styles.speedToggle}${speedSensitivity === 'med' ? ` ${styles.speedToggleActive}` : ''}`}
+                    onClick={() => setSpeedSensitivity('med')}
+                  >
+                    Med
+                  </button>
+                  <button
+                    className={`${styles.speedToggle}${speedSensitivity === 'high' ? ` ${styles.speedToggleActive}` : ''}`}
+                    onClick={() => setSpeedSensitivity('high')}
+                  >
+                    High
+                  </button>
+                </div>
               </div>
             </div>
           </div>

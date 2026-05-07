@@ -418,6 +418,7 @@ interface ToolSettings {
   brushOpacityJitter: number;
   brushSpeedSize: number;
   brushSpeedSizeInvert: boolean;
+  brushSpeedSensitivity: 'low' | 'med' | 'high';
   brushTextureData: BrushTextureData | null;
   brushTextureBlendMode: BrushTextureBlendMode;
   brushTextureScale: number;
@@ -430,6 +431,7 @@ interface ToolSettings {
   setBrushOpacityJitter: (jitter: number) => void;
   setBrushSpeedSize: (value: number) => void;
   setBrushSpeedSizeInvert: (invert: boolean) => void;
+  setBrushSpeedSensitivity: (sensitivity: 'low' | 'med' | 'high') => void;
   setBrushTextureData: (texture: BrushTextureData | null) => void;
   setBrushTextureBlendMode: (mode: BrushTextureBlendMode) => void;
   setBrushTextureScale: (scale: number) => void;
@@ -613,6 +615,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushOpacityJitter: 0,
   brushSpeedSize: 0,
   brushSpeedSizeInvert: false,
+  brushSpeedSensitivity: 'med',
   brushTextureData: null,
   brushTextureBlendMode: 'multiply',
   brushTextureScale: 100,
@@ -625,6 +628,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setBrushOpacityJitter: (jitter) => set({ brushOpacityJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(300, value)) }),
   setBrushSpeedSizeInvert: (invert) => set({ brushSpeedSizeInvert: invert }),
+  setBrushSpeedSensitivity: (sensitivity) => set({ brushSpeedSensitivity: sensitivity }),
   setBrushTextureData: (texture) => set({ brushTextureData: texture }),
   setBrushTextureBlendMode: (mode) => set({ brushTextureBlendMode: mode }),
   setBrushTextureScale: (scale) => set({ brushTextureScale: Math.max(10, Math.min(200, scale)) }),
