@@ -23,6 +23,7 @@ import { lensDistortion } from './lens-distortion';
 import { bloom } from './bloom';
 import { tiltShiftBlur } from './tilt-shift-blur';
 import { emboss } from './emboss';
+import { voronoiFilter } from './voronoi';
 
 export type { FilterDefinition };
 
@@ -51,6 +52,7 @@ const allFilters: FilterDefinition[] = [
   bloom,
   tiltShiftBlur,
   emboss,
+  voronoiFilter,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(

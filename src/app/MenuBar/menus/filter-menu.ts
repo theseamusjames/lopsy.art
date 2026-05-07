@@ -28,6 +28,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Lens Distortion...', action: () => showFilterDialog('lens-distortion') },
       { separator: true, label: '' },
       { label: 'Bloom...', action: () => showFilterDialog('bloom') },
+      { label: 'Voronoi...', action: () => showFilterDialog('voronoi') },
       { separator: true, label: '' },
       { label: 'Add Noise...', action: () => showFilterDialog('add-noise') },
       { label: 'Fill with Noise...', action: () => showFilterDialog('fill-noise') },

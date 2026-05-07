@@ -41,7 +41,8 @@ export type FilterDialogId =
   | 'lens-distortion'
   | 'bloom'
   | 'pattern-fill'
-  | 'emboss';
+  | 'emboss'
+  | 'voronoi';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;
