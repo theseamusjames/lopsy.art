@@ -85,6 +85,7 @@
 - Stroke path to pixels
 - Convert path to selection
 - **Cmd/Meta+click an anchor**: toggles between corner (no handles) and smooth spline (double-click does the same)
+- **Boolean path operations** (Path options bar buttons + **Path** menu in the menu bar): Unite, Subtract, Intersect, Exclude. Operates between the selected path and the most recently added other path; both source paths are consumed and replaced by the result. Implemented by flattening Bezier paths to polygons, rasterizing to binary masks, combining pixel-wise, then tracing contours with marching squares and refitting Catmull-Rom/Bezier anchors. Buttons are disabled until the document contains at least 2 paths and one is selected.
 
 ### Text Tool
 - **Font size**: 1 - 500
@@ -106,10 +107,12 @@
 ### Rectangular Marquee
 - **Aspect ratio lock**: width/height constraint
 - **Feather**: 0 - 250 px (soft edge applied after the marquee is committed; three-pass separable box blur on the GPU approximating Gaussian falloff)
+- **Cmd/Meta+drag**: holding meta while dragging temporarily forces a 1:1 (square) aspect ratio for the duration of the press, regardless of the persistent aspect-ratio toggle. Releasing meta returns to the unconstrained or persistently-locked behavior immediately.
 
 ### Elliptical Marquee
 - **Aspect ratio lock**: width/height constraint
 - **Feather**: 0 - 250 px (same GPU feather pipeline as the rectangular marquee)
+- **Cmd/Meta+drag**: holding meta forces a 1:1 (circle) aspect ratio while dragging, identical to the rectangular marquee transient lock.
 
 ### Lasso (Freehand)
 - No configurable parameters
@@ -329,6 +332,13 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 | Contrast | Overlay, Hard Light, Soft Light |
 | Inversion | Difference, Exclusion |
 | HSL | Hue, Saturation, Color, Luminosity |
+| Group-only | Pass Through |
+
+### Pass Through (group default)
+
+- Available exclusively on **group** layers, where it is the default blend mode (matching Photoshop).
+- Children blend directly onto the surface beneath the group, so adjustment layers and effects inside the group affect underlying layers outside the group as well.
+- Implemented entirely in the JS sync layer: `engine-sync` flattens pass-through groups before the WASM compositor sees them. The WASM engine itself never receives a "pass through" mode (it has no PSD index or Rust discriminant — exporting a pass-through group to PSD writes 'normal' as a safe fallback).
 
 ---
 
@@ -344,13 +354,14 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 
 ### Layer Properties
 - **Opacity**: 0 - 1
-- **Blend mode**: any of 16 modes
+- **Blend mode**: any of 16 modes (plus "Pass Through" on group layers)
 - **Visible**: on/off
 - **Locked**: on/off
 - **Position**: x, y
 - **Clip to below**: on/off (clipping mask)
 - **Effects**: drop shadow, outer glow, inner glow, stroke, color overlay
-- **Mask**: grayscale mask with enable/disable toggle
+- **Mask**: grayscale mask with enable/disable toggle. All mask painting (brush, eraser, pencil, gradient, fill) runs directly on the GPU mask texture — no per-frame CPU→GPU upload, so editing a mask is as fast as painting pixels.
+- **Color tag**: optional swatch (red, orange, yellow, green, blue, purple, gray, or none) shown as a vertical bar on the left edge of the layer row. Set via the layer row's right-click context menu; useful for visually grouping/organizing layers in a deep stack.
 
 ### Layer Operations
 - Add, remove, duplicate
@@ -363,6 +374,8 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - Align (left, center-h, right, top, center-v, bottom)
 - Add/remove/toggle mask — works on raster, text, shape, and **group** layers; group masks are sampled at composite time so the entire group is masked as a single unit (with the group's own opacity and blend mode applied on top)
 - **Cmd/Ctrl+click a layer thumbnail**: loads that layer's alpha as a marquee selection (non-transparent pixels become the selection)
+- **Click a layer's mask thumbnail**: always enters mask edit mode (focus switches to the mask reliably; no toggle behavior).
+- **Set layer color tag**: right-click a layer row to open a context menu with the 7 tag colors plus "None" to clear.
 
 ### Multi-Select in the Layers Panel
 - **Plain click**: selects only the clicked layer (standard behavior)
@@ -492,9 +505,14 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 
 ### Open / Save
 - **New** (`⌘N`): blank document with width/height/background prompt
-- **Open…** (`⌘O`): open a PNG/JPEG/WebP/BMP/PSD from disk
+- **Open…** (`⌘O`): open a PNG/JPEG/WebP/BMP/PSD/DNG/.lopsy from disk (the picker auto-routes by extension)
 - **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust)
 - **Save PSD**: serialises the current document via the PSD writer
+
+### Native Project Format (.lopsy)
+- **Save Project** (`⌘S`): writes the full editor state to a `.lopsy` file and triggers a browser download. Round-trips every layer (raster pixels, text, shape, group), masks, blend modes, opacity, position, clip-to-below, layer effects, color tags, group adjustment node stacks, the active layer, and the document's name / size / background.
+- **Open Project…**: file picker filtered to `.lopsy`. Restores all of the above; pixel data is gzip-compressed inside the file.
+- **Format**: binary container — `LOPSY\0` magic + uint16 version + uint32 manifest-length + UTF-8 JSON manifest + per-layer gzipped RGBA blobs + per-mask raw byte blobs (referenced from the manifest by index). Entirely client-side; no server round-trip.
 
 ### Export Dialog (`⌥⇧⌘E`)
 A modal dialog with a live thumbnail preview (debounced ~200 ms) and inline options:
