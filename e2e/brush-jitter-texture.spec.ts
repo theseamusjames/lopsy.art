@@ -368,6 +368,77 @@ test.describe('Brush jitter (#346)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests — Speed Size
+// ---------------------------------------------------------------------------
+
+test.describe('Brush speed size (#346)', () => {
+  test('fast stroke produces thinner line than slow stroke', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 400, 200, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+    await page.waitForTimeout(500);
+
+    await setupBrush(page, { size: 40, opacity: 100, hardness: 100 });
+    await setJitter(page, 0, 0, 0);
+    await setToolOption(page, 'Speed Size', 80);
+
+    // Slow stroke (many steps = slow mouse movement)
+    await drawStroke(page, { x: 50, y: 60 }, { x: 350, y: 60 }, 60);
+
+    // Sample near the edge of the full-size brush (y=60+16=76)
+    const slowSamples = await readCompositedStrip(page, 76, 80, 320, 5);
+
+    await page.screenshot({ path: 'e2e/screenshots/brush-speed-size-slow.png' });
+
+    // Undo and draw a fast stroke (few steps = fast mouse movement)
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(300);
+
+    await drawStroke(page, { x: 50, y: 60 }, { x: 350, y: 60 }, 3);
+
+    const fastSamples = await readCompositedStrip(page, 76, 80, 320, 5);
+
+    await page.screenshot({ path: 'e2e/screenshots/brush-speed-size-fast.png' });
+
+    // Slow stroke: brush is near full size, so y=76 (16px from center)
+    // is well inside the radius (20px) → painted red (green ~ 0).
+    // Fast stroke: brush shrinks, so y=76 may be outside the reduced
+    // radius → background white (green ~ 255).
+    const slowPaintedCount = slowSamples.filter((s) => s.g < 100).length;
+    const fastPaintedCount = fastSamples.filter((s) => s.g < 100).length;
+
+    console.log(`Speed size — slow painted: ${slowPaintedCount}/${slowSamples.length}, fast painted: ${fastPaintedCount}/${fastSamples.length}`);
+    // The slow stroke should have more coverage at this offset
+    expect(slowPaintedCount).toBeGreaterThan(fastPaintedCount);
+  });
+
+  test('no speed effect when speed size is zero', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 400, 200, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+    await page.waitForTimeout(500);
+
+    await setupBrush(page, { size: 40, opacity: 100, hardness: 100 });
+    await setJitter(page, 0, 0, 0);
+    await setToolOption(page, 'Speed Size', 0);
+
+    // Fast stroke — should still be full width since speed size is disabled
+    await drawStroke(page, { x: 50, y: 100 }, { x: 350, y: 100 }, 3);
+
+    const samples = await readCompositedStrip(page, 116, 80, 320, 5);
+
+    await page.screenshot({ path: 'e2e/screenshots/brush-speed-size-off.png' });
+
+    // At y=116 (16px from center), full brush (radius 20) covers this row
+    const paintedCount = samples.filter((s) => s.g < 100).length;
+    console.log(`Speed size off — painted: ${paintedCount}/${samples.length}`);
+    expect(paintedCount).toBeGreaterThan(samples.length * 0.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests — Texture
 // ---------------------------------------------------------------------------
 

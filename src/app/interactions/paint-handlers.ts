@@ -238,6 +238,8 @@ export function handlePaintDown(
     symmetryCenter: docCenter,
     strokePoints: tool === 'brush' ? [{ x: layerPos.x, y: layerPos.y }] : undefined,
     strokeColor,
+    lastPointTime: performance.now(),
+    smoothedSpeed: 0,
   };
 
   if (!engine) return state;
@@ -496,7 +498,7 @@ export function handlePaintMove(
 
   switch (state.tool) {
     case 'brush': {
-      const size = toolSettings.brushSize;
+      const baseSize = toolSettings.brushSize;
       const hardness = toolSettings.brushHardness / 100;
       const opacity = toolSettings.brushOpacity / 100;
       const brushScatter = toolSettings.brushScatter;
@@ -504,11 +506,31 @@ export function handlePaintMove(
       const sJ = toolSettings.brushSizeJitter / 100;
       const aJ = toolSettings.brushAngleJitter / 100;
       const oJ = toolSettings.brushOpacityJitter / 100;
+      const speedSize = toolSettings.brushSpeedSize / 100;
       const color = state.strokeColor ?? useToolSettingsStore.getState().foregroundColor;
-      const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
       const r = color.r / 255;
       const g = color.g / 255;
       const b = color.b / 255;
+
+      // Speed-based size: compute stroke speed and scale size down for fast strokes
+      let size = baseSize;
+      if (speedSize > 0) {
+        const now = performance.now();
+        const dt = now - (state.lastPointTime ?? now);
+        const dx = layerLocalPos.x - state.lastPoint.x;
+        const dy = layerLocalPos.y - state.lastPoint.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const rawSpeed = dt > 0 ? dist / dt : 0; // px/ms
+        const maxSpeed = 5; // ~300px in 60ms
+        const normalizedSpeed = Math.min(rawSpeed / maxSpeed, 1);
+        const alpha = 0.3;
+        const smoothed = alpha * normalizedSpeed + (1 - alpha) * (state.smoothedSpeed ?? 0);
+        state.smoothedSpeed = smoothed;
+        state.lastPointTime = now;
+        size = Math.max(1, baseSize * (1 - speedSize * smoothed));
+      }
+
+      const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
 
       if (brushFade > 0 && (state.strokeDistance ?? 0) >= brushFade) {
         state.lastPoint = layerLocalPos;

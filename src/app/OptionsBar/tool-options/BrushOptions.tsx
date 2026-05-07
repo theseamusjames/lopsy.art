@@ -28,9 +28,11 @@ export function BrushOptions() {
   const sizeJitter = useToolSettingsStore((s) => s.brushSizeJitter);
   const angleJitter = useToolSettingsStore((s) => s.brushAngleJitter);
   const opacityJitter = useToolSettingsStore((s) => s.brushOpacityJitter);
+  const speedSize = useToolSettingsStore((s) => s.brushSpeedSize);
   const setSizeJitter = useToolSettingsStore((s) => s.setBrushSizeJitter);
   const setAngleJitter = useToolSettingsStore((s) => s.setBrushAngleJitter);
   const setOpacityJitter = useToolSettingsStore((s) => s.setBrushOpacityJitter);
+  const setSpeedSize = useToolSettingsStore((s) => s.setBrushSpeedSize);
 
   const textureData = useToolSettingsStore((s) => s.brushTextureData);
   const textureBlendMode = useToolSettingsStore((s) => s.brushTextureBlendMode);
@@ -83,6 +85,7 @@ export function BrushOptions() {
       <Slider label="Size Jitter" value={sizeJitter} min={0} max={100} onChange={setSizeJitter} />
       <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
       <Slider label="Opacity Jitter" value={opacityJitter} min={0} max={100} onChange={setOpacityJitter} />
+      <Slider label="Speed Size" value={speedSize} min={0} max={100} onChange={setSpeedSize} />
 
       <div className={styles.separator} />
 

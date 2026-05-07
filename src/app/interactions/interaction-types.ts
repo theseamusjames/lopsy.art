@@ -29,6 +29,8 @@ export interface InteractionState {
   /** Color captured at stroke start. Colors don't change mid-stroke, so we
    *  avoid `useUIStore.getState()` on every pointermove. */
   strokeColor?: { r: number; g: number; b: number; a: number };
+  lastPointTime?: number;
+  smoothedSpeed?: number;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
   selectionOnlyTransform?: boolean;

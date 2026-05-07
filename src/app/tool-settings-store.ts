@@ -416,6 +416,7 @@ interface ToolSettings {
   brushSizeJitter: number;
   brushAngleJitter: number;
   brushOpacityJitter: number;
+  brushSpeedSize: number;
   brushTextureData: BrushTextureData | null;
   brushTextureBlendMode: BrushTextureBlendMode;
   brushTextureScale: number;
@@ -426,6 +427,7 @@ interface ToolSettings {
   setBrushSizeJitter: (jitter: number) => void;
   setBrushAngleJitter: (jitter: number) => void;
   setBrushOpacityJitter: (jitter: number) => void;
+  setBrushSpeedSize: (value: number) => void;
   setBrushTextureData: (texture: BrushTextureData | null) => void;
   setBrushTextureBlendMode: (mode: BrushTextureBlendMode) => void;
   setBrushTextureScale: (scale: number) => void;
@@ -605,6 +607,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushSizeJitter: 0,
   brushAngleJitter: 0,
   brushOpacityJitter: 0,
+  brushSpeedSize: 0,
   brushTextureData: null,
   brushTextureBlendMode: 'multiply',
   brushTextureScale: 100,
@@ -615,6 +618,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setBrushSizeJitter: (jitter) => set({ brushSizeJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushAngleJitter: (jitter) => set({ brushAngleJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushOpacityJitter: (jitter) => set({ brushOpacityJitter: Math.max(0, Math.min(100, jitter)) }),
+  setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(100, value)) }),
   setBrushTextureData: (texture) => set({ brushTextureData: texture }),
   setBrushTextureBlendMode: (mode) => set({ brushTextureBlendMode: mode }),
   setBrushTextureScale: (scale) => set({ brushTextureScale: Math.max(10, Math.min(200, scale)) }),
