@@ -165,6 +165,10 @@ export function buildPassThroughOpacityMap(
       const ancestor = index.byId.get(currentId);
       if (!ancestor || ancestor.type !== 'group') break;
       if (ancestor.blendMode === 'pass-through') {
+        const ag = ancestor as GroupLayer;
+        if ((ag.adjustmentsEnabled && ag.adjustments.length > 0) || ag.mask?.enabled) {
+          break;
+        }
         multiplier *= ancestor.opacity;
       } else {
         // Non-pass-through group: it pre-composites its subtree, so
@@ -220,7 +224,9 @@ export function syncLayers(
   // Add or update layers
   for (const layer of layers) {
     const effectiveVisible = isEffectivelyVisible(index, layer.id);
-    const isPassThrough = layer.type === 'group' && layer.blendMode === 'pass-through';
+    const isPassThrough = layer.type === 'group' && layer.blendMode === 'pass-through' &&
+      !((layer as GroupLayer).adjustmentsEnabled && (layer as GroupLayer).adjustments.length > 0) &&
+      !(layer.mask?.enabled);
     const opacityMultiplier = passThroughOpacity.get(layer.id) ?? 1.0;
 
     // Fast path: if both the layer reference and its effective visibility
