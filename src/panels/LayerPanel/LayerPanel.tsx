@@ -443,7 +443,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                   onClick={(e) => {
                     e.stopPropagation();
                     onSelectLayer(layer.id);
-                    setMaskEditMode(true);
+                    setMaskEditMode(!(maskEditMode && layer.id === activeLayerId));
                   }}
                   role="button"
                   tabIndex={0}

@@ -100,6 +100,18 @@ test.describe('Dynamic adjustment node list on groups', () => {
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 200, 200, false);
+    // Switch root group from pass-through to normal so group adjustments
+    // are composited (pass-through bypasses the scratch FBO).
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { rootGroupId: string };
+          updateLayerBlendMode: (id: string, mode: string) => void;
+        };
+      };
+      const s = store.getState();
+      s.updateLayerBlendMode(s.document.rootGroupId, 'normal');
+    });
     await page.waitForTimeout(300);
   });
 

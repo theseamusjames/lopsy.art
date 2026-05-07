@@ -19,6 +19,7 @@ import {
   setEffectColor,
   drawRect,
   drawEllipse,
+  setGroupAdjustments,
 } from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -670,26 +671,20 @@ test.describe('Bug Fix: Image Adjustments', () => {
     const before = await getCompositePixelAt(page, 50, 50);
 
     // Apply exposure boost via the root group layer's adjustments
-    await page.evaluate(() => {
+    const groupId = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { rootGroupId: string };
-          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
-          setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
-        };
+        getState: () => { document: { rootGroupId: string } };
       };
-      const state = store.getState();
-      const groupId = state.document.rootGroupId;
-      state.setGroupAdjustmentsEnabled(groupId, true);
-      state.setGroupAdjustments(groupId, {
-        exposure: 1.0,
-        contrast: 0,
-        highlights: 0,
-        shadows: 0,
-        whites: 0,
-        blacks: 0,
-        vignette: 0,
-      });
+      return store.getState().document.rootGroupId;
+    });
+    await setGroupAdjustments(page, groupId, {
+      exposure: 1.0,
+      contrast: 0,
+      highlights: 0,
+      shadows: 0,
+      whites: 0,
+      blacks: 0,
+      vignette: 0,
     });
     await page.waitForTimeout(500);
 
@@ -703,23 +698,14 @@ test.describe('Bug Fix: Image Adjustments', () => {
     expect(after.b).toBeGreaterThan(before.b);
 
     // Reset adjustments
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { rootGroupId: string };
-          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
-        };
-      };
-      const state = store.getState();
-      state.setGroupAdjustments(state.document.rootGroupId, {
-        exposure: 0,
-        contrast: 0,
-        highlights: 0,
-        shadows: 0,
-        whites: 0,
-        blacks: 0,
-        vignette: 0,
-      });
+    await setGroupAdjustments(page, groupId, {
+      exposure: 0,
+      contrast: 0,
+      highlights: 0,
+      shadows: 0,
+      whites: 0,
+      blacks: 0,
+      vignette: 0,
     });
   });
 
@@ -731,26 +717,20 @@ test.describe('Bug Fix: Image Adjustments', () => {
     const original = await getCompositePixelAt(page, 50, 50);
 
     // Enable strong contrast via root group
-    await page.evaluate(() => {
+    const groupId = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { rootGroupId: string };
-          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
-          setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
-        };
+        getState: () => { document: { rootGroupId: string } };
       };
-      const state = store.getState();
-      const groupId = state.document.rootGroupId;
-      state.setGroupAdjustmentsEnabled(groupId, true);
-      state.setGroupAdjustments(groupId, {
-        exposure: 0,
-        contrast: 50,
-        highlights: 0,
-        shadows: 0,
-        whites: 0,
-        blacks: 0,
-        vignette: 0,
-      });
+      return store.getState().document.rootGroupId;
+    });
+    await setGroupAdjustments(page, groupId, {
+      exposure: 0,
+      contrast: 50,
+      highlights: 0,
+      shadows: 0,
+      whites: 0,
+      blacks: 0,
+      vignette: 0,
     });
     await page.waitForTimeout(500);
 
@@ -776,20 +756,8 @@ test.describe('Bug Fix: Image Adjustments', () => {
     expect(Math.abs(restored.r - original.r)).toBeLessThan(5);
 
     // Re-enable and reset for cleanup
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { rootGroupId: string };
-          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
-          setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
-        };
-      };
-      const state = store.getState();
-      const groupId = state.document.rootGroupId;
-      state.setGroupAdjustmentsEnabled(groupId, true);
-      state.setGroupAdjustments(groupId, {
-        exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0,
-      });
+    await setGroupAdjustments(page, groupId, {
+      exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0, vignette: 0,
     });
   });
 });

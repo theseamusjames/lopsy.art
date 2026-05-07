@@ -309,16 +309,15 @@ export async function setToolOption(page: Page, label: string, value: number): P
 }
 
 export async function setForegroundColor(page: Page, r: number, g: number, b: number, a?: number): Promise<void> {
-  const hex = [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
-  const input = page.locator('[aria-label="Hex color value"]');
-  await input.fill(hex);
-  await input.press('Enter');
-  if (a !== undefined && a < 1) {
-    const alphaInput = page.locator('[aria-label="A value"]');
-    await alphaInput.fill(String(Math.round(a * 100)));
-    await alphaInput.press('Enter');
-  }
-  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await page.evaluate(
+    ({ r, g, b, a }) => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+      };
+      store.getState().setForegroundColor({ r, g, b, a: a ?? 1 });
+    },
+    { r, g, b, a },
+  );
 }
 
 export async function openBrushModal(page: Page): Promise<void> {
@@ -680,4 +679,100 @@ export async function setEffectColor(
   const hex = '#' + [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
   const input = page.locator(`[aria-label="${ariaLabel}"]`);
   await input.fill(hex);
+}
+
+// ---------------------------------------------------------------------------
+// Group adjustments — uses the new AdjustmentNode API
+// ---------------------------------------------------------------------------
+
+/**
+ * Set group adjustments using the node-based API.
+ * Accepts a flat object mapping (like the old setGroupAdjustments) and
+ * creates the appropriate adjustment nodes on the group.
+ *
+ * Replaces existing adjustment nodes on the group.
+ */
+export async function setGroupAdjustments(
+  page: Page,
+  groupId: string,
+  adjustments: Record<string, unknown>,
+): Promise<void> {
+  await page.evaluate(
+    ({ gid, adj }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { layers: Array<{ id: string; type: string; blendMode?: string; adjustments: Array<{ id: string }> }> };
+          addAdjustmentNode: (groupId: string, nodeType: string) => void;
+          updateAdjustmentNode: (groupId: string, nodeId: string, params: Record<string, unknown>) => void;
+          removeAdjustmentNode: (groupId: string, nodeId: string) => void;
+          setGroupAdjustmentsEnabled: (groupId: string, enabled: boolean) => void;
+          updateLayerBlendMode: (id: string, mode: string) => void;
+        };
+      };
+
+      const getGroup = () =>
+        store.getState().document.layers.find((l) => l.id === gid) as
+          { blendMode?: string; adjustments: Array<{ id: string; type: string }> } | undefined;
+
+      // Pass-through groups skip the compositor scratch FBO, so group
+      // adjustments would have no effect. Switch to normal mode.
+      const grp = getGroup();
+      if (grp && grp.blendMode === 'pass-through') {
+        store.getState().updateLayerBlendMode(gid, 'normal');
+      }
+
+      // Remove existing nodes
+      const group = getGroup();
+      if (group) {
+        for (const node of [...group.adjustments]) {
+          store.getState().removeAdjustmentNode(gid, node.id);
+        }
+      }
+
+      const addAndUpdate = (nodeType: string, params: Record<string, unknown>) => {
+        store.getState().addAdjustmentNode(gid, nodeType);
+        const g = getGroup();
+        if (!g) return;
+        const n = g.adjustments[g.adjustments.length - 1];
+        if (n) store.getState().updateAdjustmentNode(gid, n.id, params);
+      };
+
+      if (adj.exposure != null && adj.exposure !== 0) {
+        addAndUpdate('exposure', { exposure: adj.exposure });
+      }
+      if (adj.contrast != null && adj.contrast !== 0) {
+        addAndUpdate('contrast', { contrast: adj.contrast });
+      }
+      if ((adj.highlights != null && adj.highlights !== 0) ||
+          (adj.shadows != null && adj.shadows !== 0) ||
+          (adj.whites != null && adj.whites !== 0) ||
+          (adj.blacks != null && adj.blacks !== 0)) {
+        addAndUpdate('highlights-shadows', {
+          highlights: adj.highlights ?? 0,
+          shadows: adj.shadows ?? 0,
+          whites: adj.whites ?? 0,
+          blacks: adj.blacks ?? 0,
+        });
+      }
+      if ((adj.saturation != null && adj.saturation !== 0) ||
+          (adj.vibrance != null && adj.vibrance !== 0)) {
+        addAndUpdate('saturation', {
+          saturation: adj.saturation ?? 0,
+          vibrance: adj.vibrance ?? 0,
+        });
+      }
+      if (adj.vignette != null && adj.vignette !== 0) {
+        addAndUpdate('vignette', { vignette: adj.vignette });
+      }
+      if (adj.curves != null) {
+        addAndUpdate('curves', { curves: adj.curves });
+      }
+      if (adj.levels != null) {
+        addAndUpdate('levels', { levels: adj.levels });
+      }
+
+      store.getState().setGroupAdjustmentsEnabled(gid, true);
+    },
+    { gid: groupId, adj: adjustments },
+  );
 }

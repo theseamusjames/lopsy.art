@@ -53,23 +53,18 @@ interface CurvesJSON {
   b: CurvePointJSON[];
 }
 
-async function setGroupCurves(page: Page, curves: CurvesJSON): Promise<void> {
+async function setImageCurves(page: Page, curves: CurvesJSON): Promise<void> {
   await page.evaluate(({ c }) => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+    const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
       getState: () => {
-        document: { rootGroupId: string; layers: Array<{ id: string; type: string }> };
-        setGroupAdjustments: (id: string, adj: Record<string, unknown>) => void;
-        setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
+        adjustments: Record<string, unknown>;
+        setAdjustments: (adj: Record<string, unknown>) => void;
+        setAdjustmentsEnabled: (enabled: boolean) => void;
       };
     };
-    const state = store.getState();
-    const groupId = state.document.rootGroupId;
-    state.setGroupAdjustmentsEnabled(groupId, true);
-    state.setGroupAdjustments(groupId, {
-      exposure: 0, contrast: 0, highlights: 0, shadows: 0,
-      whites: 0, blacks: 0, vignette: 0, saturation: 0, vibrance: 0,
-      curves: c,
-    });
+    const s = uiStore.getState();
+    s.setAdjustments({ ...s.adjustments, curves: c });
+    s.setAdjustmentsEnabled(true);
   }, { c: curves });
 }
 
@@ -90,7 +85,7 @@ test.describe('Curves adjustment', () => {
     expect(before.r).toBeLessThan(110);
 
     // Master curve: (0,1) → (1,0) — invert.
-    await setGroupCurves(page, {
+    await setImageCurves(page, {
       rgb: [{ x: 0, y: 1 }, { x: 1, y: 0 }],
       r: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
       g: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
@@ -114,7 +109,7 @@ test.describe('Curves adjustment', () => {
     });
 
     // Crush red to 0; green and blue identity.
-    await setGroupCurves(page, {
+    await setImageCurves(page, {
       rgb: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
       r: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
       g: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
@@ -164,7 +159,7 @@ test.describe('Curves adjustment', () => {
     });
 
     // Classic contrast S-curve.
-    await setGroupCurves(page, {
+    await setImageCurves(page, {
       rgb: [
         { x: 0, y: 0 },
         { x: 0.25, y: 0.1 },
@@ -194,7 +189,7 @@ test.describe('Curves adjustment', () => {
     await drawRect(page, 0, 0, 100, 100, { r: 100, g: 100, b: 100 });
     await page.waitForTimeout(200);
 
-    await setGroupCurves(page, {
+    await setImageCurves(page, {
       rgb: [{ x: 0, y: 1 }, { x: 1, y: 0 }],
       r: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
       g: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
@@ -203,7 +198,7 @@ test.describe('Curves adjustment', () => {
     await page.waitForTimeout(150);
 
     // Reset to identity — should match the original gray.
-    await setGroupCurves(page, {
+    await setImageCurves(page, {
       rgb: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
       r: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
       g: [{ x: 0, y: 0 }, { x: 1, y: 1 }],

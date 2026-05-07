@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Page } from './fixtures';
-import { waitForStore, createDocument, drawRect } from './helpers';
+import { waitForStore, createDocument, drawRect, setGroupAdjustments as setGroupAdj } from './helpers';
 
 // PNG magic bytes: 137 80 78 71 13 10 26 10
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -63,29 +63,13 @@ async function setGroupAdjustments(
   saturation: number,
   vibrance: number,
 ): Promise<void> {
-  await page.evaluate(({ s, v }) => {
+  const groupId = await page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => {
-        document: { rootGroupId: string };
-        setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
-        setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
-      };
+      getState: () => { document: { rootGroupId: string } };
     };
-    const state = store.getState();
-    const groupId = state.document.rootGroupId;
-    state.setGroupAdjustmentsEnabled(groupId, true);
-    state.setGroupAdjustments(groupId, {
-      exposure: 0,
-      contrast: 0,
-      highlights: 0,
-      shadows: 0,
-      whites: 0,
-      blacks: 0,
-      vignette: 0,
-      saturation: s,
-      vibrance: v,
-    });
-  }, { s: saturation, v: vibrance });
+    return store.getState().document.rootGroupId;
+  });
+  await setGroupAdj(page, groupId, { saturation, vibrance });
 }
 
 test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
@@ -129,15 +113,16 @@ test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
     expect(after.g).toBeGreaterThan(before.g + 20);
 
     // The adjustments must persist on the group layer in the store.
-    const stored = await page.evaluate(() => {
+    const storedSaturation = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { rootGroupId: string; layers: Array<Record<string, unknown>> } };
+        getState: () => { document: { rootGroupId: string; layers: Array<{ id: string; adjustments: Array<{ type: string; saturation?: number }> }> } };
       };
       const state = store.getState();
       const group = state.document.layers.find((l) => l.id === state.document.rootGroupId);
-      return group?.adjustments as Record<string, number> | undefined;
+      const satNode = group?.adjustments.find((n) => n.type === 'saturation');
+      return satNode?.saturation;
     });
-    expect(stored?.saturation).toBe(-100);
+    expect(storedSaturation).toBe(-100);
   });
 
   test('PNG export reflects active group adjustments', async ({ page }) => {

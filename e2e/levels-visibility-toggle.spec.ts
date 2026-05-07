@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { waitForStore, createDocument, drawRect } from './helpers';
+import { waitForStore, createDocument, drawRect, setGroupAdjustments } from './helpers';
 
 interface PixelSnap {
   width: number;
@@ -54,23 +54,13 @@ async function setGroupLevels(
     b: { inputBlack: number; inputWhite: number; gamma: number; outputBlack: number; outputWhite: number };
   },
 ): Promise<void> {
-  await page.evaluate(({ lv }) => {
+  const groupId = await page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => {
-        document: { rootGroupId: string };
-        setGroupAdjustments: (id: string, adj: Record<string, unknown>) => void;
-        setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
-      };
+      getState: () => { document: { rootGroupId: string } };
     };
-    const state = store.getState();
-    const groupId = state.document.rootGroupId;
-    state.setGroupAdjustmentsEnabled(groupId, true);
-    state.setGroupAdjustments(groupId, {
-      exposure: 0, contrast: 0, highlights: 0, shadows: 0,
-      whites: 0, blacks: 0, vignette: 0, saturation: 0, vibrance: 0,
-      levels: lv,
-    });
-  }, { lv: levels });
+    return store.getState().document.rootGroupId;
+  });
+  await setGroupAdjustments(page, groupId, { levels });
 }
 
 /** Toggle adjustmentsEnabled on the root group. */

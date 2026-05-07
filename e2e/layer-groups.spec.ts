@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { setGroupAdjustments } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -272,37 +273,27 @@ test.describe('Layer Groups', () => {
   test('group adjustments can be set and retrieved', async ({ page }) => {
     const doc = await getDocInfo(page);
     const rootId = doc.rootGroupId!;
-    await page.evaluate(
-      ({ rootId }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
-          };
-        };
-        store.getState().setGroupAdjustments(rootId, {
-          exposure: 1.5,
-          contrast: 20,
-          highlights: 0,
-          shadows: 0,
-          whites: 0,
-          blacks: 0,
-          vignette: 0,
-        });
-      },
-      { rootId },
-    );
+    await setGroupAdjustments(page, rootId, {
+      exposure: 1.5,
+      contrast: 20,
+      highlights: 0,
+      shadows: 0,
+      whites: 0,
+      blacks: 0,
+      vignette: 0,
+    });
     const adj = await page.evaluate(
       ({ rootId }) => {
         const store = (window as unknown as Record<string, unknown>).__editorStore as {
           getState: () => { document: { layers: Array<Record<string, unknown>> } };
         };
         const group = store.getState().document.layers.find((l) => l.id === rootId);
-        return group?.adjustments as Record<string, number> | undefined;
+        return group?.adjustments as Array<{ type: string; enabled: boolean; [k: string]: unknown }>;
       },
       { rootId },
     );
-    expect(adj?.exposure).toBe(1.5);
-    expect(adj?.contrast).toBe(20);
+    expect(adj.find((n) => n.type === 'exposure')?.exposure).toBe(1.5);
+    expect(adj.find((n) => n.type === 'contrast')?.contrast).toBe(20);
   });
 
   test('move tool on group moves all descendants', async ({ page }) => {
@@ -370,7 +361,6 @@ test.describe('Group Effects Rendering', () => {
           document: { layers: Array<{ id: string; type: string }>, rootGroupId: string };
           getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
-          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
         };
       };
       const state = store.getState();
@@ -388,18 +378,15 @@ test.describe('Group Effects Rendering', () => {
     await page.waitForTimeout(200);
 
     // Set contrast adjustment on root group
-    await page.evaluate(() => {
+    const rootGroupId = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { rootGroupId: string };
-          setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
-        };
+        getState: () => { document: { rootGroupId: string } };
       };
-      const state = store.getState();
-      state.setGroupAdjustments(state.document.rootGroupId, {
-        exposure: 0, contrast: 50, highlights: 0, shadows: 0,
-        whites: 0, blacks: 0, vignette: 0,
-      });
+      return store.getState().document.rootGroupId;
+    });
+    await setGroupAdjustments(page, rootGroupId, {
+      exposure: 0, contrast: 50, highlights: 0, shadows: 0,
+      whites: 0, blacks: 0, vignette: 0,
     });
     await page.waitForTimeout(300);
 
@@ -410,9 +397,9 @@ test.describe('Group Effects Rendering', () => {
       };
       const state = store.getState();
       const root = state.document.layers.find((l) => l.id === state.document.rootGroupId);
-      return root?.adjustments as Record<string, number>;
+      return root?.adjustments as Array<{ type: string; enabled: boolean; [k: string]: unknown }>;
     });
-    expect(adj.contrast).toBe(50);
+    expect(adj.find((n) => n.type === 'contrast')?.contrast).toBe(50);
   });
 
   test('sub-group adjustments affect rendering (not just root group)', async ({ page }) => {
@@ -447,20 +434,10 @@ test.describe('Group Effects Rendering', () => {
     );
 
     // Set exposure on the SUB-GROUP (not root)
-    await page.evaluate(
-      ({ subGroupId }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
-          };
-        };
-        store.getState().setGroupAdjustments(subGroupId, {
-          exposure: 2, contrast: 0, highlights: 0, shadows: 0,
-          whites: 0, blacks: 0, vignette: 0,
-        });
-      },
-      { subGroupId },
-    );
+    await setGroupAdjustments(page, subGroupId, {
+      exposure: 2, contrast: 0, highlights: 0, shadows: 0,
+      whites: 0, blacks: 0, vignette: 0,
+    });
     await page.waitForTimeout(300);
 
     // Verify the sub-group adjustments are stored
@@ -470,11 +447,11 @@ test.describe('Group Effects Rendering', () => {
           getState: () => { document: { layers: Array<Record<string, unknown>> } };
         };
         const group = store.getState().document.layers.find((l) => l.id === subGroupId);
-        return group?.adjustments as Record<string, number>;
+        return group?.adjustments as Array<{ type: string; enabled: boolean; [k: string]: unknown }>;
       },
       { subGroupId },
     );
-    expect(adj.exposure).toBe(2);
+    expect(adj.find((n) => n.type === 'exposure')?.exposure).toBe(2);
 
     // Verify the aggregated adjustments include the sub-group's exposure
     const aggregated = await page.evaluate(() => {
@@ -485,9 +462,12 @@ test.describe('Group Effects Rendering', () => {
       const agg = { exposure: 0, contrast: 0 };
       for (const l of layers) {
         if (l.type === 'group' && l.adjustmentsEnabled !== false && l.visible && l.adjustments) {
-          const a = l.adjustments as Record<string, number>;
-          agg.exposure += a.exposure ?? 0;
-          agg.contrast += a.contrast ?? 0;
+          const nodes = l.adjustments as Array<{ type: string; enabled: boolean; [k: string]: unknown }>;
+          for (const node of nodes) {
+            if (!node.enabled) continue;
+            if (node.type === 'exposure') agg.exposure += node.exposure as number;
+            if (node.type === 'contrast') agg.contrast += node.contrast as number;
+          }
         }
       }
       return agg;
@@ -570,20 +550,10 @@ test.describe('Group effects only affect current members', () => {
     const adjGroupId = doc1.layers.find((l) => l.name === 'AdjGroup')!.id;
 
     // Set exposure on the group
-    await page.evaluate(
-      ({ groupId }) => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => {
-            setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
-          };
-        };
-        store.getState().setGroupAdjustments(groupId, {
-          exposure: 3, contrast: 0, highlights: 0, shadows: 0,
-          whites: 0, blacks: 0, vignette: 0,
-        });
-      },
-      { groupId: adjGroupId },
-    );
+    await setGroupAdjustments(page, adjGroupId, {
+      exposure: 3, contrast: 0, highlights: 0, shadows: 0,
+      whites: 0, blacks: 0, vignette: 0,
+    });
 
     // Add a layer inside the group
     await callStore(page, 'addLayer');
