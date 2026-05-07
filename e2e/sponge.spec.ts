@@ -49,6 +49,13 @@ async function readCompositedPixels(page: Parameters<typeof waitForStore>[0]): P
   return result ?? { width: 0, height: 0, pixels: [] };
 }
 
+async function readActiveLayerPixels(page: Parameters<typeof waitForStore>[0]): Promise<PixelSnapshot> {
+  const result = await page.evaluate(() => {
+    return (window as unknown as Record<string, unknown>).__readLayerPixels!() as Promise<PixelSnapshot | null>;
+  });
+  return result ?? { width: 0, height: 0, pixels: [] };
+}
+
 function pixelDiff(a: PixelSnapshot, b: PixelSnapshot): number {
   let count = 0;
   const len = Math.min(a.pixels.length, b.pixels.length);
@@ -171,7 +178,8 @@ test.describe('Sponge Tool', () => {
     });
     await page.waitForTimeout(200);
 
-    const before = await readCompositedPixels(page);
+    const beforeLayer = await readActiveLayerPixels(page);
+    const beforeComposite = await readCompositedPixels(page);
     await page.screenshot({ path: 'e2e/screenshots/sponge-03-before-desaturate.png' });
 
     // Activate sponge, switch to desaturate mode, set high strength
@@ -200,17 +208,18 @@ test.describe('Sponge Tool', () => {
     });
     await page.waitForTimeout(200);
 
-    const after = await readCompositedPixels(page);
+    const afterLayer = await readActiveLayerPixels(page);
+    const afterComposite = await readCompositedPixels(page);
     await page.screenshot({ path: 'e2e/screenshots/sponge-04-after-desaturate.png' });
 
     // Verify pixels changed — desaturation should modify many pixels
-    const changed = pixelDiff(before, after);
+    const changed = pixelDiff(beforeComposite, afterComposite);
     expect(changed).toBeGreaterThan(500);
 
-    // Verify saturation decreased in the painted region
-    // The red rect spans roughly doc coords (50,50) to (350,250)
-    const satBefore = meanSaturationInRegion(before, 80, 80, 200, 120);
-    const satAfter = meanSaturationInRegion(after, 80, 80, 200, 120);
+    // Verify saturation decreased in the painted region using layer pixels
+    // Layer pixels use document coordinates directly
+    const satBefore = meanSaturationInRegion(beforeLayer, 80, 80, 200, 120);
+    const satAfter = meanSaturationInRegion(afterLayer, 80, 80, 200, 120);
 
     // Desaturation should reduce mean saturation measurably
     expect(satAfter).toBeLessThan(satBefore - 0.05);
@@ -231,7 +240,7 @@ test.describe('Sponge Tool', () => {
     });
     await page.waitForTimeout(200);
 
-    const before = await readCompositedPixels(page);
+    const beforeLayer = await readActiveLayerPixels(page);
     await page.screenshot({ path: 'e2e/screenshots/sponge-05-before-saturate.png' });
 
     // Activate sponge, switch to saturate mode
@@ -258,11 +267,11 @@ test.describe('Sponge Tool', () => {
     });
     await page.waitForTimeout(200);
 
-    const after = await readCompositedPixels(page);
+    const afterLayer = await readActiveLayerPixels(page);
     await page.screenshot({ path: 'e2e/screenshots/sponge-06-after-saturate.png' });
 
-    const satBefore = meanSaturationInRegion(before, 80, 80, 200, 120);
-    const satAfter = meanSaturationInRegion(after, 80, 80, 200, 120);
+    const satBefore = meanSaturationInRegion(beforeLayer, 80, 80, 200, 120);
+    const satAfter = meanSaturationInRegion(afterLayer, 80, 80, 200, 120);
 
     // Saturation should have increased
     expect(satAfter).toBeGreaterThan(satBefore + 0.02);
@@ -282,7 +291,7 @@ test.describe('Sponge Tool', () => {
     });
     await page.waitForTimeout(200);
 
-    const before = await readCompositedPixels(page);
+    const before = await readActiveLayerPixels(page);
 
     await page.keyboard.press('y');
     await page.waitForTimeout(100);
@@ -295,23 +304,16 @@ test.describe('Sponge Tool', () => {
     await setToolOption(page, 'Size', 60);
 
     await drawStroke(page, { x: 100, y: 150 }, { x: 300, y: 150 }, 10);
-
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { pushHistory: () => void };
-      };
-      store.getState().pushHistory();
-    });
     await page.waitForTimeout(200);
 
-    const afterStroke = await readCompositedPixels(page);
+    const afterStroke = await readActiveLayerPixels(page);
     expect(pixelDiff(before, afterStroke)).toBeGreaterThan(100);
 
-    // Undo the sponge stroke
+    // Undo the sponge stroke (handleSpongeDown pushed history internally)
     await page.keyboard.press('Control+z');
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(300);
 
-    const afterUndo = await readCompositedPixels(page);
+    const afterUndo = await readActiveLayerPixels(page);
     await page.screenshot({ path: 'e2e/screenshots/sponge-07-undo.png' });
 
     // After undo, the diff from the baseline should be small
