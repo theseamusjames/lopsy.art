@@ -1,5 +1,46 @@
 use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
+use crate::gpu::shader::ShaderProgram;
+
+pub fn set_brush_texture_uniforms(
+    engine: &EngineInner,
+    shader: &ShaderProgram,
+    layer_id: &str,
+    texture_unit: u32,
+) {
+    let gl = &engine.gl;
+    let use_tex = engine.brush_has_texture && engine.brush_texture.is_some();
+    if use_tex {
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0 + texture_unit);
+        if let Some(tex_handle) = engine.brush_texture {
+            if let Some(tex_gl) = engine.texture_pool.get(tex_handle) {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex_gl));
+            }
+        }
+        if let Some(loc) = shader.location(gl, "u_brushTexture") {
+            gl.uniform1i(Some(&loc), texture_unit as i32);
+        }
+    }
+    if let Some(loc) = shader.location(gl, "u_hasBrushTexture") {
+        gl.uniform1i(Some(&loc), if use_tex { 1 } else { 0 });
+    }
+    if let Some(loc) = shader.location(gl, "u_textureScale") {
+        gl.uniform1f(Some(&loc), engine.brush_texture_scale);
+    }
+    if let Some(loc) = shader.location(gl, "u_textureBlendMode") {
+        gl.uniform1i(Some(&loc), engine.brush_texture_blend_mode as i32);
+    }
+    if let Some(loc) = shader.location(gl, "u_brushTextureSize") {
+        gl.uniform2f(Some(&loc), engine.brush_texture_width as f32, engine.brush_texture_height as f32);
+    }
+    let (layer_ox, layer_oy) = engine.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| (l.x as f32, l.y as f32))
+        .unwrap_or((0.0, 0.0));
+    if let Some(loc) = shader.location(gl, "u_layerOffset") {
+        gl.uniform2f(Some(&loc), layer_ox, layer_oy);
+    }
+}
 
 pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
     engine.ensure_layer_full_size(layer_id)?;
@@ -452,6 +493,11 @@ pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
                     if let Some(loc) = engine.shaders.composite.location(gl, "u_opacity") {
                         gl.uniform1f(Some(&loc), 1.0);
                     }
+                    // Stroke texture size for brush texture doc-space sampling
+                    if let Some(loc) = engine.shaders.composite.location(gl, "u_strokeTexSize") {
+                        gl.uniform2f(Some(&loc), w as f32, h as f32);
+                    }
+                    set_brush_texture_uniforms(engine, &engine.shaders.composite, layer_id, 2);
                     engine.draw_fullscreen_quad();
                 });
 
