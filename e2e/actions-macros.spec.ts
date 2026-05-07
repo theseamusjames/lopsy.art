@@ -130,8 +130,10 @@ test.describe('Actions / Macros', () => {
     await page.click('text=Invert');
     await page.waitForTimeout(200);
 
-    // Verify step count shows 1 step.
-    await expect(page.getByRole('status')).toContainText('1 step', { timeout: 2000 });
+    // Verify step count shows 1 step (scope to the Actions section to avoid
+    // the status-bar footer which also has role="status").
+    const actionsSection = page.locator('section[aria-label="Actions"]');
+    await expect(actionsSection.getByRole('status')).toContainText('1 step', { timeout: 2000 });
 
     // Stop recording, then cancel on the name form.
     await page.locator('[aria-label="Stop recording"]').click();
