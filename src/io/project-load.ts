@@ -14,8 +14,8 @@ import { notifyError, describeError } from '../app/notifications-store';
 import type { Layer, RasterLayer, TextLayer, ShapeLayer, GroupLayer } from '../types/layers';
 import type { LayerEffects } from '../types/effects';
 import type { Color } from '../types/color';
+import type { AdjustmentNode } from '../types/adjustment-nodes';
 import { DEFAULT_EFFECTS } from '../layers/layer-model';
-import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { LopsyManifest, SerializedLayer } from './project-save';
 
 const LOPSY_MAGIC = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]); // "LOPSY\0"
@@ -114,6 +114,8 @@ function deserializeLayer(s: SerializedLayer): Layer {
       letterSpacing: s.letterSpacing ?? 0,
       textAlign: (s.textAlign as TextLayer['textAlign']) ?? 'left',
       width: s.textWidth ?? null,
+      underline: s.underline ?? false,
+      strikethrough: s.strikethrough ?? false,
     };
     return layer;
   }
@@ -138,9 +140,7 @@ function deserializeLayer(s: SerializedLayer): Layer {
       type: 'group',
       children: (s.children as readonly string[]) ?? [],
       collapsed: s.collapsed ?? false,
-      adjustments: s.adjustments
-        ? { ...DEFAULT_ADJUSTMENTS, ...(s.adjustments as object) }
-        : { ...DEFAULT_ADJUSTMENTS },
+      adjustments: Array.isArray(s.adjustments) ? (s.adjustments as readonly AdjustmentNode[]) : [],
       adjustmentsEnabled: s.adjustmentsEnabled ?? true,
     };
     return layer;

@@ -30,6 +30,7 @@ function makeDoc(): DocumentState {
     layers: [layer],
     layerOrder: [layer.id],
     activeLayerId: layer.id,
+    selectedLayerIds: [layer.id],
     backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
   };
 }
@@ -81,6 +82,7 @@ describe('setLayerColorTag', () => {
       layers: [layer1, layer2],
       layerOrder: [layer1.id, layer2.id],
       activeLayerId: layer1.id,
+      selectedLayerIds: [layer1.id],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
     };
 

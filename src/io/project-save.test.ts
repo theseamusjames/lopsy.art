@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import type { LopsyManifest, SerializedLayer } from './project-save';
 import type { RasterLayer, TextLayer, GroupLayer, ShapeLayer } from '../types/layers';
 import { DEFAULT_EFFECTS } from '../layers/layer-model';
-import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 
 // ---------------------------------------------------------------------------
 // Helpers: build minimal layer fixtures
@@ -52,6 +51,8 @@ function makeText(overrides: Partial<TextLayer> = {}): TextLayer {
     letterSpacing: 0,
     textAlign: 'left',
     width: null,
+    underline: false,
+    strikethrough: false,
     ...overrides,
   };
 }
@@ -72,7 +73,7 @@ function makeGroup(overrides: Partial<GroupLayer> = {}): GroupLayer {
     mask: null,
     children: ['r1'],
     collapsed: false,
-    adjustments: { ...DEFAULT_ADJUSTMENTS },
+    adjustments: [],
     adjustmentsEnabled: true,
     ...overrides,
   };

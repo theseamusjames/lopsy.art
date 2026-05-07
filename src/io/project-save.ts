@@ -62,6 +62,8 @@ export interface SerializedLayer {
   readonly letterSpacing?: number;
   readonly textAlign?: string;
   readonly textWidth?: number | null;
+  readonly underline?: boolean;
+  readonly strikethrough?: boolean;
   // shape
   readonly shapeType?: string;
   readonly fill?: unknown;
@@ -120,6 +122,8 @@ function serializeLayer(layer: Layer, pixelDataIndex: number, maskDataIndex: num
       letterSpacing: layer.letterSpacing,
       textAlign: layer.textAlign,
       textWidth: layer.width,
+      underline: layer.underline,
+      strikethrough: layer.strikethrough,
     };
   }
   if (layer.type === 'shape') {
