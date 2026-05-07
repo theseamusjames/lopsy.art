@@ -9,7 +9,7 @@
 import type { Engine } from './wasm-bridge';
 import type { Layer } from '../types';
 import type { SparseLayerEntry } from '../app/store/types';
-import type { BrushTipData } from '../types/brush';
+import type { BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../types/brush';
 
 export interface TrackedState {
   docWidth: number;
@@ -44,6 +44,10 @@ export interface TrackedState {
   brushTipData: BrushTipData | null;
   brushAngle: number;
   brushHasTip: boolean;
+  brushTextureData: BrushTextureData | null;
+  brushHasTexture: boolean;
+  brushTextureScale: number;
+  brushTextureBlendMode: BrushTextureBlendMode;
   /** Reference equality on the active Curves object so we only re-upload
    *  the LUT texture when the user actually edited a control point. */
   curvesRef: unknown;
@@ -89,6 +93,10 @@ function createTrackedState(): TrackedState {
     brushTipData: null,
     brushAngle: 0,
     brushHasTip: false,
+    brushTextureData: null,
+    brushHasTexture: false,
+    brushTextureScale: 1,
+    brushTextureBlendMode: 'multiply',
     curvesRef: null,
     curvesIdentity: null,
     levelsRef: null,

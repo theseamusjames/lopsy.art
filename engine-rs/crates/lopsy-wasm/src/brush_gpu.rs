@@ -30,8 +30,9 @@ pub fn apply_dab(
     size: f32, hardness: f32,
     r: f32, g: f32, b: f32, a: f32,
     opacity: f32, flow: f32,
+    size_jitter: f32, angle_jitter: f32, opacity_jitter: f32,
 ) {
-    apply_dab_batch(engine, layer_id, &[cx, cy], size, hardness, r, g, b, a, opacity, flow);
+    apply_dab_batch(engine, layer_id, &[cx, cy], size, hardness, r, g, b, a, opacity, flow, size_jitter, angle_jitter, opacity_jitter);
 }
 
 pub fn apply_dab_batch(
@@ -41,6 +42,7 @@ pub fn apply_dab_batch(
     size: f32, hardness: f32,
     r: f32, g: f32, b: f32, a: f32,
     opacity: f32, flow: f32,
+    size_jitter: f32, angle_jitter: f32, opacity_jitter: f32,
 ) {
     // Track brush opacity for this stroke so end_stroke and the compositor can use it
     engine.stroke_opacity.insert(layer_id.to_string(), opacity);
@@ -84,6 +86,8 @@ pub fn apply_dab_batch(
     gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
     gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    gl.active_texture(WebGl2RenderingContext::TEXTURE2);
     gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
     // MAX blending for dab accumulation on the stroke texture.
@@ -177,6 +181,43 @@ pub fn apply_dab_batch(
         }
     }
 
+    // Jitter uniforms
+    if let Some(loc) = shader.location(gl, "u_sizeJitter") {
+        gl.uniform1f(Some(&loc), size_jitter);
+    }
+    if let Some(loc) = shader.location(gl, "u_angleJitter") {
+        gl.uniform1f(Some(&loc), angle_jitter);
+    }
+    if let Some(loc) = shader.location(gl, "u_opacityJitter") {
+        gl.uniform1f(Some(&loc), opacity_jitter);
+    }
+
+    // Bind brush texture if present
+    let use_brush_texture = engine.brush_has_texture && engine.brush_texture.is_some();
+    if use_brush_texture {
+        gl.active_texture(WebGl2RenderingContext::TEXTURE2);
+        if let Some(tex_handle) = engine.brush_texture {
+            if let Some(tex_gl) = engine.texture_pool.get(tex_handle) {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex_gl));
+            }
+        }
+        if let Some(loc) = shader.location(gl, "u_brushTexture") {
+            gl.uniform1i(Some(&loc), 2);
+        }
+    }
+    if let Some(loc) = shader.location(gl, "u_hasBrushTexture") {
+        gl.uniform1i(Some(&loc), if use_brush_texture { 1 } else { 0 });
+    }
+    if let Some(loc) = shader.location(gl, "u_textureScale") {
+        gl.uniform1f(Some(&loc), engine.brush_texture_scale);
+    }
+    if let Some(loc) = shader.location(gl, "u_textureBlendMode") {
+        gl.uniform1i(Some(&loc), engine.brush_texture_blend_mode as i32);
+    }
+    if let Some(loc) = shader.location(gl, "u_brushTextureSize") {
+        gl.uniform2f(Some(&loc), engine.brush_texture_width as f32, engine.brush_texture_height as f32);
+    }
+
     // Scissor each dab to its bounding box so the fragment shader only
     // runs on the pixels it will actually write. Without this, every dab
     // runs the FS on the full stroke texture (e.g. 2550x3300 for a letter
@@ -188,7 +229,8 @@ pub fn apply_dab_batch(
     // sub-pixel drift from the float→int conversion.
     let tex_w_i = w as i32;
     let tex_h_i = h as i32;
-    let half_extent = (size * 0.5 * std::f32::consts::SQRT_2).ceil() as i32 + 2;
+    let effective_size = size; // jitter only shrinks, never grows past base size
+    let half_extent = (effective_size * 0.5 * std::f32::consts::SQRT_2).ceil() as i32 + 2;
     gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
 
     let u_center_loc = shader.location(gl, "u_center");

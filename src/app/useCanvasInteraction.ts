@@ -428,7 +428,7 @@ export function useCanvasInteraction(
             arr[i * 2] = result.sampledPoints[i]!.x;
             arr[i * 2 + 1] = result.sampledPoints[i]!.y;
           }
-          gpuBrushDabBatch(eng, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
+          gpuBrushDabBatch(eng, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1, 0, 0, 0);
 
           if (symmetryCenter) {
             const { symmetryHorizontal, symmetryVertical } = useToolSettingsStore.getState();
@@ -440,7 +440,7 @@ export function useCanvasInteraction(
                 centerY: symmetryCenter.y,
               };
               for (const m of mirrorBatchPoints(arr, sym)) {
-                gpuBrushDabBatch(eng, layerId, m, size, hardness, r, g, b, color.a, opacity, 1);
+                gpuBrushDabBatch(eng, layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, 0, 0);
               }
             }
           }

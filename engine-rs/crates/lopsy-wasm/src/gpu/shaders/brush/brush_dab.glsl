@@ -16,27 +16,52 @@ uniform sampler2D u_brushTip;
 uniform int u_hasBrushTip;
 uniform float u_angle;
 uniform vec2 u_tipAspect; // (tipWidth/max, tipHeight/max) for non-square tips
+// Jitter uniforms (0.0–1.0 range, mapped from 0–100%)
+uniform float u_sizeJitter;
+uniform float u_angleJitter;
+uniform float u_opacityJitter;
+// Texture uniforms
+uniform sampler2D u_brushTexture;
+uniform int u_hasBrushTexture;
+uniform float u_textureScale;
+uniform int u_textureBlendMode; // 0=multiply, 1=subtract, 2=overlay
+uniform vec2 u_brushTextureSize;
 out vec4 fragColor;
+
+float dabHash(vec2 center, float seed) {
+    return fract(sin(dot(center + seed, vec2(12.9898, 78.233))) * 43758.5453);
+}
 
 void main() {
     vec2 fragPos = v_uv * u_texSize;
-    float radius = u_size * 0.5;
+
+    // Per-dab deterministic random values seeded from dab center
+    float h1 = dabHash(u_center, 0.0);
+    float h2 = dabHash(u_center, 127.1);
+    float h3 = dabHash(u_center, 269.5);
+
+    float jSize = u_size * (1.0 - u_sizeJitter * (1.0 - h1));
+    jSize = max(1.0, jSize);
+    float jOpacity = u_opacity * (1.0 - u_opacityJitter * (1.0 - h2));
+    float jAngle = u_angle + (h3 - 0.5) * 2.0 * u_angleJitter * 3.14159265;
+
+    float radius = jSize * 0.5;
     float dist = length(fragPos - u_center);
 
     float a;
 
     if (u_hasBrushTip == 1) {
         // Custom brush tip texture mode
-        vec2 uv = (fragPos - u_center) / u_size;
-        float ca = cos(u_angle);
-        float sa = sin(u_angle);
+        vec2 uv = (fragPos - u_center) / jSize;
+        float ca = cos(jAngle);
+        float sa = sin(jAngle);
         uv = mat2(ca, sa, -sa, ca) * uv;
         uv /= u_tipAspect;
         uv = uv + 0.5;
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;
 
         float stamp = texture(u_brushTip, uv).r;
-        a = stamp * u_flow * u_opacity;
+        a = stamp * u_flow * jOpacity;
     } else {
         // Procedural circle mode
         if (dist > radius) discard;
@@ -50,7 +75,22 @@ void main() {
         float edge = 1.0 - smoothstep(radius - 1.0, radius, dist);
         stamp *= edge;
 
-        a = stamp * u_flow * u_opacity;
+        a = stamp * u_flow * jOpacity;
+    }
+
+    // Brush texture modulation
+    if (u_hasBrushTexture == 1) {
+        vec2 docPos = fragPos + u_layerOffset;
+        vec2 texUV = docPos / (u_brushTextureSize * u_textureScale);
+        float texVal = texture(u_brushTexture, fract(texUV)).r;
+
+        if (u_textureBlendMode == 0) {
+            a *= texVal;
+        } else if (u_textureBlendMode == 1) {
+            a *= (1.0 - texVal);
+        } else {
+            a = a < 0.5 ? 2.0 * a * texVal : 1.0 - 2.0 * (1.0 - a) * (1.0 - texVal);
+        }
     }
 
     // Selection mask constraint

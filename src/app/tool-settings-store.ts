@@ -3,7 +3,7 @@ import type { Color, FontStyle, TextAlign } from '../types';
 import type { GradientStop, GradientType } from '../tools/gradient/gradient';
 import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { DodgeMode } from '../tools/dodge/dodge';
-import type { BrushPreset, BrushTipData } from '../types/brush';
+import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../types/brush';
 import { colorEquals } from '../utils/color';
 
 const MAX_RECENT_COLORS = 28;
@@ -152,6 +152,53 @@ function generateLeafTip(size: number): BrushTipData {
   }
   return { width: size, height: size, data };
 }
+
+// ---------------------------------------------------------------------------
+// Built-in brush textures
+// ---------------------------------------------------------------------------
+
+function generateNoiseTexture(size: number): BrushTextureData {
+  const data = new Uint8ClampedArray(size * size);
+  let seed = 42;
+  for (let i = 0; i < size * size; i++) {
+    seed ^= seed << 13;
+    seed ^= seed >> 17;
+    seed ^= seed << 5;
+    data[i] = (seed >>> 0) % 256;
+  }
+  return { id: 'texture-noise', name: 'Noise', width: size, height: size, data };
+}
+
+function generateCanvasTexture(size: number): BrushTextureData {
+  const data = new Uint8ClampedArray(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const h = (y % 4 < 2) ? 180 : 255;
+      const v = (x % 4 < 2) ? 180 : 255;
+      data[y * size + x] = Math.round((h + v) / 2);
+    }
+  }
+  return { id: 'texture-canvas', name: 'Canvas', width: size, height: size, data };
+}
+
+function generateGrainTexture(size: number): BrushTextureData {
+  const data = new Uint8ClampedArray(size * size);
+  let seed = 7;
+  for (let i = 0; i < size * size; i++) {
+    seed ^= seed << 13;
+    seed ^= seed >> 17;
+    seed ^= seed << 5;
+    const r = ((seed >>> 0) / 0xFFFFFFFF);
+    data[i] = Math.round(r * 100 + 155);
+  }
+  return { id: 'texture-grain', name: 'Grain', width: size, height: size, data };
+}
+
+const BUILTIN_TEXTURES: BrushTextureData[] = [
+  generateNoiseTexture(128),
+  generateCanvasTexture(128),
+  generateGrainTexture(128),
+];
 
 // ---------------------------------------------------------------------------
 // Built-in presets
@@ -366,9 +413,24 @@ interface ToolSettings {
   sprayDensity: number;
   sprayOpacity: number;
   sprayHardness: number;
+  brushSizeJitter: number;
+  brushAngleJitter: number;
+  brushOpacityJitter: number;
+  brushSpeedSize: number;
+  brushTextureData: BrushTextureData | null;
+  brushTextureBlendMode: BrushTextureBlendMode;
+  brushTextureScale: number;
+  brushTextures: BrushTextureData[];
   presets: BrushPreset[];
   activePresetId: string | null;
 
+  setBrushSizeJitter: (jitter: number) => void;
+  setBrushAngleJitter: (jitter: number) => void;
+  setBrushOpacityJitter: (jitter: number) => void;
+  setBrushSpeedSize: (value: number) => void;
+  setBrushTextureData: (texture: BrushTextureData | null) => void;
+  setBrushTextureBlendMode: (mode: BrushTextureBlendMode) => void;
+  setBrushTextureScale: (scale: number) => void;
   setSpraySize: (size: number) => void;
   setSprayDensity: (density: number) => void;
   /** Spray opacity in **percent**, range `1–100` (not normalised `0–1`). */
@@ -542,9 +604,24 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   sprayDensity: 20,
   sprayOpacity: 60,
   sprayHardness: 30,
+  brushSizeJitter: 0,
+  brushAngleJitter: 0,
+  brushOpacityJitter: 0,
+  brushSpeedSize: 0,
+  brushTextureData: null,
+  brushTextureBlendMode: 'multiply',
+  brushTextureScale: 100,
+  brushTextures: BUILTIN_TEXTURES,
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
 
+  setBrushSizeJitter: (jitter) => set({ brushSizeJitter: Math.max(0, Math.min(100, jitter)) }),
+  setBrushAngleJitter: (jitter) => set({ brushAngleJitter: Math.max(0, Math.min(100, jitter)) }),
+  setBrushOpacityJitter: (jitter) => set({ brushOpacityJitter: Math.max(0, Math.min(100, jitter)) }),
+  setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(100, value)) }),
+  setBrushTextureData: (texture) => set({ brushTextureData: texture }),
+  setBrushTextureBlendMode: (mode) => set({ brushTextureBlendMode: mode }),
+  setBrushTextureScale: (scale) => set({ brushTextureScale: Math.max(10, Math.min(200, scale)) }),
   setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(5000, size)) }),
   setSprayDensity: (density) => set({ sprayDensity: Math.max(1, Math.min(100, density)) }),
   setSprayOpacity: (opacity) => {
