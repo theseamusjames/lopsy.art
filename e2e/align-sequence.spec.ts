@@ -1,5 +1,5 @@
 import { test, type Page } from './fixtures';
-import { drawRect } from './helpers';
+import { drawRect, setForegroundColor } from './helpers';
 
 async function waitForStore(page: Page) {
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
@@ -80,13 +80,12 @@ async function paintRectWithBrush(page: Page, docX: number, docY: number, w: num
       getState: () => {
         setBrushSize: (v: number) => void;
         setBrushHardness: (v: number) => void;
-        setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
       };
     };
     store.getState().setBrushSize(8);
     store.getState().setBrushHardness(100);
-    store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
   });
+  await setForegroundColor(page, 0, 0, 0);
   for (let yy = docY; yy <= docY + h; yy += 4) {
     const s = await docToScreen(page, docX, yy);
     const e = await docToScreen(page, docX + w, yy);

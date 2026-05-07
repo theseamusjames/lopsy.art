@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { waitForStore, createDocument, drawRect } from './helpers';
+import { waitForStore, createDocument, drawRect, getRootGroupId, addAdjustment, openGroupEffectsPanel, toggleAdjustmentsEnabled, setGroupBlendMode } from './helpers';
 
 interface PixelSnap {
   width: number;
@@ -44,7 +44,12 @@ async function readCompositedAtDoc(
   }, { x: docX, y: docY });
 }
 
-/** Set levels on the root group and ensure adjustments are enabled. */
+/**
+ * Add a levels adjustment node to the root group via the UI, then set
+ * the levels data. The levels editor uses per-channel sliders that are
+ * complex to drive precisely, so we set the data via updateAdjustmentNode
+ * after adding the node through the UI.
+ */
 async function setGroupLevels(
   page: Page,
   levels: {
@@ -54,37 +59,42 @@ async function setGroupLevels(
     b: { inputBlack: number; inputWhite: number; gamma: number; outputBlack: number; outputWhite: number };
   },
 ): Promise<void> {
-  await page.evaluate(({ lv }) => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => {
-        document: { rootGroupId: string };
-        setGroupAdjustments: (id: string, adj: Record<string, unknown>) => void;
-        setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
-      };
-    };
-    const state = store.getState();
-    const groupId = state.document.rootGroupId;
-    state.setGroupAdjustmentsEnabled(groupId, true);
-    state.setGroupAdjustments(groupId, {
-      exposure: 0, contrast: 0, highlights: 0, shadows: 0,
-      whites: 0, blacks: 0, vignette: 0, saturation: 0, vibrance: 0,
-      levels: lv,
-    });
-  }, { lv: levels });
-}
+  const groupId = await getRootGroupId(page);
+  await setGroupBlendMode(page, groupId, 'normal');
+  await openGroupEffectsPanel(page, groupId);
 
-/** Toggle adjustmentsEnabled on the root group. */
-async function toggleGroupAdjustmentsEnabled(page: Page, enabled: boolean): Promise<void> {
-  await page.evaluate(({ en }) => {
+  // Check if a levels node already exists
+  const hasLevels = await page.evaluate(({ gid }) => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
-        document: { rootGroupId: string };
-        setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
+        document: { layers: Array<{ id: string; type: string; adjustments?: Array<{ type: string }> }> };
+      };
+    };
+    const group = store.getState().document.layers.find((l) => l.id === gid);
+    return group?.adjustments?.some((n) => n.type === 'levels') ?? false;
+  }, { gid: groupId });
+
+  if (!hasLevels) {
+    await addAdjustment(page, groupId, 'levels');
+  }
+
+  // Set precise levels data on the node
+  await page.evaluate(({ gid, lv }) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { layers: Array<{ id: string; type: string; adjustments?: Array<{ id: string; type: string }> }> };
+        updateAdjustmentNode: (groupId: string, nodeId: string, params: Record<string, unknown>) => void;
+        setGroupAdjustmentsEnabled: (groupId: string, enabled: boolean) => void;
       };
     };
     const state = store.getState();
-    state.setGroupAdjustmentsEnabled(state.document.rootGroupId, en);
-  }, { en: enabled });
+    const group = state.document.layers.find((l) => l.id === gid);
+    const levelsNode = group?.adjustments?.find((n) => n.type === 'levels');
+    if (levelsNode) {
+      state.updateAdjustmentNode(gid, levelsNode.id, { levels: lv });
+    }
+    state.setGroupAdjustmentsEnabled(gid, true);
+  }, { gid: groupId, lv: levels });
 }
 
 const IDENTITY_CHANNEL = { inputBlack: 0, inputWhite: 1, gamma: 1, outputBlack: 0, outputWhite: 1 };
@@ -122,7 +132,8 @@ test.describe('Levels visibility toggle', () => {
     expect(withLevels.b).toBeLessThan(5);
 
     // Step 2: Toggle adjustments OFF — levels should be removed, pixel white.
-    await toggleGroupAdjustmentsEnabled(page, false);
+    const rootId = await getRootGroupId(page);
+    await toggleAdjustmentsEnabled(page, rootId);
     await page.waitForTimeout(300);
 
     const disabled = await readCompositedAtDoc(page, 0, 0);
@@ -131,7 +142,7 @@ test.describe('Levels visibility toggle', () => {
     expect(disabled.b).toBeGreaterThan(250);
 
     // Step 3: Toggle adjustments back ON — levels should be restored, pixel black.
-    await toggleGroupAdjustmentsEnabled(page, true);
+    await toggleAdjustmentsEnabled(page, rootId);
     await page.waitForTimeout(300);
 
     const reEnabled = await readCompositedAtDoc(page, 0, 0);

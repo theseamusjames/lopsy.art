@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { setForegroundColor } from './helpers';
 
 // Regression test for the "transparent pixels being moved" bug:
 // After a layer's GPU texture has been expanded to full doc size (by a brush
@@ -65,15 +66,14 @@ async function setBrush(page: Page, size: number) {
         getState: () => {
           setBrushSize: (v: number) => void;
           setBrushHardness: (v: number) => void;
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
         };
       };
       store.getState().setBrushSize(size);
       store.getState().setBrushHardness(100);
-      store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
     },
     { size },
   );
+  await setForegroundColor(page, 0, 0, 0);
 }
 
 async function paintRectWithBrush(page: Page, docX: number, docY: number, w: number, h: number) {

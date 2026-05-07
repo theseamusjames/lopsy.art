@@ -2,6 +2,7 @@
  * Regression: marquee right half, cut, paste, move to 0,0, merge down.
  */
 import { test, expect, type Page } from './fixtures';
+import { setForegroundColor } from './helpers';
 
 async function createDocument(page: Page, width: number, height: number) {
   await page.evaluate(({ w, h }) => {
@@ -116,15 +117,14 @@ test.describe('Text selection + merge', () => {
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
           setTextFontSize: (s: number) => void;
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
           setTextFontFamily: (f: string) => void;
         };
       };
       const s = ts.getState();
       s.setTextFontSize(150);
-      s.setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
       s.setTextFontFamily('Inter');
     });
+    await setForegroundColor(page, 0, 0, 0);
     const textPos = await docToScreen(page, 150, 100);
     await page.mouse.click(textPos.x, textPos.y);
     await page.waitForTimeout(200);

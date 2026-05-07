@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { waitForStore, createDocument, docToScreen, getPixelAt } from './helpers';
+import { waitForStore, createDocument, docToScreen, getPixelAt, setForegroundColor } from './helpers';
 
 test.describe('Feathered selection fill', () => {
   test.beforeEach(async ({ page }) => {
@@ -38,12 +38,7 @@ test.describe('Feathered selection fill', () => {
     await page.waitForTimeout(500);
 
     // Set foreground to black
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-      };
-      store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
-    });
+    await setForegroundColor(page, 0, 0, 0);
 
     // Switch to fill tool and click inside the selection
     await page.keyboard.press('g');

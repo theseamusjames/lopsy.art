@@ -8,6 +8,7 @@ import {
   addLayer,
   moveLayerTo,
   drawRect,
+  setForegroundColor,
 } from './helpers';
 
 interface SelectionInfo {
@@ -55,15 +56,6 @@ async function setActiveTool(page: Page, tool: string): Promise<void> {
     await page.locator(`[data-tool-id="${tool}"]`).click();
   }
   await page.waitForTimeout(50);
-}
-
-async function setForegroundColor(page: Page, color: { r: number; g: number; b: number; a: number }): Promise<void> {
-  await page.evaluate((c) => {
-    const tool = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-    };
-    tool.getState().setForegroundColor(c);
-  }, color);
 }
 
 async function docToScreen(page: Page, docX: number, docY: number) {
@@ -222,7 +214,7 @@ test.describe('Selection coordinates with layer offset', () => {
     await page.locator(`[data-layer-id="${fillLayerId}"]`).click();
     await page.waitForTimeout(200); // let engine sync the layer
 
-    await setForegroundColor(page, { r: 0, g: 255, b: 0, a: 1 });
+    await setForegroundColor(page, 0, 255, 0);
     await setActiveTool(page, 'fill');
     // The wand also wires up a transform overlay (handles around the
     // selection bounds). The fill click must NOT land on a handle or it
@@ -285,7 +277,7 @@ test.describe('Selection coordinates with layer offset', () => {
     const s1 = await getEditorState(page);
     const fillLayerId = s1.document.activeLayerId;
 
-    await setForegroundColor(page, { r: 0, g: 0, b: 255, a: 1 });
+    await setForegroundColor(page, 0, 0, 255);
     await setActiveTool(page, 'fill');
     await clickAtDoc(page, 50, 50);
     await page.waitForTimeout(200);

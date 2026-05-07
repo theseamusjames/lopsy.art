@@ -7,6 +7,7 @@
  * syncLayers pushes the layer descriptor to the engine.
  */
 import { test, expect, type Page } from './fixtures';
+import { setForegroundColor } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -104,13 +105,11 @@ test.describe('Text + brush + merge down', () => {
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
           setTextFontSize: (s: number) => void;
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
         };
       };
-      const s = ts.getState();
-      s.setTextFontSize(40);
-      s.setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
+      ts.getState().setTextFontSize(40);
     });
+    await setForegroundColor(page, 255, 0, 0);
 
     const textPos = await docToScreen(page, 110, 110);
     await page.mouse.click(textPos.x, textPos.y);
@@ -141,13 +140,11 @@ test.describe('Text + brush + merge down', () => {
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
           setBrushSize: (s: number) => void;
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
         };
       };
-      const s = ts.getState();
-      s.setBrushSize(8);
-      s.setForegroundColor({ r: 0, g: 0, b: 255, a: 1 });
+      ts.getState().setBrushSize(8);
     });
+    await setForegroundColor(page, 0, 0, 255);
 
     // Paint a stroke in the corner (away from text)
     const from = await docToScreen(page, 20, 20);

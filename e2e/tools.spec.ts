@@ -1995,12 +1995,7 @@ test.describe('Mask Drawing', () => {
   test('add mask and draw with black foreground hides areas', async ({ page }) => {
     // Draw something on the layer first
     await page.keyboard.press('b');
-    await page.evaluate(() => {
-      const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-      };
-      toolStore.getState().setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
-    });
+    await setFgColor(page, 255, 0, 0);
     await setToolOption(page, 'Size', 40);
     await drawStroke(page, { x: 100, y: 150 }, { x: 300, y: 150 }, 10);
 
@@ -2045,12 +2040,9 @@ test.describe('Mask Drawing', () => {
           setMaskEditMode: (m: boolean) => void;
         };
       };
-      const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-      };
       uiStore.getState().setMaskEditMode(true);
-      toolStore.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
     });
+    await setFgColor(page, 0, 0, 0);
     await page.keyboard.press('b');
     await setToolOption(page, 'Size', 30);
     await setToolOption(page, 'Opacity', 100);
@@ -2092,16 +2084,13 @@ test.describe('Mask Drawing', () => {
       };
       const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
           setBackgroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
         };
       };
-      const ui = uiStore.getState();
-      const tool = toolStore.getState();
-      ui.setMaskEditMode(true);
-      tool.setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
-      tool.setBackgroundColor({ r: 255, g: 255, b: 255, a: 1 });
+      uiStore.getState().setMaskEditMode(true);
+      toolStore.getState().setBackgroundColor({ r: 255, g: 255, b: 255, a: 1 });
     });
+    await setFgColor(page, 0, 0, 0);
     await page.keyboard.press('b');
     await setToolOption(page, 'Size', 40);
     await setToolOption(page, 'Opacity', 100);

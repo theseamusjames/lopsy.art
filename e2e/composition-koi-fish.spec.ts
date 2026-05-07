@@ -30,6 +30,7 @@ import {
   closeEffectsPanel,
   undo,
   redo,
+  setForegroundColor,
 } from './helpers';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -41,16 +42,6 @@ const SCREENSHOT_DIR = path.resolve(__dirname, 'screenshots');
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Set foreground color via store (avoids needing the hex input to be visible). */
-async function setColor(page: Page, r: number, g: number, b: number) {
-  await page.evaluate(({ r, g, b }) => {
-    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
-    };
-    store.getState().setForegroundColor({ r, g, b, a: 1 });
-  }, { r, g, b });
-}
 
 async function drawStroke(
   page: Page,
@@ -140,7 +131,7 @@ function pixelDiff(a: PixelSnapshot, b: PixelSnapshot): number {
 
 /** Fill a rectangular region on the active layer via marquee + fill tool. */
 async function fillRect(page: Page, x: number, y: number, w: number, h: number, color: { r: number; g: number; b: number }) {
-  await setColor(page, color.r, color.g, color.b);
+  await setForegroundColor(page, color.r, color.g, color.b);
   await selectTool(page, 'marquee-rect');
   const start = await docToScreen(page, x, y);
   const end = await docToScreen(page, x + w, y + h);
@@ -159,7 +150,7 @@ async function fillRect(page: Page, x: number, y: number, w: number, h: number, 
 
 /** Fill an elliptical region on the active layer via elliptical marquee + fill. */
 async function fillEllipse(page: Page, cx: number, cy: number, rx: number, ry: number, color: { r: number; g: number; b: number }) {
-  await setColor(page, color.r, color.g, color.b);
+  await setForegroundColor(page, color.r, color.g, color.b);
   await selectTool(page, 'marquee-ellipse');
   const start = await docToScreen(page, cx - rx, cy - ry);
   const end = await docToScreen(page, cx + rx, cy + ry);
@@ -277,7 +268,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     await setToolOption(page, 'Size', 80);
     await setToolOption(page, 'Hardness', 60);
     await setToolOption(page, 'Opacity', 100);
-    await setColor(page, 230, 140, 30);
+    await setForegroundColor(page, 230, 140, 30);
 
     // Body curve
     await drawStroke(page, { x: 250, y: 350 }, { x: 350, y: 400 }, 15);
@@ -292,14 +283,14 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     await drawStroke(page, { x: 350, y: 420 }, { x: 480, y: 560 }, 20);
 
     // Red-orange accent patches
-    await setColor(page, 200, 60, 30);
+    await setForegroundColor(page, 200, 60, 30);
     await setToolOption(page, 'Size', 40);
     await setToolOption(page, 'Hardness', 30);
     await drawStroke(page, { x: 320, y: 390 }, { x: 380, y: 420 }, 8);
     await drawStroke(page, { x: 440, y: 490 }, { x: 470, y: 550 }, 8);
 
     // White belly highlights
-    await setColor(page, 255, 245, 230);
+    await setForegroundColor(page, 255, 245, 230);
     await setToolOption(page, 'Size', 30);
     await setToolOption(page, 'Opacity', 70);
     await drawStroke(page, { x: 370, y: 440 }, { x: 460, y: 510 }, 10);
@@ -350,7 +341,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     await setToolOption(page, 'Size', 60);
     await setToolOption(page, 'Hardness', 0);
     await setToolOption(page, 'Opacity', 100);
-    await setColor(page, 0, 0, 0);
+    await setForegroundColor(page, 0, 0, 0);
 
     await drawStroke(page, { x: 380, y: 400 }, { x: 440, y: 450 }, 10);
     await drawStroke(page, { x: 400, y: 420 }, { x: 460, y: 470 }, 10);
@@ -483,7 +474,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     await setToolOption(page, 'Size', 50);
     await setToolOption(page, 'Hardness', 50);
     await setToolOption(page, 'Opacity', 100);
-    await setColor(page, 240, 240, 230);
+    await setForegroundColor(page, 240, 240, 230);
 
     // Smaller white koi
     await drawStroke(page, { x: 550, y: 500 }, { x: 600, y: 560 }, 12);
@@ -491,7 +482,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     await drawStroke(page, { x: 570, y: 530 }, { x: 610, y: 600 }, 12);
 
     // Red-orange spot
-    await setColor(page, 200, 50, 20);
+    await setForegroundColor(page, 200, 50, 20);
     await setToolOption(page, 'Size', 25);
     await drawStroke(page, { x: 580, y: 550 }, { x: 600, y: 580 }, 6);
 

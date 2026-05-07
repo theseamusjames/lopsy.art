@@ -1,4 +1,5 @@
 import { test, type Page } from './fixtures';
+import { setForegroundColor } from './helpers';
 
 async function waitForStore(page: Page) {
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
@@ -79,13 +80,12 @@ test('align bottom, then fill center — spiral stays visible', async ({ page, i
       getState: () => {
         setBrushSize: (v: number) => void;
         setBrushHardness: (v: number) => void;
-        setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
       };
     };
     store.getState().setBrushSize(6);
     store.getState().setBrushHardness(100);
-    store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
   });
+  await setForegroundColor(page, 0, 0, 0);
   await drawSpiral(page, 150, 150, 80);
   await page.screenshot({ path: 'test-results/align-fill/01-spiral.png' });
 
@@ -117,14 +117,7 @@ test('align bottom, then fill center — spiral stays visible', async ({ page, i
   await page.screenshot({ path: 'test-results/align-fill/02-align-bottom.png' });
 
   // Select red as foreground color
-  await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => {
-        setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
-      };
-    };
-    store.getState().setForegroundColor({ r: 255, g: 0, b: 0, a: 1 });
-  });
+  await setForegroundColor(page, 255, 0, 0);
 
   // Select fill (bucket) tool
   await page.keyboard.press('g');

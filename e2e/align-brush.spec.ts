@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import { setForegroundColor } from './helpers';
 
 async function waitForStore(page: Page) {
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
@@ -95,13 +96,12 @@ test.describe('Align after brush stroke (GPU-only content)', () => {
         getState: () => {
           setBrushSize: (v: number) => void;
           setBrushHardness: (v: number) => void;
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
         };
       };
       store.getState().setBrushSize(20);
       store.getState().setBrushHardness(100);
-      store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
     });
+    await setForegroundColor(page, 0, 0, 0);
   });
 
   test('letter-like shape (multi-segment stroke) centers correctly', async ({ page }) => {

@@ -3,6 +3,7 @@ import {
   configureEffect,
   setEffectColor,
   closeEffectsPanel,
+  setForegroundColor,
 } from './helpers';
 
 async function waitForStore(page: Page) {
@@ -101,13 +102,12 @@ test.describe('Stroke effect on in-progress brush stroke', () => {
         getState: () => {
           setBrushSize: (v: number) => void;
           setBrushHardness: (v: number) => void;
-          setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
         };
       };
       store.getState().setBrushSize(30);
       store.getState().setBrushHardness(100);
-      store.getState().setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
     });
+    await setForegroundColor(page, 0, 0, 0);
 
     // Stroke 1 on the left
     await drawStroke(page, { x: 120, y: 200 }, { x: 200, y: 200 });
