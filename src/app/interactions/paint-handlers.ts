@@ -518,18 +518,32 @@ export function handlePaintMove(
 
       let size = baseSize;
 
-      // Speed-based size
+      // Speed-based size: moving-average speed → smoothed size transition
       if (speedSize > 0) {
         const now = performance.now();
         const dt = now - (state.lastPointTime ?? now);
         const rawSpeed = dt > 0 ? segDist / dt : 0;
         const maxSpeed = 5;
         const normalizedSpeed = Math.min(rawSpeed / maxSpeed, 1);
-        const alpha = 0.3;
-        const smoothed = alpha * normalizedSpeed + (1 - alpha) * (state.smoothedSpeed ?? 0);
-        state.smoothedSpeed = smoothed;
+
+        if (!state.speedHistory) state.speedHistory = [];
+        state.speedHistory.push(normalizedSpeed);
+        if (state.speedHistory.length > 6) state.speedHistory.shift();
+
+        const avgSpeed = state.speedHistory.reduce((a, b) => a + b, 0) / state.speedHistory.length;
+
+        const invert = toolSettings.brushSpeedSizeInvert;
+        const targetScale = invert
+          ? 1 + speedSize * avgSpeed
+          : 1 - speedSize * avgSpeed;
+
+        const prev = state.speedSizeCurrent ?? 1;
+        const blend = 0.25;
+        const current = prev + (targetScale - prev) * blend;
+        state.speedSizeCurrent = current;
         state.lastPointTime = now;
-        size = Math.max(1, size * (1 - speedSize * smoothed));
+
+        size = Math.max(1, size * current);
       }
 
       // Size jitter: smooth random walk between target sizes.

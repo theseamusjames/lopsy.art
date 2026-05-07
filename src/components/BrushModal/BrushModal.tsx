@@ -44,10 +44,12 @@ export function BrushModal() {
   const angleJitter = useToolSettingsStore((s) => s.brushAngleJitter);
   const opacityJitter = useToolSettingsStore((s) => s.brushOpacityJitter);
   const speedSize = useToolSettingsStore((s) => s.brushSpeedSize);
+  const speedSizeInvert = useToolSettingsStore((s) => s.brushSpeedSizeInvert);
   const setSizeJitter = useToolSettingsStore((s) => s.setBrushSizeJitter);
   const setAngleJitter = useToolSettingsStore((s) => s.setBrushAngleJitter);
   const setOpacityJitter = useToolSettingsStore((s) => s.setBrushOpacityJitter);
   const setSpeedSize = useToolSettingsStore((s) => s.setBrushSpeedSize);
+  const setSpeedSizeInvert = useToolSettingsStore((s) => s.setBrushSpeedSizeInvert);
 
   const textureData = useToolSettingsStore((s) => s.brushTextureData);
   const textureBlendMode = useToolSettingsStore((s) => s.brushTextureBlendMode);
@@ -271,6 +273,22 @@ export function BrushModal() {
               <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
               <Slider label="Opacity Jitter" value={opacityJitter} min={0} max={100} onChange={setOpacityJitter} />
               <Slider label="Speed Size" value={speedSize} min={0} max={100} onChange={setSpeedSize} />
+              {speedSize > 0 && (
+                <div className={styles.speedToggleRow}>
+                  <button
+                    className={`${styles.speedToggle}${!speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
+                    onClick={() => setSpeedSizeInvert(false)}
+                  >
+                    Thinner
+                  </button>
+                  <button
+                    className={`${styles.speedToggle}${speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
+                    onClick={() => setSpeedSizeInvert(true)}
+                  >
+                    Wider
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className={styles.sectionLabel}>Texture</div>

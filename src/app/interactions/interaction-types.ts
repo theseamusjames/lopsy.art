@@ -31,6 +31,8 @@ export interface InteractionState {
   strokeColor?: { r: number; g: number; b: number; a: number };
   lastPointTime?: number;
   smoothedSpeed?: number;
+  speedHistory?: number[];
+  speedSizeCurrent?: number;
   sizeJitterCurrent?: number;
   sizeJitterTarget?: number;
   sizeJitterPrevTarget?: number;

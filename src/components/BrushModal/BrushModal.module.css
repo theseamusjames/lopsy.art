@@ -176,6 +176,39 @@
   padding: var(--space-1) var(--space-2);
 }
 
+.speedToggleRow {
+  display: flex;
+  gap: 1px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  align-self: flex-start;
+}
+
+.speedToggle {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  border: none;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.speedToggle:hover {
+  background: var(--color-bg-hover);
+}
+
+.speedToggleActive {
+  background: var(--color-accent);
+  color: var(--color-text-on-accent, #fff);
+}
+
+.speedToggleActive:hover {
+  background: var(--color-accent);
+}
+
 .footer {
   display: flex;
   align-items: center;
