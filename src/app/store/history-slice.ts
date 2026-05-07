@@ -1,8 +1,9 @@
 import type { HistorySnapshot, SliceCreator } from './types';
+import type { Layer } from '../../types';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { getLayerTextureDimensions, uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
-import { resetTrackedState, flushLayerSync } from '../../engine-wasm/engine-sync';
+import { resetTrackedState, flushLayerSync, syncLayers } from '../../engine-wasm/engine-sync';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 
@@ -32,6 +33,7 @@ let lastRestoredSnapshot: HistorySnapshot | null = null;
  * (via flushLayerSync) to ensure the GPU has current data.
  */
 function snapshotGpuLayers(
+  layers: readonly Layer[],
   layerOrder: readonly string[],
   dirtyIds: Set<string>,
   previous: HistorySnapshot | undefined,
@@ -40,10 +42,19 @@ function snapshotGpuLayers(
   const gpuSnapshots = new Map<string, Uint8Array>();
 
   for (const layerId of layerOrder) {
-    // Reuse previous snapshot blob for non-dirty layers
+    // Reuse previous snapshot blob only when the layer's pixels haven't
+    // changed AND its document-space position is the same. GPU-side
+    // crop/expand (active-layer transitions) changes the texture size and
+    // layer x/y without touching dirtyLayerIds, so a position mismatch
+    // means the blob's texture dimensions no longer match the current GPU
+    // state and must be re-read.
     if (!dirtyIds.has(layerId) && previous?.gpuSnapshots.has(layerId)) {
-      gpuSnapshots.set(layerId, previous.gpuSnapshots.get(layerId)!);
-      continue;
+      const curLayer = layers.find((l) => l.id === layerId);
+      const prevLayer = previous.document.layers.find((l) => l.id === layerId);
+      if (curLayer && prevLayer && curLayer.x === prevLayer.x && curLayer.y === prevLayer.y) {
+        gpuSnapshots.set(layerId, previous.gpuSnapshots.get(layerId)!);
+        continue;
+      }
     }
 
     if (!engine) {
@@ -127,6 +138,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       // First undo from user-edited state — only read dirty layers from GPU,
       // reuse clean-layer blobs from the snapshot we're restoring to
       const gpuSnapshots = snapshotGpuLayers(
+        state.document.layers,
         state.document.layerOrder,
         state.dirtyLayerIds,
         previous,
@@ -155,6 +167,14 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       dirtyLayerIds: new Set(previous.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
+    // Sync layer descriptors to the engine immediately so the
+    // render-frame crop/expand transition reads correct positions.
+    // Without this, cropLayerToContent uses stale engine x/y from
+    // the pre-undo state and corrupts the restored layer position.
+    if (eng) {
+      const restored = get();
+      syncLayers(eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds);
+    }
   },
 
   redo: () => {
@@ -186,6 +206,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       };
     } else {
       const gpuSnapshots = snapshotGpuLayers(
+        state.document.layers,
         state.document.layerOrder,
         state.dirtyLayerIds,
         next,
@@ -214,6 +235,10 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       dirtyLayerIds: new Set(next.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
+    if (eng) {
+      const restored = get();
+      syncLayers(eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds);
+    }
   },
 
   pushHistory: (label = 'Edit') => {
@@ -226,7 +251,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     flushLayerSync(state);
 
     const prevSnapshot = state.undoStack[state.undoStack.length - 1];
-    const gpuSnapshots = snapshotGpuLayers(state.document.layerOrder, state.dirtyLayerIds, prevSnapshot);
+    const gpuSnapshots = snapshotGpuLayers(state.document.layers, state.document.layerOrder, state.dirtyLayerIds, prevSnapshot);
 
     const snapshot: HistorySnapshot = {
       document: state.document,
