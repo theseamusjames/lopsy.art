@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useToolSettingsStore, abrBrushToPreset } from '../../app/tool-settings-store';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
@@ -11,8 +11,12 @@ import { describeError, notifyError } from '../../app/notifications-store';
 import { docScaledMax } from '../../utils/slider-ranges';
 import styles from './BrushModal.module.css';
 
+let nextTextureId = 1;
+
 export function BrushModal() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textureFileInputRef = useRef<HTMLInputElement>(null);
+  const [textureImporting, setTextureImporting] = useState(false);
 
   const presets = useToolSettingsStore((s) => s.presets);
   const activePresetId = useToolSettingsStore((s) => s.activePresetId);
@@ -52,6 +56,8 @@ export function BrushModal() {
   const setTextureData = useToolSettingsStore((s) => s.setBrushTextureData);
   const setTextureBlendMode = useToolSettingsStore((s) => s.setBrushTextureBlendMode);
   const setTextureScale = useToolSettingsStore((s) => s.setBrushTextureScale);
+  const addBrushTexture = useToolSettingsStore((s) => s.addBrushTexture);
+  const removeBrushTexture = useToolSettingsStore((s) => s.removeBrushTexture);
 
   const activePreset = presets.find((p) => p.id === activePresetId);
   const isActiveCustom = activePreset?.isCustom ?? false;
@@ -134,6 +140,69 @@ export function BrushModal() {
     setTextureBlendMode(e.target.value as BrushTextureBlendMode);
   }, [setTextureBlendMode]);
 
+  const handleTextureImportClick = useCallback(() => {
+    textureFileInputRef.current?.click();
+  }, []);
+
+  const handleTextureFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setTextureImporting(true);
+
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        setTextureImporting(false);
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, img.width, img.height);
+      const grayscale = new Uint8ClampedArray(img.width * img.height);
+      for (let i = 0; i < grayscale.length; i++) {
+        const r = imageData.data[i * 4]!;
+        const g = imageData.data[i * 4 + 1]!;
+        const b = imageData.data[i * 4 + 2]!;
+        grayscale[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      }
+      const name = file.name.replace(/\.[^.]+$/, '');
+      const tex = {
+        id: `texture-custom-${nextTextureId++}`,
+        name,
+        width: img.width,
+        height: img.height,
+        data: grayscale,
+      };
+      addBrushTexture(tex);
+      setTextureData(tex);
+      URL.revokeObjectURL(url);
+      setTextureImporting(false);
+    };
+    img.onerror = () => {
+      notifyError('Failed to load texture image.');
+      URL.revokeObjectURL(url);
+      setTextureImporting(false);
+    };
+    img.src = url;
+
+    if (textureFileInputRef.current) {
+      textureFileInputRef.current.value = '';
+    }
+  }, [addBrushTexture, setTextureData]);
+
+  const handleTextureDelete = useCallback(() => {
+    if (textureData && !textureData.id.startsWith('texture-noise') && !textureData.id.startsWith('texture-canvas') && !textureData.id.startsWith('texture-grain')) {
+      removeBrushTexture(textureData.id);
+    }
+  }, [textureData, removeBrushTexture]);
+
+  const isCustomTexture = textureData !== null && textureData.id.startsWith('texture-custom-');
+
   return (
     <div className={styles.overlay} onMouseDown={handleOverlayClick}>
       <div className={styles.modal} role="dialog" aria-label="Brushes">
@@ -206,17 +275,39 @@ export function BrushModal() {
 
             <div className={styles.sectionLabel}>Texture</div>
             <div className={styles.textureSection}>
-              <select
-                className={styles.select}
-                value={textureData?.id ?? 'none'}
-                onChange={handleTextureChange}
-                title="Brush texture"
-              >
-                <option value="none">No Texture</option>
-                {textures.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
+              <div className={styles.textureRow}>
+                <select
+                  className={styles.select}
+                  value={textureData?.id ?? 'none'}
+                  onChange={handleTextureChange}
+                  title="Brush texture"
+                >
+                  <option value="none">No Texture</option>
+                  {textures.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+                <button
+                  className={styles.importButton}
+                  onClick={handleTextureImportClick}
+                  disabled={textureImporting}
+                >
+                  {textureImporting ? 'Loading...' : 'Import'}
+                </button>
+                {isCustomTexture && (
+                  <button className={styles.deleteButton} onClick={handleTextureDelete}>
+                    Delete
+                  </button>
+                )}
+              </div>
+              <input
+                ref={textureFileInputRef}
+                type="file"
+                accept="image/*"
+                className={styles.hiddenInput}
+                aria-label="Import texture image"
+                onChange={handleTextureFileChange}
+              />
               {textureData && (
                 <>
                   <select

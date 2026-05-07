@@ -431,6 +431,8 @@ interface ToolSettings {
   setBrushTextureData: (texture: BrushTextureData | null) => void;
   setBrushTextureBlendMode: (mode: BrushTextureBlendMode) => void;
   setBrushTextureScale: (scale: number) => void;
+  addBrushTexture: (texture: BrushTextureData) => void;
+  removeBrushTexture: (id: string) => void;
   setSpraySize: (size: number) => void;
   setSprayDensity: (density: number) => void;
   /** Spray opacity in **percent**, range `1–100` (not normalised `0–1`). */
@@ -622,6 +624,11 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setBrushTextureData: (texture) => set({ brushTextureData: texture }),
   setBrushTextureBlendMode: (mode) => set({ brushTextureBlendMode: mode }),
   setBrushTextureScale: (scale) => set({ brushTextureScale: Math.max(10, Math.min(200, scale)) }),
+  addBrushTexture: (texture) => set((s) => ({ brushTextures: [...s.brushTextures, texture] })),
+  removeBrushTexture: (id) => set((s) => ({
+    brushTextures: s.brushTextures.filter((t) => t.id !== id),
+    brushTextureData: s.brushTextureData?.id === id ? null : s.brushTextureData,
+  })),
   setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(5000, size)) }),
   setSprayDensity: (density) => set({ sprayDensity: Math.max(1, Math.min(100, density)) }),
   setSprayOpacity: (opacity) => {
