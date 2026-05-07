@@ -772,9 +772,9 @@ pub fn clipboard_paste(
     Ok(())
 }
 
-/// Expand a layer's GPU texture to the full document size, blitting existing
-/// content to its correct position within the new doc-sized buffer.
-/// Returns [x, y, width, height] = [0, 0, doc_w, doc_h] on success.
+/// Expand a layer's GPU texture to cover at least the full document area,
+/// preserving any content that extends beyond the document bounds.
+/// Returns [x, y, width, height] of the resulting texture in document space.
 /// Used before transform so stretching beyond original content bounds never clips.
 pub fn expand_layer_to_doc_size(
     engine: &mut EngineInner,
@@ -792,22 +792,26 @@ pub fn expand_layer_to_doc_size(
         (desc.x, desc.y)
     };
 
-    // Already doc-sized at origin: nothing to do.
-    if lw == doc_w && lh == doc_h && layer_x == 0 && layer_y == 0 {
-        return Ok([0, 0, doc_w as i32, doc_h as i32]);
+    let min_x = 0i32.min(layer_x);
+    let min_y = 0i32.min(layer_y);
+    let max_x = (doc_w as i32).max(layer_x + lw as i32);
+    let max_y = (doc_h as i32).max(layer_y + lh as i32);
+    let new_w = (max_x - min_x) as u32;
+    let new_h = (max_y - min_y) as u32;
+
+    if lw == new_w && lh == new_h && layer_x == min_x && layer_y == min_y {
+        return Ok([min_x, min_y, new_w as i32, new_h as i32]);
     }
 
     let layer_tex = engine.texture_pool.get(tex_handle).cloned()
         .ok_or("Layer texture not found")?;
 
-    let new_tex = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
+    let new_tex = engine.texture_pool.acquire(&engine.gl, new_w, new_h)?;
     let new_gl_tex = engine.texture_pool.get(new_tex).cloned()
         .ok_or("New texture not found")?;
 
-    // clipboard_copy shader: maps doc-space UV to source layer UV; clips to
-    // the source bounds, leaves transparent outside.
     engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.render_to_texture(&new_gl_tex, doc_w as i32, doc_h as i32, |engine| {
+    engine.render_to_texture(&new_gl_tex, new_w as i32, new_h as i32, |engine| {
         engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
         engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
@@ -819,8 +823,8 @@ pub fn expand_layer_to_doc_size(
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), layer_x as f32, layer_y as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), lw as f32, lh as f32); }
-        if let Some(loc) = shader.location(&engine.gl, "u_boundsOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_boundsSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_boundsOffset") { engine.gl.uniform2f(Some(&loc), min_x as f32, min_y as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_boundsSize") { engine.gl.uniform2f(Some(&loc), new_w as f32, new_h as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
         engine.draw_fullscreen_quad();
     });
@@ -829,14 +833,14 @@ pub fn expand_layer_to_doc_size(
     engine.layer_textures.insert(layer_id.to_string(), new_tex);
 
     if let Some(desc) = engine.layer_stack.iter_mut().find(|l| l.id == layer_id) {
-        desc.x = 0;
-        desc.y = 0;
-        desc.width = doc_w;
-        desc.height = doc_h;
+        desc.x = min_x;
+        desc.y = min_y;
+        desc.width = new_w;
+        desc.height = new_h;
     }
 
     engine.mark_layer_dirty(layer_id);
-    Ok([0, 0, doc_w as i32, doc_h as i32])
+    Ok([min_x, min_y, new_w as i32, new_h as i32])
 }
 
 /// Crop a layer's GPU texture to the bounding box of its non-transparent
@@ -909,8 +913,8 @@ pub fn float_selection(
     let layer_x = layer_desc.x;
     let layer_y = layer_desc.y;
 
-    // After expansion, the layer is always doc-sized at (0,0): no diagonal
-    // padding needed. The float inherits the full doc-sized buffer.
+    // After expansion, the layer covers at least the full document area.
+    // No diagonal padding needed. The float inherits the expanded buffer.
     let (fw, fh, pad_x, pad_y) = (lw, lh, 0u32, 0u32);
     let new_x = layer_x - pad_x as i32;
     let new_y = layer_y - pad_y as i32;

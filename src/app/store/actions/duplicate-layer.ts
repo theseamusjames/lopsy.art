@@ -1,9 +1,17 @@
-import type { DocumentState } from '../../../types';
+import type { DocumentState, Layer } from '../../../types';
 import type { ActionResult } from '../types';
-import { duplicateLayer as duplicateLayerModel } from '../../../layers/layer-model';
+import {
+  duplicateLayer as duplicateLayerModel,
+  duplicateOffsetForLayer,
+} from '../../../layers/layer-model';
 import { findParentGroup, addToGroup, isGroupLayer, getDescendantIds } from '../../../layers/group-utils';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { duplicateLayerTexture } from '../../../engine-wasm/wasm-bridge';
+
+function shiftLayer(layer: Layer, dx: number, dy: number): Layer {
+  if (dx === 0 && dy === 0) return layer;
+  return { ...layer, x: layer.x + dx, y: layer.y + dy } as Layer;
+}
 
 export function computeDuplicateLayer(
   doc: DocumentState,
@@ -25,10 +33,12 @@ export function computeDuplicateLayer(
     const descIds = getDescendantIds(doc.layers, activeId);
     const allIds = [activeId, ...descIds];
 
+    const { dx, dy } = duplicateOffsetForLayer(layer, doc.width, doc.height);
+
     for (const id of allIds) {
       const orig = doc.layers.find((l) => l.id === id);
       if (!orig) continue;
-      const dup = duplicateLayerModel(orig);
+      const dup = shiftLayer(duplicateLayerModel(orig), dx, dy);
       idMap.set(id, dup.id);
       newLayers.push(dup);
       const orderIdx = newOrder.indexOf(id);
@@ -62,13 +72,14 @@ export function computeDuplicateLayer(
     }
 
     return {
-      document: { ...doc, layers: newLayers, layerOrder: newOrder, activeLayerId: dupRootId, selectedLayerIds: [dupRootId] },
+      document: { ...doc, layers: newLayers, layerOrder: newOrder, activeLayerId: dupRootId },
       layerPixelData: pixelData,
     };
   }
 
   // Simple layer duplication
-  const newLayer = duplicateLayerModel(layer);
+  const { dx, dy } = duplicateOffsetForLayer(layer, doc.width, doc.height);
+  const newLayer = shiftLayer(duplicateLayerModel(layer), dx, dy);
   const newId = newLayer.id;
   const orderIdx = doc.layerOrder.indexOf(activeId);
   newOrder.splice(orderIdx + 1, 0, newId);
@@ -86,7 +97,7 @@ export function computeDuplicateLayer(
   }
 
   return {
-    document: { ...doc, layers, layerOrder: newOrder, activeLayerId: newId, selectedLayerIds: [newId] },
+    document: { ...doc, layers, layerOrder: newOrder, activeLayerId: newId },
     layerPixelData: pixelData,
   };
 }

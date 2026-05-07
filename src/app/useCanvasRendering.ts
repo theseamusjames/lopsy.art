@@ -99,7 +99,7 @@ function renderFrameGpu(
               ...s.document,
               layers: s.document.layers.map((l) =>
                 l.id === newId
-                  ? { ...l, x: 0, y: 0, width: result[2]!, height: result[3]! }
+                  ? { ...l, x: result[0]!, y: result[1]!, width: result[2]!, height: result[3]! }
                   : l
               ),
             },

@@ -111,6 +111,63 @@ export function duplicateLayer(layer: Layer): Layer {
   return { ...layer, id: crypto.randomUUID(), name: `${layer.name} copy` } as Layer;
 }
 
+/**
+ * Compute the (dx, dy) offset to apply when duplicating a layer onto a
+ * canvas of the given size. Returns a small positional shift so the duplicate
+ * is visually distinguishable from the original, but never one that pushes
+ * the duplicate further off the canvas than the original was.
+ *
+ * - Layers wider/taller than the canvas: no shift on that axis (any shift
+ *   would move visible content off the canvas).
+ * - Layers that fit: shift toward (+10, +10), clamped so the duplicate's
+ *   far edge does not pass the canvas edge.
+ */
+export function duplicateOffsetForLayer(
+  layer: Layer,
+  canvasWidth: number,
+  canvasHeight: number,
+): { dx: number; dy: number } {
+  const SHIFT = 10;
+  const w = layerSpanWidth(layer);
+  const h = layerSpanHeight(layer);
+
+  let dx = SHIFT;
+  let dy = SHIFT;
+
+  if (w !== null) {
+    if (w >= canvasWidth) {
+      dx = 0;
+    } else {
+      const maxX = canvasWidth - w;
+      const remaining = maxX - layer.x;
+      dx = Math.max(0, Math.min(dx, remaining));
+    }
+  }
+
+  if (h !== null) {
+    if (h >= canvasHeight) {
+      dy = 0;
+    } else {
+      const maxY = canvasHeight - h;
+      const remaining = maxY - layer.y;
+      dy = Math.max(0, Math.min(dy, remaining));
+    }
+  }
+
+  return { dx, dy };
+}
+
+function layerSpanWidth(layer: Layer): number | null {
+  if (layer.type === 'raster' || layer.type === 'shape') return layer.width;
+  if (layer.type === 'text') return layer.width;
+  return null;
+}
+
+function layerSpanHeight(layer: Layer): number | null {
+  if (layer.type === 'raster' || layer.type === 'shape') return layer.height;
+  return null;
+}
+
 export function updateLayer<T extends Layer>(
   layer: T,
   updates: Partial<Omit<T, 'id' | 'type'>>,
