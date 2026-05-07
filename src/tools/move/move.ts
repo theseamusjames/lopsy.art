@@ -166,6 +166,32 @@ export function computeAlign(
   return { x: x || 0, y: y || 0 };
 }
 
+/**
+ * Compute new dimensions and position to fit content within a canvas such
+ * that the longest side fits within the canvas bounds, preserving aspect
+ * ratio, and the content is centered. Used by the move-tool "Fit" action
+ * to bring an oversized pasted/dropped image onto the artboard.
+ */
+export function computeFit(
+  contentWidth: number,
+  contentHeight: number,
+  canvasWidth: number,
+  canvasHeight: number,
+): { x: number; y: number; width: number; height: number } {
+  if (contentWidth <= 0 || contentHeight <= 0) {
+    return { x: 0, y: 0, width: contentWidth, height: contentHeight };
+  }
+  const scale = Math.min(canvasWidth / contentWidth, canvasHeight / contentHeight);
+  const newW = Math.max(1, Math.round(contentWidth * scale));
+  const newH = Math.max(1, Math.round(contentHeight * scale));
+  return {
+    x: Math.round((canvasWidth - newW) / 2),
+    y: Math.round((canvasHeight - newH) / 2),
+    width: newW,
+    height: newH,
+  };
+}
+
 export function computeLayerMove(
   startPos: Point,
   currentPos: Point,

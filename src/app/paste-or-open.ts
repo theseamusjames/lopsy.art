@@ -10,6 +10,7 @@
 import { useEditorStore } from './editor-store';
 import { seedBitmapFromBlob } from '../engine/bitmap-cache';
 import { decodeImageBlob } from './decode-image';
+import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 
 export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNewDocument = false): Promise<void> {
   const store = useEditorStore.getState();
@@ -44,6 +45,10 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
     } else if (result.imageData) {
       store.pasteImageData(result.imageData);
     }
+    // Issue #347: select the pasted content so the user can immediately
+    // transform it (resize, fit, etc.) via the move/transform tools.
+    const pastedId = useEditorStore.getState().document.activeLayerId;
+    if (pastedId) selectLayerAlpha(pastedId);
   } else {
     const layerId = crypto.randomUUID();
     const result = await decodeImageBlob(blob, layerId);
