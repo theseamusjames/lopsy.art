@@ -7,6 +7,7 @@ export const clouds: FilterDefinition = {
   params: [
     { key: 'scale', label: 'Scale', min: 1, max: 20, step: 1, defaultValue: 5 },
   ],
+  randomized: true,
   applyGpu: (engine, layerId, values) => {
     const seed = Math.random() * 1000;
     filterClouds(engine, layerId, values['scale'] ?? 5, seed);

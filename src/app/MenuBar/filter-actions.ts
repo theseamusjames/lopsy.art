@@ -11,6 +11,7 @@ import {
   restoreFilterPreview,
   clearFilterPreview,
 } from '../../engine-wasm/wasm-bridge';
+import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 import { filterRegistry } from '../../filters/filter-registry';
 import type { FilterDefinition } from '../../filters/filter-types';
 
@@ -113,13 +114,22 @@ export function applyGenericFilterWithPreview(id: FilterDialogId, values: Record
   const engine = getEngine();
   if (!engine) return;
 
-  // Restore original first so history captures the unfiltered state
+  // Snapshot the current GPU texture (the preview the user is looking at)
+  // so we can restore it after capturing history from the original.
+  const previewPixels = readLayerCompressed(activeId);
+
+  // Restore original so history captures the unfiltered state
   restoreFilterPreview(engine);
   clearFilterPreview(engine);
 
-  // Now apply for real with history
   useEditorStore.getState().pushHistory(filter.title);
-  filter.applyGpu(engine, activeId, values);
+
+  if (previewPixels) {
+    uploadCompressed(activeId, previewPixels);
+  } else {
+    filter.applyGpu(engine, activeId, values);
+  }
+
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }

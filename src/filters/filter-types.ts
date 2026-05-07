@@ -5,5 +5,6 @@ export interface FilterDefinition {
   id: string;
   title: string;
   params: FilterParam[];
+  randomized?: boolean;
   applyGpu: (engine: Engine, layerId: string, values: Record<string, number>) => void;
 }
