@@ -5,6 +5,7 @@
   "type": "module",
   "description": "A browser-based image editor",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "wasm:build": "rm -rf src/engine-wasm/pkg && cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --out-dir ../../../src/engine-wasm/pkg",
     "wasm:build:dev": "rm -rf src/engine-wasm/pkg && cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --dev --out-dir ../../../src/engine-wasm/pkg",
     "wasm:test": "cd engine-rs && cargo test",

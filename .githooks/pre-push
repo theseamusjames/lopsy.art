@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Block pushes when `tsc --noEmit` fails. Bypass with `git push --no-verify`.
+set -e
+
+cd "$(git rev-parse --show-toplevel)"
+
+if [ ! -d src/engine-wasm/pkg ]; then
+  echo "pre-push: src/engine-wasm/pkg missing — running wasm build first"
+  npm run wasm:build
+fi
+
+echo "pre-push: running tsc --noEmit"
+npm run typecheck
