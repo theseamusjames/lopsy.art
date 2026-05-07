@@ -306,9 +306,9 @@ pub fn crop_layer_texture(
     ).map_err(|e| JsError::new(&e))
 }
 
-/// Expand a raster layer's GPU texture to full document size so that
-/// transform/stretch operations never clip beyond the original content bounds.
-/// Returns [0, 0, doc_w, doc_h] on success, or [] on error.
+/// Expand a raster layer's GPU texture to cover at least the full document
+/// area, preserving any content that extends beyond the document bounds.
+/// Returns [x, y, w, h] of the resulting texture on success, or [] on error.
 #[wasm_bindgen(js_name = "expandLayerToDocSize")]
 pub fn expand_layer_to_doc_size(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
     match layer_manager::expand_layer_to_doc_size(&mut engine.inner, layer_id) {
