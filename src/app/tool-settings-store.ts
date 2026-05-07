@@ -157,39 +157,83 @@ function generateLeafTip(size: number): BrushTipData {
 // Built-in brush textures
 // ---------------------------------------------------------------------------
 
+function tileHash(x: number, y: number, seed: number): number {
+  let h = (x * 374761393 + y * 668265263 + seed) | 0;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h = h ^ (h >> 16);
+  return ((h >>> 0) & 0xFF) / 255;
+}
+
+function generateSeamlessNoise(size: number, octaves: number, seed: number): Float64Array {
+  const data = new Float64Array(size * size);
+  for (let oct = 0; oct < octaves; oct++) {
+    const freq = 1 << oct;
+    const amp = 1 / (1 << oct);
+    const cellSize = size / freq;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const cx = x / cellSize;
+        const cy = y / cellSize;
+        const x0 = Math.floor(cx) % freq;
+        const y0 = Math.floor(cy) % freq;
+        const x1 = (x0 + 1) % freq;
+        const y1 = (y0 + 1) % freq;
+        const fx = cx - Math.floor(cx);
+        const fy = cy - Math.floor(cy);
+        const sx = fx * fx * (3 - 2 * fx);
+        const sy = fy * fy * (3 - 2 * fy);
+        const v00 = tileHash(x0, y0, seed + oct * 997);
+        const v10 = tileHash(x1, y0, seed + oct * 997);
+        const v01 = tileHash(x0, y1, seed + oct * 997);
+        const v11 = tileHash(x1, y1, seed + oct * 997);
+        const v = (v00 * (1 - sx) + v10 * sx) * (1 - sy) + (v01 * (1 - sx) + v11 * sx) * sy;
+        const idx = y * size + x;
+        data[idx] = (data[idx] ?? 0) + v * amp;
+      }
+    }
+  }
+  return data;
+}
+
 function generateNoiseTexture(size: number): BrushTextureData {
+  const raw = generateSeamlessNoise(size, 4, 42);
   const data = new Uint8ClampedArray(size * size);
-  let seed = 42;
-  for (let i = 0; i < size * size; i++) {
-    seed ^= seed << 13;
-    seed ^= seed >> 17;
-    seed ^= seed << 5;
-    data[i] = (seed >>> 0) % 256;
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i]! < min) min = raw[i]!;
+    if (raw[i]! > max) max = raw[i]!;
+  }
+  const range = max - min || 1;
+  for (let i = 0; i < raw.length; i++) {
+    data[i] = Math.round(((raw[i]! - min) / range) * 255);
   }
   return { id: 'texture-noise', name: 'Noise', width: size, height: size, data };
 }
 
 function generateCanvasTexture(size: number): BrushTextureData {
+  const raw = generateSeamlessNoise(size, 3, 100);
   const data = new Uint8ClampedArray(size * size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const h = (y % 4 < 2) ? 180 : 255;
-      const v = (x % 4 < 2) ? 180 : 255;
-      data[y * size + x] = Math.round((h + v) / 2);
+      const weave = ((y % 4 < 2) ? 0.7 : 1.0) * ((x % 4 < 2) ? 0.7 : 1.0);
+      const noise = raw[y * size + x]!;
+      data[y * size + x] = Math.round((weave * 0.7 + noise * 0.3) * 255);
     }
   }
   return { id: 'texture-canvas', name: 'Canvas', width: size, height: size, data };
 }
 
 function generateGrainTexture(size: number): BrushTextureData {
+  const raw = generateSeamlessNoise(size, 5, 7);
   const data = new Uint8ClampedArray(size * size);
-  let seed = 7;
-  for (let i = 0; i < size * size; i++) {
-    seed ^= seed << 13;
-    seed ^= seed >> 17;
-    seed ^= seed << 5;
-    const r = ((seed >>> 0) / 0xFFFFFFFF);
-    data[i] = Math.round(r * 100 + 155);
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i]! < min) min = raw[i]!;
+    if (raw[i]! > max) max = raw[i]!;
+  }
+  const range = max - min || 1;
+  for (let i = 0; i < raw.length; i++) {
+    data[i] = Math.round(((raw[i]! - min) / range) * 60 + 195);
   }
   return { id: 'texture-grain', name: 'Grain', width: size, height: size, data };
 }
