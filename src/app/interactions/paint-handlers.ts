@@ -503,7 +503,7 @@ export function handlePaintMove(
       const opacity = toolSettings.brushOpacity / 100;
       const brushScatter = toolSettings.brushScatter;
       const brushFade = toolSettings.brushFade;
-      const sJ = toolSettings.brushSizeJitter / 100;
+      const sizeJitter = toolSettings.brushSizeJitter / 100;
       const aJ = toolSettings.brushAngleJitter / 100;
       const oJ = toolSettings.brushOpacityJitter / 100;
       const speedSize = toolSettings.brushSpeedSize / 100;
@@ -512,22 +512,44 @@ export function handlePaintMove(
       const g = color.g / 255;
       const b = color.b / 255;
 
-      // Speed-based size: compute stroke speed and scale size down for fast strokes
+      const dx = layerLocalPos.x - state.lastPoint.x;
+      const dy = layerLocalPos.y - state.lastPoint.y;
+      const segDist = Math.sqrt(dx * dx + dy * dy);
+
       let size = baseSize;
+
+      // Speed-based size
       if (speedSize > 0) {
         const now = performance.now();
         const dt = now - (state.lastPointTime ?? now);
-        const dx = layerLocalPos.x - state.lastPoint.x;
-        const dy = layerLocalPos.y - state.lastPoint.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const rawSpeed = dt > 0 ? dist / dt : 0; // px/ms
-        const maxSpeed = 5; // ~300px in 60ms
+        const rawSpeed = dt > 0 ? segDist / dt : 0;
+        const maxSpeed = 5;
         const normalizedSpeed = Math.min(rawSpeed / maxSpeed, 1);
         const alpha = 0.3;
         const smoothed = alpha * normalizedSpeed + (1 - alpha) * (state.smoothedSpeed ?? 0);
         state.smoothedSpeed = smoothed;
         state.lastPointTime = now;
-        size = Math.max(1, baseSize * (1 - speedSize * smoothed));
+        size = Math.max(1, size * (1 - speedSize * smoothed));
+      }
+
+      // Size jitter: smooth random walk between target sizes.
+      // Pick a random target multiplier (0..1) and a transition distance,
+      // then lerp toward it. When reached, pick a new target.
+      if (sizeJitter > 0) {
+        if (state.sizeJitterTarget === undefined || (state.sizeJitterDistTraveled ?? 0) >= (state.sizeJitterTransitionDist ?? 0)) {
+          state.sizeJitterPrevTarget = state.sizeJitterCurrent ?? 1;
+          state.sizeJitterTarget = Math.random();
+          state.sizeJitterTransitionDist = 30 + Math.random() * 90;
+          state.sizeJitterDistTraveled = 0;
+        }
+        state.sizeJitterDistTraveled = (state.sizeJitterDistTraveled ?? 0) + segDist;
+        const t = Math.min((state.sizeJitterDistTraveled ?? 0) / (state.sizeJitterTransitionDist ?? 1), 1);
+        const smoothT = t * t * (3 - 2 * t);
+        const prev = state.sizeJitterPrevTarget ?? 1;
+        const target = state.sizeJitterTarget ?? 1;
+        const current = prev + (target - prev) * smoothT;
+        state.sizeJitterCurrent = current;
+        size = Math.max(1, size * (1 - sizeJitter * (1 - current)));
       }
 
       const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
@@ -540,27 +562,27 @@ export function handlePaintMove(
       if (brushScatter > 0) {
         const scatterPts = interpolatePointsWithScatter(state.lastPoint, layerLocalPos, spacing, brushScatter, size);
         if (brushFade > 0) {
-          emitDabsWithFade(engine, state.layerId, scatterPts, state.lastPoint, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym, sJ, aJ, oJ);
+          emitDabsWithFade(engine, state.layerId, scatterPts, state.lastPoint, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym, 0, aJ, oJ);
         } else {
           const pts = new Float64Array(scatterPts.length * 2);
           for (let i = 0; i < scatterPts.length; i++) {
             pts[i * 2] = scatterPts[i]!.x;
             pts[i * 2 + 1] = scatterPts[i]!.y;
           }
-          gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
+          gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
           for (const m of mirrorBatchPoints(pts, sym)) {
-            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
+            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
           }
         }
       } else {
         const { points: pts, remainder: spacingRem } = interpolateWithSpacing(state.lastPoint, layerLocalPos, spacing, state.spacingRemainder ?? 0);
         state.spacingRemainder = spacingRem;
         if (brushFade > 0) {
-          emitFlatDabsWithFade(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym, sJ, aJ, oJ);
+          emitFlatDabsWithFade(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym, 0, aJ, oJ);
         } else {
-          gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
+          gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
           for (const m of mirrorBatchPoints(pts, sym)) {
-            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
+            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
           }
         }
       }

@@ -31,6 +31,11 @@ export interface InteractionState {
   strokeColor?: { r: number; g: number; b: number; a: number };
   lastPointTime?: number;
   smoothedSpeed?: number;
+  sizeJitterCurrent?: number;
+  sizeJitterTarget?: number;
+  sizeJitterPrevTarget?: number;
+  sizeJitterTransitionDist?: number;
+  sizeJitterDistTraveled?: number;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
   selectionOnlyTransform?: boolean;
