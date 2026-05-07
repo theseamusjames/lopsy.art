@@ -28,8 +28,9 @@ pub fn apply_brush_dab(
     stamp_size: f32, hardness: f32,
     r: f32, g: f32, b: f32, a: f32,
     opacity: f32, flow: f32,
+    size_jitter: f32, angle_jitter: f32, opacity_jitter: f32,
 ) {
-    brush_gpu::apply_dab(&mut engine.inner, layer_id, cx, cy, stamp_size, hardness, r, g, b, a, opacity, flow);
+    brush_gpu::apply_dab(&mut engine.inner, layer_id, cx, cy, stamp_size, hardness, r, g, b, a, opacity, flow, size_jitter, angle_jitter, opacity_jitter);
 }
 
 #[wasm_bindgen(js_name = "applyBrushDabBatch")]
@@ -39,8 +40,9 @@ pub fn apply_brush_dab_batch(
     stamp_size: f32, hardness: f32,
     r: f32, g: f32, b: f32, a: f32,
     opacity: f32, flow: f32,
+    size_jitter: f32, angle_jitter: f32, opacity_jitter: f32,
 ) {
-    brush_gpu::apply_dab_batch(&mut engine.inner, layer_id, points, stamp_size, hardness, r, g, b, a, opacity, flow);
+    brush_gpu::apply_dab_batch(&mut engine.inner, layer_id, points, stamp_size, hardness, r, g, b, a, opacity, flow, size_jitter, angle_jitter, opacity_jitter);
 }
 
 #[wasm_bindgen(js_name = "applyEraserDab")]
@@ -193,6 +195,54 @@ pub fn clear_brush_tip(engine: &mut Engine) {
 pub fn set_brush_tip_state(engine: &mut Engine, has_tip: bool, angle: f32) {
     engine.inner.brush_has_tip = has_tip;
     engine.inner.brush_angle = angle;
+}
+
+#[wasm_bindgen(js_name = "uploadBrushTexture")]
+pub fn upload_brush_texture(engine: &mut Engine, data: &[u8], width: u32, height: u32) -> Result<(), JsError> {
+    let mut rgba = vec![0u8; (width * height * 4) as usize];
+    for i in 0..(width * height) as usize {
+        let v = if i < data.len() { data[i] } else { 0 };
+        rgba[i * 4] = v;
+        rgba[i * 4 + 1] = v;
+        rgba[i * 4 + 2] = v;
+        rgba[i * 4 + 3] = 255;
+    }
+    if let Some(old) = engine.inner.brush_texture.take() {
+        engine.inner.texture_pool.release(old);
+    }
+    let tex = engine.inner.texture_pool.acquire(&engine.inner.gl, width, height)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, width, height, &rgba)
+        .map_err(|e| JsError::new(&e))?;
+    // Set texture wrapping to REPEAT for tiling
+    let gl = &engine.inner.gl;
+    if let Some(tex_gl) = engine.inner.texture_pool.get(tex) {
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex_gl));
+        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_WRAP_S, WebGl2RenderingContext::REPEAT as i32);
+        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_WRAP_T, WebGl2RenderingContext::REPEAT as i32);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    }
+    engine.inner.brush_texture = Some(tex);
+    engine.inner.brush_texture_width = width;
+    engine.inner.brush_texture_height = height;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "clearBrushTexture")]
+pub fn clear_brush_texture(engine: &mut Engine) {
+    if let Some(tex) = engine.inner.brush_texture.take() {
+        engine.inner.texture_pool.release(tex);
+    }
+    engine.inner.brush_texture_width = 0;
+    engine.inner.brush_texture_height = 0;
+    engine.inner.brush_has_texture = false;
+}
+
+#[wasm_bindgen(js_name = "setBrushTextureState")]
+pub fn set_brush_texture_state(engine: &mut Engine, has_texture: bool, scale: f32, blend_mode: u32) {
+    engine.inner.brush_has_texture = has_texture;
+    engine.inner.brush_texture_scale = scale;
+    engine.inner.brush_texture_blend_mode = blend_mode;
 }
 
 #[wasm_bindgen(js_name = "generateBrushStamp")]

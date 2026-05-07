@@ -61,6 +61,9 @@ import {
   uploadBrushTip,
   clearBrushTip,
   setBrushTipState,
+  uploadBrushTexture,
+  clearBrushTexture,
+  setBrushTextureState,
   setTextLayerContent,
   renderTextLayer,
   getRenderedTextPixels,
@@ -68,7 +71,7 @@ import {
 } from './wasm-bridge';
 import type { PathAnchor, TextEditingState } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
-import type { BrushTipData } from '../types/brush';
+import type { BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../types/brush';
 import type { Color } from '../types';
 import type { TextLayer } from '../types/layers';
 import type { StoredPath } from '../types/paths';
@@ -376,6 +379,49 @@ export function syncBrushTip(
     setBrushTipState(engine, hasTip, brushAngle);
     tracked.brushHasTip = hasTip;
     tracked.brushAngle = brushAngle;
+  }
+}
+
+const BLEND_MODE_MAP: Record<BrushTextureBlendMode, number> = {
+  multiply: 0,
+  subtract: 1,
+  overlay: 2,
+};
+
+export function syncBrushTexture(
+  engine: Engine,
+  textureData: BrushTextureData | null,
+  scale: number,
+  blendMode: BrushTextureBlendMode,
+): void {
+  const tracked = getTracked(engine);
+  const hasTexture = textureData !== null;
+  const textureChanged = tracked.brushTextureData !== textureData;
+
+  if (textureChanged) {
+    if (textureData) {
+      const bytes = new Uint8Array(
+        textureData.data.buffer,
+        textureData.data.byteOffset,
+        textureData.data.byteLength,
+      );
+      uploadBrushTexture(engine, bytes, textureData.width, textureData.height);
+    } else {
+      clearBrushTexture(engine);
+    }
+    tracked.brushTextureData = textureData;
+  }
+
+  const normalizedScale = scale / 100;
+  if (
+    tracked.brushHasTexture !== hasTexture ||
+    tracked.brushTextureScale !== normalizedScale ||
+    tracked.brushTextureBlendMode !== blendMode
+  ) {
+    setBrushTextureState(engine, hasTexture, normalizedScale, BLEND_MODE_MAP[blendMode]);
+    tracked.brushHasTexture = hasTexture;
+    tracked.brushTextureScale = normalizedScale;
+    tracked.brushTextureBlendMode = blendMode;
   }
 }
 

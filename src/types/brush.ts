@@ -5,6 +5,17 @@ export interface BrushTipData {
   readonly data: Uint8ClampedArray;
 }
 
+/** Grayscale tileable texture applied to brush strokes. */
+export interface BrushTextureData {
+  readonly id: string;
+  readonly name: string;
+  readonly width: number;
+  readonly height: number;
+  readonly data: Uint8ClampedArray;
+}
+
+export type BrushTextureBlendMode = 'multiply' | 'subtract' | 'overlay';
+
 /** A saved brush preset with tip shape and stroke parameters. */
 export interface BrushPreset {
   readonly id: string;

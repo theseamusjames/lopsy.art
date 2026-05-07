@@ -251,6 +251,9 @@ export function handlePaintDown(
     const brushSpacing = toolSettings.brushSpacing;
     const brushScatter = toolSettings.brushScatter;
     const brushFade = toolSettings.brushFade;
+    const sJ = toolSettings.brushSizeJitter / 100;
+    const aJ = toolSettings.brushAngleJitter / 100;
+    const oJ = toolSettings.brushOpacityJitter / 100;
     const color = strokeColor;
     useToolSettingsStore.getState().addRecentColor(color);
     const r = color.r / 255;
@@ -262,36 +265,36 @@ export function handlePaintDown(
       if (brushScatter > 0) {
         const scatterPts = interpolatePointsWithScatter(lineFrom, layerPos, spacing, brushScatter, size);
         if (brushFade > 0) {
-          emitDabsWithFade(engine, activeLayerId, scatterPts, lineFrom, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym);
+          emitDabsWithFade(engine, activeLayerId, scatterPts, lineFrom, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym, sJ, aJ, oJ);
         } else {
           const arr = new Float64Array(scatterPts.length * 2);
           for (let i = 0; i < scatterPts.length; i++) {
             arr[i * 2] = scatterPts[i]!.x;
             arr[i * 2 + 1] = scatterPts[i]!.y;
           }
-          gpuBrushDabBatch(engine, activeLayerId, arr, size, hardness, r, g, b, color.a, opacity, 1);
+          gpuBrushDabBatch(engine, activeLayerId, arr, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
           for (const m of mirrorBatchPoints(arr, sym)) {
-            gpuBrushDabBatch(engine, activeLayerId, m, size, hardness, r, g, b, color.a, opacity, 1);
+            gpuBrushDabBatch(engine, activeLayerId, m, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
           }
         }
       } else {
         const { points: pts, remainder: spacingRem } = interpolateWithSpacing(lineFrom, layerPos, spacing, state.spacingRemainder ?? 0);
         state.spacingRemainder = spacingRem;
         if (brushFade > 0) {
-          emitFlatDabsWithFade(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym);
+          emitFlatDabsWithFade(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym, sJ, aJ, oJ);
         } else {
-          gpuBrushDabBatch(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, 1);
+          gpuBrushDabBatch(engine, activeLayerId, pts, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
           for (const m of mirrorBatchPoints(pts, sym)) {
-            gpuBrushDabBatch(engine, activeLayerId, m, size, hardness, r, g, b, color.a, opacity, 1);
+            gpuBrushDabBatch(engine, activeLayerId, m, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
           }
         }
       }
     } else {
       const fadedOpacity = brushFade > 0 ? opacity * Math.max(0, 1 - (state.strokeDistance ?? 0) / brushFade) : opacity;
       if (fadedOpacity > 0) {
-        gpuBrushDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, r, g, b, color.a, fadedOpacity, 1);
+        gpuBrushDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, r, g, b, color.a, fadedOpacity, 1, sJ, aJ, oJ);
         for (const mp of getMirroredPoints(layerPos.x, layerPos.y, sym)) {
-          gpuBrushDab(engine, activeLayerId, mp.x, mp.y, size, hardness, r, g, b, color.a, fadedOpacity, 1);
+          gpuBrushDab(engine, activeLayerId, mp.x, mp.y, size, hardness, r, g, b, color.a, fadedOpacity, 1, sJ, aJ, oJ);
         }
       }
     }
@@ -387,6 +390,7 @@ function emitFlatDabsWithFade(
   fadeDistance: number,
   state: InteractionState,
   sym: SymmetryConfig,
+  sJ = 0, aJ = 0, oJ = 0,
 ): void {
   if (!engine) return;
   let dist = state.strokeDistance ?? 0;
@@ -409,9 +413,9 @@ function emitFlatDabsWithFade(
 
     const fadeFactor = Math.max(0, 1 - dist / fadeDistance);
     const fadedOp = baseOpacity * fadeFactor;
-    gpuBrushDab(engine, layerId, px, py, size, hardness, r, g, b, a, fadedOp, 1);
+    gpuBrushDab(engine, layerId, px, py, size, hardness, r, g, b, a, fadedOp, 1, sJ, aJ, oJ);
     for (const mp of getMirroredPoints(px, py, sym)) {
-      gpuBrushDab(engine, layerId, mp.x, mp.y, size, hardness, r, g, b, a, fadedOp, 1);
+      gpuBrushDab(engine, layerId, mp.x, mp.y, size, hardness, r, g, b, a, fadedOp, 1, sJ, aJ, oJ);
     }
   }
   state.strokeDistance = dist;
@@ -433,6 +437,7 @@ function emitDabsWithFade(
   fadeDistance: number,
   state: InteractionState,
   sym: SymmetryConfig,
+  sJ = 0, aJ = 0, oJ = 0,
 ): void {
   if (!engine) return;
   let dist = state.strokeDistance ?? 0;
@@ -453,9 +458,9 @@ function emitDabsWithFade(
 
     const fadeFactor = Math.max(0, 1 - dist / fadeDistance);
     const fadedOp = baseOpacity * fadeFactor;
-    gpuBrushDab(engine, layerId, pt.x, pt.y, size, hardness, r, g, b, a, fadedOp, 1);
+    gpuBrushDab(engine, layerId, pt.x, pt.y, size, hardness, r, g, b, a, fadedOp, 1, sJ, aJ, oJ);
     for (const mp of getMirroredPoints(pt.x, pt.y, sym)) {
-      gpuBrushDab(engine, layerId, mp.x, mp.y, size, hardness, r, g, b, a, fadedOp, 1);
+      gpuBrushDab(engine, layerId, mp.x, mp.y, size, hardness, r, g, b, a, fadedOp, 1, sJ, aJ, oJ);
     }
   }
   state.strokeDistance = dist;
@@ -496,6 +501,9 @@ export function handlePaintMove(
       const opacity = toolSettings.brushOpacity / 100;
       const brushScatter = toolSettings.brushScatter;
       const brushFade = toolSettings.brushFade;
+      const sJ = toolSettings.brushSizeJitter / 100;
+      const aJ = toolSettings.brushAngleJitter / 100;
+      const oJ = toolSettings.brushOpacityJitter / 100;
       const color = state.strokeColor ?? useToolSettingsStore.getState().foregroundColor;
       const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
       const r = color.r / 255;
@@ -510,27 +518,27 @@ export function handlePaintMove(
       if (brushScatter > 0) {
         const scatterPts = interpolatePointsWithScatter(state.lastPoint, layerLocalPos, spacing, brushScatter, size);
         if (brushFade > 0) {
-          emitDabsWithFade(engine, state.layerId, scatterPts, state.lastPoint, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym);
+          emitDabsWithFade(engine, state.layerId, scatterPts, state.lastPoint, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym, sJ, aJ, oJ);
         } else {
           const pts = new Float64Array(scatterPts.length * 2);
           for (let i = 0; i < scatterPts.length; i++) {
             pts[i * 2] = scatterPts[i]!.x;
             pts[i * 2 + 1] = scatterPts[i]!.y;
           }
-          gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1);
+          gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
           for (const m of mirrorBatchPoints(pts, sym)) {
-            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1);
+            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
           }
         }
       } else {
         const { points: pts, remainder: spacingRem } = interpolateWithSpacing(state.lastPoint, layerLocalPos, spacing, state.spacingRemainder ?? 0);
         state.spacingRemainder = spacingRem;
         if (brushFade > 0) {
-          emitFlatDabsWithFade(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym);
+          emitFlatDabsWithFade(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym, sJ, aJ, oJ);
         } else {
-          gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1);
+          gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
           for (const m of mirrorBatchPoints(pts, sym)) {
-            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1);
+            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, sJ, aJ, oJ);
           }
         }
       }

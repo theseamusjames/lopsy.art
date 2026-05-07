@@ -18,6 +18,7 @@ import {
   syncGroupAdjustments,
   syncMaskEditMode,
   syncBrushTip,
+  syncBrushTexture,
   syncTextLayers,
   syncPathTextLayers,
   renderEngine,
@@ -202,6 +203,7 @@ function renderFrameGpu(
   syncGroupAdjustments(engine, layers);
   syncMaskEditMode(engine, uiState.maskEditMode, doc.activeLayerId);
   syncBrushTip(engine, toolState.activeBrushTip, toolState.brushAngle * Math.PI / 180);
+  syncBrushTexture(engine, toolState.brushTextureData, toolState.brushTextureScale, toolState.brushTextureBlendMode);
 
   renderEngine(engine);
 

@@ -33,7 +33,7 @@ function emitSprayDabs(
 ): void {
   const dots = generateSprayDots(centerX, centerY, brushRadius, density, baseOpacity);
   for (const dot of dots) {
-    gpuBrushDab(engine, layerId, dot.x, dot.y, dot.radius * 2, hardness, r, g, b, a, dot.opacity, 1);
+    gpuBrushDab(engine, layerId, dot.x, dot.y, dot.radius * 2, hardness, r, g, b, a, dot.opacity, 1, 0, 0, 0);
   }
 }
 

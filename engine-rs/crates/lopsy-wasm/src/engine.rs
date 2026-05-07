@@ -130,6 +130,13 @@ pub struct EngineInner {
     pub brush_tip_height: u32,
     pub brush_has_tip: bool,
     pub brush_angle: f32,
+    // Custom brush texture
+    pub brush_texture: Option<TextureHandle>,
+    pub brush_texture_width: u32,
+    pub brush_texture_height: u32,
+    pub brush_has_texture: bool,
+    pub brush_texture_scale: f32,
+    pub brush_texture_blend_mode: u32,
     // Selection
     pub selection_mask_texture: Option<TextureHandle>,
     pub quick_mask_texture: Option<TextureHandle>,
@@ -257,6 +264,12 @@ impl EngineInner {
             brush_tip_height: 0,
             brush_has_tip: false,
             brush_angle: 0.0,
+            brush_texture: None,
+            brush_texture_width: 0,
+            brush_texture_height: 0,
+            brush_has_texture: false,
+            brush_texture_scale: 1.0,
+            brush_texture_blend_mode: 0,
             selection_mask_texture: None,
             quick_mask_texture: None,
             shape_preview_texture: None,
@@ -481,6 +494,11 @@ impl EngineInner {
             self.texture_pool.release(tex);
         }
         self.brush_has_tip = false;
+        // Brush texture
+        if let Some(tex) = self.brush_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        self.brush_has_texture = false;
         // Selection mask
         if let Some(tex) = self.selection_mask_texture.take() {
             self.texture_pool.release(tex);
