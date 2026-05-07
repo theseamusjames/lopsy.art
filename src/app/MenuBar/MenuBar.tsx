@@ -273,6 +273,7 @@ export function MenuBar() {
         <FilterDialog
           title={filterDef.title}
           params={filterDef.params}
+          showRegenerate={filterDef.randomized}
           onApply={handleGenericFilterApply}
           onCancel={handleDialogCancel}
           onPreviewStart={handlePreviewStart}

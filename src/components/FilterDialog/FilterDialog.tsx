@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { Slider } from '../Slider/Slider';
 import { useDraggablePanel } from '../../app/hooks/useDraggablePanel';
 import { useEditorStore } from '../../app/editor-store';
@@ -19,6 +20,7 @@ interface FilterParam {
 interface FilterDialogProps {
   title: string;
   params: FilterParam[];
+  showRegenerate?: boolean;
   onApply: (values: Record<string, number>) => void;
   onCancel: () => void;
   onPreviewChange?: (values: Record<string, number>) => void;
@@ -28,7 +30,7 @@ interface FilterDialogProps {
 
 export type { FilterParam, FilterDialogProps };
 
-export function FilterDialog({ title, params, onApply, onCancel, onPreviewChange, onPreviewStart, onPreviewStop }: FilterDialogProps) {
+export function FilterDialog({ title, params, showRegenerate, onApply, onCancel, onPreviewChange, onPreviewStart, onPreviewStop }: FilterDialogProps) {
   const [values, setValues] = useState<Record<string, number>>(() => {
     const initial: Record<string, number> = {};
     for (const param of params) {
@@ -55,6 +57,17 @@ export function FilterDialog({ title, params, onApply, onCancel, onPreviewChange
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [values, preview, onPreviewChange]);
+
+  const handleRegenerate = useCallback(() => {
+    if (!preview) {
+      setPreview(true);
+      previewActiveRef.current = true;
+      onPreviewStart?.();
+    }
+    if (onPreviewChange) {
+      setTimeout(() => onPreviewChange(values), 0);
+    }
+  }, [preview, onPreviewStart, onPreviewChange, values]);
 
   const handlePreviewToggle = useCallback(() => {
     setPreview((prev) => {
@@ -131,15 +144,28 @@ export function FilterDialog({ title, params, onApply, onCancel, onPreviewChange
           })}
         </div>
         <div className={styles.footer}>
-          <label className={styles.previewLabel}>
-            <input
-              type="checkbox"
-              checked={preview}
-              onChange={handlePreviewToggle}
-              className={styles.previewCheckbox}
-            />
-            Preview
-          </label>
+          <div className={styles.footerLeft}>
+            <label className={styles.previewLabel}>
+              <input
+                type="checkbox"
+                checked={preview}
+                onChange={handlePreviewToggle}
+                className={styles.previewCheckbox}
+              />
+              Preview
+            </label>
+            {showRegenerate && (
+              <button
+                className={styles.regenerateButton}
+                onClick={handleRegenerate}
+                type="button"
+                title="Regenerate"
+                aria-label="Regenerate"
+              >
+                <RefreshCw size={14} />
+              </button>
+            )}
+          </div>
           <div className={styles.footerButtons}>
             <button className={styles.cancelButton} onClick={handleCancel} type="button">
               Cancel
