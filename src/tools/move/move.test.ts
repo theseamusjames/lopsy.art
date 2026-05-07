@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeLayerMove, computeNudge, snapToGuide, computeAlign, getContentBounds, snapPositionToLayers } from './move';
+import { computeLayerMove, computeNudge, snapToGuide, computeAlign, getContentBounds, snapPositionToLayers, computeFit } from './move';
 import type { Layer } from '../../types';
 import { DEFAULT_EFFECTS } from '../../layers/layer-model';
 
@@ -206,5 +206,47 @@ describe('snapToGuide', () => {
   it('snaps to nearest guide within threshold', () => {
     const result = snapToGuide(199, [100, 200, 300], 5);
     expect(result).toEqual({ snapped: true, value: 200 });
+  });
+});
+
+describe('computeFit', () => {
+  // Issue #347: pasted/dropped image overflowing the canvas. Fit scales the
+  // longest side to the canvas while preserving aspect ratio and centers it.
+  it('shrinks a wide image so its width matches the canvas', () => {
+    const fit = computeFit(4000, 2000, 1024, 1024);
+    expect(fit.width).toBe(1024);
+    expect(fit.height).toBe(512);
+    expect(fit.x).toBe(0);
+    expect(fit.y).toBe(256);
+  });
+
+  it('shrinks a tall image so its height matches the canvas', () => {
+    const fit = computeFit(2000, 4000, 1024, 1024);
+    expect(fit.width).toBe(512);
+    expect(fit.height).toBe(1024);
+    expect(fit.x).toBe(256);
+    expect(fit.y).toBe(0);
+  });
+
+  it('scales up a small image to fit the canvas', () => {
+    const fit = computeFit(100, 100, 1024, 1024);
+    expect(fit.width).toBe(1024);
+    expect(fit.height).toBe(1024);
+    expect(fit.x).toBe(0);
+    expect(fit.y).toBe(0);
+  });
+
+  it('handles non-square canvases', () => {
+    const fit = computeFit(2000, 1000, 800, 600);
+    // Scale = min(800/2000, 600/1000) = min(0.4, 0.6) = 0.4 — width-bound.
+    expect(fit.width).toBe(800);
+    expect(fit.height).toBe(400);
+    expect(fit.x).toBe(0);
+    expect(fit.y).toBe(100);
+  });
+
+  it('returns the input unchanged for zero-sized content', () => {
+    const fit = computeFit(0, 100, 1024, 1024);
+    expect(fit.width).toBe(0);
   });
 });

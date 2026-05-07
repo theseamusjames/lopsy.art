@@ -30,6 +30,7 @@ import { computeCropCanvas } from './actions/crop-canvas';
 import { computeResizeCanvas } from './actions/resize-canvas';
 import { computeResizeImage } from './actions/resize-image';
 import { computeAlignLayer } from './actions/align-layer';
+import { computeFitLayer } from './actions/fit-layer';
 import { computeAddLayerMask } from './actions/add-layer-mask';
 import { computeRemoveLayerMask } from './actions/remove-layer-mask';
 import {
@@ -169,6 +170,7 @@ export interface DocumentSlice {
   moveLayer: (fromIndex: number, toIndex: number) => void;
   updateLayerPosition: (id: string, x: number, y: number) => void;
   alignLayer: (edge: AlignEdge) => void;
+  fitActiveLayerToCanvas: () => void;
   duplicateLayer: () => void;
   mergeDown: () => void;
   flattenImage: () => void;
@@ -455,6 +457,15 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     s.pushHistory('Align Layer');
     applyActionResult(set, result);
     for (const id of sparseIds) get().cropLayerToContent(id);
+  },
+
+  fitActiveLayerToCanvas: () => {
+    finalizePendingStrokeGlobal();
+    const s = get();
+    const result = computeFitLayer(s.document, s.renderVersion);
+    if (!result) return;
+    s.pushHistory('Fit Layer to Canvas');
+    applyActionResult(set, result);
   },
 
   duplicateLayer: () => {

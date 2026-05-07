@@ -9,6 +9,7 @@ import {
   AlignVerticalJustifyEnd,
   RotateCw,
   RotateCcw,
+  Maximize2,
 } from 'lucide-react';
 import type { AlignEdge } from '../../../tools/move/move';
 import { rotateActiveLayer } from '../../MenuBar/menus/image-menu';
@@ -18,6 +19,7 @@ import styles from '../OptionsBar.module.css';
 
 export function MoveOptions() {
   const alignLayer = useEditorStore((s) => s.alignLayer);
+  const fitActiveLayerToCanvas = useEditorStore((s) => s.fitActiveLayerToCanvas);
   const selectionActive = useEditorStore((s) => s.selection.active);
 
   const handleRotate = (dir: 'cw' | 'ccw') => {
@@ -58,6 +60,11 @@ export function MoveOptions() {
           icon={<RotateCw size={16} />}
           label="Rotate 90° CW"
           onClick={() => handleRotate('cw')}
+        />
+        <IconButton
+          icon={<Maximize2 size={16} />}
+          label="Fit layer to canvas"
+          onClick={() => fitActiveLayerToCanvas()}
         />
       </div>
       <TransformControls />
