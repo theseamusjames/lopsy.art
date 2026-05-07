@@ -193,4 +193,25 @@ describe('syncGroupAdjustments — group mask registration', () => {
     // Should be registered exactly once — mask and adjustments don't double-register
     expect(vi.mocked(bridge.setGroupAdjustments)).toHaveBeenCalledOnce();
   });
+
+  it('registers a pass-through group when it has adjustments', () => {
+    const engine = makeFakeEngine();
+    const raster = createRasterLayer({ name: 'Layer 1', width: 100, height: 100 });
+    const group = {
+      ...createGroupLayer({ name: 'Group', children: [raster.id] }),
+      blendMode: 'pass-through' as const,
+      adjustmentsEnabled: true,
+      adjustments: [{ id: 'exp-1', type: 'exposure' as const, enabled: true, exposure: 1.5 }],
+    };
+    sync.syncGroupAdjustments(engine, [raster, group]);
+    expect(vi.mocked(bridge.setGroupAdjustments)).toHaveBeenCalledOnce();
+  });
+
+  it('does not register a pass-through group with no adjustments and no mask', () => {
+    const engine = makeFakeEngine();
+    const raster = createRasterLayer({ name: 'Layer 1', width: 100, height: 100 });
+    const group = createGroupLayer({ name: 'Group', children: [raster.id] });
+    sync.syncGroupAdjustments(engine, [raster, group]);
+    expect(vi.mocked(bridge.setGroupAdjustments)).not.toHaveBeenCalled();
+  });
 });

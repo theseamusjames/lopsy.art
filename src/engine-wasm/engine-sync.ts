@@ -233,10 +233,12 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
   for (const layer of layers) {
     if (layer.type !== 'group') continue;
     const group = layer as import('../types').GroupLayer;
-    // Pass-through groups bypass the scratch FBO entirely — their children
-    // blend directly onto the parent composite, so group adjustments must
-    // not be registered (that would route children into the scratch FBO).
-    if (group.blendMode === 'pass-through') continue;
+    // Pass-through groups normally bypass the scratch FBO, but when a
+    // pass-through group has adjustments or a mask it must use the scratch
+    // FBO path so adjustments/mask apply to the composited group output.
+    const hasAdjNodes = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
+    const groupHasMask = group.mask != null && group.mask.enabled;
+    if (group.blendMode === 'pass-through' && !hasAdjNodes && !groupHasMask) continue;
     const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
     const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
     const hasCurves = adj?.curves != null && !isIdentityCurves(adj.curves);

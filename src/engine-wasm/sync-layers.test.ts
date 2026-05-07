@@ -376,4 +376,19 @@ describe('buildPassThroughOpacityMap', () => {
     const map = buildPassThroughOpacityMap(layers, index);
     expect(map.get('group-1')).toBe(1.0);
   });
+
+  it('stops multiplying when pass-through group has active adjustments', () => {
+    const group: GroupLayer = {
+      ...baseGroup,
+      opacity: 0.6,
+      blendMode: 'pass-through',
+      adjustmentsEnabled: true,
+      adjustments: [{ id: 'exp-1', type: 'exposure' as const, enabled: true, exposure: 1.0 }],
+    };
+    const child: RasterLayer = { ...baseRasterLayer };
+    const layers = [child, group];
+    const index = buildLayerIndex(layers);
+    const map = buildPassThroughOpacityMap(layers, index);
+    expect(map.get('raster-1')).toBe(1.0);
+  });
 });
