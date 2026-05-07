@@ -78,10 +78,15 @@ void main() {
         a = stamp * u_flow * jOpacity;
     }
 
-    // Brush texture modulation
+    // Brush texture modulation (rotated by per-dab jittered angle)
     if (u_hasBrushTexture == 1) {
         vec2 docPos = fragPos + u_layerOffset;
-        vec2 texUV = docPos / (u_brushTextureSize * u_textureScale);
+        vec2 texCenter = u_center + u_layerOffset;
+        vec2 rel = docPos - texCenter;
+        float tca = cos(jAngle);
+        float tsa = sin(jAngle);
+        vec2 rotated = texCenter + vec2(tca * rel.x + tsa * rel.y, -tsa * rel.x + tca * rel.y);
+        vec2 texUV = rotated / (u_brushTextureSize * u_textureScale);
         float texVal = texture(u_brushTexture, fract(texUV)).r;
 
         if (u_textureBlendMode == 0) {
