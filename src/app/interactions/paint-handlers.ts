@@ -528,7 +528,7 @@ export function handlePaintMove(
 
         if (!state.speedHistory) state.speedHistory = [];
         state.speedHistory.push(normalizedSpeed);
-        if (state.speedHistory.length > 6) state.speedHistory.shift();
+        if (state.speedHistory.length > 3) state.speedHistory.shift();
 
         const avgSpeed = state.speedHistory.reduce((a, b) => a + b, 0) / state.speedHistory.length;
 

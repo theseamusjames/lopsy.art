@@ -623,7 +623,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setBrushSizeJitter: (jitter) => set({ brushSizeJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushAngleJitter: (jitter) => set({ brushAngleJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushOpacityJitter: (jitter) => set({ brushOpacityJitter: Math.max(0, Math.min(100, jitter)) }),
-  setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(100, value)) }),
+  setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(300, value)) }),
   setBrushSpeedSizeInvert: (invert) => set({ brushSpeedSizeInvert: invert }),
   setBrushTextureData: (texture) => set({ brushTextureData: texture }),
   setBrushTextureBlendMode: (mode) => set({ brushTextureBlendMode: mode }),

@@ -14,53 +14,40 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   width: 600px;
-  max-height: 80vh;
+  height: 520px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.header {
-  padding: var(--space-3) var(--space-4);
+/* ------------------------------------------------------------------ */
+/* Top: horizontal preset gallery, 2 rows high                       */
+/* ------------------------------------------------------------------ */
+
+.gallery {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
-.header h2 {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.content {
-  display: flex;
+.galleryScroll {
   flex: 1;
-  min-height: 0;
-}
-
-.leftPanel {
-  width: 200px;
-  border-right: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-}
-
-.presetGrid {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-2);
+  min-width: 0;
+  overflow-x: auto;
   display: grid;
-  grid-template-columns: repeat(3, 48px);
-  gap: var(--space-2);
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, 44px);
+  gap: var(--space-1);
   align-content: start;
-  justify-content: center;
+  padding: var(--space-1) 0;
 }
 
 .presetItem {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border: 2px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-bg-primary);
@@ -71,6 +58,7 @@
   justify-content: center;
   transition: border-color var(--transition-fast);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .presetItem:hover {
@@ -81,52 +69,69 @@
   border-color: var(--color-accent);
 }
 
-.presetActions {
+.galleryActions {
   display: flex;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border-top: 1px solid var(--color-border);
+  flex-direction: column;
+  gap: var(--space-1);
   flex-shrink: 0;
 }
 
-.importButton,
-.deleteButton {
+/* ------------------------------------------------------------------ */
+/* Bottom: tab list (left) + panel (right)                            */
+/* ------------------------------------------------------------------ */
+
+.tabContainer {
+  display: flex;
   flex: 1;
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-1) var(--space-2);
-  color: var(--color-text-primary);
-  font-family: var(--font-ui);
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background var(--transition-fast);
-  text-align: center;
+  min-height: 0;
 }
 
-.importButton:hover,
-.deleteButton:hover {
+.tabList {
+  display: flex;
+  flex-direction: column;
+  width: 120px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border);
+  padding: var(--space-1) 0;
+}
+
+.tabItem {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  user-select: none;
+}
+
+.tabItem:hover {
   background: var(--color-bg-hover);
 }
 
-.deleteButton:disabled {
-  color: var(--color-text-disabled);
-  cursor: default;
+.tabItemActive {
+  background: var(--color-accent-subtle);
+  color: var(--color-text-primary);
+  font-weight: 500;
 }
 
-.deleteButton:disabled:hover {
-  background: var(--color-bg-tertiary);
+.tabItemActive:hover {
+  background: var(--color-accent-subtle);
 }
 
-.rightPanel {
+.tabPanel {
   flex: 1;
-  padding: var(--space-4);
+  min-width: 0;
+  padding: var(--space-3);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  overflow-y: auto;
 }
+
+/* ------------------------------------------------------------------ */
+/* Panel contents                                                     */
+/* ------------------------------------------------------------------ */
 
 .sliderSection {
   display: flex;
@@ -138,15 +143,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-}
-
-.sectionLabel {
-  font-family: var(--font-ui);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .textureSection {
@@ -178,11 +174,24 @@
 
 .speedToggleRow {
   display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+}
+
+.speedToggleLabel {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.speedToggleGroup {
+  display: flex;
   gap: 1px;
   border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--color-border);
-  align-self: flex-start;
 }
 
 .speedToggle {
@@ -209,11 +218,43 @@
   background: var(--color-accent);
 }
 
+/* ------------------------------------------------------------------ */
+/* Shared                                                             */
+/* ------------------------------------------------------------------ */
+
+.smallButton {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.smallButton:hover {
+  background: var(--color-bg-hover);
+}
+
+.smallButton:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.smallButton:disabled:hover {
+  background: var(--color-bg-tertiary);
+}
+
 .footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
 }
@@ -237,15 +278,4 @@
 
 .hiddenInput {
   display: none;
-}
-
-.presetName {
-  font-family: var(--font-ui);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 48px;
 }

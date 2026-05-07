@@ -11,12 +11,21 @@ import { describeError, notifyError } from '../../app/notifications-store';
 import { docScaledMax } from '../../utils/slider-ranges';
 import styles from './BrushModal.module.css';
 
+type TabKey = 'shape' | 'dynamics' | 'texture';
+
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'shape', label: 'Shape' },
+  { key: 'dynamics', label: 'Dynamics' },
+  { key: 'texture', label: 'Texture' },
+];
+
 let nextTextureId = 1;
 
 export function BrushModal() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textureFileInputRef = useRef<HTMLInputElement>(null);
   const [textureImporting, setTextureImporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>('shape');
 
   const presets = useToolSettingsStore((s) => s.presets);
   const activePresetId = useToolSettingsStore((s) => s.activePresetId);
@@ -73,9 +82,7 @@ export function BrushModal() {
   }, [setShowBrushModal]);
 
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      handleClose();
-    }
+    if (e.target === e.currentTarget) handleClose();
   }, [handleClose]);
 
   const handleImportClick = useCallback(() => {
@@ -85,11 +92,8 @@ export function BrushModal() {
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
-    reader.onerror = () => {
-      notifyError('Failed to read brush file.');
-    };
+    reader.onerror = () => notifyError('Failed to read brush file.');
     reader.onload = () => {
       const buffer = reader.result as ArrayBuffer;
       const worker = new Worker(
@@ -97,13 +101,8 @@ export function BrushModal() {
         { type: 'module' },
       );
       worker.onmessage = (msg: MessageEvent<Array<{ name: string; width: number; height: number; data: Uint8ClampedArray; spacing?: number }>>) => {
-        const brushes = msg.data;
-        const newPresets = brushes.map((b) => {
-          const tip: BrushTipData = {
-            width: b.width,
-            height: b.height,
-            data: b.data,
-          };
+        const newPresets = msg.data.map((b) => {
+          const tip: BrushTipData = { width: b.width, height: b.height, data: b.data };
           return abrBrushToPreset(b.name, tip, b.spacing);
         });
         addPresets(newPresets);
@@ -116,16 +115,11 @@ export function BrushModal() {
       worker.postMessage(buffer, [buffer]);
     };
     reader.readAsArrayBuffer(file);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }, [addPresets]);
 
   const handleDelete = useCallback(() => {
-    if (activePresetId && isActiveCustom) {
-      removePreset(activePresetId);
-    }
+    if (activePresetId && isActiveCustom) removePreset(activePresetId);
   }, [activePresetId, isActiveCustom, removePreset]);
 
   const handleTextureChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -150,7 +144,6 @@ export function BrushModal() {
     const file = e.target.files?.[0];
     if (!file) return;
     setTextureImporting(true);
-
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
@@ -158,11 +151,7 @@ export function BrushModal() {
       canvas.width = img.width;
       canvas.height = img.height;
       const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        URL.revokeObjectURL(url);
-        setTextureImporting(false);
-        return;
-      }
+      if (!ctx) { URL.revokeObjectURL(url); setTextureImporting(false); return; }
       ctx.drawImage(img, 0, 0);
       const imageData = ctx.getImageData(0, 0, img.width, img.height);
       const grayscale = new Uint8ClampedArray(img.width * img.height);
@@ -173,82 +162,28 @@ export function BrushModal() {
         grayscale[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
       }
       const name = file.name.replace(/\.[^.]+$/, '');
-      const tex = {
-        id: `texture-custom-${nextTextureId++}`,
-        name,
-        width: img.width,
-        height: img.height,
-        data: grayscale,
-      };
+      const tex = { id: `texture-custom-${nextTextureId++}`, name, width: img.width, height: img.height, data: grayscale };
       addBrushTexture(tex);
       setTextureData(tex);
       URL.revokeObjectURL(url);
       setTextureImporting(false);
     };
-    img.onerror = () => {
-      notifyError('Failed to load texture image.');
-      URL.revokeObjectURL(url);
-      setTextureImporting(false);
-    };
+    img.onerror = () => { notifyError('Failed to load texture image.'); URL.revokeObjectURL(url); setTextureImporting(false); };
     img.src = url;
-
-    if (textureFileInputRef.current) {
-      textureFileInputRef.current.value = '';
-    }
+    if (textureFileInputRef.current) textureFileInputRef.current.value = '';
   }, [addBrushTexture, setTextureData]);
 
   const handleTextureDelete = useCallback(() => {
-    if (textureData && !textureData.id.startsWith('texture-noise') && !textureData.id.startsWith('texture-canvas') && !textureData.id.startsWith('texture-grain')) {
-      removeBrushTexture(textureData.id);
-    }
+    if (textureData && textureData.id.startsWith('texture-custom-')) removeBrushTexture(textureData.id);
   }, [textureData, removeBrushTexture]);
 
   const isCustomTexture = textureData !== null && textureData.id.startsWith('texture-custom-');
 
-  return (
-    <div className={styles.overlay} onMouseDown={handleOverlayClick}>
-      <div className={styles.modal} role="dialog" aria-label="Brushes">
-        <div className={styles.header}>
-          <h2>Brushes</h2>
-        </div>
-        <div className={styles.content}>
-          <div className={styles.leftPanel}>
-            <div className={styles.presetGrid}>
-              {presets.map((preset) => (
-                <button
-                  key={preset.id}
-                  className={`${styles.presetItem}${preset.id === activePresetId ? ` ${styles.presetItemActive}` : ''}`}
-                  onClick={() => setActivePreset(preset.id)}
-                  aria-label={`Brush preset: ${preset.name}`}
-                  aria-pressed={preset.id === activePresetId}
-                  title={preset.name}
-                >
-                  <BrushThumbnail preset={preset} size={44} />
-                </button>
-              ))}
-            </div>
-            <div className={styles.presetActions}>
-              <button className={styles.importButton} onClick={handleImportClick}>
-                Import ABR
-              </button>
-              <button
-                className={styles.deleteButton}
-                onClick={handleDelete}
-                disabled={!isActiveCustom}
-              >
-                Delete
-              </button>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".abr"
-              className={styles.hiddenInput}
-              aria-label="Import ABR brush file"
-              onChange={handleFileChange}
-            />
-          </div>
-          <div className={styles.rightPanel}>
+  function renderPanel() {
+    switch (activeTab) {
+      case 'shape':
+        return (
+          <>
             <div className={styles.sliderSection}>
               <Slider label="Size" value={brushSize} min={1} max={sizeMax} onChange={setBrushSize} />
               <Slider label="Spacing" value={brushSpacing} min={1} max={200} onChange={setBrushSpacing} />
@@ -266,88 +201,139 @@ export function BrushModal() {
                 tip={activeBrushTip}
               />
             </div>
-
-            <div className={styles.sectionLabel}>Dynamics</div>
-            <div className={styles.sliderSection}>
-              <Slider label="Size Jitter" value={sizeJitter} min={0} max={100} onChange={setSizeJitter} />
-              <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
-              <Slider label="Opacity Jitter" value={opacityJitter} min={0} max={100} onChange={setOpacityJitter} />
-              <Slider label="Speed Size" value={speedSize} min={0} max={100} onChange={setSpeedSize} />
-              {speedSize > 0 && (
-                <div className={styles.speedToggleRow}>
-                  <button
-                    className={`${styles.speedToggle}${!speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
-                    onClick={() => setSpeedSizeInvert(false)}
-                  >
-                    Thinner
-                  </button>
-                  <button
-                    className={`${styles.speedToggle}${speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
-                    onClick={() => setSpeedSizeInvert(true)}
-                  >
-                    Wider
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className={styles.sectionLabel}>Texture</div>
-            <div className={styles.textureSection}>
-              <div className={styles.textureRow}>
-                <select
-                  className={styles.select}
-                  value={textureData?.id ?? 'none'}
-                  onChange={handleTextureChange}
-                  title="Brush texture"
-                >
-                  <option value="none">No Texture</option>
-                  {textures.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+          </>
+        );
+      case 'dynamics':
+        return (
+          <div className={styles.sliderSection}>
+            <Slider label="Size Jitter" value={sizeJitter} min={0} max={100} onChange={setSizeJitter} />
+            <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
+            <Slider label="Opacity Jitter" value={opacityJitter} min={0} max={100} onChange={setOpacityJitter} />
+            <Slider label="Speed Size" value={speedSize} min={0} max={300} onChange={setSpeedSize} />
+            <div className={styles.speedToggleRow}>
+              <span className={styles.speedToggleLabel}>Faster is</span>
+              <div className={styles.speedToggleGroup}>
                 <button
-                  className={styles.importButton}
-                  onClick={handleTextureImportClick}
-                  disabled={textureImporting}
+                  className={`${styles.speedToggle}${!speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
+                  onClick={() => setSpeedSizeInvert(false)}
                 >
-                  {textureImporting ? 'Loading...' : 'Import'}
+                  Thinner
                 </button>
-                {isCustomTexture && (
-                  <button className={styles.deleteButton} onClick={handleTextureDelete}>
-                    Delete
-                  </button>
-                )}
+                <button
+                  className={`${styles.speedToggle}${speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
+                  onClick={() => setSpeedSizeInvert(true)}
+                >
+                  Wider
+                </button>
               </div>
-              <input
-                ref={textureFileInputRef}
-                type="file"
-                accept="image/*"
-                className={styles.hiddenInput}
-                aria-label="Import texture image"
-                onChange={handleTextureFileChange}
-              />
-              {textureData && (
-                <>
-                  <select
-                    className={styles.select}
-                    value={textureBlendMode}
-                    onChange={handleBlendModeChange}
-                    title="Texture blend mode"
-                  >
-                    <option value="multiply">Multiply</option>
-                    <option value="subtract">Subtract</option>
-                    <option value="overlay">Overlay</option>
-                  </select>
-                  <Slider label="Scale" value={textureScale} min={10} max={200} onChange={setTextureScale} />
-                </>
-              )}
             </div>
           </div>
+        );
+      case 'texture':
+        return (
+          <div className={styles.textureSection}>
+            <div className={styles.textureRow}>
+              <select
+                className={styles.select}
+                value={textureData?.id ?? 'none'}
+                onChange={handleTextureChange}
+                title="Brush texture"
+              >
+                <option value="none">No Texture</option>
+                {textures.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              <button className={styles.smallButton} onClick={handleTextureImportClick} disabled={textureImporting}>
+                {textureImporting ? 'Loading...' : 'Import'}
+              </button>
+              {isCustomTexture && (
+                <button className={styles.smallButton} onClick={handleTextureDelete}>Delete</button>
+              )}
+            </div>
+            <input
+              ref={textureFileInputRef}
+              type="file"
+              accept="image/*"
+              className={styles.hiddenInput}
+              aria-label="Import texture image"
+              onChange={handleTextureFileChange}
+            />
+            {textureData && (
+              <>
+                <select
+                  className={styles.select}
+                  value={textureBlendMode}
+                  onChange={handleBlendModeChange}
+                  title="Texture blend mode"
+                >
+                  <option value="multiply">Multiply</option>
+                  <option value="subtract">Subtract</option>
+                  <option value="overlay">Overlay</option>
+                </select>
+                <Slider label="Scale" value={textureScale} min={10} max={200} onChange={setTextureScale} />
+              </>
+            )}
+          </div>
+        );
+    }
+  }
+
+  return (
+    <div className={styles.overlay} onMouseDown={handleOverlayClick}>
+      <div className={styles.modal} role="dialog" aria-label="Brushes">
+        {/* Preset gallery — horizontal, 2 rows */}
+        <div className={styles.gallery}>
+          <div className={styles.galleryScroll}>
+            {presets.map((preset) => (
+              <button
+                key={preset.id}
+                className={`${styles.presetItem}${preset.id === activePresetId ? ` ${styles.presetItemActive}` : ''}`}
+                onClick={() => setActivePreset(preset.id)}
+                aria-label={`Brush preset: ${preset.name}`}
+                aria-pressed={preset.id === activePresetId}
+                title={preset.name}
+              >
+                <BrushThumbnail preset={preset} size={40} />
+              </button>
+            ))}
+          </div>
+          <div className={styles.galleryActions}>
+            <button className={styles.smallButton} onClick={handleImportClick}>Import ABR</button>
+            <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".abr"
+            className={styles.hiddenInput}
+            aria-label="Import ABR brush file"
+            onChange={handleFileChange}
+          />
         </div>
+
+        {/* Tab list + panel */}
+        <div className={styles.tabContainer}>
+          <div className={styles.tabList} role="listbox" aria-label="Brush settings">
+            {TABS.map(({ key, label }) => (
+              <div
+                key={key}
+                className={`${styles.tabItem}${activeTab === key ? ` ${styles.tabItemActive}` : ''}`}
+                onClick={() => setActiveTab(key)}
+                role="option"
+                aria-selected={activeTab === key}
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+          <div className={styles.tabPanel}>
+            {renderPanel()}
+          </div>
+        </div>
+
         <div className={styles.footer}>
-          <button className={styles.closeButton} onClick={handleClose}>
-            Close
-          </button>
+          <button className={styles.closeButton} onClick={handleClose}>Close</button>
         </div>
       </div>
     </div>
