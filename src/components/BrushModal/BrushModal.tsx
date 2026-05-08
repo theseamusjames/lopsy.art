@@ -8,7 +8,7 @@ import { BrushDabPreview } from './BrushDabPreview';
 import { BrushThumbnail } from './BrushThumbnail';
 import type { BrushTipData, BrushTextureBlendMode } from '../../types/brush';
 import { describeError, notifyError } from '../../app/notifications-store';
-import { exportPresets, importPresets } from '../../tools/brush/preset-io';
+import { exportPresets, importPresetsFromFile } from '../../tools/brush/preset-io';
 import { docScaledMax } from '../../utils/slider-ranges';
 import { BrushStrokePreview } from './BrushStrokePreview';
 import styles from './BrushModal.module.css';
@@ -24,7 +24,6 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 let nextTextureId = 1;
 
 export function BrushModal() {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const textureFileInputRef = useRef<HTMLInputElement>(null);
   const [textureImporting, setTextureImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('shape');
@@ -92,12 +91,31 @@ export function BrushModal() {
   }, [setShowBrushModal]);
 
   const handleImportClick = useCallback(() => {
-    fileInputRef.current?.click();
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.abr,.json';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.name.endsWith('.json')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(reader.result as string) as { presets: unknown[] };
+            if (Array.isArray(parsed.presets)) {
+              importPresetsFromFile(file);
+            }
+          } catch { /* not valid JSON, ignore */ }
+        };
+        reader.readAsText(file);
+      } else {
+        handleAbrFile(file);
+      }
+    };
+    input.click();
   }, []);
 
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleAbrFile = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onerror = () => notifyError('Failed to read brush file.');
     reader.onload = () => {
@@ -121,7 +139,6 @@ export function BrushModal() {
       worker.postMessage(buffer, [buffer]);
     };
     reader.readAsArrayBuffer(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   }, [addPresets]);
 
   const handleDelete = useCallback(() => {
@@ -139,9 +156,6 @@ export function BrushModal() {
     exportPresets();
   }, []);
 
-  const handleImportPresets = useCallback(() => {
-    importPresets();
-  }, []);
 
   const handleTextureChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value;
@@ -221,14 +235,6 @@ export function BrushModal() {
                 ))}
               </div>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".abr"
-              className={styles.hiddenInput}
-              aria-label="Import ABR brush file"
-              onChange={handleFileChange}
-            />
             <div className={styles.sliderSection}>
               <Slider label="Size" value={brushSize} min={1} max={sizeMax} onChange={setBrushSize} />
               <Slider label="Spacing" value={brushSpacing} min={1} max={200} onChange={setBrushSpacing} />
@@ -393,8 +399,7 @@ export function BrushModal() {
       />
       <div className={styles.footer}>
         <div className={styles.footerLeft}>
-          <button className={styles.smallButton} onClick={handleImportClick}>Import ABR</button>
-          <button className={styles.smallButton} onClick={handleImportPresets}>Import</button>
+          <button className={styles.smallButton} onClick={handleImportClick}>Import</button>
           <button className={styles.smallButton} onClick={handleExportPresets}>Export</button>
         </div>
         <div className={styles.footerRight}>

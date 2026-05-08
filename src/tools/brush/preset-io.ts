@@ -83,48 +83,40 @@ export function exportPresets(): void {
   URL.revokeObjectURL(url);
 }
 
-export async function importPresets(): Promise<number> {
+export async function importPresetsFromFile(file: File): Promise<number> {
   return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) { resolve(0); return; }
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const parsed = JSON.parse(reader.result as string) as { version: number; presets: SerializedPreset[] };
-          const presets: BrushPreset[] = parsed.presets.map((s) => ({
-            id: `imported-${nextImportId++}`,
-            name: s.name,
-            tip: s.tip ? tipFromJson(s.tip) : null,
-            size: s.size,
-            hardness: s.hardness,
-            spacing: s.spacing,
-            scatter: s.scatter,
-            angle: s.angle,
-            opacity: s.opacity,
-            flow: s.flow,
-            isCustom: true,
-            sizeJitter: s.sizeJitter,
-            hardnessJitter: s.hardnessJitter,
-            angleJitter: s.angleJitter,
-            opacityJitter: s.opacityJitter,
-            speedSize: s.speedSize,
-            speedSizeInvert: s.speedSizeInvert,
-            speedSensitivity: s.speedSensitivity,
-            fade: s.fade,
-            taper: s.taper,
-          }));
-          useToolSettingsStore.getState().addPresets(presets);
-          resolve(presets.length);
-        } catch {
-          resolve(0);
-        }
-      };
-      reader.readAsText(file);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result as string) as { version: number; presets: SerializedPreset[] };
+        const presets: BrushPreset[] = parsed.presets.map((s) => ({
+          id: `imported-${nextImportId++}`,
+          name: s.name,
+          tip: s.tip ? tipFromJson(s.tip) : null,
+          size: s.size,
+          hardness: s.hardness,
+          spacing: s.spacing,
+          scatter: s.scatter,
+          angle: s.angle,
+          opacity: s.opacity,
+          flow: s.flow,
+          isCustom: true,
+          sizeJitter: s.sizeJitter,
+          hardnessJitter: s.hardnessJitter,
+          angleJitter: s.angleJitter,
+          opacityJitter: s.opacityJitter,
+          speedSize: s.speedSize,
+          speedSizeInvert: s.speedSizeInvert,
+          speedSensitivity: s.speedSensitivity,
+          fade: s.fade,
+          taper: s.taper,
+        }));
+        useToolSettingsStore.getState().addPresets(presets);
+        resolve(presets.length);
+      } catch {
+        resolve(0);
+      }
     };
-    input.click();
+    reader.readAsText(file);
   });
 }
