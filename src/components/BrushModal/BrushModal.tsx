@@ -125,8 +125,10 @@ export function BrushModal() {
   }, [addPresets]);
 
   const handleDelete = useCallback(() => {
-    if (activePresetId && isActiveCustom) removePreset(activePresetId);
-  }, [activePresetId, isActiveCustom, removePreset]);
+    if (activePresetId && isActiveCustom && confirm(`Delete "${activePreset?.name}"?`)) {
+      removePreset(activePresetId);
+    }
+  }, [activePresetId, isActiveCustom, activePreset?.name, removePreset]);
 
   const handleSavePreset = useCallback(() => {
     const name = prompt('Preset name:');
@@ -390,11 +392,15 @@ export function BrushModal() {
         textureScale={textureScale}
       />
       <div className={styles.footer}>
-        <button className={styles.smallButton} onClick={handleSavePreset}>Save Current</button>
-        <button className={styles.smallButton} onClick={handleImportClick}>Import ABR</button>
-        <button className={styles.smallButton} onClick={handleImportPresets}>Import</button>
-        <button className={styles.smallButton} onClick={handleExportPresets}>Export</button>
-        <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
+        <div className={styles.footerLeft}>
+          <button className={styles.smallButton} onClick={handleImportClick}>Import ABR</button>
+          <button className={styles.smallButton} onClick={handleImportPresets}>Import</button>
+          <button className={styles.smallButton} onClick={handleExportPresets}>Export</button>
+        </div>
+        <div className={styles.footerRight}>
+          <button className={styles.smallButton} onClick={handleSavePreset}>Save Current</button>
+          <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
+        </div>
       </div>
     </div>
   );
