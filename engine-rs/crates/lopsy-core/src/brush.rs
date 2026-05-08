@@ -27,7 +27,8 @@ pub fn generate_brush_stamp(size: u32, hardness: f32) -> Vec<f32> {
                 1.0
             } else {
                 let t = (dist - hard_radius) / (radius - hard_radius);
-                1.0 - t * t // quadratic falloff
+                let s = t * t * (3.0 - 2.0 * t);
+                1.0 - s
             };
 
             stamp[y as usize * s + x as usize] = alpha;

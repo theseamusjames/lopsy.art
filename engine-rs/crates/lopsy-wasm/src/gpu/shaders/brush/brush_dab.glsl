@@ -66,10 +66,14 @@ void main() {
         // Procedural circle mode
         if (dist > radius) discard;
 
-        // Quadratic falloff matching lopsy_core::brush::generate_brush_stamp
         float t = clamp(dist / radius, 0.0, 1.0);
-        float soft = 1.0 - t * t;
-        float stamp = u_hardness + (1.0 - u_hardness) * soft;
+        float stamp;
+        if (t <= u_hardness) {
+            stamp = 1.0;
+        } else {
+            float softT = (t - u_hardness) / max(1.0 - u_hardness, 0.001);
+            stamp = 1.0 - smoothstep(0.0, 1.0, softT);
+        }
 
         // Smooth antialiasing at circle edge (1px feather)
         float edge = 1.0 - smoothstep(radius - 1.0, radius, dist);
