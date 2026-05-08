@@ -61,6 +61,17 @@ void main() {
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;
 
         float stamp = texture(u_brushTip, uv).r;
+        // Apply hardness as a radial falloff multiplier on the tip
+        float tipDist = length(uv - 0.5) * 2.0;
+        if (tipDist <= u_hardness) {
+            // inside hard core — full strength
+        } else if (tipDist < 1.0) {
+            float ft = (tipDist - u_hardness) / max(1.0 - u_hardness, 0.001);
+            float fs = ft * ft * (3.0 - 2.0 * ft);
+            stamp *= 1.0 - fs;
+        } else {
+            stamp = 0.0;
+        }
         a = stamp * u_flow * jOpacity;
     } else {
         // Procedural circle mode
