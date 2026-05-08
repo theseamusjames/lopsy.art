@@ -38,6 +38,11 @@ export interface InteractionState {
   sizeJitterPrevTarget?: number;
   sizeJitterTransitionDist?: number;
   sizeJitterDistTraveled?: number;
+  hardnessJitterCurrent?: number;
+  hardnessJitterTarget?: number;
+  hardnessJitterPrevTarget?: number;
+  hardnessJitterTransitionDist?: number;
+  hardnessJitterDistTraveled?: number;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
   selectionOnlyTransform?: boolean;

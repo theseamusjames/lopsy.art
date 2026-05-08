@@ -50,12 +50,14 @@ export function BrushModal() {
   const setBrushAngle = useToolSettingsStore((s) => s.setBrushAngle);
 
   const sizeJitter = useToolSettingsStore((s) => s.brushSizeJitter);
+  const hardnessJitter = useToolSettingsStore((s) => s.brushHardnessJitter);
   const angleJitter = useToolSettingsStore((s) => s.brushAngleJitter);
   const opacityJitter = useToolSettingsStore((s) => s.brushOpacityJitter);
   const speedSize = useToolSettingsStore((s) => s.brushSpeedSize);
   const speedSizeInvert = useToolSettingsStore((s) => s.brushSpeedSizeInvert);
   const speedSensitivity = useToolSettingsStore((s) => s.brushSpeedSensitivity);
   const setSizeJitter = useToolSettingsStore((s) => s.setBrushSizeJitter);
+  const setHardnessJitter = useToolSettingsStore((s) => s.setBrushHardnessJitter);
   const setAngleJitter = useToolSettingsStore((s) => s.setBrushAngleJitter);
   const setOpacityJitter = useToolSettingsStore((s) => s.setBrushOpacityJitter);
   const setSpeedSize = useToolSettingsStore((s) => s.setBrushSpeedSize);
@@ -209,6 +211,7 @@ export function BrushModal() {
         return (
           <div className={styles.sliderSection}>
             <Slider label="Size Jitter" value={sizeJitter} min={0} max={100} onChange={setSizeJitter} />
+            <Slider label="Hardness Jitter" value={hardnessJitter} min={0} max={100} onChange={setHardnessJitter} />
             <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
             <Slider label="Opacity Jitter" value={opacityJitter} min={0} max={100} onChange={setOpacityJitter} />
             <Slider label="Speed Size" value={speedSize} min={0} max={300} onChange={setSpeedSize} />

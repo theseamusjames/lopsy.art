@@ -499,11 +499,12 @@ export function handlePaintMove(
   switch (state.tool) {
     case 'brush': {
       const baseSize = toolSettings.brushSize;
-      const hardness = toolSettings.brushHardness / 100;
+      const baseHardness = toolSettings.brushHardness / 100;
       const opacity = toolSettings.brushOpacity / 100;
       const brushScatter = toolSettings.brushScatter;
       const brushFade = toolSettings.brushFade;
       const sizeJitter = toolSettings.brushSizeJitter / 100;
+      const hardnessJitter = toolSettings.brushHardnessJitter / 100;
       const aJ = toolSettings.brushAngleJitter / 100;
       const oJ = toolSettings.brushOpacityJitter / 100;
       const speedSize = toolSettings.brushSpeedSize / 100;
@@ -566,6 +567,24 @@ export function handlePaintMove(
         const current = prev + (target - prev) * smoothT;
         state.sizeJitterCurrent = current;
         size = Math.max(1, size * (1 - sizeJitter * (1 - current)));
+      }
+
+      let hardness = baseHardness;
+      if (hardnessJitter > 0) {
+        if (state.hardnessJitterTarget === undefined || (state.hardnessJitterDistTraveled ?? 0) >= (state.hardnessJitterTransitionDist ?? 0)) {
+          state.hardnessJitterPrevTarget = state.hardnessJitterCurrent ?? 1;
+          state.hardnessJitterTarget = Math.random();
+          state.hardnessJitterTransitionDist = 30 + Math.random() * 90;
+          state.hardnessJitterDistTraveled = 0;
+        }
+        state.hardnessJitterDistTraveled = (state.hardnessJitterDistTraveled ?? 0) + segDist;
+        const t = Math.min((state.hardnessJitterDistTraveled ?? 0) / (state.hardnessJitterTransitionDist ?? 1), 1);
+        const smoothT = t * t * (3 - 2 * t);
+        const prev = state.hardnessJitterPrevTarget ?? 1;
+        const target = state.hardnessJitterTarget ?? 1;
+        const current = prev + (target - prev) * smoothT;
+        state.hardnessJitterCurrent = current;
+        hardness = Math.max(0, baseHardness * (1 - hardnessJitter * (1 - current)));
       }
 
       const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
