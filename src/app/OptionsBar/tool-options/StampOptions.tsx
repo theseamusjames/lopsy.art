@@ -13,7 +13,7 @@ export function StampOptions() {
 
   return (
     <>
-      <Slider label="Size" value={stampSize} min={1} max={sizeMax} onChange={setStampSize} />
+      <Slider label="Size" value={stampSize} min={1} max={sizeMax} sliderMax={300} onChange={setStampSize} />
       <span className={styles.hint}>Alt/Cmd+click to set source</span>
     </>
   );

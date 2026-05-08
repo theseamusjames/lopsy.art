@@ -14,7 +14,7 @@ export function SmudgeOptions() {
 
   return (
     <>
-      <Slider label="Size" value={smudgeSize} min={1} max={sizeMax} onChange={setSmudgeSize} />
+      <Slider label="Size" value={smudgeSize} min={1} max={sizeMax} sliderMax={300} onChange={setSmudgeSize} />
       <Slider label="Strength" value={smudgeStrength} min={0} max={100} onChange={setSmudgeStrength} />
     </>
   );

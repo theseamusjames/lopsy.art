@@ -14,7 +14,7 @@ export function EraserOptions() {
 
   return (
     <>
-      <Slider label="Size" value={eraserSize} min={1} max={sizeMax} onChange={setEraserSize} />
+      <Slider label="Size" value={eraserSize} min={1} max={sizeMax} sliderMax={300} onChange={setEraserSize} />
       <Slider label="Opacity" value={eraserOpacity} min={1} max={100} onChange={setEraserOpacity} />
     </>
   );
