@@ -125,6 +125,7 @@ function renderFrameGpu(
 
   const activeTool = uiState.activeTool;
   const cursorPosition = uiState.cursorPosition;
+  const cursorOnCanvas = uiState.cursorOnCanvas;
   const showGrid = uiState.showGrid;
   const showPixelGrid = uiState.showPixelGrid;
   const showRulers = uiState.showRulers;
@@ -266,7 +267,7 @@ function renderFrameGpu(
     }
 
     const brushCursorInfo = getBrushCursorInfo(activeTool);
-    if (brushCursorInfo !== null) {
+    if (brushCursorInfo !== null && cursorOnCanvas) {
       const size = activeTool === 'brush' ? toolState.brushSize
         : activeTool === 'pencil' ? toolState.pencilSize
         : activeTool === 'eraser' ? toolState.eraserSize
