@@ -308,7 +308,23 @@ export async function setToolOption(page: Page, label: string, value: number): P
   await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
 }
 
+export async function openColorPanel(page: Page, expanded = true): Promise<void> {
+  const panel = page.locator('section[aria-label="Color"]');
+  if (!(await panel.isVisible().catch(() => false))) {
+    await page.locator('button[aria-label="Color"]').click();
+    await panel.waitFor({ state: 'visible', timeout: 3000 });
+  }
+  if (expanded) {
+    const hexInput = page.locator('[aria-label="Hex color value"]');
+    if (!(await hexInput.isVisible().catch(() => false))) {
+      await page.locator('button[aria-label="Color panel"]').click();
+      await hexInput.waitFor({ state: 'visible', timeout: 3000 });
+    }
+  }
+}
+
 export async function setForegroundColor(page: Page, r: number, g: number, b: number, a?: number): Promise<void> {
+  await openColorPanel(page, true);
   const hex = [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
   const input = page.locator('[aria-label="Hex color value"]');
   await input.fill(hex);
@@ -680,4 +696,141 @@ export async function setEffectColor(
   const hex = '#' + [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
   const input = page.locator(`[aria-label="${ariaLabel}"]`);
   await input.fill(hex);
+}
+
+// ---------------------------------------------------------------------------
+// Adjustment helpers — interact with AdjustmentsPanel UI
+// ---------------------------------------------------------------------------
+
+const ADJUSTMENT_MENU_LABELS: Record<string, string> = {
+  exposure: 'Exposure',
+  contrast: 'Contrast',
+  'highlights-shadows': 'Highlights & Shadows',
+  saturation: 'Saturation & Vibrance',
+  vignette: 'Vignette',
+  curves: 'Curves',
+  levels: 'Levels',
+  invert: 'Invert',
+  'hue-saturation': 'Hue / Saturation',
+};
+
+const ADJUSTMENT_SLIDER_LABELS: Record<string, Record<string, string>> = {
+  exposure: { exposure: 'Exposure' },
+  contrast: { contrast: 'Contrast' },
+  'highlights-shadows': {
+    highlights: 'Highlights',
+    shadows: 'Shadows',
+    whites: 'Whites',
+    blacks: 'Blacks',
+  },
+  saturation: { saturation: 'Saturation', vibrance: 'Vibrance' },
+  vignette: { vignette: 'Vignette' },
+};
+
+export async function openGroupEffectsPanel(page: Page, groupId: string): Promise<void> {
+  await setActiveLayer(page, groupId);
+  const drawer = page.getByTestId('effects-drawer');
+  if (await drawer.isVisible()) return;
+  const row = page.locator(`[data-layer-id="${groupId}"]`);
+  await row.locator('button[aria-label*="effects"]').click();
+  await page.locator('[aria-label="Add Adjustment"]').waitFor({ state: 'visible', timeout: 5000 });
+}
+
+export async function addAdjustment(
+  page: Page,
+  groupId: string,
+  nodeType: string,
+  values?: Record<string, number>,
+): Promise<void> {
+  await openGroupEffectsPanel(page, groupId);
+
+  const menuLabel = ADJUSTMENT_MENU_LABELS[nodeType];
+  if (!menuLabel) throw new Error(`Unknown adjustment type: ${nodeType}`);
+
+  // Click Add Adjustment and select from the menu. The menu opens
+  // upward and may be clipped by the canvas overlay. If the normal
+  // click fails due to the canvas intercepting, dispatch a click
+  // event directly on the menu item.
+  await page.locator('[aria-label="Add Adjustment"]').click();
+  const menuItem = page.getByRole('menuitem', { name: menuLabel, exact: true });
+  await menuItem.waitFor({ state: 'visible', timeout: 3000 });
+  try {
+    await menuItem.click({ timeout: 2000 });
+  } catch {
+    await menuItem.dispatchEvent('click');
+  }
+  await page.waitForTimeout(200);
+
+  if (values) {
+    const drawer = page.getByTestId('effects-drawer');
+
+    // The newly added node should auto-expand, but click the expand
+    // chevron if the sliders aren't visible yet.
+    const sliderMap = ADJUSTMENT_SLIDER_LABELS[nodeType];
+    const firstLabel = sliderMap ? Object.values(sliderMap)[0] : undefined;
+    if (firstLabel) {
+      const firstInput = drawer.locator(`[aria-label="${firstLabel} value"]`);
+      if (!(await firstInput.isVisible({ timeout: 1000 }).catch(() => false))) {
+        const expandBtn = drawer.locator('[aria-label="Expand"]').last();
+        if (await expandBtn.isVisible().catch(() => false)) {
+          await expandBtn.click();
+          await page.waitForTimeout(100);
+        }
+      }
+    }
+
+    for (const [key, val] of Object.entries(values)) {
+      const label = sliderMap?.[key] ?? key;
+      const input = drawer.locator(`[aria-label="${label} value"]`);
+      await input.waitFor({ state: 'visible', timeout: 5000 });
+      await input.fill(String(val));
+      await input.press('Enter');
+    }
+    await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  }
+}
+
+export async function toggleAdjustmentsEnabled(page: Page, groupId: string): Promise<void> {
+  await openGroupEffectsPanel(page, groupId);
+  const btn = page.locator('[aria-label="Disable adjustments"], [aria-label="Enable adjustments"]');
+  await btn.click();
+}
+
+export async function setGroupBlendMode(page: Page, groupId: string, mode: string): Promise<void> {
+  // Check if this is a group layer (groups show AdjustmentsPanel with no
+  // blend-mode dropdown, so we set the mode via the LayerPanel blend-mode
+  // select if visible, or fall back to the store).
+  const isGroup = await page.evaluate((gid) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: Array<{ id: string; type: string }> } };
+    };
+    return store.getState().document.layers.find((l) => l.id === gid)?.type === 'group';
+  }, groupId);
+
+  if (isGroup) {
+    // Groups don't have a blend mode dropdown in the effects drawer.
+    // The blend mode is a layer property set via the store.
+    await page.evaluate(
+      ({ gid, m }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { updateLayerBlendMode: (id: string, mode: string) => void };
+        };
+        store.getState().updateLayerBlendMode(gid, m);
+      },
+      { gid: groupId, m: mode },
+    );
+    return;
+  }
+
+  await setActiveLayer(page, groupId);
+  await setBlendMode(page, mode);
+}
+
+export async function getRootGroupId(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { rootGroupId: string } };
+    };
+    return store.getState().document.rootGroupId;
+  });
 }

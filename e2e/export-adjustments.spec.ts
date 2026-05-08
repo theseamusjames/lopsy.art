@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Page } from './fixtures';
-import { waitForStore, createDocument, drawRect } from './helpers';
+import { waitForStore, createDocument, drawRect, getRootGroupId, addAdjustment, setGroupBlendMode } from './helpers';
 
 // PNG magic bytes: 137 80 78 71 13 10 26 10
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -58,34 +58,14 @@ async function readCompositedAtDoc(
   }, { x: docX, y: docY });
 }
 
-async function setGroupAdjustments(
+async function setSaturationAdjustment(
   page: Page,
   saturation: number,
   vibrance: number,
 ): Promise<void> {
-  await page.evaluate(({ s, v }) => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => {
-        document: { rootGroupId: string };
-        setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
-        setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
-      };
-    };
-    const state = store.getState();
-    const groupId = state.document.rootGroupId;
-    state.setGroupAdjustmentsEnabled(groupId, true);
-    state.setGroupAdjustments(groupId, {
-      exposure: 0,
-      contrast: 0,
-      highlights: 0,
-      shadows: 0,
-      whites: 0,
-      blacks: 0,
-      vignette: 0,
-      saturation: s,
-      vibrance: v,
-    });
-  }, { s: saturation, v: vibrance });
+  const groupId = await getRootGroupId(page);
+  await setGroupBlendMode(page, groupId, 'normal');
+  await addAdjustment(page, groupId, 'saturation', { saturation, vibrance });
 }
 
 test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
@@ -114,7 +94,7 @@ test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
 
     // Use the slider's full range — -100 → -1 in the shader after the
     // engine's /100 normalisation, which produces the gray-equivalent.
-    await setGroupAdjustments(page, -100, 0);
+    await setSaturationAdjustment(page, -100, 0);
     await page.waitForTimeout(200);
 
     const after = await readCompositedAtDoc(page, 50, 50);
@@ -128,16 +108,17 @@ test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
     // G must rise (it was the least-saturated channel; pulls toward luma).
     expect(after.g).toBeGreaterThan(before.g + 20);
 
-    // The adjustments must persist on the group layer in the store.
-    const stored = await page.evaluate(() => {
+    // The adjustments must persist on the group layer in the store (node-based).
+    const storedSaturation = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { rootGroupId: string; layers: Array<Record<string, unknown>> } };
+        getState: () => { document: { rootGroupId: string; layers: Array<{ id: string; adjustments: Array<{ type: string; saturation?: number }> }> } };
       };
       const state = store.getState();
       const group = state.document.layers.find((l) => l.id === state.document.rootGroupId);
-      return group?.adjustments as Record<string, number> | undefined;
+      const satNode = group?.adjustments.find((n) => n.type === 'saturation');
+      return satNode?.saturation;
     });
-    expect(stored?.saturation).toBe(-100);
+    expect(storedSaturation).toBe(-100);
   });
 
   test('PNG export reflects active group adjustments', async ({ page }) => {
@@ -158,7 +139,7 @@ test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
     // (applyAdjustmentsToImageData) over it. The exact post-export pixel
     // depends on the JS desaturation math; we only require that the export
     // CHANGED the painted region — not what it changed to.
-    await setGroupAdjustments(page, -100, 0);
+    await setSaturationAdjustment(page, -100, 0);
     await page.waitForTimeout(200);
 
     const adjustedPixel = await exportAndDecodePixel(page, 50, 50);
@@ -188,7 +169,7 @@ test.describe('Export pipeline applies saturation & vibrance (#122)', () => {
     await drawRect(page, 20, 20, 60, 60, { r: 255, g: 80, b: 80 });
     await page.waitForTimeout(200);
 
-    await setGroupAdjustments(page, -100, 0);
+    await setSaturationAdjustment(page, -100, 0);
     await page.waitForTimeout(200);
 
     const live = await readCompositedAtDoc(page, 50, 50);

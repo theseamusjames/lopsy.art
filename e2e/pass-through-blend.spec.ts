@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { waitForStore, createDocument, drawRect, setBlendMode, setActiveLayer } from './helpers';
+import { waitForStore, createDocument, drawRect, setBlendMode, setActiveLayer, addAdjustment, setGroupBlendMode } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -102,23 +102,9 @@ async function setLayerBlendMode(page: Page, layerId: string, mode: string): Pro
   await page.waitForTimeout(100);
 }
 
-/**
- * Set group adjustments (exposure) via the store. This simulates the AdjustmentsPanel.
- */
 async function setGroupExposure(page: Page, groupId: string, exposure: number): Promise<void> {
-  await page.evaluate(({ gid, exp }) => {
-    const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => {
-        pushHistory: (label: string) => void;
-        setGroupAdjustments: (id: string, adj: Record<string, number>) => void;
-        setGroupAdjustmentsEnabled: (id: string, enabled: boolean) => void;
-      };
-    };
-    const s = store.getState();
-    s.setGroupAdjustmentsEnabled(gid, true);
-    s.setGroupAdjustments(gid, { exposure: exp });
-    s.pushHistory('Set Group Exposure');
-  }, { gid: groupId, exp: exposure });
+  await setGroupBlendMode(page, groupId, 'normal');
+  await addAdjustment(page, groupId, 'exposure', { exposure });
   await page.waitForTimeout(200);
 }
 
@@ -191,7 +177,7 @@ test.describe('Pass-through blend mode', () => {
     //   Group with exposure=2.0 (brightening adjustment)
     //     Layer B (mid-grey [128,128,128])
     //
-    // Normal group + adjustments registered via setGroupAdjustments:
+    // Normal group + adjustments added via the AdjustmentsPanel UI:
     //   children composite into group scratch FBO → exposure applied → result is brighter
     //
     // Pass-through group:
@@ -251,25 +237,26 @@ test.describe('Pass-through blend mode', () => {
     ).toBeGreaterThan(30);
   });
 
-  test('blend mode dropdown shows Pass Through option for group layers', async ({ page }) => {
+  test('group effects drawer shows AdjustmentsPanel with Add Adjustment button', async ({ page }) => {
     const groupId = await addGroup(page, 'DropdownGroup');
     await setActiveLayer(page, groupId);
     await page.waitForTimeout(100);
 
-    // Open the effects drawer for this group via setBlendMode helper which handles opening it
-    // We need to trigger the effects drawer to open for the group
+    // Open the effects drawer for this group — groups render AdjustmentsPanel
+    // (not LayerEffectsPanel), so there is no blend-mode dropdown.
     const groupRow = page.locator(`[data-layer-id="${groupId}"]`);
     await groupRow.locator('button[aria-label*="effects"]').click();
     await page.waitForTimeout(300);
 
-    // The blend mode dropdown should have a "Pass Through" option
-    const select = page.locator('[aria-labelledby="blend-mode-label"]');
-    await expect(select).toBeVisible();
+    // The AdjustmentsPanel should be visible with its "Add Adjustment" button
+    const addBtn = page.locator('[aria-label="Add Adjustment"]');
+    await expect(addBtn).toBeVisible();
 
-    const passThroughOption = select.locator('option[value="pass-through"]');
-    await expect(passThroughOption).toHaveText('Pass Through');
+    // Verify the group defaults to pass-through via the store
+    const mode = await getLayerBlendMode(page, groupId);
+    expect(mode).toBe('pass-through');
 
-    // Take screenshot showing the blend mode dropdown with pass-through option
+    // Take screenshot showing the adjustments panel for the group
     await page.screenshot({ path: 'e2e/screenshots/pass-through-dropdown.png' });
   });
 
