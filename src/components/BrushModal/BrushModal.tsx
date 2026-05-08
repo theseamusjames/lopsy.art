@@ -9,6 +9,7 @@ import { BrushThumbnail } from './BrushThumbnail';
 import type { BrushTipData, BrushTextureBlendMode } from '../../types/brush';
 import { describeError, notifyError } from '../../app/notifications-store';
 import { docScaledMax } from '../../utils/slider-ranges';
+import { BrushStrokePreview } from './BrushStrokePreview';
 import styles from './BrushModal.module.css';
 
 type TabKey = 'shape' | 'dynamics' | 'texture';
@@ -357,6 +358,24 @@ export function BrushModal() {
           </div>
         </div>
 
+        <BrushStrokePreview
+          size={brushSize}
+          hardness={brushHardness}
+          spacing={brushSpacing}
+          opacity={brushOpacity}
+          scatter={brushScatter}
+          angle={brushAngle}
+          tip={activeBrushTip}
+          sizeJitter={sizeJitter}
+          hardnessJitter={hardnessJitter}
+          angleJitter={angleJitter}
+          opacityJitter={opacityJitter}
+          speedSize={speedSize}
+          speedSizeInvert={speedSizeInvert}
+          texture={textureData}
+          textureBlendMode={textureBlendMode}
+          textureScale={textureScale}
+        />
         <div className={styles.footer}>
           <button className={styles.closeButton} onClick={handleClose}>Close</button>
         </div>
