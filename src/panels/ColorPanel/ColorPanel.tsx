@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ArrowUpDown } from 'lucide-react';
 import { ColorSwatch } from '../../components/ColorSwatch/ColorSwatch';
 import { ColorPicker } from '../../components/ColorPicker/ColorPicker';
@@ -33,6 +33,10 @@ export function ColorPanel() {
 
   const activeColor = editingBg ? backgroundColor : foregroundColor;
   const onActiveChange = editingBg ? onBackgroundChange : onForegroundChange;
+
+  useEffect(() => {
+    setHexInput(colorToHex(activeColor));
+  }, [activeColor]);
 
   const handleHexBlur = useCallback(() => {
     const parsed = hexToColor(hexInput);
@@ -89,6 +93,10 @@ export function ColorPanel() {
                   size="md"
                   isActive={!editingBg}
                   onClick={() => setEditingBg(false)}
+                  onDoubleClick={() => {
+                    setEditingBg(false);
+                    setCollapsed(false);
+                  }}
                 />
               </div>
               <div className={styles.background}>
@@ -97,6 +105,10 @@ export function ColorPanel() {
                   size="sm"
                   isActive={editingBg}
                   onClick={() => setEditingBg(true)}
+                  onDoubleClick={() => {
+                    setEditingBg(true);
+                    setCollapsed(false);
+                  }}
                 />
               </div>
             </div>
@@ -114,6 +126,10 @@ export function ColorPanel() {
                 color={color}
                 size="sm"
                 onClick={() => handleRecentClick(color)}
+                onDoubleClick={() => {
+                  handleRecentClick(color);
+                  setCollapsed(false);
+                }}
               />
             ))}
           </div>

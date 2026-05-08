@@ -5,6 +5,7 @@ interface ColorSwatchProps {
   color: Color;
   size?: 'sm' | 'md' | 'lg';
   onClick?: () => void;
+  onDoubleClick?: () => void;
   isActive?: boolean;
 }
 
@@ -16,6 +17,7 @@ export function ColorSwatch({
   color,
   size = 'md',
   onClick,
+  onDoubleClick,
   isActive = false,
 }: ColorSwatchProps) {
   const sizeClass = size === 'sm' ? styles.sm : size === 'lg' ? styles.lg : styles.md;
@@ -27,6 +29,7 @@ export function ColorSwatch({
     <button
       className={className}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       type="button"
       aria-label={`Color: rgb(${color.r}, ${color.g}, ${color.b})`}
     >
