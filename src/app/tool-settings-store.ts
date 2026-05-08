@@ -558,6 +558,7 @@ interface ToolSettings {
   addRecentColor: (color: Color) => void;
   addPreset: (preset: BrushPreset) => void;
   addPresets: (presets: BrushPreset[]) => void;
+  saveCurrentAsPreset: (name: string) => void;
   removePreset: (id: string) => void;
   updatePreset: (id: string, patch: Partial<Omit<BrushPreset, 'id'>>) => void;
   setActivePreset: (id: string) => void;
@@ -815,6 +816,32 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
 
   addPreset: (preset) => set((s) => ({ presets: [...s.presets, preset] })),
   addPresets: (presets) => set((s) => ({ presets: [...s.presets, ...presets] })),
+  saveCurrentAsPreset: (name) => {
+    const s = get();
+    const preset: BrushPreset = {
+      id: uid(),
+      name,
+      tip: s.activeBrushTip,
+      size: s.brushSize,
+      hardness: s.brushHardness,
+      spacing: s.brushSpacing,
+      scatter: s.brushScatter,
+      angle: s.brushAngle,
+      opacity: s.brushOpacity,
+      flow: 100,
+      isCustom: true,
+      sizeJitter: s.brushSizeJitter,
+      hardnessJitter: s.brushHardnessJitter,
+      angleJitter: s.brushAngleJitter,
+      opacityJitter: s.brushOpacityJitter,
+      speedSize: s.brushSpeedSize,
+      speedSizeInvert: s.brushSpeedSizeInvert,
+      speedSensitivity: s.brushSpeedSensitivity,
+      fade: s.brushFade,
+      taper: s.brushTaper,
+    };
+    set((state) => ({ presets: [...state.presets, preset], activePresetId: preset.id }));
+  },
   removePreset: (id) =>
     set((s) => ({
       presets: s.presets.filter((p) => p.id !== id),
@@ -836,6 +863,15 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     state.setBrushScatter(preset.scatter);
     state.setBrushAngle(preset.angle);
     state.setActiveBrushTip(preset.tip);
+    if (preset.sizeJitter !== undefined) state.setBrushSizeJitter(preset.sizeJitter);
+    if (preset.hardnessJitter !== undefined) state.setBrushHardnessJitter(preset.hardnessJitter);
+    if (preset.angleJitter !== undefined) state.setBrushAngleJitter(preset.angleJitter);
+    if (preset.opacityJitter !== undefined) state.setBrushOpacityJitter(preset.opacityJitter);
+    if (preset.speedSize !== undefined) state.setBrushSpeedSize(preset.speedSize);
+    if (preset.speedSizeInvert !== undefined) state.setBrushSpeedSizeInvert(preset.speedSizeInvert);
+    if (preset.speedSensitivity !== undefined) state.setBrushSpeedSensitivity(preset.speedSensitivity);
+    if (preset.fade !== undefined) state.setBrushFade(preset.fade);
+    if (preset.taper !== undefined) state.setBrushTaper(preset.taper);
   },
 }));
 

@@ -8,6 +8,7 @@ import { BrushDabPreview } from './BrushDabPreview';
 import { BrushThumbnail } from './BrushThumbnail';
 import type { BrushTipData, BrushTextureBlendMode } from '../../types/brush';
 import { describeError, notifyError } from '../../app/notifications-store';
+import { exportPresets, importPresets } from '../../tools/brush/preset-io';
 import { docScaledMax } from '../../utils/slider-ranges';
 import { BrushStrokePreview } from './BrushStrokePreview';
 import styles from './BrushModal.module.css';
@@ -33,6 +34,7 @@ export function BrushModal() {
   const setActivePreset = useToolSettingsStore((s) => s.setActivePreset);
   const removePreset = useToolSettingsStore((s) => s.removePreset);
   const addPresets = useToolSettingsStore((s) => s.addPresets);
+  const saveCurrentAsPreset = useToolSettingsStore((s) => s.saveCurrentAsPreset);
   const setShowBrushModal = useUIStore((s) => s.setShowBrushModal);
 
   const brushSize = useToolSettingsStore((s) => s.brushSize);
@@ -130,6 +132,19 @@ export function BrushModal() {
     if (activePresetId && isActiveCustom) removePreset(activePresetId);
   }, [activePresetId, isActiveCustom, removePreset]);
 
+  const handleSavePreset = useCallback(() => {
+    const name = prompt('Preset name:');
+    if (name) saveCurrentAsPreset(name);
+  }, [saveCurrentAsPreset]);
+
+  const handleExportPresets = useCallback(() => {
+    exportPresets();
+  }, []);
+
+  const handleImportPresets = useCallback(() => {
+    importPresets();
+  }, []);
+
   const handleTextureChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value;
     if (id === 'none') {
@@ -209,7 +224,10 @@ export function BrushModal() {
               </div>
             </div>
             <div className={styles.galleryActions}>
+              <button className={styles.smallButton} onClick={handleSavePreset}>Save Current</button>
               <button className={styles.smallButton} onClick={handleImportClick}>Import ABR</button>
+              <button className={styles.smallButton} onClick={handleImportPresets}>Import</button>
+              <button className={styles.smallButton} onClick={handleExportPresets}>Export</button>
               <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
             </div>
             <input
