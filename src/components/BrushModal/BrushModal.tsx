@@ -49,6 +49,8 @@ export function BrushModal() {
   const setBrushSpacing = useToolSettingsStore((s) => s.setBrushSpacing);
   const setBrushScatter = useToolSettingsStore((s) => s.setBrushScatter);
   const setBrushAngle = useToolSettingsStore((s) => s.setBrushAngle);
+  const brushTaper = useToolSettingsStore((s) => s.brushTaper);
+  const setBrushTaper = useToolSettingsStore((s) => s.setBrushTaper);
 
   const sizeJitter = useToolSettingsStore((s) => s.brushSizeJitter);
   const hardnessJitter = useToolSettingsStore((s) => s.brushHardnessJitter);
@@ -80,6 +82,7 @@ export function BrushModal() {
 
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
+  const taperMax = docScaledMax(docWidth, docHeight, 2000);
   const sizeMax = docScaledMax(docWidth, docHeight, 2000);
 
   const handleClose = useCallback(() => {
@@ -223,6 +226,7 @@ export function BrushModal() {
               <Slider label="Hardness" value={brushHardness} min={0} max={100} onChange={setBrushHardness} />
               <Slider label="Scatter" value={brushScatter} min={0} max={100} onChange={setBrushScatter} />
               <Slider label="Opacity" value={brushOpacity} min={1} max={100} onChange={setBrushOpacity} />
+              <Slider label="Taper" value={brushTaper} min={0} max={taperMax} onChange={setBrushTaper} suffix="px" />
             </div>
             <div className={styles.angleRow}>
               <AngleControl angle={brushAngle} onAngleChange={setBrushAngle} />
@@ -370,6 +374,7 @@ export function BrushModal() {
           opacityJitter={opacityJitter}
           speedSize={speedSize}
           speedSizeInvert={speedSizeInvert}
+          taper={brushTaper}
           texture={textureData}
           textureBlendMode={textureBlendMode}
           textureScale={textureScale}

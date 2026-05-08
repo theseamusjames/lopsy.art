@@ -447,6 +447,7 @@ interface ToolSettings {
   brushScatter: number;
   brushAngle: number;
   brushFade: number;
+  brushTaper: number;
   activeBrushTip: BrushTipData | null;
   symmetryHorizontal: boolean;
   symmetryVertical: boolean;
@@ -490,6 +491,7 @@ interface ToolSettings {
   setSprayHardness: (hardness: number) => void;
   setBrushSize: (size: number) => void;
   setBrushFade: (fade: number) => void;
+  setBrushTaper: (taper: number) => void;
   setBrushSpacing: (spacing: number) => void;
   setBrushScatter: (scatter: number) => void;
   setBrushAngle: (angle: number) => void;
@@ -617,6 +619,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushScatter: 0,
   brushAngle: 0,
   brushFade: 0,
+  brushTaper: 0,
   activeBrushTip: null,
   symmetryHorizontal: false,
   symmetryVertical: false,
@@ -694,6 +697,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setSprayHardness: (hardness) => set({ sprayHardness: Math.max(0, Math.min(100, hardness)) }),
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(5000, size)) }),
   setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(5000, fade)) }),
+  setBrushTaper: (taper) => set({ brushTaper: Math.max(0, Math.min(5000, taper)) }),
   setBrushSpacing: (spacing) => set({ brushSpacing: Math.max(0, Math.min(200, spacing)) }),
   setBrushScatter: (scatter) => set({ brushScatter: Math.max(0, Math.min(100, scatter)) }),
   setBrushAngle: (angle) => set({ brushAngle: ((angle % 360) + 360) % 360 }),

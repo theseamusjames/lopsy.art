@@ -257,7 +257,8 @@ export function handlePaintDown(
     const hardnessJitter = toolSettings.brushHardnessJitter / 100;
     const aJ = toolSettings.brushAngleJitter / 100;
     const oJ = toolSettings.brushOpacityJitter / 100;
-    const hasJitter = sizeJitter > 0 || hardnessJitter > 0;
+    const brushTaper = toolSettings.brushTaper;
+    const needsPerDab = sizeJitter > 0 || hardnessJitter > 0 || brushTaper > 0;
     const color = strokeColor;
     useToolSettingsStore.getState().addRecentColor(color);
     const r = color.r / 255;
@@ -270,17 +271,25 @@ export function handlePaintDown(
         const scatterPts = interpolatePointsWithScatter(lineFrom, layerPos, spacing, brushScatter, baseSize);
         if (brushFade > 0) {
           emitDabsWithFade(engine, activeLayerId, scatterPts, lineFrom, baseSize, baseHardness, r, g, b, color.a, opacity, brushFade, state, sym, 0, aJ, oJ);
-        } else if (hasJitter) {
+        } else if (needsPerDab) {
           let prevX = lineFrom.x, prevY = lineFrom.y;
+          let cumDist = state.strokeDistance ?? 0;
           for (const pt of scatterPts) {
             const d = Math.sqrt((pt.x - prevX) ** 2 + (pt.y - prevY) ** 2);
+            cumDist += d;
             const { size: jS, hardness: jH } = advanceJitterWalk(state, d, baseSize, baseHardness, sizeJitter, hardnessJitter);
-            gpuBrushDab(engine, activeLayerId, pt.x, pt.y, jS, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
+            let dabSize = jS;
+            if (brushTaper > 0) {
+              dabSize *= Math.max(0, 1 - cumDist / brushTaper);
+              if (dabSize < 0.5) break;
+            }
+            gpuBrushDab(engine, activeLayerId, pt.x, pt.y, dabSize, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
             for (const mp of getMirroredPoints(pt.x, pt.y, sym)) {
-              gpuBrushDab(engine, activeLayerId, mp.x, mp.y, jS, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
+              gpuBrushDab(engine, activeLayerId, mp.x, mp.y, dabSize, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
             }
             prevX = pt.x; prevY = pt.y;
           }
+          state.strokeDistance = cumDist;
         } else {
           const arr = new Float64Array(scatterPts.length * 2);
           for (let i = 0; i < scatterPts.length; i++) {
@@ -297,18 +306,26 @@ export function handlePaintDown(
         state.spacingRemainder = spacingRem;
         if (brushFade > 0) {
           emitFlatDabsWithFade(engine, activeLayerId, pts, baseSize, baseHardness, r, g, b, color.a, opacity, brushFade, state, sym, 0, aJ, oJ);
-        } else if (hasJitter) {
+        } else if (needsPerDab) {
           let prevX = lineFrom.x, prevY = lineFrom.y;
+          let cumDist = state.strokeDistance ?? 0;
           for (let i = 0; i < pts.length; i += 2) {
             const px = pts[i]!, py = pts[i + 1]!;
             const d = Math.sqrt((px - prevX) ** 2 + (py - prevY) ** 2);
+            cumDist += d;
             const { size: jS, hardness: jH } = advanceJitterWalk(state, d, baseSize, baseHardness, sizeJitter, hardnessJitter);
-            gpuBrushDab(engine, activeLayerId, px, py, jS, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
+            let dabSize = jS;
+            if (brushTaper > 0) {
+              dabSize *= Math.max(0, 1 - cumDist / brushTaper);
+              if (dabSize < 0.5) break;
+            }
+            gpuBrushDab(engine, activeLayerId, px, py, dabSize, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
             for (const mp of getMirroredPoints(px, py, sym)) {
-              gpuBrushDab(engine, activeLayerId, mp.x, mp.y, jS, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
+              gpuBrushDab(engine, activeLayerId, mp.x, mp.y, dabSize, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
             }
             prevX = px; prevY = py;
           }
+          state.strokeDistance = cumDist;
         } else {
           gpuBrushDabBatch(engine, activeLayerId, pts, baseSize, baseHardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
           for (const m of mirrorBatchPoints(pts, sym)) {
@@ -620,6 +637,17 @@ export function handlePaintMove(
       const jittered = advanceJitterWalk(state, segDist, size, baseHardness, sizeJitter, hardnessJitter);
       size = jittered.size;
       let hardness = jittered.hardness;
+
+      // Taper: shrink brush size to zero over taperDistance
+      const brushTaper = toolSettings.brushTaper;
+      if (brushTaper > 0) {
+        const taperFactor = Math.max(0, 1 - (state.strokeDistance ?? 0) / brushTaper);
+        size = size * taperFactor;
+        if (size < 0.5) {
+          state.lastPoint = layerLocalPos;
+          break;
+        }
+      }
 
       const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
 

@@ -17,6 +17,7 @@ interface BrushStrokePreviewProps {
   opacityJitter: number;
   speedSize: number;
   speedSizeInvert: boolean;
+  taper: number;
   texture: BrushTextureData | null;
   textureBlendMode: BrushTextureBlendMode;
   textureScale: number;
@@ -133,6 +134,13 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
             ? 1 + speedAmt * normalizedSpeed
             : 1 - speedAmt * normalizedSpeed;
           dabSize = Math.max(1, dabSize * scale);
+        }
+
+        // Taper: shrink to zero over taper distance
+        if (props.taper > 0) {
+          const taperFactor = Math.max(0, 1 - dist / props.taper);
+          dabSize *= taperFactor;
+          if (dabSize < 0.5) continue;
         }
 
         // Size jitter walk
