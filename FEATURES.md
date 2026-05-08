@@ -397,6 +397,13 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - **Crop canvas**: by rectangle
 - **Resize canvas**: new width/height with anchor point
 - **Resize image**: new width/height (resamples all layers)
+- **Content-Aware Scale**: seam carving algorithm that removes low-energy
+  pixel paths to reduce image dimensions while preserving visually important
+  content. Enabled via a "Content-Aware" checkbox in the Image Size dialog.
+  Implemented in Rust/WASM for performance: computes a Sobel gradient energy
+  map, finds minimum-energy vertical (or horizontal) seams via dynamic
+  programming, and iteratively removes them. Falls back to bilinear
+  interpolation for enlargement on either axis.
 
 ---
 

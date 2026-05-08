@@ -281,6 +281,14 @@ pub fn scale_layer_texture(engine: &mut Engine, layer_id: &str, new_w: u32, new_
         .map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen(js_name = "contentAwareScaleLayerTexture")]
+pub fn content_aware_scale_layer_texture(
+    engine: &mut Engine, layer_id: &str, new_w: u32, new_h: u32,
+) -> Result<(), JsError> {
+    layer_manager::content_aware_scale_texture(&mut engine.inner, layer_id, new_w, new_h)
+        .map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "resizeCanvasTexture")]
 pub fn resize_canvas_texture(
     engine: &mut Engine, layer_id: &str,

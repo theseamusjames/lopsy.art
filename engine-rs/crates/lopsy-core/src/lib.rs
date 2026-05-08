@@ -15,3 +15,4 @@ pub mod decode;
 pub mod dng;
 pub mod psd;
 pub mod text_types;
+pub mod seam_carving;

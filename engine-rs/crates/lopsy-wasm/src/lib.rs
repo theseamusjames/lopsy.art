@@ -231,6 +231,14 @@ pub fn crop_layer_pixel_data(
     lopsy_core::pixel_buffer::crop_layer_pixel_data(data, src_w, src_h, layer_x, layer_y, crop_x, crop_y, crop_w, crop_h)
 }
 
+#[wasm_bindgen(js_name = "contentAwareScale")]
+pub fn content_aware_scale(
+    data: &[u8], src_w: u32, src_h: u32,
+    dst_w: u32, dst_h: u32,
+) -> Vec<u8> {
+    lopsy_core::seam_carving::content_aware_scale(data, src_w, src_h, dst_w, dst_h)
+}
+
 #[wasm_bindgen(js_name = "createMaskSurface")]
 pub fn create_mask_surface(mask_data: &[u8], width: u32, height: u32) -> Vec<u8> {
     lopsy_core::pixel_buffer::create_mask_surface(mask_data, width, height)

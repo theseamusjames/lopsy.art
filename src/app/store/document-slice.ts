@@ -183,7 +183,7 @@ export interface DocumentSlice {
   updateLayerMaskData: (layerId: string, maskData: Uint8ClampedArray) => void;
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
-  resizeImage: (newWidth: number, newHeight: number) => void;
+  resizeImage: (newWidth: number, newHeight: number, contentAware?: boolean) => void;
 
   // Multi-select
   toggleLayerSelection: (id: string) => void;
@@ -646,13 +646,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     }
   },
 
-  resizeImage: (newWidth, newHeight) => {
+  resizeImage: (newWidth, newHeight, contentAware) => {
     const s = get();
-    s.pushHistory('Resize Image');
+    s.pushHistory(contentAware ? 'Content-Aware Scale' : 'Resize Image');
     const result = computeResizeImage(
       s.document,
       resolveAllPixelData(s.document.layerOrder, s.document.layers),
-      s.renderVersion, newWidth, newHeight,
+      s.renderVersion, newWidth, newHeight, contentAware,
     );
     applyActionResult(set, result);
     if (result.layerPixelData && result.document) {

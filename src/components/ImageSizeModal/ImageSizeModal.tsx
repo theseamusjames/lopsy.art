@@ -14,6 +14,7 @@ export function ImageSizeModal({ onClose }: ImageSizeModalProps) {
   const [width, setWidth] = useState(String(docWidth));
   const [height, setHeight] = useState(String(docHeight));
   const [isConstrained, setIsConstrained] = useState(true);
+  const [isContentAware, setIsContentAware] = useState(false);
   const aspectRatio = docWidth / docHeight;
 
   const handleWidthChange = useCallback((value: string) => {
@@ -39,9 +40,9 @@ export function ImageSizeModal({ onClose }: ImageSizeModalProps) {
   const handleApply = useCallback(() => {
     const w = Math.max(1, Math.min(16384, Math.round(parseInt(width, 10) || docWidth)));
     const h = Math.max(1, Math.min(16384, Math.round(parseInt(height, 10) || docHeight)));
-    resizeImage(w, h);
+    resizeImage(w, h, isContentAware);
     onClose();
-  }, [width, height, docWidth, docHeight, resizeImage, onClose]);
+  }, [width, height, docWidth, docHeight, resizeImage, onClose, isContentAware]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -99,6 +100,14 @@ export function ImageSizeModal({ onClose }: ImageSizeModalProps) {
               onChange={(e) => setIsConstrained(e.target.checked)}
             />
             <span className={styles.constrainLabel}>Constrain proportions</span>
+          </label>
+          <label className={styles.constrainRow}>
+            <input
+              type="checkbox"
+              checked={isContentAware}
+              onChange={(e) => setIsContentAware(e.target.checked)}
+            />
+            <span className={styles.constrainLabel}>Content-Aware</span>
           </label>
         </div>
         <div className={styles.footer}>

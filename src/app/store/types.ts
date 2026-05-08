@@ -143,7 +143,7 @@ export interface EditorState {
   // Canvas
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
-  resizeImage: (newWidth: number, newHeight: number) => void;
+  resizeImage: (newWidth: number, newHeight: number, contentAware?: boolean) => void;
 
   // Viewport
   setZoom: (zoom: number) => void;

@@ -403,6 +403,35 @@ pub fn scale_texture(
     Ok(())
 }
 
+/// Content-aware scale: read pixels from GPU, run seam carving on CPU,
+/// upload the result back. Preserves important visual content while
+/// removing low-energy seams.
+pub fn content_aware_scale_texture(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    new_w: u32,
+    new_h: u32,
+) -> Result<(), String> {
+    let tex_handle = *engine.layer_textures.get(layer_id)
+        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
+    let (src_w, src_h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
+
+    if src_w == 0 || src_h == 0 || new_w == 0 || new_h == 0 {
+        return Err("Invalid dimensions for content-aware scale".to_string());
+    }
+
+    let pixels = read_pixels(engine, layer_id)?;
+    let result = lopsy_core::seam_carving::content_aware_scale(&pixels, src_w, src_h, new_w, new_h);
+
+    let new_tex = engine.texture_pool.acquire(&engine.gl, new_w, new_h)?;
+    engine.texture_pool.upload_rgba(&engine.gl, new_tex, 0, 0, new_w, new_h, &result)?;
+
+    engine.texture_pool.release(tex_handle);
+    engine.layer_textures.insert(layer_id.to_string(), new_tex);
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
 /// GPU-side canvas resize: reposition layer pixels within a new canvas size.
 pub fn resize_canvas_texture(
     engine: &mut EngineInner,

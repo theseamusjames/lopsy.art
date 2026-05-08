@@ -1,7 +1,7 @@
 import type { DocumentState, Layer } from '../../../types';
 import type { ActionResult } from '../types';
 import { getEngine } from '../../../engine-wasm/engine-state';
-import { scaleLayerTexture } from '../../../engine-wasm/wasm-bridge';
+import { scaleLayerTexture, contentAwareScaleLayerTexture } from '../../../engine-wasm/wasm-bridge';
 
 export function computeResizeImage(
   doc: DocumentState,
@@ -9,6 +9,7 @@ export function computeResizeImage(
   renderVersion: number,
   newWidth: number,
   newHeight: number,
+  contentAware = false,
 ): ActionResult {
   const oldW = doc.width;
   const oldH = doc.height;
@@ -20,7 +21,6 @@ export function computeResizeImage(
 
   for (const layer of doc.layers) {
     if (layer.type === 'text') {
-      // Text layers: scale position only — engine re-renders at new coordinates
       newLayers.push({
         ...layer,
         x: Math.round(layer.x * scaleX),
@@ -34,9 +34,12 @@ export function computeResizeImage(
       continue;
     }
 
-    // GPU-side scale
     if (engine) {
-      scaleLayerTexture(engine, layer.id, newWidth, newHeight);
+      if (contentAware) {
+        contentAwareScaleLayerTexture(engine, layer.id, newWidth, newHeight);
+      } else {
+        scaleLayerTexture(engine, layer.id, newWidth, newHeight);
+      }
     }
 
     newLayers.push({
