@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { generateBrushStamp } from '../../tools/brush/brush';
 import type { BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../../types/brush';
 import styles from './BrushStrokePreview.module.css';
@@ -49,8 +49,15 @@ function seededRandom(seed: number): () => number {
 
 export function BrushStrokePreview(props: BrushStrokePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [debouncedProps, setDebouncedProps] = useState(props);
 
   useEffect(() => {
+    const id = setTimeout(() => setDebouncedProps(props), 200);
+    return () => clearTimeout(id);
+  }, [props]);
+
+  useEffect(() => {
+    const props = debouncedProps;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
@@ -271,7 +278,7 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
       }
       ctx.restore();
     }
-  }, [props]);
+  }, [debouncedProps]);
 
   return (
     <canvas ref={canvasRef} className={styles.canvas} />

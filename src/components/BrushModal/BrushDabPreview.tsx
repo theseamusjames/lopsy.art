@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { generateBrushStamp } from '../../tools/brush/brush';
 import type { BrushTipData } from '../../types/brush';
 import styles from './BrushDabPreview.module.css';
@@ -11,10 +11,19 @@ interface BrushDabPreviewProps {
   tip: BrushTipData | null;
 }
 
-export function BrushDabPreview({ size, hardness, opacity, angle, tip }: BrushDabPreviewProps) {
+export function BrushDabPreview(props: BrushDabPreviewProps) {
+  const { size, hardness, opacity, angle, tip } = props;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [ready, setReady] = useState(true);
 
   useEffect(() => {
+    setReady(false);
+    const id = setTimeout(() => setReady(true), 200);
+    return () => clearTimeout(id);
+  }, [size, hardness, opacity, angle, tip]);
+
+  useEffect(() => {
+    if (!ready) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -70,7 +79,7 @@ export function BrushDabPreview({ size, hardness, opacity, angle, tip }: BrushDa
     }
 
     ctx.restore();
-  }, [size, hardness, opacity, angle, tip]);
+  }, [size, hardness, opacity, angle, tip, ready]);
 
   return <canvas ref={canvasRef} className={styles.canvas} width={80} height={80} />;
 }
