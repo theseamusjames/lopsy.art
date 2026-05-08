@@ -1,7 +1,7 @@
 import type { HistorySnapshot, SliceCreator } from './types';
 import type { Layer } from '../../types';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { getLayerTextureDimensions, uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
+import { endStroke, getLayerTextureDimensions, uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 import { resetTrackedState, flushLayerSync, syncLayers } from '../../engine-wasm/engine-sync';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
@@ -244,6 +244,15 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   pushHistory: (label = 'Edit') => {
     const state = get();
     lastRestoredSnapshot = null;
+
+    // Finalize any in-progress GPU stroke so the layer texture includes
+    // it before the snapshot. Without this, a stroke still in the stroke
+    // texture would be invisible to the snapshot and to any subsequent
+    // clipboardCut / clear operation.
+    const engine = getEngine();
+    if (engine && state.document.activeLayerId) {
+      endStroke(engine, state.document.activeLayerId);
+    }
 
     // Flush any pending JS pixel data to the GPU before snapshotting.
     // The GPU is the single source of truth — if JS has data that hasn't
