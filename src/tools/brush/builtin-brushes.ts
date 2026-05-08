@@ -31,11 +31,14 @@ const BUILTIN_BITMAP_BRUSHES: BuiltinBrushDef[] = [
 async function decodePngToGrayscale(pngBytes: Uint8Array): Promise<BrushTipData> {
   const blob = new Blob([pngBytes.buffer as ArrayBuffer], { type: 'image/png' });
   const bitmap = await createImageBitmap(blob);
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const w = bitmap.width;
+  const h = bitmap.height;
+  const canvas = new OffscreenCanvas(w, h);
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(bitmap, 0, 0);
-  const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
-  const grayscale = new Uint8ClampedArray(bitmap.width * bitmap.height);
+  bitmap.close();
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const grayscale = new Uint8ClampedArray(w * h);
   for (let i = 0; i < grayscale.length; i++) {
     const r = imageData.data[i * 4]!;
     const g = imageData.data[i * 4 + 1]!;
@@ -44,8 +47,7 @@ async function decodePngToGrayscale(pngBytes: Uint8Array): Promise<BrushTipData>
     const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
     grayscale[i] = Math.round((255 - lum) * (a / 255));
   }
-  bitmap.close();
-  return { width: bitmap.width, height: bitmap.height, data: grayscale };
+  return { width: w, height: h, data: grayscale };
 }
 
 let loaded = false;
