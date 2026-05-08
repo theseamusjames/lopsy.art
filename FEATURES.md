@@ -3,17 +3,38 @@
 ## Drawing & Painting Tools
 
 ### Brush
-- **Size**: 1 - 2000 px
+
+The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Everything else (preset gallery, brush-tip import, dynamics, texture) lives in the **Brushes modal** opened from the toolbar.
+
+**Core parameters**
+- **Size**: 1 - 2000 px (auto-scaled by document size)
 - **Opacity**: 1 - 100%
 - **Hardness**: 0 - 100%
 - **Fade**: 0 - 2000 px (fade-out distance)
-- **Spacing**: 0 - 200% of brush size
+- **Spacing**: 1 - 200% of brush size
 - **Scatter**: 0 - 100%
-- **Angle**: 0 - 360 degrees
+- **Angle**: 0 - 360 degrees (set via the modal's angle dial)
 - **Symmetry**: horizontal, vertical, or both (4-way)
+
+**Dynamics** (Brushes modal → Dynamics section). Per-dab randomization is performed GPU-side, seeded by each dab's center position so strokes are deterministic for a given path.
+- **Size Jitter**: 0 - 100% — per-dab size randomization
+- **Angle Jitter**: 0 - 100% — per-dab rotation randomization (most visible with non-circular tips)
+- **Opacity Jitter**: 0 - 100% — per-dab transparency randomization
+- **Speed Size**: 0 - 100% — stroke velocity reduces brush size (faster strokes → thinner lines; at 100%, max-speed strokes shrink toward 1 px). Velocity is exponentially smoothed (α=0.3) so the size doesn't twitch from noisy pointer deltas.
+
+**Texture** (Brushes modal → Texture section)
+- **Built-in textures**: Noise, Canvas, Grain (128×128 grayscale tiles generated procedurally) — `No Texture` disables texturing
+- **Texture blend mode**: Multiply, Subtract, or Overlay (against the brush color)
+- **Scale**: 10 - 200% (tile size relative to the source tile)
+- Texture tiles in document space so adjacent strokes line up across the same pattern grid
+
+**Tips & presets** (Brushes modal — left panel)
 - **Custom brush tips**: grayscale bitmap or procedural circle
-- **ABR import**: Adobe Brush file support
+- **ABR import**: Adobe Brush file support — drops every brush in the file into the preset grid as new tips
 - **Built-in presets**: Hard Round, Soft Round, Airbrush, Square, Cross Hatch, Diamond, Star, Slash, Chalk, Spray, Leaf
+- **Delete**: removes the active preset (only enabled for user-imported custom presets, never built-ins)
+
+**Stroke modifiers**
 - **Shift+click**: draws a straight line from the previous stroke endpoint to the click point
 - **Hold-to-smooth**: pause the cursor mid-stroke and the recorded freehand path is auto-smoothed and re-rasterized in place (undo restores the freehand version first, then the pre-stroke state)
 
@@ -180,8 +201,13 @@
 - Snap to guides
 - **Snap to layers** (View menu → "Snap to Layers"): while dragging, the moving layer's left/right/top/bottom edges and X/Y centers attract to the matching edges and centers of every other visible layer within a 5 px threshold. Magenta alignment guides span the document while a snap is engaged and clear on mouse-up.
 - **Align**: left, center-h, right, top, center-v, bottom
+- **Fit** (options-bar button): scales the active raster layer so its longest side matches the canvas — preserving aspect ratio — and centers it on the artboard. Useful for bringing an oversized pasted/dropped image into view; reuses the GPU `scaleLayerTexture` path so no pixel data round-trips through JS.
 - **Alt/Option+drag**: with no active selection, duplicates the active layer before moving; with an active marquee, leaves the original pixels behind and moves a floating copy
 - **Cmd/Meta+drag (transform handles)**: constrains aspect ratio when scaling and snaps rotation to 15° increments. Grid + snap-to-grid also forces snapping automatically during the transform.
+
+### Paste / Drop behavior
+- Pasting from the clipboard or drag-and-dropping an image file onto the canvas creates a new raster layer at the image's natural dimensions and **auto-selects** the new layer's non-transparent pixels (loads the alpha as a marquee selection). Combined with the **Fit** button, oversized images can be quickly scaled in to fit without first hunting for a transform handle off-canvas.
+- When duplicating a layer that is wider or taller than the canvas, the +10/+10 visual offset is clamped so the duplicate's far edge never moves past the canvas edge that the original was within (prevents already-oversized layers from being shoved further out of view).
 
 ### Eyedropper
 - **Sample size**: point, 3x3, 5x5
@@ -312,6 +338,7 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 ### Render
 - **Clouds**: scale, seed
 - **Smoke**: scale, seed, turbulence
+- **Regenerate** button: randomized filters (Clouds, Smoke) show a circular-arrow button next to the Preview checkbox in the filter dialog. Clicking it picks a new random seed and refreshes the preview, so users can spin through variations without re-opening the dialog. Confirming the dialog with Preview active commits the exact previewed pixels (the seed is captured at preview time and the GPU result is snapshotted, so what you see is what you get).
 - **Pattern Fill**: tiles a user-defined pattern across the active layer
   - **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern
   - **Scale**: 10 - 1000% (tile size relative to original pattern dimensions)
