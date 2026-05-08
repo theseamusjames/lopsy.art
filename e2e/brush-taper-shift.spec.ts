@@ -179,6 +179,8 @@ test('shift-click taper density matches drag with custom bitmap tip', async ({ p
     if (star) s.setActivePreset(star.id);
     s.setBrushSize(30);
     s.setBrushTaper(400);
+    // Star preset has scatter=0, but test with scatter to cover that path
+    (s as unknown as { setBrushScatter: (v: number) => void }).setBrushScatter(20);
     s.setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
   });
   await page.waitForTimeout(200);

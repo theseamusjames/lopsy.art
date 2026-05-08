@@ -267,53 +267,23 @@ export function handlePaintDown(
     const spacing = Math.max(1, baseSize * brushSpacing / 100);
 
     if (shiftLine) {
-      if (brushScatter > 0) {
-        const scatterPts = interpolatePointsWithScatter(lineFrom, layerPos, spacing, brushScatter, baseSize);
-        if (brushFade > 0) {
-          emitDabsWithFade(engine, activeLayerId, scatterPts, lineFrom, baseSize, baseHardness, r, g, b, color.a, opacity, brushFade, state, sym, 0, aJ, oJ);
-        } else if (needsPerDab) {
-          let prevX = lineFrom.x, prevY = lineFrom.y;
-          let cumDist = state.strokeDistance ?? 0;
-          for (const pt of scatterPts) {
-            const d = Math.sqrt((pt.x - prevX) ** 2 + (pt.y - prevY) ** 2);
-            cumDist += d;
-            const { size: jS, hardness: jH } = advanceJitterWalk(state, d, baseSize, baseHardness, sizeJitter, hardnessJitter);
-            let dabSize = jS;
-            if (brushTaper > 0) {
-              dabSize *= Math.max(0, 1 - cumDist / brushTaper);
-              if (dabSize < 0.5) break;
-            }
-            gpuBrushDab(engine, activeLayerId, pt.x, pt.y, dabSize, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-            for (const mp of getMirroredPoints(pt.x, pt.y, sym)) {
-              gpuBrushDab(engine, activeLayerId, mp.x, mp.y, dabSize, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-            }
-            prevX = pt.x; prevY = pt.y;
-          }
-          state.strokeDistance = cumDist;
-        } else {
-          const arr = new Float64Array(scatterPts.length * 2);
-          for (let i = 0; i < scatterPts.length; i++) {
-            arr[i * 2] = scatterPts[i]!.x;
-            arr[i * 2 + 1] = scatterPts[i]!.y;
-          }
-          gpuBrushDabBatch(engine, activeLayerId, arr, baseSize, baseHardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-          for (const m of mirrorBatchPoints(arr, sym)) {
-            gpuBrushDabBatch(engine, activeLayerId, m, baseSize, baseHardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-          }
-        }
-      } else if (needsPerDab) {
+      if (needsPerDab || brushScatter > 0) {
+        // Walk the line with dynamic spacing. Taper shrinks dabs AND spacing
+        // so density increases as the brush tapers — matching drag behaviour.
+        // Scatter is applied per-dab as a perpendicular offset.
         const ldx = layerPos.x - lineFrom.x;
         const ldy = layerPos.y - lineFrom.y;
         const lineDist = Math.sqrt(ldx * ldx + ldy * ldy);
         if (lineDist > 0) {
           const nx = ldx / lineDist;
           const ny = ldy / lineDist;
+          const perpX = -ny;
+          const perpY = nx;
           const baseDist = state.strokeDistance ?? 0;
           let walked = spacing - (state.spacingRemainder ?? 0);
           let prevWalked = 0;
+          let seed = 12345;
           while (walked <= lineDist) {
-            const px = lineFrom.x + nx * walked;
-            const py = lineFrom.y + ny * walked;
             const step = walked - prevWalked;
             prevWalked = walked;
             const cumDist = baseDist + walked;
@@ -323,11 +293,20 @@ export function handlePaintDown(
               dabSize *= Math.max(0, 1 - cumDist / brushTaper);
               if (dabSize < 0.5) break;
             }
+            let px = lineFrom.x + nx * walked;
+            let py = lineFrom.y + ny * walked;
+            if (brushScatter > 0) {
+              seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+              const r01 = ((seed >>> 0) % 10000) / 10000;
+              const offset = (r01 - 0.5) * 2 * (brushScatter / 100) * dabSize * 2;
+              px += perpX * offset;
+              py += perpY * offset;
+            }
             gpuBrushDab(engine, activeLayerId, px, py, dabSize, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
             for (const mp of getMirroredPoints(px, py, sym)) {
               gpuBrushDab(engine, activeLayerId, mp.x, mp.y, dabSize, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
             }
-            const curSpacing = Math.max(1, dabSize * toolSettings.brushSpacing / 100);
+            const curSpacing = Math.max(1, dabSize * brushSpacing / 100);
             walked += curSpacing;
           }
           state.spacingRemainder = walked - lineDist;
