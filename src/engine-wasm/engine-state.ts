@@ -24,6 +24,7 @@ export function getEngineCanvas(): HTMLCanvasElement | null {
 
 export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   await initWasm();
+  import('../tools/brush/builtin-brushes').then((m) => m.loadBuiltinBitmapBrushes()).catch(() => {});
   engine = createEngine(canvas);
   engineCanvas = canvas;
 

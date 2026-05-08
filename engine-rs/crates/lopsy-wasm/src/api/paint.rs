@@ -245,6 +245,17 @@ pub fn set_brush_texture_state(engine: &mut Engine, has_texture: bool, scale: f3
     engine.inner.brush_texture_blend_mode = blend_mode;
 }
 
+// Built-in brush tip bitmaps embedded at compile time
+const BUILTIN_BRUSH_OBLONG: &[u8] = include_bytes!("../../../../brushes/oblong.png");
+
+#[wasm_bindgen(js_name = "getBuiltinBrushTip")]
+pub fn get_builtin_brush_tip(name: &str) -> Option<Vec<u8>> {
+    match name {
+        "oblong" => Some(BUILTIN_BRUSH_OBLONG.to_vec()),
+        _ => None,
+    }
+}
+
 #[wasm_bindgen(js_name = "generateBrushStamp")]
 pub fn generate_brush_stamp(size: u32, hardness: f32) -> Vec<f32> {
     lopsy_core::brush::generate_brush_stamp(size, hardness)
