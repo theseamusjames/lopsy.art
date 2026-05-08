@@ -243,13 +243,13 @@ export function BrushModal() {
             <Slider label="Hardness Jitter" value={hardnessJitter} min={0} max={100} onChange={setHardnessJitter} />
             <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
             <Slider label="Opacity Jitter" value={opacityJitter} min={0} max={100} onChange={setOpacityJitter} />
-            <Slider label="Speed Size" value={speedSize} min={0} max={300} onChange={setSpeedSize} />
+            <Slider label="Speed Size" value={speedSize} min={0} max={speedSizeInvert ? 300 : 100} onChange={setSpeedSize} />
             <div className={styles.speedToggleRow}>
               <span className={styles.speedToggleLabel}>Faster is</span>
               <div className={styles.speedToggleGroup}>
                 <button
                   className={`${styles.speedToggle}${!speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
-                  onClick={() => setSpeedSizeInvert(false)}
+                  onClick={() => { setSpeedSizeInvert(false); if (speedSize > 100) setSpeedSize(100); }}
                 >
                   Thinner
                 </button>
@@ -260,8 +260,6 @@ export function BrushModal() {
                   Wider
                 </button>
               </div>
-            </div>
-            <div className={styles.speedToggleRow}>
               <span className={styles.speedToggleLabel}>Sensitivity</span>
               <div className={styles.speedToggleGroup}>
                 <button
