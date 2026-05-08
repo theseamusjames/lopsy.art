@@ -29,7 +29,7 @@ export function DodgeOptions() {
         <option value="burn">Burn</option>
       </select>
       <Slider label="Exposure" value={dodgeExposure} min={1} max={100} onChange={setDodgeExposure} />
-      <Slider label="Size" value={brushSize} min={1} max={sizeMax} onChange={setBrushSize} />
+      <Slider label="Size" value={brushSize} min={1} max={sizeMax} sliderMax={300} onChange={setBrushSize} />
     </>
   );
 }

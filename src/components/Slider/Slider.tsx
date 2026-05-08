@@ -6,6 +6,8 @@ interface SliderProps {
   value: number;
   min: number;
   max: number;
+  sliderMin?: number;
+  sliderMax?: number;
   step?: number;
   label?: string;
   defaultValue?: number;
@@ -44,10 +46,22 @@ export function commitSliderValue(
   return clamp(parsed, min, max);
 }
 
+export function sliderKnobPosition(
+  value: number,
+  sliderMin: number,
+  sliderMax: number,
+  scale: 'linear' | 'log' = 'linear',
+): number {
+  const clamped = clamp(value, sliderMin, sliderMax);
+  return scale === 'log' ? posLog(clamped, sliderMin, sliderMax) : clamped;
+}
+
 export function Slider({
   value,
   min,
   max,
+  sliderMin,
+  sliderMax,
   step = 1,
   label,
   defaultValue,
@@ -60,6 +74,9 @@ export function Slider({
 }: SliderProps) {
   const [localValue, setLocalValue] = useState(String(value));
   const [isFocused, setIsFocused] = useState(false);
+
+  const knobMin = Math.max(min, sliderMin ?? min);
+  const knobMax = Math.min(max, sliderMax ?? max);
 
   const handleDoubleClick = () => {
     onChange(defaultValue ?? min);
@@ -98,9 +115,7 @@ export function Slider({
     [value, step, onChange, scale, min, max],
   );
 
-  // For log scale: the slider knob position is mapped logarithmically.
-  // The HTML input stores the knob position, we convert to/from the actual value.
-  const inputValue = scale === 'log' ? posLog(value, min, max) : value;
+  const knobPosition = sliderKnobPosition(value, knobMin, knobMax, scale);
 
   return (
     <div className={styles.container} onDoubleClick={handleDoubleClick}>
@@ -108,15 +123,15 @@ export function Slider({
       <input
         type="range"
         className={styles.slider}
-        value={Math.max(min, Math.min(max, inputValue))}
-        min={min}
-        max={max}
+        value={knobPosition}
+        min={knobMin}
+        max={knobMax}
         step={step}
         aria-label={label ?? 'Value'}
         onChange={(e) => {
           const iv = Number(e.target.value);
-          const v = scale === 'log' ? valLog(iv, min, max) : iv;
-          onChange(v);
+          const v = scale === 'log' ? valLog(iv, knobMin, knobMax) : iv;
+          onChange(clamp(v, min, max));
         }}
         onPointerDown={() => onDragStart?.()}
         onPointerUp={() => onCommit?.()}
