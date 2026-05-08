@@ -574,7 +574,7 @@ export function handlePaintMove(
         if (state.hardnessJitterTarget === undefined || (state.hardnessJitterDistTraveled ?? 0) >= (state.hardnessJitterTransitionDist ?? 0)) {
           state.hardnessJitterPrevTarget = state.hardnessJitterCurrent ?? 1;
           state.hardnessJitterTarget = Math.random();
-          state.hardnessJitterTransitionDist = 30 + Math.random() * 90;
+          state.hardnessJitterTransitionDist = 80 + Math.random() * 200;
           state.hardnessJitterDistTraveled = 0;
         }
         state.hardnessJitterDistTraveled = (state.hardnessJitterDistTraveled ?? 0) + segDist;
