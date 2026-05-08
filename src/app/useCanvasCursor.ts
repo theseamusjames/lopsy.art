@@ -161,6 +161,7 @@ export function useCanvasCursor(
 export interface BrushCursorInfo {
   readonly size: number;
   readonly shape: 'circle' | 'square';
+  readonly tip: import('../types/brush').BrushTipData | null;
 }
 
 export function getBrushCursorInfo(tool: ToolId): BrushCursorInfo | null {
@@ -169,5 +170,6 @@ export function getBrushCursorInfo(tool: ToolId): BrushCursorInfo | null {
   return {
     size: getToolSize(tool, settings),
     shape: tool === 'pencil' ? 'square' : 'circle',
+    tip: tool === 'brush' ? settings.activeBrushTip : null,
   };
 }

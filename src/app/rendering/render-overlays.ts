@@ -213,6 +213,7 @@ export function renderBrushCursor(
   size: number,
   zoom: number,
   shape: 'circle' | 'square',
+  tip?: { width: number; height: number; data: Uint8ClampedArray } | null,
 ): void {
   const half = size / 2;
 
@@ -238,6 +239,32 @@ export function renderBrushCursor(
     ctx.moveTo(position.x, position.y - crossSize);
     ctx.lineTo(position.x, position.y + crossSize);
     ctx.stroke();
+  } else if (tip && tip.data.length > 0) {
+    // Render custom brush tip shape as a semi-transparent silhouette
+    const maxDim = Math.max(tip.width, tip.height);
+    const scale = size / maxDim;
+    const w = tip.width * scale;
+    const h = tip.height * scale;
+    ctx.globalAlpha = 0.4;
+    const offscreen = new OffscreenCanvas(tip.width, tip.height);
+    const offCtx = offscreen.getContext('2d');
+    if (offCtx) {
+      const imgData = offCtx.createImageData(tip.width, tip.height);
+      for (let i = 0; i < tip.data.length; i++) {
+        const v = tip.data[i]!;
+        imgData.data[i * 4] = 255;
+        imgData.data[i * 4 + 1] = 255;
+        imgData.data[i * 4 + 2] = 255;
+        imgData.data[i * 4 + 3] = v;
+      }
+      offCtx.putImageData(imgData, 0, 0);
+      ctx.drawImage(offscreen, position.x - w / 2, position.y - h / 2, w, h);
+    }
+    ctx.globalAlpha = 1;
+    // Outline at the bounding box
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 0.75 / zoom;
+    ctx.strokeRect(position.x - w / 2, position.y - h / 2, w, h);
   } else if (shape === 'square') {
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.lineWidth = 1.5 / zoom;

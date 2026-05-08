@@ -188,6 +188,34 @@ export function BrushModal() {
       case 'shape':
         return (
           <>
+            <div className={styles.galleryStage}>
+              <div className={styles.galleryGrid}>
+                {presets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    className={`${styles.presetItem}${preset.id === activePresetId ? ` ${styles.presetItemActive}` : ''}`}
+                    onClick={() => setActivePreset(preset.id)}
+                    aria-label={`Brush preset: ${preset.name}`}
+                    aria-pressed={preset.id === activePresetId}
+                    title={preset.name}
+                  >
+                    <BrushThumbnail preset={preset} size={36} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={styles.galleryActions}>
+              <button className={styles.smallButton} onClick={handleImportClick}>Import ABR</button>
+              <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".abr"
+              className={styles.hiddenInput}
+              aria-label="Import ABR brush file"
+              onChange={handleFileChange}
+            />
             <div className={styles.sliderSection}>
               <Slider label="Size" value={brushSize} min={1} max={sizeMax} onChange={setBrushSize} />
               <Slider label="Spacing" value={brushSpacing} min={1} max={200} onChange={setBrushSpacing} />
@@ -231,28 +259,28 @@ export function BrushModal() {
                   Wider
                 </button>
               </div>
-              <div className={styles.speedToggleRow}>
-                <span className={styles.speedToggleLabel}>Sensitivity</span>
-                <div className={styles.speedToggleGroup}>
-                  <button
-                    className={`${styles.speedToggle}${speedSensitivity === 'low' ? ` ${styles.speedToggleActive}` : ''}`}
-                    onClick={() => setSpeedSensitivity('low')}
-                  >
-                    Low
-                  </button>
-                  <button
-                    className={`${styles.speedToggle}${speedSensitivity === 'med' ? ` ${styles.speedToggleActive}` : ''}`}
-                    onClick={() => setSpeedSensitivity('med')}
-                  >
-                    Med
-                  </button>
-                  <button
-                    className={`${styles.speedToggle}${speedSensitivity === 'high' ? ` ${styles.speedToggleActive}` : ''}`}
-                    onClick={() => setSpeedSensitivity('high')}
-                  >
-                    High
-                  </button>
-                </div>
+            </div>
+            <div className={styles.speedToggleRow}>
+              <span className={styles.speedToggleLabel}>Sensitivity</span>
+              <div className={styles.speedToggleGroup}>
+                <button
+                  className={`${styles.speedToggle}${speedSensitivity === 'low' ? ` ${styles.speedToggleActive}` : ''}`}
+                  onClick={() => setSpeedSensitivity('low')}
+                >
+                  Low
+                </button>
+                <button
+                  className={`${styles.speedToggle}${speedSensitivity === 'med' ? ` ${styles.speedToggleActive}` : ''}`}
+                  onClick={() => setSpeedSensitivity('med')}
+                >
+                  Med
+                </button>
+                <button
+                  className={`${styles.speedToggle}${speedSensitivity === 'high' ? ` ${styles.speedToggleActive}` : ''}`}
+                  onClick={() => setSpeedSensitivity('high')}
+                >
+                  High
+                </button>
               </div>
             </div>
           </div>
@@ -310,37 +338,6 @@ export function BrushModal() {
   return (
     <div className={styles.overlay} onMouseDown={handleOverlayClick}>
       <div className={styles.modal} role="dialog" aria-label="Brushes">
-        {/* Preset gallery — horizontal, 2 rows */}
-        <div className={styles.gallery}>
-          <div className={styles.galleryScroll}>
-            {presets.map((preset) => (
-              <button
-                key={preset.id}
-                className={`${styles.presetItem}${preset.id === activePresetId ? ` ${styles.presetItemActive}` : ''}`}
-                onClick={() => setActivePreset(preset.id)}
-                aria-label={`Brush preset: ${preset.name}`}
-                aria-pressed={preset.id === activePresetId}
-                title={preset.name}
-              >
-                <BrushThumbnail preset={preset} size={40} />
-              </button>
-            ))}
-          </div>
-          <div className={styles.galleryActions}>
-            <button className={styles.smallButton} onClick={handleImportClick}>Import ABR</button>
-            <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".abr"
-            className={styles.hiddenInput}
-            aria-label="Import ABR brush file"
-            onChange={handleFileChange}
-          />
-        </div>
-
-        {/* Tab list + panel */}
         <div className={styles.tabContainer}>
           <div className={styles.tabList} role="listbox" aria-label="Brush settings">
             {TABS.map(({ key, label }) => (
