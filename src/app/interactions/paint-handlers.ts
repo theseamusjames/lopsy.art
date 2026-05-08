@@ -302,23 +302,22 @@ export function handlePaintDown(
           }
         }
       } else if (needsPerDab) {
-        // Walk the line with dynamic spacing: taper shrinks size, which
-        // shrinks spacing, producing denser dabs as the brush tapers —
-        // matching the behaviour of mouse-dragged strokes.
-        const dx = layerPos.x - lineFrom.x;
-        const dy = layerPos.y - lineFrom.y;
-        const lineDist = Math.sqrt(dx * dx + dy * dy);
+        const ldx = layerPos.x - lineFrom.x;
+        const ldy = layerPos.y - lineFrom.y;
+        const lineDist = Math.sqrt(ldx * ldx + ldy * ldy);
         if (lineDist > 0) {
-          const nx = dx / lineDist;
-          const ny = dy / lineDist;
-          let cumDist = state.strokeDistance ?? 0;
+          const nx = ldx / lineDist;
+          const ny = ldy / lineDist;
+          const baseDist = state.strokeDistance ?? 0;
           let walked = spacing - (state.spacingRemainder ?? 0);
+          let prevWalked = 0;
           while (walked <= lineDist) {
             const px = lineFrom.x + nx * walked;
             const py = lineFrom.y + ny * walked;
-            const segStep = walked > 0 ? spacing : 0;
-            cumDist += segStep;
-            const { size: jS, hardness: jH } = advanceJitterWalk(state, segStep, baseSize, baseHardness, sizeJitter, hardnessJitter);
+            const step = walked - prevWalked;
+            prevWalked = walked;
+            const cumDist = baseDist + walked;
+            const { size: jS, hardness: jH } = advanceJitterWalk(state, step, baseSize, baseHardness, sizeJitter, hardnessJitter);
             let dabSize = jS;
             if (brushTaper > 0) {
               dabSize *= Math.max(0, 1 - cumDist / brushTaper);
@@ -332,7 +331,7 @@ export function handlePaintDown(
             walked += curSpacing;
           }
           state.spacingRemainder = walked - lineDist;
-          state.strokeDistance = cumDist;
+          state.strokeDistance = baseDist + prevWalked;
         }
       } else {
         const { points: pts, remainder: spacingRem } = interpolateWithSpacing(lineFrom, layerPos, spacing, state.spacingRemainder ?? 0);
