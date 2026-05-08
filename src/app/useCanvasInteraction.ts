@@ -189,12 +189,17 @@ export function useCanvasInteraction(
             strokeContinuation = true;
           }
           {
-            finalizePendingStroke(pendingStrokeRef);
+            const canContinueStroke = strokeContinuation && pendingStrokeRef.current?.layerId === activeLayerId;
+            if (!canContinueStroke) {
+              finalizePendingStroke(pendingStrokeRef);
+            }
             const currentState = useEditorStore.getState();
             syncDocumentSize(engine, currentState.document.width, currentState.document.height);
             flushLayerSync(currentState);
             syncSelection(engine, currentState.selection);
-            beginStroke(engine, activeLayerId);
+            if (!canContinueStroke) {
+              beginStroke(engine, activeLayerId);
+            }
 
             // beginStroke calls ensure_layer_full_size on the WASM side,
             // which expands a cropped layer texture to the union of the
