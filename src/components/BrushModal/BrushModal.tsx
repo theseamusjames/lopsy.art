@@ -4,7 +4,7 @@ import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { Slider } from '../Slider/Slider';
 import { AngleControl } from './AngleControl';
-import { BrushPreview } from './BrushPreview';
+import { BrushDabPreview } from './BrushDabPreview';
 import { BrushThumbnail } from './BrushThumbnail';
 import type { BrushTipData, BrushTextureBlendMode } from '../../types/brush';
 import { describeError, notifyError } from '../../app/notifications-store';
@@ -226,11 +226,11 @@ export function BrushModal() {
             </div>
             <div className={styles.angleRow}>
               <AngleControl angle={brushAngle} onAngleChange={setBrushAngle} />
-              <BrushPreview
+              <BrushDabPreview
                 size={brushSize}
                 hardness={brushHardness}
-                spacing={brushSpacing}
                 opacity={brushOpacity}
+                angle={brushAngle}
                 tip={activeBrushTip}
               />
             </div>
