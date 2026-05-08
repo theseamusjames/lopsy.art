@@ -301,19 +301,24 @@ export function handlePaintDown(
             gpuBrushDabBatch(engine, activeLayerId, m, baseSize, baseHardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
           }
         }
-      } else {
-        const { points: pts, remainder: spacingRem } = interpolateWithSpacing(lineFrom, layerPos, spacing, state.spacingRemainder ?? 0);
-        state.spacingRemainder = spacingRem;
-        if (brushFade > 0) {
-          emitFlatDabsWithFade(engine, activeLayerId, pts, baseSize, baseHardness, r, g, b, color.a, opacity, brushFade, state, sym, 0, aJ, oJ);
-        } else if (needsPerDab) {
-          let prevX = lineFrom.x, prevY = lineFrom.y;
+      } else if (needsPerDab) {
+        // Walk the line with dynamic spacing: taper shrinks size, which
+        // shrinks spacing, producing denser dabs as the brush tapers —
+        // matching the behaviour of mouse-dragged strokes.
+        const dx = layerPos.x - lineFrom.x;
+        const dy = layerPos.y - lineFrom.y;
+        const lineDist = Math.sqrt(dx * dx + dy * dy);
+        if (lineDist > 0) {
+          const nx = dx / lineDist;
+          const ny = dy / lineDist;
           let cumDist = state.strokeDistance ?? 0;
-          for (let i = 0; i < pts.length; i += 2) {
-            const px = pts[i]!, py = pts[i + 1]!;
-            const d = Math.sqrt((px - prevX) ** 2 + (py - prevY) ** 2);
-            cumDist += d;
-            const { size: jS, hardness: jH } = advanceJitterWalk(state, d, baseSize, baseHardness, sizeJitter, hardnessJitter);
+          let walked = spacing - (state.spacingRemainder ?? 0);
+          while (walked <= lineDist) {
+            const px = lineFrom.x + nx * walked;
+            const py = lineFrom.y + ny * walked;
+            const segStep = walked > 0 ? spacing : 0;
+            cumDist += segStep;
+            const { size: jS, hardness: jH } = advanceJitterWalk(state, segStep, baseSize, baseHardness, sizeJitter, hardnessJitter);
             let dabSize = jS;
             if (brushTaper > 0) {
               dabSize *= Math.max(0, 1 - cumDist / brushTaper);
@@ -323,9 +328,17 @@ export function handlePaintDown(
             for (const mp of getMirroredPoints(px, py, sym)) {
               gpuBrushDab(engine, activeLayerId, mp.x, mp.y, dabSize, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
             }
-            prevX = px; prevY = py;
+            const curSpacing = Math.max(1, dabSize * toolSettings.brushSpacing / 100);
+            walked += curSpacing;
           }
+          state.spacingRemainder = walked - lineDist;
           state.strokeDistance = cumDist;
+        }
+      } else {
+        const { points: pts, remainder: spacingRem } = interpolateWithSpacing(lineFrom, layerPos, spacing, state.spacingRemainder ?? 0);
+        state.spacingRemainder = spacingRem;
+        if (brushFade > 0) {
+          emitFlatDabsWithFade(engine, activeLayerId, pts, baseSize, baseHardness, r, g, b, color.a, opacity, brushFade, state, sym, 0, aJ, oJ);
         } else {
           gpuBrushDabBatch(engine, activeLayerId, pts, baseSize, baseHardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
           for (const m of mirrorBatchPoints(pts, sym)) {
