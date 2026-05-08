@@ -675,7 +675,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setBrushSpeedSensitivity: (sensitivity) => set({ brushSpeedSensitivity: sensitivity }),
   setBrushTextureData: (texture) => set({ brushTextureData: texture }),
   setBrushTextureBlendMode: (mode) => set({ brushTextureBlendMode: mode }),
-  setBrushTextureScale: (scale) => set({ brushTextureScale: Math.max(10, Math.min(200, scale)) }),
+  setBrushTextureScale: (scale) => set({ brushTextureScale: Math.max(10, Math.min(300, scale)) }),
   addBrushTexture: (texture) => set((s) => ({ brushTextures: [...s.brushTextures, texture] })),
   removeBrushTexture: (id) => set((s) => ({
     brushTextures: s.brushTextures.filter((t) => t.id !== id),

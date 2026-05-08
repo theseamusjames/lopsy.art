@@ -296,7 +296,7 @@ export function BrushModal() {
                   <option value="subtract">Subtract</option>
                   <option value="overlay">Overlay</option>
                 </select>
-                <Slider label="Scale" value={textureScale} min={10} max={200} onChange={setTextureScale} />
+                <Slider label="Scale" value={textureScale} min={10} max={300} onChange={setTextureScale} />
               </>
             )}
           </div>
