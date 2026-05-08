@@ -91,10 +91,6 @@ export function BrushModal() {
     setShowBrushModal(false);
   }, [setShowBrushModal]);
 
-  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) handleClose();
-  }, [handleClose]);
-
   const handleImportClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -223,13 +219,6 @@ export function BrushModal() {
                 ))}
               </div>
             </div>
-            <div className={styles.galleryActions}>
-              <button className={styles.smallButton} onClick={handleSavePreset}>Save Current</button>
-              <button className={styles.smallButton} onClick={handleImportClick}>Import ABR</button>
-              <button className={styles.smallButton} onClick={handleImportPresets}>Import</button>
-              <button className={styles.smallButton} onClick={handleExportPresets}>Export</button>
-              <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
-            </div>
             <input
               ref={fileInputRef}
               type="file"
@@ -357,49 +346,55 @@ export function BrushModal() {
   }
 
   return (
-    <div className={styles.overlay} onMouseDown={handleOverlayClick}>
-      <div className={styles.modal} role="dialog" aria-label="Brushes">
-        <div className={styles.tabContainer}>
-          <div className={styles.tabList} role="listbox" aria-label="Brush settings">
-            {TABS.map(({ key, label }) => (
-              <div
-                key={key}
-                className={`${styles.tabItem}${activeTab === key ? ` ${styles.tabItemActive}` : ''}`}
-                onClick={() => setActiveTab(key)}
-                role="option"
-                aria-selected={activeTab === key}
-              >
-                {label}
-              </div>
-            ))}
-          </div>
-          <div className={styles.tabPanel}>
-            {renderPanel()}
-          </div>
+    <div className={styles.panel} role="dialog" aria-label="Brushes">
+      <div className={styles.titleBar}>
+        <span className={styles.titleText}>Brushes</span>
+        <button className={styles.closeX} onClick={handleClose} aria-label="Close">&times;</button>
+      </div>
+      <div className={styles.tabContainer}>
+        <div className={styles.tabList} role="listbox" aria-label="Brush settings">
+          {TABS.map(({ key, label }) => (
+            <div
+              key={key}
+              className={`${styles.tabItem}${activeTab === key ? ` ${styles.tabItemActive}` : ''}`}
+              onClick={() => setActiveTab(key)}
+              role="option"
+              aria-selected={activeTab === key}
+            >
+              {label}
+            </div>
+          ))}
         </div>
+        <div className={styles.tabPanel}>
+          {renderPanel()}
+        </div>
+      </div>
 
-        <BrushStrokePreview
-          size={brushSize}
-          hardness={brushHardness}
-          spacing={brushSpacing}
-          opacity={brushOpacity}
-          scatter={brushScatter}
-          angle={brushAngle}
-          tip={activeBrushTip}
-          sizeJitter={sizeJitter}
-          hardnessJitter={hardnessJitter}
-          angleJitter={angleJitter}
-          opacityJitter={opacityJitter}
-          speedSize={speedSize}
-          speedSizeInvert={speedSizeInvert}
-          taper={brushTaper}
-          texture={textureData}
-          textureBlendMode={textureBlendMode}
-          textureScale={textureScale}
-        />
-        <div className={styles.footer}>
-          <button className={styles.closeButton} onClick={handleClose}>Close</button>
-        </div>
+      <BrushStrokePreview
+        size={brushSize}
+        hardness={brushHardness}
+        spacing={brushSpacing}
+        opacity={brushOpacity}
+        scatter={brushScatter}
+        angle={brushAngle}
+        tip={activeBrushTip}
+        sizeJitter={sizeJitter}
+        hardnessJitter={hardnessJitter}
+        angleJitter={angleJitter}
+        opacityJitter={opacityJitter}
+        speedSize={speedSize}
+        speedSizeInvert={speedSizeInvert}
+        taper={brushTaper}
+        texture={textureData}
+        textureBlendMode={textureBlendMode}
+        textureScale={textureScale}
+      />
+      <div className={styles.footer}>
+        <button className={styles.smallButton} onClick={handleSavePreset}>Save Current</button>
+        <button className={styles.smallButton} onClick={handleImportClick}>Import ABR</button>
+        <button className={styles.smallButton} onClick={handleImportPresets}>Import</button>
+        <button className={styles.smallButton} onClick={handleExportPresets}>Export</button>
+        <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
       </div>
     </div>
   );
