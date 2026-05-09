@@ -273,7 +273,7 @@ function renderFrameGpu(
         : activeTool === 'eraser' ? toolState.eraserSize
         : activeTool === 'stamp' ? toolState.stampSize
         : brushCursorInfo.size;
-      renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip);
+      renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip, brushCursorInfo.angle);
     }
 
     renderSnapLines(overlayCtx, snapLines, doc.width, doc.height, viewport.zoom);

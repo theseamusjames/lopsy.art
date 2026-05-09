@@ -214,6 +214,7 @@ export function renderBrushCursor(
   zoom: number,
   shape: 'circle' | 'square',
   tip?: { width: number; height: number; data: Uint8ClampedArray } | null,
+  angle = 0,
 ): void {
   const half = size / 2;
 
@@ -274,8 +275,6 @@ export function renderBrushCursor(
       outerCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
       outerCtx.fillRect(0, 0, ow, oh);
 
-      ctx.drawImage(outerCanvas, position.x - drawW / 2 - pad, position.y - drawH / 2 - pad);
-
       // Light inner outline
       const innerCanvas = new OffscreenCanvas(ow, oh);
       const innerCtx = innerCanvas.getContext('2d')!;
@@ -287,7 +286,11 @@ export function renderBrushCursor(
       innerCtx.fillStyle = 'rgba(255, 255, 255, 0.8)';
       innerCtx.fillRect(0, 0, ow, oh);
 
-      ctx.drawImage(innerCanvas, position.x - drawW / 2 - pad, position.y - drawH / 2 - pad);
+      // Draw both outlines rotated by the brush angle
+      ctx.translate(position.x, position.y);
+      ctx.rotate(angle);
+      ctx.drawImage(outerCanvas, -drawW / 2 - pad, -drawH / 2 - pad);
+      ctx.drawImage(innerCanvas, -drawW / 2 - pad, -drawH / 2 - pad);
     }
   } else if (shape === 'square') {
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
