@@ -294,6 +294,6 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
   }, [debouncedProps]);
 
   return (
-    <canvas ref={canvasRef} className={styles.canvas} />
+    <canvas ref={canvasRef} className={styles.canvas} data-testid="brush-stroke-preview" />
   );
 }

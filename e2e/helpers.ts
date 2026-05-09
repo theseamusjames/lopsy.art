@@ -288,7 +288,7 @@ export async function redo(page: Page): Promise<void> {
 const TOOL_SHORTCUTS: Record<string, string> = {
   move: 'v', brush: 'b', pencil: 'n', eraser: 'e', fill: 'g',
   eyedropper: 'i', stamp: 's', dodge: 'o', smudge: 'r', spray: 'j',
-  'marquee-rect': 'm', lasso: 'l', wand: 'w', 'quick-select': 'q',
+  'marquee-rect': 'm', lasso: 'l', wand: 'w',
   shape: 'u', text: 't', crop: 'c', path: 'p',
 };
 
@@ -354,7 +354,16 @@ export async function closeBrushModal(page: Page): Promise<void> {
 
 export async function setBrushModalOption(page: Page, label: string, value: number): Promise<void> {
   await openBrushModal(page);
-  const input = page.locator(`[role="dialog"][aria-label="Brushes"] [aria-label="${label} value"]`);
+  const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
+  const dynamicsLabels = ['Size Jitter', 'Hardness Jitter', 'Angle Jitter', 'Opacity Jitter', 'Speed Size'];
+  const textureLabels = ['Scale'];
+  const tab = dynamicsLabels.includes(label) ? 'Dynamics' : textureLabels.includes(label) ? 'Texture' : 'Shape';
+  const tabOption = dialog.locator(`[role="option"]:has-text("${tab}")`);
+  if (!(await tabOption.getAttribute('aria-selected')).includes('true')) {
+    await tabOption.click();
+    await page.waitForTimeout(50);
+  }
+  const input = dialog.locator(`[aria-label="${label} value"]`);
   await input.fill(String(value));
   await input.press('Enter');
 }

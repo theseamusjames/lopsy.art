@@ -11,10 +11,10 @@ test.describe('Export Dialog', () => {
     await page.waitForTimeout(200);
   });
 
-  test('File > Export As… opens the Export dialog', async ({ page }) => {
+  test('File > Export… opens the Export dialog', async ({ page }) => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(150);
-    await page.getByRole('menuitem', { name: 'Export As…' }).click();
+    await page.getByRole('menuitem', { name: 'Export…' }).click();
     await page.waitForTimeout(200);
 
     // The dialog should be visible with its heading
@@ -26,7 +26,7 @@ test.describe('Export Dialog', () => {
   test('dialog shows format buttons', async ({ page }) => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(150);
-    await page.getByRole('menuitem', { name: 'Export As…' }).click();
+    await page.getByRole('menuitem', { name: 'Export…' }).click();
     await page.waitForTimeout(200);
 
     const dialog = page.getByRole('dialog', { name: 'Export' });
@@ -41,7 +41,7 @@ test.describe('Export Dialog', () => {
   test('quality slider is hidden when PNG is selected', async ({ page }) => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(150);
-    await page.getByRole('menuitem', { name: 'Export As…' }).click();
+    await page.getByRole('menuitem', { name: 'Export…' }).click();
     await page.waitForTimeout(200);
 
     const dialog = page.getByRole('dialog', { name: 'Export' });
@@ -56,7 +56,7 @@ test.describe('Export Dialog', () => {
   test('quality slider appears when JPEG is selected', async ({ page }) => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(150);
-    await page.getByRole('menuitem', { name: 'Export As…' }).click();
+    await page.getByRole('menuitem', { name: 'Export…' }).click();
     await page.waitForTimeout(200);
 
     const dialog = page.getByRole('dialog', { name: 'Export' });
@@ -74,7 +74,7 @@ test.describe('Export Dialog', () => {
   test('dimensions display updates when scale changes', async ({ page }) => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(150);
-    await page.getByRole('menuitem', { name: 'Export As…' }).click();
+    await page.getByRole('menuitem', { name: 'Export…' }).click();
     await page.waitForTimeout(200);
 
     const dialog = page.getByRole('dialog', { name: 'Export' });
@@ -94,7 +94,7 @@ test.describe('Export Dialog', () => {
   test('Cancel button closes the dialog', async ({ page }) => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(150);
-    await page.getByRole('menuitem', { name: 'Export As…' }).click();
+    await page.getByRole('menuitem', { name: 'Export…' }).click();
     await page.waitForTimeout(200);
 
     const dialog = page.getByRole('dialog', { name: 'Export' });
@@ -113,15 +113,15 @@ test.describe('Export Dialog', () => {
 
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(150);
-    await page.getByRole('menuitem', { name: 'Export As…' }).click();
+    await page.getByRole('menuitem', { name: 'Export…' }).click();
     await page.waitForTimeout(200);
 
     const dialog = page.getByRole('dialog', { name: 'Export' });
     await dialog.getByRole('button', { name: 'Export' }).click();
 
     const download = await downloadPromise;
-    // Default format is PNG, filename defaults to document name 'Untitled'
-    expect(download.suggestedFilename()).toBe('Untitled.png');
+    // Default format is PNG, filename defaults to document name 'lopsy'
+    expect(download.suggestedFilename()).toBe('lopsy.png');
 
     await page.screenshot({ path: 'e2e/screenshots/export-dialog-downloaded.png' });
   });

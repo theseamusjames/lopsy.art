@@ -15,6 +15,16 @@ test.describe('Mobile canvas', () => {
     await createDocument(page, 800, 600);
     await page.waitForTimeout(300);
 
+    // Close panels that may overflow the narrow viewport
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { visiblePanels: Set<string>; togglePanel: (id: string) => void };
+      };
+      const s = store.getState();
+      for (const panel of s.visiblePanels) s.togglePanel(panel);
+    });
+    await page.waitForTimeout(100);
+
     const container = page.getByTestId('canvas-container');
     const box = await container.boundingBox();
     expect(box).not.toBeNull();

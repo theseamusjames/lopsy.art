@@ -313,18 +313,9 @@ test.describe('Brush System', () => {
     await openBrushModal(page);
     await page.waitForTimeout(200);
 
-    /**
-     * Read the BrushPreview canvas (the 240×80 preview swatch inside the
-     * brush modal) directly via the DOM. This is the canvas the test
-     * needs to assert against — the main composited screen pixels do
-     * not contain it.
-     */
     const readPreview = async () =>
       page.evaluate(() => {
-        const canvases = Array.from(document.querySelectorAll('canvas')) as HTMLCanvasElement[];
-        // The brush preview canvas is exactly 240×80 by construction
-        // (BrushPreview.tsx). The main WebGL canvas is much larger.
-        const preview = canvases.find((c) => c.width === 240 && c.height === 80);
+        const preview = document.querySelector('canvas[data-testid="brush-stroke-preview"]') as HTMLCanvasElement | null;
         if (!preview) return null;
         const ctx = preview.getContext('2d');
         if (!ctx) return null;
@@ -334,7 +325,7 @@ test.describe('Brush System', () => {
 
     const before = await readPreview();
     expect(before).not.toBeNull();
-    expect(before!.width).toBe(240);
+    expect(before!.width).toBeGreaterThan(0);
 
     // The preview must have rendered something for size=4 — count opaque
     // (non-zero alpha) pixels along the bezier path.

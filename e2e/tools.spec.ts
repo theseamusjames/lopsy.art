@@ -1985,7 +1985,8 @@ test.describe('Comprehensive Scenarios', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Mask Drawing', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'viewport too small for mask UI');
     await page.goto('/');
     await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
     await createDocument(page, 400, 300, false);

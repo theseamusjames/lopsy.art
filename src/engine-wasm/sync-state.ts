@@ -31,6 +31,10 @@ export interface TrackedState {
    *  decide whether a removeLayerMask call is needed — previously done by
    *  substring-sniffing the cached descriptor JSON, which was fragile. */
   masksOnEngine: Set<string>;
+  /** Mask data reference that was last uploaded. Only re-upload to the GPU
+   *  when the JS-side mask data reference changes (same pattern as pixelDataVersions). */
+  maskDataRefs: Map<string, Uint8ClampedArray>;
+  layerPassThroughOpacity: Map<string, number>;
   pixelDataVersions: Map<string, ImageData | undefined>;
   sparseVersions: Map<string, SparseLayerEntry | undefined>;
   layerOrder: string;
@@ -80,6 +84,8 @@ function createTrackedState(): TrackedState {
     layerRefs: new Map(),
     layerEffectiveVisible: new Map(),
     masksOnEngine: new Set(),
+    maskDataRefs: new Map(),
+    layerPassThroughOpacity: new Map(),
     pixelDataVersions: new Map(),
     sparseVersions: new Map(),
     layerOrder: '',

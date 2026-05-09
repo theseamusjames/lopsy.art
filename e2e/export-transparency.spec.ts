@@ -34,7 +34,7 @@ test.describe('Transparency export roundtrip', () => {
     await page.getByRole('menuitem', { name: 'Quick Export PNG' }).click();
 
     const download = await downloadPromise;
-    expect(download.suggestedFilename()).toBe('Untitled.png');
+    expect(download.suggestedFilename()).toBe('lopsy.png');
 
     // Save the downloaded PNG to a temp location
     const tmpDir = path.join(process.cwd(), 'test-results', 'tmp');
