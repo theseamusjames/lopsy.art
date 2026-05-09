@@ -39,8 +39,9 @@ export function generateBrushStamp(size: number, hardness: number): Float32Array
         if (normalizedDist <= hardness) {
           stamp[y * size + x] = 1;
         } else {
-          const falloff = 1 - (normalizedDist - hardness) / (1 - hardness);
-          stamp[y * size + x] = Math.max(0, falloff);
+          const t = (normalizedDist - hardness) / (1 - hardness);
+          const s = t * t * (3 - 2 * t);
+          stamp[y * size + x] = Math.max(0, 1 - s);
         }
       }
     }

@@ -213,6 +213,8 @@ export function renderBrushCursor(
   size: number,
   zoom: number,
   shape: 'circle' | 'square',
+  tip?: { width: number; height: number; data: Uint8ClampedArray } | null,
+  angle = 0,
 ): void {
   const half = size / 2;
 
@@ -238,6 +240,58 @@ export function renderBrushCursor(
     ctx.moveTo(position.x, position.y - crossSize);
     ctx.lineTo(position.x, position.y + crossSize);
     ctx.stroke();
+  } else if (tip && tip.data.length > 0) {
+    // Trace the outline of the custom brush tip shape with dark/light strokes.
+    // Build a filled mask at cursor size, dilate it by ~1.5px, subtract the
+    // original to get a ring, then draw it twice for contrast.
+    const maxDim = Math.max(tip.width, tip.height);
+    const drawW = (tip.width / maxDim) * size;
+    const drawH = (tip.height / maxDim) * size;
+    const pad = 4;
+    const ow = Math.ceil(drawW) + pad * 2;
+    const oh = Math.ceil(drawH) + pad * 2;
+
+    // Render tip as opaque white shape
+    const tipCanvas = new OffscreenCanvas(tip.width, tip.height);
+    const tipCtx = tipCanvas.getContext('2d');
+    if (tipCtx) {
+      const imgData = tipCtx.createImageData(tip.width, tip.height);
+      for (let i = 0; i < tip.data.length; i++) {
+        imgData.data[i * 4] = 255;
+        imgData.data[i * 4 + 1] = 255;
+        imgData.data[i * 4 + 2] = 255;
+        imgData.data[i * 4 + 3] = tip.data[i]! > 30 ? 255 : 0;
+      }
+      tipCtx.putImageData(imgData, 0, 0);
+
+      // Dark outer outline: dilated shape minus original
+      const outerCanvas = new OffscreenCanvas(ow, oh);
+      const outerCtx = outerCanvas.getContext('2d')!;
+      const expand = 1.5 / zoom;
+      outerCtx.drawImage(tipCanvas, pad - expand, pad - expand, drawW + expand * 2, drawH + expand * 2);
+      outerCtx.globalCompositeOperation = 'destination-out';
+      outerCtx.drawImage(tipCanvas, pad + expand * 0.5, pad + expand * 0.5, drawW - expand, drawH - expand);
+      outerCtx.globalCompositeOperation = 'source-in';
+      outerCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      outerCtx.fillRect(0, 0, ow, oh);
+
+      // Light inner outline
+      const innerCanvas = new OffscreenCanvas(ow, oh);
+      const innerCtx = innerCanvas.getContext('2d')!;
+      const shrink = 0.75 / zoom;
+      innerCtx.drawImage(tipCanvas, pad, pad, drawW, drawH);
+      innerCtx.globalCompositeOperation = 'destination-out';
+      innerCtx.drawImage(tipCanvas, pad + shrink, pad + shrink, drawW - shrink * 2, drawH - shrink * 2);
+      innerCtx.globalCompositeOperation = 'source-in';
+      innerCtx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      innerCtx.fillRect(0, 0, ow, oh);
+
+      // Draw both outlines rotated by the brush angle
+      ctx.translate(position.x, position.y);
+      ctx.rotate(angle);
+      ctx.drawImage(outerCanvas, -drawW / 2 - pad, -drawH / 2 - pad);
+      ctx.drawImage(innerCanvas, -drawW / 2 - pad, -drawH / 2 - pad);
+    }
   } else if (shape === 'square') {
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.lineWidth = 1.5 / zoom;

@@ -205,7 +205,7 @@ pub fn composite(engine: &mut EngineInner) {
         // continuation).
         let merged_handle: Option<TextureHandle> = engine.stroke_textures.get(&layer_id)
             .copied()
-            .and_then(|stroke_handle| render_layer_plus_stroke(engine, tex_handle, stroke_handle, tw, th));
+            .and_then(|stroke_handle| render_layer_plus_stroke(engine, tex_handle, stroke_handle, tw, th, &layer_id));
         let effect_tex_handle = merged_handle.unwrap_or(tex_handle);
 
         // --- "Behind" effects: outer glow, drop shadow ---
@@ -257,12 +257,19 @@ pub fn composite(engine: &mut EngineInner) {
             if let Some(&stroke_handle) = engine.stroke_textures.get(&layer_id) {
                 if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
                     let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
+                    let combined_opacity = opacity;
+                    // Set brush texture uniforms on the blend shader before compositing the stroke
+                    crate::brush_gpu::set_brush_texture_uniforms(engine, &engine.shaders.blend, &layer_id, 4);
                     if is_group_child {
                         let gs_tex = engine.group_scratch_texture.unwrap();
                         let gs_fbo = engine.group_scratch_fbo.unwrap();
-                        blend_onto_target(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+                        blend_onto_target(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
                     } else {
-                        blend_onto_composite(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                        blend_onto_composite(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                    }
+                    // Clear brush texture so it doesn't affect subsequent layer blends
+                    if let Some(loc) = engine.shaders.blend.location(&engine.gl, "u_hasBrushTexture") {
+                        engine.gl.uniform1i(Some(&loc), 0);
                     }
                 }
             }
@@ -359,6 +366,7 @@ fn blend_onto_composite(
     if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
     if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), opacity); }
     if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), blend_mode); }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasBrushTexture") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
@@ -443,6 +451,7 @@ fn blend_onto_target(
     if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
     if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), opacity); }
     if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), blend_mode); }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasBrushTexture") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
@@ -653,6 +662,7 @@ fn render_layer_plus_stroke(
     stroke_handle: TextureHandle,
     tw: u32,
     th: u32,
+    layer_id: &str,
 ) -> Option<TextureHandle> {
     if engine.texture_pool.get_size(stroke_handle).map_or(true, |(w, h)| w != tw || h != th) {
         return None;
@@ -674,6 +684,8 @@ fn render_layer_plus_stroke(
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_gl));
         if let Some(loc) = shader.location(gl, "u_dstTex") { gl.uniform1i(Some(&loc), 1); }
         if let Some(loc) = shader.location(gl, "u_opacity") { gl.uniform1f(Some(&loc), 1.0); }
+        if let Some(loc) = shader.location(gl, "u_strokeTexSize") { gl.uniform2f(Some(&loc), tw as f32, th as f32); }
+        crate::brush_gpu::set_brush_texture_uniforms(engine, shader, layer_id, 2);
         engine.draw_fullscreen_quad();
     });
 

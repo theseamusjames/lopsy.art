@@ -52,7 +52,9 @@ export function BrushThumbnail({ preset, size = 48 }: BrushThumbnailProps) {
             if (normalizedDist <= hardness) {
               alpha = 1;
             } else if (hardness < 1) {
-              alpha = 1 - (normalizedDist - hardness) / (1 - hardness);
+              const t = (normalizedDist - hardness) / (1 - hardness);
+              const s = t * t * (3 - 2 * t);
+              alpha = 1 - s;
             }
           }
           const idx = (y * size + x) * 4;

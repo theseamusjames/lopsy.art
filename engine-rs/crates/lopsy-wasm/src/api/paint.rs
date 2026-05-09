@@ -245,6 +245,19 @@ pub fn set_brush_texture_state(engine: &mut Engine, has_texture: bool, scale: f3
     engine.inner.brush_texture_blend_mode = blend_mode;
 }
 
+// Built-in brush tip bitmaps — auto-generated from engine-rs/brushes/*.png
+include!(concat!(env!("OUT_DIR"), "/builtin_brushes.rs"));
+
+#[wasm_bindgen(js_name = "getBuiltinBrushTip")]
+pub fn get_builtin_brush_tip(name: &str) -> Option<Vec<u8>> {
+    get_builtin_brush_tip_generated(name)
+}
+
+#[wasm_bindgen(js_name = "listBuiltinBrushTips")]
+pub fn list_builtin_brush_tips_js() -> String {
+    list_builtin_brush_tips()
+}
+
 #[wasm_bindgen(js_name = "generateBrushStamp")]
 pub fn generate_brush_stamp(size: u32, hardness: f32) -> Vec<f32> {
     lopsy_core::brush::generate_brush_stamp(size, hardness)

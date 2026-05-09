@@ -20,7 +20,7 @@ import { useToolSettingsStore } from './tool-settings-store';
 
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
-import { clearPendingStroke } from './interactions/pending-stroke';
+import { clearPendingStroke, setPendingStroke } from './interactions/pending-stroke';
 import type {
   InteractionState, InteractionContext,
   FloatingSelection, PersistentTransform, LastPaintPoint,
@@ -189,12 +189,17 @@ export function useCanvasInteraction(
             strokeContinuation = true;
           }
           {
-            finalizePendingStroke(pendingStrokeRef);
+            const canContinueStroke = strokeContinuation && pendingStrokeRef.current?.layerId === activeLayerId;
+            if (!canContinueStroke) {
+              finalizePendingStroke(pendingStrokeRef);
+            }
             const currentState = useEditorStore.getState();
             syncDocumentSize(engine, currentState.document.width, currentState.document.height);
             flushLayerSync(currentState);
             syncSelection(engine, currentState.selection);
-            beginStroke(engine, activeLayerId);
+            if (!canContinueStroke) {
+              beginStroke(engine, activeLayerId);
+            }
 
             // beginStroke calls ensure_layer_full_size on the WASM side,
             // which expands a cropped layer texture to the union of the
@@ -496,14 +501,20 @@ export function useCanvasInteraction(
 
     toolHandlers[state.tool]?.up?.(ctx, state);
 
-    // Finalize paint stroke immediately so the layer texture is up-to-date
-    // (thumbnails, undo snapshots, etc. read the layer texture directly).
+    // Defer brush stroke finalization so shift-click can continue the same
+    // stroke texture (avoiding double-composite at the overlap point).
+    // Other paint tools finalize immediately.
     if (PAINT_TOOLS.has(state.tool) && state.layerId && !state.maskMode) {
       const engine = getEngine();
       if (engine && state._usedGpuStroke) {
-        endStroke(engine, state.layerId);
-        clearJsPixelData(state.layerId);
-        useEditorStore.getState().notifyRender();
+        if (state.tool === 'brush') {
+          pendingStrokeRef.current = { layerId: state.layerId };
+          setPendingStroke(state.layerId);
+        } else {
+          endStroke(engine, state.layerId);
+          clearJsPixelData(state.layerId);
+          useEditorStore.getState().notifyRender();
+        }
       } else {
         // CPU fallback
         destroyPaintingCanvas(state.layerId);

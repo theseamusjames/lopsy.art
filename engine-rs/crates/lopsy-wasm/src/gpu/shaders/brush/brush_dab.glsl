@@ -61,36 +61,35 @@ void main() {
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;
 
         float stamp = texture(u_brushTip, uv).r;
+        // Apply hardness as a radial falloff on tip — softens edges
+        // without clipping non-circular shapes
+        if (u_hardness < 0.99) {
+            float tipDist = length(uv - 0.5) * 2.0;
+            if (tipDist > u_hardness) {
+                float ft = (tipDist - u_hardness) / max(1.0 - u_hardness, 0.001);
+                float fs = ft * ft * (3.0 - 2.0 * ft);
+                stamp *= clamp(1.0 - fs, 0.0, 1.0);
+            }
+        }
         a = stamp * u_flow * jOpacity;
     } else {
         // Procedural circle mode
         if (dist > radius) discard;
 
-        // Quadratic falloff matching lopsy_core::brush::generate_brush_stamp
         float t = clamp(dist / radius, 0.0, 1.0);
-        float soft = 1.0 - t * t;
-        float stamp = u_hardness + (1.0 - u_hardness) * soft;
+        float stamp;
+        if (t <= u_hardness) {
+            stamp = 1.0;
+        } else {
+            float softT = (t - u_hardness) / max(1.0 - u_hardness, 0.001);
+            stamp = 1.0 - smoothstep(0.0, 1.0, softT);
+        }
 
         // Smooth antialiasing at circle edge (1px feather)
         float edge = 1.0 - smoothstep(radius - 1.0, radius, dist);
         stamp *= edge;
 
         a = stamp * u_flow * jOpacity;
-    }
-
-    // Brush texture modulation
-    if (u_hasBrushTexture == 1) {
-        vec2 docPos = fragPos + u_layerOffset;
-        vec2 texUV = docPos / (u_brushTextureSize * u_textureScale);
-        float texVal = texture(u_brushTexture, fract(texUV)).r;
-
-        if (u_textureBlendMode == 0) {
-            a *= texVal;
-        } else if (u_textureBlendMode == 1) {
-            a *= (1.0 - texVal);
-        } else {
-            a = a < 0.5 ? 2.0 * a * texVal : 1.0 - 2.0 * (1.0 - a) * (1.0 - texVal);
-        }
     }
 
     // Selection mask constraint

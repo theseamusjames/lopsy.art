@@ -114,8 +114,10 @@ interface UIState {
   showReferenceModal: boolean;
   visiblePanels: Set<string>;
   cursorPosition: Point;
+  cursorOnCanvas: boolean;
   gradientPreview: { start: Point; end: Point } | null;
   setCursorPosition: (pos: Point) => void;
+  setCursorOnCanvas: (onCanvas: boolean) => void;
   setMaskEditMode: (mode: boolean) => void;
   toggleQuickMaskMode: () => void;
   /** Open a modal, replacing any that was already open. */
@@ -228,12 +230,14 @@ export const useUIStore = create<UIState>((set, get) => ({
       : ['color', 'layers'],
   ),
   cursorPosition: { x: 0, y: 0 },
+  cursorOnCanvas: false,
   adjustments: { ...DEFAULT_ADJUSTMENTS },
   adjustmentsEnabled: true,
   setAdjustments: (adj) => set({ adjustments: adj }),
   setAdjustmentsEnabled: (enabled) => set({ adjustmentsEnabled: enabled }),
   gradientPreview: null,
   setCursorPosition: (pos) => set({ cursorPosition: pos }),
+  setCursorOnCanvas: (onCanvas) => set({ cursorOnCanvas: onCanvas }),
   setMaskEditMode: (mode) => set({ maskEditMode: mode }),
   toggleQuickMaskMode: () => set((state) => ({ isQuickMaskMode: !state.isQuickMaskMode })),
 
