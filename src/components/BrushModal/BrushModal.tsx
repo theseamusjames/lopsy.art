@@ -8,9 +8,10 @@ import { BrushDabPreview } from './BrushDabPreview';
 import { BrushThumbnail } from './BrushThumbnail';
 import type { BrushTipData, BrushTextureBlendMode } from '../../types/brush';
 import { describeError, notifyError } from '../../app/notifications-store';
-import { exportPresets, importPresetsFromFile } from '../../tools/brush/preset-io';
+import { importPresetsFromFile } from '../../tools/brush/preset-io';
 import { docScaledMax } from '../../utils/slider-ranges';
 import { BrushStrokePreview } from './BrushStrokePreview';
+import { BrushExportModal } from './BrushExportModal';
 import styles from './BrushModal.module.css';
 
 type TabKey = 'shape' | 'dynamics' | 'texture' | 'presets';
@@ -28,6 +29,7 @@ export function BrushModal() {
   const textureFileInputRef = useRef<HTMLInputElement>(null);
   const [textureImporting, setTextureImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('presets');
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const presets = useToolSettingsStore((s) => s.presets);
   const activePresetId = useToolSettingsStore((s) => s.activePresetId);
@@ -154,9 +156,6 @@ export function BrushModal() {
     if (name) saveCurrentAsPreset(name);
   }, [saveCurrentAsPreset]);
 
-  const handleExportPresets = useCallback(() => {
-    exportPresets();
-  }, []);
 
 
   const handleTextureChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -238,14 +237,8 @@ export function BrushModal() {
               </div>
             </div>
             <div className={styles.presetActions}>
-              <div className={styles.footerLeft}>
-                <button className={styles.smallButton} onClick={handleImportClick}>Import</button>
-                <button className={styles.smallButton} onClick={handleExportPresets}>Export</button>
-              </div>
-              <div className={styles.footerRight}>
-                <button className={styles.smallButton} onClick={handleSavePreset}>Save Current</button>
-                <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
-              </div>
+              <button className={styles.smallButton} onClick={handleImportClick}>Import</button>
+              <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
             </div>
           </>
         );
@@ -429,6 +422,11 @@ export function BrushModal() {
         textureBlendMode={textureBlendMode}
         textureScale={textureScale}
       />
+      <div className={styles.footer}>
+        <button className={styles.smallButton} onClick={() => setShowExportModal(true)}>Export</button>
+        <button className={styles.smallButton} onClick={handleSavePreset}>Save Current</button>
+      </div>
+      {showExportModal && <BrushExportModal onClose={() => setShowExportModal(false)} />}
     </div>
   );
 }

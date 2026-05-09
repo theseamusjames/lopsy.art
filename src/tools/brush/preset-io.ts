@@ -47,9 +47,11 @@ function tipFromJson(s: SerializedTip): BrushTipData {
 
 let nextImportId = 1;
 
-export function exportPresets(): void {
+export function exportPresets(ids?: Set<string>): void {
   const state = useToolSettingsStore.getState();
-  const customs = state.presets.filter((p) => p.isCustom);
+  const customs = ids
+    ? state.presets.filter((p) => ids.has(p.id))
+    : state.presets.filter((p) => p.isCustom);
   if (customs.length === 0) return;
 
   const serialized: SerializedPreset[] = customs.map((p) => ({
