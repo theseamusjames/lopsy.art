@@ -77,6 +77,13 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
     const baseSpacing = Math.max(1, (previewSize * props.spacing) / 100);
     const baseHardness = props.hardness / 100;
     const baseOpacity = props.opacity / 100;
+
+    // Render dabs to a stroke offscreen canvas (simulating MAX blending
+    // by drawing at per-dab jitter intensity only), then composite the
+    // whole stroke onto the preview at baseOpacity.
+    const strokeCanvas = new OffscreenCanvas(Math.round(cssW * dpr), Math.round(cssH * dpr));
+    const sCtx = strokeCanvas.getContext('2d')!;
+    sCtx.scale(dpr, dpr);
     const sizeJ = props.sizeJitter / 100;
     const hardnessJ = props.hardnessJitter / 100;
     const angleJ = props.angleJitter / 100;
@@ -202,12 +209,13 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
           dabY += perpY * offset;
         }
 
-        // Render the dab
+        // Render dab onto the stroke canvas (no base opacity — applied later)
+        const dabAlpha = opacityJ > 0 ? dabOpacity / baseOpacity : 1.0;
         const half = dabSize / 2;
-        ctx.save();
-        ctx.globalAlpha = dabOpacity;
-        ctx.translate(dabX, dabY);
-        ctx.rotate(dabAngle);
+        sCtx.save();
+        sCtx.globalAlpha = dabAlpha;
+        sCtx.translate(dabX, dabY);
+        sCtx.rotate(dabAngle);
 
         if (props.tip) {
           const maxDim = Math.max(props.tip.width, props.tip.height);
@@ -224,7 +232,7 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
               imgData.data[j * 4 + 3] = props.tip.data[j]!;
             }
             offCtx.putImageData(imgData, 0, 0);
-            ctx.drawImage(offscreen, -sw / 2, -sh / 2, sw, sh);
+            sCtx.drawImage(offscreen, -sw / 2, -sh / 2, sw, sh);
           }
         } else {
           const stamp = generateBrushStamp(Math.max(2, Math.round(dabSize)), dabHardness);
@@ -240,14 +248,19 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
               imgData.data[j * 4 + 3] = Math.round((stamp[j] ?? 0) * 255);
             }
             offCtx.putImageData(imgData, 0, 0);
-            ctx.drawImage(offscreen, -half, -half);
+            sCtx.drawImage(offscreen, -half, -half);
           }
         }
 
-        ctx.restore();
+        sCtx.restore();
       }
       prevPt = pt;
     }
+
+    // Composite the stroke canvas onto the preview at base opacity
+    ctx.globalAlpha = baseOpacity;
+    ctx.drawImage(strokeCanvas, 0, 0, cssW, cssH);
+    ctx.globalAlpha = 1;
 
     // Texture overlay (simulated)
     if (props.texture) {
