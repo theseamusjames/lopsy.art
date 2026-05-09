@@ -148,6 +148,12 @@
   border-color: var(--color-accent);
 }
 
+.presetActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 /* ------------------------------------------------------------------ */
 /* Panel contents                                                     */
 /* ------------------------------------------------------------------ */

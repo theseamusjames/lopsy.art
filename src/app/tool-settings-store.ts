@@ -562,6 +562,7 @@ interface ToolSettings {
   removePreset: (id: string) => void;
   updatePreset: (id: string, patch: Partial<Omit<BrushPreset, 'id'>>) => void;
   setActivePreset: (id: string) => void;
+  setTipFromPreset: (id: string) => void;
 }
 
 export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
@@ -872,6 +873,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     if (preset.speedSensitivity !== undefined) state.setBrushSpeedSensitivity(preset.speedSensitivity);
     if (preset.fade !== undefined) state.setBrushFade(preset.fade);
     if (preset.taper !== undefined) state.setBrushTaper(preset.taper);
+  },
+  setTipFromPreset: (id) => {
+    const state = get();
+    const preset = state.presets.find((p) => p.id === id);
+    if (!preset) return;
+    state.setActiveBrushTip(preset.tip);
   },
 }));
 

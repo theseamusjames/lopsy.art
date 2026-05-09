@@ -13,9 +13,10 @@ import { docScaledMax } from '../../utils/slider-ranges';
 import { BrushStrokePreview } from './BrushStrokePreview';
 import styles from './BrushModal.module.css';
 
-type TabKey = 'shape' | 'dynamics' | 'texture';
+type TabKey = 'shape' | 'dynamics' | 'texture' | 'presets';
 
 const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'presets', label: 'Presets' },
   { key: 'shape', label: 'Shape' },
   { key: 'dynamics', label: 'Dynamics' },
   { key: 'texture', label: 'Texture' },
@@ -26,11 +27,12 @@ let nextTextureId = 1;
 export function BrushModal() {
   const textureFileInputRef = useRef<HTMLInputElement>(null);
   const [textureImporting, setTextureImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>('shape');
+  const [activeTab, setActiveTab] = useState<TabKey>('presets');
 
   const presets = useToolSettingsStore((s) => s.presets);
   const activePresetId = useToolSettingsStore((s) => s.activePresetId);
   const setActivePreset = useToolSettingsStore((s) => s.setActivePreset);
+  const setTipFromPreset = useToolSettingsStore((s) => s.setTipFromPreset);
   const removePreset = useToolSettingsStore((s) => s.removePreset);
   const addPresets = useToolSettingsStore((s) => s.addPresets);
   const saveCurrentAsPreset = useToolSettingsStore((s) => s.saveCurrentAsPreset);
@@ -216,7 +218,7 @@ export function BrushModal() {
 
   function renderPanel() {
     switch (activeTab) {
-      case 'shape':
+      case 'presets':
         return (
           <>
             <div className={styles.galleryStage}>
@@ -228,6 +230,36 @@ export function BrushModal() {
                     onClick={() => setActivePreset(preset.id)}
                     aria-label={`Brush preset: ${preset.name}`}
                     aria-pressed={preset.id === activePresetId}
+                    title={preset.name}
+                  >
+                    <BrushThumbnail preset={preset} size={36} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={styles.presetActions}>
+              <div className={styles.footerLeft}>
+                <button className={styles.smallButton} onClick={handleImportClick}>Import</button>
+                <button className={styles.smallButton} onClick={handleExportPresets}>Export</button>
+              </div>
+              <div className={styles.footerRight}>
+                <button className={styles.smallButton} onClick={handleSavePreset}>Save Current</button>
+                <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
+              </div>
+            </div>
+          </>
+        );
+      case 'shape':
+        return (
+          <>
+            <div className={styles.galleryStage}>
+              <div className={styles.galleryGrid}>
+                {presets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    className={`${styles.presetItem}${activeBrushTip === preset.tip ? ` ${styles.presetItemActive}` : ''}`}
+                    onClick={() => setTipFromPreset(preset.id)}
+                    aria-label={`Brush shape: ${preset.name}`}
                     title={preset.name}
                   >
                     <BrushThumbnail preset={preset} size={36} />
@@ -397,16 +429,6 @@ export function BrushModal() {
         textureBlendMode={textureBlendMode}
         textureScale={textureScale}
       />
-      <div className={styles.footer}>
-        <div className={styles.footerLeft}>
-          <button className={styles.smallButton} onClick={handleImportClick}>Import</button>
-          <button className={styles.smallButton} onClick={handleExportPresets}>Export</button>
-        </div>
-        <div className={styles.footerRight}>
-          <button className={styles.smallButton} onClick={handleSavePreset}>Save Current</button>
-          <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
-        </div>
-      </div>
     </div>
   );
 }

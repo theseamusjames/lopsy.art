@@ -118,6 +118,7 @@ async function setupBrush(page: Page, opts: { size: number; opacity: number; har
   await setToolOption(page, 'Size', opts.size);
   await setToolOption(page, 'Opacity', opts.opacity);
   await setToolOption(page, 'Hardness', opts.hardness);
+  await selectBrushTab(page, 'Shape');
   await setBrushModalOption(page, 'Spacing', 0);
   await closeBrushModal(page);
   await setToolOption(page, 'Fade', 0);
@@ -229,6 +230,7 @@ test.describe('Brush jitter (#346)', () => {
 
     // Use wide spacing so individual dabs are distinguishable
     await setupBrush(page, { size: 20, opacity: 100, hardness: 100 });
+    await selectBrushTab(page, 'Shape');
     await setBrushModalOption(page, 'Spacing', 100);
     await closeBrushModal(page);
 
