@@ -24,6 +24,7 @@ import {
 } from '../../engine-wasm/wasm-bridge';
 import type { SymmetryConfig } from '../../tools/symmetry';
 import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from '../../tools/symmetry';
+import { createStabilizerState, stabilize } from '../../tools/brush/stabilizer';
 
 type PaintTool = 'brush' | 'pencil' | 'eraser';
 
@@ -274,6 +275,9 @@ export function handlePaintDown(
     strokeColor,
     lastPointTime: performance.now(),
     smoothedSpeed: 0,
+    stabilizerState: tool === 'brush' && toolSettings.brushStabilizer > 0
+      ? createStabilizerState(layerPos)
+      : undefined,
   };
 
   if (!engine) return state;
@@ -592,7 +596,7 @@ export function handlePaintMove(
   if (!state.lastPoint || !state.layerId) return;
 
   const toolSettings = useToolSettingsStore.getState();
-  const layerLocalPos = ctx.layerPos;
+  let layerLocalPos = ctx.layerPos;
 
   // Mask modes: quick mask and layer mask both route to GPU
   if (state.maskMode) {
@@ -629,6 +633,12 @@ export function handlePaintMove(
       const r = color.r / 255;
       const g = color.g / 255;
       const b = color.b / 255;
+
+      const stabStr = toolSettings.brushStabilizer;
+      if (stabStr > 0 && state.stabilizerState) {
+        const smoothed = stabilize(state.stabilizerState, layerLocalPos, stabStr);
+        layerLocalPos = smoothed;
+      }
 
       const dx = layerLocalPos.x - state.lastPoint.x;
       const dy = layerLocalPos.y - state.lastPoint.y;

@@ -476,9 +476,11 @@ interface ToolSettings {
   brushTextureScale: number;
   brushTextures: BrushTextureData[];
   presets: BrushPreset[];
+  brushStabilizer: number;
   activePresetId: string | null;
   activeSubBrushes: SubBrush[];
 
+  setBrushStabilizer: (stabilizer: number) => void;
   setBrushSizeJitter: (jitter: number) => void;
   setBrushAngleJitter: (jitter: number) => void;
   setBrushOpacityJitter: (jitter: number) => void;
@@ -693,10 +695,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushTextureBlendMode: 'multiply',
   brushTextureScale: 100,
   brushTextures: BUILTIN_TEXTURES,
+  brushStabilizer: 0,
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
   activeSubBrushes: [],
 
+  setBrushStabilizer: (stabilizer) => set({ brushStabilizer: Math.max(0, Math.min(100, stabilizer)) }),
   setBrushSizeJitter: (jitter) => set({ brushSizeJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushAngleJitter: (jitter) => set({ brushAngleJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushOpacityJitter: (jitter) => set({ brushOpacityJitter: Math.max(0, Math.min(100, jitter)) }),

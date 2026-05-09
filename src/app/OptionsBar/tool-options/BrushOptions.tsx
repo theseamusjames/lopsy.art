@@ -19,6 +19,8 @@ export function BrushOptions() {
   const setBrushHardness = useToolSettingsStore((s) => s.setBrushHardness);
   const brushFade = useToolSettingsStore((s) => s.brushFade);
   const setBrushFade = useToolSettingsStore((s) => s.setBrushFade);
+  const brushStabilizer = useToolSettingsStore((s) => s.brushStabilizer);
+  const setBrushStabilizer = useToolSettingsStore((s) => s.setBrushStabilizer);
   const symmetryH = useToolSettingsStore((s) => s.symmetryHorizontal);
   const symmetryV = useToolSettingsStore((s) => s.symmetryVertical);
   const setSymH = useToolSettingsStore((s) => s.setSymmetryHorizontal);
@@ -51,6 +53,7 @@ export function BrushOptions() {
       <Slider label="Opacity" value={brushOpacity} min={1} max={100} onChange={setBrushOpacity} />
       <Slider label="Hardness" value={brushHardness} min={0} max={100} onChange={setBrushHardness} />
       <Slider label="Fade" value={brushFade} min={0} max={fadeMax} onChange={setBrushFade} suffix="px" />
+      <Slider label="Smooth" value={brushStabilizer} min={0} max={100} onChange={setBrushStabilizer} />
       <div className={styles.symmetryGroup}>
         <IconButton
           icon={<FlipVertical2 size={16} />}

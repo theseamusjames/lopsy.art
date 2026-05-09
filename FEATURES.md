@@ -51,7 +51,12 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 
 **Stroke modifiers**
 - **Shift+click**: draws a straight line from the previous stroke endpoint to the click point
+<<<<<<< HEAD
 - **Hold-to-smooth**: pause the cursor mid-stroke for ~1500 ms and the recorded freehand path is auto-smoothed (Ramer-Douglas-Peucker simplification + Catmull-Rom interpolation, straight-line detection within a 4 px tolerance) and re-rasterized in place. Undo restores the freehand version first, then the pre-stroke state.
+=======
+- **Hold-to-smooth**: pause the cursor mid-stroke and the recorded freehand path is auto-smoothed and re-rasterized in place (undo restores the freehand version first, then the pre-stroke state)
+- **Stroke Stabilizer (Smooth)**: 0 - 100 (options bar slider). Real-time stroke smoothing that dampens hand tremor while preserving intentional direction. Uses a weighted moving-average filter: a buffer of recent raw pointer positions is maintained, and the output position is a decay-weighted average that trails behind the cursor. Higher values produce smoother, more dampened strokes with a longer trailing distance. At 0, raw pointer positions pass through unmodified.
+>>>>>>> 39921fa (feat(brush): add real-time stroke stabilizer for smoother freehand drawing)
 
 ### Pencil
 - **Size**: 1 - 100 px

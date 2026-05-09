@@ -2,6 +2,7 @@ import type { MutableRefObject } from 'react';
 import type { Point, ToolId, Layer, Rect } from '../../types';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
 import type { PixelBuffer, MaskedPixelBuffer } from '../../engine/pixel-data';
+import type { StabilizerState } from '../../tools/brush/stabilizer';
 
 export interface InteractionState {
   drawing: boolean;
@@ -53,6 +54,7 @@ export interface InteractionState {
   meshWarpDragging?: boolean;
   /** Set when a tilt-shift overlay drag is in progress. */
   tiltShiftDragging?: boolean;
+  stabilizerState?: StabilizerState;
 }
 
 export const DEFAULT_TRANSFORM_FIELDS = {
