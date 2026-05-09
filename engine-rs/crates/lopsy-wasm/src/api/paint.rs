@@ -245,23 +245,17 @@ pub fn set_brush_texture_state(engine: &mut Engine, has_texture: bool, scale: f3
     engine.inner.brush_texture_blend_mode = blend_mode;
 }
 
-// Built-in brush tip bitmaps embedded at compile time
-const BUILTIN_BRUSH_OBLONG: &[u8] = include_bytes!("../../../../brushes/oblong.png");
-const BUILTIN_BRUSH_CALLIGRAPHIC_ANGLE: &[u8] = include_bytes!("../../../../brushes/caligraphic-angle.png");
-const BUILTIN_BRUSH_CALLIGRAPHIC_ROUNDED: &[u8] = include_bytes!("../../../../brushes/caligraphic-rounded.png");
-const BUILTIN_BRUSH_CALLIGRAPHIC_SPLIT: &[u8] = include_bytes!("../../../../brushes/calligraphic-split.png");
-const BUILTIN_BRUSH_STAR: &[u8] = include_bytes!("../../../../brushes/star.png");
+// Built-in brush tip bitmaps — auto-generated from engine-rs/brushes/*.png
+include!(concat!(env!("OUT_DIR"), "/builtin_brushes.rs"));
 
 #[wasm_bindgen(js_name = "getBuiltinBrushTip")]
 pub fn get_builtin_brush_tip(name: &str) -> Option<Vec<u8>> {
-    match name {
-        "oblong" => Some(BUILTIN_BRUSH_OBLONG.to_vec()),
-        "calligraphic-angle" => Some(BUILTIN_BRUSH_CALLIGRAPHIC_ANGLE.to_vec()),
-        "calligraphic-rounded" => Some(BUILTIN_BRUSH_CALLIGRAPHIC_ROUNDED.to_vec()),
-        "calligraphic-split" => Some(BUILTIN_BRUSH_CALLIGRAPHIC_SPLIT.to_vec()),
-        "star" => Some(BUILTIN_BRUSH_STAR.to_vec()),
-        _ => None,
-    }
+    get_builtin_brush_tip_generated(name)
+}
+
+#[wasm_bindgen(js_name = "listBuiltinBrushTips")]
+pub fn list_builtin_brush_tips_js() -> String {
+    list_builtin_brush_tips()
 }
 
 #[wasm_bindgen(js_name = "generateBrushStamp")]

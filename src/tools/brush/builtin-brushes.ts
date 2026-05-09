@@ -1,76 +1,6 @@
-import { getBuiltinBrushTip } from '../../engine-wasm/wasm-bridge';
+import { getBuiltinBrushTip, listBuiltinBrushTips } from '../../engine-wasm/wasm-bridge';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import type { BrushTipData, BrushPreset } from '../../types/brush';
-
-interface BuiltinBrushDef {
-  name: string;
-  wasmKey: string;
-  size: number;
-  hardness: number;
-  spacing: number;
-  scatter: number;
-  angle: number;
-  opacity: number;
-  flow: number;
-}
-
-const BUILTIN_BITMAP_BRUSHES: BuiltinBrushDef[] = [
-  {
-    name: 'Oblong',
-    wasmKey: 'oblong',
-    size: 30,
-    hardness: 100,
-    spacing: 15,
-    scatter: 0,
-    angle: 0,
-    opacity: 100,
-    flow: 100,
-  },
-  {
-    name: 'Calligraphic Angle',
-    wasmKey: 'calligraphic-angle',
-    size: 25,
-    hardness: 100,
-    spacing: 10,
-    scatter: 0,
-    angle: 0,
-    opacity: 100,
-    flow: 100,
-  },
-  {
-    name: 'Calligraphic Rounded',
-    wasmKey: 'calligraphic-rounded',
-    size: 25,
-    hardness: 100,
-    spacing: 10,
-    scatter: 0,
-    angle: 0,
-    opacity: 100,
-    flow: 100,
-  },
-  {
-    name: 'Calligraphic Split',
-    wasmKey: 'calligraphic-split',
-    size: 25,
-    hardness: 100,
-    spacing: 10,
-    scatter: 0,
-    angle: 0,
-    opacity: 100,
-    flow: 100,
-  },
-  {
-    name: 'Star',
-    wasmKey: 'star',
-    size: 30,
-    hardness: 100,
-    spacing: 80,
-    scatter: 0,
-    angle: 0,
-    opacity: 100,
-    flow: 100,
-  },
-];
 
 async function decodePngToGrayscale(pngBytes: Uint8Array): Promise<BrushTipData> {
   const blob = new Blob([pngBytes.buffer as ArrayBuffer], { type: 'image/png' });
@@ -94,28 +24,38 @@ async function decodePngToGrayscale(pngBytes: Uint8Array): Promise<BrushTipData>
   return { width: w, height: h, data: grayscale };
 }
 
+function prettyName(stem: string): string {
+  return stem
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 let loaded = false;
 
 export async function loadBuiltinBitmapBrushes(): Promise<void> {
   if (loaded) return;
   loaded = true;
 
+  const csv = listBuiltinBrushTips();
+  const names = csv.split(',').filter(Boolean);
+  if (names.length === 0) return;
+
   const presets: BrushPreset[] = [];
-  for (const def of BUILTIN_BITMAP_BRUSHES) {
-    const pngBytes = getBuiltinBrushTip(def.wasmKey);
+  for (const name of names) {
+    const pngBytes = getBuiltinBrushTip(name);
     if (!pngBytes) continue;
     const tip = await decodePngToGrayscale(new Uint8Array(pngBytes));
     presets.push({
-      id: `builtin-bitmap-${def.wasmKey}`,
-      name: def.name,
+      id: `builtin-bitmap-${name}`,
+      name: prettyName(name),
       tip,
-      size: def.size,
-      hardness: def.hardness,
-      spacing: def.spacing,
-      scatter: def.scatter,
-      angle: def.angle,
-      opacity: def.opacity,
-      flow: def.flow,
+      size: 30,
+      hardness: 100,
+      spacing: 15,
+      scatter: 0,
+      angle: 0,
+      opacity: 100,
+      flow: 100,
       isCustom: false,
     });
   }
