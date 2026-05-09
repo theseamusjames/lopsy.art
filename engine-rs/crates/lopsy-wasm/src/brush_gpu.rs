@@ -131,13 +131,12 @@ pub fn apply_dab_batch(
     gl.active_texture(WebGl2RenderingContext::TEXTURE2);
     gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
-    // MAX blending for dab accumulation on the stroke texture.
-    // Each pixel takes the maximum of the existing value and the new dab value.
-    // Since output is premultiplied (color*a, a), MAX selects the highest-alpha
-    // dab at each pixel, preventing opacity compounding from overlapping dabs.
-    // Opacity is applied as a uniform multiplier in the shader.
+    // Standard premultiplied-alpha blending for dab accumulation.
+    // Each dab composites naturally onto the stroke texture, matching
+    // the visual behaviour of the 2D canvas preview.
     gl.enable(WebGl2RenderingContext::BLEND);
-    gl.blend_equation(WebGl2RenderingContext::MAX);
+    gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
+    gl.blend_func(WebGl2RenderingContext::ONE, WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA);
 
     let shader = &engine.shaders.brush_dab;
     gl.use_program(Some(&shader.program));
@@ -295,8 +294,8 @@ pub fn apply_dab_batch(
 
     gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
     gl.disable(WebGl2RenderingContext::BLEND);
-    // Reset blend equation to default ADD for subsequent passes
     gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
+    gl.blend_func(WebGl2RenderingContext::ONE, WebGl2RenderingContext::ZERO);
 
     gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
 
