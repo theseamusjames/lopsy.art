@@ -4,39 +4,46 @@
 
 ### Brush
 
-The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Everything else (preset gallery, brush-tip import, dynamics, texture) lives in the **Brushes modal** opened from the toolbar.
+The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Everything else (preset gallery, brush-tip import, dynamics, texture) lives in the **Brushes panel** opened from the toolbar — a floating, draggable panel (no backdrop) with four tabs (**Presets**, **Shape**, **Dynamics**, **Texture**) and a live full-width stroke preview at the bottom that re-renders 200 ms after the last setting change.
 
 **Core parameters**
-- **Size**: 1 - 2000 px (auto-scaled by document size)
+- **Size**: 1 - 2000 px typed range; the toolbar slider's visual track caps at 300 so the useful range isn't crammed at the left end (typed values above 300 still work, they pin at the right edge of the track)
 - **Opacity**: 1 - 100%
-- **Hardness**: 0 - 100%
+- **Hardness**: 0 - 100% (Photoshop-style curve — at 0 the entire dab is a smooth gradient, at 50 the inner half is solid with a soft edge, at 100 the tip renders fully hard with no clipping for non-circular tips)
 - **Fade**: 0 - 2000 px (fade-out distance)
 - **Spacing**: 1 - 200% of brush size
 - **Scatter**: 0 - 100%
-- **Angle**: 0 - 360 degrees (set via the modal's angle dial)
+- **Angle**: 0 - 360 degrees (set via the Shape tab's angle dial; the on-canvas brush cursor outline rotates to match)
+- **Taper**: 0 - 2000 px — linearly reduces brush size from full to zero over the configured distance, creating a pointed tail. Dynamic spacing keeps the dab density constant as the brush shrinks. Works for both drag strokes and shift-click lines (round and bitmap tips).
 - **Symmetry**: horizontal, vertical, or both (4-way)
 
-**Dynamics** (Brushes modal → Dynamics section). Per-dab randomization is performed GPU-side, seeded by each dab's center position so strokes are deterministic for a given path.
-- **Size Jitter**: 0 - 100% — per-dab size randomization
-- **Angle Jitter**: 0 - 100% — per-dab rotation randomization (most visible with non-circular tips)
+**Dynamics** (Brushes panel → Dynamics tab). Per-dab randomization runs GPU-side, seeded by each dab's center position so strokes are deterministic for a given path.
+- **Size Jitter**: 0 - 100% — smooth random walk along the stroke. Picks a random target size multiplier and transitions toward it over 30–120 px with smoothstep easing, then picks a new target. Produces visible thick-thin variation instead of high-frequency noise.
+- **Hardness Jitter**: 0 - 100% — same smooth random walk over hardness, with a longer 80–280 px transition so soft-to-hard variation is gradual.
+- **Angle Jitter**: 0 - 100% — per-dab rotation randomization (most visible with non-circular tips). Rotates the texture sample with the dab so the pattern follows the tip orientation.
 - **Opacity Jitter**: 0 - 100% — per-dab transparency randomization
-- **Speed Size**: 0 - 100% — stroke velocity reduces brush size (faster strokes → thinner lines; at 100%, max-speed strokes shrink toward 1 px). Velocity is exponentially smoothed (α=0.3) so the size doesn't twitch from noisy pointer deltas.
+- **Speed Size**: 0 - 100% (Thinner) or 0 - 300% (Wider) — stroke velocity scales brush size. **Faster is** toggle picks the direction (Thinner = fast strokes shrink, Wider = fast strokes grow). **Sensitivity** segmented toggle picks the smoothing window for the speed signal: **Low** = 6-sample moving average (smooth, slow response), **Med** = 3 samples (default), **High** = 2 samples (reactive, fast changes). Per-frame size changes are blended at 0.25 for fluid transitions.
 
-**Texture** (Brushes modal → Texture section)
-- **Built-in textures**: Noise, Canvas, Grain (128×128 grayscale tiles generated procedurally) — `No Texture` disables texturing
+**Texture** (Brushes panel → Texture tab)
+- **Built-in textures**: Noise, Canvas, Grain — seamlessly tileable 128×128 grayscale tiles generated as torus-wrapped value noise (4–5 octaves) so adjacent tiles match without seams. `No Texture` disables texturing.
+- **Custom textures**: import any image file via the **Import** button. The image is converted to grayscale on load and stored in the panel's texture list; custom textures can be deleted (built-ins cannot).
 - **Texture blend mode**: Multiply, Subtract, or Overlay (against the brush color)
-- **Scale**: 10 - 200% (tile size relative to the source tile)
-- Texture tiles in document space so adjacent strokes line up across the same pattern grid
+- **Scale**: 10 - 300% (tile size relative to the source tile)
+- Texture tiles in document space so adjacent strokes line up across the same pattern grid. Modulation is applied at stroke-composite time (not per-dab) so the pattern survives MAX-blended overlapping dabs.
 
-**Tips & presets** (Brushes modal — left panel)
-- **Custom brush tips**: grayscale bitmap or procedural circle
-- **ABR import**: Adobe Brush file support — drops every brush in the file into the preset grid as new tips
-- **Built-in presets**: Hard Round, Soft Round, Airbrush, Square, Cross Hatch, Diamond, Star, Slash, Chalk, Spray, Leaf
-- **Delete**: removes the active preset (only enabled for user-imported custom presets, never built-ins)
+**Presets** (Brushes panel → Presets tab)
+- **Built-in procedural presets**: Hard Round, Soft Round, Airbrush, Square, Cross Hatch, Diamond, Star, Slash, Chalk, Spray, Leaf
+- **Built-in bitmap tips** (auto-discovered from `engine-rs/brushes/*.png` at WASM build time): Bubbles, Calligraphic-Angle, Calligraphic-Rounded, Calligraphic-Split, Light-Offset, Oblong, Smooth, Star, Triangle. Drop a new PNG into that directory and rebuild — no Rust or JS code changes needed.
+- **Save Current**: footer button that captures every current brush setting (size, hardness, spacing, scatter, angle, opacity, all dynamics, fade, taper, tip) as a named custom preset.
+- **Import**: single button that accepts both `.abr` (Adobe Brush) files — every brush in the file becomes a new tip in the gallery — and `.json` files exported from Lopsy.
+- **Export**: footer button opens a modal with a multi-select gallery of every preset (Select All / Select None toggles) and downloads the chosen ones as `lopsy-brushes.json` (tip data base64-encoded; full dynamics included).
+- **Delete**: prompts for confirmation; only enabled for user-imported custom presets, never built-ins.
+- **Shape tab gallery**: the same gallery, but clicking a preset only swaps the **tip shape** — size, spacing, opacity, dynamics, etc. stay put. Useful for trying different tip shapes against your current dynamics setup.
+- **Brush cursor**: renders the actual tip shape (rotated by the brush angle) as a dark/light double-stroke outline rather than a plain circle, so non-round tips show their real silhouette on the canvas. Hidden when the pointer leaves the canvas.
 
 **Stroke modifiers**
-- **Shift+click**: draws a straight line from the previous stroke endpoint to the click point
-- **Hold-to-smooth**: pause the cursor mid-stroke and the recorded freehand path is auto-smoothed and re-rasterized in place (undo restores the freehand version first, then the pre-stroke state)
+- **Shift+click**: draws a straight line from the previous stroke endpoint to the click point. The pending stroke is reused (rather than baked and restarted) so MAX blending prevents the connecting line from double-compositing over the origin dab. Size jitter, hardness jitter, scatter, and taper are all applied along shift-click lines using the same dynamic-spacing walk as freehand drag, so dab density and variation match.
+- **Hold-to-smooth**: pause the cursor mid-stroke for 1.5 s and the recorded freehand path is auto-smoothed (sampled at the brush's spacing) and re-rasterized in place. Undo restores the raw freehand version first, then the pre-stroke state.
 
 ### Pencil
 - **Size**: 1 - 100 px
@@ -45,7 +52,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Shift+click**: draws a straight pixel-perfect line from the previous stroke endpoint
 
 ### Eraser
-- **Size**: 1 - 200 px
+- **Size**: 1 px – document-scaled max (slider track caps at 300; typed values up to the document max still work and pin at the right edge)
 - **Opacity**: 1 - 100%
 - **Hardness**: 0 - 100% (internal)
 - **Shift+click**: erases a straight line from the previous stroke endpoint
@@ -53,11 +60,11 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 ### Dodge / Burn
 - **Mode**: dodge or burn
 - **Exposure**: 1 - 100%
-- **Size**: 1 - 200 px
+- **Size**: 1 px – document-scaled max (slider track caps at 300)
 - **Shift+click**: applies dodge/burn along a straight line from the previous stroke endpoint
 
 ### Clone Stamp
-- **Size**: 1 - 200 px
+- **Size**: 1 px – document-scaled max (slider track caps at 300)
 - **Alt/Cmd+click**: set the source sample point
 - **Shift+click**: stamps along a straight line from the previous stroke endpoint, preserving source offset
 
@@ -70,14 +77,14 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - Soft quadratic falloff at the dab edge for seamless blending
 
 ### Smudge
-- **Size**: 1 - 200 px
+- **Size**: 1 px – document-scaled max (slider track caps at 300)
 - **Strength**: 0 - 100% (how far pixels are pulled along the stroke)
 - Shortcut: `R`
 - Pulls colors along the stroke direction, blending neighbouring pixels.
 - **Shift+click**: smudges along a straight line from the previous stroke endpoint
 
 ### Spray
-- **Size**: 1 - 500 px
+- **Size**: 1 px – document-scaled max (slider track caps at 500)
 - **Density**: 1 - 100 (number of dots emitted per dab)
 - **Opacity**: 1 - 100%
 - **Softness**: 0 - 100% (per-dot hardness falloff)
@@ -452,7 +459,7 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - Drag from ruler to create
 
 ### UI
-- **Foreground / background color**: with swap and reset
+- **Foreground / background color**: with swap and reset. Double-clicking the foreground or background swatch (or any recent-color swatch) selects that swatch *and* expands the Color panel if it is collapsed, so the picker is reachable from anywhere in the chrome with a single double-click.
 - **Recent colors**: up to 20
 - **Sidebar collapsed**: on/off
 - **Panel visibility**: togglable per panel (color, layers, etc.)
