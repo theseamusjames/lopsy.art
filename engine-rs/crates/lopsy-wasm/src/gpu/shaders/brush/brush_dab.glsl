@@ -42,7 +42,11 @@ void main() {
 
     float jSize = u_size * (1.0 - u_sizeJitter * (1.0 - h1));
     jSize = max(1.0, jSize);
-    float jOpacity = u_opacity * (1.0 - u_opacityJitter * (1.0 - h2));
+    // Base opacity is applied at stroke composite time, not per-dab.
+    // Opacity jitter modulates per-dab intensity (0–1) within MAX accumulation.
+    float jOpacity = u_opacityJitter > 0.0
+        ? (1.0 - u_opacityJitter * (1.0 - h2))
+        : 1.0;
     float jAngle = u_angle + (h3 - 0.5) * 2.0 * u_angleJitter * 3.14159265;
 
     float radius = jSize * 0.5;

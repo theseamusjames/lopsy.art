@@ -131,12 +131,13 @@ pub fn apply_dab_batch(
     gl.active_texture(WebGl2RenderingContext::TEXTURE2);
     gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
-    // Standard premultiplied-alpha blending for dab accumulation.
-    // Each dab composites naturally onto the stroke texture, matching
-    // the visual behaviour of the 2D canvas preview.
+    // MAX blending for dab accumulation. Each pixel takes the highest
+    // alpha from any overlapping dab, preventing opacity compounding.
+    // Base opacity is NOT in the shader — it's applied once when the
+    // stroke is composited onto the layer. Opacity jitter varies
+    // per-dab intensity within the MAX accumulation.
     gl.enable(WebGl2RenderingContext::BLEND);
-    gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
-    gl.blend_func(WebGl2RenderingContext::ONE, WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA);
+    gl.blend_equation(WebGl2RenderingContext::MAX);
 
     let shader = &engine.shaders.brush_dab;
     gl.use_program(Some(&shader.program));
@@ -295,7 +296,6 @@ pub fn apply_dab_batch(
     gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
     gl.disable(WebGl2RenderingContext::BLEND);
     gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
-    gl.blend_func(WebGl2RenderingContext::ONE, WebGl2RenderingContext::ZERO);
 
     gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
 
@@ -433,9 +433,7 @@ pub fn apply_eraser_dab_batch(
 }
 
 pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
-    // Opacity is already baked into the stroke texture via the clamp pass,
-    // so composite at full strength.
-    let _stroke_opacity = engine.stroke_opacity.remove(layer_id).unwrap_or(1.0);
+    let stroke_opacity = engine.stroke_opacity.remove(layer_id).unwrap_or(1.0);
 
     let Some(stroke_tex) = engine.stroke_textures.remove(layer_id) else {
         engine.mark_layer_dirty(layer_id);
@@ -490,7 +488,7 @@ pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
                         gl.uniform1i(Some(&loc), 1);
                     }
                     if let Some(loc) = engine.shaders.composite.location(gl, "u_opacity") {
-                        gl.uniform1f(Some(&loc), 1.0);
+                        gl.uniform1f(Some(&loc), stroke_opacity);
                     }
                     // Stroke texture size for brush texture doc-space sampling
                     if let Some(loc) = engine.shaders.composite.location(gl, "u_strokeTexSize") {
