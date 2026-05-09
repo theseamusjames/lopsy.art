@@ -433,7 +433,7 @@ pub fn apply_eraser_dab_batch(
 }
 
 pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
-    let stroke_opacity = engine.stroke_opacity.remove(layer_id).unwrap_or(1.0);
+    let _stroke_opacity = engine.stroke_opacity.remove(layer_id).unwrap_or(1.0);
 
     let Some(stroke_tex) = engine.stroke_textures.remove(layer_id) else {
         engine.mark_layer_dirty(layer_id);
@@ -488,7 +488,7 @@ pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
                         gl.uniform1i(Some(&loc), 1);
                     }
                     if let Some(loc) = engine.shaders.composite.location(gl, "u_opacity") {
-                        gl.uniform1f(Some(&loc), stroke_opacity);
+                        gl.uniform1f(Some(&loc), 1.0);
                     }
                     // Stroke texture size for brush texture doc-space sampling
                     if let Some(loc) = engine.shaders.composite.location(gl, "u_strokeTexSize") {
