@@ -205,7 +205,7 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
         // Render the dab
         const half = dabSize / 2;
         ctx.save();
-        ctx.globalAlpha = dabOpacity * 0.8;
+        ctx.globalAlpha = dabOpacity;
         ctx.translate(dabX, dabY);
         ctx.rotate(dabAngle);
 
