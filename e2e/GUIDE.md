@@ -1,15 +1,12 @@
 # E2E Test Writing Guide
 
-This guide captures hard-won knowledge about writing meaningful e2e tests
-for Lopsy. If you're fixing a failing test or adding a new one, read this
-first — most of the pitfalls below were learned the painful way.
+This guide captures hard-won knowledge about writing meaningful e2e tests for Lopsy. If you're fixing a failing test or adding a new one, read this first — most of the pitfalls below were learned the painful way.
 
 ## The golden rule
 
 **A meaningful assertion must be able to fail when the feature breaks.**
 
-If the test's assertion could pass against a completely stubbed or
-missing implementation, the test doesn't test anything. Ask yourself:
+If the test's assertion could pass against a completely stubbed or missing implementation, the test doesn't test anything. Ask yourself:
 
 - Would this pass if the feature were deleted?
 - Would this pass if the feature were silently replaced with a no-op?
@@ -21,14 +18,14 @@ If the answer to any of these is "yes (still passes)", rewrite the test.
 
 ## Test with the UI
 
-When possible, manipulate the UI directly to simulate real user interaction.
-Avoid calling store functions directly as much as you can. The goal is to
-test how a real user will experience the website — when you call functions
-directly, you miss bugs caused by UI interactions that real users will find.
+When possible, manipulate the UI directly to simulate real user interaction. Avoid calling store functions directly as much as you can. The goal is to test how a real user will experience the website — when you call functions directly, you miss bugs caused by UI interactions that real users will find.
 
 - Interact with the UI directly with mouse clicks, mouse movement, etc.
 - Use the website the way a real user would
 - Don't call store actions when a UI equivalent exists
+- It's ok if changes to the UI break the tests -- we'll fix the tests with updated UI manipulation.
+
+**If a test breaks because the UI changed, that doesn't mean we should use the store instead. Just fix the UI test. It's ok if it's brittle, we'll fix it. That's the _point_ of the UI test.** 
 
 ### How to select tools
 

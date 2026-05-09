@@ -44,3 +44,16 @@ export const FractionalStep: Story = {
   args: { value: 1.5, min: 0, max: 10, step: 0.1, label: 'Flow' },
   render: (args) => <StatefulSlider {...args} />,
 };
+
+export const NarrowSliderRange: Story = {
+  args: {
+    value: 60,
+    min: 1,
+    max: 2880,
+    sliderMin: 1,
+    sliderMax: 300,
+    label: 'Size',
+    suffix: 'px',
+  },
+  render: (args) => <StatefulSlider {...args} />,
+};

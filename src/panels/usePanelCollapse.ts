@@ -28,6 +28,23 @@ export function writePanelCollapse(id: string, collapsed: boolean): void {
   }
 }
 
+type Listener = (collapsed: boolean) => void;
+const listeners = new Map<string, Set<Listener>>();
+
+/**
+ * Imperatively set a panel's collapse state from outside the panel itself.
+ * Used by features (e.g. double-clicking a swatch) that need to ensure the
+ * Color panel is expanded even when triggered from a different component tree.
+ */
+export function setPanelCollapsed(id: string, collapsed: boolean): void {
+  const set = listeners.get(id);
+  if (set && set.size > 0) {
+    for (const fn of set) fn(collapsed);
+  } else {
+    writePanelCollapse(id, collapsed);
+  }
+}
+
 /**
  * Per-panel collapse state with localStorage persistence.
  *
@@ -44,6 +61,20 @@ export function usePanelCollapse(
   useEffect(() => {
     writePanelCollapse(id, collapsed);
   }, [id, collapsed]);
+
+  useEffect(() => {
+    let set = listeners.get(id);
+    if (!set) {
+      set = new Set();
+      listeners.set(id, set);
+    }
+    const fn: Listener = (next) => setCollapsed(next);
+    set.add(fn);
+    return () => {
+      set!.delete(fn);
+      if (set!.size === 0) listeners.delete(id);
+    };
+  }, [id]);
 
   const toggle = useCallback(
     (next: boolean | ((prev: boolean) => boolean)) => {

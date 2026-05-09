@@ -42,7 +42,7 @@ export function BrushOptions() {
           <BrushThumbnail preset={activePreset} size={24} />
         </button>
       )}
-      <Slider label="Size" value={brushSize} min={1} max={sizeMax} onChange={setBrushSize} />
+      <Slider label="Size" value={brushSize} min={1} max={sizeMax} sliderMax={300} onChange={setBrushSize} />
       <Slider label="Opacity" value={brushOpacity} min={1} max={100} onChange={setBrushOpacity} />
       <Slider label="Hardness" value={brushHardness} min={0} max={100} onChange={setBrushHardness} />
       <Slider label="Fade" value={brushFade} min={0} max={fadeMax} onChange={setBrushFade} suffix="px" />

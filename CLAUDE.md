@@ -218,6 +218,7 @@ Tool logic modules must not import React, DOM APIs, or any rendering code.
 - **Storybook**: Storybook 8+. Stories co-located with components.
 - Tool logic must have unit tests. Test the math, not the rendering.
 - Every new component needs a Storybook story before it's considered complete.
+- IMPORTANT: e2e tests should always test the UI, not manipulate the zustand stores directly. When we make UI changes, we update the test for the new UI. This is critical to making sure the UI works as the user would experience it.
 
 ## Commands
 

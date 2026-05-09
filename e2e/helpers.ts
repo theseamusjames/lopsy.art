@@ -348,7 +348,7 @@ export async function openBrushModal(page: Page): Promise<void> {
 export async function closeBrushModal(page: Page): Promise<void> {
   const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
   if (await dialog.isVisible()) {
-    await dialog.locator('button:has-text("Close")').click();
+    await dialog.locator('[aria-label="Close"]').click();
   }
 }
 

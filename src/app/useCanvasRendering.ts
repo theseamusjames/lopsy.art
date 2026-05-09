@@ -125,6 +125,7 @@ function renderFrameGpu(
 
   const activeTool = uiState.activeTool;
   const cursorPosition = uiState.cursorPosition;
+  const cursorOnCanvas = uiState.cursorOnCanvas;
   const showGrid = uiState.showGrid;
   const showPixelGrid = uiState.showPixelGrid;
   const showRulers = uiState.showRulers;
@@ -202,7 +203,7 @@ function renderFrameGpu(
   syncAdjustments(engine, adjustments, adjustmentsEnabled);
   syncGroupAdjustments(engine, layers);
   syncMaskEditMode(engine, uiState.maskEditMode, doc.activeLayerId);
-  syncBrushTip(engine, toolState.activeBrushTip, toolState.brushAngle * Math.PI / 180);
+  syncBrushTip(engine, toolState.activeBrushTip, -toolState.brushAngle * Math.PI / 180);
   syncBrushTexture(engine, toolState.brushTextureData, toolState.brushTextureScale, toolState.brushTextureBlendMode);
 
   renderEngine(engine);
@@ -266,13 +267,13 @@ function renderFrameGpu(
     }
 
     const brushCursorInfo = getBrushCursorInfo(activeTool);
-    if (brushCursorInfo !== null) {
+    if (brushCursorInfo !== null && cursorOnCanvas) {
       const size = activeTool === 'brush' ? toolState.brushSize
         : activeTool === 'pencil' ? toolState.pencilSize
         : activeTool === 'eraser' ? toolState.eraserSize
         : activeTool === 'stamp' ? toolState.stampSize
         : brushCursorInfo.size;
-      renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape);
+      renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip, brushCursorInfo.angle);
     }
 
     renderSnapLines(overlayCtx, snapLines, doc.width, doc.height, viewport.zoom);

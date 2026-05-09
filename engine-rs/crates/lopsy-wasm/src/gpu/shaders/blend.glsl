@@ -17,6 +17,12 @@ uniform sampler2D u_maskTex;    // layer mask texture
 uniform int u_hasMask;          // 1 if layer mask is active
 uniform vec2 u_maskSize;        // mask texture size in pixels
 uniform int u_maskOverlay;      // 1 = render mask as blue overlay (edit mode)
+// Optional brush texture (modulates stroke alpha during composite)
+uniform sampler2D u_brushTexture;
+uniform int u_hasBrushTexture;
+uniform float u_textureScale;
+uniform int u_textureBlendMode;
+uniform vec2 u_brushTextureSize;
 out vec4 fragColor;
 
 // RGB <-> HSL helpers
@@ -176,6 +182,19 @@ void main() {
             src.a *= maskVal;
         } else {
             src.a = 0.0;
+        }
+    }
+
+    // Brush texture modulation (for stroke compositing)
+    if (u_hasBrushTexture == 1 && src.a > 0.001) {
+        vec2 texUV = docPos / (u_brushTextureSize * u_textureScale);
+        float texVal = texture(u_brushTexture, fract(texUV)).r;
+        if (u_textureBlendMode == 0) {
+            src.a *= texVal;
+        } else if (u_textureBlendMode == 1) {
+            src.a *= (1.0 - texVal);
+        } else {
+            src.a = src.a < 0.5 ? 2.0 * src.a * texVal : 1.0 - 2.0 * (1.0 - src.a) * (1.0 - texVal);
         }
     }
 

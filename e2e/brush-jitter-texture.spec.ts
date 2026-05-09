@@ -118,6 +118,7 @@ async function setupBrush(page: Page, opts: { size: number; opacity: number; har
   await setToolOption(page, 'Size', opts.size);
   await setToolOption(page, 'Opacity', opts.opacity);
   await setToolOption(page, 'Hardness', opts.hardness);
+  await selectBrushTab(page, 'Shape');
   await setBrushModalOption(page, 'Spacing', 0);
   await closeBrushModal(page);
   await setToolOption(page, 'Fade', 0);
@@ -129,8 +130,14 @@ async function setupBrush(page: Page, opts: { size: number; opacity: number; har
   });
 }
 
-async function setJitter(page: Page, sizeJ: number, angleJ: number, opacityJ: number) {
+async function selectBrushTab(page: Page, tabName: string) {
   await openBrushModal(page);
+  await page.locator(`[role="dialog"][aria-label="Brushes"] [role="option"]:has-text("${tabName}")`).click();
+  await page.waitForTimeout(50);
+}
+
+async function setJitter(page: Page, sizeJ: number, angleJ: number, opacityJ: number) {
+  await selectBrushTab(page, 'Dynamics');
   await setBrushModalOption(page, 'Size Jitter', sizeJ);
   await setBrushModalOption(page, 'Angle Jitter', angleJ);
   await setBrushModalOption(page, 'Opacity Jitter', opacityJ);
@@ -138,7 +145,7 @@ async function setJitter(page: Page, sizeJ: number, angleJ: number, opacityJ: nu
 }
 
 async function selectTexture(page: Page, textureName: string) {
-  await openBrushModal(page);
+  await selectBrushTab(page, 'Texture');
   const select = page.locator('[role="dialog"][aria-label="Brushes"] select[title="Brush texture"]');
   await select.selectOption({ label: textureName });
   await page.waitForTimeout(100);
@@ -146,7 +153,7 @@ async function selectTexture(page: Page, textureName: string) {
 }
 
 async function selectTextureBlendMode(page: Page, mode: string) {
-  await openBrushModal(page);
+  await selectBrushTab(page, 'Texture');
   const select = page.locator('[role="dialog"][aria-label="Brushes"] select[title="Texture blend mode"]');
   await select.selectOption({ label: mode });
   await page.waitForTimeout(100);
@@ -223,6 +230,7 @@ test.describe('Brush jitter (#346)', () => {
 
     // Use wide spacing so individual dabs are distinguishable
     await setupBrush(page, { size: 20, opacity: 100, hardness: 100 });
+    await selectBrushTab(page, 'Shape');
     await setBrushModalOption(page, 'Spacing', 100);
     await closeBrushModal(page);
 
@@ -387,6 +395,7 @@ test.describe('Brush speed size (#346)', () => {
 
     await setupBrush(page, { size: 40, opacity: 100, hardness: 100 });
     await setJitter(page, 0, 0, 0);
+    await selectBrushTab(page, 'Dynamics');
     await setBrushModalOption(page, 'Speed Size', 80);
     await closeBrushModal(page);
 
@@ -429,6 +438,7 @@ test.describe('Brush speed size (#346)', () => {
 
     await setupBrush(page, { size: 40, opacity: 100, hardness: 100 });
     await setJitter(page, 0, 0, 0);
+    await selectBrushTab(page, 'Dynamics');
     await setBrushModalOption(page, 'Speed Size', 0);
     await closeBrushModal(page);
 
@@ -557,7 +567,7 @@ test.describe('Brush texture (#346)', () => {
     await setJitter(page, 0, 0, 0);
 
     // Draw with Noise texture at 50% scale (smaller tiles, more oscillation)
-    await openBrushModal(page);
+    await selectBrushTab(page, 'Texture');
     const texSelect = page.locator('[role="dialog"][aria-label="Brushes"] select[title="Brush texture"]');
     await texSelect.selectOption({ label: 'Noise' });
     await setBrushModalOption(page, 'Scale', 50);
@@ -572,6 +582,7 @@ test.describe('Brush texture (#346)', () => {
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
+    await selectBrushTab(page, 'Texture');
     await setBrushModalOption(page, 'Scale', 200);
     await closeBrushModal(page);
     await drawStroke(page, { x: 50, y: 100 }, { x: 350, y: 100 }, 40);

@@ -157,39 +157,83 @@ function generateLeafTip(size: number): BrushTipData {
 // Built-in brush textures
 // ---------------------------------------------------------------------------
 
+function tileHash(x: number, y: number, seed: number): number {
+  let h = (x * 374761393 + y * 668265263 + seed) | 0;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h = h ^ (h >> 16);
+  return ((h >>> 0) & 0xFF) / 255;
+}
+
+function generateSeamlessNoise(size: number, octaves: number, seed: number): Float64Array {
+  const data = new Float64Array(size * size);
+  for (let oct = 0; oct < octaves; oct++) {
+    const freq = 1 << oct;
+    const amp = 1 / (1 << oct);
+    const cellSize = size / freq;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const cx = x / cellSize;
+        const cy = y / cellSize;
+        const x0 = Math.floor(cx) % freq;
+        const y0 = Math.floor(cy) % freq;
+        const x1 = (x0 + 1) % freq;
+        const y1 = (y0 + 1) % freq;
+        const fx = cx - Math.floor(cx);
+        const fy = cy - Math.floor(cy);
+        const sx = fx * fx * (3 - 2 * fx);
+        const sy = fy * fy * (3 - 2 * fy);
+        const v00 = tileHash(x0, y0, seed + oct * 997);
+        const v10 = tileHash(x1, y0, seed + oct * 997);
+        const v01 = tileHash(x0, y1, seed + oct * 997);
+        const v11 = tileHash(x1, y1, seed + oct * 997);
+        const v = (v00 * (1 - sx) + v10 * sx) * (1 - sy) + (v01 * (1 - sx) + v11 * sx) * sy;
+        const idx = y * size + x;
+        data[idx] = (data[idx] ?? 0) + v * amp;
+      }
+    }
+  }
+  return data;
+}
+
 function generateNoiseTexture(size: number): BrushTextureData {
+  const raw = generateSeamlessNoise(size, 4, 42);
   const data = new Uint8ClampedArray(size * size);
-  let seed = 42;
-  for (let i = 0; i < size * size; i++) {
-    seed ^= seed << 13;
-    seed ^= seed >> 17;
-    seed ^= seed << 5;
-    data[i] = (seed >>> 0) % 256;
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i]! < min) min = raw[i]!;
+    if (raw[i]! > max) max = raw[i]!;
+  }
+  const range = max - min || 1;
+  for (let i = 0; i < raw.length; i++) {
+    data[i] = Math.round(((raw[i]! - min) / range) * 255);
   }
   return { id: 'texture-noise', name: 'Noise', width: size, height: size, data };
 }
 
 function generateCanvasTexture(size: number): BrushTextureData {
+  const raw = generateSeamlessNoise(size, 3, 100);
   const data = new Uint8ClampedArray(size * size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const h = (y % 4 < 2) ? 180 : 255;
-      const v = (x % 4 < 2) ? 180 : 255;
-      data[y * size + x] = Math.round((h + v) / 2);
+      const weave = ((y % 4 < 2) ? 0.7 : 1.0) * ((x % 4 < 2) ? 0.7 : 1.0);
+      const noise = raw[y * size + x]!;
+      data[y * size + x] = Math.round((weave * 0.7 + noise * 0.3) * 255);
     }
   }
   return { id: 'texture-canvas', name: 'Canvas', width: size, height: size, data };
 }
 
 function generateGrainTexture(size: number): BrushTextureData {
+  const raw = generateSeamlessNoise(size, 5, 7);
   const data = new Uint8ClampedArray(size * size);
-  let seed = 7;
-  for (let i = 0; i < size * size; i++) {
-    seed ^= seed << 13;
-    seed ^= seed >> 17;
-    seed ^= seed << 5;
-    const r = ((seed >>> 0) / 0xFFFFFFFF);
-    data[i] = Math.round(r * 100 + 155);
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i]! < min) min = raw[i]!;
+    if (raw[i]! > max) max = raw[i]!;
+  }
+  const range = max - min || 1;
+  for (let i = 0; i < raw.length; i++) {
+    data[i] = Math.round(((raw[i]! - min) / range) * 60 + 195);
   }
   return { id: 'texture-grain', name: 'Grain', width: size, height: size, data };
 }
@@ -403,6 +447,7 @@ interface ToolSettings {
   brushScatter: number;
   brushAngle: number;
   brushFade: number;
+  brushTaper: number;
   activeBrushTip: BrushTipData | null;
   symmetryHorizontal: boolean;
   symmetryVertical: boolean;
@@ -416,7 +461,10 @@ interface ToolSettings {
   brushSizeJitter: number;
   brushAngleJitter: number;
   brushOpacityJitter: number;
+  brushHardnessJitter: number;
   brushSpeedSize: number;
+  brushSpeedSizeInvert: boolean;
+  brushSpeedSensitivity: 'low' | 'med' | 'high';
   brushTextureData: BrushTextureData | null;
   brushTextureBlendMode: BrushTextureBlendMode;
   brushTextureScale: number;
@@ -427,10 +475,15 @@ interface ToolSettings {
   setBrushSizeJitter: (jitter: number) => void;
   setBrushAngleJitter: (jitter: number) => void;
   setBrushOpacityJitter: (jitter: number) => void;
+  setBrushHardnessJitter: (jitter: number) => void;
   setBrushSpeedSize: (value: number) => void;
+  setBrushSpeedSizeInvert: (invert: boolean) => void;
+  setBrushSpeedSensitivity: (sensitivity: 'low' | 'med' | 'high') => void;
   setBrushTextureData: (texture: BrushTextureData | null) => void;
   setBrushTextureBlendMode: (mode: BrushTextureBlendMode) => void;
   setBrushTextureScale: (scale: number) => void;
+  addBrushTexture: (texture: BrushTextureData) => void;
+  removeBrushTexture: (id: string) => void;
   setSpraySize: (size: number) => void;
   setSprayDensity: (density: number) => void;
   /** Spray opacity in **percent**, range `1–100` (not normalised `0–1`). */
@@ -438,6 +491,7 @@ interface ToolSettings {
   setSprayHardness: (hardness: number) => void;
   setBrushSize: (size: number) => void;
   setBrushFade: (fade: number) => void;
+  setBrushTaper: (taper: number) => void;
   setBrushSpacing: (spacing: number) => void;
   setBrushScatter: (scatter: number) => void;
   setBrushAngle: (angle: number) => void;
@@ -504,9 +558,11 @@ interface ToolSettings {
   addRecentColor: (color: Color) => void;
   addPreset: (preset: BrushPreset) => void;
   addPresets: (presets: BrushPreset[]) => void;
+  saveCurrentAsPreset: (name: string) => void;
   removePreset: (id: string) => void;
   updatePreset: (id: string, patch: Partial<Omit<BrushPreset, 'id'>>) => void;
   setActivePreset: (id: string) => void;
+  setTipFromPreset: (id: string) => void;
 }
 
 export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
@@ -565,6 +621,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushScatter: 0,
   brushAngle: 0,
   brushFade: 0,
+  brushTaper: 0,
   activeBrushTip: null,
   symmetryHorizontal: false,
   symmetryVertical: false,
@@ -607,7 +664,10 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushSizeJitter: 0,
   brushAngleJitter: 0,
   brushOpacityJitter: 0,
+  brushHardnessJitter: 0,
   brushSpeedSize: 0,
+  brushSpeedSizeInvert: false,
+  brushSpeedSensitivity: 'med',
   brushTextureData: null,
   brushTextureBlendMode: 'multiply',
   brushTextureScale: 100,
@@ -618,10 +678,18 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setBrushSizeJitter: (jitter) => set({ brushSizeJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushAngleJitter: (jitter) => set({ brushAngleJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushOpacityJitter: (jitter) => set({ brushOpacityJitter: Math.max(0, Math.min(100, jitter)) }),
-  setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(100, value)) }),
+  setBrushHardnessJitter: (jitter) => set({ brushHardnessJitter: Math.max(0, Math.min(100, jitter)) }),
+  setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(300, value)) }),
+  setBrushSpeedSizeInvert: (invert) => set({ brushSpeedSizeInvert: invert }),
+  setBrushSpeedSensitivity: (sensitivity) => set({ brushSpeedSensitivity: sensitivity }),
   setBrushTextureData: (texture) => set({ brushTextureData: texture }),
   setBrushTextureBlendMode: (mode) => set({ brushTextureBlendMode: mode }),
-  setBrushTextureScale: (scale) => set({ brushTextureScale: Math.max(10, Math.min(200, scale)) }),
+  setBrushTextureScale: (scale) => set({ brushTextureScale: Math.max(10, Math.min(300, scale)) }),
+  addBrushTexture: (texture) => set((s) => ({ brushTextures: [...s.brushTextures, texture] })),
+  removeBrushTexture: (id) => set((s) => ({
+    brushTextures: s.brushTextures.filter((t) => t.id !== id),
+    brushTextureData: s.brushTextureData?.id === id ? null : s.brushTextureData,
+  })),
   setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(5000, size)) }),
   setSprayDensity: (density) => set({ sprayDensity: Math.max(1, Math.min(100, density)) }),
   setSprayOpacity: (opacity) => {
@@ -631,6 +699,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setSprayHardness: (hardness) => set({ sprayHardness: Math.max(0, Math.min(100, hardness)) }),
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(5000, size)) }),
   setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(5000, fade)) }),
+  setBrushTaper: (taper) => set({ brushTaper: Math.max(0, Math.min(5000, taper)) }),
   setBrushSpacing: (spacing) => set({ brushSpacing: Math.max(0, Math.min(200, spacing)) }),
   setBrushScatter: (scatter) => set({ brushScatter: Math.max(0, Math.min(100, scatter)) }),
   setBrushAngle: (angle) => set({ brushAngle: ((angle % 360) + 360) % 360 }),
@@ -748,6 +817,32 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
 
   addPreset: (preset) => set((s) => ({ presets: [...s.presets, preset] })),
   addPresets: (presets) => set((s) => ({ presets: [...s.presets, ...presets] })),
+  saveCurrentAsPreset: (name) => {
+    const s = get();
+    const preset: BrushPreset = {
+      id: uid(),
+      name,
+      tip: s.activeBrushTip,
+      size: s.brushSize,
+      hardness: s.brushHardness,
+      spacing: s.brushSpacing,
+      scatter: s.brushScatter,
+      angle: s.brushAngle,
+      opacity: s.brushOpacity,
+      flow: 100,
+      isCustom: true,
+      sizeJitter: s.brushSizeJitter,
+      hardnessJitter: s.brushHardnessJitter,
+      angleJitter: s.brushAngleJitter,
+      opacityJitter: s.brushOpacityJitter,
+      speedSize: s.brushSpeedSize,
+      speedSizeInvert: s.brushSpeedSizeInvert,
+      speedSensitivity: s.brushSpeedSensitivity,
+      fade: s.brushFade,
+      taper: s.brushTaper,
+    };
+    set((state) => ({ presets: [...state.presets, preset], activePresetId: preset.id }));
+  },
   removePreset: (id) =>
     set((s) => ({
       presets: s.presets.filter((p) => p.id !== id),
@@ -768,6 +863,21 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     state.setBrushSpacing(preset.spacing);
     state.setBrushScatter(preset.scatter);
     state.setBrushAngle(preset.angle);
+    state.setActiveBrushTip(preset.tip);
+    if (preset.sizeJitter !== undefined) state.setBrushSizeJitter(preset.sizeJitter);
+    if (preset.hardnessJitter !== undefined) state.setBrushHardnessJitter(preset.hardnessJitter);
+    if (preset.angleJitter !== undefined) state.setBrushAngleJitter(preset.angleJitter);
+    if (preset.opacityJitter !== undefined) state.setBrushOpacityJitter(preset.opacityJitter);
+    if (preset.speedSize !== undefined) state.setBrushSpeedSize(preset.speedSize);
+    if (preset.speedSizeInvert !== undefined) state.setBrushSpeedSizeInvert(preset.speedSizeInvert);
+    if (preset.speedSensitivity !== undefined) state.setBrushSpeedSensitivity(preset.speedSensitivity);
+    if (preset.fade !== undefined) state.setBrushFade(preset.fade);
+    if (preset.taper !== undefined) state.setBrushTaper(preset.taper);
+  },
+  setTipFromPreset: (id) => {
+    const state = get();
+    const preset = state.presets.find((p) => p.id === id);
+    if (!preset) return;
     state.setActiveBrushTip(preset.tip);
   },
 }));

@@ -34,4 +34,14 @@ export interface BrushPreset {
   readonly flow: number;
   /** true for user-created or imported presets; false for built-in. */
   readonly isCustom: boolean;
+  // Dynamics (optional for backwards compat with existing presets)
+  readonly sizeJitter?: number;
+  readonly hardnessJitter?: number;
+  readonly angleJitter?: number;
+  readonly opacityJitter?: number;
+  readonly speedSize?: number;
+  readonly speedSizeInvert?: boolean;
+  readonly speedSensitivity?: 'low' | 'med' | 'high';
+  readonly fade?: number;
+  readonly taper?: number;
 }
