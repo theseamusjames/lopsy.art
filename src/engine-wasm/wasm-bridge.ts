@@ -249,8 +249,8 @@ export async function initWasm(): Promise<void> {
   if (initError) throw initError;
   if (!initPromise) {
     initPromise = init()
-      .then((output) => { wasmMemory = output.memory; })
-      .catch((err) => {
+      .then((output: { memory: WebAssembly.Memory }) => { wasmMemory = output.memory; })
+      .catch((err: unknown) => {
         initError = err;
         initPromise = null;
         throw err;
