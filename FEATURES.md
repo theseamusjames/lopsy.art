@@ -91,6 +91,13 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - Shortcut: `J`
 - Holding the cursor still keeps emitting dots at ~6 Hz so paint accumulates over time, mimicking an airbrush. Dragging spreads dots along the path with automatic spacing scaled to brush size.
 
+### Sponge
+- **Mode**: saturate or desaturate
+- **Strength**: 1 - 100% (per-stroke saturation push; uses a quadratic curve so 50% is gentle rather than instantly clipping)
+- **Size**: 1 px – document-scaled max (slider track caps at 300)
+- Shortcut: `Y`
+- GPU-accelerated using the same coverage-accumulation pipeline as Dodge/Burn: dabs MAX-blend strength into a coverage texture, the live preview composites on the fly, and on stroke end a single GPU pass bakes the HSL saturation adjustment back into the layer (no per-pixel JS readback). Renders a round brush cursor sized to the tool.
+
 ---
 
 ## Shape & Vector Tools
@@ -307,6 +314,7 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - **Motion Blur**: angle (degrees), distance (px)
 - **Radial Blur**: amount (centered)
 - **Tilt-Shift Blur**: focus position 0–100% (center of sharp band along blur axis), focus width 0–100% (width of the sharp band), blur radius 1–32 px (max blur intensity in out-of-focus regions), angle 0–360° (rotation of the focus plane). Creates selective-focus miniature photography effects by blurring areas outside a configurable focus band while leaving the focus zone sharp.
+- **Surface Blur**: radius 1–50 px (document-scaled max), threshold 1–255 (max RGB color distance for neighbors to be included). Bilateral-style edge-preserving blur — smooths flat regions while keeping hard edges crisp. Implemented as a single-pass GLSL ES 3.00 shader that combines spatial and range (smoothstep) weights so neighbors whose color distance exceeds the threshold are excluded from the average.
 
 ### Sharpen
 - **Unsharp Mask**: radius, amount, threshold
@@ -344,6 +352,12 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - **Pixel Stretch**: amount 1 - 200 px, bands 2 - 50, seed 0 - 999, RGB split 0 - 1.0 (shifts horizontal scan-line bands by random offsets with per-channel separation, creating glitch / VHS corruption effects)
 - **Lens Distortion**: strength -100 to +100 (negative = pincushion, positive = barrel), zoom 50 - 200%, chromatic fringing 0 - 100% (applies barrel or pincushion radial distortion with optional per-channel color separation at edges, simulating real camera lens effects)
 - **Mesh Warp**: interactive grid-based distortion overlaid directly on the canvas. Activated from the Move tool's options bar; grid handles are draggable in document space, with bilinear interpolation between points handled on the GPU. When a marquee selection is active, the warp is constrained to the selection's bounding box (pixels outside pass through unchanged); otherwise the warp covers the whole layer. Grid sizes 3×3 to 6×6 with live preview, reset, and undo support.
+- **Liquify** (Filter menu → Liquify…, `⌘⇧X`): interactive brush-based mesh warp on the active raster layer. Opens a floating, draggable Liquify panel and switches the canvas into a session where every paint stroke nudges a per-pixel displacement field instead of pixels.
+  - **Modes**: Push Forward (drags pixels along the brush direction), Twirl CW, Twirl CCW (rotates pixels around the brush center), Bloat (pushes pixels outward), Pinch (pulls pixels toward center)
+  - **Brush Size**: configurable in panel; round brush cursor overlay tracks the cursor while a session is active
+  - **Pressure**: 0 - 100% (scales the per-dab strength; pinch/bloat use a softened pressure curve and quintic falloff so gentle dabs are subtle rather than abrupt)
+  - **Apply / Cancel**: commit bakes the warped pixels back into the layer; cancel restores the original layer texture from the GPU-side filter preview backup
+  - GPU pipeline: a persistent RGBA8 displacement texture is allocated for the session and only the dirty sub-rectangle around each dab is encoded on the CPU and uploaded via `texSubImage2D`, then `liquify_warp.glsl` samples the original texture at `(x + dx, y + dy)` to render the live preview. Auto-cancels on new document / open file.
 
 ### Render
 - **Clouds**: scale, seed
@@ -495,6 +509,17 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 
 ---
 
+## Channels Panel
+
+A lightweight per-channel viewer for the active layer.
+
+- Five rows: **RGB**, **Red**, **Green**, **Blue**, **Alpha**, each with a small thumbnail of the active layer's contribution to that channel. Thumbnails refresh whenever the underlying pixel data changes (driven by `usePixelDataVersion`); the row is disabled when its channel is hidden.
+- **Active channel**: clicking a row sets the active channel for the panel (used by the channel-extract preview and reflected by an active highlight).
+- **Visibility toggle**: each non-RGB row has an Eye / EyeOff button. Hiding a channel clamps it to zero on output via the `u_channelMask` uniform in `final_blit.glsl` — the channel mask is synced from the Zustand UI store through `engine-sync` into the WASM compositor, so the effect is global to the document, not just the panel preview.
+- Collapsible; collapsed state persists in localStorage like the other side-panels.
+
+---
+
 ## Navigator Panel
 
 - Live thumbnail of the composited canvas (refreshed by copying the main WebGL canvas; throttled to ~5 Hz so it stays cheap during heavy strokes)
@@ -508,7 +533,9 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 ## Symmetry
 
 - **Axes**: horizontal, vertical, or both (4-way)
-- **Center**: configurable (defaults to canvas center)
+- **Radial symmetry**: 2 - 32 segments — toggled via the **Snowflake** button in BrushOptions; segment count is set with a number input rather than a slider so you can dial exact petal counts. When enabled it overrides the horizontal/vertical mirrors and rotates each input point around the symmetry center by `2π · k / n` for every segment.
+- **Center**: configurable per document and persisted in the tool-settings store (defaults to the canvas center when unset). **Cmd/Meta+click** anywhere on the canvas relocates the symmetry center.
+- **Center overlay**: a circle + crosshair drawn in the active guide color appears at the symmetry center whenever any symmetry mode (horizontal, vertical, or radial) is active, so you always know where mirrors will originate.
 - Available on brush, pencil, and eraser
 
 ---
