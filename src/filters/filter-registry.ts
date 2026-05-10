@@ -22,6 +22,7 @@ import { pixelStretch } from './pixel-stretch';
 import { lensDistortion } from './lens-distortion';
 import { bloom } from './bloom';
 import { tiltShiftBlur } from './tilt-shift-blur';
+import { emboss } from './emboss';
 
 export type { FilterDefinition };
 
@@ -49,6 +50,7 @@ const allFilters: FilterDefinition[] = [
   lensDistortion,
   bloom,
   tiltShiftBlur,
+  emboss,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(
