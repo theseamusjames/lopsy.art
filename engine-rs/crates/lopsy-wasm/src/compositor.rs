@@ -326,6 +326,7 @@ pub fn composite(engine: &mut EngineInner) {
     if let Some(loc) = shader.location(&engine.gl, "u_bgAlpha") { engine.gl.uniform1f(Some(&loc), bg[3]); }
     if let Some(loc) = shader.location(&engine.gl, "u_seamlessEnabled") { engine.gl.uniform1f(Some(&loc), if engine.seamless_pattern { 1.0 } else { 0.0 }); }
     if let Some(loc) = shader.location(&engine.gl, "u_seamlessDim") { engine.gl.uniform1f(Some(&loc), if engine.seamless_dim { 1.0 } else { 0.0 }); }
+    if let Some(loc) = shader.location(&engine.gl, "u_channelMask") { engine.gl.uniform4f(Some(&loc), engine.channel_mask[0], engine.channel_mask[1], engine.channel_mask[2], engine.channel_mask[3]); }
 
     engine.draw_fullscreen_quad();
 

@@ -14,6 +14,7 @@ import {
   syncGrid,
   syncRulers,
   syncSeamlessPattern,
+  syncChannelVisibility,
   syncAdjustments,
   syncGroupAdjustments,
   syncMaskEditMode,
@@ -200,6 +201,7 @@ function renderFrameGpu(
   syncGrid(engine, showGrid, gridSize);
   syncRulers(engine, showRulers);
   syncSeamlessPattern(engine, uiState.showSeamlessPattern, uiState.dimSeamlessPattern);
+  syncChannelVisibility(engine, uiState.channelVisibility);
   syncAdjustments(engine, adjustments, adjustmentsEnabled);
   syncGroupAdjustments(engine, layers);
   syncMaskEditMode(engine, uiState.maskEditMode, doc.activeLayerId);

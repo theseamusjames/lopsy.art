@@ -10,6 +10,7 @@ uniform vec2 u_docSize;
 uniform float u_bgAlpha;
 uniform float u_seamlessEnabled;
 uniform float u_seamlessDim;
+uniform vec4 u_channelMask;
 out vec4 fragColor;
 
 void main() {
@@ -39,6 +40,8 @@ void main() {
     vec2 sampleUV = seamless ? fract(docUV) : docUV;
 
     vec4 color = texture(u_compositeTex, sampleUV);
+
+    color = vec4(color.rgb * u_channelMask.rgb, color.a * u_channelMask.a);
 
     bool isTransparentDoc = u_bgAlpha < 0.999;
     vec2 tileCanvasPos = seamless ? sampleUV * u_docSize : canvasPos;
