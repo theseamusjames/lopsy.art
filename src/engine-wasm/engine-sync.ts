@@ -47,6 +47,7 @@ import {
   setGroupLevelsLut,
   clearGroupAdjustments,
   setSeamlessPattern,
+  setChannelMask,
   setLassoPreview,
   setPathOverlay,
   setCropPreview,
@@ -69,7 +70,7 @@ import {
   getRenderedTextPixels,
   uploadLayerPixels,
 } from './wasm-bridge';
-import type { PathAnchor, TextEditingState } from '../app/ui-store';
+import type { PathAnchor, TextEditingState, ChannelVisibility } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
 import type { BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../types/brush';
 import type { Color } from '../types';
@@ -172,6 +173,16 @@ export function syncSeamlessPattern(engine: Engine, show: boolean, dim: boolean)
     tracked.showSeamlessPattern = show;
     tracked.dimSeamlessPattern = dim;
   }
+}
+
+export function syncChannelVisibility(engine: Engine, channelVisibility: ChannelVisibility): void {
+  setChannelMask(
+    engine,
+    channelVisibility.r ? 1.0 : 0.0,
+    channelVisibility.g ? 1.0 : 0.0,
+    channelVisibility.b ? 1.0 : 0.0,
+    channelVisibility.a ? 1.0 : 0.0,
+  );
 }
 
 export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, enabled: boolean): void {

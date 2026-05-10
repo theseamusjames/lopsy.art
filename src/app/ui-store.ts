@@ -84,6 +84,15 @@ export interface SnapLine {
   position: number;
 }
 
+export type ActiveChannel = 'rgb' | 'r' | 'g' | 'b' | 'a';
+
+export interface ChannelVisibility {
+  r: boolean;
+  g: boolean;
+  b: boolean;
+  a: boolean;
+}
+
 interface UIState {
   activeTool: ToolId;
   showGrid: boolean;
@@ -196,6 +205,10 @@ interface UIState {
   commitTextEditing: () => void;
   cancelTextEditing: () => void;
   setTextDrag: (drag: TextDragState | null) => void;
+  channelVisibility: ChannelVisibility;
+  activeChannel: ActiveChannel;
+  toggleChannelVisibility: (channel: keyof ChannelVisibility) => void;
+  setActiveChannel: (channel: ActiveChannel) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -365,4 +378,11 @@ export const useUIStore = create<UIState>((set, get) => ({
   commitTextEditing: () => set({ textEditing: null }),
   cancelTextEditing: () => set({ textEditing: null }),
   setTextDrag: (drag) => set({ textDrag: drag }),
+  channelVisibility: { r: true, g: true, b: true, a: true },
+  activeChannel: 'rgb',
+  toggleChannelVisibility: (channel) =>
+    set((s) => ({
+      channelVisibility: { ...s.channelVisibility, [channel]: !s.channelVisibility[channel] },
+    })),
+  setActiveChannel: (channel) => set({ activeChannel: channel }),
 }));

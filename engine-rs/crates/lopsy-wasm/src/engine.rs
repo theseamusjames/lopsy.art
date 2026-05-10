@@ -181,6 +181,7 @@ pub struct EngineInner {
     pub path_overlay: Option<String>,
     pub seamless_pattern: bool,
     pub seamless_dim: bool,
+    pub channel_mask: [f32; 4],
     pub selection_time: f64,
     /// Per-document image adjustments — exposure/contrast/highlights/
     /// shadows/whites/blacks/vignette/saturation/vibrance plus curves and
@@ -306,6 +307,7 @@ impl EngineInner {
             path_overlay: None,
             seamless_pattern: false,
             seamless_dim: true,
+            channel_mask: [1.0, 1.0, 1.0, 1.0],
             selection_time: 0.0,
             adjustments: ImageAdjustmentState::default(),
             group_adjustments: HashMap::new(),
