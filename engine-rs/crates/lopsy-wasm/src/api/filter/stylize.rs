@@ -194,6 +194,28 @@ pub fn filter_cel_shading(engine: &mut Engine, layer_id: &str, levels: u32, edge
     );
 }
 
+#[wasm_bindgen(js_name = "filterEmboss")]
+pub fn filter_emboss(engine: &mut Engine, layer_id: &str, angle_degrees: f32, strength: f32, emboss_type: f32) {
+    let strength = strength.clamp(0.0, 1.0);
+    let emboss_type = emboss_type.clamp(0.0, 1.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.emboss,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_angle") {
+                gl.uniform1f(Some(&loc), angle_degrees.to_radians());
+            }
+            if let Some(loc) = shader.location(gl, "u_strength") {
+                gl.uniform1f(Some(&loc), strength);
+            }
+            if let Some(loc) = shader.location(gl, "u_type") {
+                gl.uniform1f(Some(&loc), emboss_type);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterBloom")]
 pub fn filter_bloom(
     engine: &mut Engine,
