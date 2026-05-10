@@ -221,6 +221,8 @@ export function useCanvasInteraction(
             flushLayerSync(currentState);
             syncSelection(engine, currentState.selection);
             if (!canContinueStroke) {
+              const toolLabel = activeTool === 'brush' ? 'Brush' : activeTool === 'pencil' ? 'Pencil' : 'Eraser';
+              useEditorStore.getState().pushHistory(toolLabel);
               beginStroke(engine, activeLayerId);
             }
 
@@ -303,7 +305,7 @@ export function useCanvasInteraction(
       }
       const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer, pixelBuffer, paintSurface);
       if (useGpu) {
-        ctx.isStrokeContinuation = strokeContinuation;
+        ctx.isStrokeContinuation = true;
       }
 
       // Transform handle interaction (pre-tool dispatch)
