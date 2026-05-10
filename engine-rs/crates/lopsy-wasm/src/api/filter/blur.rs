@@ -170,6 +170,59 @@ pub fn filter_motion_blur(engine: &mut Engine, layer_id: &str, angle: f32, dista
     );
 }
 
+#[wasm_bindgen(js_name = "filterTiltShiftBlur")]
+pub fn filter_tilt_shift_blur(
+    engine: &mut Engine,
+    layer_id: &str,
+    focus_position: f32,
+    focus_width: f32,
+    blur_radius: f32,
+    angle: f32,
+) {
+    if blur_radius <= 0.0 { return; }
+    let focus_position = focus_position.clamp(0.0, 1.0);
+    let focus_width = focus_width.clamp(0.0, 1.0);
+    let blur_radius = blur_radius.clamp(1.0, 32.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.tilt_shift_blur,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_focusPosition") {
+                gl.uniform1f(Some(&loc), focus_position);
+            }
+            if let Some(loc) = shader.location(gl, "u_focusWidth") {
+                gl.uniform1f(Some(&loc), focus_width);
+            }
+            if let Some(loc) = shader.location(gl, "u_blurRadius") {
+                gl.uniform1f(Some(&loc), blur_radius);
+            }
+            if let Some(loc) = shader.location(gl, "u_angle") {
+                gl.uniform1f(Some(&loc), angle);
+            }
+        },
+    );
+}
+
+#[wasm_bindgen(js_name = "filterSurfaceBlur")]
+pub fn filter_surface_blur(engine: &mut Engine, layer_id: &str, radius: u32, threshold: f32) {
+    if radius == 0 { return; }
+    let threshold = threshold.clamp(1.0, 255.0) / 255.0;
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.surface_blur,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_radius") {
+                gl.uniform1i(Some(&loc), radius as i32);
+            }
+            if let Some(loc) = shader.location(gl, "u_threshold") {
+                gl.uniform1f(Some(&loc), threshold);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterRadialBlur")]
 pub fn filter_radial_blur(engine: &mut Engine, layer_id: &str, amount: u32) {
     if amount == 0 { return; }

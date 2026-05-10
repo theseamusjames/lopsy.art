@@ -31,6 +31,17 @@ import {
   handleMeshWarpMove,
   handleMeshWarpUp,
 } from './interactions/mesh-warp-handlers';
+import {
+  handleTiltShiftDown,
+  handleTiltShiftMove,
+  handleTiltShiftUp,
+} from './interactions/tilt-shift-handlers';
+import {
+  isLiquifyActive,
+  handleLiquifyDown,
+  handleLiquifyMove,
+  handleLiquifyUp,
+} from './interactions/liquify-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 import { createTransformState } from '../tools/transform/transform';
@@ -138,9 +149,37 @@ export function useCanvasInteraction(
 
       const canvasPos = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
 
+      if (e.metaKey) {
+        const ts = useToolSettingsStore.getState();
+        if (ts.symmetryRadialSegments >= 2 || ts.symmetryHorizontal || ts.symmetryVertical) {
+          ts.setSymmetryCenter({ x: canvasPos.x, y: canvasPos.y });
+          return;
+        }
+      }
+
+      if (isLiquifyActive()) {
+        const layerPos = (() => {
+          const layer = editorState.document.layers.find((l) => l.id === activeLayerId);
+          return layer ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y } : canvasPos;
+        })();
+        handleLiquifyDown(layerPos);
+        stateRef.current = { ...INITIAL_STATE, drawing: true, layerId: activeLayerId };
+        return;
+      }
+
       // Pre-tool: mesh warp handle drag. Captures the click before the
       // expensive GPU stroke / pixel-buffer setup runs, so dragging a
       // mesh handle is cheap and doesn't disturb the active layer texture.
+      if (handleTiltShiftDown(canvasPos)) {
+        stateRef.current = {
+          ...INITIAL_STATE,
+          drawing: true,
+          layerId: activeLayerId,
+          tiltShiftDragging: true,
+        };
+        return;
+      }
+
       if (handleMeshWarpDown(canvasPos)) {
         stateRef.current = {
           ...INITIAL_STATE,
@@ -198,6 +237,8 @@ export function useCanvasInteraction(
             flushLayerSync(currentState);
             syncSelection(engine, currentState.selection);
             if (!canContinueStroke) {
+              const toolLabel = activeTool === 'brush' ? 'Brush' : activeTool === 'pencil' ? 'Pencil' : 'Eraser';
+              useEditorStore.getState().pushHistory(toolLabel);
               beginStroke(engine, activeLayerId);
             }
 
@@ -280,7 +321,7 @@ export function useCanvasInteraction(
       }
       const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer, pixelBuffer, paintSurface);
       if (useGpu) {
-        ctx.isStrokeContinuation = strokeContinuation;
+        ctx.isStrokeContinuation = true;
       }
 
       // Transform handle interaction (pre-tool dispatch)
@@ -328,6 +369,21 @@ export function useCanvasInteraction(
         x: canvasPos.x - state.layerStartX,
         y: canvasPos.y - state.layerStartY,
       };
+
+      // Tilt-shift drag (not tool-routed)
+      if (state.tiltShiftDragging) {
+        handleTiltShiftMove(canvasPos, e.metaKey);
+        return;
+      }
+
+      // Liquify painting — all moves feed the displacement map.
+      if (isLiquifyActive()) {
+        const editorState = useEditorStore.getState();
+        const layer = editorState.document.layers.find((l) => l.id === state.layerId);
+        const layerPos = layer ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y } : canvasPos;
+        handleLiquifyMove(layerPos);
+        return;
+      }
 
       // Mesh warp drag (not tool-routed)
       if (state.meshWarpDragging) {
@@ -436,13 +492,14 @@ export function useCanvasInteraction(
           gpuBrushDabBatch(eng, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1, 0, 0, 0);
 
           if (symmetryCenter) {
-            const { symmetryHorizontal, symmetryVertical } = useToolSettingsStore.getState();
-            if (symmetryHorizontal || symmetryVertical) {
+            const { symmetryHorizontal, symmetryVertical, symmetryRadialSegments } = useToolSettingsStore.getState();
+            if (symmetryHorizontal || symmetryVertical || symmetryRadialSegments >= 2) {
               const sym = {
                 horizontal: symmetryHorizontal,
                 vertical: symmetryVertical,
                 centerX: symmetryCenter.x,
                 centerY: symmetryCenter.y,
+                radialSegments: symmetryRadialSegments,
               };
               for (const m of mirrorBatchPoints(arr, sym)) {
                 gpuBrushDabBatch(eng, layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, 0, 0);
@@ -469,6 +526,20 @@ export function useCanvasInteraction(
 
     const state = stateRef.current;
 
+    // Tilt-shift drag end — short-circuit before regular tool teardown.
+    if (state.tiltShiftDragging) {
+      handleTiltShiftUp();
+      stateRef.current = { ...INITIAL_STATE };
+      return;
+    }
+
+    // Liquify stroke end — short-circuit before regular tool teardown.
+    if (isLiquifyActive()) {
+      handleLiquifyUp();
+      stateRef.current = { ...INITIAL_STATE };
+      return;
+    }
+
     // Mesh warp drag end — short-circuit before regular tool teardown.
     if (state.meshWarpDragging) {
       handleMeshWarpUp();
@@ -485,9 +556,13 @@ export function useCanvasInteraction(
     const canvasPos = rect
       ? screenToCanvas(e.clientX - rect.left, e.clientY - rect.top)
       : { x: 0, y: 0 };
+    const layerLocalPos: Point = {
+      x: canvasPos.x - state.layerStartX,
+      y: canvasPos.y - state.layerStartY,
+    };
 
     const ctx: InteractionContext = {
-      canvasPos, layerPos: canvasPos,
+      canvasPos, layerPos: layerLocalPos,
       shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
       clientX: e.clientX, clientY: e.clientY,
       activeLayerId: state.layerId ?? '',

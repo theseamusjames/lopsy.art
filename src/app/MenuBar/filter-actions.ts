@@ -40,7 +40,10 @@ export type FilterDialogId =
   | 'pixel-stretch'
   | 'lens-distortion'
   | 'bloom'
-  | 'pattern-fill';
+  | 'surface-blur'
+  | 'pattern-fill'
+  | 'emboss'
+  | 'voronoi';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;

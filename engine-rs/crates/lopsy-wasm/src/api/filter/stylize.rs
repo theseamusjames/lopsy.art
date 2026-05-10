@@ -194,6 +194,28 @@ pub fn filter_cel_shading(engine: &mut Engine, layer_id: &str, levels: u32, edge
     );
 }
 
+#[wasm_bindgen(js_name = "filterEmboss")]
+pub fn filter_emboss(engine: &mut Engine, layer_id: &str, angle_degrees: f32, strength: f32, emboss_type: f32) {
+    let strength = strength.clamp(0.0, 1.0);
+    let emboss_type = emboss_type.clamp(0.0, 1.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.emboss,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_angle") {
+                gl.uniform1f(Some(&loc), angle_degrees.to_radians());
+            }
+            if let Some(loc) = shader.location(gl, "u_strength") {
+                gl.uniform1f(Some(&loc), strength);
+            }
+            if let Some(loc) = shader.location(gl, "u_type") {
+                gl.uniform1f(Some(&loc), emboss_type);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterBloom")]
 pub fn filter_bloom(
     engine: &mut Engine,
@@ -321,4 +343,48 @@ pub fn filter_bloom(
     });
 
     engine.inner.mark_layer_dirty(layer_id);
+}
+
+#[wasm_bindgen(js_name = "filterVoronoi")]
+pub fn filter_voronoi(
+    engine: &mut Engine,
+    layer_id: &str,
+    cell_count: f32,
+    edge_width: f32,
+    edge_r: f32,
+    edge_g: f32,
+    edge_b: f32,
+    seed: f32,
+) {
+    let cell_count = cell_count.clamp(2.0, 200.0);
+    let edge_width = edge_width.clamp(0.0, 20.0);
+    let edge_r = edge_r.clamp(0.0, 1.0);
+    let edge_g = edge_g.clamp(0.0, 1.0);
+    let edge_b = edge_b.clamp(0.0, 1.0);
+    let seed = seed.clamp(0.0, 999.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.voronoi,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_cellCount") {
+                gl.uniform1f(Some(&loc), cell_count);
+            }
+            if let Some(loc) = shader.location(gl, "u_edgeWidth") {
+                gl.uniform1f(Some(&loc), edge_width);
+            }
+            if let Some(loc) = shader.location(gl, "u_edgeR") {
+                gl.uniform1f(Some(&loc), edge_r);
+            }
+            if let Some(loc) = shader.location(gl, "u_edgeG") {
+                gl.uniform1f(Some(&loc), edge_g);
+            }
+            if let Some(loc) = shader.location(gl, "u_edgeB") {
+                gl.uniform1f(Some(&loc), edge_b);
+            }
+            if let Some(loc) = shader.location(gl, "u_seed") {
+                gl.uniform1f(Some(&loc), seed);
+            }
+        },
+    );
 }

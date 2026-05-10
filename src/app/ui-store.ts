@@ -4,6 +4,7 @@ import type { TransformHandle, TransformState } from '../tools/transform/transfo
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import type { MeshWarpGrid } from '../filters/mesh-warp';
+import type { DisplacementMap, LiquifySettings } from '../tools/liquify/liquify';
 import { toolRegistry } from '../tools/tool-registry';
 
 export interface TextEditingState {
@@ -48,6 +49,16 @@ export interface ShapeSizeClick {
   layerY: number;
 }
 
+export interface TiltShiftSession {
+  focusPosition: number;
+  focusWidth: number;
+  blurRadius: number;
+  angle: number;
+  dragging: 'line1' | 'line2' | 'center' | 'angle' | null;
+  dragAnchor: number;
+  previewActive: boolean;
+}
+
 /**
  * Active inline mesh warp session. The grid lives on the canvas as an overlay
  * (no modal). `bounds` is the document-space rect the grid covers — set from
@@ -63,6 +74,21 @@ export interface MeshWarpSession {
   hovered: number | null;
   /** Whether the user has armed live preview. */
   previewActive: boolean;
+}
+
+/**
+ * Active Liquify session. The floating panel lives on top of the canvas.
+ * The GPU engine holds a backup of the original layer texture (via
+ * saveFilterPreview) — restored on Cancel or used as the warp source
+ * during preview.
+ */
+export interface LiquifySession {
+  layerId: string;
+  layerWidth: number;
+  layerHeight: number;
+  displacementMap: DisplacementMap;
+  encodedDisplacement: Uint8Array;
+  settings: LiquifySettings;
 }
 
 /**
@@ -82,6 +108,15 @@ export type ModalState =
 export interface SnapLine {
   orientation: 'vertical' | 'horizontal';
   position: number;
+}
+
+export type ActiveChannel = 'rgb' | 'r' | 'g' | 'b' | 'a';
+
+export interface ChannelVisibility {
+  r: boolean;
+  g: boolean;
+  b: boolean;
+  a: boolean;
 }
 
 interface UIState {
@@ -106,6 +141,8 @@ interface UIState {
   transform: TransformState | null;
   activeTransformHandle: TransformHandle | null;
   meshWarp: MeshWarpSession | null;
+  tiltShift: TiltShiftSession | null;
+  liquify: LiquifySession | null;
   maskEditMode: boolean;
   isQuickMaskMode: boolean;
   /** Active modal, or null when nothing is open. Only one at a time. */
@@ -162,6 +199,11 @@ interface UIState {
   setMeshWarpDragging: (idx: number | null) => void;
   setMeshWarpHovered: (idx: number | null) => void;
   setMeshWarpPreview: (active: boolean) => void;
+  setTiltShift: (session: TiltShiftSession | null) => void;
+  updateTiltShift: (update: Partial<TiltShiftSession>) => void;
+  setTiltShiftDragging: (target: TiltShiftSession['dragging'], anchor?: number) => void;
+  setLiquify: (session: LiquifySession | null) => void;
+  updateLiquifySettings: (settings: LiquifySettings) => void;
   /** Backward-compat setter. Reads should use modal directly:
    *  `modal?.kind === 'shapeSize' ? modal.click : null` */
   setPendingShapeClick: (pending: ShapeSizeClick | null) => void;
@@ -196,6 +238,10 @@ interface UIState {
   commitTextEditing: () => void;
   cancelTextEditing: () => void;
   setTextDrag: (drag: TextDragState | null) => void;
+  channelVisibility: ChannelVisibility;
+  activeChannel: ActiveChannel;
+  toggleChannelVisibility: (channel: keyof ChannelVisibility) => void;
+  setActiveChannel: (channel: ActiveChannel) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -219,6 +265,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   transform: null,
   activeTransformHandle: null,
   meshWarp: null,
+  tiltShift: null,
+  liquify: null,
   maskEditMode: false,
   isQuickMaskMode: false,
   modal: null,
@@ -332,6 +380,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     set((s) => (s.meshWarp ? { meshWarp: { ...s.meshWarp, hovered: idx } } : {})),
   setMeshWarpPreview: (active) =>
     set((s) => (s.meshWarp ? { meshWarp: { ...s.meshWarp, previewActive: active } } : {})),
+  setTiltShift: (session) => set({ tiltShift: session }),
+  updateTiltShift: (update) =>
+    set((s) => (s.tiltShift ? { tiltShift: { ...s.tiltShift, ...update } } : {})),
+  setTiltShiftDragging: (target, anchor) =>
+    set((s) => (s.tiltShift ? { tiltShift: { ...s.tiltShift, dragging: target, dragAnchor: anchor ?? s.tiltShift.dragAnchor } } : {})),
+  setLiquify: (session) => set({ liquify: session }),
+  updateLiquifySettings: (settings) =>
+    set((s) => (s.liquify ? { liquify: { ...s.liquify, settings } } : {})),
   editingAnchorIndex: null,
   setEditingAnchorIndex: (index) => set({ editingAnchorIndex: index }),
   convertingAnchorToSpline: false,
@@ -365,4 +421,11 @@ export const useUIStore = create<UIState>((set, get) => ({
   commitTextEditing: () => set({ textEditing: null }),
   cancelTextEditing: () => set({ textEditing: null }),
   setTextDrag: (drag) => set({ textDrag: drag }),
+  channelVisibility: { r: true, g: true, b: true, a: true },
+  activeChannel: 'rgb',
+  toggleChannelVisibility: (channel) =>
+    set((s) => ({
+      channelVisibility: { ...s.channelVisibility, [channel]: !s.channelVisibility[channel] },
+    })),
+  setActiveChannel: (channel) => set({ activeChannel: channel }),
 }));

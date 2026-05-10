@@ -3,6 +3,7 @@ import type { Color, FontStyle, TextAlign } from '../types';
 import type { GradientStop, GradientType } from '../tools/gradient/gradient';
 import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { DodgeMode } from '../tools/dodge/dodge';
+import type { SpongeMode } from '../tools/sponge/sponge';
 import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../types/brush';
 import { colorEquals } from '../utils/color';
 
@@ -423,6 +424,9 @@ interface ToolSettings {
   pathStrokeWidth: number;
   dodgeExposure: number;
   dodgeMode: DodgeMode;
+  spongeMode: SpongeMode;
+  spongeStrength: number;
+  spongeSize: number;
   smudgeSize: number;
   smudgeStrength: number;
   wandTolerance: number;
@@ -451,6 +455,8 @@ interface ToolSettings {
   activeBrushTip: BrushTipData | null;
   symmetryHorizontal: boolean;
   symmetryVertical: boolean;
+  symmetryRadialSegments: number;
+  symmetryCenter: { x: number; y: number } | null;
   foregroundColor: Color;
   backgroundColor: Color;
   recentColors: readonly Color[];
@@ -503,6 +509,9 @@ interface ToolSettings {
   setPathStrokeWidth: (width: number) => void;
   setDodgeExposure: (exposure: number) => void;
   setDodgeMode: (mode: DodgeMode) => void;
+  setSpongeMode: (mode: SpongeMode) => void;
+  setSpongeStrength: (strength: number) => void;
+  setSpongeSize: (size: number) => void;
   setSmudgeSize: (size: number) => void;
   setSmudgeStrength: (strength: number) => void;
   setWandTolerance: (tolerance: number) => void;
@@ -551,6 +560,8 @@ interface ToolSettings {
   updateGradientStop: (index: number, stop: Partial<GradientStop>) => void;
   setSymmetryHorizontal: (enabled: boolean) => void;
   setSymmetryVertical: (enabled: boolean) => void;
+  setSymmetryRadialSegments: (segments: number) => void;
+  setSymmetryCenter: (center: { x: number; y: number } | null) => void;
   setForegroundColor: (color: Color) => void;
   setBackgroundColor: (color: Color) => void;
   swapColors: () => void;
@@ -597,6 +608,9 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   pathStrokeWidth: 2,
   dodgeExposure: 50,
   dodgeMode: 'dodge',
+  spongeMode: 'desaturate',
+  spongeStrength: 50,
+  spongeSize: 30,
   smudgeSize: 30,
   smudgeStrength: 50,
   wandTolerance: 32,
@@ -625,6 +639,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   activeBrushTip: null,
   symmetryHorizontal: false,
   symmetryVertical: false,
+  symmetryRadialSegments: 0,
+  symmetryCenter: null,
   foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
   backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
   recentColors: [
@@ -766,6 +782,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   }),
   setSymmetryHorizontal: (enabled) => set({ symmetryHorizontal: enabled }),
   setSymmetryVertical: (enabled) => set({ symmetryVertical: enabled }),
+  setSymmetryRadialSegments: (segments) => set({ symmetryRadialSegments: Math.max(0, Math.min(32, Math.round(segments))) }),
+  setSymmetryCenter: (center) => set({ symmetryCenter: center }),
   setStampSize: (size) => set({ stampSize: Math.max(1, Math.min(5000, size)) }),
   setHealingSize: (size) => set({ healingSize: Math.max(1, Math.min(5000, size)) }),
   setHealingOpacity: (opacity) => {
@@ -775,6 +793,9 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setPathStrokeWidth: (width) => set({ pathStrokeWidth: Math.max(1, Math.min(50, width)) }),
   setDodgeExposure: (exposure) => set({ dodgeExposure: Math.max(1, Math.min(100, exposure)) }),
   setDodgeMode: (mode) => set({ dodgeMode: mode }),
+  setSpongeMode: (mode) => set({ spongeMode: mode }),
+  setSpongeStrength: (strength) => set({ spongeStrength: Math.max(1, Math.min(100, strength)) }),
+  setSpongeSize: (size) => set({ spongeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeSize: (size) => set({ smudgeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeStrength: (strength) => set({ smudgeStrength: Math.max(0, Math.min(100, strength)) }),
   setWandTolerance: (tolerance) => set({ wandTolerance: Math.max(0, Math.min(255, tolerance)) }),

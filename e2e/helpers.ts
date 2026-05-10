@@ -287,7 +287,7 @@ export async function redo(page: Page): Promise<void> {
 
 const TOOL_SHORTCUTS: Record<string, string> = {
   move: 'v', brush: 'b', pencil: 'n', eraser: 'e', fill: 'g',
-  eyedropper: 'i', stamp: 's', dodge: 'o', smudge: 'r', spray: 'j',
+  eyedropper: 'i', stamp: 's', dodge: 'o', sponge: 'y', smudge: 'r', spray: 'j',
   'marquee-rect': 'm', lasso: 'l', wand: 'w', 'quick-select': 'q',
   shape: 'u', text: 't', crop: 'c', path: 'p',
 };
@@ -327,6 +327,13 @@ export async function setForegroundColor(page: Page, r: number, g: number, b: nu
   await openColorPanel(page, true);
   const hex = [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
   const input = page.locator('[aria-label="Hex color value"]');
+  if (!(await input.isVisible({ timeout: 200 }).catch(() => false))) {
+    const panelBtn = page.locator('button[aria-label="Color panel"][aria-expanded="false"]');
+    if (await panelBtn.isVisible({ timeout: 200 }).catch(() => false)) {
+      await panelBtn.click();
+    }
+    await input.waitFor({ state: 'visible', timeout: 2000 });
+  }
   await input.fill(hex);
   await input.press('Enter');
   if (a !== undefined && a < 1) {

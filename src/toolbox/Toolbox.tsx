@@ -18,6 +18,7 @@ import {
   Pointer,
   SprayCan,
   Bandage,
+  Droplets,
 } from 'lucide-react';
 import { IconButton } from '../components/IconButton/IconButton';
 import { useUIStore } from '../app/ui-store';
@@ -99,6 +100,7 @@ const toolGroups: ToolDef[][] = [
   ],
   [
     { id: 'dodge', icon: <Sun size={ICON_SIZE} />, label: 'Dodge/Burn (O)' },
+    { id: 'sponge', icon: <Droplets size={ICON_SIZE} />, label: 'Sponge (Y)' },
     { id: 'smudge', icon: <Pointer size={ICON_SIZE} />, label: 'Smudge (R)' },
     { id: 'eyedropper', icon: <Pipette size={ICON_SIZE} />, label: 'Eyedropper (I)' },
   ],

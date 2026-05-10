@@ -247,7 +247,7 @@ describe('syncLayers — group mask upload', () => {
     };
     syncLayers(engine, [raster, group], [group.id, raster.id], new Set());
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(2);
-    const uploadedIds = vi.mocked(bridge.uploadLayerMask).mock.calls.map((c) => c[1]);
+    const uploadedIds = vi.mocked(bridge.uploadLayerMask).mock.calls.map((c: unknown[]) => c[1]);
     expect(uploadedIds).toContain(raster.id);
     expect(uploadedIds).toContain(group.id);
   });

@@ -9,6 +9,7 @@ import { handleFillDown } from './fill/fill-interaction';
 import { handleQuickSelectDown, handleQuickSelectMove, handleQuickSelectUp } from './quick-select/quick-select-interaction';
 import { handleEyedropperDown, handleEyedropperMove } from './eyedropper/eyedropper-interaction';
 import { handleDodgeDown, handleDodgeMove, handleDodgeUp } from './dodge/dodge-interaction';
+import { handleSpongeDown, handleSpongeMove, handleSpongeUp } from './sponge/sponge-interaction';
 import { handleSmudgeDown, handleSmudgeMove } from './smudge/smudge-interaction';
 import { handleStampDown, handleStampMove } from './stamp/stamp-interaction';
 import { handleHealingDown, handleHealingMove } from './healing/healing-interaction';
@@ -28,6 +29,7 @@ import { WandOptions } from '../app/OptionsBar/tool-options/WandOptions';
 import { QuickSelectOptions } from './quick-select/QuickSelectOptions';
 import { MarqueeOptions } from '../app/OptionsBar/tool-options/MarqueeOptions';
 import { DodgeOptions } from '../app/OptionsBar/tool-options/DodgeOptions';
+import { SpongeOptions } from '../app/OptionsBar/tool-options/SpongeOptions';
 import { SmudgeOptions } from '../app/OptionsBar/tool-options/SmudgeOptions';
 import { ShapeOptions } from '../app/OptionsBar/tool-options/ShapeOptions';
 import { GradientOptions } from '../app/OptionsBar/tool-options/GradientOptions';
@@ -183,6 +185,19 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
       up: (_ctx, state) => handleDodgeUp(state),
     },
   },
+  sponge: {
+    id: 'sponge',
+    label: 'Sponge',
+    shortcut: 'y',
+    optionsComponent: SpongeOptions,
+    isPaint: true,
+    isGpu: true,
+    handler: {
+      down: (ctx) => handleSpongeDown(ctx),
+      move: (ctx, state) => handleSpongeMove(state, ctx.layerPos),
+      up: (_ctx, state) => handleSpongeUp(state),
+    },
+  },
   smudge: {
     id: 'smudge',
     label: 'Smudge',
@@ -261,8 +276,8 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     isGpu: true,
     handler: {
       down: (ctx) => handleShapeDown(ctx),
-      move: (ctx, state) => handleShapeMove(state, ctx.layerPos),
-      up: (ctx, state) => handleShapeUp(state, ctx.layerPos),
+      move: (ctx, state) => handleShapeMove(state, ctx.layerPos, ctx.metaKey),
+      up: (ctx, state) => handleShapeUp(state, ctx.layerPos, ctx.metaKey),
     },
     // Seed the shape's fill color from the current foreground on activation —
     // users expect "pick a color, then click shape" to draw in that color.
