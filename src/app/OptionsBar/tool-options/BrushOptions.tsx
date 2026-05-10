@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
+import { FlipHorizontal2, FlipVertical2, Snowflake } from 'lucide-react';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { useUIStore } from '../../ui-store';
 import { useEditorStore } from '../../editor-store';
@@ -7,6 +7,7 @@ import { Slider } from '../../../components/Slider/Slider';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { BrushThumbnail } from '../../../components/BrushModal/BrushThumbnail';
 import { docScaledMax } from '../../../utils/slider-ranges';
+import optionStyles from '../OptionsBar.module.css';
 import styles from './BrushOptions.module.css';
 
 export function BrushOptions() {
@@ -22,6 +23,8 @@ export function BrushOptions() {
   const symmetryV = useToolSettingsStore((s) => s.symmetryVertical);
   const setSymH = useToolSettingsStore((s) => s.setSymmetryHorizontal);
   const setSymV = useToolSettingsStore((s) => s.setSymmetryVertical);
+  const radialSegments = useToolSettingsStore((s) => s.symmetryRadialSegments);
+  const setRadialSegments = useToolSettingsStore((s) => s.setSymmetryRadialSegments);
 
   const presets = useToolSettingsStore((s) => s.presets);
   const activePresetId = useToolSettingsStore((s) => s.activePresetId);
@@ -34,6 +37,8 @@ export function BrushOptions() {
   const handleOpenBrushModal = useCallback(() => {
     useUIStore.getState().setShowBrushModal(true);
   }, []);
+
+  const isRadialActive = radialSegments >= 2;
 
   return (
     <>
@@ -59,6 +64,26 @@ export function BrushOptions() {
           isActive={symmetryV}
           onClick={() => setSymV(!symmetryV)}
         />
+        <IconButton
+          icon={<Snowflake size={16} />}
+          label="Radial Symmetry"
+          isActive={isRadialActive}
+          onClick={() => setRadialSegments(isRadialActive ? 0 : 8)}
+        />
+        {isRadialActive && (
+          <>
+            <label className={optionStyles.label} htmlFor="radial-segments">Segments</label>
+            <input
+              id="radial-segments"
+              className={optionStyles.numberInput}
+              type="number"
+              min={2}
+              max={32}
+              value={radialSegments}
+              onChange={(e) => setRadialSegments(Number(e.target.value))}
+            />
+          </>
+        )}
       </div>
     </>
   );

@@ -2,11 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from './symmetry';
 import type { SymmetryConfig } from './symmetry';
 
-const config = (h: boolean, v: boolean): SymmetryConfig => ({
+const config = (h: boolean, v: boolean, radial = 0): SymmetryConfig => ({
   horizontal: h,
   vertical: v,
   centerX: 100,
   centerY: 50,
+  radialSegments: radial,
 });
 
 describe('getMirroredPoints', () => {
@@ -58,6 +59,7 @@ describe('stroke-start centering', () => {
       vertical: true,
       centerX: 50,
       centerY: 30,
+      radialSegments: 0,
     };
     const pts = getMirroredPoints(70, 30, startConfig);
     expect(pts).toEqual([{ x: 30, y: 30 }]);

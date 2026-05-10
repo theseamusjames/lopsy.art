@@ -1,4 +1,4 @@
-import type { Layer, Point, Rect } from '../../types';
+import type { Color, Layer, Point, Rect } from '../../types';
 import type { PathAnchor } from '../../tools/path/path';
 
 interface PathOverlaySource {
@@ -315,6 +315,36 @@ export function renderBrushCursor(
     ctx.arc(position.x, position.y, half, 0, Math.PI * 2);
     ctx.stroke();
   }
+
+  ctx.restore();
+}
+
+export function renderSymmetryCenter(
+  ctx: CanvasRenderingContext2D,
+  center: Point,
+  zoom: number,
+  guideColor: Color,
+): void {
+  const r = 8 / zoom;
+  const cross = 5 / zoom;
+  const lw = 1.5 / zoom;
+  const color = `rgba(${guideColor.r}, ${guideColor.g}, ${guideColor.b}, 0.9)`;
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  ctx.setLineDash([]);
+
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, r, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(center.x - cross, center.y);
+  ctx.lineTo(center.x + cross, center.y);
+  ctx.moveTo(center.x, center.y - cross);
+  ctx.lineTo(center.x, center.y + cross);
+  ctx.stroke();
 
   ctx.restore();
 }
