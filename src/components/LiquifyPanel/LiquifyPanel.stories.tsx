@@ -7,17 +7,14 @@ import { createDisplacementMap, defaultLiquifySettings } from '../../tools/liqui
 function withLiquifySession(Story: React.ComponentType) {
   const width = 400;
   const height = 300;
-  const pixels = new Uint8ClampedArray(width * height * 4);
   useUIStore.setState({
     liquify: {
       layerId: 'story-layer',
       layerWidth: width,
       layerHeight: height,
-      originalPixels: pixels,
       displacementMap: createDisplacementMap(width, height),
+      encodedDisplacement: new Uint8Array(width * height * 4),
       settings: defaultLiquifySettings(),
-      isPainting: false,
-      lastPaintPoint: null,
     },
   });
   return <Story />;
@@ -39,17 +36,14 @@ export const TwirlMode: Story = {
     (Story) => {
       const width = 400;
       const height = 300;
-      const pixels = new Uint8ClampedArray(width * height * 4);
       useUIStore.setState({
         liquify: {
           layerId: 'story-layer',
           layerWidth: width,
           layerHeight: height,
-          originalPixels: pixels,
           displacementMap: createDisplacementMap(width, height),
+      encodedDisplacement: new Uint8Array(width * height * 4),
           settings: { ...defaultLiquifySettings(), mode: 'twirl-cw' },
-          isPainting: false,
-          lastPaintPoint: null,
         },
       });
       return <Story />;

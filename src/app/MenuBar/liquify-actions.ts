@@ -1,60 +1,65 @@
 /**
  * Liquify tool actions — open/close the session and commit/cancel the warp.
  *
- * The design matches the mesh-warp pattern: we read GPU pixel data on open,
- * accumulate warp in JS (displacement map), render a preview via an offscreen
- * canvas, and on Apply we upload the final warped pixels to the GPU layer.
+ * The original layer texture is saved on the GPU via saveFilterPreview.
+ * A persistent displacement texture lives on the GPU for the session
+ * lifetime. Each brush dab encodes only the dirty sub-rectangle and
+ * uploads it via texSubImage2D, then the shader renders the warp.
  */
 
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
-import { readLayerAsImageData, clearFrameCache } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
+import {
+  saveFilterPreview,
+  restoreFilterPreview,
+  clearFilterPreview,
+  liquifyInitDisplacement,
+  liquifyUploadRegion,
+  liquifyRender,
+  liquifyRelease,
+} from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import {
   createDisplacementMap,
-  renderWarp,
+  encodeDisplacementMap,
+  MAX_DISP,
   defaultLiquifySettings,
 } from '../../tools/liquify/liquify';
 import type { LiquifySession } from '../ui-store';
 
-/**
- * Open a Liquify session on the active layer.
- * Snapshots the GPU pixels and initialises a zeroed displacement map.
- */
 export function openLiquify(): void {
   const editorStore = useEditorStore.getState();
   const activeId = editorStore.document.activeLayerId;
   if (!activeId) return;
 
-  // Force a fresh readback (skip the frame cache which may be stale).
-  clearFrameCache();
-  const imageData = readLayerAsImageData(activeId);
-  if (!imageData) return;
+  const engine = getEngine();
+  if (!engine) return;
 
-  const { width, height } = imageData;
-  const snapshot = new Uint8ClampedArray(imageData.data.length);
-  snapshot.set(imageData.data);
+  const layer = editorStore.document.layers.find((l) => l.id === activeId);
+  if (!layer || layer.type !== 'raster') return;
+
+  const { width, height } = layer;
+
+  saveFilterPreview(engine, activeId);
+
+  const displacementMap = createDisplacementMap(width, height);
+  const encodedDisplacement = new Uint8Array(width * height * 4);
+  encodeDisplacementMap(displacementMap, encodedDisplacement);
+  liquifyInitDisplacement(engine, encodedDisplacement, width, height);
 
   const session: LiquifySession = {
     layerId: activeId,
     layerWidth: width,
     layerHeight: height,
-    originalPixels: snapshot,
-    displacementMap: createDisplacementMap(width, height),
+    displacementMap,
+    encodedDisplacement,
     settings: defaultLiquifySettings(),
-    isPainting: false,
-    lastPaintPoint: null,
   };
 
   useUIStore.getState().setLiquify(session);
 }
 
-/**
- * Apply the current displacement map to the layer as a permanent edit.
- * Pushes an undo entry, uploads warped pixels to GPU, then closes the session.
- */
 export function applyLiquify(): void {
   const ui = useUIStore.getState();
   const session = ui.liquify;
@@ -63,32 +68,17 @@ export function applyLiquify(): void {
   const engine = getEngine();
   if (!engine) return;
 
-  const { layerId, layerWidth, layerHeight, originalPixels, displacementMap } = session;
-
-  // Render the warped image into a new buffer
-  const warped = new Uint8ClampedArray(originalPixels.length);
-  renderWarp(originalPixels, displacementMap, warped);
-
-  // Push history before modifying the layer
   useEditorStore.getState().pushHistory('Liquify');
 
-  // Upload the warped pixels to the GPU layer texture
-  uploadLayerPixels(engine, layerId, warped, layerWidth, layerHeight, 0, 0);
+  liquifyRender(engine, session.layerId, MAX_DISP);
 
-  // Invalidate the JS pixel data cache for this layer
-  clearJsPixelData(layerId);
-
-  // Close the session
+  clearJsPixelData(session.layerId);
+  liquifyRelease(engine);
+  clearFilterPreview(engine);
   ui.setLiquify(null);
-
-  // Trigger a render
   useEditorStore.getState().notifyRender();
 }
 
-/**
- * Cancel the Liquify session — discard the displacement map and restore
- * the original pixels (by re-uploading the snapshot), then close the panel.
- */
 export function cancelLiquify(): void {
   const ui = useUIStore.getState();
   const session = ui.liquify;
@@ -97,10 +87,10 @@ export function cancelLiquify(): void {
   const engine = getEngine();
 
   if (engine) {
-    const { layerId, layerWidth, layerHeight, originalPixels } = session;
-    // Restore original GPU texture
-    uploadLayerPixels(engine, layerId, originalPixels, layerWidth, layerHeight, 0, 0);
-    clearJsPixelData(layerId);
+    restoreFilterPreview(engine);
+    liquifyRelease(engine);
+    clearFilterPreview(engine);
+    clearJsPixelData(session.layerId);
   }
 
   ui.setLiquify(null);
@@ -108,22 +98,24 @@ export function cancelLiquify(): void {
 }
 
 /**
- * Rerender the current warp state onto the GPU layer texture (no history push).
- * Called during painting to update the live preview.
+ * Upload a dirty sub-rectangle to the GPU displacement texture and
+ * re-render the warp. Called from the interaction handler after each dab.
  */
-export function previewLiquify(): void {
+export function previewLiquifyRegion(
+  subData: Uint8Array,
+  rx: number,
+  ry: number,
+  rw: number,
+  rh: number,
+): void {
   const session = useUIStore.getState().liquify;
   if (!session) return;
 
   const engine = getEngine();
   if (!engine) return;
 
-  const { layerId, layerWidth, layerHeight, originalPixels, displacementMap } = session;
-
-  const warped = new Uint8ClampedArray(originalPixels.length);
-  renderWarp(originalPixels, displacementMap, warped);
-
-  uploadLayerPixels(engine, layerId, warped, layerWidth, layerHeight, 0, 0);
-  clearJsPixelData(layerId);
+  liquifyUploadRegion(engine, subData, rx, ry, rw, rh);
+  liquifyRender(engine, session.layerId, MAX_DISP);
+  clearJsPixelData(session.layerId);
   useEditorStore.getState().notifyRender();
 }

@@ -284,6 +284,10 @@ function renderFrameGpu(
       renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip, brushCursorInfo.angle);
     }
 
+    if (uiState.liquify && cursorOnCanvas) {
+      renderBrushCursor(overlayCtx, cursorPosition, uiState.liquify.settings.brushSize, viewport.zoom, 'circle', null, 0);
+    }
+
     renderSnapLines(overlayCtx, snapLines, doc.width, doc.height, viewport.zoom);
 
     if (showGuides) {

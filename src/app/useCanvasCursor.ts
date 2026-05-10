@@ -98,6 +98,7 @@ export function useCanvasCursor(
   const activeTool = useUIStore((s) => s.activeTool);
   const hoveredHandle = useUIStore((s) => s.activeTransformHandle);
   const transform = useUIStore((s) => s.transform);
+  const isLiquifyOpen = useUIStore((s) => s.liquify !== null);
   const selectionActive = useEditorStore((s) => s.selection.active);
   const selectedPathId = useEditorStore((s) => s.selectedPathId);
 
@@ -110,6 +111,8 @@ export function useCanvasCursor(
 
     if (showsGrabCursor(pointerMode)) {
       cursorClass = styles.canvasGrab ?? '';
+    } else if (isLiquifyOpen) {
+      cursorClass = styles.canvasNone ?? '';
     } else if (hoveredHandle) {
       cursorClass = getCursorClassForHandle(hoveredHandle);
     } else if (isPathEditMode()) {
@@ -137,7 +140,7 @@ export function useCanvasCursor(
     if (cursorClass) {
       container.classList.add(cursorClass);
     }
-  }, [containerRef, pointerMode, activeTool, hoveredHandle, transform, selectionActive, selectedPathId]);
+  }, [containerRef, pointerMode, activeTool, hoveredHandle, transform, isLiquifyOpen, selectionActive, selectedPathId]);
 
   // Hit test transform handles on hover
   const updateHoveredHandle = useCallback(

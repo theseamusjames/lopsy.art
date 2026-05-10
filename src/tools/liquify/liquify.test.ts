@@ -3,7 +3,9 @@ import {
   createDisplacementMap,
   applyPushDab,
   applyTwirlDab,
-  sampleBilinear,
+  encodeDisplacementMap,
+  encodeDisplacementRegion,
+  MAX_DISP,
   applyDab,
   type LiquifySettings,
 } from './liquify';
@@ -108,50 +110,65 @@ describe('applyTwirlDab', () => {
   });
 });
 
-describe('sampleBilinear', () => {
-  it('returns exact pixel value at integer coords', () => {
-    // 2x2 image: red, green, blue, white
-    const data = new Uint8ClampedArray([
-      255, 0, 0, 255,  // (0,0) red
-      0, 255, 0, 255,  // (1,0) green
-      0, 0, 255, 255,  // (0,1) blue
-      255, 255, 255, 255, // (1,1) white
-    ]);
-    const [r, g, b, a] = sampleBilinear(data, 2, 2, 0, 0);
-    expect(r).toBeCloseTo(255);
-    expect(g).toBeCloseTo(0);
-    expect(b).toBeCloseTo(0);
-    expect(a).toBeCloseTo(255);
+describe('encodeDisplacementMap', () => {
+  it('encodes zero displacement as midpoint (0x8000)', () => {
+    const map = createDisplacementMap(2, 2);
+    const out = new Uint8Array(2 * 2 * 4);
+    encodeDisplacementMap(map, out);
+    expect(out[0]).toBe(0x80);
+    expect(out[1]).toBe(0x00);
+    expect(out[2]).toBe(0x80);
+    expect(out[3]).toBe(0x00);
   });
 
-  it('interpolates halfway between two pixels', () => {
-    // 2x1 image: red at x=0, green at x=1
-    const data = new Uint8ClampedArray([
-      255, 0, 0, 255,
-      0, 255, 0, 255,
-    ]);
-    const [r, g] = sampleBilinear(data, 2, 1, 0.5, 0);
-    expect(r).toBeCloseTo(127.5);
-    expect(g).toBeCloseTo(127.5);
+  it('encodes positive displacement above midpoint', () => {
+    const map = createDisplacementMap(1, 1);
+    map.dx[0] = MAX_DISP;
+    const out = new Uint8Array(4);
+    encodeDisplacementMap(map, out);
+    expect(out[0]).toBe(0xFF);
+    expect(out[1]).toBe(0xFF);
   });
 
-  it('clamps to border pixel when sampling out of bounds', () => {
-    const data = new Uint8ClampedArray([255, 0, 0, 255, 0, 0, 0, 255]);
-    const [r] = sampleBilinear(data, 2, 1, -1, 0);
-    expect(r).toBeCloseTo(255); // clamps to x=0
+  it('encodes negative displacement below midpoint', () => {
+    const map = createDisplacementMap(1, 1);
+    map.dx[0] = -MAX_DISP;
+    const out = new Uint8Array(4);
+    encodeDisplacementMap(map, out);
+    expect(out[0]).toBe(0x00);
+    expect(out[1]).toBe(0x00);
   });
 
-  it('produces correctly blended RGBA from 2x2 bilinear sample', () => {
-    // 2x2 image: fully opaque corners at different values
-    const data = new Uint8ClampedArray([
-      100, 0, 0, 255,  // (0,0)
-      200, 0, 0, 255,  // (1,0)
-      100, 0, 0, 255,  // (0,1)
-      200, 0, 0, 255,  // (1,1)
-    ]);
-    // At x=0.5, y=0.5: all four corners contribute equally → average of 100,200,100,200 = 150
-    const [r] = sampleBilinear(data, 2, 2, 0.5, 0.5);
-    expect(r).toBeCloseTo(150);
+  it('round-trips small displacement with sub-pixel precision', () => {
+    const map = createDisplacementMap(1, 1);
+    map.dx[0] = 3.5;
+    map.dy[0] = -7.25;
+    const out = new Uint8Array(4);
+    encodeDisplacementMap(map, out);
+    const ndx = ((out[0]! * 256 + out[1]!) / 65535);
+    const ndy = ((out[2]! * 256 + out[3]!) / 65535);
+    const decodedDx = (ndx * 2.0 - 1.0) * MAX_DISP;
+    const decodedDy = (ndy * 2.0 - 1.0) * MAX_DISP;
+    expect(decodedDx).toBeCloseTo(3.5, 0);
+    expect(decodedDy).toBeCloseTo(-7.25, 0);
+  });
+});
+
+describe('encodeDisplacementRegion', () => {
+  it('encodes only the specified sub-rect and returns contiguous data', () => {
+    const map = createDisplacementMap(10, 10);
+    map.dx[3 * 10 + 2] = 100;
+    const encoded = new Uint8Array(10 * 10 * 4);
+    encodeDisplacementMap(map, encoded);
+
+    map.dx[3 * 10 + 2] = 200;
+    const sub = encodeDisplacementRegion(map, encoded, { x: 1, y: 2, w: 3, h: 3 });
+
+    expect(sub.length).toBe(3 * 3 * 4);
+    const fullIdx = (3 * 10 + 2) * 4;
+    const subIdx = (1 * 3 + 1) * 4;
+    expect(sub[subIdx]).toBe(encoded[fullIdx]);
+    expect(sub[subIdx + 1]).toBe(encoded[fullIdx + 1]);
   });
 });
 
@@ -162,11 +179,15 @@ describe('applyDab dispatch', () => {
     pressure: 1.0,
   };
 
-  it('push mode changes displacement in drag direction', () => {
+  it('push mode changes displacement in drag direction and returns dirty rect', () => {
     const map = createDisplacementMap(100, 100);
-    applyDab(map, 50, 50, 10, 3, settings);
+    const dirty = applyDab(map, 50, 50, 10, 3, settings);
     expect(map.dx[50 * 100 + 50]).toBeGreaterThan(0);
     expect(map.dy[50 * 100 + 50]).toBeGreaterThan(0);
+    expect(dirty.x).toBeLessThanOrEqual(50);
+    expect(dirty.y).toBeLessThanOrEqual(50);
+    expect(dirty.x + dirty.w).toBeGreaterThanOrEqual(50);
+    expect(dirty.y + dirty.h).toBeGreaterThanOrEqual(50);
   });
 
   it('bloat mode creates outward displacement', () => {

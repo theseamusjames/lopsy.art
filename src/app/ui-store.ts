@@ -78,21 +78,17 @@ export interface MeshWarpSession {
 
 /**
  * Active Liquify session. The floating panel lives on top of the canvas.
- * `originalPixels` is the snapshot taken when Liquify was opened — used
- * for live preview and restored on Cancel.
+ * The GPU engine holds a backup of the original layer texture (via
+ * saveFilterPreview) — restored on Cancel or used as the warp source
+ * during preview.
  */
 export interface LiquifySession {
   layerId: string;
   layerWidth: number;
   layerHeight: number;
-  /** Pixel snapshot of the layer at activation time (RGBA, 0–255). */
-  originalPixels: Uint8ClampedArray;
   displacementMap: DisplacementMap;
+  encodedDisplacement: Uint8Array;
   settings: LiquifySettings;
-  /** True while the user is actively dragging a brush stroke. */
-  isPainting: boolean;
-  /** Last paint position in layer-space coordinates. */
-  lastPaintPoint: Point | null;
 }
 
 /**
@@ -208,8 +204,6 @@ interface UIState {
   setTiltShiftDragging: (target: TiltShiftSession['dragging'], anchor?: number) => void;
   setLiquify: (session: LiquifySession | null) => void;
   updateLiquifySettings: (settings: LiquifySettings) => void;
-  updateLiquifyDisplacementMap: (map: DisplacementMap) => void;
-  setLiquifyPainting: (isPainting: boolean, lastPoint: Point | null) => void;
   /** Backward-compat setter. Reads should use modal directly:
    *  `modal?.kind === 'shapeSize' ? modal.click : null` */
   setPendingShapeClick: (pending: ShapeSizeClick | null) => void;
@@ -394,10 +388,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   setLiquify: (session) => set({ liquify: session }),
   updateLiquifySettings: (settings) =>
     set((s) => (s.liquify ? { liquify: { ...s.liquify, settings } } : {})),
-  updateLiquifyDisplacementMap: (map) =>
-    set((s) => (s.liquify ? { liquify: { ...s.liquify, displacementMap: map } } : {})),
-  setLiquifyPainting: (isPainting, lastPoint) =>
-    set((s) => (s.liquify ? { liquify: { ...s.liquify, isPainting, lastPaintPoint: lastPoint } } : {})),
   editingAnchorIndex: null,
   setEditingAnchorIndex: (index) => set({ editingAnchorIndex: index }),
   convertingAnchorToSpline: false,

@@ -175,32 +175,8 @@ test.describe('Liquify Tool', () => {
     // Screenshot with panel visible
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-before-warp.png') });
 
-    // Manipulate the displacement map: pull content from the right side (+50 dx)
-    // Pixel at x=50 will sample from x=100 (the boundary) and beyond — blue
-    await page.evaluate(() => {
-      const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => {
-          liquify: {
-            displacementMap: { width: number; height: number; dx: Float32Array; dy: Float32Array };
-          } | null;
-          updateLiquifyDisplacementMap: (map: { width: number; height: number; dx: Float32Array; dy: Float32Array }) => void;
-        };
-      };
-      const state = uiStore.getState();
-      const session = state.liquify;
-      if (!session) return;
-      const map = session.displacementMap;
-      const { width, height } = map;
-      // Strong uniform rightward pull: sample 80px to the right
-      for (let py = 80; py < 120; py++) {
-        for (let px = 0; px < width; px++) {
-          map.dx[py * width + px] = 80;
-        }
-      }
-      // Zustand needs to see a new session object
-      state.updateLiquifyDisplacementMap(map);
-    });
-    await page.waitForTimeout(100);
+    // Push-drag across the centre to warp red pixels into the blue half
+    await liquifyDrag(page, 50, 100, 150);
 
     // Screenshot after displacement
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-after-warp-preview.png') });
@@ -211,10 +187,9 @@ test.describe('Liquify Tool', () => {
     // Screenshot after Apply
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-applied.png') });
 
-    // After warp: pixel at x=50, y=100 should now be blue (sampled from x=130)
-    const afterLeft = await getPixelAt(page, 50, 100, layerId);
-    expect(afterLeft.b).toBeGreaterThan(200);
-    expect(afterLeft.r).toBeLessThan(50);
+    // After warp: pixel at x=150 should now have red pushed in from the left
+    const afterRight = await getPixelAt(page, 150, 100, layerId);
+    expect(afterRight.r).toBeGreaterThan(100);
   });
 
   test('Cancel: discards displacement, layer pixels unchanged', async ({ page }) => {

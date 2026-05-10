@@ -46,8 +46,8 @@ export function createDisplacementMap(width: number, height: number): Displaceme
 function brushWeight(distSq: number, radiusSq: number): number {
   if (distSq >= radiusSq) return 0;
   const t = 1 - distSq / radiusSq;
-  // Smooth cubic falloff
-  return t * t * (3 - 2 * t);
+  // Quintic falloff — gentler than smoothstep, more weight near edges
+  return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
 /**
@@ -161,7 +161,7 @@ export function applyBloatDab(
       if (dist < 0.001) continue;
 
       const idx = y * map.width + x;
-      const scale = w * pressure * radius * 0.1;
+      const scale = w * pressure * radius * 0.02;
       map.dx[idx]! -= (distX / dist) * scale;
       map.dy[idx]! -= (distY / dist) * scale;
     }
@@ -196,15 +196,22 @@ export function applyPinchDab(
       if (dist < 0.001) continue;
 
       const idx = y * map.width + x;
-      const scale = w * pressure * radius * 0.1;
+      const scale = w * pressure * radius * 0.02;
       map.dx[idx]! += (distX / dist) * scale;
       map.dy[idx]! += (distY / dist) * scale;
     }
   }
 }
 
+export interface DirtyRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /**
- * Dispatch a brush dab to the appropriate mode handler.
+ * Dispatch a brush dab and return the dirty bounding rect.
  */
 export function applyDab(
   map: DisplacementMap,
@@ -213,7 +220,7 @@ export function applyDab(
   dragDx: number,
   dragDy: number,
   settings: LiquifySettings,
-): void {
+): DirtyRect {
   const { mode, brushSize, pressure } = settings;
   const radius = brushSize / 2;
 
@@ -234,73 +241,69 @@ export function applyDab(
       applyPinchDab(map, cx, cy, radius, pressure);
       break;
   }
+
+  const x0 = Math.max(0, Math.floor(cx - radius));
+  const y0 = Math.max(0, Math.floor(cy - radius));
+  const x1 = Math.min(map.width - 1, Math.ceil(cx + radius));
+  const y1 = Math.min(map.height - 1, Math.ceil(cy + radius));
+  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
 
-/**
- * Bilinear interpolation: sample imageData at floating-point (sx, sy).
- * Returns RGBA values 0–255.
- */
-export function sampleBilinear(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  sx: number,
-  sy: number,
-): [number, number, number, number] {
-  // Clamp to valid range
-  const x0 = Math.floor(sx);
-  const y0 = Math.floor(sy);
-  const x1 = x0 + 1;
-  const y1 = y0 + 1;
-
-  const fx = sx - x0;
-  const fy = sy - y0;
-
-  const cx0 = Math.max(0, Math.min(width - 1, x0));
-  const cx1 = Math.max(0, Math.min(width - 1, x1));
-  const cy0 = Math.max(0, Math.min(height - 1, y0));
-  const cy1 = Math.max(0, Math.min(height - 1, y1));
-
-  const i00 = (cy0 * width + cx0) * 4;
-  const i10 = (cy0 * width + cx1) * 4;
-  const i01 = (cy1 * width + cx0) * 4;
-  const i11 = (cy1 * width + cx1) * 4;
-
-  const r = (1 - fx) * (1 - fy) * data[i00]! + fx * (1 - fy) * data[i10]! +
-    (1 - fx) * fy * data[i01]! + fx * fy * data[i11]!;
-  const g = (1 - fx) * (1 - fy) * data[i00 + 1]! + fx * (1 - fy) * data[i10 + 1]! +
-    (1 - fx) * fy * data[i01 + 1]! + fx * fy * data[i11 + 1]!;
-  const b = (1 - fx) * (1 - fy) * data[i00 + 2]! + fx * (1 - fy) * data[i10 + 2]! +
-    (1 - fx) * fy * data[i01 + 2]! + fx * fy * data[i11 + 2]!;
-  const a = (1 - fx) * (1 - fy) * data[i00 + 3]! + fx * (1 - fy) * data[i10 + 3]! +
-    (1 - fx) * fy * data[i01 + 3]! + fx * fy * data[i11 + 3]!;
-
-  return [r, g, b, a];
-}
+export const MAX_DISP = 2048;
 
 /**
- * Render the warped image into an output Uint8ClampedArray.
- * For each output pixel (x, y), sample the original at (x + dx, y + dy).
+ * Encode the full displacement map into a pre-allocated RGBA8 buffer.
+ * Called once on session open to initialise the persistent buffer.
  */
-export function renderWarp(
-  original: Uint8ClampedArray,
-  map: DisplacementMap,
-  output: Uint8ClampedArray,
-): void {
+export function encodeDisplacementMap(map: DisplacementMap, out: Uint8Array): void {
   const { width, height, dx, dy } = map;
+  const len = width * height;
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = y * width + x;
-      const sx = x + dx[idx]!;
-      const sy = y + dy[idx]!;
+  for (let i = 0; i < len; i++) {
+    const ndx = Math.max(0, Math.min(65535, Math.round((dx[i]! / MAX_DISP + 1.0) * 0.5 * 65535)));
+    const ndy = Math.max(0, Math.min(65535, Math.round((dy[i]! / MAX_DISP + 1.0) * 0.5 * 65535)));
+    const o = i * 4;
+    out[o] = (ndx >> 8) & 0xFF;
+    out[o + 1] = ndx & 0xFF;
+    out[o + 2] = (ndy >> 8) & 0xFF;
+    out[o + 3] = ndy & 0xFF;
+  }
+}
 
-      const [r, g, b, a] = sampleBilinear(original, width, height, sx, sy);
-      const outIdx = idx * 4;
-      output[outIdx] = Math.round(r);
-      output[outIdx + 1] = Math.round(g);
-      output[outIdx + 2] = Math.round(b);
-      output[outIdx + 3] = Math.round(a);
+/**
+ * Re-encode only the dirty sub-rectangle into the persistent buffer,
+ * then return a contiguous copy of that region for GPU sub-image upload.
+ */
+export function encodeDisplacementRegion(
+  map: DisplacementMap,
+  encoded: Uint8Array,
+  rect: DirtyRect,
+): Uint8Array {
+  const { width, dx, dy } = map;
+  const { x: rx, y: ry, w: rw, h: rh } = rect;
+  const sub = new Uint8Array(rw * rh * 4);
+
+  for (let row = 0; row < rh; row++) {
+    const mapY = ry + row;
+    for (let col = 0; col < rw; col++) {
+      const mapX = rx + col;
+      const idx = mapY * width + mapX;
+      const ndx = Math.max(0, Math.min(65535, Math.round((dx[idx]! / MAX_DISP + 1.0) * 0.5 * 65535)));
+      const ndy = Math.max(0, Math.min(65535, Math.round((dy[idx]! / MAX_DISP + 1.0) * 0.5 * 65535)));
+
+      const fullOff = idx * 4;
+      encoded[fullOff] = (ndx >> 8) & 0xFF;
+      encoded[fullOff + 1] = ndx & 0xFF;
+      encoded[fullOff + 2] = (ndy >> 8) & 0xFF;
+      encoded[fullOff + 3] = ndy & 0xFF;
+
+      const subOff = (row * rw + col) * 4;
+      sub[subOff] = encoded[fullOff]!;
+      sub[subOff + 1] = encoded[fullOff + 1]!;
+      sub[subOff + 2] = encoded[fullOff + 2]!;
+      sub[subOff + 3] = encoded[fullOff + 3]!;
     }
   }
+
+  return sub;
 }

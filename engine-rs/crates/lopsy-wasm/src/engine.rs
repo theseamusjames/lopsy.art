@@ -153,6 +153,8 @@ pub struct EngineInner {
     // Filter preview (stores pre-filter layer content for live preview)
     pub filter_preview_texture: Option<TextureHandle>,
     pub filter_preview_layer_id: Option<String>,
+    // Liquify persistent displacement texture (lives for the session)
+    pub liquify_disp_texture: Option<TextureHandle>,
     // Gradient preview (stores pre-drag layer content for live preview)
     pub gradient_preview_texture: Option<TextureHandle>,
     pub gradient_preview_layer_id: Option<String>,
@@ -291,6 +293,7 @@ impl EngineInner {
             shape_preview_h: 0,
             filter_preview_texture: None,
             filter_preview_layer_id: None,
+            liquify_disp_texture: None,
             gradient_preview_texture: None,
             gradient_preview_layer_id: None,
             clipboard_texture: None,
@@ -535,6 +538,10 @@ impl EngineInner {
             self.texture_pool.release(tex);
         }
         self.filter_preview_layer_id = None;
+        // Liquify displacement
+        if let Some(tex) = self.liquify_disp_texture.take() {
+            self.texture_pool.release(tex);
+        }
         // Gradient preview
         if let Some(tex) = self.gradient_preview_texture.take() {
             self.texture_pool.release(tex);
