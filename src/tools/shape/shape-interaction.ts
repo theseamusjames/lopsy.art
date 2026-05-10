@@ -25,10 +25,11 @@ function shapeModeToU32(mode: ShapeMode): number {
 }
 
 /** Snap an edge point so the bounding rectangle preserves the locked aspect. */
-function constrainToAspectRatio(center: Point, edge: Point): Point {
+function constrainToAspectRatio(center: Point, edge: Point, metaKey = false): Point {
   const ts = useToolSettingsStore.getState();
-  if (!ts.aspectRatioLocked || ts.aspectRatioW <= 0 || ts.aspectRatioH <= 0) return edge;
-  const ratio = ts.aspectRatioW / ts.aspectRatioH;
+  const locked = metaKey || (ts.aspectRatioLocked && ts.aspectRatioW > 0 && ts.aspectRatioH > 0);
+  if (!locked) return edge;
+  const ratio = metaKey ? 1 : ts.aspectRatioW / ts.aspectRatioH;
   let rx = Math.abs(edge.x - center.x);
   let ry = Math.abs(edge.y - center.y);
   if (rx / (ry || 1) > ratio) {
@@ -99,11 +100,11 @@ export function handleShapeDown(ctx: InteractionContext): InteractionState {
   };
 }
 
-export function handleShapeMove(state: InteractionState, layerLocalPos: Point): void {
+export function handleShapeMove(state: InteractionState, layerLocalPos: Point, metaKey = false): void {
   if (!state.startPoint || !state.layerId) return;
 
   const toolSettings = useToolSettingsStore.getState();
-  const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos);
+  const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos, metaKey);
   const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
   const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
   if (rx < 1 || ry < 1) return;
@@ -167,7 +168,7 @@ export function confirmShapeSize(width: number, height: number, click: ShapeSize
   editorState.notifyRender();
 }
 
-export function handleShapeUp(state: InteractionState, layerLocalPos: Point): void {
+export function handleShapeUp(state: InteractionState, layerLocalPos: Point, metaKey = false): void {
   if (!state.startPoint) return;
 
   const engine = getEngine();
@@ -190,7 +191,7 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point): vo
   }
 
   if (engine && state.layerId && toolSettings.shapeOutput !== 'path') {
-    const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos);
+    const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos, metaKey);
     const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
     const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
     const docCx = state.startPoint.x + state.layerStartX;
@@ -220,7 +221,7 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point): vo
     // Undo the raster preview that was rendered during drag.
     useEditorStore.getState().undo();
 
-    const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos);
+    const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos, metaKey);
     const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
     const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
     if (rx < 1 && ry < 1) return;
