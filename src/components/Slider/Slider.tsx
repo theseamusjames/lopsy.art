@@ -116,7 +116,6 @@ export function Slider({
   );
 
   const knobPosition = sliderKnobPosition(value, knobMin, knobMax, scale);
-
   return (
     <div className={styles.container} onDoubleClick={handleDoubleClick}>
       {label && <span className={styles.label}>{label}</span>}
