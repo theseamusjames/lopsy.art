@@ -14,6 +14,7 @@ import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import type { ActionResult, SliceCreator, SparseLayerEntry } from './types';
 import { useUIStore } from '../ui-store';
+import { cancelLiquify } from '../MenuBar/liquify-actions';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 
 import { computeCreateDocument } from './actions/create-document';
@@ -200,6 +201,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   documentReady: false,
 
   createDocument: (width, height, transparentBg) => {
+    cancelLiquify();
     clearEngine();
     const result = computeCreateDocument(width, height, transparentBg);
     applyActionResult(set, result);
@@ -211,6 +213,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   openImageAsDocument: (imageData, name) => {
+    cancelLiquify();
     clearEngine();
     const result = computeOpenImage(imageData, name);
     applyActionResult(set, result);

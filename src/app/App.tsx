@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WebGL2Warning, checkWebGL2Support } from '../components/WebGL2Warning/WebGL2Warning';
+import { LiquifyPanel } from '../components/LiquifyPanel/LiquifyPanel';
 import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
@@ -88,6 +89,7 @@ export function App() {
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const showReferenceModal = useUIStore((s) => s.showReferenceModal);
   const loadingMessage = useUIStore((s) => s.modal?.kind === 'loading' ? s.modal.message : null);
+  const isLiquifyOpen = useUIStore((s) => s.liquify !== null);
 
   useEffect(() => {
     if (documentReady) return;
@@ -235,6 +237,7 @@ export function App() {
           />
         )}
         <GuideColorPicker />
+        {isLiquifyOpen && <LiquifyPanel />}
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div

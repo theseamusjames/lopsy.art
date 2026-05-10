@@ -4,6 +4,7 @@ import type { TransformHandle, TransformState } from '../tools/transform/transfo
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import type { MeshWarpGrid } from '../filters/mesh-warp';
+import type { DisplacementMap, LiquifySettings } from '../tools/liquify/liquify';
 import { toolRegistry } from '../tools/tool-registry';
 
 export interface TextEditingState {
@@ -76,6 +77,21 @@ export interface MeshWarpSession {
 }
 
 /**
+ * Active Liquify session. The floating panel lives on top of the canvas.
+ * The GPU engine holds a backup of the original layer texture (via
+ * saveFilterPreview) — restored on Cancel or used as the warp source
+ * during preview.
+ */
+export interface LiquifySession {
+  layerId: string;
+  layerWidth: number;
+  layerHeight: number;
+  displacementMap: DisplacementMap;
+  encodedDisplacement: Uint8Array;
+  settings: LiquifySettings;
+}
+
+/**
  * One-at-a-time modal slot. Only one kind can be open; opening a new kind
  * replaces whatever was there. Payloads ride on the variant so data and
  * visibility can't drift apart (the old pattern had parallel booleans +
@@ -126,6 +142,7 @@ interface UIState {
   activeTransformHandle: TransformHandle | null;
   meshWarp: MeshWarpSession | null;
   tiltShift: TiltShiftSession | null;
+  liquify: LiquifySession | null;
   maskEditMode: boolean;
   isQuickMaskMode: boolean;
   /** Active modal, or null when nothing is open. Only one at a time. */
@@ -185,6 +202,8 @@ interface UIState {
   setTiltShift: (session: TiltShiftSession | null) => void;
   updateTiltShift: (update: Partial<TiltShiftSession>) => void;
   setTiltShiftDragging: (target: TiltShiftSession['dragging'], anchor?: number) => void;
+  setLiquify: (session: LiquifySession | null) => void;
+  updateLiquifySettings: (settings: LiquifySettings) => void;
   /** Backward-compat setter. Reads should use modal directly:
    *  `modal?.kind === 'shapeSize' ? modal.click : null` */
   setPendingShapeClick: (pending: ShapeSizeClick | null) => void;
@@ -247,6 +266,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeTransformHandle: null,
   meshWarp: null,
   tiltShift: null,
+  liquify: null,
   maskEditMode: false,
   isQuickMaskMode: false,
   modal: null,
@@ -365,6 +385,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     set((s) => (s.tiltShift ? { tiltShift: { ...s.tiltShift, ...update } } : {})),
   setTiltShiftDragging: (target, anchor) =>
     set((s) => (s.tiltShift ? { tiltShift: { ...s.tiltShift, dragging: target, dragAnchor: anchor ?? s.tiltShift.dragAnchor } } : {})),
+  setLiquify: (session) => set({ liquify: session }),
+  updateLiquifySettings: (settings) =>
+    set((s) => (s.liquify ? { liquify: { ...s.liquify, settings } } : {})),
   editingAnchorIndex: null,
   setEditingAnchorIndex: (index) => set({ editingAnchorIndex: index }),
   convertingAnchorToSpline: false,
