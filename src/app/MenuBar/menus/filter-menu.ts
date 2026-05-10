@@ -12,6 +12,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { separator: true, label: '' },
       { label: 'Gaussian Blur...', action: () => showFilterDialog('gaussian-blur') },
       { label: 'Box Blur...', action: () => showFilterDialog('box-blur') },
+      { label: 'Surface Blur...', action: () => showFilterDialog('surface-blur') },
       { label: 'Motion Blur...', action: () => showFilterDialog('motion-blur') },
       { label: 'Radial Blur...', action: () => showFilterDialog('radial-blur') },
       { label: 'Tilt-Shift Blur...', action: () => beginTiltShiftSession() },

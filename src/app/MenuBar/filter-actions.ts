@@ -40,6 +40,7 @@ export type FilterDialogId =
   | 'pixel-stretch'
   | 'lens-distortion'
   | 'bloom'
+  | 'surface-blur'
   | 'pattern-fill'
   | 'emboss'
   | 'voronoi';

@@ -69,6 +69,7 @@ pub const TILT_SHIFT_BLUR_FRAG: &str = include_str!("shaders/filters/tilt_shift_
 pub const EMBOSS_FRAG: &str = include_str!("shaders/filters/emboss.glsl");
 pub const VORONOI_FRAG: &str = include_str!("shaders/filters/voronoi.glsl");
 pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
+pub const SURFACE_BLUR_FRAG: &str = include_str!("shaders/filters/surface_blur.glsl");
 
 // Brush
 pub const BRUSH_DAB_FRAG: &str = include_str!("shaders/brush/brush_dab.glsl");
@@ -234,6 +235,7 @@ pub struct ShaderPrograms {
     pub emboss: ShaderProgram,
     pub voronoi: ShaderProgram,
     pub selection_mask_blend: ShaderProgram,
+    pub surface_blur: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab: ShaderProgram,
     pub eraser_dab: ShaderProgram,
@@ -320,6 +322,7 @@ impl ShaderPrograms {
             emboss: compile_program(gl, v, EMBOSS_FRAG)?,
             voronoi: compile_program(gl, v, VORONOI_FRAG)?,
             selection_mask_blend: compile_program(gl, v, SELECTION_MASK_BLEND_FRAG)?,
+            surface_blur: compile_program(gl, v, SURFACE_BLUR_FRAG)?,
             // Brush — use standard fullscreen quad vert; dab positioning via fragment shader
             brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,
             eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,
