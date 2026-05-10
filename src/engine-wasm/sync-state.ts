@@ -27,6 +27,10 @@ export interface TrackedState {
    *  also unchanged and we can skip JSON.stringify entirely. */
   layerRefs: Map<string, Layer>;
   layerEffectiveVisible: Map<string, boolean>;
+  /** Cached pass-through opacity multiplier per layer. When a pass-through
+   *  group's opacity changes, children must be re-synced even though their
+   *  own references haven't changed. */
+  layerPassThroughOpacity: Map<string, number>;
   /** Layer ids currently known to have a mask on the engine side. Used to
    *  decide whether a removeLayerMask call is needed — previously done by
    *  substring-sniffing the cached descriptor JSON, which was fragile. */
@@ -80,6 +84,7 @@ function createTrackedState(): TrackedState {
     layerVersions: new Map(),
     layerRefs: new Map(),
     layerEffectiveVisible: new Map(),
+    layerPassThroughOpacity: new Map(),
     masksOnEngine: new Set(),
     maskDataRefs: new Map(),
     pixelDataVersions: new Map(),
