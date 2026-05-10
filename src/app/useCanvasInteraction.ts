@@ -31,6 +31,11 @@ import {
   handleMeshWarpMove,
   handleMeshWarpUp,
 } from './interactions/mesh-warp-handlers';
+import {
+  handleTiltShiftDown,
+  handleTiltShiftMove,
+  handleTiltShiftUp,
+} from './interactions/tilt-shift-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 import { createTransformState } from '../tools/transform/transform';
@@ -149,6 +154,16 @@ export function useCanvasInteraction(
       // Pre-tool: mesh warp handle drag. Captures the click before the
       // expensive GPU stroke / pixel-buffer setup runs, so dragging a
       // mesh handle is cheap and doesn't disturb the active layer texture.
+      if (handleTiltShiftDown(canvasPos)) {
+        stateRef.current = {
+          ...INITIAL_STATE,
+          drawing: true,
+          layerId: activeLayerId,
+          tiltShiftDragging: true,
+        };
+        return;
+      }
+
       if (handleMeshWarpDown(canvasPos)) {
         stateRef.current = {
           ...INITIAL_STATE,
@@ -337,6 +352,12 @@ export function useCanvasInteraction(
         y: canvasPos.y - state.layerStartY,
       };
 
+      // Tilt-shift drag (not tool-routed)
+      if (state.tiltShiftDragging) {
+        handleTiltShiftMove(canvasPos, e.metaKey);
+        return;
+      }
+
       // Mesh warp drag (not tool-routed)
       if (state.meshWarpDragging) {
         handleMeshWarpMove(canvasPos);
@@ -477,6 +498,13 @@ export function useCanvasInteraction(
     cancelHoldTimer();
 
     const state = stateRef.current;
+
+    // Tilt-shift drag end — short-circuit before regular tool teardown.
+    if (state.tiltShiftDragging) {
+      handleTiltShiftUp();
+      stateRef.current = { ...INITIAL_STATE };
+      return;
+    }
 
     // Mesh warp drag end — short-circuit before regular tool teardown.
     if (state.meshWarpDragging) {

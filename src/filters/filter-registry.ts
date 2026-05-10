@@ -21,6 +21,7 @@ import { chromaticAberration } from './chromatic-aberration';
 import { pixelStretch } from './pixel-stretch';
 import { lensDistortion } from './lens-distortion';
 import { bloom } from './bloom';
+import { tiltShiftBlur } from './tilt-shift-blur';
 
 export type { FilterDefinition };
 
@@ -47,6 +48,7 @@ const allFilters: FilterDefinition[] = [
   pixelStretch,
   lensDistortion,
   bloom,
+  tiltShiftBlur,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(
