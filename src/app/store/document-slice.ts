@@ -761,11 +761,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const parentGroup = findParentGroup(doc.layers, firstId);
     const targetGroupId = parentGroup?.id ?? doc.rootGroupId ?? null;
 
-    // Remove selected layers from their current parents, add new group
-    let newLayers = [...doc.layers, group];
+    // Remove selected layers from their current parents BEFORE adding the
+    // group — otherwise removeFromParentGroup also strips children from
+    // the newly created group.
+    let newLayers = [...doc.layers];
     for (const id of orderedIds) {
       newLayers = removeFromParentGroup(newLayers, id);
     }
+    newLayers = [...newLayers, group];
     if (targetGroupId) {
       newLayers = addToGroupUtil(newLayers, group.id, targetGroupId);
     }
