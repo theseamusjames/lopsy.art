@@ -1,6 +1,6 @@
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
-import type { Point } from '../../types';
+import type { Point, Layer } from '../../types';
 import { useUIStore, type ShapeSizeClick } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
@@ -8,14 +8,15 @@ import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   renderShape as gpuRenderShape,
+  renderShapeExpanded as gpuRenderShapeExpanded,
   saveShapePreview as gpuSaveShapePreview,
   endShapePreview as gpuEndShapePreview,
+  getLayerEngineBounds,
 } from '../../engine-wasm/wasm-bridge';
-import { PixelBuffer } from '../../engine/pixel-data';
-import { wrapWithSelectionMask } from '../../app/interactions/selection-mask-wrap';
-import { drawShape, ellipseToPathAnchors, polygonToPathAnchors } from './shape';
+import { ellipseToPathAnchors, polygonToPathAnchors } from './shape';
 import type { ShapeMode } from './shape';
 import type { PathAnchor } from '../path/path';
+import { pixelDataManager } from '../../engine/pixel-data-manager';
 
 const CLICK_THRESHOLD = 4;
 
@@ -39,6 +40,38 @@ function constrainToAspectRatio(center: Point, edge: Point): Point {
     x: center.x + rx * Math.sign(edge.x - center.x || 1),
     y: center.y + ry * Math.sign(edge.y - center.y || 1),
   };
+}
+
+function syncLayerBoundsFromEngine(engine: NonNullable<ReturnType<typeof getEngine>>, layerId: string): void {
+  const bounds = getLayerEngineBounds(engine, layerId);
+  if (!bounds || bounds.length < 4) return;
+  const newX = bounds[0]!;
+  const newY = bounds[1]!;
+  const texW = bounds[2]!;
+  const texH = bounds[3]!;
+
+  const docState = useEditorStore.getState().document;
+  const layer = docState.layers.find((l) => l.id === layerId);
+  if (!layer) return;
+
+  const samePos = newX === layer.x && newY === layer.y;
+  const sameSize = layer.type !== 'raster' || (layer.width === texW && layer.height === texH);
+  if (samePos && sameSize) return;
+
+  const updatedLayers = docState.layers.map((l) => {
+    if (l.id !== layerId) return l;
+    if (l.type === 'raster') {
+      return { ...l, x: newX, y: newY, width: texW, height: texH } as Layer;
+    }
+    return { ...l, x: newX, y: newY } as Layer;
+  });
+  pixelDataManager.remove(layerId);
+  const dirtyIds = new Set(useEditorStore.getState().dirtyLayerIds);
+  dirtyIds.add(layerId);
+  useEditorStore.setState({
+    document: { ...docState, layers: updatedLayers },
+    dirtyLayerIds: dirtyIds,
+  });
 }
 
 export function handleShapeDown(ctx: InteractionContext): InteractionState {
@@ -99,32 +132,39 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point): 
 
 /**
  * Apply a shape whose dimensions came from the ShapeSize modal (user clicked
- * instead of dragged — we asked them for the size). Pulls current tool
- * settings, pushes history, and rasterizes into the clicked layer's pixel
- * buffer. Split out of the modal's own confirm callback so the modal host
- * can stay purely declarative.
+ * instead of dragged — we asked them for the size). Uses the GPU rendering
+ * path so shapes that extend beyond the artboard are preserved.
  */
 export function confirmShapeSize(width: number, height: number, click: ShapeSizeClick): void {
   const editorState = useEditorStore.getState();
-  const imageData = editorState.getOrCreateLayerPixelData(click.layerId);
-  const pixelBuffer = PixelBuffer.fromImageData(imageData);
-  const surface = wrapWithSelectionMask(pixelBuffer, click.layerX, click.layerY);
   const ts = useToolSettingsStore.getState();
 
   editorState.pushHistory('Shape');
   if (ts.shapeFillColor) ts.addRecentColor(ts.shapeFillColor);
   if (ts.shapeStrokeColor) ts.addRecentColor(ts.shapeStrokeColor);
 
-  const edge = { x: click.center.x + width / 2, y: click.center.y + height / 2 };
-  drawShape(surface, click.center, edge, {
-    mode: ts.shapeMode,
-    fillColor: ts.shapeFillColor,
-    strokeColor: ts.shapeStrokeColor,
-    strokeWidth: ts.shapeStrokeWidth,
-    sides: ts.shapePolygonSides,
-  });
+  const engine = getEngine();
+  if (!engine) return;
 
-  editorState.updateLayerPixelData(click.layerId, pixelBuffer.toImageData());
+  const cx = click.center.x + click.layerX;
+  const cy = click.center.y + click.layerY;
+
+  const fillColor = ts.shapeFillColor;
+  const strokeColor = ts.shapeStrokeColor;
+  gpuRenderShapeExpanded(
+    engine, click.layerId,
+    shapeModeToU32(ts.shapeMode),
+    cx, cy, width, height,
+    fillColor ? fillColor.r / 255 : 0, fillColor ? fillColor.g / 255 : 0,
+    fillColor ? fillColor.b / 255 : 0, fillColor ? fillColor.a : 0,
+    strokeColor ? strokeColor.r / 255 : 0, strokeColor ? strokeColor.g / 255 : 0,
+    strokeColor ? strokeColor.b / 255 : 0, strokeColor ? strokeColor.a : 0,
+    ts.shapeStrokeWidth, ts.shapePolygonSides,
+    Math.min(ts.shapeCornerRadius, Math.min(width, height) / 2),
+  );
+  syncLayerBoundsFromEngine(engine, click.layerId);
+  clearJsPixelData(click.layerId);
+  editorState.notifyRender();
 }
 
 export function handleShapeUp(state: InteractionState, layerLocalPos: Point): void {
@@ -147,6 +187,33 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point): vo
       layerY: state.layerStartY,
     });
     return;
+  }
+
+  if (engine && state.layerId && toolSettings.shapeOutput !== 'path') {
+    const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos);
+    const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
+    const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
+    const docCx = state.startPoint.x + state.layerStartX;
+    const docCy = state.startPoint.y + state.layerStartY;
+    const sw = toolSettings.shapeStrokeWidth;
+    const { width: docW, height: docH } = useEditorStore.getState().document;
+    if (docCx - rx - sw < 0 || docCy - ry - sw < 0
+        || docCx + rx + sw > docW || docCy + ry + sw > docH) {
+      const fillColor = toolSettings.shapeFillColor;
+      const strokeColor = toolSettings.shapeStrokeColor;
+      gpuRenderShapeExpanded(
+        engine, state.layerId,
+        shapeModeToU32(toolSettings.shapeMode),
+        docCx, docCy, rx * 2, ry * 2,
+        fillColor ? fillColor.r / 255 : 0, fillColor ? fillColor.g / 255 : 0,
+        fillColor ? fillColor.b / 255 : 0, fillColor ? fillColor.a : 0,
+        strokeColor ? strokeColor.r / 255 : 0, strokeColor ? strokeColor.g / 255 : 0,
+        strokeColor ? strokeColor.b / 255 : 0, strokeColor ? strokeColor.a : 0,
+        sw, toolSettings.shapePolygonSides,
+        Math.min(toolSettings.shapeCornerRadius, Math.min(rx * 2, ry * 2) / 2),
+      );
+    }
+    syncLayerBoundsFromEngine(engine, state.layerId);
   }
 
   if (toolSettings.shapeOutput === 'path') {

@@ -143,6 +143,10 @@ pub struct EngineInner {
     // Shape preview (stores pre-drag layer content for live preview)
     pub shape_preview_texture: Option<TextureHandle>,
     pub shape_preview_layer_id: Option<String>,
+    pub shape_preview_x: i32,
+    pub shape_preview_y: i32,
+    pub shape_preview_w: u32,
+    pub shape_preview_h: u32,
     // Filter preview (stores pre-filter layer content for live preview)
     pub filter_preview_texture: Option<TextureHandle>,
     pub filter_preview_layer_id: Option<String>,
@@ -274,6 +278,10 @@ impl EngineInner {
             quick_mask_texture: None,
             shape_preview_texture: None,
             shape_preview_layer_id: None,
+            shape_preview_x: 0,
+            shape_preview_y: 0,
+            shape_preview_w: 0,
+            shape_preview_h: 0,
             filter_preview_texture: None,
             filter_preview_layer_id: None,
             gradient_preview_texture: None,
@@ -371,31 +379,42 @@ impl EngineInner {
     /// Called before any GPU operation that writes to the layer texture
     /// (gradient, shape, brush stroke). No-op if already full size.
     pub fn ensure_layer_full_size(&mut self, layer_id: &str) -> Result<(), String> {
+        self.ensure_layer_covers(layer_id, 0, 0, self.doc_width as i32, self.doc_height as i32)
+    }
+
+    /// Expand the layer texture so it covers the union of its current content,
+    /// the document area, and the additional rectangle `(extra_min_x..extra_max_x,
+    /// extra_min_y..extra_max_y)`. No-op if the texture already covers all three.
+    pub fn ensure_layer_covers(
+        &mut self,
+        layer_id: &str,
+        extra_min_x: i32,
+        extra_min_y: i32,
+        extra_max_x: i32,
+        extra_max_y: i32,
+    ) -> Result<(), String> {
         let layer_tex = match self.layer_textures.get(layer_id) {
             Some(&t) => t,
             None => return Ok(()),
         };
         let (lw, lh) = self.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
 
-        // Get the layer's current position so we can place the old content
-        // correctly in the new full-size texture.
         let (layer_x, layer_y) = self.layer_stack.iter()
             .find(|l| l.id == layer_id)
             .map(|l| (l.x, l.y))
             .unwrap_or((0, 0));
 
-        // Skip only when the layer already fully contains the document area.
-        // Checking size alone (lw >= doc_width && lh >= doc_height) is wrong
-        // when the layer has been offset (e.g. aligned right): a 1920-wide
-        // texture at x=1820 covers doc columns 1820..3740, leaving 0..1820
-        // uncovered. JS-side expansion logic would then desync from WASM.
-        let doc_w = self.doc_width as i32;
-        let doc_h = self.doc_height as i32;
-        let fully_contains_doc = layer_x <= 0
-            && layer_y <= 0
-            && layer_x + lw as i32 >= doc_w
-            && layer_y + lh as i32 >= doc_h;
-        if fully_contains_doc {
+        let min_x = 0i32.min(layer_x).min(extra_min_x);
+        let min_y = 0i32.min(layer_y).min(extra_min_y);
+        let max_x = (self.doc_width as i32).max(layer_x + lw as i32).max(extra_max_x);
+        let max_y = (self.doc_height as i32).max(layer_y + lh as i32).max(extra_max_y);
+        let new_w = (max_x - min_x) as u32;
+        let new_h = (max_y - min_y) as u32;
+
+        if layer_x <= min_x && layer_y <= min_y
+            && layer_x + lw as i32 >= max_x
+            && layer_y + lh as i32 >= max_y
+        {
             return Ok(());
         }
 
@@ -422,15 +441,6 @@ impl EngineInner {
         } else {
             None
         };
-
-        // Compute the union of the document area and the layer content area
-        // so that offscreen content is preserved.
-        let min_x = 0i32.min(layer_x);
-        let min_y = 0i32.min(layer_y);
-        let max_x = (self.doc_width as i32).max(layer_x + lw as i32);
-        let max_y = (self.doc_height as i32).max(layer_y + lh as i32);
-        let new_w = (max_x - min_x) as u32;
-        let new_h = (max_y - min_y) as u32;
 
         let new_tex = self.texture_pool.acquire(&self.gl, new_w, new_h)?;
 

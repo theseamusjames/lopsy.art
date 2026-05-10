@@ -207,6 +207,8 @@ pub fn merge_layers(
     engine.fbo_pool.unbind(&engine.gl);
 
     // Blend bottom into scratch_a (src=bottom, dst=scratch_b cleared → scratch_a)
+    // Use the bottom layer's actual opacity so it's baked into the merged
+    // content. The merged layer will get opacity=1.0 on the JS side.
     let scratch_b_tex = engine.texture_pool.get(engine.scratch_texture_b).cloned()
         .ok_or("scratch_b not found")?;
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
@@ -221,7 +223,7 @@ pub fn merge_layers(
 
         if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), bottom_desc.opacity); }
         if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") {
             engine.gl.uniform2f(Some(&loc), bottom_desc.x as f32, bottom_desc.y as f32);

@@ -44,6 +44,10 @@ pub fn save_shape_preview(engine: &mut EngineInner, layer_id: &str) {
 
     engine.shape_preview_texture = Some(preview_handle);
     engine.shape_preview_layer_id = Some(layer_id.to_string());
+    engine.shape_preview_x = 0;
+    engine.shape_preview_y = 0;
+    engine.shape_preview_w = w;
+    engine.shape_preview_h = h;
 }
 
 /// Release the preview texture. Called when the shape drag ends.
@@ -82,6 +86,10 @@ pub fn render_shape(
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let (layer_x, layer_y) = engine.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| (l.x, l.y))
+        .unwrap_or((0, 0));
     let layer_tex = match engine.texture_pool.get(tex_handle) {
         Some(t) => t.clone(),
         None => return,
@@ -110,7 +118,7 @@ pub fn render_shape(
         }
     }
 
-    // Draw the shape on top
+    // Draw the shape on top — convert center from document space to texture space
     engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
         let gl = &engine.gl;
         let shader = &engine.shaders.shape_fill;
@@ -126,7 +134,7 @@ pub fn render_shape(
             gl.uniform1i(Some(&loc), shape_type as i32);
         }
         if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), cx as f32, cy as f32);
+            gl.uniform2f(Some(&loc), (cx as f32) - (layer_x as f32), (cy as f32) - (layer_y as f32));
         }
         if let Some(loc) = shader.location(gl, "u_size") {
             gl.uniform2f(Some(&loc), width as f32, height as f32);
@@ -155,4 +163,46 @@ pub fn render_shape(
 
     engine.gl.disable(WebGl2RenderingContext::BLEND);
     engine.mark_layer_dirty(layer_id);
+}
+
+/// One-shot shape render that expands the texture to cover the full shape.
+/// Used by confirmShapeSize (modal path) where there's no preview/drag cycle.
+pub fn render_shape_expanded(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    shape_type: u32,
+    cx: f64,
+    cy: f64,
+    width: f64,
+    height: f64,
+    fill_r: f32,
+    fill_g: f32,
+    fill_b: f32,
+    fill_a: f32,
+    stroke_r: f32,
+    stroke_g: f32,
+    stroke_b: f32,
+    stroke_a: f32,
+    stroke_width: f32,
+    sides: u32,
+    corner_radius: f32,
+) {
+    let corner_radius = corner_radius.min((width as f32).min(height as f32) / 2.0);
+    let half_w = (width / 2.0 + stroke_width as f64 + 1.0).ceil() as i32;
+    let half_h = (height / 2.0 + stroke_width as f64 + 1.0).ceil() as i32;
+    let _ = engine.ensure_layer_covers(
+        layer_id,
+        (cx as i32) - half_w,
+        (cy as i32) - half_h,
+        (cx as i32) + half_w,
+        (cy as i32) + half_h,
+    );
+
+    // Delegate to the standard render (no preview active for one-shot)
+    render_shape(
+        engine, layer_id, shape_type, cx, cy, width, height,
+        fill_r, fill_g, fill_b, fill_a,
+        stroke_r, stroke_g, stroke_b, stroke_a,
+        stroke_width, sides, corner_radius,
+    );
 }
