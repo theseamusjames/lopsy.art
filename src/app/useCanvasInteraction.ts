@@ -138,6 +138,14 @@ export function useCanvasInteraction(
 
       const canvasPos = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
 
+      if (e.metaKey) {
+        const ts = useToolSettingsStore.getState();
+        if (ts.symmetryRadialSegments >= 2 || ts.symmetryHorizontal || ts.symmetryVertical) {
+          ts.setSymmetryCenter({ x: canvasPos.x, y: canvasPos.y });
+          return;
+        }
+      }
+
       // Pre-tool: mesh warp handle drag. Captures the click before the
       // expensive GPU stroke / pixel-buffer setup runs, so dragging a
       // mesh handle is cheap and doesn't disturb the active layer texture.
@@ -436,13 +444,14 @@ export function useCanvasInteraction(
           gpuBrushDabBatch(eng, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1, 0, 0, 0);
 
           if (symmetryCenter) {
-            const { symmetryHorizontal, symmetryVertical } = useToolSettingsStore.getState();
-            if (symmetryHorizontal || symmetryVertical) {
+            const { symmetryHorizontal, symmetryVertical, symmetryRadialSegments } = useToolSettingsStore.getState();
+            if (symmetryHorizontal || symmetryVertical || symmetryRadialSegments >= 2) {
               const sym = {
                 horizontal: symmetryHorizontal,
                 vertical: symmetryVertical,
                 centerX: symmetryCenter.x,
                 centerY: symmetryCenter.y,
+                radialSegments: symmetryRadialSegments,
               };
               for (const m of mirrorBatchPoints(arr, sym)) {
                 gpuBrushDabBatch(eng, layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, 0, 0);

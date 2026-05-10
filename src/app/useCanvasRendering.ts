@@ -28,7 +28,7 @@ import {
 import { renderGrid, renderPixelGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
-import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
+import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor, renderSymmetryCenter } from './rendering/render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './rendering/render-text-overlay';
 import { hitTestTextLayer } from '../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './rendering/render-guides';
@@ -286,6 +286,11 @@ function renderFrameGpu(
       if (rulerHover && !hoveredGuideId) {
         renderGuidePreview(overlayCtx, rulerHover, doc.width, doc.height, viewport.zoom, guideColor);
       }
+    }
+
+    if (toolState.symmetryRadialSegments >= 2 || toolState.symmetryHorizontal || toolState.symmetryVertical) {
+      const symCenter = toolState.symmetryCenter ?? { x: doc.width / 2, y: doc.height / 2 };
+      renderSymmetryCenter(overlayCtx, symCenter, viewport.zoom, guideColor);
     }
 
     overlayCtx.restore();

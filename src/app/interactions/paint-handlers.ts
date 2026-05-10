@@ -25,10 +25,11 @@ import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from '../../to
 type PaintTool = 'brush' | 'pencil' | 'eraser';
 
 function getSymmetryConfig(center: { x: number; y: number }): SymmetryConfig {
-  const { symmetryHorizontal, symmetryVertical } = useToolSettingsStore.getState();
+  const { symmetryHorizontal, symmetryVertical, symmetryRadialSegments } = useToolSettingsStore.getState();
   return {
     horizontal: symmetryHorizontal,
     vertical: symmetryVertical,
+    radialSegments: symmetryRadialSegments,
     centerX: center.x,
     centerY: center.y,
   };
@@ -212,12 +213,11 @@ export function handlePaintDown(
 
   const engine = getEngine();
 
-  // Symmetry should mirror around the document center, not the click point.
-  // Convert document center to layer-local coordinates.
   const doc = editorState.document;
+  const storedCenter = useToolSettingsStore.getState().symmetryCenter;
   const docCenter = {
-    x: doc.width / 2 - activeLayer.x,
-    y: doc.height / 2 - activeLayer.y,
+    x: (storedCenter?.x ?? doc.width / 2) - activeLayer.x,
+    y: (storedCenter?.y ?? doc.height / 2) - activeLayer.y,
   };
 
   const strokeColor = useToolSettingsStore.getState().foregroundColor;
