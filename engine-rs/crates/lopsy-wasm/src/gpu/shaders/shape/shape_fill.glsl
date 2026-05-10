@@ -37,34 +37,24 @@ float sdPolygon(vec2 p, vec2 halfSize, int n, float cr) {
     float an = PI / float(n);
     float cosAn = cos(an);
 
-    // Face (inscribed) radius = halfSize; circumradius = halfSize / cos(π/n).
-    float faceR = min(halfSize.x, halfSize.y);
-    float circumR = faceR / cosAn;
+    vec2 faceR = halfSize;
+    vec2 circumR = faceR / cosAn;
 
-    float maxCr = faceR * 0.99;
+    float minFaceR = min(faceR.x, faceR.y);
+    float maxCr = minFaceR * 0.99;
     float clampedCr = min(cr, maxCr);
 
-    // Inset the polygon by cr along the face normal.
-    float insetFaceR = faceR - clampedCr;
-    float insetCircumR = insetFaceR / cosAn;
+    vec2 insetFaceR = faceR - clampedCr;
+    vec2 insetCircumR = insetFaceR / cosAn;
 
-    // Rotation: even-sided polygons get +an so flat edges face up/down.
-    // Odd-sided polygons stay at the natural orientation (vertex up).
-    // The rotation uses the atan(x,y) convention where angle 0 = +y.
     float rot = (n / 2 * 2 == n) ? an : 0.0;
 
-    // Compute signed distance to the inset polygon via explicit edge loop.
     float minEdgeDist = 1e6;
-    // For a convex polygon with CW winding (sin/cos gives CW in screen
-    // space where y points down), a point is inside if the cross product
-    // `edge × toP` is ≤ 0 for ALL edges. If any cross product is > 0
-    // the point is outside.
     bool isOutside = false;
     for (int i = 0; i < 64; i++) {
         if (i >= n) break;
         float a0 = rot + 2.0 * PI * float(i) / float(n);
         float a1 = rot + 2.0 * PI * float(i + 1) / float(n);
-        // Vertices in atan(x,y) convention: (circumR*sin(a), circumR*cos(a))
         vec2 v0 = insetCircumR * vec2(sin(a0), cos(a0));
         vec2 v1 = insetCircumR * vec2(sin(a1), cos(a1));
 
