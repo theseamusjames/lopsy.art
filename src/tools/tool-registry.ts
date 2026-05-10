@@ -276,8 +276,8 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     isGpu: true,
     handler: {
       down: (ctx) => handleShapeDown(ctx),
-      move: (ctx, state) => handleShapeMove(state, ctx.layerPos),
-      up: (ctx, state) => handleShapeUp(state, ctx.layerPos),
+      move: (ctx, state) => handleShapeMove(state, ctx.layerPos, ctx.metaKey),
+      up: (ctx, state) => handleShapeUp(state, ctx.layerPos, ctx.metaKey),
     },
     // Seed the shape's fill color from the current foreground on activation —
     // users expect "pick a color, then click shape" to draw in that color.

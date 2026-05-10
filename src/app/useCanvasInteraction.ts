@@ -485,9 +485,13 @@ export function useCanvasInteraction(
     const canvasPos = rect
       ? screenToCanvas(e.clientX - rect.left, e.clientY - rect.top)
       : { x: 0, y: 0 };
+    const layerLocalPos: Point = {
+      x: canvasPos.x - state.layerStartX,
+      y: canvasPos.y - state.layerStartY,
+    };
 
     const ctx: InteractionContext = {
-      canvasPos, layerPos: canvasPos,
+      canvasPos, layerPos: layerLocalPos,
       shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
       clientX: e.clientX, clientY: e.clientY,
       activeLayerId: state.layerId ?? '',
