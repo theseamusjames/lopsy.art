@@ -9,7 +9,7 @@ import { handleFillDown } from './fill/fill-interaction';
 import { handleQuickSelectDown, handleQuickSelectMove, handleQuickSelectUp } from './quick-select/quick-select-interaction';
 import { handleEyedropperDown, handleEyedropperMove } from './eyedropper/eyedropper-interaction';
 import { handleDodgeDown, handleDodgeMove, handleDodgeUp } from './dodge/dodge-interaction';
-import { handleSpongeDown, handleSpongeMove } from './sponge/sponge-interaction';
+import { handleSpongeDown, handleSpongeMove, handleSpongeUp } from './sponge/sponge-interaction';
 import { handleSmudgeDown, handleSmudgeMove } from './smudge/smudge-interaction';
 import { handleStampDown, handleStampMove } from './stamp/stamp-interaction';
 import { handleHealingDown, handleHealingMove } from './healing/healing-interaction';
@@ -191,9 +191,11 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     shortcut: 'y',
     optionsComponent: SpongeOptions,
     isPaint: true,
+    isGpu: true,
     handler: {
       down: (ctx) => handleSpongeDown(ctx),
       move: (ctx, state) => handleSpongeMove(state, ctx.layerPos),
+      up: (_ctx, state) => handleSpongeUp(state),
     },
   },
   smudge: {

@@ -787,7 +787,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setDodgeMode: (mode) => set({ dodgeMode: mode }),
   setSpongeMode: (mode) => set({ spongeMode: mode }),
   setSpongeStrength: (strength) => set({ spongeStrength: Math.max(1, Math.min(100, strength)) }),
-  setSpongeSize: (size) => set({ spongeSize: Math.max(1, Math.min(200, size)) }),
+  setSpongeSize: (size) => set({ spongeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeSize: (size) => set({ smudgeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeStrength: (strength) => set({ smudgeStrength: Math.max(0, Math.min(100, strength)) }),
   setWandTolerance: (tolerance) => set({ wandTolerance: Math.max(0, Math.min(255, tolerance)) }),

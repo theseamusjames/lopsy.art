@@ -29,7 +29,7 @@ export function SpongeOptions() {
         <option value="desaturate">Desaturate</option>
       </select>
       <Slider label="Strength" value={spongeStrength} min={1} max={100} onChange={setSpongeStrength} />
-      <Slider label="Size" value={spongeSize} min={1} max={sizeMax} onChange={setSpongeSize} />
+      <Slider label="Size" value={spongeSize} min={1} max={sizeMax} sliderMax={300} onChange={setSpongeSize} />
     </>
   );
 }

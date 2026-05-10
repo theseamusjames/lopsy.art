@@ -3,58 +3,56 @@ import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-typ
 import type { Point } from '../../types';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
-import { PixelBuffer } from '../../engine/pixel-data';
-import { applySponge } from './sponge';
+import { getEngine } from '../../engine-wasm/engine-state';
+import {
+  beginSpongeStroke,
+  applySpongeDabBatch as gpuSpongeDabBatch,
+  endSpongeStroke,
+} from '../../engine-wasm/wasm-bridge';
 import { interpolateFlat } from '../common/dab-interpolation';
+import {
+  setPendingSpongeStroke,
+  clearPendingSpongeStroke,
+} from '../../app/interactions/pending-stroke';
+import type { SpongeMode } from './sponge';
 
-/** Spacing as a fraction of brush diameter — matches Dodge/Burn cadence. */
+const SPONGE_HARDNESS = 0.5;
 const SPONGE_SPACING_RATIO = 0.25;
+const SPONGE_STRENGTH_SCALE = 0.25;
 
-function applyDabToLayer(
-  layerId: string,
-  pos: Point,
-  size: number,
-  strength: number,
-  mode: import('./sponge').SpongeMode,
-): void {
-  const editorState = useEditorStore.getState();
-  const layer = editorState.document.layers.find((l) => l.id === layerId);
-  if (!layer) return;
+function scaleSpongeStrength(raw: number): number {
+  return raw * raw * SPONGE_STRENGTH_SCALE;
+}
 
-  const imageData = editorState.getOrCreateLayerPixelData(layerId);
-  const buf = PixelBuffer.fromImageData(imageData);
-
-  // Convert doc-space pos to layer-local position
-  const localX = pos.x - layer.x;
-  const localY = pos.y - layer.y;
-
-  applySponge(buf, { x: localX, y: localY }, size, mode, strength);
-  editorState.updateLayerPixelData(layerId, buf.toImageData());
+function spongeModeToU32(mode: SpongeMode): number {
+  return mode === 'saturate' ? 0 : 1;
 }
 
 export function handleSpongeDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer, shiftKey } = ctx;
   const editorState = useEditorStore.getState();
-  editorState.pushHistory();
   const toolSettings = useToolSettingsStore.getState();
   const mode = toolSettings.spongeMode;
-  const strength = toolSettings.spongeStrength / 100;
+  editorState.pushHistory(mode === 'saturate' ? 'Saturate' : 'Desaturate');
+  const strength = scaleSpongeStrength(toolSettings.spongeStrength / 100);
   const size = toolSettings.spongeSize;
-
   const shiftLine = shiftKey
     && ctx.lastPaintPointRef.current
     && ctx.lastPaintPointRef.current.layerId === activeLayerId;
 
-  if (shiftLine) {
-    const from = ctx.lastPaintPointRef.current!.point;
-    const spacing = Math.max(1, size * SPONGE_SPACING_RATIO);
-    const pts = interpolateFlat(from, layerPos, spacing);
-    // pts is a flat Float64Array of [x0, y0, x1, y1, ...]
-    for (let i = 0; i < pts.length; i += 2) {
-      applyDabToLayer(activeLayerId, { x: pts[i]!, y: pts[i + 1]! }, size, strength, mode);
+  const engine = getEngine();
+  if (engine) {
+    const modeU32 = spongeModeToU32(mode);
+    beginSpongeStroke(engine, activeLayerId, modeU32);
+    setPendingSpongeStroke(activeLayerId);
+    if (shiftLine) {
+      const spacing = Math.max(1, size * SPONGE_SPACING_RATIO);
+      const pts = interpolateFlat(ctx.lastPaintPointRef.current!.point, layerPos, spacing);
+      gpuSpongeDabBatch(engine, activeLayerId, pts, size, SPONGE_HARDNESS, strength);
+    } else {
+      gpuSpongeDabBatch(engine, activeLayerId, new Float64Array([layerPos.x, layerPos.y]), size, SPONGE_HARDNESS, strength);
     }
-  } else {
-    applyDabToLayer(activeLayerId, layerPos, size, strength, mode);
+    editorState.notifyRender();
   }
 
   return {
@@ -72,17 +70,26 @@ export function handleSpongeDown(ctx: InteractionContext): InteractionState {
 }
 
 export function handleSpongeMove(state: InteractionState, layerLocalPos: Point): void {
-  if (!state.drawing || !state.lastPoint || !state.layerId) return;
+  if (!state.lastPoint) return;
   const toolSettings = useToolSettingsStore.getState();
-  const mode = toolSettings.spongeMode;
-  const strength = toolSettings.spongeStrength / 100;
+  const strength = scaleSpongeStrength(toolSettings.spongeStrength / 100);
   const size = toolSettings.spongeSize;
   const spacing = Math.max(1, size * SPONGE_SPACING_RATIO);
 
-  const pts = interpolateFlat(state.lastPoint, layerLocalPos, spacing);
-  for (let i = 0; i < pts.length; i += 2) {
-    applyDabToLayer(state.layerId, { x: pts[i]!, y: pts[i + 1]! }, size, strength, mode);
+  const engine = getEngine();
+  if (engine && state.layerId) {
+    const pts = interpolateFlat(state.lastPoint, layerLocalPos, spacing);
+    gpuSpongeDabBatch(engine, state.layerId, pts, size, SPONGE_HARDNESS, strength);
   }
-
   state.lastPoint = layerLocalPos;
+  useEditorStore.getState().notifyRender();
+}
+
+export function handleSpongeUp(state: InteractionState): void {
+  if (!state.layerId) return;
+  const engine = getEngine();
+  if (!engine) return;
+  endSpongeStroke(engine, state.layerId);
+  clearPendingSpongeStroke();
+  useEditorStore.getState().notifyRender();
 }

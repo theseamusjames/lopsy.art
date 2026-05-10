@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
-use crate::{brush_gpu, clone_stamp_gpu, dodge_burn_gpu, healing_brush_gpu, mask_paint_gpu, smudge_gpu};
+use crate::{brush_gpu, clone_stamp_gpu, dodge_burn_gpu, healing_brush_gpu, mask_paint_gpu, smudge_gpu, sponge_gpu};
 
 // ============================================================
 // Brush / Paint Operations
@@ -303,6 +303,39 @@ pub fn apply_dodge_burn_dab_batch(
 #[wasm_bindgen(js_name = "endDodgeBurnStroke")]
 pub fn end_dodge_burn_stroke(engine: &mut Engine, layer_id: &str) {
     dodge_burn_gpu::end_dodge_burn_stroke(&mut engine.inner, layer_id);
+}
+
+// ============================================================
+// Sponge
+// ============================================================
+
+#[wasm_bindgen(js_name = "beginSpongeStroke")]
+pub fn begin_sponge_stroke(
+    engine: &mut Engine, layer_id: &str, mode: u32,
+) -> Result<(), JsError> {
+    sponge_gpu::begin_sponge_stroke(&mut engine.inner, layer_id, mode)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "applySpongeDab")]
+pub fn apply_sponge_dab(
+    engine: &mut Engine, layer_id: &str,
+    cx: f64, cy: f64, size: f32, hardness: f32, strength: f32,
+) {
+    sponge_gpu::apply_sponge_dab(&mut engine.inner, layer_id, cx, cy, size, hardness, strength);
+}
+
+#[wasm_bindgen(js_name = "applySpongeDabBatch")]
+pub fn apply_sponge_dab_batch(
+    engine: &mut Engine, layer_id: &str,
+    points: &[f64], size: f32, hardness: f32, strength: f32,
+) {
+    sponge_gpu::apply_sponge_dab_batch(&mut engine.inner, layer_id, points, size, hardness, strength);
+}
+
+#[wasm_bindgen(js_name = "endSpongeStroke")]
+pub fn end_sponge_stroke(engine: &mut Engine, layer_id: &str) {
+    sponge_gpu::end_sponge_stroke(&mut engine.inner, layer_id);
 }
 
 // ============================================================

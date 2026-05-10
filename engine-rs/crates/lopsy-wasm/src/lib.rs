@@ -10,6 +10,7 @@ pub mod selection_gpu;
 pub mod quick_mask_gpu;
 pub mod mask_paint_gpu;
 pub mod dodge_burn_gpu;
+pub mod sponge_gpu;
 pub mod smudge_gpu;
 pub mod clone_stamp_gpu;
 pub mod healing_brush_gpu;
