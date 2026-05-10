@@ -309,10 +309,15 @@ export function syncLayers(
       }
     }
 
-    // Upload mask
+    // Upload mask — only when the JS-side data reference actually changes,
+    // so GPU-painted mask data isn't overwritten by a stale re-upload.
     if (layer.mask) {
-      const maskBytes = new Uint8Array(layer.mask.data.buffer, layer.mask.data.byteOffset, layer.mask.data.byteLength);
-      uploadLayerMask(engine, layer.id, maskBytes, layer.mask.width, layer.mask.height);
+      const prevMaskData = tracked.maskDataRefs.get(layer.id);
+      if (prevMaskData !== layer.mask.data) {
+        const maskBytes = new Uint8Array(layer.mask.data.buffer, layer.mask.data.byteOffset, layer.mask.data.byteLength);
+        uploadLayerMask(engine, layer.id, maskBytes, layer.mask.width, layer.mask.height);
+        tracked.maskDataRefs.set(layer.id, layer.mask.data);
+      }
       tracked.masksOnEngine.add(layer.id);
     } else if (tracked.masksOnEngine.has(layer.id)) {
       removeLayerMask(engine, layer.id);

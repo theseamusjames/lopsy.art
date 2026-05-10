@@ -31,6 +31,7 @@ export interface TrackedState {
    *  decide whether a removeLayerMask call is needed — previously done by
    *  substring-sniffing the cached descriptor JSON, which was fragile. */
   masksOnEngine: Set<string>;
+  maskDataRefs: Map<string, Uint8ClampedArray>;
   pixelDataVersions: Map<string, ImageData | undefined>;
   sparseVersions: Map<string, SparseLayerEntry | undefined>;
   layerOrder: string;
@@ -80,6 +81,7 @@ function createTrackedState(): TrackedState {
     layerRefs: new Map(),
     layerEffectiveVisible: new Map(),
     masksOnEngine: new Set(),
+    maskDataRefs: new Map(),
     pixelDataVersions: new Map(),
     sparseVersions: new Map(),
     layerOrder: '',

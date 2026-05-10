@@ -442,8 +442,9 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                   ].filter(Boolean).join(' ')}
                   onClick={(e) => {
                     e.stopPropagation();
+                    const isAlreadyEditing = maskEditMode && layer.id === activeLayerId;
                     onSelectLayer(layer.id);
-                    setMaskEditMode(true);
+                    setMaskEditMode(!isAlreadyEditing);
                   }}
                   role="button"
                   tabIndex={0}
