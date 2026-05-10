@@ -576,6 +576,10 @@ export function useCanvasInteraction(
 
     toolHandlers[state.tool]?.up?.(ctx, state);
 
+    if (PAINT_TOOLS.has(state.tool)) {
+      useUIStore.getState().setIsStroking(false);
+    }
+
     // Defer brush stroke finalization so shift-click can continue the same
     // stroke texture (avoiding double-composite at the overlap point).
     // Other paint tools finalize immediately.

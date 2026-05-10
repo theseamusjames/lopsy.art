@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../app/editor-store';
+import { useUIStore } from '../../app/ui-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { readCompositeThumbnail } from '../../engine-wasm/wasm-bridge';
 import { PanelContainer } from '../PanelContainer/PanelContainer';
 import { usePanelCollapse } from '../usePanelCollapse';
 import { computeViewportRect, thumbnailPointToDocPoint, docPointToPan } from './navigator-math';
+import { createNavigatorScheduler } from './navigator-scheduler';
 import styles from './NavigatorPanel.module.css';
 
 const THUMBNAIL_UPDATE_INTERVAL_MS = 200;
@@ -40,7 +42,9 @@ export function NavigatorPanel() {
     setThumbnailSize({ width: Math.round(w), height: Math.round(h) });
   }, [docWidth, docHeight]);
 
-  // Throttled thumbnail update by reading the composite texture from the engine
+  // Throttled thumbnail update by reading the composite texture from the engine.
+  // The scheduler skips ticks while a paint stroke is in progress so the GPU
+  // readback doesn't stall the brush hot path (issue #380).
   useEffect(() => {
     if (collapsed) return;
 
@@ -71,9 +75,20 @@ export function NavigatorPanel() {
       ctx.putImageData(imageData, 0, 0);
     };
 
-    update();
-    const id = setInterval(update, THUMBNAIL_UPDATE_INTERVAL_MS);
-    return () => clearInterval(id);
+    if (!useUIStore.getState().isStroking) update();
+    const scheduler = createNavigatorScheduler({
+      read: update,
+      intervalMs: THUMBNAIL_UPDATE_INTERVAL_MS,
+    });
+    const unsubscribe = useUIStore.subscribe((state, prev) => {
+      if (state.isStroking !== prev.isStroking) {
+        scheduler.setStroking(state.isStroking);
+      }
+    });
+    return () => {
+      unsubscribe();
+      scheduler.stop();
+    };
   }, [collapsed, thumbnailSize]);
 
   // Compute viewport indicator rect in thumbnail space
