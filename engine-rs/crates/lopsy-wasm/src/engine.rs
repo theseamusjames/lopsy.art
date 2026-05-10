@@ -124,6 +124,9 @@ pub struct EngineInner {
     /// 0 = dodge, 1 = burn — captured on `begin_dodge_burn_stroke` so the
     /// compositor preview and bake share the mode.
     pub stroke_dodge_modes: HashMap<String, u32>,
+    pub stroke_sponge_textures: HashMap<String, TextureHandle>,
+    pub stroke_sponge_preview_textures: HashMap<String, TextureHandle>,
+    pub stroke_sponge_modes: HashMap<String, u32>,
     // Custom brush tip
     pub brush_tip_texture: Option<TextureHandle>,
     pub brush_tip_width: u32,
@@ -260,6 +263,9 @@ impl EngineInner {
             stroke_dodge_textures: HashMap::new(),
             stroke_dodge_preview_textures: HashMap::new(),
             stroke_dodge_modes: HashMap::new(),
+            stroke_sponge_textures: HashMap::new(),
+            stroke_sponge_preview_textures: HashMap::new(),
+            stroke_sponge_modes: HashMap::new(),
             brush_tip_texture: None,
             brush_tip_width: 0,
             brush_tip_height: 0,

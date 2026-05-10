@@ -234,6 +234,9 @@ pub fn composite(engine: &mut EngineInner) {
         let composite_src = if engine.stroke_dodge_textures.contains_key(&layer_id) {
             render_dodge_burn_preview(engine, &layer_id, effect_tex_handle, tw, th)
                 .map(|h| (h, tw, th))
+        } else if engine.stroke_sponge_textures.contains_key(&layer_id) {
+            render_sponge_preview(engine, &layer_id, effect_tex_handle, tw, th)
+                .map(|h| (h, tw, th))
         } else if merged_handle.is_some() {
             Some((effect_tex_handle, tw, th))
         } else {
@@ -751,6 +754,58 @@ fn render_dodge_burn_preview(
     });
 
     // Unbind to avoid feedback loops in subsequent passes.
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+
+    Some(preview_handle)
+}
+
+fn render_sponge_preview(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    layer_handle: TextureHandle,
+    tw: u32,
+    th: u32,
+) -> Option<TextureHandle> {
+    let coverage_handle = *engine.stroke_sponge_textures.get(layer_id)?;
+    let preview_handle = *engine.stroke_sponge_preview_textures.get(layer_id)?;
+    let mode = *engine.stroke_sponge_modes.get(layer_id).unwrap_or(&0);
+
+    if engine.texture_pool.get_size(coverage_handle).map_or(true, |(w, h)| w != tw || h != th) {
+        return None;
+    }
+    if engine.texture_pool.get_size(preview_handle).map_or(true, |(w, h)| w != tw || h != th) {
+        return None;
+    }
+
+    let layer_gl_tex = engine.texture_pool.get(layer_handle)?.clone();
+    let coverage_gl_tex = engine.texture_pool.get(coverage_handle)?.clone();
+    let preview_gl_tex = engine.texture_pool.get(preview_handle)?.clone();
+
+    let gl = &engine.gl;
+    gl.disable(WebGl2RenderingContext::BLEND);
+
+    engine.render_to_texture(&preview_gl_tex, tw as i32, th as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.sponge;
+        gl.use_program(Some(&shader.program));
+
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_gl_tex));
+        if let Some(loc) = shader.location(gl, "u_layerTex") { gl.uniform1i(Some(&loc), 0); }
+
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&coverage_gl_tex));
+        if let Some(loc) = shader.location(gl, "u_stampTex") { gl.uniform1i(Some(&loc), 1); }
+
+        if let Some(loc) = shader.location(gl, "u_mode") { gl.uniform1i(Some(&loc), mode as i32); }
+        if let Some(loc) = shader.location(gl, "u_exposure") { gl.uniform1f(Some(&loc), 1.0); }
+
+        engine.draw_fullscreen_quad();
+    });
+
     gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
     gl.active_texture(WebGl2RenderingContext::TEXTURE1);

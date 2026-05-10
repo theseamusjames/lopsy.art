@@ -10,6 +10,7 @@ export type ToolId =
   | 'eyedropper'
   | 'stamp'
   | 'dodge'
+  | 'sponge'
   | 'smudge'
   | 'marquee-rect'
   | 'marquee-ellipse'
