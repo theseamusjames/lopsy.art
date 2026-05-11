@@ -4,7 +4,7 @@
 
 ### Brush
 
-The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Everything else (preset gallery, brush-tip import, dynamics, texture) lives in the **Brushes panel** opened from the toolbar — a floating, draggable panel (no backdrop) with four tabs (**Presets**, **Shape**, **Dynamics**, **Texture**) and a live full-width stroke preview at the bottom that re-renders 200 ms after the last setting change.
+Shortcut: `B`. The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Everything else (preset gallery, brush-tip import, dynamics, texture) lives in the **Brushes panel** opened from the toolbar — a floating, draggable panel (no backdrop) with four tabs (**Presets**, **Shape**, **Dynamics**, **Texture**) and a live full-width stroke preview at the bottom that re-renders 200 ms after the last setting change.
 
 **Core parameters**
 - **Size**: 1 - 2000 px typed range; the toolbar slider's visual track caps at 300 so the useful range isn't crammed at the left end (typed values above 300 still work, they pin at the right edge of the track)
@@ -44,31 +44,37 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 **Stroke modifiers**
 - **Shift+click**: draws a straight line from the previous stroke endpoint to the click point. The pending stroke is reused (rather than baked and restarted) so MAX blending prevents the connecting line from double-compositing over the origin dab. Size jitter, hardness jitter, scatter, and taper are all applied along shift-click lines using the same dynamic-spacing walk as freehand drag, so dab density and variation match.
 - **Hold-to-smooth**: pause the cursor mid-stroke for 1.5 s and the recorded freehand path is auto-smoothed (sampled at the brush's spacing) and re-rasterized in place. Undo restores the raw freehand version first, then the pre-stroke state.
+- **`[` / `]`**: decrease / increase brush size by 1 px without leaving the canvas (also works for pencil, eraser, dodge/burn, smudge, stamp, healing, path stroke width, and shape stroke width — applies to whichever paint-class tool is active).
 
 ### Pencil
+- Shortcut: `N`
 - **Size**: 1 - 100 px
 - **Symmetry**: horizontal, vertical, or both
 - Pixel-perfect Bresenham lines (no anti-aliasing)
 - **Shift+click**: draws a straight pixel-perfect line from the previous stroke endpoint
 
 ### Eraser
+- Shortcut: `E`
 - **Size**: 1 px – document-scaled max (slider track caps at 300; typed values up to the document max still work and pin at the right edge)
 - **Opacity**: 1 - 100%
 - **Hardness**: 0 - 100% (internal)
 - **Shift+click**: erases a straight line from the previous stroke endpoint
 
 ### Dodge / Burn
+- Shortcut: `O`
 - **Mode**: dodge or burn
 - **Exposure**: 1 - 100%
 - **Size**: 1 px – document-scaled max (slider track caps at 300)
 - **Shift+click**: applies dodge/burn along a straight line from the previous stroke endpoint
 
 ### Clone Stamp
+- Shortcut: `S`
 - **Size**: 1 px – document-scaled max (slider track caps at 300)
 - **Alt/Cmd+click**: set the source sample point
 - **Shift+click**: stamps along a straight line from the previous stroke endpoint, preserving source offset
 
 ### Healing Brush
+- Shortcut: `H`
 - **Size**: 1 px – document-scaled max (default cap 200 px, scales with canvas size)
 - **Opacity**: 1 - 100%
 - **Alt/Cmd+click**: set the healing source sample point
@@ -103,6 +109,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 ## Shape & Vector Tools
 
 ### Shape Tool
+- Shortcut: `U`
 - **Shape types**: ellipse, polygon. A rectangle/square is drawn as a
   4-sided polygon (set sides to 4); triangles use sides=3, etc.
 - **Output**: pixels or path
@@ -112,8 +119,10 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Polygon sides**: 3 - 64
 - **Corner radius**: 0 - 200 px
 - **Aspect ratio lock**: width/height ratio constraint
+- **Cmd/Meta+drag**: temporarily forces a 1:1 square ratio while dragging, overriding the persistent aspect-ratio toggle for the duration of the press
 
 ### Path / Pen Tool
+- Shortcut: `P`
 - **Stroke width**: 1 - 50 px
 - Bezier anchors with in/out handles
 - Close path, split segment, convert anchor
@@ -123,6 +132,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Boolean path operations** (Path options bar buttons + **Path** menu in the menu bar): Unite, Subtract, Intersect, Exclude. Operates between the selected path and the most recently added other path; both source paths are consumed and replaced by the result. Implemented by flattening Bezier paths to polygons, rasterizing to binary masks, combining pixel-wise, then tracing contours with marching squares and refitting Catmull-Rom/Bezier anchors. Buttons are disabled until the document contains at least 2 paths and one is selected.
 
 ### Text Tool
+- Shortcut: `T`
 - **Font size**: 1 - 500
 - **Font family**: Inter, Arial, Helvetica, Georgia, Times New Roman, Courier New, JetBrains Mono, Verdana, Trebuchet MS, Impact, Comic Sans MS, Palatino, Garamond, Brush Script
 - **Font weight**: normal (400) or bold (700)
@@ -134,22 +144,27 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Strikethrough (`S`)**: toggle a horizontal stroke 32% of the font size above the baseline, 8% of font-size thick
 - **Mode**: point text (no wrap) or area text (fixed width with wrapping)
 - **Bind to path**: a Path dropdown in the text options bar lists every stored path. Once bound, glyphs are placed one by one along the path's arc-length and rotated to match the local Bezier tangent (works on both open and closed paths). Live editing (typing) re-flows the type along the curve in real time, and editing the path's anchors invalidates the cached layout so the text follows. Selecting "None" unbinds and restores the layer's pre-bind position.
+- **Commit**: `Shift+Enter` or `Tab` bakes the text edit (Tab also swallows the browser default focus change). **Cancel**: `Escape` aborts; if the layer was newly created for this edit it is removed.
 
 ---
 
 ## Selection Tools
 
 ### Rectangular Marquee
+- Shortcut: `M`
 - **Aspect ratio lock**: width/height constraint
 - **Feather**: 0 - 250 px (soft edge applied after the marquee is committed; three-pass separable box blur on the GPU approximating Gaussian falloff)
 - **Cmd/Meta+drag**: holding meta while dragging temporarily forces a 1:1 (square) aspect ratio for the duration of the press, regardless of the persistent aspect-ratio toggle. Releasing meta returns to the unconstrained or persistently-locked behavior immediately.
+- **Click+drag inside an existing selection**: with the marquee tool active, pressing inside the current selection (any non-zero mask coverage) and dragging moves the selection outline itself — the mask is translated by the integer drag delta, the underlying pixels are not touched. Use the Move tool instead to drag the pixels.
 
 ### Elliptical Marquee
 - **Aspect ratio lock**: width/height constraint
 - **Feather**: 0 - 250 px (same GPU feather pipeline as the rectangular marquee)
 - **Cmd/Meta+drag**: holding meta forces a 1:1 (circle) aspect ratio while dragging, identical to the rectangular marquee transient lock.
+- **Click+drag inside an existing selection**: same selection-outline move behavior as the rectangular marquee.
 
 ### Lasso (Freehand)
+- Shortcut: `L`
 - No configurable parameters
 
 ### Magnetic Lasso
@@ -159,6 +174,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - Edge detection runs in WASM against the active layer's GPU texture; only snapped coordinates cross back to JS
 
 ### Magic Wand
+- Shortcut: `W`
 - **Tolerance**: 0 - 255
 - **Contiguous**: on/off
 - **Graduated**: on/off — when enabled, the wand uses a gradient-aware flood fill that produces partial-coverage selection edges across smooth color transitions, instead of a hard threshold cut
@@ -209,6 +225,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 ## Other Tools
 
 ### Move
+- Shortcut: `V`
 - Drag to reposition layers
 - Arrow key nudge
 - Snap to grid
@@ -224,9 +241,11 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - When duplicating a layer that is wider or taller than the canvas, the +10/+10 visual offset is clamped so the duplicate's far edge never moves past the canvas edge that the original was within (prevents already-oversized layers from being shoved further out of view).
 
 ### Eyedropper
+- Shortcut: `I`
 - **Sample size**: point, 3x3, 5x5
 
 ### Fill (Paint Bucket)
+- Shortcut: `G`
 - **Tolerance**: 0 - 255
 - **Contiguous**: on/off
 
@@ -237,6 +256,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Cmd/Meta+drag**: snaps the gradient angle to 15° increments while dragging
 
 ### Crop
+- Shortcut: `C`
 - Interactive drag to define crop rectangle
 
 ---
@@ -476,7 +496,7 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - Drag from ruler to create
 
 ### UI
-- **Foreground / background color**: with swap and reset. Double-clicking the foreground or background swatch (or any recent-color swatch) selects that swatch *and* expands the Color panel if it is collapsed, so the picker is reachable from anywhere in the chrome with a single double-click.
+- **Foreground / background color**: with swap and reset. **`X`** swaps the foreground and background colors; **`D`** resets the pair to the default black / white. Double-clicking the foreground or background swatch (or any recent-color swatch) selects that swatch *and* expands the Color panel if it is collapsed, so the picker is reachable from anywhere in the chrome with a single double-click.
 - **Recent colors**: up to 20
 - **Sidebar collapsed**: on/off
 - **Panel visibility**: togglable per panel (color, layers, etc.)
@@ -594,3 +614,98 @@ One-shot PNG export through the GPU compositor — no dialog, no preview, uses t
 
 ### DNG / RAW Import
 Camera RAW (DNG) files are decoded entirely in Rust (demosaic, LJPEG, TIFF) before being uploaded to a GPU layer.
+
+---
+
+## Keyboard Shortcuts (Quick Reference)
+
+Consolidates the per-tool and per-section shortcuts above into a single lookup.
+
+### Tools
+| Key | Tool |
+|-----|------|
+| `V` | Move |
+| `B` | Brush |
+| `N` | Pencil |
+| `E` | Eraser |
+| `G` | Fill (Paint Bucket) |
+| `I` | Eyedropper |
+| `S` | Clone Stamp |
+| `H` | Healing Brush |
+| `O` | Dodge / Burn |
+| `Y` | Sponge |
+| `R` | Smudge |
+| `M` | Rectangular Marquee |
+| `L` | Lasso |
+| `W` | Magic Wand |
+| `U` | Shape |
+| `T` | Text |
+| `C` | Crop |
+| `P` | Path / Pen |
+| `J` | Spray |
+
+### Painting size & color
+| Key | Action |
+|-----|--------|
+| `[` / `]` | Decrease / increase active paint-class tool size by 1 px (brush, pencil, eraser, dodge, smudge, stamp, healing, path stroke width, shape stroke width) |
+| `X` | Swap foreground and background colors |
+| `D` | Reset colors to black / white |
+| `Q` | Toggle Quick Mask mode |
+
+### Selection
+| Key | Action |
+|-----|--------|
+| `⌘A` | Select all |
+| `⌘D` | Deselect |
+| `⇧⌘I` | Invert selection |
+| Arrow keys | Nudge selection (or move layer when Move is active); steps by grid size if grid + snap-to-grid are on |
+
+### Layers panel (when focused)
+| Key | Action |
+|-----|--------|
+| `⌘A` | Select every layer |
+| `Delete` / `Backspace` | Remove every selected layer |
+
+### Text editing
+| Key | Action |
+|-----|--------|
+| `⇧Enter` or `Tab` | Commit the edit |
+| `Escape` | Cancel (and remove the layer if it was newly created for this edit) |
+
+### Viewport
+| Key | Action |
+|-----|--------|
+| `Space + drag` | Temporary pan from any tool |
+| Middle-click drag | Temporary pan from any tool |
+| `⌘ / Ctrl + scroll` | Zoom centered on the cursor |
+| Plain scroll | Pan |
+
+### File I/O
+| Key | Action |
+|-----|--------|
+| `⌘N` | New document |
+| `⌘O` | Open file (PNG / JPEG / WebP / BMP / PSD / DNG / .lopsy) |
+| `⌘S` | Save Project (.lopsy) |
+| `⇧⌘E` | Quick Export (PNG) |
+| `⌥⇧⌘E` | Export dialog |
+| `⌘⇧X` | Liquify… |
+| `⌘⇧C` | Copy merged |
+
+### Modifier gestures (mouse + keyboard)
+| Gesture | Effect |
+|---------|--------|
+| `Shift+click` on brush / pencil / eraser / dodge / smudge / stamp / healing / spray | Straight line from previous stroke endpoint |
+| `Alt` or `⌘+click` (Stamp, Healing) | Set the source sample point |
+| Hold cursor still mid-stroke (1.5 s) | Auto-smooth the recorded freehand path |
+| `⌘+drag` on Gradient | Snap angle to 15° increments |
+| `⌘+drag` on Shape | Force 1:1 square ratio for the duration of the press |
+| `⌘+drag` on Rectangular / Elliptical Marquee | Force 1:1 (square / circle) aspect ratio |
+| Click+drag inside an existing marquee selection | Move the selection outline (not pixels) |
+| `⌘+click` a path anchor | Toggle between corner and smooth spline (same as double-click) |
+| `Alt+drag` (Move) | Duplicate the active layer with no selection; float a copy with an active selection |
+| `⌘+drag` on a Transform scale handle | Constrain to uniform aspect ratio |
+| `⌘+drag` on a Transform rotation handle | Snap rotation to 15° increments |
+| `⌘ / Ctrl+click` a layer thumbnail | Load that layer's alpha as a marquee selection |
+| `⌘ / Ctrl+click` on the canvas with symmetry active | Relocate the symmetry center |
+| `⌘ / Ctrl+click` a layer row | Add / remove the row from the multi-selection |
+| `Shift+click` a layer row | Range-select from active to clicked |
