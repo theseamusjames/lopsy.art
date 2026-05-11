@@ -21,10 +21,12 @@ import type {
   PersistentTransform,
 } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
+import { translateSelectionMask } from './quick-mask-move';
 
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
+  const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
   editorState.pushHistory(ctx.altKey && !(sel.active && sel.mask) ? 'Duplicate Layer' : 'Move');
   const {
     canvasPos,
@@ -34,6 +36,27 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     persistentTransformRef,
   } = ctx;
   let { activeLayerId } = ctx;
+
+  // Quick-mask mode + active marquee: float-on-GPU would cut the underlying
+  // layer pixels (issue #315). Until we have quick-mask-texture float ops,
+  // translate only the marquee bounds/mask in JS and leave both the layer
+  // and the quick-mask texture untouched.
+  if (isQuickMaskMode && sel.active && sel.mask) {
+    return {
+      drawing: true,
+      lastPoint: canvasPos,
+      pixelBuffer: null,
+      originalPixelBuffer: null,
+      layerId: activeLayerId,
+      tool: 'move',
+      startPoint: canvasPos,
+      layerStartX: 0,
+      layerStartY: 0,
+      ...DEFAULT_TRANSFORM_FIELDS,
+      moveOriginalMask: new Uint8ClampedArray(sel.mask),
+      moveOriginalBounds: { ...sel.bounds! },
+    };
+  }
 
   // Option+drag with no selection: duplicate layer first, then move the copy
   if (altKey && !(sel.active && sel.mask)) {
@@ -162,6 +185,31 @@ export function handleMoveMove(
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);
   const dragDy = Math.round(canvasPos.y - state.startPoint.y);
 
+  // Quick-mask + marquee move: translate selection bounds/mask only. No GPU
+  // float exists (handleMoveDown bypasses it for quick-mask mode to avoid
+  // corrupting the layer texture — issue #315).
+  if (
+    useUIStore.getState().isQuickMaskMode
+    && !floatingSelectionRef.current
+    && state.moveOriginalMask
+    && state.moveOriginalBounds
+  ) {
+    const edState = useEditorStore.getState();
+    const { width: docW, height: docH } = edState.document;
+    const { mask: newMask, bounds: newBounds } = translateSelectionMask(
+      state.moveOriginalMask,
+      state.moveOriginalBounds,
+      dragDx,
+      dragDy,
+      docW,
+      docH,
+    );
+    edState.setSelection(newBounds, newMask, docW, docH);
+    useUIStore.getState().setTransform(createTransformState(newBounds));
+    edState.notifyRender();
+    return;
+  }
+
   const engine = getEngine();
   if (floatingSelectionRef.current && engine && hasFloat(engine)) {
     // GPU path: composite float at new offset
@@ -281,7 +329,27 @@ export function handleNudgeMove(
   if (!layer || layer.locked) return;
 
   const sel = editor.selection;
+  const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
   editor.pushHistory('Nudge');
+
+  // Quick-mask + marquee nudge: translate the marquee in JS only. Floating
+  // selected pixels onto the GPU would cut the underlying layer texture
+  // (issue #315). Mirror the guard in handleMoveDown / handleMoveMove.
+  if (isQuickMaskMode && sel.active && sel.mask && sel.bounds) {
+    const { width: docW, height: docH } = editor.document;
+    const { mask: newMask, bounds: newBounds } = translateSelectionMask(
+      sel.mask,
+      sel.bounds,
+      dx,
+      dy,
+      docW,
+      docH,
+    );
+    editor.setSelection(newBounds, newMask, docW, docH);
+    useUIStore.getState().setTransform(createTransformState(newBounds));
+    editor.notifyRender();
+    return;
+  }
 
   if (sel.active && sel.mask) {
     const engine = getEngine();
