@@ -369,11 +369,15 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Pixel Stretch**: amount 1 - 200 px, bands 2 - 50, seed 0 - 999, RGB split 0 - 1.0 (shifts horizontal scan-line bands by random offsets with per-channel separation, creating glitch / VHS corruption effects)
 - **Lens Distortion**: strength -100 to +100 (negative = pincushion, positive = barrel), zoom 50 - 200%, chromatic fringing 0 - 100% (applies barrel or pincushion radial distortion with optional per-channel color separation at edges, simulating real camera lens effects)
 - **Mesh Warp**: interactive grid-based distortion overlaid directly on the canvas. Activated from the Move tool's options bar; grid handles are draggable in document space, with bilinear interpolation between points handled on the GPU. When a marquee selection is active, the warp is constrained to the selection's bounding box (pixels outside pass through unchanged); otherwise the warp covers the whole layer. Grid sizes 3×3 to 6×6 with live preview, reset, and undo support.
+<<<<<<< HEAD
 - **Liquify** (Filter menu → "Liquify…" or `⌘⇧X`): opens a floating, modal-style session that paints into a per-pixel displacement map sampled by the GPU on each frame. Apply commits the warp to a new history snapshot; Cancel discards the displacement map.
   - **Modes**: `push` (drag pixels along the cursor direction), `twirl CW` / `twirl CCW` (rotate pixels around the brush center), `bloat` (push outward), `pinch` (pull inward)
   - **Brush Size**: 4 - 500 px
   - **Pressure**: 1 - 100% (multiplier for displacement intensity)
   - Quintic radial falloff inside each dab so the warp eases off smoothly at the brush edge
+=======
+- **Polar Coordinates**: mode toggle (Rectangular→Polar or Polar→Rectangular). Rectangular→Polar treats the x-axis as angle and y-axis as radius, wrapping flat content into circular arcs. Polar→Rectangular does the inverse, converting radial patterns into horizontal strips with circular mapping from the image center. Useful for creating planet effects, circular text, and creative radial distortions.
+>>>>>>> 6f2a0c5 (feat(filter): add Polar Coordinates GPU distort filter)
 
 ### Render
 - **Clouds**: scale, seed

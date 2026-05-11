@@ -27,6 +27,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Chromatic Aberration...', action: () => showFilterDialog('chromatic-aberration') },
       { label: 'Pixel Stretch...', action: () => showFilterDialog('pixel-stretch') },
       { label: 'Lens Distortion...', action: () => showFilterDialog('lens-distortion') },
+      { label: 'Polar Coordinates...', action: () => showFilterDialog('polar-coordinates') },
       { separator: true, label: '' },
       { label: 'Bloom...', action: () => showFilterDialog('bloom') },
       { label: 'Voronoi...', action: () => showFilterDialog('voronoi') },

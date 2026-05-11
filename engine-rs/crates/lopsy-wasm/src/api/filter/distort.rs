@@ -1,10 +1,25 @@
-//! Distortion filters: mesh warp, liquify warp.
+//! Distortion filters: mesh warp, liquify warp, polar coordinates.
 
 use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
 use crate::filter_gpu;
+
+#[wasm_bindgen(js_name = "filterPolarCoordinates")]
+pub fn filter_polar_coordinates(engine: &mut Engine, layer_id: &str, mode: f32) {
+    let mode = mode.clamp(0.0, 1.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.polar_coordinates,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_mode") {
+                gl.uniform1f(Some(&loc), mode);
+            }
+        },
+    );
+}
 
 #[wasm_bindgen(js_name = "filterMeshWarp")]
 pub fn filter_mesh_warp(
