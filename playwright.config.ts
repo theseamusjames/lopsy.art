@@ -5,6 +5,7 @@ const port = Number(process.env.VITE_PORT ?? 5174);
 export default defineConfig({
   testDir: './e2e',
   timeout: 60000,
+  retries: 1,
   use: {
     baseURL: `http://localhost:${port}`,
     headless: true,

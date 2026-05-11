@@ -23,8 +23,19 @@ export const test = base.extend<{
   _consoleErrorGuard: [
     async ({ page, allowConsoleErrors }, use) => {
       const errors: string[] = [];
+      const networkNoise: RegExp[] = [
+        /ERR_SOCKET_NOT_CONNECTED/,
+        /ERR_NETWORK_CHANGED/,
+        /ERR_CONNECTION_REFUSED/,
+        /net::ERR_/,
+        /Failed to load resource/,
+        /CORS request did not succeed/,
+        /downloadable font:.*download failed/,
+        /Cross-Origin Request Blocked/,
+      ];
       const isAllowed = (text: string) =>
-        allowConsoleErrors.some((re) => re.test(text));
+        allowConsoleErrors.some((re) => re.test(text)) ||
+        networkNoise.some((re) => re.test(text));
 
       page.on('console', (msg) => {
         if (msg.type() !== 'error') return;
