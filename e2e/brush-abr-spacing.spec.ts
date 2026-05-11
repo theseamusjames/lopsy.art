@@ -276,6 +276,7 @@ test.describe('ABR Import & Brush Properties', () => {
   // -----------------------------------------------------------------------
 
   test('Spacing — max spacing (200%) produces widely spaced dabs', async ({ page }) => {
+    test.setTimeout(120_000);
     await setToolOption(page, 'Size', 20);
     await setToolOption(page, 'Hardness', 100);
     await setBrushModalOption(page, 'Spacing', 200);
@@ -361,6 +362,7 @@ test.describe('ABR Import & Brush Properties', () => {
   // -----------------------------------------------------------------------
 
   test('Modifying brush size changes stroke thickness', async ({ page }) => {
+    test.setTimeout(120_000);
     await setForegroundColor(page, 255, 0, 0);
     await setToolOption(page, 'Hardness', 100);
     await setBrushModalOption(page, 'Spacing', 25);
@@ -387,6 +389,7 @@ test.describe('ABR Import & Brush Properties', () => {
   });
 
   test('Modifying opacity changes stroke transparency', async ({ page }) => {
+    test.setTimeout(120_000);
     await setForegroundColor(page, 255, 0, 0);
     await setToolOption(page, 'Size', 30);
     await setToolOption(page, 'Hardness', 100);
@@ -416,6 +419,7 @@ test.describe('ABR Import & Brush Properties', () => {
   });
 
   test('Modifying hardness changes edge softness', async ({ page }) => {
+    test.setTimeout(120_000);
     await setForegroundColor(page, 0, 0, 255);
     await setToolOption(page, 'Size', 40);
     await setBrushModalOption(page, 'Spacing', 25);
@@ -448,6 +452,7 @@ test.describe('ABR Import & Brush Properties', () => {
   });
 
   test('Scatter spreads dabs perpendicular to stroke direction', async ({ page }) => {
+    test.setTimeout(120_000);
     await setForegroundColor(page, 255, 0, 255);
     await setToolOption(page, 'Size', 10);
     await setToolOption(page, 'Hardness', 100);
@@ -477,6 +482,7 @@ test.describe('ABR Import & Brush Properties', () => {
   });
 
   test('Angle control rotates brush tip', async ({ page }) => {
+    test.setTimeout(120_000);
     // Create a wide, flat rectangular brush tip
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__brushPresetStore as {

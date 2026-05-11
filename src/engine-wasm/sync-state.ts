@@ -27,6 +27,7 @@ export interface TrackedState {
    *  also unchanged and we can skip JSON.stringify entirely. */
   layerRefs: Map<string, Layer>;
   layerEffectiveVisible: Map<string, boolean>;
+  layerPassThroughMult: Map<string, number>;
   /** Layer ids currently known to have a mask on the engine side. Used to
    *  decide whether a removeLayerMask call is needed — previously done by
    *  substring-sniffing the cached descriptor JSON, which was fragile. */
@@ -79,6 +80,7 @@ function createTrackedState(): TrackedState {
     layerVersions: new Map(),
     layerRefs: new Map(),
     layerEffectiveVisible: new Map(),
+    layerPassThroughMult: new Map(),
     masksOnEngine: new Set(),
     pixelDataVersions: new Map(),
     sparseVersions: new Map(),

@@ -354,7 +354,23 @@ export async function closeBrushModal(page: Page): Promise<void> {
 
 export async function setBrushModalOption(page: Page, label: string, value: number): Promise<void> {
   await openBrushModal(page);
-  const input = page.locator(`[role="dialog"][aria-label="Brushes"] [aria-label="${label} value"]`);
+  const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
+  const dynamicsLabels = ['Size Jitter', 'Hardness Jitter', 'Angle Jitter', 'Opacity Jitter', 'Speed Size'];
+  const textureLabels = ['Scale'];
+  let targetTab: string;
+  if (dynamicsLabels.includes(label)) {
+    targetTab = 'Dynamics';
+  } else if (textureLabels.includes(label)) {
+    targetTab = 'Texture';
+  } else {
+    targetTab = 'Shape';
+  }
+  const tab = dialog.locator(`[role="option"]:has-text("${targetTab}")`);
+  if (!(await tab.getAttribute('aria-selected'))?.includes('true')) {
+    await tab.click();
+    await page.waitForTimeout(50);
+  }
+  const input = dialog.locator(`[aria-label="${label} value"]`);
   await input.fill(String(value));
   await input.press('Enter');
 }
@@ -378,11 +394,6 @@ export async function setBlendMode(page: Page, mode: string): Promise<void> {
 
 export async function setLayerOpacity(page: Page, layerId: string, percent: number): Promise<void> {
   await setActiveLayer(page, layerId);
-  const row = page.locator(`[data-layer-id="${layerId}"]`);
-  await row.locator('button[aria-label*="Opacity"]').click();
-  await page.waitForTimeout(100);
-  const slider = page.locator(`input[type="range"][aria-label*="opacity"]`);
-  await slider.waitFor({ state: 'visible', timeout: 3000 });
   await page.evaluate(({ lid, pct }) => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
@@ -394,7 +405,7 @@ export async function setLayerOpacity(page: Page, layerId: string, percent: numb
     s.pushHistory('Change Opacity');
     s.updateLayerOpacity(lid, pct / 100);
   }, { lid: layerId, pct: percent });
-  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
 }
 
 export async function applyFilter(
@@ -417,33 +428,58 @@ export async function applyFilter(
 }
 
 export async function setAdjustment(page: Page, label: string, value: number): Promise<void> {
-  const valuesSliders = ['Exposure', 'Contrast', 'Highlights', 'Shadows', 'Whites', 'Blacks', 'Vignette'];
-  const tab = valuesSliders.includes(label) ? 'Values' : 'Colors';
+  await page.evaluate(({ label, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { rootGroupId: string; layers: Array<{ id: string; type: string; adjustments: Array<{ id: string; type: string }> }> };
+        pushHistory: (label: string) => void;
+        addAdjustmentNode: (groupId: string, nodeType: string) => void;
+        updateAdjustmentNode: (groupId: string, nodeId: string, params: Record<string, unknown>) => void;
+      };
+    };
+    const s = store.getState();
+    const rootId = s.document.rootGroupId;
 
-  const input = page.locator(`[aria-label="${label} value"]`);
-  if (!(await input.isVisible({ timeout: 500 }).catch(() => false))) {
-    const tabLocator = page.locator(`role=tab[name="${tab}"]`);
-    if (await tabLocator.isVisible({ timeout: 500 }).catch(() => false)) {
-      await tabLocator.click();
-      await page.waitForTimeout(100);
-    } else {
-      const rootGroupId = await page.evaluate(() => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { document: { rootGroupId: string } };
-        };
-        return store.getState().document.rootGroupId;
-      });
-      await page.locator(`[data-layer-id="${rootGroupId}"] button[aria-label*="effects"]`).click();
-      await page.waitForTimeout(200);
-      const tabAfter = page.locator(`role=tab[name="${tab}"]`);
-      if (await tabAfter.isVisible({ timeout: 500 }).catch(() => false)) {
-        await tabAfter.click();
-      }
+    const typeMap: Record<string, string> = {
+      Exposure: 'exposure',
+      Contrast: 'contrast',
+      Highlights: 'highlights-shadows',
+      Shadows: 'highlights-shadows',
+      Whites: 'highlights-shadows',
+      Blacks: 'highlights-shadows',
+      Saturation: 'saturation',
+      Vibrance: 'saturation',
+      Vignette: 'vignette',
+    };
+    const propMap: Record<string, string> = {
+      Exposure: 'exposure',
+      Contrast: 'contrast',
+      Highlights: 'highlights',
+      Shadows: 'shadows',
+      Whites: 'whites',
+      Blacks: 'blacks',
+      Saturation: 'saturation',
+      Vibrance: 'vibrance',
+      Vignette: 'vignette',
+    };
+
+    const nodeType = typeMap[label] ?? 'exposure';
+    const prop = propMap[label] ?? label.toLowerCase();
+
+    const rootGroup = s.document.layers.find((l) => l.id === rootId);
+    let node = rootGroup?.adjustments?.find((n) => n.type === nodeType);
+
+    s.pushHistory(`Set ${label}`);
+    if (!node) {
+      s.addAdjustmentNode(rootId, nodeType);
+      const updated = (store.getState() as typeof s).document.layers.find((l) => l.id === rootId);
+      node = updated?.adjustments?.find((n) => n.type === nodeType);
     }
-  }
-  await input.fill(String(value));
-  await input.press('Enter');
-  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+    if (node) {
+      s.updateAdjustmentNode(rootId, node.id, { [prop]: value });
+    }
+  }, { label, value });
+  await page.waitForTimeout(100);
 }
 
 // ---------------------------------------------------------------------------

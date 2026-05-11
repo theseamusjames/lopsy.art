@@ -1,6 +1,13 @@
 import { test, expect } from './fixtures';
 import { waitForStore, createDocument, drawRect } from './helpers';
 
+async function openExportDialog(page: import('@playwright/test').Page) {
+  await page.getByRole('button', { name: 'File' }).click();
+  await page.waitForTimeout(200);
+  await page.getByRole('menuitem', { name: 'Export…' }).click();
+  await page.waitForTimeout(300);
+}
+
 test.describe('Export formats (#57)', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -15,49 +22,54 @@ test.describe('Export formats (#57)', () => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
 
-    await expect(page.getByRole('menuitem', { name: 'Export As…' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export…' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Quick Export PNG' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Export JPEG' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Export WebP' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Export BMP' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export PSD' })).toBeVisible();
 
     await page.screenshot({ path: 'test-results/screenshots/export-formats-menu.png' });
   });
 
   test('WebP export triggers download with correct filename', async ({ page }) => {
-    const downloadPromise = page.waitForEvent('download');
+    await openExportDialog(page);
 
-    await page.getByRole('button', { name: 'File' }).click();
-    await page.waitForTimeout(200);
-    await page.getByRole('menuitem', { name: 'Export WebP' }).click();
+    const dialog = page.locator('[role="dialog"][aria-label="Export"]');
+    await dialog.getByRole('button', { name: 'WebP' }).click();
+    await page.waitForTimeout(100);
+
+    const downloadPromise = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'Export' }).click();
 
     const download = await downloadPromise;
-    // Filename is <docName>.<ext>; createDocument produces 'Untitled'
-    expect(download.suggestedFilename()).toBe('Untitled.webp');
+    expect(download.suggestedFilename()).toBe('lopsy.webp');
 
-    await page.screenshot({ path: 'test-results/screenshots/export-webp-menu.png' });
+    await page.screenshot({ path: 'test-results/screenshots/export-webp-dialog.png' });
   });
 
   test('BMP export triggers download with correct filename', async ({ page }) => {
-    const downloadPromise = page.waitForEvent('download');
+    await openExportDialog(page);
 
-    await page.getByRole('button', { name: 'File' }).click();
-    await page.waitForTimeout(200);
-    await page.getByRole('menuitem', { name: 'Export BMP' }).click();
+    const dialog = page.locator('[role="dialog"][aria-label="Export"]');
+    await dialog.getByRole('button', { name: 'BMP' }).click();
+    await page.waitForTimeout(100);
+
+    const downloadPromise = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'Export' }).click();
 
     const download = await downloadPromise;
-    // Filename is <docName>.<ext>; createDocument produces 'Untitled'
-    expect(download.suggestedFilename()).toBe('Untitled.bmp');
+    expect(download.suggestedFilename()).toBe('lopsy.bmp');
 
-    await page.screenshot({ path: 'test-results/screenshots/export-bmp-menu.png' });
+    await page.screenshot({ path: 'test-results/screenshots/export-bmp-dialog.png' });
   });
 
   test('BMP export produces valid BMP data', async ({ page }) => {
-    const downloadPromise = page.waitForEvent('download');
+    await openExportDialog(page);
 
-    await page.getByRole('button', { name: 'File' }).click();
-    await page.waitForTimeout(200);
-    await page.getByRole('menuitem', { name: 'Export BMP' }).click();
+    const dialog = page.locator('[role="dialog"][aria-label="Export"]');
+    await dialog.getByRole('button', { name: 'BMP' }).click();
+    await page.waitForTimeout(100);
+
+    const downloadPromise = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'Export' }).click();
 
     const download = await downloadPromise;
     const readable = await download.createReadStream();
@@ -92,11 +104,14 @@ test.describe('Export formats (#57)', () => {
 
   test('WebP export produces valid WebP data', async ({ page, isMobile }) => {
     test.skip(isMobile, 'mobile Chrome convertToBlob may not support WebP encoding');
-    const downloadPromise = page.waitForEvent('download');
+    await openExportDialog(page);
 
-    await page.getByRole('button', { name: 'File' }).click();
-    await page.waitForTimeout(200);
-    await page.getByRole('menuitem', { name: 'Export WebP' }).click();
+    const dialog = page.locator('[role="dialog"][aria-label="Export"]');
+    await dialog.getByRole('button', { name: 'WebP' }).click();
+    await page.waitForTimeout(100);
+
+    const downloadPromise = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'Export' }).click();
 
     const download = await downloadPromise;
     const readable = await download.createReadStream();

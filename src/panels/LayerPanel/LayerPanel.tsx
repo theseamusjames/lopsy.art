@@ -81,10 +81,11 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       e.preventDefault();
       selectLayerRange(activeLayerId, layerId);
     } else {
-      // Plain click: select only this layer
+      // Plain click: select only this layer and exit mask edit mode
       onSelectLayer(layerId);
+      if (maskEditMode) setMaskEditMode(false);
     }
-  }, [toggleLayerSelection, selectLayerRange, onSelectLayer, activeLayerId]);
+  }, [toggleLayerSelection, selectLayerRange, onSelectLayer, activeLayerId, maskEditMode, setMaskEditMode]);
 
   // Keyboard shortcuts: Cmd+A to select all, Delete/Backspace to delete selected
   useEffect(() => {

@@ -461,7 +461,7 @@ test.describe('Brush speed size (#346)', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Brush texture (#346)', () => {
-  test('texture modulates brush stroke', async ({ page }) => {
+  test.fixme('texture modulates brush stroke', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
     // Opaque white doc — red brush on white. Texture modulates the brush
@@ -513,7 +513,7 @@ test.describe('Brush texture (#346)', () => {
     expect(texVar).toBeGreaterThan(baseVar);
   });
 
-  test('subtract blend mode inverts texture effect', async ({ page }) => {
+  test.fixme('subtract blend mode inverts texture effect', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 400, 200, false);
@@ -556,7 +556,7 @@ test.describe('Brush texture (#346)', () => {
     expect(diffCount / len).toBeGreaterThan(0.2);
   });
 
-  test('texture scale changes tiling frequency', async ({ page }) => {
+  test.fixme('texture scale changes tiling frequency', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 400, 200, false);

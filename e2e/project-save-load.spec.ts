@@ -355,20 +355,22 @@ test.describe('Project Save / Load Round-Trip', () => {
     const greenLayerAfter = afterRasters.find((l) => l.name === 'Green Layer');
     expect(greenLayerAfter).toBeDefined();
     if (greenLayerAfter) {
-      const greenPixel = await readLayerPixel(page, greenLayerAfter.id, 110, 110);
-      // The green rect was painted at doc coords (100,100) with r=30, g=200, b=30
-      // After reload the pixel should be close to the original (some precision loss is OK)
-      expect(greenPixel.g).toBeGreaterThan(150);
-      expect(greenPixel.a).toBeGreaterThan(200);
+      await expect(async () => {
+        const greenPixel = await readLayerPixel(page, greenLayerAfter.id, 110, 110);
+        expect(greenPixel.g).toBeGreaterThan(150);
+        expect(greenPixel.a).toBeGreaterThan(200);
+      }).toPass({ timeout: 5000 });
     }
 
     // Find the blue layer and confirm pixels in its painted region
     const blueLayerAfter = afterRasters.find((l) => l.name === 'Blue Layer');
     expect(blueLayerAfter).toBeDefined();
     if (blueLayerAfter) {
-      const bluePixel = await readLayerPixel(page, blueLayerAfter.id, 90, 90);
-      expect(bluePixel.b).toBeGreaterThan(150);
-      expect(bluePixel.a).toBeGreaterThan(200);
+      await expect(async () => {
+        const bluePixel = await readLayerPixel(page, blueLayerAfter.id, 90, 90);
+        expect(bluePixel.b).toBeGreaterThan(150);
+        expect(bluePixel.a).toBeGreaterThan(200);
+      }).toPass({ timeout: 5000 });
     }
 
     await page.waitForTimeout(200);

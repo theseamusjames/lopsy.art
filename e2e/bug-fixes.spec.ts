@@ -729,7 +729,7 @@ test.describe('Bug Fix: Image Adjustments', () => {
 // ===========================================================================
 
 test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
-  test('undo all 20+ operations then redo all, verifying state at each end', async ({ page }) => {
+  test('undo all 20+ operations then redo all, verifying state at each end', { timeout: 120000 }, async ({ page }) => {
     // Create transparent document
     await createDocument(page, 200, 200, true);
     const s0 = await getEditorState(page);

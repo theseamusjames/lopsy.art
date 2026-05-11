@@ -12,24 +12,26 @@ async function getLayerPixelAt(
   x: number,
   y: number,
 ): Promise<{ r: number; g: number; b: number; a: number }> {
-  return page.evaluate(({ x, y }) => {
+  return page.evaluate(async ({ x, y }) => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
         document: { activeLayerId: string; layers: { id: string; x: number; y: number }[] };
-        getOrCreateLayerPixelData: (id: string) => ImageData;
       };
     };
+    const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
+      (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
     const s = store.getState();
     const id = s.document.activeLayerId;
     const layer = s.document.layers.find((l) => l.id === id)!;
-    const data = s.getOrCreateLayerPixelData(id);
+    const gpu = await readFn(id);
+    if (!gpu) return { r: 0, g: 0, b: 0, a: 0 };
     const lx = x - layer.x;
     const ly = y - layer.y;
-    if (lx < 0 || ly < 0 || lx >= data.width || ly >= data.height) {
+    if (lx < 0 || ly < 0 || lx >= gpu.width || ly >= gpu.height) {
       return { r: 0, g: 0, b: 0, a: 0 };
     }
-    const i = (ly * data.width + lx) * 4;
-    return { r: data.data[i]!, g: data.data[i + 1]!, b: data.data[i + 2]!, a: data.data[i + 3]! };
+    const i = (ly * gpu.width + lx) * 4;
+    return { r: gpu.pixels[i]!, g: gpu.pixels[i + 1]!, b: gpu.pixels[i + 2]!, a: gpu.pixels[i + 3]! };
   }, { x, y });
 }
 
@@ -44,6 +46,15 @@ test.describe('filter bounds (#235)', () => {
     // than the doc-sized scratch texture.
     const cream = { r: 240, g: 230, b: 210 };
     await drawEllipse(page, 400, 300, 100, 50, cream);
+
+    // Force GPU readback so pixel data is available (Firefox needs this)
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { pushHistory: (label: string) => void };
+      };
+      store.getState().pushHistory('draw ellipse');
+    });
+    await page.waitForTimeout(500);
 
     // Sample the ellipse center BEFORE the blur to confirm content exists.
     const before = await getLayerPixelAt(page, 400, 300);

@@ -440,7 +440,9 @@ test.describe('Composition 2: Geometric Design', () => {
     // =====================================================================
     // PHASE 5: MOVE TOOL — Nudge with arrow keys
     // =====================================================================
+    await page.waitForTimeout(300);
     await page.locator(`[data-layer-id="${triLayerId}"]`).click();
+    await page.waitForTimeout(200);
 
     const posBefore = await page.evaluate((lid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -452,9 +454,9 @@ test.describe('Composition 2: Geometric Design', () => {
     }, triLayerId);
 
     await page.keyboard.press('ArrowRight');
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(200);
     await page.keyboard.press('ArrowDown');
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(200);
 
     const posAfter = await page.evaluate((lid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -464,7 +466,6 @@ test.describe('Composition 2: Geometric Design', () => {
       };
       return store.getState().document.layers.find((l) => l.id === lid);
     }, triLayerId);
-
     expect(posAfter!.x).toBeGreaterThanOrEqual(posBefore!.x);
     expect(posAfter!.y).toBeGreaterThanOrEqual(posBefore!.y);
 

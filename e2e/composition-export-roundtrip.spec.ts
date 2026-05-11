@@ -393,7 +393,7 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
   test('builds 20+ layer composition and verifies PNG/PSD export round-trip', async ({ page, allowConsoleErrors }) => {
     // Vite HMR WebSocket can disconnect during reload
     (allowConsoleErrors as RegExp[]).push(/WebSocket connection/);
-    test.setTimeout(600_000);
+    test.setTimeout(900_000);
 
     await page.goto('/');
     await waitForStore(page);

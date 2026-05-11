@@ -131,7 +131,7 @@ test.describe('Mask Sub-Row', () => {
     expect(uiAfter.maskEditMode).toBe(true);
   });
 
-  test('clicking mask thumbnail again exits mask edit mode', async ({ page }) => {
+  test('clicking layer row exits mask edit mode', async ({ page }) => {
     const state = await getEditorState(page);
     const layerId = state.document.layers[0]!.id;
 
@@ -142,8 +142,8 @@ test.describe('Mask Sub-Row', () => {
     const ui1 = await getUIState(page);
     expect(ui1.maskEditMode).toBe(true);
 
-    // Exit mask edit mode
-    await page.locator('[title="Click to edit mask"]').click();
+    // Exit mask edit mode by clicking the layer row
+    await page.locator(`[data-layer-id="${layerId}"]`).click();
     const ui2 = await getUIState(page);
     expect(ui2.maskEditMode).toBe(false);
   });

@@ -183,15 +183,15 @@ test.describe('Align layer content', () => {
     await drawRect(page, 10, 10, 20, 20, { r: 255, g: 0, b: 0 });
 
     await clickAlignButton(page, 'Align left');
+    await page.waitForTimeout(500);
 
     const pos = await getLayerPosition(page);
     // Auto-crop: layer at (10,10), 20x20. Align left: x=0, y=10.
     // ±1px tolerance: shape tool mouse events introduce rounding in screen-to-doc conversion.
     expect(Math.abs(pos.x - 0)).toBeLessThanOrEqual(1);
 
-    // Content center is at approximately doc (10, 20) after align left.
-    // Read a pixel well inside the content to verify it moved.
-    const pixel = await getPixelAt(page, 10, 20);
+    // Read a pixel at the center of the 20×20 content (local coords 10, 10).
+    const pixel = await getPixelAt(page, 10, 10);
     expect(pixel.r).toBeGreaterThan(200);
     expect(pixel.a).toBeGreaterThan(200);
   });

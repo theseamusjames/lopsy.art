@@ -162,8 +162,10 @@ test.describe('History - Multi-Step Operations', () => {
     expect((await getEditorState(page)).document.layers).toHaveLength(3);
 
     await redo(page); // redo paint top
-    const topPixel = await getPixelAt(page, 60, 60, topId);
-    expect(topPixel.g).toBe(255);
+    await expect(async () => {
+      const topPixel = await getPixelAt(page, 60, 60, topId);
+      expect(topPixel.g).toBe(255);
+    }).toPass({ timeout: 5000 });
   });
 });
 
