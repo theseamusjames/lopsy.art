@@ -335,6 +335,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 
 ### Sharpen
 - **Unsharp Mask**: radius, amount, threshold
+- **High Pass**: radius 1–100 px (Gaussian blur radius that controls the detail frequency cutoff), strength 0.1–5.0 (amplification of the extracted detail). Subtracts a Gaussian-blurred copy from the original and shifts the result to mid-gray (0.5), isolating fine detail and edges. Standard sharpening workflow: apply High Pass, then set the layer blend mode to Overlay for crisp edge enhancement without affecting flat regions.
 
 ### Color
 - **Brightness / Contrast**: -100 to +100 each

@@ -17,6 +17,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Radial Blur...', action: () => showFilterDialog('radial-blur') },
       { label: 'Tilt-Shift Blur...', action: () => beginTiltShiftSession() },
       { label: 'Unsharp Mask...', action: () => showFilterDialog('unsharp-mask') },
+      { label: 'High Pass...', action: () => showFilterDialog('high-pass') },
       { separator: true, label: '' },
       { label: 'Find Edges', action: () => applyFindEdges() },
       { label: 'Cel Shading...', action: () => showFilterDialog('cel-shading') },
