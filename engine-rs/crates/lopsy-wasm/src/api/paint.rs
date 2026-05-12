@@ -22,6 +22,11 @@ pub fn begin_stroke(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> 
     brush_gpu::begin_stroke(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen(js_name = "prewarmStroke")]
+pub fn prewarm_stroke(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
+    brush_gpu::prewarm_stroke(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "applyBrushDab")]
 pub fn apply_brush_dab(
     engine: &mut Engine, layer_id: &str,
