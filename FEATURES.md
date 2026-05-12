@@ -102,6 +102,7 @@ Shortcut: `B`. The toolbar exposes Size, Opacity, Hardness, Fade, and the symmet
 - **Strength**: 1 - 100% (per-stroke saturation push; uses a quadratic curve so 50% is gentle rather than instantly clipping)
 - **Size**: 1 px – document-scaled max (slider track caps at 300)
 - Shortcut: `Y`
+- **Shift+click**: applies the sponge along a straight line from the previous stroke endpoint
 - GPU-accelerated using the same coverage-accumulation pipeline as Dodge/Burn: dabs MAX-blend strength into a coverage texture, the live preview composites on the fly, and on stroke end a single GPU pass bakes the HSL saturation adjustment back into the layer (no per-pixel JS readback). Renders a round brush cursor sized to the tool.
 
 ---
@@ -333,7 +334,11 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - **Box Blur**: radius
 - **Motion Blur**: angle (degrees), distance (px)
 - **Radial Blur**: amount (centered)
-- **Tilt-Shift Blur**: focus position 0–100% (center of sharp band along blur axis), focus width 0–100% (width of the sharp band), blur radius 1–32 px (max blur intensity in out-of-focus regions), angle 0–360° (rotation of the focus plane). Creates selective-focus miniature photography effects by blurring areas outside a configurable focus band while leaving the focus zone sharp.
+- **Tilt-Shift Blur** (Filter menu → Tilt-Shift Blur…): focus position 0–100% (center of sharp band along blur axis), focus width 0–100% (width of the sharp band), blur radius 1–32 px (max blur intensity in out-of-focus regions), angle 0–360° (rotation of the focus plane). Creates selective-focus miniature photography effects by blurring areas outside a configurable focus band while leaving the focus zone sharp.
+  - **Interactive on-canvas session** (not a modal): activating Tilt-Shift opens a compact floating options panel (Blur Radius slider, Apply, Cancel) and overlays the focus band, the two focus-edge lines, and an angle handle directly on the canvas with a live blurred preview.
+  - **Drag the focus band's center handle** to move `focusPosition`; **drag either edge line** to widen/narrow `focusWidth`; **drag the angle handle** to rotate the focus plane.
+  - **`Cmd/Meta+drag` the angle handle**: snaps the angle to 15° increments while dragging.
+  - **`Enter`** commits the filter and pushes a single history entry; **`Escape`** cancels and restores the pre-session pixels from the GPU filter-preview backup.
 - **Surface Blur**: radius 1–50 px (document-scaled max), threshold 1–255 (max RGB color distance for neighbors to be included). Bilateral-style edge-preserving blur — smooths flat regions while keeping hard edges crisp. Implemented as a single-pass GLSL ES 3.00 shader that combines spatial and range (smoothstep) weights so neighbors whose color distance exceeds the threshold are excluded from the average.
 
 ### Sharpen
@@ -672,6 +677,12 @@ Consolidates the per-tool and per-section shortcuts above into a single lookup.
 | `⇧Enter` or `Tab` | Commit the edit |
 | `Escape` | Cancel (and remove the layer if it was newly created for this edit) |
 
+### Tilt-Shift interactive session
+| Key | Action |
+|-----|--------|
+| `Enter` | Apply the filter (commits pixels and pushes a history entry) |
+| `Escape` | Cancel the session and restore the original pixels |
+
 ### Viewport
 | Key | Action |
 |-----|--------|
@@ -694,7 +705,7 @@ Consolidates the per-tool and per-section shortcuts above into a single lookup.
 ### Modifier gestures (mouse + keyboard)
 | Gesture | Effect |
 |---------|--------|
-| `Shift+click` on brush / pencil / eraser / dodge / smudge / stamp / healing / spray | Straight line from previous stroke endpoint |
+| `Shift+click` on brush / pencil / eraser / dodge / smudge / stamp / healing / spray / sponge | Straight line from previous stroke endpoint |
 | `Alt` or `⌘+click` (Stamp, Healing) | Set the source sample point |
 | Hold cursor still mid-stroke (1.5 s) | Auto-smooth the recorded freehand path |
 | `⌘+drag` on Gradient | Snap angle to 15° increments |
@@ -705,6 +716,7 @@ Consolidates the per-tool and per-section shortcuts above into a single lookup.
 | `Alt+drag` (Move) | Duplicate the active layer with no selection; float a copy with an active selection |
 | `⌘+drag` on a Transform scale handle | Constrain to uniform aspect ratio |
 | `⌘+drag` on a Transform rotation handle | Snap rotation to 15° increments |
+| `⌘+drag` on the Tilt-Shift angle handle | Snap focus-plane angle to 15° increments |
 | `⌘ / Ctrl+click` a layer thumbnail | Load that layer's alpha as a marquee selection |
 | `⌘ / Ctrl+click` on the canvas with symmetry active | Relocate the symmetry center |
 | `⌘ / Ctrl+click` a layer row | Add / remove the row from the multi-selection |
