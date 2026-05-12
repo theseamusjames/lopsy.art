@@ -305,3 +305,102 @@
   padding: var(--space-4) 0;
   margin: 0;
 }
+
+/* ─── New effect controls ──────────────────────────────────────────────────── */
+
+.invertNote {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding: var(--space-2) 0;
+  margin: 0;
+  text-align: center;
+}
+
+.colorRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.colorLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  flex: 1;
+}
+
+.colorSwatch {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: none;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.checkboxRow input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.gradientMapSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.gradientPreview {
+  height: 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.gradientStop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.positionInput {
+  width: 46px;
+  padding: 2px 4px;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-ui);
+  text-align: right;
+}
+
+.positionUnit {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.removeStopBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.removeStopBtn:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.removeStopBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}

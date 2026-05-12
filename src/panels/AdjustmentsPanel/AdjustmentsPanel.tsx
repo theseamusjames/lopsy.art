@@ -27,6 +27,12 @@ import type {
   VignetteNode,
   CurvesNode,
   LevelsNode,
+  HueSaturationNode,
+  ColorBalanceNode,
+  PhotoFilterNode,
+  BlackWhiteNode,
+  ChannelMixerNode,
+  GradientMapNode,
 } from '../../types/adjustment-nodes';
 import {
   ADJUSTMENT_NODE_LABELS,
@@ -67,13 +73,7 @@ const ADD_MENU_TYPES: AdjustmentNodeType[] = [
   'gradient-map',
 ];
 
-const LEGACY_ONLY_TYPES = new Set<AdjustmentNodeType>([
-  'color-balance',
-  'gradient-map',
-  'black-white',
-  'photo-filter',
-  'channel-mixer',
-]);
+const LEGACY_ONLY_TYPES = new Set<AdjustmentNodeType>();
 
 function useActiveGroup(): GroupLayer | null {
   return useEditorStore((s) => {
@@ -325,8 +325,22 @@ function NodeControls({ node, onChange }: NodeControlsProps) {
       return <CurvesControls node={node} onChange={onChange} />;
     case 'levels':
       return <LevelsControls node={node} onChange={onChange} />;
+    case 'hue-saturation':
+      return <HueSaturationControls node={node} onChange={onChange} />;
+    case 'color-balance':
+      return <ColorBalanceControls node={node} onChange={onChange} />;
+    case 'photo-filter':
+      return <PhotoFilterControls node={node} onChange={onChange} />;
+    case 'black-white':
+      return <BlackWhiteControls node={node} onChange={onChange} />;
+    case 'channel-mixer':
+      return <ChannelMixerControls node={node} onChange={onChange} />;
+    case 'gradient-map':
+      return <GradientMapControls node={node} onChange={onChange} />;
+    case 'invert':
+      return <p className={styles.invertNote}>No parameters — the layer is inverted when enabled.</p>;
     default:
-      return <p className={styles.comingSoonNote}>Controls for this adjustment type are coming soon.</p>;
+      return null;
   }
 }
 
@@ -443,4 +457,177 @@ function LevelsControls({ node, onChange }: { node: LevelsNode; onChange: (p: Pa
       onReset={() => onChange({ levels: IDENTITY_LEVELS })}
     />
   );
+}
+
+function HueSaturationControls({ node, onChange }: { node: HueSaturationNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  return (
+    <div className={styles.sliders}>
+      <Slider label="Hue" value={node.hue} min={-180} max={180} step={1} defaultValue={0}
+        onChange={(v) => onChange({ hue: v })} />
+      <Slider label="Saturation" value={node.saturation} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ saturation: v })} />
+      <Slider label="Lightness" value={node.lightness} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ lightness: v })} />
+    </div>
+  );
+}
+
+function ColorBalanceControls({ node, onChange }: { node: ColorBalanceNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  const [toneRange, setToneRange] = useState<'shadows' | 'midtones' | 'highlights'>('midtones');
+  const current = node[`${toneRange}CMY` as keyof ColorBalanceNode] as [number, number, number];
+  return (
+    <div className={styles.sliders}>
+      <div className={styles.channelTabs} role="tablist" aria-label="Tone range">
+        {(['shadows', 'midtones', 'highlights'] as const).map((range) => (
+          <button key={range} type="button" role="tab"
+            aria-selected={toneRange === range}
+            className={`${styles.channelTab} ${toneRange === range ? styles.channelTabActive : ''}`}
+            onClick={() => setToneRange(range)}
+          >
+            {range.charAt(0).toUpperCase() + range.slice(1)}
+          </button>
+        ))}
+      </div>
+      <Slider label="Cyan — Red" value={current[0]} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ [`${toneRange}CMY`]: [v, current[1], current[2]] })} />
+      <Slider label="Magenta — Green" value={current[1]} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ [`${toneRange}CMY`]: [current[0], v, current[2]] })} />
+      <Slider label="Yellow — Blue" value={current[2]} min={-100} max={100} step={1} defaultValue={0}
+        onChange={(v) => onChange({ [`${toneRange}CMY`]: [current[0], current[1], v] })} />
+    </div>
+  );
+}
+
+function PhotoFilterControls({ node, onChange }: { node: PhotoFilterNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  const toHex = (c: { r: number; g: number; b: number }) =>
+    '#' + [c.r, c.g, c.b].map((v) => v.toString(16).padStart(2, '0')).join('');
+  const fromHex = (hex: string): { r: number; g: number; b: number } => ({
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16),
+  });
+  return (
+    <div className={styles.sliders}>
+      <div className={styles.colorRow}>
+        <label className={styles.colorLabel}>Filter color</label>
+        <input
+          type="color"
+          className={styles.colorSwatch}
+          value={toHex(node.color)}
+          onChange={(e) => onChange({ color: fromHex(e.target.value) })}
+          aria-label="Filter color"
+        />
+      </div>
+      <Slider label="Density" value={node.density} min={0} max={100} step={1} defaultValue={25}
+        onChange={(v) => onChange({ density: v })} />
+      <label className={styles.checkboxRow}>
+        <input type="checkbox" checked={node.preserveLuminosity}
+          onChange={(e) => onChange({ preserveLuminosity: e.target.checked })} />
+        <span>Preserve Luminosity</span>
+      </label>
+    </div>
+  );
+}
+
+function BlackWhiteControls({ node, onChange }: { node: BlackWhiteNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  return (
+    <div className={styles.sliders}>
+      <Slider label="Reds" value={node.reds} min={-200} max={300} step={1} defaultValue={40}
+        onChange={(v) => onChange({ reds: v })} />
+      <Slider label="Yellows" value={node.yellows} min={-200} max={300} step={1} defaultValue={60}
+        onChange={(v) => onChange({ yellows: v })} />
+      <Slider label="Greens" value={node.greens} min={-200} max={300} step={1} defaultValue={40}
+        onChange={(v) => onChange({ greens: v })} />
+      <Slider label="Cyans" value={node.cyans} min={-200} max={300} step={1} defaultValue={60}
+        onChange={(v) => onChange({ cyans: v })} />
+      <Slider label="Blues" value={node.blues} min={-200} max={300} step={1} defaultValue={20}
+        onChange={(v) => onChange({ blues: v })} />
+      <Slider label="Magentas" value={node.magentas} min={-200} max={300} step={1} defaultValue={80}
+        onChange={(v) => onChange({ magentas: v })} />
+    </div>
+  );
+}
+
+function ChannelMixerControls({ node, onChange }: { node: ChannelMixerNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  return (
+    <div className={styles.sliders}>
+      <div className={styles.channelTabs} role="tablist" aria-label="Output channel">
+        {(['red', 'green', 'blue'] as const).map((ch) => (
+          <button key={ch} type="button" role="tab"
+            aria-selected={node.outputChannel === ch}
+            className={`${styles.channelTab} ${node.outputChannel === ch ? styles.channelTabActive : ''}`}
+            style={{ color: ch === 'red' ? '#ff5e5e' : ch === 'green' ? '#5eff7e' : '#5e9eff' }}
+            onClick={() => onChange({ outputChannel: ch })}
+          >
+            {ch.charAt(0).toUpperCase()}
+          </button>
+        ))}
+      </div>
+      <Slider label="Red" value={node.red} min={-200} max={200} step={1} defaultValue={node.outputChannel === 'red' ? 100 : 0}
+        onChange={(v) => onChange({ red: v })} />
+      <Slider label="Green" value={node.green} min={-200} max={200} step={1} defaultValue={node.outputChannel === 'green' ? 100 : 0}
+        onChange={(v) => onChange({ green: v })} />
+      <Slider label="Blue" value={node.blue} min={-200} max={200} step={1} defaultValue={node.outputChannel === 'blue' ? 100 : 0}
+        onChange={(v) => onChange({ blue: v })} />
+      <Slider label="Constant" value={node.constant} min={-200} max={200} step={1} defaultValue={0}
+        onChange={(v) => onChange({ constant: v })} />
+    </div>
+  );
+}
+
+function GradientMapControls({ node, onChange }: { node: GradientMapNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
+  const toHex = (c: { r: number; g: number; b: number }) =>
+    '#' + [c.r, c.g, c.b].map((v) => v.toString(16).padStart(2, '0')).join('');
+  const fromHex = (hex: string): { r: number; g: number; b: number } => ({
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16),
+  });
+
+  const updateStop = (index: number, field: 'color' | 'position', value: unknown) => {
+    const newStops = node.stops.map((s, i) =>
+      i === index ? { ...s, [field]: value } : s,
+    );
+    onChange({ stops: newStops });
+  };
+
+  const addStop = () => {
+    const sorted = [...node.stops].sort((a, b) => a.position - b.position);
+    const last = sorted[sorted.length - 1]!;
+    onChange({ stops: [...node.stops, { position: Math.min(1, last.position + 0.1), color: { r: 128, g: 128, b: 128 } }] });
+  };
+
+  const removeStop = (index: number) => {
+    if (node.stops.length <= 2) return;
+    onChange({ stops: node.stops.filter((_, i) => i !== index) });
+  };
+
+  return (
+    <div className={styles.gradientMapSection}>
+      <div className={styles.gradientPreview} style={{ background: buildCssGradient(node.stops) }} />
+      {node.stops.map((stop, i) => (
+        <div key={i} className={styles.gradientStop}>
+          <input type="color" className={styles.colorSwatch} value={toHex(stop.color)}
+            onChange={(e) => updateStop(i, 'color', fromHex(e.target.value))}
+            aria-label={`Stop ${i + 1} color`}
+          />
+          <input type="number" className={styles.positionInput}
+            value={Math.round(stop.position * 100)} min={0} max={100} step={1}
+            onChange={(e) => updateStop(i, 'position', Number(e.target.value) / 100)}
+            aria-label={`Stop ${i + 1} position`}
+          />
+          <span className={styles.positionUnit}>%</span>
+          <button type="button" className={styles.removeStopBtn} onClick={() => removeStop(i)}
+            disabled={node.stops.length <= 2} aria-label={`Remove stop ${i + 1}`}>×</button>
+        </div>
+      ))}
+      <button type="button" className={styles.textBtn} onClick={addStop}>+ Add Stop</button>
+    </div>
+  );
+}
+
+function buildCssGradient(stops: ReadonlyArray<{ position: number; color: { r: number; g: number; b: number } }>): string {
+  const sorted = [...stops].sort((a, b) => a.position - b.position);
+  const parts = sorted.map((s) => `rgb(${s.color.r},${s.color.g},${s.color.b}) ${Math.round(s.position * 100)}%`);
+  return `linear-gradient(to right, ${parts.join(', ')})`;
 }
