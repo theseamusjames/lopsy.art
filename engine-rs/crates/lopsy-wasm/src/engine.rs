@@ -57,6 +57,36 @@ pub struct ImageAdjustmentState {
     pub levels_b: [f32; 5],
     pub levels_texture: Option<TextureHandle>,
     pub has_levels: bool,
+    // Hue/Saturation
+    pub hue_shift: f32,
+    pub hsl_saturation: f32,
+    pub lightness: f32,
+    // Color Balance (CMY→RGB shifts per tonal range, -100..100)
+    pub cb_shadows: [f32; 3],
+    pub cb_midtones: [f32; 3],
+    pub cb_highlights: [f32; 3],
+    // Photo Filter
+    pub pf_color: [f32; 3],
+    pub pf_density: f32,
+    pub pf_preserve_luminosity: bool,
+    // Black & White
+    pub bw_reds: f32,
+    pub bw_yellows: f32,
+    pub bw_greens: f32,
+    pub bw_cyans: f32,
+    pub bw_blues: f32,
+    pub bw_magentas: f32,
+    pub bw_enabled: bool,
+    // Channel Mixer (row per output channel: [from_r, from_g, from_b, constant])
+    pub cm_r: [f32; 4],
+    pub cm_g: [f32; 4],
+    pub cm_b: [f32; 4],
+    pub cm_enabled: bool,
+    // Invert
+    pub invert: bool,
+    // Gradient Map
+    pub gradient_map_texture: Option<TextureHandle>,
+    pub has_gradient_map: bool,
 }
 
 impl Default for ImageAdjustmentState {
@@ -79,6 +109,29 @@ impl Default for ImageAdjustmentState {
             levels_b: [0.0, 1.0, 1.0, 0.0, 1.0],
             levels_texture: None,
             has_levels: false,
+            hue_shift: 0.0,
+            hsl_saturation: 0.0,
+            lightness: 0.0,
+            cb_shadows: [0.0; 3],
+            cb_midtones: [0.0; 3],
+            cb_highlights: [0.0; 3],
+            pf_color: [1.0; 3],
+            pf_density: 0.0,
+            pf_preserve_luminosity: true,
+            bw_reds: 40.0,
+            bw_yellows: 60.0,
+            bw_greens: 40.0,
+            bw_cyans: 60.0,
+            bw_blues: 20.0,
+            bw_magentas: 80.0,
+            bw_enabled: false,
+            cm_r: [1.0, 0.0, 0.0, 0.0],
+            cm_g: [0.0, 1.0, 0.0, 0.0],
+            cm_b: [0.0, 0.0, 1.0, 0.0],
+            cm_enabled: false,
+            invert: false,
+            gradient_map_texture: None,
+            has_gradient_map: false,
         }
     }
 }
@@ -596,6 +649,22 @@ impl EngineInner {
             self.texture_pool.release(tex);
         }
         self.adjustments.has_curves = false;
+        self.adjustments.hue_shift = 0.0;
+        self.adjustments.hsl_saturation = 0.0;
+        self.adjustments.lightness = 0.0;
+        self.adjustments.cb_shadows = [0.0; 3];
+        self.adjustments.cb_midtones = [0.0; 3];
+        self.adjustments.cb_highlights = [0.0; 3];
+        self.adjustments.pf_color = [1.0; 3];
+        self.adjustments.pf_density = 0.0;
+        self.adjustments.pf_preserve_luminosity = true;
+        self.adjustments.bw_enabled = false;
+        self.adjustments.cm_enabled = false;
+        self.adjustments.invert = false;
+        if let Some(tex) = self.adjustments.gradient_map_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        self.adjustments.has_gradient_map = false;
         self.needs_recomposite = true;
         // Clear text renderer layer state so stale text layouts don't persist
         // across document switches.
