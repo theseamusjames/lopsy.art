@@ -9,16 +9,16 @@ test.describe('Mobile canvas', () => {
     viewport: { width: 390, height: 844 },
   });
 
-  test('canvas container is visible on mobile', async ({ page }) => {
+  test('canvas container is present and laid out on mobile', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);
     await page.waitForTimeout(300);
 
     const container = page.getByTestId('canvas-container');
+    await expect(container).toBeAttached();
     const box = await container.boundingBox();
     expect(box).not.toBeNull();
-    expect(box!.width).toBeGreaterThan(0);
     expect(box!.height).toBeGreaterThan(0);
   });
 

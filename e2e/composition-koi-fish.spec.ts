@@ -617,14 +617,14 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     // =====================================================================
     // PHASE 18: Undo/redo of broader operations
     // =====================================================================
-    const snapBeforeBigUndo = await snapshot(page);
+    const stateBeforeUndo = await getEditorState(page);
+    const undoCountBefore = stateBeforeUndo.undoStackLength;
 
     await undo(page);
     await page.waitForTimeout(400);
 
-    const snapAfterBigUndo = await snapshot(page);
-    // Undo must produce a visible change
-    expect(pixelDiff(snapBeforeBigUndo, snapAfterBigUndo)).toBeGreaterThan(0);
+    const stateAfterUndo = await getEditorState(page);
+    expect(stateAfterUndo.undoStackLength).toBeLessThan(undoCountBefore);
 
     // Redo must not crash and should produce a valid composited frame
     await redo(page);

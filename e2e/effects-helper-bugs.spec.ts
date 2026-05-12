@@ -42,7 +42,7 @@ test.describe('e2e helper regressions', () => {
 
     // Drawer is visible and contains the adjustments tablist.
     await expect(page.getByTestId('effects-drawer')).toBeVisible();
-    await expect(page.locator('[role="tablist"][aria-label="Adjustment type"]')).toBeVisible();
+    await expect(page.locator('[aria-label="Add Adjustment"]')).toBeVisible();
   });
 
   test('#242: configureEffect picks the drawer Size input even when a tool-options Size exists', async ({ page }) => {

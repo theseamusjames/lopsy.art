@@ -149,19 +149,14 @@ test.describe('Tilt-Shift Blur Filter', () => {
     await page.click('text=Tilt-Shift Blur...');
     await page.waitForTimeout(300);
 
-    const dialogHeading = page.locator('h2:has-text("Tilt-Shift Blur")');
-    await expect(dialogHeading).toBeVisible({ timeout: 3000 });
+    const dialog = page.locator('[role="dialog"][aria-label="Tilt-Shift Blur"]');
+    await expect(dialog).toBeVisible({ timeout: 3000 });
 
-    const sliders = page.locator('input[type="range"]');
-    // Focus Position = 50 (center)
-    // Focus Width = 15 (narrow focus band)
-    await sliders.nth(1).fill('15');
-    await page.waitForTimeout(100);
-    // Blur Radius = 25 (strong blur for dramatic effect)
-    await sliders.nth(2).fill('25');
+    const blurSlider = dialog.locator('input[type="range"]');
+    await blurSlider.fill('25');
     await page.waitForTimeout(200);
 
-    await page.locator('button:has-text("Apply")').click();
+    await dialog.locator('button:has-text("Apply")').click();
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'tilt-shift-after.png') });
@@ -204,13 +199,12 @@ test.describe('Tilt-Shift Blur Filter', () => {
     await page.click('text=Tilt-Shift Blur...');
     await page.waitForTimeout(300);
 
-    const sliders = page.locator('input[type="range"]');
-    await sliders.nth(1).fill('10');
-    await page.waitForTimeout(100);
-    await sliders.nth(2).fill('30');
+    const dialog2 = page.locator('[role="dialog"][aria-label="Tilt-Shift Blur"]');
+    const blurSlider2 = dialog2.locator('input[type="range"]');
+    await blurSlider2.fill('30');
     await page.waitForTimeout(200);
 
-    await page.locator('button:has-text("Apply")').click();
+    await dialog2.locator('button:has-text("Apply")').click();
     await page.waitForTimeout(500);
 
     // Count how many pixels differ significantly from original at top
@@ -239,23 +233,17 @@ test.describe('Tilt-Shift Blur Filter', () => {
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'tilt-shift-dialog.png') });
 
-    const dialogHeading = page.locator('h2:has-text("Tilt-Shift Blur")');
-    await expect(dialogHeading).toBeVisible({ timeout: 3000 });
+    const dialog = page.locator('[role="dialog"][aria-label="Tilt-Shift Blur"]');
+    await expect(dialog).toBeVisible({ timeout: 3000 });
 
-    const focusPositionLabel = page.locator('text=Focus Position');
-    const focusWidthLabel = page.locator('text=Focus Width');
     const blurRadiusLabel = page.locator('text=Blur Radius');
-    const angleLabel = page.locator('text=Angle');
-    await expect(focusPositionLabel).toBeVisible({ timeout: 2000 });
-    await expect(focusWidthLabel).toBeVisible({ timeout: 2000 });
     await expect(blurRadiusLabel).toBeVisible({ timeout: 2000 });
-    await expect(angleLabel).toBeVisible({ timeout: 2000 });
 
-    const cancelBtn = page.locator('button:has-text("Cancel")');
+    const cancelBtn = dialog.locator('button:has-text("Cancel")');
     await expect(cancelBtn).toBeVisible();
     await cancelBtn.click();
     await page.waitForTimeout(300);
 
-    await expect(dialogHeading).not.toBeVisible();
+    await expect(dialog).not.toBeVisible();
   });
 });

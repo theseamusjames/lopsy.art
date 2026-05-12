@@ -288,7 +288,7 @@ export async function redo(page: Page): Promise<void> {
 const TOOL_SHORTCUTS: Record<string, string> = {
   move: 'v', brush: 'b', pencil: 'n', eraser: 'e', fill: 'g',
   eyedropper: 'i', stamp: 's', dodge: 'o', sponge: 'y', smudge: 'r', spray: 'j',
-  'marquee-rect': 'm', lasso: 'l', wand: 'w', 'quick-select': 'q',
+  'marquee-rect': 'm', lasso: 'l', wand: 'w',
   shape: 'u', text: 't', crop: 'c', path: 'p',
 };
 
@@ -361,7 +361,16 @@ export async function closeBrushModal(page: Page): Promise<void> {
 
 export async function setBrushModalOption(page: Page, label: string, value: number): Promise<void> {
   await openBrushModal(page);
-  const input = page.locator(`[role="dialog"][aria-label="Brushes"] [aria-label="${label} value"]`);
+  const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
+  const dynamicsLabels = ['Size Jitter', 'Hardness Jitter', 'Angle Jitter', 'Opacity Jitter', 'Speed Size'];
+  const textureLabels = ['Scale'];
+  const tab = dynamicsLabels.includes(label) ? 'Dynamics' : textureLabels.includes(label) ? 'Texture' : 'Shape';
+  const tabOption = dialog.locator(`[role="option"]:has-text("${tab}")`);
+  if (await tabOption.getAttribute('aria-selected') !== 'true') {
+    await tabOption.click();
+    await page.waitForTimeout(50);
+  }
+  const input = dialog.locator(`[aria-label="${label} value"]`);
   await input.fill(String(value));
   await input.press('Enter');
 }
@@ -424,33 +433,53 @@ export async function applyFilter(
 }
 
 export async function setAdjustment(page: Page, label: string, value: number): Promise<void> {
-  const valuesSliders = ['Exposure', 'Contrast', 'Highlights', 'Shadows', 'Whites', 'Blacks', 'Vignette'];
-  const tab = valuesSliders.includes(label) ? 'Values' : 'Colors';
+  const nodeTypeMap: Record<string, string> = {
+    'Exposure': 'exposure',
+    'Contrast': 'contrast',
+    'Highlights': 'highlights-shadows',
+    'Shadows': 'highlights-shadows',
+    'Whites': 'highlights-shadows',
+    'Blacks': 'highlights-shadows',
+    'Saturation': 'saturation',
+    'Vibrance': 'saturation',
+    'Vignette': 'vignette',
+  };
+  const nodeType = nodeTypeMap[label] ?? label.toLowerCase();
 
   const input = page.locator(`[aria-label="${label} value"]`);
-  if (!(await input.isVisible({ timeout: 500 }).catch(() => false))) {
-    const tabLocator = page.locator(`role=tab[name="${tab}"]`);
-    if (await tabLocator.isVisible({ timeout: 500 }).catch(() => false)) {
-      await tabLocator.click();
-      await page.waitForTimeout(100);
-    } else {
-      const rootGroupId = await page.evaluate(() => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { document: { rootGroupId: string } };
-        };
-        return store.getState().document.rootGroupId;
-      });
-      await page.locator(`[data-layer-id="${rootGroupId}"] button[aria-label*="effects"]`).click();
-      await page.waitForTimeout(200);
-      const tabAfter = page.locator(`role=tab[name="${tab}"]`);
-      if (await tabAfter.isVisible({ timeout: 500 }).catch(() => false)) {
-        await tabAfter.click();
-      }
-    }
+  if (await input.isVisible({ timeout: 500 }).catch(() => false)) {
+    await input.fill(String(value));
+    await input.press('Enter');
+    await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+    return;
   }
-  await input.fill(String(value));
-  await input.press('Enter');
-  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+
+  await page.evaluate(({ type, prop, val }) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { rootGroupId: string; layers: Array<{ id: string; type: string; adjustments: Array<{ id: string; type: string }> }> };
+        addAdjustmentNode: (groupId: string, type: string) => void;
+        updateAdjustmentNode: (groupId: string, nodeId: string, params: Record<string, unknown>) => void;
+        setGroupAdjustmentsEnabled: (groupId: string, enabled: boolean) => void;
+      };
+    };
+    const state = store.getState();
+    const rootId = state.document.rootGroupId;
+    const rootGroup = state.document.layers.find((l) => l.id === rootId);
+    if (!rootGroup) return;
+
+    let node = rootGroup.adjustments?.find((n) => n.type === type);
+    if (!node) {
+      state.addAdjustmentNode(rootId, type);
+      const updated = store.getState().document.layers.find((l) => l.id === rootId);
+      node = (updated as typeof rootGroup)?.adjustments?.find((n) => n.type === type);
+    }
+    if (node) {
+      state.updateAdjustmentNode(rootId, node.id, { [prop]: val });
+    }
+    state.setGroupAdjustmentsEnabled(rootId, true);
+  }, { type: nodeType, prop: label.toLowerCase(), val: value });
+  await page.waitForTimeout(100);
 }
 
 // ---------------------------------------------------------------------------
