@@ -92,14 +92,55 @@ export function nodesToLegacyAdjustments(nodes: readonly AdjustmentNode[]): Imag
       case 'levels':
         result.levels = node.levels;
         break;
-      // New types not yet bridged to the engine — silently ignored for now.
-      case 'color-balance':
-      case 'gradient-map':
-      case 'black-white':
-      case 'photo-filter':
-      case 'channel-mixer':
-      case 'invert':
       case 'hue-saturation':
+        result.hueSatHue = (result.hueSatHue ?? 0) + node.hue;
+        result.hueSatSaturation = (result.hueSatSaturation ?? 0) + node.saturation;
+        result.hueSatLightness = (result.hueSatLightness ?? 0) + node.lightness;
+        break;
+      case 'color-balance': {
+        const s = result.colorBalanceShadows ?? [0, 0, 0];
+        const m = result.colorBalanceMidtones ?? [0, 0, 0];
+        const h = result.colorBalanceHighlights ?? [0, 0, 0];
+        result.colorBalanceShadows    = [s[0] + node.shadowsCMY[0],    s[1] + node.shadowsCMY[1],    s[2] + node.shadowsCMY[2]];
+        result.colorBalanceMidtones   = [m[0] + node.midtonesCMY[0],   m[1] + node.midtonesCMY[1],   m[2] + node.midtonesCMY[2]];
+        result.colorBalanceHighlights = [h[0] + node.highlightsCMY[0], h[1] + node.highlightsCMY[1], h[2] + node.highlightsCMY[2]];
+        break;
+      }
+      case 'photo-filter':
+        result.photoFilterColor = node.color;
+        result.photoFilterDensity = node.density / 100;
+        result.photoFilterPreserveLuminosity = node.preserveLuminosity;
+        break;
+      case 'black-white':
+        result.bwEnabled  = true;
+        result.bwReds     = node.reds;
+        result.bwYellows  = node.yellows;
+        result.bwGreens   = node.greens;
+        result.bwCyans    = node.cyans;
+        result.bwBlues    = node.blues;
+        result.bwMagentas = node.magentas;
+        break;
+      case 'channel-mixer': {
+        result.channelMixerEnabled = true;
+        const identity: [number, number, number, number] = [100, 0, 0, 0];
+        const prev = {
+          r: result.channelMixerR ?? identity,
+          g: result.channelMixerG ?? [0, 100, 0, 0] as [number, number, number, number],
+          b: result.channelMixerB ?? [0, 0, 100, 0] as [number, number, number, number],
+        };
+        if (node.outputChannel === 'red')   result.channelMixerR = [node.red, node.green, node.blue, node.constant];
+        if (node.outputChannel === 'green') result.channelMixerG = [node.red, node.green, node.blue, node.constant];
+        if (node.outputChannel === 'blue')  result.channelMixerB = [node.red, node.green, node.blue, node.constant];
+        if (!result.channelMixerR) result.channelMixerR = prev.r;
+        if (!result.channelMixerG) result.channelMixerG = prev.g;
+        if (!result.channelMixerB) result.channelMixerB = prev.b;
+        break;
+      }
+      case 'invert':
+        result.invert = !result.invert;
+        break;
+      case 'gradient-map':
+        result.gradientMapStops = node.stops;
         break;
     }
   }
