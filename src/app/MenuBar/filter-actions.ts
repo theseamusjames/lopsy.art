@@ -45,7 +45,8 @@ export type FilterDialogId =
   | 'pattern-fill'
   | 'emboss'
   | 'voronoi'
-  | 'fibers';
+  | 'fibers'
+  | 'duotone';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;

@@ -1,5 +1,5 @@
 //! Stylize filters: pixelate, halftone, kaleidoscope, oil paint, chromatic
-//! aberration, pixel stretch, find edges, cel shading, bloom.
+//! aberration, pixel stretch, find edges, cel shading, bloom, duotone.
 
 use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
@@ -384,6 +384,43 @@ pub fn filter_voronoi(
             }
             if let Some(loc) = shader.location(gl, "u_seed") {
                 gl.uniform1f(Some(&loc), seed);
+            }
+        },
+    );
+}
+
+#[wasm_bindgen(js_name = "filterDuotone")]
+pub fn filter_duotone(
+    engine: &mut Engine,
+    layer_id: &str,
+    shadow_r: f32,
+    shadow_g: f32,
+    shadow_b: f32,
+    highlight_r: f32,
+    highlight_g: f32,
+    highlight_b: f32,
+    contrast: f32,
+) {
+    let shadow_r = (shadow_r / 255.0).clamp(0.0, 1.0);
+    let shadow_g = (shadow_g / 255.0).clamp(0.0, 1.0);
+    let shadow_b = (shadow_b / 255.0).clamp(0.0, 1.0);
+    let highlight_r = (highlight_r / 255.0).clamp(0.0, 1.0);
+    let highlight_g = (highlight_g / 255.0).clamp(0.0, 1.0);
+    let highlight_b = (highlight_b / 255.0).clamp(0.0, 1.0);
+    let contrast = contrast.clamp(0.5, 3.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.duotone,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_shadowColor") {
+                gl.uniform3f(Some(&loc), shadow_r, shadow_g, shadow_b);
+            }
+            if let Some(loc) = shader.location(gl, "u_highlightColor") {
+                gl.uniform3f(Some(&loc), highlight_r, highlight_g, highlight_b);
+            }
+            if let Some(loc) = shader.location(gl, "u_contrast") {
+                gl.uniform1f(Some(&loc), contrast);
             }
         },
     );

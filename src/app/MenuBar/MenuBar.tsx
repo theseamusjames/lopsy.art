@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilterDialog } from '../../components/FilterDialog/FilterDialog';
 import { NoiseDialog, FillNoiseDialog } from '../../components/FilterDialog/NoiseDialog';
 import { PatternFillDialog } from '../../components/PatternFillDialog/PatternFillDialog';
+import { DuotoneDialog } from '../../components/DuotoneDialog/DuotoneDialog';
 import { ExportDialog } from '../../components/ExportDialog/ExportDialog';
 import {
   type FilterDialogId,
@@ -146,6 +147,33 @@ export function MenuBar() {
     setActiveDialog(null);
   }, []);
 
+  const handleDuotoneApply = useCallback((values: Record<string, number>) => {
+    if (previewActiveRef.current) {
+      applyGenericFilterWithPreview('duotone', values);
+      previewActiveRef.current = false;
+    } else {
+      applyGenericFilter('duotone', values);
+    }
+    setActiveDialog(null);
+  }, []);
+
+  const handleDuotonePreviewStart = useCallback(() => {
+    previewActiveRef.current = true;
+    beginFilterPreview();
+  }, []);
+
+  const handleDuotonePreviewStop = useCallback(() => {
+    if (previewActiveRef.current) {
+      cancelFilterPreviewSession();
+      previewActiveRef.current = false;
+    }
+  }, []);
+
+  const handleDuotonePreviewChange = useCallback((values: Record<string, number>) => {
+    if (!previewActiveRef.current) return;
+    previewGenericFilter('duotone', values);
+  }, []);
+
   useEffect(() => {
     if (openMenu === null) return;
     const handleClick = (e: MouseEvent) => {
@@ -220,7 +248,7 @@ export function MenuBar() {
     setSelectDialog(null);
   }, [selectDialog]);
 
-  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill'
+  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill' && activeDialog !== 'duotone'
     ? getFilterDialogConfig(activeDialog)
     : null;
 
@@ -293,6 +321,15 @@ export function MenuBar() {
           title="Fill with Noise"
           onApply={handleFillNoiseApply}
           onCancel={handleDialogCancel}
+        />
+      )}
+      {activeDialog === 'duotone' && (
+        <DuotoneDialog
+          onApply={handleDuotoneApply}
+          onCancel={handleDialogCancel}
+          onPreviewStart={handleDuotonePreviewStart}
+          onPreviewStop={handleDuotonePreviewStop}
+          onPreviewChange={handleDuotonePreviewChange}
         />
       )}
       {activeDialog === 'pattern-fill' && (
