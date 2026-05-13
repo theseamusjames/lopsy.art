@@ -206,7 +206,7 @@ function renderFrameGpu(
   syncAdjustments(engine, adjustments, adjustmentsEnabled);
   syncGroupAdjustments(engine, layers);
   syncMaskEditMode(engine, uiState.maskEditMode, doc.activeLayerId);
-  syncBrushTip(engine, toolState.activeBrushTip, -toolState.brushAngle * Math.PI / 180);
+  syncBrushTip(engine, toolState.activeBrushTip, -toolState.brushAngle * Math.PI / 180, toolState.brushHardness);
   syncBrushTexture(engine, toolState.brushTextureData, toolState.brushTextureScale, toolState.brushTextureBlendMode);
 
   renderEngine(engine);

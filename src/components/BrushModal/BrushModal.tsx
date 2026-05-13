@@ -14,13 +14,14 @@ import { BrushStrokePreview } from './BrushStrokePreview';
 import { BrushExportModal } from './BrushExportModal';
 import styles from './BrushModal.module.css';
 
-type TabKey = 'shape' | 'dynamics' | 'texture' | 'presets';
+type TabKey = 'shape' | 'dynamics' | 'texture' | 'presets' | 'sub-brushes';
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'presets', label: 'Presets' },
   { key: 'shape', label: 'Shape' },
   { key: 'dynamics', label: 'Dynamics' },
   { key: 'texture', label: 'Texture' },
+  { key: 'sub-brushes', label: 'Sub-Brushes' },
 ];
 
 let nextTextureId = 1;
@@ -103,6 +104,11 @@ export function BrushModal() {
   const setTextureScale = useToolSettingsStore((s) => s.setBrushTextureScale);
   const addBrushTexture = useToolSettingsStore((s) => s.addBrushTexture);
   const removeBrushTexture = useToolSettingsStore((s) => s.removeBrushTexture);
+
+  const activeSubBrushes = useToolSettingsStore((s) => s.activeSubBrushes);
+  const addSubBrush = useToolSettingsStore((s) => s.addSubBrush);
+  const removeSubBrush = useToolSettingsStore((s) => s.removeSubBrush);
+  const updateSubBrush = useToolSettingsStore((s) => s.updateSubBrush);
 
   const activePreset = presets.find((p) => p.id === activePresetId);
   const isActiveCustom = activePreset?.isCustom ?? false;
@@ -242,7 +248,7 @@ export function BrushModal() {
       case 'presets':
         return (
           <>
-            <div className={styles.galleryStage}>
+            <div className={styles.galleryFull}>
               <div className={styles.galleryGrid}>
                 {presets.map((preset) => (
                   <button
@@ -272,7 +278,7 @@ export function BrushModal() {
                 {presets.map((preset) => (
                   <button
                     key={preset.id}
-                    className={`${styles.presetItem}${activeBrushTip === preset.tip ? ` ${styles.presetItemActive}` : ''}`}
+                    className={`${styles.presetItem}${(preset.tip !== null && activeBrushTip === preset.tip) || (preset.tip === null && activeBrushTip === null && preset.id === activePresetId) ? ` ${styles.presetItemActive}` : ''}`}
                     onClick={() => setTipFromPreset(preset.id)}
                     aria-label={`Brush shape: ${preset.name}`}
                     title={preset.name}
@@ -286,7 +292,6 @@ export function BrushModal() {
               <Slider label="Size" value={brushSize} min={1} max={sizeMax} onChange={setBrushSize} />
               <Slider label="Spacing" value={brushSpacing} min={1} max={200} onChange={setBrushSpacing} />
               <Slider label="Hardness" value={brushHardness} min={0} max={100} onChange={setBrushHardness} />
-              <Slider label="Scatter" value={brushScatter} min={0} max={100} onChange={setBrushScatter} />
               <Slider label="Opacity" value={brushOpacity} min={1} max={100} onChange={setBrushOpacity} />
               <Slider label="Taper" value={brushTaper} min={0} max={taperMax} onChange={setBrushTaper} suffix="px" />
             </div>
@@ -305,6 +310,7 @@ export function BrushModal() {
       case 'dynamics':
         return (
           <div className={styles.sliderSection}>
+            <Slider label="Scatter" value={brushScatter} min={0} max={100} onChange={setBrushScatter} />
             <Slider label="Size Jitter" value={sizeJitter} min={0} max={100} onChange={setSizeJitter} />
             <Slider label="Hardness Jitter" value={hardnessJitter} min={0} max={100} onChange={setHardnessJitter} />
             <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
@@ -395,6 +401,56 @@ export function BrushModal() {
                 <Slider label="Scale" value={textureScale} min={10} max={300} onChange={setTextureScale} />
               </>
             )}
+          </div>
+        );
+      case 'sub-brushes':
+        return (
+          <div className={styles.sliderSection}>
+            {activeSubBrushes.map((sub, idx) => (
+              <div key={idx} className={styles.textureSection}>
+                <div className={styles.textureRow}>
+                  <span className={styles.speedToggleLabel}>Sub-Brush {idx + 1}</span>
+                  <button className={styles.smallButton} onClick={() => removeSubBrush(idx)}>Remove</button>
+                </div>
+                <div className={styles.galleryStage}>
+                  <div className={styles.galleryGrid}>
+                    {presets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        className={`${styles.presetItem}${sub.tip !== null && sub.tip === preset.tip ? ` ${styles.presetItemActive}` : ''}`}
+                        onClick={() => updateSubBrush(idx, { tip: preset.tip })}
+                        aria-label={`Sub-brush tip: ${preset.name}`}
+                        title={preset.name}
+                      >
+                        <BrushThumbnail preset={preset} size={28} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Slider label="Size Ratio" value={Math.round(sub.sizeRatio * 100)} min={10} max={200} onChange={(v) => updateSubBrush(idx, { sizeRatio: v / 100 })} />
+                <Slider label="Hardness" value={sub.hardness} min={0} max={100} onChange={(v) => updateSubBrush(idx, { hardness: v })} />
+                <Slider label="Opacity Ratio" value={Math.round(sub.opacityRatio * 100)} min={1} max={100} onChange={(v) => updateSubBrush(idx, { opacityRatio: v / 100 })} />
+                <Slider label="Angle Offset" value={sub.angleOffset} min={0} max={360} onChange={(v) => updateSubBrush(idx, { angleOffset: v })} />
+                <Slider label="Size Jitter" value={sub.sizeJitter} min={0} max={100} onChange={(v) => updateSubBrush(idx, { sizeJitter: v })} />
+                <Slider label="Angle Jitter" value={sub.angleJitter} min={0} max={100} onChange={(v) => updateSubBrush(idx, { angleJitter: v })} />
+                <Slider label="Opacity Jitter" value={sub.opacityJitter} min={0} max={100} onChange={(v) => updateSubBrush(idx, { opacityJitter: v })} />
+              </div>
+            ))}
+            <button
+              className={styles.smallButton}
+              onClick={() => addSubBrush({
+                tip: null,
+                sizeRatio: 0.5,
+                hardness: 100,
+                opacityRatio: 0.5,
+                angleOffset: 0,
+                sizeJitter: 0,
+                angleJitter: 0,
+                opacityJitter: 0,
+              })}
+            >
+              Add Sub-Brush
+            </button>
           </div>
         );
     }

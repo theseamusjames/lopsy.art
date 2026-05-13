@@ -69,6 +69,93 @@ pub fn gaussian_blur(data: &mut [u8], width: u32, height: u32, radius: u32) {
     }
 }
 
+/// CPU separable min-filter (morphological erosion) on single-channel data.
+/// Shrinks content inward by `radius` pixels on each side.
+pub fn erode_gray(data: &mut [u8], width: u32, height: u32, radius: u32) {
+    if radius == 0 { return; }
+    let r = radius as i32;
+    let w = width as i32;
+    let h = height as i32;
+
+    let mut temp = data.to_vec();
+    // Horizontal pass
+    for y in 0..h {
+        for x in 0..w {
+            let mut min_val = 255u8;
+            for k in -r..=r {
+                let sx = (x + k).clamp(0, w - 1);
+                min_val = min_val.min(data[(y * w + sx) as usize]);
+            }
+            temp[(y * w + x) as usize] = min_val;
+        }
+    }
+    // Vertical pass
+    for y in 0..h {
+        for x in 0..w {
+            let mut min_val = 255u8;
+            for k in -r..=r {
+                let sy = (y + k).clamp(0, h - 1);
+                min_val = min_val.min(temp[(sy * w + x) as usize]);
+            }
+            data[(y * w + x) as usize] = min_val;
+        }
+    }
+}
+
+/// CPU separable Gaussian blur on single-channel (grayscale) data.
+/// Uses clamp-to-edge for out-of-bounds samples.
+pub fn gaussian_blur_gray(data: &mut [u8], width: u32, height: u32, radius: u32) {
+    gaussian_blur_gray_inner(data, width, height, radius, false);
+}
+
+/// Like `gaussian_blur_gray` but treats out-of-bounds samples as 0.
+/// Prevents edge-value bleeding for content that touches the texture boundary.
+pub fn gaussian_blur_gray_zero_pad(data: &mut [u8], width: u32, height: u32, radius: u32) {
+    gaussian_blur_gray_inner(data, width, height, radius, true);
+}
+
+fn gaussian_blur_gray_inner(data: &mut [u8], width: u32, height: u32, radius: u32, zero_pad: bool) {
+    if radius == 0 { return; }
+    let kernel = gaussian_kernel(radius);
+    let r = radius as i32;
+    let w = width as i32;
+    let h = height as i32;
+
+    let mut temp = data.to_vec();
+    for y in 0..h {
+        for x in 0..w {
+            let mut val = 0.0f32;
+            for k in -r..=r {
+                let sx = x + k;
+                if sx < 0 || sx >= w {
+                    if !zero_pad {
+                        val += data[(y * w + sx.clamp(0, w - 1)) as usize] as f32 * kernel[(k + r) as usize];
+                    }
+                } else {
+                    val += data[(y * w + sx) as usize] as f32 * kernel[(k + r) as usize];
+                }
+            }
+            temp[(y * w + x) as usize] = val.round().clamp(0.0, 255.0) as u8;
+        }
+    }
+    for y in 0..h {
+        for x in 0..w {
+            let mut val = 0.0f32;
+            for k in -r..=r {
+                let sy = y + k;
+                if sy < 0 || sy >= h {
+                    if !zero_pad {
+                        val += temp[(sy.clamp(0, h - 1) * w + x) as usize] as f32 * kernel[(k + r) as usize];
+                    }
+                } else {
+                    val += temp[(sy * w + x) as usize] as f32 * kernel[(k + r) as usize];
+                }
+            }
+            data[(y * w + x) as usize] = val.round().clamp(0.0, 255.0) as u8;
+        }
+    }
+}
+
 /// CPU separable box blur on RGBA data
 pub fn box_blur(data: &mut [u8], width: u32, height: u32, radius: u32) {
     if radius == 0 {

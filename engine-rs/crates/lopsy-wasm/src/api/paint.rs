@@ -81,6 +81,8 @@ pub fn draw_pencil_line(
     if !eng.stroke_textures.contains_key(layer_id) {
         let _ = brush_gpu::begin_stroke(eng, layer_id);
     }
+    // Pencil strokes never use brush texture
+    eng.stroke_use_brush_texture.insert(layer_id.to_string(), false);
 
     // Read selection mask from GPU if present
     let selection_mask: Option<(Vec<u8>, u32, u32)> = eng.selection_mask_texture.and_then(|mask_handle| {
@@ -160,12 +162,43 @@ pub fn end_stroke(engine: &mut Engine, layer_id: &str) {
 
 #[wasm_bindgen(js_name = "uploadBrushTip")]
 pub fn upload_brush_tip(engine: &mut Engine, data: &[u8], width: u32, height: u32) -> Result<(), JsError> {
-    let mut rgba = vec![0u8; (width * height * 4) as usize];
-    for i in 0..(width * height) as usize {
-        let v = if i < data.len() { data[i] } else { 0 };
-        rgba[i * 4] = v;
-        rgba[i * 4 + 1] = v;
-        rgba[i * 4 + 2] = v;
+    let pixel_count = (width * height) as usize;
+    let mut sharp = vec![0u8; pixel_count];
+    for i in 0..pixel_count {
+        sharp[i] = if i < data.len() { data[i] } else { 0 };
+    }
+    // Inner-glow approach: invert alpha → blur → normalize → store.
+    let blur_radius = (width.min(height) / 2).max(1);
+    let mut inverted = vec![0u8; pixel_count];
+    for i in 0..pixel_count {
+        inverted[i] = 255 - sharp[i];
+    }
+    lopsy_core::filters::blur::gaussian_blur_gray(&mut inverted, width, height, blur_radius);
+    // Normalize glow within the shape to use the full [0,255] range,
+    // so there's always a strong gradient from edge (255) to center (0).
+    let mut min_val = 255u8;
+    let mut max_val = 0u8;
+    for i in 0..pixel_count {
+        if sharp[i] > 5 {
+            min_val = min_val.min(inverted[i]);
+            max_val = max_val.max(inverted[i]);
+        }
+    }
+    if max_val > min_val {
+        for i in 0..pixel_count {
+            if sharp[i] > 5 {
+                let t = (inverted[i] as f32 - min_val as f32) / (max_val as f32 - min_val as f32);
+                inverted[i] = (t.sqrt() * 255.0).round() as u8;
+            } else {
+                inverted[i] = 255;
+            }
+        }
+    }
+    let mut rgba = vec![0u8; pixel_count * 4];
+    for i in 0..pixel_count {
+        rgba[i * 4] = sharp[i];
+        rgba[i * 4 + 1] = inverted[i];
+        rgba[i * 4 + 2] = 0;
         rgba[i * 4 + 3] = 255;
     }
     if let Some(old) = engine.inner.brush_tip_texture.take() {
@@ -181,6 +214,42 @@ pub fn upload_brush_tip(engine: &mut Engine, data: &[u8], width: u32, height: u3
     Ok(())
 }
 
+#[wasm_bindgen(js_name = "uploadBrushTipBlurred")]
+pub fn upload_brush_tip_blurred(engine: &mut Engine, data: &[u8], width: u32, height: u32, _blur_radius: u32) -> Result<(), JsError> {
+    upload_brush_tip(engine, data, width, height)
+}
+
+#[wasm_bindgen(js_name = "uploadBrushTipRGBA")]
+pub fn upload_brush_tip_rgba(engine: &mut Engine, data: &[u8], width: u32, height: u32) -> Result<(), JsError> {
+    let pixel_count = (width * height) as usize;
+    let expected_len = pixel_count * 4;
+    if data.len() < expected_len {
+        return Err(JsError::new("RGBA brush tip data too short"));
+    }
+    // Premultiply alpha
+    let mut rgba = vec![0u8; expected_len];
+    for i in 0..pixel_count {
+        let off = i * 4;
+        let a = data[off + 3] as f32 / 255.0;
+        rgba[off] = (data[off] as f32 * a + 0.5) as u8;
+        rgba[off + 1] = (data[off + 1] as f32 * a + 0.5) as u8;
+        rgba[off + 2] = (data[off + 2] as f32 * a + 0.5) as u8;
+        rgba[off + 3] = data[off + 3];
+    }
+    if let Some(old) = engine.inner.brush_tip_texture.take() {
+        engine.inner.texture_pool.release(old);
+    }
+    let tex = engine.inner.texture_pool.acquire(&engine.inner.gl, width, height)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, width, height, &rgba)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.brush_tip_texture = Some(tex);
+    engine.inner.brush_tip_width = width;
+    engine.inner.brush_tip_height = height;
+    engine.inner.brush_tip_is_color = true;
+    Ok(())
+}
+
 #[wasm_bindgen(js_name = "clearBrushTip")]
 pub fn clear_brush_tip(engine: &mut Engine) {
     if let Some(tex) = engine.inner.brush_tip_texture.take() {
@@ -189,12 +258,14 @@ pub fn clear_brush_tip(engine: &mut Engine) {
     engine.inner.brush_tip_width = 0;
     engine.inner.brush_tip_height = 0;
     engine.inner.brush_has_tip = false;
+    engine.inner.brush_tip_is_color = false;
 }
 
 #[wasm_bindgen(js_name = "setBrushTipState")]
-pub fn set_brush_tip_state(engine: &mut Engine, has_tip: bool, angle: f32) {
+pub fn set_brush_tip_state(engine: &mut Engine, has_tip: bool, angle: f32, is_color: bool) {
     engine.inner.brush_has_tip = has_tip;
     engine.inner.brush_angle = angle;
+    engine.inner.brush_tip_is_color = is_color;
 }
 
 #[wasm_bindgen(js_name = "uploadBrushTexture")]

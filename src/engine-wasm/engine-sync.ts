@@ -60,6 +60,7 @@ import {
   setMaskEditLayer,
   clearMaskEditLayer,
   uploadBrushTip,
+  uploadBrushTipRGBA,
   clearBrushTip,
   setBrushTipState,
   uploadBrushTexture,
@@ -369,9 +370,11 @@ export function syncBrushTip(
   engine: Engine,
   activeBrushTip: BrushTipData | null,
   brushAngle: number,
+  brushHardness: number = 100,
 ): void {
   const tracked = getTracked(engine);
   const hasTip = activeBrushTip !== null;
+  const isColor = activeBrushTip?.kind === 'color';
   const tipChanged = tracked.brushTipData !== activeBrushTip;
 
   if (tipChanged) {
@@ -381,17 +384,63 @@ export function syncBrushTip(
         activeBrushTip.data.byteOffset,
         activeBrushTip.data.byteLength,
       );
-      uploadBrushTip(engine, bytes, activeBrushTip.width, activeBrushTip.height);
+      if (isColor) {
+        uploadBrushTipRGBA(engine, bytes, activeBrushTip.width, activeBrushTip.height);
+      } else {
+        uploadBrushTip(engine, bytes, activeBrushTip.width, activeBrushTip.height);
+      }
     } else {
       clearBrushTip(engine);
     }
     tracked.brushTipData = activeBrushTip;
+    tracked.brushTipHardness = brushHardness;
   }
 
-  if (tracked.brushHasTip !== hasTip || tracked.brushAngle !== brushAngle) {
-    setBrushTipState(engine, hasTip, brushAngle);
+  if (tracked.brushHasTip !== hasTip || tracked.brushAngle !== brushAngle || tracked.brushTipIsColor !== isColor) {
+    setBrushTipState(engine, hasTip, brushAngle, isColor);
     tracked.brushHasTip = hasTip;
     tracked.brushAngle = brushAngle;
+    tracked.brushTipIsColor = isColor;
+  }
+}
+
+/**
+ * Temporarily swap the active brush tip for sub-brush rendering.
+ * Bypasses tracked state — caller must call restorePrimaryBrushTip after.
+ */
+export function swapBrushTip(engine: Engine, tip: BrushTipData | null, angleDeg: number = 0): void {
+  const angleRad = -angleDeg * Math.PI / 180;
+  if (tip) {
+    const bytes = new Uint8Array(tip.data.buffer, tip.data.byteOffset, tip.data.byteLength);
+    if (tip.kind === 'color') {
+      uploadBrushTipRGBA(engine, bytes, tip.width, tip.height);
+    } else {
+      uploadBrushTip(engine, bytes, tip.width, tip.height);
+    }
+    setBrushTipState(engine, true, angleRad, tip.kind === 'color');
+  } else {
+    setBrushTipState(engine, false, angleRad, false);
+  }
+}
+
+/**
+ * Restore the primary brush tip after sub-brush rendering.
+ * Re-uploads the tip and resets the engine state so subsequent dabs
+ * in the same event (before the next frame sync) use the correct tip.
+ */
+export function restorePrimaryBrushTip(engine: Engine): void {
+  const tracked = getTracked(engine);
+  const tip = tracked.brushTipData;
+  if (tip) {
+    const bytes = new Uint8Array(tip.data.buffer, tip.data.byteOffset, tip.data.byteLength);
+    if (tip.kind === 'color') {
+      uploadBrushTipRGBA(engine, bytes, tip.width, tip.height);
+    } else {
+      uploadBrushTip(engine, bytes, tip.width, tip.height);
+    }
+    setBrushTipState(engine, true, tracked.brushAngle, tip.kind === 'color');
+  } else {
+    setBrushTipState(engine, tracked.brushHasTip, tracked.brushAngle, tracked.brushTipIsColor);
   }
 }
 
