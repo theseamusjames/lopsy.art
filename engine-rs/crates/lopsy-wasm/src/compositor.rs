@@ -1525,21 +1525,134 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Resul
     Ok(pixels)
 }
 
+/// Set all uniforms on the currently bound adjustments shader program.
+/// Texture unit assignments: 0=u_tex, 1=u_curveLut, 2=u_levelsLut, 3=u_gradientLut.
+fn set_adjustment_uniforms(
+    engine: &mut EngineInner,
+    adj: &crate::engine::ImageAdjustmentState,
+    brightness: f32,
+) {
+    let shader = &engine.shaders.adjustments;
+    let gl = &engine.gl;
+    if let Some(loc) = shader.location(gl, "u_brightness") { gl.uniform1f(Some(&loc), brightness); }
+    if let Some(loc) = shader.location(gl, "u_contrast")   { gl.uniform1f(Some(&loc), adj.contrast / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_exposure")   { gl.uniform1f(Some(&loc), adj.exposure); }
+    if let Some(loc) = shader.location(gl, "u_highlights") { gl.uniform1f(Some(&loc), adj.highlights); }
+    if let Some(loc) = shader.location(gl, "u_shadows")    { gl.uniform1f(Some(&loc), adj.shadows); }
+    if let Some(loc) = shader.location(gl, "u_whites")     { gl.uniform1f(Some(&loc), adj.whites); }
+    if let Some(loc) = shader.location(gl, "u_blacks")     { gl.uniform1f(Some(&loc), adj.blacks); }
+    if let Some(loc) = shader.location(gl, "u_saturation") { gl.uniform1f(Some(&loc), adj.saturation / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_vibrance")   { gl.uniform1f(Some(&loc), adj.vibrance / 100.0); }
+    // Hue/Saturation
+    if let Some(loc) = shader.location(gl, "u_hue_shift")       { gl.uniform1f(Some(&loc), adj.hue_shift); }
+    if let Some(loc) = shader.location(gl, "u_hsl_saturation")  { gl.uniform1f(Some(&loc), adj.hsl_saturation); }
+    if let Some(loc) = shader.location(gl, "u_lightness")       { gl.uniform1f(Some(&loc), adj.lightness); }
+    // Color Balance
+    if let Some(loc) = shader.location(gl, "u_cb_shadows")    { gl.uniform3f(Some(&loc), adj.cb_shadows[0],    adj.cb_shadows[1],    adj.cb_shadows[2]); }
+    if let Some(loc) = shader.location(gl, "u_cb_midtones")   { gl.uniform3f(Some(&loc), adj.cb_midtones[0],   adj.cb_midtones[1],   adj.cb_midtones[2]); }
+    if let Some(loc) = shader.location(gl, "u_cb_highlights") { gl.uniform3f(Some(&loc), adj.cb_highlights[0], adj.cb_highlights[1], adj.cb_highlights[2]); }
+    // Photo Filter
+    if let Some(loc) = shader.location(gl, "u_pf_color")      { gl.uniform3f(Some(&loc), adj.pf_color[0], adj.pf_color[1], adj.pf_color[2]); }
+    if let Some(loc) = shader.location(gl, "u_pf_density")    { gl.uniform1f(Some(&loc), adj.pf_density); }
+    if let Some(loc) = shader.location(gl, "u_pf_luminosity") { gl.uniform1f(Some(&loc), if adj.pf_preserve_luminosity { 1.0 } else { 0.0 }); }
+    // Black & White
+    if let Some(loc) = shader.location(gl, "u_bw_reds")     { gl.uniform1f(Some(&loc), adj.bw_reds); }
+    if let Some(loc) = shader.location(gl, "u_bw_yellows")  { gl.uniform1f(Some(&loc), adj.bw_yellows); }
+    if let Some(loc) = shader.location(gl, "u_bw_greens")   { gl.uniform1f(Some(&loc), adj.bw_greens); }
+    if let Some(loc) = shader.location(gl, "u_bw_cyans")    { gl.uniform1f(Some(&loc), adj.bw_cyans); }
+    if let Some(loc) = shader.location(gl, "u_bw_blues")    { gl.uniform1f(Some(&loc), adj.bw_blues); }
+    if let Some(loc) = shader.location(gl, "u_bw_magentas") { gl.uniform1f(Some(&loc), adj.bw_magentas); }
+    if let Some(loc) = shader.location(gl, "u_bw_enabled")  { gl.uniform1f(Some(&loc), if adj.bw_enabled { 1.0 } else { 0.0 }); }
+    // Channel Mixer
+    if let Some(loc) = shader.location(gl, "u_cm_rr") { gl.uniform1f(Some(&loc), adj.cm_r[0] / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_cm_rg") { gl.uniform1f(Some(&loc), adj.cm_r[1] / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_cm_rb") { gl.uniform1f(Some(&loc), adj.cm_r[2] / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_cm_rc") { gl.uniform1f(Some(&loc), adj.cm_r[3]); }
+    if let Some(loc) = shader.location(gl, "u_cm_gr") { gl.uniform1f(Some(&loc), adj.cm_g[0] / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_cm_gg") { gl.uniform1f(Some(&loc), adj.cm_g[1] / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_cm_gb") { gl.uniform1f(Some(&loc), adj.cm_g[2] / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_cm_gc") { gl.uniform1f(Some(&loc), adj.cm_g[3]); }
+    if let Some(loc) = shader.location(gl, "u_cm_br") { gl.uniform1f(Some(&loc), adj.cm_b[0] / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_cm_bg") { gl.uniform1f(Some(&loc), adj.cm_b[1] / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_cm_bb") { gl.uniform1f(Some(&loc), adj.cm_b[2] / 100.0); }
+    if let Some(loc) = shader.location(gl, "u_cm_bc") { gl.uniform1f(Some(&loc), adj.cm_b[3]); }
+    if let Some(loc) = shader.location(gl, "u_cm_enabled") { gl.uniform1f(Some(&loc), if adj.cm_enabled { 1.0 } else { 0.0 }); }
+    // Invert
+    if let Some(loc) = shader.location(gl, "u_invert") { gl.uniform1f(Some(&loc), if adj.invert { 1.0 } else { 0.0 }); }
+    // Levels LUT — bound to TEXTURE2
+    let has_levels = adj.has_levels && adj.levels_texture.is_some();
+    if has_levels {
+        if let Some(levels_tex) = adj.levels_texture.and_then(|h| engine.texture_pool.get(h)) {
+            let levels_tex = levels_tex.clone();
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&levels_tex));
+            if let Some(loc) = shader.location(&engine.gl, "u_levelsLut") { engine.gl.uniform1i(Some(&loc), 2); }
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        }
+    }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasLevels") {
+        engine.gl.uniform1f(Some(&loc), if has_levels { 1.0 } else { 0.0 });
+    }
+    // Curves LUT — bound to TEXTURE1
+    let has_curves = adj.has_curves && adj.curves_texture.is_some();
+    if has_curves {
+        if let Some(curve_tex) = adj.curves_texture.and_then(|h| engine.texture_pool.get(h)) {
+            let curve_tex = curve_tex.clone();
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&curve_tex));
+            if let Some(loc) = shader.location(&engine.gl, "u_curveLut") { engine.gl.uniform1i(Some(&loc), 1); }
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        }
+    }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasCurves") {
+        engine.gl.uniform1f(Some(&loc), if has_curves { 1.0 } else { 0.0 });
+    }
+    // Gradient Map LUT — bound to TEXTURE3
+    let has_gradient = adj.has_gradient_map && adj.gradient_map_texture.is_some();
+    if has_gradient {
+        if let Some(grad_tex) = adj.gradient_map_texture.and_then(|h| engine.texture_pool.get(h)) {
+            let grad_tex = grad_tex.clone();
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE3);
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&grad_tex));
+            if let Some(loc) = shader.location(&engine.gl, "u_gradientLut") { engine.gl.uniform1i(Some(&loc), 3); }
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        }
+    }
+    if let Some(loc) = shader.location(&engine.gl, "u_hasGradientMap") {
+        engine.gl.uniform1f(Some(&loc), if has_gradient { 1.0 } else { 0.0 });
+    }
+}
+
+/// Returns true if any adjustment in the state is non-default (i.e., would change pixels).
+fn has_any_adjustment(adj: &crate::engine::ImageAdjustmentState) -> bool {
+    adj.exposure.abs() > 1e-6
+        || adj.contrast.abs() > 1e-6
+        || adj.highlights.abs() > 1e-6
+        || adj.shadows.abs() > 1e-6
+        || adj.whites.abs() > 1e-6
+        || adj.blacks.abs() > 1e-6
+        || adj.saturation.abs() > 1e-6
+        || adj.vibrance.abs() > 1e-6
+        || adj.has_curves
+        || adj.has_levels
+        || adj.hue_shift.abs() > 1e-6
+        || adj.hsl_saturation.abs() > 1e-6
+        || adj.lightness.abs() > 1e-6
+        || adj.cb_shadows.iter().any(|v| v.abs() > 1e-6)
+        || adj.cb_midtones.iter().any(|v| v.abs() > 1e-6)
+        || adj.cb_highlights.iter().any(|v| v.abs() > 1e-6)
+        || adj.pf_density > 1e-6
+        || adj.bw_enabled
+        || adj.cm_enabled
+        || adj.invert
+        || adj.has_gradient_map
+}
+
 /// Apply image adjustments (exposure, contrast, highlights, shadows, whites, blacks)
 /// to the composite texture. Renders composite → scratch_a via adjustments shader,
 /// then copies scratch_a → composite.
 fn apply_image_adjustments(engine: &mut EngineInner) {
-    let has_adjustments =
-        engine.adjustments.exposure.abs() > 1e-6
-        || engine.adjustments.contrast.abs() > 1e-6
-        || engine.adjustments.highlights.abs() > 1e-6
-        || engine.adjustments.shadows.abs() > 1e-6
-        || engine.adjustments.whites.abs() > 1e-6
-        || engine.adjustments.blacks.abs() > 1e-6
-        || engine.adjustments.saturation.abs() > 1e-6
-        || engine.adjustments.vibrance.abs() > 1e-6
-        || engine.adjustments.has_curves
-        || engine.adjustments.has_levels;
+    let has_adjustments = has_any_adjustment(&engine.adjustments);
     let has_vignette = engine.adjustments.vignette.abs() > 1e-6;
 
     if !has_adjustments && !has_vignette { return; }
@@ -1562,44 +1675,8 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
         if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_brightness") { engine.gl.uniform1f(Some(&loc), 0.0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_contrast") { engine.gl.uniform1f(Some(&loc), engine.adjustments.contrast / 100.0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_exposure") { engine.gl.uniform1f(Some(&loc), engine.adjustments.exposure); }
-        if let Some(loc) = shader.location(&engine.gl, "u_highlights") { engine.gl.uniform1f(Some(&loc), engine.adjustments.highlights); }
-        if let Some(loc) = shader.location(&engine.gl, "u_shadows") { engine.gl.uniform1f(Some(&loc), engine.adjustments.shadows); }
-        if let Some(loc) = shader.location(&engine.gl, "u_whites") { engine.gl.uniform1f(Some(&loc), engine.adjustments.whites); }
-        if let Some(loc) = shader.location(&engine.gl, "u_blacks") { engine.gl.uniform1f(Some(&loc), engine.adjustments.blacks); }
-        if let Some(loc) = shader.location(&engine.gl, "u_saturation") { engine.gl.uniform1f(Some(&loc), engine.adjustments.saturation / 100.0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_vibrance") { engine.gl.uniform1f(Some(&loc), engine.adjustments.vibrance / 100.0); }
-        // Levels LUT — bound to TEXTURE2 so it doesn't clobber u_tex or u_curveLut.
-        let has_levels = engine.adjustments.has_levels && engine.adjustments.levels_texture.is_some();
-        if has_levels {
-            if let Some(levels_tex) = engine.adjustments.levels_texture.and_then(|h| engine.texture_pool.get(h)) {
-                let levels_tex = levels_tex.clone();
-                engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
-                engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&levels_tex));
-                if let Some(loc) = shader.location(&engine.gl, "u_levelsLut") { engine.gl.uniform1i(Some(&loc), 2); }
-                engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            }
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_hasLevels") {
-            engine.gl.uniform1f(Some(&loc), if has_levels { 1.0 } else { 0.0 });
-        }
-
-        // Curves LUT — bound to TEXTURE1 so it doesn't clobber u_tex or u_levelsLut.
-        let has_curves = engine.adjustments.has_curves && engine.adjustments.curves_texture.is_some();
-        if has_curves {
-            if let Some(curve_tex) = engine.adjustments.curves_texture.and_then(|h| engine.texture_pool.get(h)) {
-                let curve_tex = curve_tex.clone();
-                engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-                engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&curve_tex));
-                if let Some(loc) = shader.location(&engine.gl, "u_curveLut") { engine.gl.uniform1i(Some(&loc), 1); }
-                engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            }
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_hasCurves") {
-            engine.gl.uniform1f(Some(&loc), if has_curves { 1.0 } else { 0.0 });
-        }
+        let adj = engine.adjustments.clone();
+        set_adjustment_uniforms(engine, &adj, 0.0);
         engine.draw_fullscreen_quad();
 
         // Copy scratch_a → composite
@@ -1668,43 +1745,8 @@ fn apply_adjustments_to_texture(
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
     if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_brightness") { engine.gl.uniform1f(Some(&loc), 0.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_contrast") { engine.gl.uniform1f(Some(&loc), adj.contrast / 100.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_exposure") { engine.gl.uniform1f(Some(&loc), adj.exposure); }
-    if let Some(loc) = shader.location(&engine.gl, "u_highlights") { engine.gl.uniform1f(Some(&loc), adj.highlights); }
-    if let Some(loc) = shader.location(&engine.gl, "u_shadows") { engine.gl.uniform1f(Some(&loc), adj.shadows); }
-    if let Some(loc) = shader.location(&engine.gl, "u_whites") { engine.gl.uniform1f(Some(&loc), adj.whites); }
-    if let Some(loc) = shader.location(&engine.gl, "u_blacks") { engine.gl.uniform1f(Some(&loc), adj.blacks); }
-    if let Some(loc) = shader.location(&engine.gl, "u_saturation") { engine.gl.uniform1f(Some(&loc), adj.saturation / 100.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_vibrance") { engine.gl.uniform1f(Some(&loc), adj.vibrance / 100.0); }
-
-    let has_levels = adj.has_levels && adj.levels_texture.is_some();
-    if has_levels {
-        if let Some(levels_tex) = adj.levels_texture.and_then(|h| engine.texture_pool.get(h)) {
-            let levels_tex = levels_tex.clone();
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&levels_tex));
-            if let Some(loc) = shader.location(&engine.gl, "u_levelsLut") { engine.gl.uniform1i(Some(&loc), 2); }
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        }
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasLevels") {
-        engine.gl.uniform1f(Some(&loc), if has_levels { 1.0 } else { 0.0 });
-    }
-
-    let has_curves = adj.has_curves && adj.curves_texture.is_some();
-    if has_curves {
-        if let Some(curve_tex) = adj.curves_texture.and_then(|h| engine.texture_pool.get(h)) {
-            let curve_tex = curve_tex.clone();
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&curve_tex));
-            if let Some(loc) = shader.location(&engine.gl, "u_curveLut") { engine.gl.uniform1i(Some(&loc), 1); }
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        }
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasCurves") {
-        engine.gl.uniform1f(Some(&loc), if has_curves { 1.0 } else { 0.0 });
-    }
+    let adj_clone = adj.clone();
+    set_adjustment_uniforms(engine, &adj_clone, 0.0);
 
     engine.draw_fullscreen_quad();
 
