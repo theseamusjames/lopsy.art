@@ -33,7 +33,12 @@ export function handleSpongeDown(ctx: InteractionContext): InteractionState {
   const editorState = useEditorStore.getState();
   const toolSettings = useToolSettingsStore.getState();
   const mode = toolSettings.spongeMode;
-  editorState.pushHistory(mode === 'saturate' ? 'Saturate' : 'Desaturate');
+  // The generic GPU paint handler in useCanvasInteraction already pushes
+  // history when isStrokeContinuation is set. Only push here for the
+  // non-GPU / CPU fallback path.
+  if (!ctx.isStrokeContinuation) {
+    editorState.pushHistory(mode === 'saturate' ? 'Saturate' : 'Desaturate');
+  }
   const strength = scaleSpongeStrength(toolSettings.spongeStrength / 100);
   const size = toolSettings.spongeSize;
   const shiftLine = shiftKey

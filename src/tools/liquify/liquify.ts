@@ -77,8 +77,8 @@ export function applyPushDab(
       const w = brushWeight(distSq, radiusSq);
       if (w <= 0) continue;
       const idx = y * map.width + x;
-      map.dx[idx]! += dragDx * w * pressure;
-      map.dy[idx]! += dragDy * w * pressure;
+      map.dx[idx]! -= dragDx * w * pressure;
+      map.dy[idx]! -= dragDy * w * pressure;
     }
   }
 }

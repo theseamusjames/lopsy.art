@@ -22,7 +22,8 @@ import {
   setForegroundColor as setForegroundColorUI,
   setBlendMode,
   setLayerOpacity,
-  setAdjustment,
+  addAdjustment,
+  getRootGroupId,
   setActiveLayer,
   configureEffect,
   setEffectColor,
@@ -703,11 +704,11 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     // =====================================================================
     // PHASE 8: REMAINING IMAGE ADJUSTMENTS
     // =====================================================================
-    await setAdjustment(page, 'Highlights', 20);
-    await setAdjustment(page, 'Shadows', -15);
-    await setAdjustment(page, 'Whites', 10);
-    await setAdjustment(page, 'Blacks', -10);
-    await setAdjustment(page, 'Vibrance', 25);
+    const rootGroup = await getRootGroupId(page);
+    await addAdjustment(page, rootGroup, 'highlights-shadows', {
+      highlights: 20, shadows: -15, whites: 10, blacks: -10,
+    });
+    await addAdjustment(page, rootGroup, 'saturation', { vibrance: 25 });
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: 'e2e/screenshots/comp3-26-adjustments.png' });

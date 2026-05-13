@@ -12,6 +12,16 @@ export function TiltShiftControls() {
   const session = useUIStore((s) => s.tiltShift);
   const updateTiltShift = useUIStore((s) => s.updateTiltShift);
 
+  const handleFocusPositionChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    updateTiltShift({ focusPosition: Number(e.target.value) / 100 });
+    previewTiltShift();
+  }, [updateTiltShift]);
+
+  const handleFocusWidthChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    updateTiltShift({ focusWidth: Number(e.target.value) / 100 });
+    previewTiltShift();
+  }, [updateTiltShift]);
+
   const handleBlurChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     updateTiltShift({ blurRadius: Number(e.target.value) });
     previewTiltShift();
@@ -49,6 +59,34 @@ export function TiltShiftControls() {
         <span>Tilt-Shift Blur</span>
       </div>
       <div className={styles.body}>
+        <label className={styles.row}>
+          <span className={styles.label}>Focus Position</span>
+          <input
+            type="range"
+            className={styles.slider}
+            min={0}
+            max={100}
+            step={1}
+            value={Math.round(session.focusPosition * 100)}
+            onChange={handleFocusPositionChange}
+            aria-label="Focus position"
+          />
+          <span className={styles.value}>{Math.round(session.focusPosition * 100)}%</span>
+        </label>
+        <label className={styles.row}>
+          <span className={styles.label}>Focus Width</span>
+          <input
+            type="range"
+            className={styles.slider}
+            min={1}
+            max={100}
+            step={1}
+            value={Math.round(session.focusWidth * 100)}
+            onChange={handleFocusWidthChange}
+            aria-label="Focus width"
+          />
+          <span className={styles.value}>{Math.round(session.focusWidth * 100)}%</span>
+        </label>
         <label className={styles.row}>
           <span className={styles.label}>Blur Radius</span>
           <input

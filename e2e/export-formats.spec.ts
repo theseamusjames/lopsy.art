@@ -15,7 +15,7 @@ test.describe('Export formats (#57)', () => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(200);
 
-    await expect(page.getByRole('menuitem', { name: 'Export As…' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Export…' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Quick Export PNG' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Export JPEG' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Export WebP' })).toBeVisible();
@@ -33,7 +33,7 @@ test.describe('Export formats (#57)', () => {
 
     const download = await downloadPromise;
     // Filename is <docName>.<ext>; createDocument produces 'Untitled'
-    expect(download.suggestedFilename()).toBe('Untitled.webp');
+    expect(download.suggestedFilename()).toBe('lopsy.webp');
 
     await page.screenshot({ path: 'test-results/screenshots/export-webp-menu.png' });
   });
@@ -47,7 +47,7 @@ test.describe('Export formats (#57)', () => {
 
     const download = await downloadPromise;
     // Filename is <docName>.<ext>; createDocument produces 'Untitled'
-    expect(download.suggestedFilename()).toBe('Untitled.bmp');
+    expect(download.suggestedFilename()).toBe('lopsy.bmp');
 
     await page.screenshot({ path: 'test-results/screenshots/export-bmp-menu.png' });
   });

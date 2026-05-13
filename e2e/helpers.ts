@@ -361,7 +361,16 @@ export async function closeBrushModal(page: Page): Promise<void> {
 
 export async function setBrushModalOption(page: Page, label: string, value: number): Promise<void> {
   await openBrushModal(page);
-  const input = page.locator(`[role="dialog"][aria-label="Brushes"] [aria-label="${label} value"]`);
+  const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
+  const dynamicsLabels = ['Size Jitter', 'Hardness Jitter', 'Angle Jitter', 'Opacity Jitter', 'Speed Size'];
+  const textureLabels = ['Scale'];
+  const targetTab = dynamicsLabels.includes(label) ? 'Dynamics' : textureLabels.includes(label) ? 'Texture' : 'Shape';
+  const tab = dialog.locator(`[role="option"]:has-text("${targetTab}")`);
+  if (await tab.isVisible()) {
+    await tab.click();
+    await page.waitForTimeout(50);
+  }
+  const input = dialog.locator(`[aria-label="${label} value"]`);
   await input.fill(String(value));
   await input.press('Enter');
 }

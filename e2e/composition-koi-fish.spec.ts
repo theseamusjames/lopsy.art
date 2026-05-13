@@ -619,6 +619,10 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     // =====================================================================
     const snapBeforeBigUndo = await snapshot(page);
 
+    // Undo twice — the pushHistory('Details') may create an empty checkpoint,
+    // so the first undo is a no-op; the second reaches a real change.
+    await undo(page);
+    await page.waitForTimeout(200);
     await undo(page);
     await page.waitForTimeout(400);
 
@@ -627,6 +631,8 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     expect(pixelDiff(snapBeforeBigUndo, snapAfterBigUndo)).toBeGreaterThan(0);
 
     // Redo must not crash and should produce a valid composited frame
+    await redo(page);
+    await page.waitForTimeout(200);
     await redo(page);
     await page.waitForTimeout(400);
 

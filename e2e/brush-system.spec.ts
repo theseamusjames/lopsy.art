@@ -311,20 +311,22 @@ test.describe('Brush System', () => {
     await page.waitForTimeout(50);
 
     await openBrushModal(page);
+    await page.waitForTimeout(100);
+    // Navigate to the Shape tab where the BrushDabPreview canvas lives
+    const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
+    await dialog.locator('[role="option"]:has-text("Shape")').click();
     await page.waitForTimeout(200);
 
     /**
-     * Read the BrushPreview canvas (the 240×80 preview swatch inside the
-     * brush modal) directly via the DOM. This is the canvas the test
-     * needs to assert against — the main composited screen pixels do
-     * not contain it.
+     * Read the BrushDabPreview canvas (the 80×80 dab preview inside the
+     * brush modal Shape tab) directly via the DOM.
      */
     const readPreview = async () =>
       page.evaluate(() => {
-        const canvases = Array.from(document.querySelectorAll('canvas')) as HTMLCanvasElement[];
-        // The brush preview canvas is exactly 240×80 by construction
-        // (BrushPreview.tsx). The main WebGL canvas is much larger.
-        const preview = canvases.find((c) => c.width === 240 && c.height === 80);
+        const modal = document.querySelector('[role="dialog"][aria-label="Brushes"]');
+        if (!modal) return null;
+        const canvases = Array.from(modal.querySelectorAll('canvas')) as HTMLCanvasElement[];
+        const preview = canvases.find((c) => c.width === 80 && c.height === 80);
         if (!preview) return null;
         const ctx = preview.getContext('2d');
         if (!ctx) return null;
@@ -334,7 +336,7 @@ test.describe('Brush System', () => {
 
     const before = await readPreview();
     expect(before).not.toBeNull();
-    expect(before!.width).toBe(240);
+    expect(before!.width).toBe(80);
 
     // The preview must have rendered something for size=4 — count opaque
     // (non-zero alpha) pixels along the bezier path.

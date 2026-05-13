@@ -26,7 +26,7 @@ describe('applyPushDab', () => {
 
     const centerIdx = 50 * 100 + 50;
     // Center pixel should have significant dx (brushWeight at dist=0 is 1)
-    expect(map.dx[centerIdx]).toBeGreaterThan(8);
+    expect(map.dx[centerIdx]).toBeLessThan(-8);
     // No vertical displacement
     expect(map.dy[centerIdx]).toBeCloseTo(0);
   });
@@ -182,8 +182,8 @@ describe('applyDab dispatch', () => {
   it('push mode changes displacement in drag direction and returns dirty rect', () => {
     const map = createDisplacementMap(100, 100);
     const dirty = applyDab(map, 50, 50, 10, 3, settings);
-    expect(map.dx[50 * 100 + 50]).toBeGreaterThan(0);
-    expect(map.dy[50 * 100 + 50]).toBeGreaterThan(0);
+    expect(map.dx[50 * 100 + 50]).toBeLessThan(0);
+    expect(map.dy[50 * 100 + 50]).toBeLessThan(0);
     expect(dirty.x).toBeLessThanOrEqual(50);
     expect(dirty.y).toBeLessThanOrEqual(50);
     expect(dirty.x + dirty.w).toBeGreaterThanOrEqual(50);

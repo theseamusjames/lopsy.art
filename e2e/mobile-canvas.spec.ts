@@ -13,6 +13,18 @@ test.describe('Mobile canvas', () => {
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);
+    await page.waitForTimeout(500);
+
+    // On mobile viewports, close panels that might squeeze the canvas to zero
+    await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { visiblePanels: Set<string>; togglePanel: (id: string) => void };
+      };
+      const state = ui.getState();
+      for (const panelId of state.visiblePanels) {
+        state.togglePanel(panelId);
+      }
+    });
     await page.waitForTimeout(300);
 
     const container = page.getByTestId('canvas-container');

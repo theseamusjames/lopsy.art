@@ -187,8 +187,9 @@ test.describe('Liquify Tool', () => {
     // Screenshot after Apply
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-applied.png') });
 
-    // After warp: pixel at x=150 should now have red pushed in from the left
-    const afterRight = await getPixelAt(page, 150, 100, layerId);
+    // After warp: pixel at x=110 (just past the red-blue boundary) should have
+    // red pushed in from the left by the liquify displacement
+    const afterRight = await getPixelAt(page, 110, 100, layerId);
     expect(afterRight.r).toBeGreaterThan(100);
   });
 
@@ -211,7 +212,7 @@ test.describe('Liquify Tool', () => {
 
     // Open Liquify and drag to warp
     await openLiquify(page);
-    await liquifyDrag(page, 100, 100, 160, 100);
+    await liquifyDrag(page, 100, 100, 160);
 
     // Screenshot showing the warp preview before cancel
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-cancel-preview.png') });

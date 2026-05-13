@@ -27,7 +27,12 @@ export function handleDodgeDown(ctx: InteractionContext): InteractionState {
   const editorState = useEditorStore.getState();
   const toolSettings = useToolSettingsStore.getState();
   const dodgeMode = toolSettings.dodgeMode;
-  editorState.pushHistory(dodgeMode === 'dodge' ? 'Dodge' : 'Burn');
+  // The generic GPU paint handler in useCanvasInteraction already pushes
+  // history when isStrokeContinuation is set. Only push here for the
+  // non-GPU / CPU fallback path.
+  if (!ctx.isStrokeContinuation) {
+    editorState.pushHistory(dodgeMode === 'dodge' ? 'Dodge' : 'Burn');
+  }
   const exposure = toolSettings.dodgeExposure / 100;
   const dodgeSize = toolSettings.brushSize;
   const dodgeShiftLine = shiftKey

@@ -48,7 +48,7 @@ import { createTransformState } from '../tools/transform/transform';
 import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 // PAINT_TOOLS / GPU_TOOLS are derived from the tool registry, so adding a
 // new paint or GPU tool is a single-file change at the descriptor.
-import { PAINT_TOOLS, GPU_TOOLS } from '../tools/tool-registry';
+import { PAINT_TOOLS, GPU_TOOLS, toolRegistry } from '../tools/tool-registry';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 
 export { strokeCurrentPath } from './interactions/path-stroke';
@@ -237,7 +237,7 @@ export function useCanvasInteraction(
             flushLayerSync(currentState);
             syncSelection(engine, currentState.selection);
             if (!canContinueStroke) {
-              const toolLabel = activeTool === 'brush' ? 'Brush' : activeTool === 'pencil' ? 'Pencil' : 'Eraser';
+              const toolLabel = toolRegistry[activeTool]?.label ?? 'Edit';
               useEditorStore.getState().pushHistory(toolLabel);
               beginStroke(engine, activeLayerId);
             }

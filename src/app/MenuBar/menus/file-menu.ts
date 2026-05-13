@@ -310,6 +310,9 @@ export const fileMenu: MenuDef = {
     { separator: true, label: '' },
     { label: 'Export…', shortcut: '⌥⇧⌘E', action: () => openExportDialogFn?.() },
     { label: 'Quick Export PNG', shortcut: '⇧⌘E', action: () => exportCanvas('png') },
+    { label: 'Export JPEG', action: () => exportCanvas('jpeg') },
+    { label: 'Export WebP', action: () => exportCanvas('webp') },
+    { label: 'Export BMP', action: () => exportCanvas('bmp') },
     { label: 'Export PSD', action: () => exportPsdFile(16) },
   ],
 };

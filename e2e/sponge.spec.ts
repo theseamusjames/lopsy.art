@@ -283,11 +283,12 @@ test.describe('Sponge Tool', () => {
     await drawRect(page, 50, 50, 300, 200, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(300);
 
+    // Flush pending GPU stroke into the layer texture so readActiveLayerPixels sees it
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { pushHistory: () => void };
+        getState: () => { pushHistory: (label?: string) => void };
       };
-      store.getState().pushHistory();
+      store.getState().pushHistory('flush');
     });
     await page.waitForTimeout(200);
 

@@ -15,7 +15,8 @@ import {
   setForegroundColor as setForegroundColorUI,
   setBlendMode,
   setLayerOpacity,
-  setAdjustment,
+  addAdjustment,
+  getRootGroupId,
   closeEffectsPanel,
   configureEffect,
   setEffectColor,
@@ -602,10 +603,11 @@ test.describe('Composition 1: Painted Landscape', () => {
     // =====================================================================
     // PHASE 14: IMAGE ADJUSTMENTS — Exposure, contrast, saturation, vignette
     // =====================================================================
-    await setAdjustment(page, 'Exposure', 0.15);
-    await setAdjustment(page, 'Contrast', 20);
-    await setAdjustment(page, 'Saturation', 15);
-    await setAdjustment(page, 'Vignette', 30);
+    const rootGroup = await getRootGroupId(page);
+    await addAdjustment(page, rootGroup, 'exposure', { exposure: 0.15 });
+    await addAdjustment(page, rootGroup, 'contrast', { contrast: 20 });
+    await addAdjustment(page, rootGroup, 'saturation', { saturation: 15 });
+    await addAdjustment(page, rootGroup, 'vignette', { vignette: 30 });
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: 'e2e/screenshots/comp1-14-adjustments.png' });
