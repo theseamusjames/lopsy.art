@@ -120,28 +120,55 @@ export function BrushDabPreview(props: BrushDabPreviewProps) {
       const maxDim = Math.max(tip.width, tip.height);
       const w = (tip.width / maxDim) * previewSize;
       const h = (tip.height / maxDim) * previewSize;
-      const offscreen = new OffscreenCanvas(tip.width, tip.height);
+
+      // Downsample to at most 80×80 before running the CPU blur so the
+      // Gaussian radius stays ≤ 40 (≈2M iters) instead of min(w,h)/2 which
+      // blows up to 268M iters for a 512×512 tip.
+      const MAX_DIM = 80;
+      const dsScale = Math.min(1, MAX_DIM / Math.max(tip.width, tip.height));
+      const dsW = Math.max(1, Math.round(tip.width * dsScale));
+      const dsH = Math.max(1, Math.round(tip.height * dsScale));
+
+      const offscreen = new OffscreenCanvas(dsW, dsH);
       const offCtx = offscreen.getContext('2d');
       if (offCtx) {
-        const imgData = offCtx.createImageData(tip.width, tip.height);
+        const imgData = offCtx.createImageData(dsW, dsH);
         if (tip.kind === 'color') {
-          const pixelCount = tip.width * tip.height;
+          const pixelCount = dsW * dsH;
           const alphaChannel = new Uint8Array(pixelCount);
-          for (let i = 0; i < pixelCount; i++) {
-            alphaChannel[i] = tip.data[i * 4 + 3] ?? 0;
+          for (let y = 0; y < dsH; y++) {
+            for (let x = 0; x < dsW; x++) {
+              const sx = Math.min(tip.width - 1, Math.round(x * tip.width / dsW));
+              const sy = Math.min(tip.height - 1, Math.round(y * tip.height / dsH));
+              alphaChannel[y * dsW + x] = tip.data[(sy * tip.width + sx) * 4 + 3] ?? 0;
+            }
           }
-          const modAlpha = applyInnerGlowHardness(alphaChannel, tip.width, tip.height, hardness / 100);
-          for (let i = 0; i < pixelCount; i++) {
-            const srcA = tip.data[i * 4 + 3] ?? 0;
-            const scale = srcA > 0 ? (modAlpha[i] ?? 0) / srcA : 0;
-            imgData.data[i * 4] = Math.round((tip.data[i * 4] ?? 0) * scale);
-            imgData.data[i * 4 + 1] = Math.round((tip.data[i * 4 + 1] ?? 0) * scale);
-            imgData.data[i * 4 + 2] = Math.round((tip.data[i * 4 + 2] ?? 0) * scale);
-            imgData.data[i * 4 + 3] = modAlpha[i] ?? 0;
+          const modAlpha = applyInnerGlowHardness(alphaChannel, dsW, dsH, hardness / 100);
+          for (let y = 0; y < dsH; y++) {
+            for (let x = 0; x < dsW; x++) {
+              const sx = Math.min(tip.width - 1, Math.round(x * tip.width / dsW));
+              const sy = Math.min(tip.height - 1, Math.round(y * tip.height / dsH));
+              const si = (sy * tip.width + sx) * 4;
+              const di = (y * dsW + x) * 4;
+              const srcA = tip.data[si + 3] ?? 0;
+              const alphaScale = srcA > 0 ? (modAlpha[y * dsW + x] ?? 0) / srcA : 0;
+              imgData.data[di] = Math.round((tip.data[si] ?? 0) * alphaScale);
+              imgData.data[di + 1] = Math.round((tip.data[si + 1] ?? 0) * alphaScale);
+              imgData.data[di + 2] = Math.round((tip.data[si + 2] ?? 0) * alphaScale);
+              imgData.data[di + 3] = modAlpha[y * dsW + x] ?? 0;
+            }
           }
         } else {
-          const modAlpha = applyInnerGlowHardness(tip.data, tip.width, tip.height, hardness / 100);
-          for (let i = 0; i < tip.data.length; i++) {
+          const dsData = new Uint8ClampedArray(dsW * dsH);
+          for (let y = 0; y < dsH; y++) {
+            for (let x = 0; x < dsW; x++) {
+              const sx = Math.min(tip.width - 1, Math.round(x * tip.width / dsW));
+              const sy = Math.min(tip.height - 1, Math.round(y * tip.height / dsH));
+              dsData[y * dsW + x] = tip.data[sy * tip.width + sx] ?? 0;
+            }
+          }
+          const modAlpha = applyInnerGlowHardness(dsData, dsW, dsH, hardness / 100);
+          for (let i = 0; i < dsW * dsH; i++) {
             imgData.data[i * 4] = 255;
             imgData.data[i * 4 + 1] = 255;
             imgData.data[i * 4 + 2] = 255;

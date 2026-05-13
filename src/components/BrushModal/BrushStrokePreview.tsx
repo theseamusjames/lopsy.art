@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { generateBrushStamp } from '../../tools/brush/brush';
 import type { BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../../types/brush';
 import styles from './BrushStrokePreview.module.css';
 
@@ -47,14 +46,27 @@ function seededRandom(seed: number): () => number {
   };
 }
 
-export function BrushStrokePreview(props: BrushStrokePreviewProps) {
+export function BrushStrokePreview({
+  size, hardness, spacing, opacity, scatter, angle, tip,
+  sizeJitter, hardnessJitter, angleJitter, opacityJitter,
+  speedSize, speedSizeInvert, taper, texture, textureBlendMode, textureScale,
+}: BrushStrokePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [debouncedProps, setDebouncedProps] = useState(props);
+  const [debouncedProps, setDebouncedProps] = useState<BrushStrokePreviewProps>({
+    size, hardness, spacing, opacity, scatter, angle, tip,
+    sizeJitter, hardnessJitter, angleJitter, opacityJitter,
+    speedSize, speedSizeInvert, taper, texture, textureBlendMode, textureScale,
+  });
 
   useEffect(() => {
-    const id = setTimeout(() => setDebouncedProps(props), 200);
+    const snapshot = {
+      size, hardness, spacing, opacity, scatter, angle, tip,
+      sizeJitter, hardnessJitter, angleJitter, opacityJitter,
+      speedSize, speedSizeInvert, taper, texture, textureBlendMode, textureScale,
+    };
+    const id = setTimeout(() => setDebouncedProps(snapshot), 200);
     return () => clearTimeout(id);
-  }, [props]);
+  }, [size, hardness, spacing, opacity, scatter, angle, tip, sizeJitter, hardnessJitter, angleJitter, opacityJitter, speedSize, speedSizeInvert, taper, texture, textureBlendMode, textureScale]);
 
   useEffect(() => {
     const props = debouncedProps;
@@ -78,9 +90,6 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
     const baseHardness = props.hardness / 100;
     const baseOpacity = props.opacity / 100;
 
-    // Render dabs to a stroke offscreen canvas (simulating MAX blending
-    // by drawing at per-dab jitter intensity only), then composite the
-    // whole stroke onto the preview at baseOpacity.
     const strokeCanvas = new OffscreenCanvas(Math.round(cssW * dpr), Math.round(cssH * dpr));
     const sCtx = strokeCanvas.getContext('2d')!;
     sCtx.scale(dpr, dpr);
@@ -90,6 +99,31 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
     const opacityJ = props.opacityJitter / 100;
     const speedAmt = props.speedSize / 100;
     const scatterAmt = props.scatter / 100;
+
+    // Bake the tip into a single OffscreenCanvas once so the dab loop never
+    // allocates or iterates pixels — just drawImage at different scales.
+    let tipCanvas: OffscreenCanvas | null = null;
+    let tipMaxDim = 1;
+    if (props.tip) {
+      const { width, height, data, kind } = props.tip;
+      tipMaxDim = Math.max(width, height);
+      tipCanvas = new OffscreenCanvas(width, height);
+      const tipCtx = tipCanvas.getContext('2d');
+      if (tipCtx) {
+        const imgData = tipCtx.createImageData(width, height);
+        if (kind === 'color') {
+          imgData.data.set(data);
+        } else {
+          for (let j = 0; j < data.length; j++) {
+            imgData.data[j * 4] = 255;
+            imgData.data[j * 4 + 1] = 255;
+            imgData.data[j * 4 + 2] = 255;
+            imgData.data[j * 4 + 3] = data[j]!;
+          }
+        }
+        tipCtx.putImageData(imgData, 0, 0);
+      }
+    }
 
     const p0 = { x: margin, y: h / 2 };
     const p1 = { x: w * 0.3, y: h * 0.25 };
@@ -137,11 +171,9 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
         let dabY = prevPt.y + dy * frac;
         const t = prevPt.t + (pt.t - prevPt.t) * frac;
 
-        // Speed simulation: slow at edges, fast in the middle
         const speedT = Math.sin(t * Math.PI);
         const normalizedSpeed = speedT;
 
-        // Speed-based size
         let dabSize = previewSize;
         if (speedAmt > 0) {
           const scale = props.speedSizeInvert
@@ -150,14 +182,12 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
           dabSize = Math.max(1, dabSize * scale);
         }
 
-        // Taper: shrink to zero over taper distance
         if (props.taper > 0) {
           const taperFactor = Math.max(0, 1 - dist / props.taper);
           dabSize *= taperFactor;
           if (dabSize < 0.5) continue;
         }
 
-        // Size jitter walk
         if (sizeJ > 0) {
           sizeWalkDist += baseSpacing;
           if (sizeWalkDist >= sizeWalkTransDist) {
@@ -172,7 +202,6 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
           dabSize = Math.max(1, dabSize * (1 - sizeJ * (1 - sizeWalkCurrent)));
         }
 
-        // Hardness jitter walk
         let dabHardness = baseHardness;
         if (hardnessJ > 0) {
           hardnessWalkDist += baseSpacing;
@@ -188,19 +217,16 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
           dabHardness = Math.max(0, baseHardness * (1 - hardnessJ * (1 - hardnessWalkCurrent)));
         }
 
-        // Opacity jitter
         let dabOpacity = baseOpacity;
         if (opacityJ > 0) {
           dabOpacity = baseOpacity * (1 - opacityJ * (1 - rand()));
         }
 
-        // Angle jitter
         let dabAngle = (props.angle * Math.PI) / 180;
         if (angleJ > 0) {
           dabAngle += (rand() - 0.5) * 2 * angleJ * Math.PI;
         }
 
-        // Scatter
         if (scatterAmt > 0) {
           const perpX = -dy / (segLen || 1);
           const perpY = dx / (segLen || 1);
@@ -209,56 +235,34 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
           dabY += perpY * offset;
         }
 
-        // Render dab onto the stroke canvas (no base opacity — applied later)
         const dabAlpha = opacityJ > 0 ? dabOpacity / baseOpacity : 1.0;
-        const half = dabSize / 2;
+        const half = Math.max(0.5, dabSize / 2);
         sCtx.save();
         sCtx.globalAlpha = dabAlpha;
         sCtx.translate(dabX, dabY);
         sCtx.rotate(dabAngle);
 
-        if (props.tip) {
-          const maxDim = Math.max(props.tip.width, props.tip.height);
-          const sw = (props.tip.width / maxDim) * dabSize;
-          const sh = (props.tip.height / maxDim) * dabSize;
-          const offscreen = new OffscreenCanvas(props.tip.width, props.tip.height);
-          const offCtx = offscreen.getContext('2d');
-          if (offCtx) {
-            const imgData = offCtx.createImageData(props.tip.width, props.tip.height);
-            if (props.tip.kind === 'color') {
-              const pixelCount = props.tip.width * props.tip.height;
-              for (let j = 0; j < pixelCount; j++) {
-                imgData.data[j * 4] = props.tip.data[j * 4] ?? 0;
-                imgData.data[j * 4 + 1] = props.tip.data[j * 4 + 1] ?? 0;
-                imgData.data[j * 4 + 2] = props.tip.data[j * 4 + 2] ?? 0;
-                imgData.data[j * 4 + 3] = props.tip.data[j * 4 + 3] ?? 0;
-              }
-            } else {
-              for (let j = 0; j < props.tip.data.length; j++) {
-                imgData.data[j * 4] = 255;
-                imgData.data[j * 4 + 1] = 255;
-                imgData.data[j * 4 + 2] = 255;
-                imgData.data[j * 4 + 3] = props.tip.data[j]!;
-              }
-            }
-            offCtx.putImageData(imgData, 0, 0);
-            sCtx.drawImage(offscreen, -sw / 2, -sh / 2, sw, sh);
-          }
+        if (tipCanvas && props.tip) {
+          const sw = (props.tip.width / tipMaxDim) * dabSize;
+          const sh = (props.tip.height / tipMaxDim) * dabSize;
+          sCtx.drawImage(tipCanvas, -sw / 2, -sh / 2, sw, sh);
         } else {
-          const stamp = generateBrushStamp(Math.max(2, Math.round(dabSize)), dabHardness);
-          const stampSize = Math.max(2, Math.round(dabSize));
-          const offscreen = new OffscreenCanvas(stampSize, stampSize);
-          const offCtx = offscreen.getContext('2d');
-          if (offCtx) {
-            const imgData = offCtx.createImageData(stampSize, stampSize);
-            for (let j = 0; j < stampSize * stampSize; j++) {
-              imgData.data[j * 4] = 255;
-              imgData.data[j * 4 + 1] = 255;
-              imgData.data[j * 4 + 2] = 255;
-              imgData.data[j * 4 + 3] = Math.round((stamp[j] ?? 0) * 255);
+          if (dabHardness >= 1) {
+            sCtx.fillStyle = 'rgba(255,255,255,1)';
+            sCtx.beginPath();
+            sCtx.arc(0, 0, half, 0, Math.PI * 2);
+            sCtx.fill();
+          } else {
+            const grad = sCtx.createRadialGradient(0, 0, 0, 0, 0, half);
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            if (dabHardness > 0) {
+              grad.addColorStop(Math.min(0.9999, dabHardness), 'rgba(255,255,255,1)');
             }
-            offCtx.putImageData(imgData, 0, 0);
-            sCtx.drawImage(offscreen, -half, -half);
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            sCtx.fillStyle = grad;
+            sCtx.beginPath();
+            sCtx.arc(0, 0, half, 0, Math.PI * 2);
+            sCtx.fill();
           }
         }
 
@@ -267,7 +271,6 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
       prevPt = pt;
     }
 
-    // Apply texture mask to the stroke canvas before compositing
     if (props.texture) {
       const texData = props.texture;
       const texScale = props.textureScale / 100;
@@ -297,7 +300,6 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
       sCtx.restore();
     }
 
-    // Composite the stroke canvas onto the preview at base opacity
     ctx.globalAlpha = baseOpacity;
     ctx.drawImage(strokeCanvas, 0, 0, cssW, cssH);
     ctx.globalAlpha = 1;
