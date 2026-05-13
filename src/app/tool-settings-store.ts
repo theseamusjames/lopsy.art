@@ -4,7 +4,7 @@ import type { GradientStop, GradientType } from '../tools/gradient/gradient';
 import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { DodgeMode } from '../tools/dodge/dodge';
 import type { SpongeMode } from '../tools/sponge/sponge';
-import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../types/brush';
+import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
 import { colorEquals } from '../utils/color';
 
 const MAX_RECENT_COLORS = 28;
@@ -477,6 +477,7 @@ interface ToolSettings {
   brushTextures: BrushTextureData[];
   presets: BrushPreset[];
   activePresetId: string | null;
+  activeSubBrushes: SubBrush[];
 
   setBrushSizeJitter: (jitter: number) => void;
   setBrushAngleJitter: (jitter: number) => void;
@@ -567,6 +568,10 @@ interface ToolSettings {
   swapColors: () => void;
   resetColors: () => void;
   addRecentColor: (color: Color) => void;
+  addSubBrush: (sub: SubBrush) => void;
+  removeSubBrush: (index: number) => void;
+  updateSubBrush: (index: number, patch: Partial<SubBrush>) => void;
+  clearSubBrushes: () => void;
   addPreset: (preset: BrushPreset) => void;
   addPresets: (presets: BrushPreset[]) => void;
   saveCurrentAsPreset: (name: string) => void;
@@ -690,6 +695,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushTextures: BUILTIN_TEXTURES,
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
+  activeSubBrushes: [],
 
   setBrushSizeJitter: (jitter) => set({ brushSizeJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushAngleJitter: (jitter) => set({ brushAngleJitter: Math.max(0, Math.min(100, jitter)) }),
@@ -836,6 +842,14 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       return { recentColors: [color, ...filtered].slice(0, MAX_RECENT_COLORS) };
     }),
 
+  addSubBrush: (sub) => set((s) => ({ activeSubBrushes: [...s.activeSubBrushes, sub] })),
+  removeSubBrush: (index) => set((s) => ({
+    activeSubBrushes: s.activeSubBrushes.filter((_, i) => i !== index),
+  })),
+  updateSubBrush: (index, patch) => set((s) => ({
+    activeSubBrushes: s.activeSubBrushes.map((sub, i) => i === index ? { ...sub, ...patch } : sub),
+  })),
+  clearSubBrushes: () => set({ activeSubBrushes: [] }),
   addPreset: (preset) => set((s) => ({ presets: [...s.presets, preset] })),
   addPresets: (presets) => set((s) => ({ presets: [...s.presets, ...presets] })),
   saveCurrentAsPreset: (name) => {
@@ -861,6 +875,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       speedSensitivity: s.brushSpeedSensitivity,
       fade: s.brushFade,
       taper: s.brushTaper,
+      subBrushes: s.activeSubBrushes.length > 0 ? s.activeSubBrushes : undefined,
     };
     set((state) => ({ presets: [...state.presets, preset], activePresetId: preset.id }));
   },
@@ -877,23 +892,29 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     const state = get();
     const preset = state.presets.find((p) => p.id === id);
     if (!preset) return;
-    set({ activePresetId: id });
-    state.setBrushSize(preset.size);
-    state.setBrushHardness(preset.hardness);
-    state.setBrushOpacity(preset.opacity);
-    state.setBrushSpacing(preset.spacing);
-    state.setBrushScatter(preset.scatter);
-    state.setBrushAngle(preset.angle);
-    state.setActiveBrushTip(preset.tip);
-    if (preset.sizeJitter !== undefined) state.setBrushSizeJitter(preset.sizeJitter);
-    if (preset.hardnessJitter !== undefined) state.setBrushHardnessJitter(preset.hardnessJitter);
-    if (preset.angleJitter !== undefined) state.setBrushAngleJitter(preset.angleJitter);
-    if (preset.opacityJitter !== undefined) state.setBrushOpacityJitter(preset.opacityJitter);
-    if (preset.speedSize !== undefined) state.setBrushSpeedSize(preset.speedSize);
-    if (preset.speedSizeInvert !== undefined) state.setBrushSpeedSizeInvert(preset.speedSizeInvert);
-    if (preset.speedSensitivity !== undefined) state.setBrushSpeedSensitivity(preset.speedSensitivity);
-    if (preset.fade !== undefined) state.setBrushFade(preset.fade);
-    if (preset.taper !== undefined) state.setBrushTaper(preset.taper);
+    set({
+      activePresetId: id,
+      brushSize: preset.size,
+      brushHardness: preset.hardness,
+      brushOpacity: preset.opacity,
+      brushSpacing: preset.spacing,
+      brushScatter: preset.scatter,
+      brushAngle: preset.angle,
+      activeBrushTip: preset.tip,
+      brushSizeJitter: preset.sizeJitter ?? 0,
+      brushHardnessJitter: preset.hardnessJitter ?? 0,
+      brushAngleJitter: preset.angleJitter ?? 0,
+      brushOpacityJitter: preset.opacityJitter ?? 0,
+      brushSpeedSize: preset.speedSize ?? 0,
+      brushSpeedSizeInvert: preset.speedSizeInvert ?? false,
+      brushSpeedSensitivity: preset.speedSensitivity ?? 'med',
+      brushFade: preset.fade ?? 0,
+      brushTaper: preset.taper ?? 0,
+      brushTextureData: null,
+      brushTextureBlendMode: 'multiply',
+      brushTextureScale: 100,
+      activeSubBrushes: preset.subBrushes ?? [],
+    });
   },
   setTipFromPreset: (id) => {
     const state = get();

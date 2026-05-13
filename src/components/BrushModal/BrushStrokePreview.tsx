@@ -225,11 +225,21 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
           const offCtx = offscreen.getContext('2d');
           if (offCtx) {
             const imgData = offCtx.createImageData(props.tip.width, props.tip.height);
-            for (let j = 0; j < props.tip.data.length; j++) {
-              imgData.data[j * 4] = 255;
-              imgData.data[j * 4 + 1] = 255;
-              imgData.data[j * 4 + 2] = 255;
-              imgData.data[j * 4 + 3] = props.tip.data[j]!;
+            if (props.tip.kind === 'color') {
+              const pixelCount = props.tip.width * props.tip.height;
+              for (let j = 0; j < pixelCount; j++) {
+                imgData.data[j * 4] = props.tip.data[j * 4] ?? 0;
+                imgData.data[j * 4 + 1] = props.tip.data[j * 4 + 1] ?? 0;
+                imgData.data[j * 4 + 2] = props.tip.data[j * 4 + 2] ?? 0;
+                imgData.data[j * 4 + 3] = props.tip.data[j * 4 + 3] ?? 0;
+              }
+            } else {
+              for (let j = 0; j < props.tip.data.length; j++) {
+                imgData.data[j * 4] = 255;
+                imgData.data[j * 4 + 1] = 255;
+                imgData.data[j * 4 + 2] = 255;
+                imgData.data[j * 4 + 3] = props.tip.data[j]!;
+              }
             }
             offCtx.putImageData(imgData, 0, 0);
             sCtx.drawImage(offscreen, -sw / 2, -sh / 2, sw, sh);
@@ -257,17 +267,12 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
       prevPt = pt;
     }
 
-    // Composite the stroke canvas onto the preview at base opacity
-    ctx.globalAlpha = baseOpacity;
-    ctx.drawImage(strokeCanvas, 0, 0, cssW, cssH);
-    ctx.globalAlpha = 1;
-
-    // Texture overlay (simulated)
+    // Apply texture mask to the stroke canvas before compositing
     if (props.texture) {
       const texData = props.texture;
       const texScale = props.textureScale / 100;
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-in';
+      sCtx.save();
+      sCtx.globalCompositeOperation = 'destination-in';
       const texCanvas = new OffscreenCanvas(texData.width, texData.height);
       const texCtx = texCanvas.getContext('2d');
       if (texCtx) {
@@ -285,12 +290,17 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
         const tileH = texData.height * texScale;
         for (let ty = 0; ty < cssH; ty += tileH) {
           for (let tx = 0; tx < cssW; tx += tileW) {
-            ctx.drawImage(texCanvas, tx, ty, tileW, tileH);
+            sCtx.drawImage(texCanvas, tx, ty, tileW, tileH);
           }
         }
       }
-      ctx.restore();
+      sCtx.restore();
     }
+
+    // Composite the stroke canvas onto the preview at base opacity
+    ctx.globalAlpha = baseOpacity;
+    ctx.drawImage(strokeCanvas, 0, 0, cssW, cssH);
+    ctx.globalAlpha = 1;
   }, [debouncedProps]);
 
   return (

@@ -45,6 +45,13 @@ pub fn set_brush_texture_uniforms(
 pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
     engine.ensure_layer_full_size(layer_id)?;
 
+    // Track whether this stroke should apply the brush texture during compositing.
+    // Only brush strokes use texture; pencil/eraser override this to false.
+    engine.stroke_use_brush_texture.insert(
+        layer_id.to_string(),
+        engine.brush_has_texture,
+    );
+
     // Create a stroke texture matching the layer size
     if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
         let (w, h) = engine.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
@@ -139,7 +146,13 @@ pub fn apply_dab_batch(
     gl.enable(WebGl2RenderingContext::BLEND);
     gl.blend_equation(WebGl2RenderingContext::MAX);
 
-    let shader = &engine.shaders.brush_dab;
+    let shader = if engine.brush_has_tip && engine.brush_tip_is_color {
+        &engine.shaders.brush_dab_color
+    } else if engine.brush_has_tip {
+        &engine.shaders.brush_dab_alpha
+    } else {
+        &engine.shaders.brush_dab_circle
+    };
     gl.use_program(Some(&shader.program));
 
     // Set uniforms (no stamp texture needed — computed analytically in shader)
@@ -190,7 +203,7 @@ pub fn apply_dab_batch(
         gl.uniform2f(Some(&loc), layer_ox, layer_oy);
     }
 
-    // Bind custom brush tip texture if present
+    // Bind custom brush tip texture if present (for alpha and color variants)
     let use_brush_tip = engine.brush_has_tip && engine.brush_tip_texture.is_some();
     if use_brush_tip {
         gl.active_texture(WebGl2RenderingContext::TEXTURE1);
@@ -202,9 +215,6 @@ pub fn apply_dab_batch(
         if let Some(loc) = shader.location(gl, "u_brushTip") {
             gl.uniform1i(Some(&loc), 1);
         }
-    }
-    if let Some(loc) = shader.location(gl, "u_hasBrushTip") {
-        gl.uniform1i(Some(&loc), if use_brush_tip { 1 } else { 0 });
     }
     if let Some(loc) = shader.location(gl, "u_angle") {
         gl.uniform1f(Some(&loc), if use_brush_tip { engine.brush_angle } else { 0.0 });
@@ -435,6 +445,7 @@ pub fn apply_eraser_dab_batch(
 pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
     let _stroke_opacity = engine.stroke_opacity.remove(layer_id).unwrap_or(1.0);
 
+    engine.stroke_use_brush_texture.remove(layer_id);
     let Some(stroke_tex) = engine.stroke_textures.remove(layer_id) else {
         engine.mark_layer_dirty(layer_id);
         return;

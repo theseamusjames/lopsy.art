@@ -23,16 +23,25 @@ export function BrushThumbnail({ preset, size = 48 }: BrushThumbnailProps) {
       const img = ctx.createImageData(size, size);
       const scaleX = preset.tip.width / size;
       const scaleY = preset.tip.height / size;
+      const isColor = preset.tip.kind === 'color';
       for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
           const sx = Math.min(preset.tip.width - 1, Math.floor(x * scaleX));
           const sy = Math.min(preset.tip.height - 1, Math.floor(y * scaleY));
-          const alpha = preset.tip.data[sy * preset.tip.width + sx] ?? 0;
           const idx = (y * size + x) * 4;
-          img.data[idx] = 255;
-          img.data[idx + 1] = 255;
-          img.data[idx + 2] = 255;
-          img.data[idx + 3] = alpha;
+          if (isColor) {
+            const srcIdx = (sy * preset.tip.width + sx) * 4;
+            img.data[idx] = preset.tip.data[srcIdx] ?? 0;
+            img.data[idx + 1] = preset.tip.data[srcIdx + 1] ?? 0;
+            img.data[idx + 2] = preset.tip.data[srcIdx + 2] ?? 0;
+            img.data[idx + 3] = preset.tip.data[srcIdx + 3] ?? 0;
+          } else {
+            const alpha = preset.tip.data[sy * preset.tip.width + sx] ?? 0;
+            img.data[idx] = 255;
+            img.data[idx + 1] = 255;
+            img.data[idx + 2] = 255;
+            img.data[idx + 3] = alpha;
+          }
         }
       }
       ctx.putImageData(img, 0, 0);

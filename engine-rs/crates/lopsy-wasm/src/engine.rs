@@ -110,6 +110,7 @@ pub struct EngineInner {
     // Brush state
     pub stroke_textures: HashMap<String, TextureHandle>,
     pub stroke_opacity: HashMap<String, f32>,
+    pub stroke_use_brush_texture: HashMap<String, bool>,
     pub stroke_fbo: Option<FramebufferHandle>,
     /// Dodge/burn per-stroke coverage texture: a scalar strength field
     /// (RGBA, all four channels equal) MAX-accumulated across dabs so
@@ -132,6 +133,7 @@ pub struct EngineInner {
     pub brush_tip_width: u32,
     pub brush_tip_height: u32,
     pub brush_has_tip: bool,
+    pub brush_tip_is_color: bool,
     pub brush_angle: f32,
     // Custom brush texture
     pub brush_texture: Option<TextureHandle>,
@@ -265,6 +267,7 @@ impl EngineInner {
             needs_recomposite: true,
             stroke_textures: HashMap::new(),
             stroke_opacity: HashMap::new(),
+            stroke_use_brush_texture: HashMap::new(),
             stroke_fbo: None,
             stroke_dodge_textures: HashMap::new(),
             stroke_dodge_preview_textures: HashMap::new(),
@@ -276,6 +279,7 @@ impl EngineInner {
             brush_tip_width: 0,
             brush_tip_height: 0,
             brush_has_tip: false,
+            brush_tip_is_color: false,
             brush_angle: 0.0,
             brush_texture: None,
             brush_texture_width: 0,

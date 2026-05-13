@@ -71,8 +71,12 @@ pub const VORONOI_FRAG: &str = include_str!("shaders/filters/voronoi.glsl");
 pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
 pub const SURFACE_BLUR_FRAG: &str = include_str!("shaders/filters/surface_blur.glsl");
 
-// Brush
-pub const BRUSH_DAB_FRAG: &str = include_str!("shaders/brush/brush_dab.glsl");
+// Brush (assembled from header + variant + footer at compile_all time)
+const BRUSH_DAB_HEADER: &str = include_str!("shaders/brush/brush_dab_header.glsl");
+const BRUSH_DAB_FOOTER: &str = include_str!("shaders/brush/brush_dab_footer.glsl");
+const BRUSH_DAB_CIRCLE_BODY: &str = include_str!("shaders/brush/brush_dab_circle.glsl");
+const BRUSH_DAB_ALPHA_BODY: &str = include_str!("shaders/brush/brush_dab_alpha.glsl");
+const BRUSH_DAB_COLOR_BODY: &str = include_str!("shaders/brush/brush_dab_color.glsl");
 pub const ERASER_DAB_FRAG: &str = include_str!("shaders/brush/eraser_dab.glsl");
 pub const QUICK_MASK_DAB_FRAG: &str = include_str!("shaders/brush/quick_mask_dab.glsl");
 pub const DODGE_BURN_FRAG: &str = include_str!("shaders/brush/dodge_burn.glsl");
@@ -237,7 +241,9 @@ pub struct ShaderPrograms {
     pub selection_mask_blend: ShaderProgram,
     pub surface_blur: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
-    pub brush_dab: ShaderProgram,
+    pub brush_dab_circle: ShaderProgram,
+    pub brush_dab_alpha: ShaderProgram,
+    pub brush_dab_color: ShaderProgram,
     pub eraser_dab: ShaderProgram,
     pub quick_mask_dab: ShaderProgram,
     pub dodge_burn: ShaderProgram,
@@ -323,8 +329,10 @@ impl ShaderPrograms {
             voronoi: compile_program(gl, v, VORONOI_FRAG)?,
             selection_mask_blend: compile_program(gl, v, SELECTION_MASK_BLEND_FRAG)?,
             surface_blur: compile_program(gl, v, SURFACE_BLUR_FRAG)?,
-            // Brush — use standard fullscreen quad vert; dab positioning via fragment shader
-            brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,
+            // Brush — assembled from header + variant body + footer
+            brush_dab_circle: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_CIRCLE_BODY}{BRUSH_DAB_FOOTER}"))?,
+            brush_dab_alpha: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_ALPHA_BODY}{BRUSH_DAB_FOOTER}"))?,
+            brush_dab_color: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_COLOR_BODY}{BRUSH_DAB_FOOTER}"))?,
             eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,
             quick_mask_dab: compile_program(gl, v, QUICK_MASK_DAB_FRAG)?,
             dodge_burn: compile_program(gl, v, DODGE_BURN_FRAG)?,
