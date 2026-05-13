@@ -117,6 +117,8 @@ pub fn composite(engine: &mut EngineInner) {
                     });
                     // Blend the adjusted group scratch onto composite with the group's
                     // opacity, blend mode, and mask applied.
+                    // Group scratch has straight alpha (blend.glsl outputs
+                    // vec4(outRGB, outA) without premultiplication), so pass false.
                     if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
                         blend_onto_composite(
                             engine,
@@ -125,7 +127,7 @@ pub fn composite(engine: &mut EngineInner) {
                             blend_mode,
                             0.0, 0.0,
                             doc_w, doc_h,
-                            true,
+                            false,
                             None,
                             group_mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)),
                         );

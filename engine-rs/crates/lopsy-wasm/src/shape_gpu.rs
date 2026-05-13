@@ -188,8 +188,21 @@ pub fn render_shape_expanded(
     corner_radius: f32,
 ) {
     let corner_radius = corner_radius.min((width as f32).min(height as f32) / 2.0);
-    let half_w = (width / 2.0 + stroke_width as f64 + 1.0).ceil() as i32;
-    let half_h = (height / 2.0 + stroke_width as f64 + 1.0).ceil() as i32;
+    // For polygon shapes the vertices sit on the circumscribed circle, which
+    // extends beyond the face-radius (apothem) bounding box. Use the
+    // circumradius so ensure_layer_covers allocates enough texture space.
+    let (half_w, half_h) = if sides >= 3 {
+        let face_r = (width as f32).min(height as f32) / 2.0;
+        let an = std::f32::consts::PI / sides as f32;
+        let circum_r = (face_r / an.cos()) as f64;
+        let hw = (circum_r + stroke_width as f64 + 1.0).ceil() as i32;
+        (hw, hw)
+    } else {
+        (
+            (width / 2.0 + stroke_width as f64 + 1.0).ceil() as i32,
+            (height / 2.0 + stroke_width as f64 + 1.0).ceil() as i32,
+        )
+    };
     let _ = engine.ensure_layer_covers(
         layer_id,
         (cx as i32) - half_w,
