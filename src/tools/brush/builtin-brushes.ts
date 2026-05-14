@@ -51,7 +51,7 @@ export async function loadBuiltinBitmapBrushes(): Promise<void> {
       tip,
       size: 30,
       hardness: 100,
-      spacing: 15,
+      spacing: 1,
       scatter: 0,
       angle: 0,
       opacity: 100,
