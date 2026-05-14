@@ -288,7 +288,7 @@ export async function redo(page: Page): Promise<void> {
 const TOOL_SHORTCUTS: Record<string, string> = {
   move: 'v', brush: 'b', pencil: 'n', eraser: 'e', fill: 'g',
   eyedropper: 'i', stamp: 's', dodge: 'o', sponge: 'y', smudge: 'r', spray: 'j',
-  'marquee-rect': 'm', lasso: 'l', wand: 'w', 'quick-select': 'q',
+  'marquee-rect': 'm', lasso: 'l', wand: 'w',
   shape: 'u', text: 't', crop: 'c', path: 'p',
 };
 
@@ -361,7 +361,13 @@ export async function closeBrushModal(page: Page): Promise<void> {
 
 export async function setBrushModalOption(page: Page, label: string, value: number): Promise<void> {
   await openBrushModal(page);
-  const input = page.locator(`[role="dialog"][aria-label="Brushes"] [aria-label="${label} value"]`);
+  const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
+  const dynamicsLabels = ['Scatter', 'Size Jitter', 'Hardness Jitter', 'Angle Jitter', 'Opacity Jitter', 'Speed Size'];
+  const textureLabels = ['Scale'];
+  const targetTab = dynamicsLabels.includes(label) ? 'Dynamics' : textureLabels.includes(label) ? 'Texture' : 'Shape';
+  await dialog.locator(`[role="option"]:has-text("${targetTab}")`).click();
+  await page.waitForTimeout(50);
+  const input = dialog.locator(`[aria-label="${label} value"]`);
   await input.fill(String(value));
   await input.press('Enter');
 }
@@ -424,30 +430,47 @@ export async function applyFilter(
 }
 
 export async function setAdjustment(page: Page, label: string, value: number): Promise<void> {
-  const valuesSliders = ['Exposure', 'Contrast', 'Highlights', 'Shadows', 'Whites', 'Blacks', 'Vignette'];
-  const tab = valuesSliders.includes(label) ? 'Values' : 'Colors';
+  const LABEL_TO_NODE: Record<string, { nodeType: string; key: string }> = {
+    Exposure: { nodeType: 'exposure', key: 'exposure' },
+    Contrast: { nodeType: 'contrast', key: 'contrast' },
+    Highlights: { nodeType: 'highlights-shadows', key: 'highlights' },
+    Shadows: { nodeType: 'highlights-shadows', key: 'shadows' },
+    Whites: { nodeType: 'highlights-shadows', key: 'whites' },
+    Blacks: { nodeType: 'highlights-shadows', key: 'blacks' },
+    Saturation: { nodeType: 'saturation', key: 'saturation' },
+    Vibrance: { nodeType: 'saturation', key: 'vibrance' },
+    Vignette: { nodeType: 'vignette', key: 'vignette' },
+  };
 
-  const input = page.locator(`[aria-label="${label} value"]`);
+  const mapping = LABEL_TO_NODE[label];
+  if (!mapping) throw new Error(`Unknown adjustment label: ${label}`);
+
+  const rootGroupId = await page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { rootGroupId: string } };
+    };
+    return store.getState().document.rootGroupId;
+  });
+
+  const drawer = page.getByTestId('effects-drawer');
+  const input = drawer.locator(`[aria-label="${label} value"]`);
+
   if (!(await input.isVisible({ timeout: 500 }).catch(() => false))) {
-    const tabLocator = page.locator(`role=tab[name="${tab}"]`);
-    if (await tabLocator.isVisible({ timeout: 500 }).catch(() => false)) {
-      await tabLocator.click();
-      await page.waitForTimeout(100);
-    } else {
-      const rootGroupId = await page.evaluate(() => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { document: { rootGroupId: string } };
-        };
-        return store.getState().document.rootGroupId;
-      });
-      await page.locator(`[data-layer-id="${rootGroupId}"] button[aria-label*="effects"]`).click();
-      await page.waitForTimeout(200);
-      const tabAfter = page.locator(`role=tab[name="${tab}"]`);
-      if (await tabAfter.isVisible({ timeout: 500 }).catch(() => false)) {
-        await tabAfter.click();
+    await openGroupEffectsPanel(page, rootGroupId);
+
+    if (!(await input.isVisible({ timeout: 500 }).catch(() => false))) {
+      await addAdjustment(page, rootGroupId, mapping.nodeType);
+    }
+
+    if (!(await input.isVisible({ timeout: 1000 }).catch(() => false))) {
+      const expandBtn = drawer.locator('[aria-label="Expand"]').last();
+      if (await expandBtn.isVisible().catch(() => false)) {
+        await expandBtn.click();
+        await page.waitForTimeout(100);
       }
     }
   }
+
   await input.fill(String(value));
   await input.press('Enter');
   await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
