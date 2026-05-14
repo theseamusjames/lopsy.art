@@ -138,15 +138,22 @@ pub fn apply_dab_batch(
     gl.active_texture(WebGl2RenderingContext::TEXTURE2);
     gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
-    // MAX blending for dab accumulation. Each pixel takes the highest
+    // Dab accumulation blending.
+    // Alpha/circle brushes: MAX blending — each pixel takes the highest
     // alpha from any overlapping dab, preventing opacity compounding.
-    // Base opacity is NOT in the shader — it's applied once when the
-    // stroke is composited onto the layer. Opacity jitter varies
-    // per-dab intensity within the MAX accumulation.
+    // Color brushes: premultiplied alpha "over" compositing — overlapping
+    // rotated dabs layer correctly instead of per-channel MAX which would
+    // create phantom colors (e.g. blue + orange → pink).
     gl.enable(WebGl2RenderingContext::BLEND);
-    gl.blend_equation(WebGl2RenderingContext::MAX);
+    let is_color_tip = engine.brush_has_tip && engine.brush_tip_is_color;
+    if is_color_tip {
+        gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
+        gl.blend_func(WebGl2RenderingContext::ONE, WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA);
+    } else {
+        gl.blend_equation(WebGl2RenderingContext::MAX);
+    }
 
-    let shader = if engine.brush_has_tip && engine.brush_tip_is_color {
+    let shader = if is_color_tip {
         &engine.shaders.brush_dab_color
     } else if engine.brush_has_tip {
         &engine.shaders.brush_dab_alpha
@@ -306,6 +313,7 @@ pub fn apply_dab_batch(
     gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
     gl.disable(WebGl2RenderingContext::BLEND);
     gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
+    gl.blend_func(WebGl2RenderingContext::ONE, WebGl2RenderingContext::ZERO);
 
     gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
 
