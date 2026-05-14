@@ -150,3 +150,10 @@
   flex-direction: column;
   min-height: 0;
 }
+
+@media (max-width: 600px) {
+  .sidebar,
+  .sidebarArea {
+    display: none;
+  }
+}
