@@ -28,15 +28,30 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Scale**: 10 - 200% (tile size relative to the source tile)
 - Texture tiles in document space so adjacent strokes line up across the same pattern grid
 
+**Sub-brushes** (Brushes modal → Sub-brushes section). Each sub-brush emits an additional dab co-located with every primary dab, so a single stroke can layer multiple textures, sizes, and rotations at once. A tip can carry any number of sub-brushes.
+- **Size Ratio**: 0 - 200% (sub-brush size relative to the primary brush)
+- **Hardness**: 0 - 100% (independent hardness for the sub-brush)
+- **Opacity Ratio**: 0 - 100% of the primary brush opacity
+- **Angle Offset**: -180° to +180° relative to the primary brush angle
+- **Size / Angle / Opacity Jitter**: 0 - 100% per-dab randomization, independent from the primary brush's dynamics
+
 **Tips & presets** (Brushes modal — left panel)
-- **Custom brush tips**: grayscale bitmap or procedural circle
-- **ABR import**: Adobe Brush file support — drops every brush in the file into the preset grid as new tips
-- **Built-in presets**: Hard Round, Soft Round, Airbrush, Square, Cross Hatch, Diamond, Star, Slash, Chalk, Spray, Leaf
+- **Tip kinds**: procedural circle (no bitmap), **alpha tip** (1 byte/pixel grayscale, brush color tints the dab), or **color tip** (4 byte/pixel RGBA, color comes from the bitmap itself). Color-tip dabs use premultiplied-alpha "over" compositing so overlapping rotated dabs layer correctly.
+- **Custom brush tips**: import grayscale bitmaps as alpha tips. PNG/JPG/WebP supported.
+- **Brush from Selection** (Edit menu → "Define Brush from Selection"): captures the current marquee selection as a new brush tip. Two variants:
+  - **Grayscale (alpha) capture**: inverts the source so dark pixels paint opaquely (Photoshop convention) and the selection mask crops to the marquee bounds.
+  - **Color capture**: preserves full RGBA so the tip stamps the original colors of the selection (useful for stamp-pattern brushes).
+- **ABR import**: Adobe Brush file support — drops every brush in the file into the preset grid as new tips.
+- **Preset import / export**: dumps the user's custom presets to `lopsy-brushes.json` (Base64-encoded bitmap data plus every dynamic / sub-brush parameter); the same file can be re-imported on any machine to restore the preset library.
+- **Built-in presets** (loaded from the Rust engine; current set): Hard Round, Soft Round, Airbrush, Square, Cross Hatch, Diamond, Star, Slash, Chalk, Spray, Leaf. All built-in presets ship with spacing standardized to 1% of brush size so they paint smooth strokes by default.
 - **Delete**: removes the active preset (only enabled for user-imported custom presets, never built-ins)
+
+**Shape-aware hardness**
+- Tip hardness is implemented as an inner-glow falloff: the tip alpha is inverted, Gaussian-blurred, normalized, then multiplied back in as an opacity mask. This preserves the tip silhouette while softening edges — corners and straight edges soften proportionally to their distance from the interior, so non-circular tips (Square, Star, Slash, Leaf) don't degenerate into circular blobs when hardness is reduced.
 
 **Stroke modifiers**
 - **Shift+click**: draws a straight line from the previous stroke endpoint to the click point
-- **Hold-to-smooth**: pause the cursor mid-stroke and the recorded freehand path is auto-smoothed and re-rasterized in place (undo restores the freehand version first, then the pre-stroke state)
+- **Hold-to-smooth**: pause the cursor mid-stroke for ~1500 ms and the recorded freehand path is auto-smoothed (Ramer-Douglas-Peucker simplification + Catmull-Rom interpolation, straight-line detection within a 4 px tolerance) and re-rasterized in place. Undo restores the freehand version first, then the pre-stroke state.
 
 ### Pencil
 - **Size**: 1 - 100 px
@@ -55,6 +70,14 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Exposure**: 1 - 100%
 - **Size**: 1 - 200 px
 - **Shift+click**: applies dodge/burn along a straight line from the previous stroke endpoint
+
+### Sponge
+- **Mode**: saturate or desaturate
+- **Strength**: 1 - 100 (saturation delta applied per dab)
+- **Size**: 1 px – document-scaled max (default cap 200 px)
+- Shortcut: `Y`
+- Converts each affected pixel to HSL, shifts the saturation channel by the configured delta with a Gaussian falloff (1.0 at the dab center, 0 at the edge), and writes back to RGB. Internal hardness is fixed at 0.5; dab spacing is 25% of the brush size.
+- **Shift+click**: applies the sponge along a straight line from the previous stroke endpoint
 
 ### Clone Stamp
 - **Size**: 1 - 200 px
@@ -286,9 +309,15 @@ Available node types (Add menu):
   and Output White controls. Master is applied first, then per-channel
   levels. Compiled to a 256×1 LUT and shares the GPU adjustments path with
   Curves; identity levels bypass the lookup.
-- **Hue / Saturation**, **Color Balance**, **Invert**, **Black & White**, **Photo Filter**, **Channel Mixer**, **Gradient Map** — listed in the Add menu and addable to the stack; their detailed controls are still landing (the node body shows a "Controls coming soon" note while the engine wiring matures).
+- **Invert** — single toggle (no numeric controls); inverts RGB at composite time.
+- **Hue / Saturation** — Hue -180° to +180°, Saturation -100 to +100, Lightness -100 to +100. Operates per-pixel in HSL space.
+- **Color Balance** — tone-range tabs (Shadows, Midtones, Highlights) each with Cyan ↔ Red, Magenta ↔ Green, and Yellow ↔ Blue sliders (-100 to +100). Per-pixel weighting determines how much each tonal range contributes to the shift.
+- **Photo Filter** — Color (color picker), Density 0 - 100, Preserve Luminosity (checkbox). Blends a tinted overlay over the pixel; when Preserve Luminosity is on, the tinted result is re-luminance-matched to the source.
+- **Black & White** — six channel sliders (Reds, Yellows, Greens, Cyans, Blues, Magentas), each -200 to +300, controlling how strongly that hue contributes to the monochrome output luminance.
+- **Channel Mixer** — output-channel tabs (R / G / B) each with Red, Green, Blue (-200 to +200), and Constant (-200 to +200) sliders. Lets a single output channel be remixed as a linear combination of the source channels plus a bias.
+- **Gradient Map** — editable gradient stops with per-stop color picker and position (0 - 100%). The stack of stops is compiled into a 256×1 RGBA LUT at sync time and applied as a luminance-indexed lookup in the GPU adjustments shader.
 
-Internally the node list compiles down to the legacy flat `ImageAdjustments` shape so the GPU compositor's adjustment pass is unchanged.
+All 14 adjustment types now have first-class UI controls and are fully GPU-accelerated. Internally the node list compiles down to the legacy flat `ImageAdjustments` shape so the GPU compositor's adjustment pass is unchanged.
 
 ---
 
@@ -337,6 +366,11 @@ Internally the node list compiles down to the legacy flat `ImageAdjustments` sha
 - **Pixel Stretch**: amount 1 - 200 px, bands 2 - 50, seed 0 - 999, RGB split 0 - 1.0 (shifts horizontal scan-line bands by random offsets with per-channel separation, creating glitch / VHS corruption effects)
 - **Lens Distortion**: strength -100 to +100 (negative = pincushion, positive = barrel), zoom 50 - 200%, chromatic fringing 0 - 100% (applies barrel or pincushion radial distortion with optional per-channel color separation at edges, simulating real camera lens effects)
 - **Mesh Warp**: interactive grid-based distortion overlaid directly on the canvas. Activated from the Move tool's options bar; grid handles are draggable in document space, with bilinear interpolation between points handled on the GPU. When a marquee selection is active, the warp is constrained to the selection's bounding box (pixels outside pass through unchanged); otherwise the warp covers the whole layer. Grid sizes 3×3 to 6×6 with live preview, reset, and undo support.
+- **Liquify** (Filter menu → "Liquify…" or `⌘⇧X`): opens a floating, modal-style session that paints into a per-pixel displacement map sampled by the GPU on each frame. Apply commits the warp to a new history snapshot; Cancel discards the displacement map.
+  - **Modes**: `push` (drag pixels along the cursor direction), `twirl CW` / `twirl CCW` (rotate pixels around the brush center), `bloat` (push outward), `pinch` (pull inward)
+  - **Brush Size**: 4 - 500 px
+  - **Pressure**: 1 - 100% (multiplier for displacement intensity)
+  - Quintic radial falloff inside each dab so the warp eases off smoothly at the brush edge
 
 ### Render
 - **Clouds**: scale, seed
