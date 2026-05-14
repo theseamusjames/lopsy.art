@@ -7,6 +7,7 @@ import {
   filterAddNoise,
   filterFillWithNoise,
   filterFindEdges,
+  filterDisplacementMap,
   saveFilterPreview,
   restoreFilterPreview,
   clearFilterPreview,
@@ -45,7 +46,8 @@ export type FilterDialogId =
   | 'pattern-fill'
   | 'emboss'
   | 'voronoi'
-  | 'fibers';
+  | 'fibers'
+  | 'displacement-map';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;
@@ -192,6 +194,70 @@ export function applyFillWithNoise(monochrome: boolean): void {
 
   useEditorStore.getState().pushHistory('Fill with Noise');
   filterFillWithNoise(engine, activeId, monochrome);
+  clearJsPixelData(activeId);
+  useEditorStore.getState().notifyRender();
+}
+
+export function applyDisplacementMap(
+  dispLayerId: string,
+  scaleX: number,
+  scaleY: number,
+  mode: number,
+  wrap: number,
+): void {
+  const activeId = getActiveLayerId();
+  if (!activeId) return;
+  const engine = getEngine();
+  if (!engine) return;
+
+  flushLayerSync(useEditorStore.getState());
+  useEditorStore.getState().pushHistory('Displacement Map');
+  filterDisplacementMap(engine, activeId, dispLayerId, scaleX, scaleY, mode, wrap);
+  clearJsPixelData(activeId);
+  useEditorStore.getState().notifyRender();
+}
+
+export function previewDisplacementMap(
+  dispLayerId: string,
+  scaleX: number,
+  scaleY: number,
+  mode: number,
+  wrap: number,
+): void {
+  const activeId = getActiveLayerId();
+  if (!activeId) return;
+  const engine = getEngine();
+  if (!engine) return;
+
+  restoreFilterPreview(engine);
+  filterDisplacementMap(engine, activeId, dispLayerId, scaleX, scaleY, mode, wrap);
+  clearJsPixelData(activeId);
+  useEditorStore.getState().notifyRender();
+}
+
+export function applyDisplacementMapWithPreview(
+  dispLayerId: string,
+  scaleX: number,
+  scaleY: number,
+  mode: number,
+  wrap: number,
+): void {
+  const activeId = getActiveLayerId();
+  if (!activeId) return;
+  const engine = getEngine();
+  if (!engine) return;
+
+  const previewPixels = readLayerCompressed(activeId);
+  restoreFilterPreview(engine);
+  clearFilterPreview(engine);
+
+  useEditorStore.getState().pushHistory('Displacement Map');
+  if (previewPixels) {
+    uploadCompressed(activeId, previewPixels);
+  } else {
+    filterDisplacementMap(engine, activeId, dispLayerId, scaleX, scaleY, mode, wrap);
+  }
+
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }

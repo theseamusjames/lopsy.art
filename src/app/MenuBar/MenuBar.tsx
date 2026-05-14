@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilterDialog } from '../../components/FilterDialog/FilterDialog';
 import { NoiseDialog, FillNoiseDialog } from '../../components/FilterDialog/NoiseDialog';
 import { PatternFillDialog } from '../../components/PatternFillDialog/PatternFillDialog';
+import { DisplacementMapDialog } from '../../components/DisplacementMapDialog/DisplacementMapDialog';
 import { ExportDialog } from '../../components/ExportDialog/ExportDialog';
 import {
   type FilterDialogId,
@@ -13,6 +14,9 @@ import {
   previewGenericFilter,
   cancelFilterPreviewSession,
   applyGenericFilterWithPreview,
+  applyDisplacementMap,
+  previewDisplacementMap,
+  applyDisplacementMapWithPreview,
 } from './filter-actions';
 import {
   applyPatternFill,
@@ -184,6 +188,21 @@ export function MenuBar() {
     previewPatternFill(patternId, scale, offsetX, offsetY);
   }, []);
 
+  const handleDisplacementApply = useCallback((dispLayerId: string, scaleX: number, scaleY: number, mode: number, wrap: number) => {
+    if (previewActiveRef.current) {
+      applyDisplacementMapWithPreview(dispLayerId, scaleX, scaleY, mode, wrap);
+      previewActiveRef.current = false;
+    } else {
+      applyDisplacementMap(dispLayerId, scaleX, scaleY, mode, wrap);
+    }
+    setActiveDialog(null);
+  }, []);
+
+  const handleDisplacementPreviewChange = useCallback((dispLayerId: string, scaleX: number, scaleY: number, mode: number, wrap: number) => {
+    if (!previewActiveRef.current) return;
+    previewDisplacementMap(dispLayerId, scaleX, scaleY, mode, wrap);
+  }, []);
+
   const handleExportDialogExport = useCallback((options: ExportOptions) => {
     setShowExportDialog(false);
     exportCanvasWithOptions(options);
@@ -220,7 +239,7 @@ export function MenuBar() {
     setSelectDialog(null);
   }, [selectDialog]);
 
-  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill'
+  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill' && activeDialog !== 'displacement-map'
     ? getFilterDialogConfig(activeDialog)
     : null;
 
@@ -302,6 +321,15 @@ export function MenuBar() {
           onPreviewStart={handlePatternPreviewStart}
           onPreviewStop={handlePatternPreviewStop}
           onPreviewChange={handlePatternPreviewChange}
+        />
+      )}
+      {activeDialog === 'displacement-map' && (
+        <DisplacementMapDialog
+          onApply={handleDisplacementApply}
+          onCancel={handleDialogCancel}
+          onPreviewStart={handlePreviewStart}
+          onPreviewStop={handlePreviewStop}
+          onPreviewChange={handleDisplacementPreviewChange}
         />
       )}
       {imageDialog === 'canvas-size' && (

@@ -1,4 +1,4 @@
-//! Distortion filters: mesh warp, liquify warp.
+//! Distortion filters: mesh warp, liquify warp, displacement map.
 
 use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
@@ -240,4 +240,51 @@ pub fn liquify_release(engine: &mut Engine) {
     if let Some(tex) = engine.inner.liquify_disp_texture.take() {
         engine.inner.texture_pool.release(tex);
     }
+}
+
+#[wasm_bindgen(js_name = "filterDisplacementMap")]
+pub fn filter_displacement_map(
+    engine: &mut Engine,
+    layer_id: &str,
+    disp_layer_id: &str,
+    scale_x: f32,
+    scale_y: f32,
+    mode: u32,
+    wrap: u32,
+) {
+    let _ = engine.inner.ensure_layer_full_size(disp_layer_id);
+
+    let disp_tex_handle = match engine.inner.layer_textures.get(disp_layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+
+    let disp_tex_obj = engine.inner.texture_pool.get(disp_tex_handle).cloned();
+
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.displacement_map,
+        |gl, shader| {
+            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+            if let Some(ref t) = disp_tex_obj {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
+            }
+            if let Some(loc) = shader.location(gl, "u_dispMap") {
+                gl.uniform1i(Some(&loc), 1);
+            }
+            if let Some(loc) = shader.location(gl, "u_scaleX") {
+                gl.uniform1f(Some(&loc), scale_x);
+            }
+            if let Some(loc) = shader.location(gl, "u_scaleY") {
+                gl.uniform1f(Some(&loc), scale_y);
+            }
+            if let Some(loc) = shader.location(gl, "u_mode") {
+                gl.uniform1i(Some(&loc), mode as i32);
+            }
+            if let Some(loc) = shader.location(gl, "u_wrap") {
+                gl.uniform1i(Some(&loc), wrap as i32);
+            }
+        },
+    );
 }
