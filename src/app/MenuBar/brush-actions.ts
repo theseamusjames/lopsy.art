@@ -75,7 +75,7 @@ export function defineBrush(asColor: boolean = false): void {
     tip,
     size: Math.max(tip.width, tip.height),
     hardness: 100,
-    spacing: 25,
+    spacing: 1,
     scatter: 0,
     angle: 0,
     opacity: 100,
