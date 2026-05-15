@@ -261,21 +261,12 @@ pub fn composite(engine: &mut EngineInner) {
                 if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
                     let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
                     let combined_opacity = opacity;
-                    // Only apply brush texture if this stroke was started with texture enabled
-                    let use_tex = engine.stroke_use_brush_texture.get(&layer_id).copied().unwrap_or(false);
-                    if use_tex {
-                        crate::brush_gpu::set_brush_texture_uniforms(engine, &engine.shaders.blend, &layer_id, 4);
-                    }
                     if is_group_child {
                         let gs_tex = engine.group_scratch_texture.unwrap();
                         let gs_fbo = engine.group_scratch_fbo.unwrap();
                         blend_onto_target(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
                     } else {
                         blend_onto_composite(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
-                    }
-                    // Clear brush texture so it doesn't affect subsequent layer blends
-                    if let Some(loc) = engine.shaders.blend.location(&engine.gl, "u_hasBrushTexture") {
-                        engine.gl.uniform1i(Some(&loc), 0);
                     }
                 }
             }
@@ -669,7 +660,7 @@ fn render_layer_plus_stroke(
     stroke_handle: TextureHandle,
     tw: u32,
     th: u32,
-    layer_id: &str,
+    _layer_id: &str,
 ) -> Option<TextureHandle> {
     if engine.texture_pool.get_size(stroke_handle).map_or(true, |(w, h)| w != tw || h != th) {
         return None;
@@ -692,10 +683,6 @@ fn render_layer_plus_stroke(
         if let Some(loc) = shader.location(gl, "u_dstTex") { gl.uniform1i(Some(&loc), 1); }
         if let Some(loc) = shader.location(gl, "u_opacity") { gl.uniform1f(Some(&loc), 1.0); }
         if let Some(loc) = shader.location(gl, "u_strokeTexSize") { gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-        let use_tex = engine.stroke_use_brush_texture.get(layer_id).copied().unwrap_or(false);
-        if use_tex {
-            crate::brush_gpu::set_brush_texture_uniforms(engine, shader, layer_id, 2);
-        }
         engine.draw_fullscreen_quad();
     });
 

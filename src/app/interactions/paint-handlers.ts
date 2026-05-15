@@ -37,8 +37,9 @@ function emitSubBrushDabs(
   subBrushes: readonly SubBrush[],
   sym: SymmetryConfig,
 ): void {
-  for (const sub of subBrushes) {
-    swapBrushTip(engine, sub.tip, sub.angleOffset);
+  for (let i = 0; i < subBrushes.length; i++) {
+    const sub = subBrushes[i]!;
+    swapBrushTip(engine, i, sub.tip, sub.angleOffset);
     const subSize = baseSize * sub.sizeRatio;
     const subOpacity = opacity * sub.opacityRatio;
     const subHardness = sub.hardness / 100;

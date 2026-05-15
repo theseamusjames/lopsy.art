@@ -80,6 +80,11 @@ import {
   uploadBrushTipRGBA,
   clearBrushTip,
   setBrushTipState,
+  cacheSubBrushTip,
+  cacheSubBrushTipRGBA,
+  activateSubBrushTip as wasmActivateSubBrushTip,
+  deactivateSubBrushTip as wasmDeactivateSubBrushTip,
+  clearSubBrushTipCache,
   uploadBrushTexture,
   clearBrushTexture,
   setBrushTextureState,
@@ -90,7 +95,7 @@ import {
 } from './wasm-bridge';
 import type { PathAnchor, TextEditingState, ChannelVisibility } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
-import type { BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../types/brush';
+import type { BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
 import type { Color } from '../types';
 import type { TextLayer } from '../types/layers';
 import type { StoredPath } from '../types/paths';
@@ -530,43 +535,45 @@ export function syncBrushTip(
 }
 
 /**
- * Temporarily swap the active brush tip for sub-brush rendering.
- * Bypasses tracked state — caller must call restorePrimaryBrushTip after.
+ * Pre-process and cache all sub-brush tip textures on the GPU.
+ * Call once at stroke start so per-dab swaps are just pointer changes.
  */
-export function swapBrushTip(engine: Engine, tip: BrushTipData | null, angleDeg: number = 0): void {
+export function cacheSubBrushTips(engine: Engine, subBrushes: readonly SubBrush[]): void {
+  clearSubBrushTipCache(engine);
+  for (let i = 0; i < subBrushes.length; i++) {
+    const sub = subBrushes[i]!;
+    if (sub.tip) {
+      const bytes = new Uint8Array(sub.tip.data.buffer, sub.tip.data.byteOffset, sub.tip.data.byteLength);
+      if (sub.tip.kind === 'color') {
+        cacheSubBrushTipRGBA(engine, i, bytes, sub.tip.width, sub.tip.height);
+      } else {
+        cacheSubBrushTip(engine, i, bytes, sub.tip.width, sub.tip.height);
+      }
+    }
+  }
+}
+
+/**
+ * Activate a cached sub-brush tip by index. No texture re-upload or
+ * Gaussian blur — just swaps the active GPU texture handle.
+ */
+export function swapBrushTip(engine: Engine, subIndex: number, tip: BrushTipData | null, angleDeg: number = 0): void {
   const angleRad = -angleDeg * Math.PI / 180;
   if (tip) {
-    const bytes = new Uint8Array(tip.data.buffer, tip.data.byteOffset, tip.data.byteLength);
-    if (tip.kind === 'color') {
-      uploadBrushTipRGBA(engine, bytes, tip.width, tip.height);
-    } else {
-      uploadBrushTip(engine, bytes, tip.width, tip.height);
-    }
-    setBrushTipState(engine, true, angleRad, tip.kind === 'color');
+    wasmActivateSubBrushTip(engine, subIndex, angleRad, tip.kind === 'color');
   } else {
-    setBrushTipState(engine, false, angleRad, false);
+    wasmActivateSubBrushTip(engine, subIndex, angleRad, false);
   }
 }
 
 /**
  * Restore the primary brush tip after sub-brush rendering.
- * Re-uploads the tip and resets the engine state so subsequent dabs
- * in the same event (before the next frame sync) use the correct tip.
+ * Just swaps the GPU texture handle back — no re-upload.
  */
 export function restorePrimaryBrushTip(engine: Engine): void {
   const tracked = getTracked(engine);
-  const tip = tracked.brushTipData;
-  if (tip) {
-    const bytes = new Uint8Array(tip.data.buffer, tip.data.byteOffset, tip.data.byteLength);
-    if (tip.kind === 'color') {
-      uploadBrushTipRGBA(engine, bytes, tip.width, tip.height);
-    } else {
-      uploadBrushTip(engine, bytes, tip.width, tip.height);
-    }
-    setBrushTipState(engine, true, tracked.brushAngle, tip.kind === 'color');
-  } else {
-    setBrushTipState(engine, tracked.brushHasTip, tracked.brushAngle, tracked.brushTipIsColor);
-  }
+  wasmDeactivateSubBrushTip(engine);
+  setBrushTipState(engine, tracked.brushHasTip, tracked.brushAngle, tracked.brushTipIsColor);
 }
 
 const BLEND_MODE_MAP: Record<BrushTextureBlendMode, number> = {

@@ -10,6 +10,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
+use crate::gpu::texture_pool::TextureHandle;
 use crate::{brush_gpu, clone_stamp_gpu, dodge_burn_gpu, healing_brush_gpu, mask_paint_gpu, smudge_gpu, sponge_gpu};
 
 // ============================================================
@@ -266,6 +267,139 @@ pub fn set_brush_tip_state(engine: &mut Engine, has_tip: bool, angle: f32, is_co
     engine.inner.brush_has_tip = has_tip;
     engine.inner.brush_angle = angle;
     engine.inner.brush_tip_is_color = is_color;
+}
+
+#[wasm_bindgen(js_name = "cacheSubBrushTip")]
+pub fn cache_sub_brush_tip(engine: &mut Engine, index: u32, data: &[u8], width: u32, height: u32) -> Result<(), JsError> {
+    let idx = index as usize;
+    while engine.inner.sub_brush_tips.len() <= idx {
+        engine.inner.sub_brush_tips.push(None);
+    }
+    if let Some((old_handle, _, _, _)) = engine.inner.sub_brush_tips[idx].take() {
+        engine.inner.texture_pool.release(old_handle);
+    }
+    let pixel_count = (width * height) as usize;
+    let mut sharp = vec![0u8; pixel_count];
+    for i in 0..pixel_count {
+        sharp[i] = if i < data.len() { data[i] } else { 0 };
+    }
+    let blur_radius = (width.min(height) / 2).max(1);
+    let mut inverted = vec![0u8; pixel_count];
+    for i in 0..pixel_count {
+        inverted[i] = 255 - sharp[i];
+    }
+    lopsy_core::filters::blur::gaussian_blur_gray(&mut inverted, width, height, blur_radius);
+    let mut min_val = 255u8;
+    let mut max_val = 0u8;
+    for i in 0..pixel_count {
+        if sharp[i] > 5 {
+            min_val = min_val.min(inverted[i]);
+            max_val = max_val.max(inverted[i]);
+        }
+    }
+    if max_val > min_val {
+        for i in 0..pixel_count {
+            if sharp[i] > 5 {
+                let t = (inverted[i] as f32 - min_val as f32) / (max_val as f32 - min_val as f32);
+                inverted[i] = (t.sqrt() * 255.0).round() as u8;
+            } else {
+                inverted[i] = 255;
+            }
+        }
+    }
+    let mut rgba = vec![0u8; pixel_count * 4];
+    for i in 0..pixel_count {
+        rgba[i * 4] = sharp[i];
+        rgba[i * 4 + 1] = inverted[i];
+        rgba[i * 4 + 2] = 0;
+        rgba[i * 4 + 3] = 255;
+    }
+    let tex = engine.inner.texture_pool.acquire(&engine.inner.gl, width, height)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, width, height, &rgba)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.sub_brush_tips[idx] = Some((tex, width, height, false));
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "cacheSubBrushTipRGBA")]
+pub fn cache_sub_brush_tip_rgba(engine: &mut Engine, index: u32, data: &[u8], width: u32, height: u32) -> Result<(), JsError> {
+    let idx = index as usize;
+    while engine.inner.sub_brush_tips.len() <= idx {
+        engine.inner.sub_brush_tips.push(None);
+    }
+    if let Some((old_handle, _, _, _)) = engine.inner.sub_brush_tips[idx].take() {
+        engine.inner.texture_pool.release(old_handle);
+    }
+    let pixel_count = (width * height) as usize;
+    let expected_len = pixel_count * 4;
+    if data.len() < expected_len {
+        return Err(JsError::new("RGBA sub-brush tip data too short"));
+    }
+    let mut rgba = vec![0u8; expected_len];
+    for i in 0..pixel_count {
+        let off = i * 4;
+        let a = data[off + 3] as f32 / 255.0;
+        rgba[off] = (data[off] as f32 * a + 0.5) as u8;
+        rgba[off + 1] = (data[off + 1] as f32 * a + 0.5) as u8;
+        rgba[off + 2] = (data[off + 2] as f32 * a + 0.5) as u8;
+        rgba[off + 3] = data[off + 3];
+    }
+    let tex = engine.inner.texture_pool.acquire(&engine.inner.gl, width, height)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, width, height, &rgba)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.sub_brush_tips[idx] = Some((tex, width, height, true));
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "activateSubBrushTip")]
+pub fn activate_sub_brush_tip(engine: &mut Engine, index: u32, angle: f32, is_color: bool) {
+    if engine.inner.saved_primary_tip.is_none() {
+        engine.inner.saved_primary_tip = Some((
+            engine.inner.brush_tip_texture.unwrap_or(TextureHandle(usize::MAX)),
+            engine.inner.brush_tip_width,
+            engine.inner.brush_tip_height,
+            engine.inner.brush_tip_is_color,
+        ));
+    }
+    let idx = index as usize;
+    if let Some(Some((tex, w, h, cached_is_color))) = engine.inner.sub_brush_tips.get(idx) {
+        engine.inner.brush_tip_texture = Some(*tex);
+        engine.inner.brush_tip_width = *w;
+        engine.inner.brush_tip_height = *h;
+        engine.inner.brush_has_tip = true;
+        engine.inner.brush_angle = angle;
+        engine.inner.brush_tip_is_color = if is_color { true } else { *cached_is_color };
+    } else {
+        engine.inner.brush_has_tip = false;
+        engine.inner.brush_angle = angle;
+        engine.inner.brush_tip_is_color = false;
+    }
+}
+
+#[wasm_bindgen(js_name = "deactivateSubBrushTip")]
+pub fn deactivate_sub_brush_tip(engine: &mut Engine) {
+    if let Some((tex, w, h, is_color)) = engine.inner.saved_primary_tip.take() {
+        if tex.0 == usize::MAX {
+            engine.inner.brush_tip_texture = None;
+        } else {
+            engine.inner.brush_tip_texture = Some(tex);
+        }
+        engine.inner.brush_tip_width = w;
+        engine.inner.brush_tip_height = h;
+        engine.inner.brush_tip_is_color = is_color;
+    }
+}
+
+#[wasm_bindgen(js_name = "clearSubBrushTipCache")]
+pub fn clear_sub_brush_tip_cache(engine: &mut Engine) {
+    for entry in engine.inner.sub_brush_tips.drain(..) {
+        if let Some((handle, _, _, _)) = entry {
+            engine.inner.texture_pool.release(handle);
+        }
+    }
+    engine.inner.saved_primary_tip = None;
 }
 
 #[wasm_bindgen(js_name = "uploadBrushTexture")]
