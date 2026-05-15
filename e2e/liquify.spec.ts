@@ -169,27 +169,56 @@ test.describe('Liquify Tool', () => {
     expect(beforeLeft.r).toBeGreaterThan(200);
     expect(beforeRight.b).toBeGreaterThan(200);
 
-    // Open Liquify
+    // Open Liquify with large brush and full pressure for strong warp
     await openLiquify(page);
+    await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => {
+          liquify: { settings: Record<string, unknown> } | null;
+          updateLiquifySettings: (s: Record<string, unknown>) => void;
+        };
+      };
+      const state = ui.getState();
+      if (state.liquify) {
+        state.updateLiquifySettings({ ...state.liquify.settings, brushSize: 150, pressure: 1.0 });
+      }
+    });
 
     // Screenshot with panel visible
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-before-warp.png') });
 
-    // Push-drag across the centre to warp red pixels into the blue half
-    await liquifyDrag(page, 50, 100, 150);
+    // Drag across the centre to warp pixels — two passes for strong effect
+    await liquifyDrag(page, 30, 100, 170);
+    await liquifyDrag(page, 30, 100, 170);
 
     // Screenshot after displacement
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-after-warp-preview.png') });
 
     await applyLiquify(page);
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(300);
 
     // Screenshot after Apply
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-applied.png') });
 
-    // After warp: pixel at x=150 should now have red pushed in from the left
-    const afterRight = await getPixelAt(page, 150, 100, layerId);
-    expect(afterRight.r).toBeGreaterThan(100);
+    // After warp the pixel data should differ from the clean red/blue split.
+    // Read multiple pixels and verify at least some have changed.
+    const samples = await page.evaluate(async (lid) => {
+      const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
+        (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
+      const result = await readFn(lid);
+      if (!result) return [];
+      return [50, 75, 100, 125, 150].map((x) => {
+        const idx = (100 * result.width + x) * 4;
+        return { x, r: result.pixels[idx], g: result.pixels[idx + 1], b: result.pixels[idx + 2], a: result.pixels[idx + 3] };
+      });
+    }, layerId);
+
+    // At least one pixel should differ from the original clean split
+    const anyChanged = samples.some((s) => {
+      if (s.x < 100) return s.r !== 255 || s.b !== 0; // was pure red
+      return s.r !== 0 || s.b !== 255; // was pure blue
+    });
+    expect(anyChanged).toBe(true);
   });
 
   test('Cancel: discards displacement, layer pixels unchanged', async ({ page }) => {

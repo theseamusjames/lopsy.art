@@ -312,6 +312,9 @@ test.describe('Sponge Tool', () => {
     // Undo the sponge stroke (handleSpongeDown pushed history internally)
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
+    // Also undo the manual pushHistory above so we return to the baseline
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(300);
 
     const afterUndo = await readCompositedPixels(page);
     await page.screenshot({ path: 'e2e/screenshots/sponge-07-undo.png' });

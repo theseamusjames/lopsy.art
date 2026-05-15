@@ -620,6 +620,10 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     // =====================================================================
     const snapBeforeBigUndo = await snapshot(page);
 
+    // Undo twice: first reverses the pushHistory snapshot (no visual change),
+    // second reverses the last fillEllipse which actually changed pixels.
+    await undo(page);
+    await page.waitForTimeout(200);
     await undo(page);
     await page.waitForTimeout(600);
 

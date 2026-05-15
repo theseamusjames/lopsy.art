@@ -171,70 +171,43 @@ test.describe('Pass-through blend mode', () => {
     expect(pixel.b).toBeGreaterThan(100);
   });
 
-  test('normal group with adjustments brightens children; pass-through group does not', async ({ page }) => {
-    // Setup:
-    //   Layer A (mid-grey [128,128,128]) — background
-    //   Group with exposure=2.0 (brightening adjustment)
-    //     Layer B (mid-grey [128,128,128])
-    //
-    // Normal group + adjustments added via the AdjustmentsPanel UI:
-    //   children composite into group scratch FBO → exposure applied → result is brighter
-    //
-    // Pass-through group:
-    //   syncGroupAdjustments skips it → no scratch FBO → children blend directly
-    //   → result is just mid-grey (same as without the group)
-    //
-    // The pixel brightness in normal mode should be significantly higher than pass-through.
+  test('both normal and pass-through groups with adjustments brighten children', async ({ page }) => {
+    // Pass-through groups with adjustments now apply those adjustments via
+    // a scratch FBO path, same as normal groups.
 
-    // Draw mid-grey background on base layer
     await drawRect(page, 0, 0, 100, 100, { r: 128, g: 128, b: 128 });
     await page.waitForTimeout(200);
 
     const groupId = await addGroup(page, 'AdjustGroup');
 
-    // Add mid-grey child inside group
     await page.locator('[aria-label="Add Layer"]').click();
     await page.waitForTimeout(200);
     await drawRect(page, 0, 0, 100, 100, { r: 128, g: 128, b: 128 });
     await page.waitForTimeout(200);
 
-    // Switch group to Normal blend mode so adjustments register
     await setLayerBlendMode(page, groupId, 'normal');
     await page.waitForTimeout(200);
 
-    // Enable high exposure on the group
     await setGroupExposure(page, groupId, 2.0);
 
-    // Screenshot: normal group + high exposure = brighter children
     await page.screenshot({ path: 'e2e/screenshots/pass-through-normal-with-adj.png' });
-
     const normalPixel = await readCompositedAtDoc(page, 50, 50);
 
-    // Switch to pass-through — syncGroupAdjustments will skip this group
     await setLayerBlendMode(page, groupId, 'pass-through');
     await page.waitForTimeout(300);
 
-    // Screenshot: pass-through group + high exposure = exposure NOT applied
     await page.screenshot({ path: 'e2e/screenshots/pass-through-pass-with-adj.png' });
-
     const passThroughPixel = await readCompositedAtDoc(page, 50, 50);
 
-    // Normal group should be significantly brighter (exposure applied)
-    // Pass-through group should show near-original grey
+    // Both modes apply exposure — both should be bright
     expect(
       normalPixel.r,
       `normal group with exposure=2.0 should be bright (got ${normalPixel.r})`,
     ).toBeGreaterThan(180);
     expect(
       passThroughPixel.r,
-      `pass-through group should not apply exposure, should stay near grey (got ${passThroughPixel.r})`,
-    ).toBeLessThan(180);
-
-    const brightnessDiff = normalPixel.r - passThroughPixel.r;
-    expect(
-      brightnessDiff,
-      `normal (${normalPixel.r}) should be noticeably brighter than pass-through (${passThroughPixel.r})`,
-    ).toBeGreaterThan(30);
+      `pass-through group with adjustments also applies exposure (got ${passThroughPixel.r})`,
+    ).toBeGreaterThan(180);
   });
 
   test('group effects drawer shows AdjustmentsPanel with Add Adjustment button', async ({ page }) => {
@@ -260,48 +233,40 @@ test.describe('Pass-through blend mode', () => {
     await page.screenshot({ path: 'e2e/screenshots/pass-through-dropdown.png' });
   });
 
-  test('switching group from normal to pass-through disables group adjustments compositing', async ({ page }) => {
-    // Verify that once we switch a group from normal→pass-through, the
-    // adjustment that was previously brightening its children no longer applies.
+  test('switching group from normal to pass-through preserves adjustments compositing', async ({ page }) => {
+    // Pass-through groups with adjustments now apply them the same as
+    // normal groups, so switching should keep the adjustment active.
 
-    // White background
     await drawRect(page, 0, 0, 100, 100, { r: 128, g: 128, b: 128 });
     await page.waitForTimeout(200);
 
     const groupId = await addGroup(page, 'SwitchGroup');
 
-    // Add child layer
     await page.locator('[aria-label="Add Layer"]').click();
     await page.waitForTimeout(200);
     await drawRect(page, 0, 0, 100, 100, { r: 128, g: 128, b: 128 });
     await page.waitForTimeout(200);
 
-    // Set to normal mode + high exposure so adjustment applies
     await setLayerBlendMode(page, groupId, 'normal');
     await setGroupExposure(page, groupId, 2.5);
 
     const withAdjPixel = await readCompositedAtDoc(page, 50, 50);
     await page.screenshot({ path: 'e2e/screenshots/pass-through-switch-before.png' });
 
-    // Switch to pass-through — adjustment should no longer be registered
     await setLayerBlendMode(page, groupId, 'pass-through');
     await page.waitForTimeout(300);
 
     const afterSwitchPixel = await readCompositedAtDoc(page, 50, 50);
     await page.screenshot({ path: 'e2e/screenshots/pass-through-switch-after.png' });
 
-    // After switch to pass-through, adjustment is gone → pixels should be darker
+    // Both should be bright — adjustments persist across mode switch
     expect(
       withAdjPixel.r,
       `normal group with exposure=2.5 should be bright (got ${withAdjPixel.r})`,
     ).toBeGreaterThan(200);
     expect(
       afterSwitchPixel.r,
-      `pass-through group: adjustment no longer applies, should be near grey (got ${afterSwitchPixel.r})`,
-    ).toBeLessThan(200);
-    expect(
-      withAdjPixel.r - afterSwitchPixel.r,
-      `brightness should drop after switching to pass-through`,
-    ).toBeGreaterThan(30);
+      `pass-through group still applies adjustment (got ${afterSwitchPixel.r})`,
+    ).toBeGreaterThan(200);
   });
 });

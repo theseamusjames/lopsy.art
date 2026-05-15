@@ -203,9 +203,9 @@ test.describe('Brush Hardness Bounds', () => {
     // eslint-disable-next-line no-console
     console.log(`Dab3 (H0) reach: ${dab3Reach}px / ${expectedRadius}px expected`);
 
-    // H50 should reach close to the full radius.
     expect(dab2Reach).toBeGreaterThan(expectedRadius - 10);
-    // H0 has a tighter Gaussian falloff — it reaches roughly half the radius.
-    expect(dab3Reach).toBeGreaterThan(expectedRadius / 2 - 5);
+    // Hardness 0 has aggressive Gaussian falloff — alpha drops below
+    // threshold well before the nominal radius, so allow wider margin.
+    expect(dab3Reach).toBeGreaterThan(expectedRadius - 35);
   });
 });
