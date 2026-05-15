@@ -13,6 +13,26 @@ void main() {
 
     vec4 result = computeDab(fragPos, u_center, jSize, jOpacity, jAngle);
 
+    if (u_hasBrushTexture == 1 && result.a > 0.001) {
+        vec2 rel = fragPos - u_strokeOrigin;
+        float ca = cos(u_textureRotation);
+        float sa = sin(u_textureRotation);
+        vec2 rotated = vec2(ca * rel.x + sa * rel.y, -sa * rel.x + ca * rel.y);
+        vec2 texUV = rotated / (u_brushTextureSize * u_textureScale);
+        float texVal = texture(u_brushTexture, fract(texUV + 0.5)).r;
+        if (u_textureBlendMode == 0) {
+            result.a *= texVal;
+            result.rgb *= texVal;
+        } else if (u_textureBlendMode == 1) {
+            result.a *= (1.0 - texVal);
+            result.rgb *= (1.0 - texVal);
+        } else {
+            float m = result.a < 0.5 ? 2.0 * result.a * texVal : 1.0 - 2.0 * (1.0 - result.a) * (1.0 - texVal);
+            result.rgb *= m / max(result.a, 0.001);
+            result.a = m;
+        }
+    }
+
     if (u_hasSelection == 1) {
         vec2 docPos = fragPos + u_layerOffset;
         vec2 selUV = docPos / u_docSize;

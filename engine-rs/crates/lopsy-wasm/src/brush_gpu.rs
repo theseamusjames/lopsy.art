@@ -52,6 +52,16 @@ pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), Stri
         engine.brush_has_texture,
     );
 
+    // Generate random texture rotation for this stroke.
+    // Use a simple hash of the layer_id bytes as seed since we don't have rand.
+    let seed: u32 = layer_id.bytes().enumerate().fold(0x9E3779B9u32, |acc, (i, b)| {
+        acc.wrapping_add((b as u32).wrapping_mul(i as u32 + 1))
+            .wrapping_mul(0x85EBCA6Bu32)
+    });
+    let seed = seed ^ (js_sys::Date::now() as u32);
+    engine.stroke_texture_rotation = (seed as f32 / u32::MAX as f32) * std::f32::consts::TAU;
+    engine.stroke_texture_origin_set = false;
+
     // Create a stroke texture matching the layer size
     if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
         let (w, h) = engine.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
@@ -274,6 +284,18 @@ pub fn apply_dab_batch(
     }
     if let Some(loc) = shader.location(gl, "u_brushTextureSize") {
         gl.uniform2f(Some(&loc), engine.brush_texture_width as f32, engine.brush_texture_height as f32);
+    }
+
+    // Set stroke origin from first dab position if not yet set
+    if !engine.stroke_texture_origin_set && points.len() >= 2 {
+        engine.stroke_texture_origin = (points[0] as f32, points[1] as f32);
+        engine.stroke_texture_origin_set = true;
+    }
+    if let Some(loc) = shader.location(gl, "u_strokeOrigin") {
+        gl.uniform2f(Some(&loc), engine.stroke_texture_origin.0, engine.stroke_texture_origin.1);
+    }
+    if let Some(loc) = shader.location(gl, "u_textureRotation") {
+        gl.uniform1f(Some(&loc), engine.stroke_texture_rotation);
     }
 
     // Scissor each dab to its bounding box so the fragment shader only

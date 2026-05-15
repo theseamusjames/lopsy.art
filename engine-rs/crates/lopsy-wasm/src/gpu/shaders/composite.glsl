@@ -21,25 +21,7 @@ void main() {
 
     // Source (stroke texture) is premultiplied — un-premultiply first
     vec3 srcRGB = src.a > 0.001 ? src.rgb / src.a : vec3(0.0);
-    float sa = src.a;
-
-    // Brush texture modulation on the stroke alpha
-    if (u_hasBrushTexture == 1 && sa > 0.001) {
-        vec2 fragPos = v_uv * u_strokeTexSize;
-        vec2 docPos = fragPos + u_layerOffset;
-        vec2 texUV = docPos / (u_brushTextureSize * u_textureScale);
-        float texVal = texture(u_brushTexture, fract(texUV)).r;
-
-        if (u_textureBlendMode == 0) {
-            sa *= texVal;
-        } else if (u_textureBlendMode == 1) {
-            sa *= (1.0 - texVal);
-        } else {
-            sa = sa < 0.5 ? 2.0 * sa * texVal : 1.0 - 2.0 * (1.0 - sa) * (1.0 - texVal);
-        }
-    }
-
-    sa *= u_opacity;
+    float sa = src.a * u_opacity;
     float da = dst.a;
     float outA = sa + da * (1.0 - sa);
 

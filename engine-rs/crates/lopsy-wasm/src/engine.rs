@@ -188,6 +188,13 @@ pub struct EngineInner {
     pub brush_has_tip: bool,
     pub brush_tip_is_color: bool,
     pub brush_angle: f32,
+    // Sub-brush tip cache: pre-processed textures to avoid per-dab Gaussian blur
+    pub sub_brush_tips: Vec<Option<(TextureHandle, u32, u32, bool)>>,
+    pub saved_primary_tip: Option<(TextureHandle, u32, u32, bool)>,
+    // Per-stroke texture state (origin + rotation for stroke-relative UV)
+    pub stroke_texture_origin: (f32, f32),
+    pub stroke_texture_rotation: f32,
+    pub stroke_texture_origin_set: bool,
     // Custom brush texture
     pub brush_texture: Option<TextureHandle>,
     pub brush_texture_width: u32,
@@ -334,6 +341,11 @@ impl EngineInner {
             brush_has_tip: false,
             brush_tip_is_color: false,
             brush_angle: 0.0,
+            sub_brush_tips: Vec::new(),
+            saved_primary_tip: None,
+            stroke_texture_origin: (0.0, 0.0),
+            stroke_texture_rotation: 0.0,
+            stroke_texture_origin_set: false,
             brush_texture: None,
             brush_texture_width: 0,
             brush_texture_height: 0,

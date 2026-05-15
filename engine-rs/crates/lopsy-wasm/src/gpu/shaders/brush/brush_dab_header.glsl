@@ -23,6 +23,8 @@ uniform int u_hasBrushTexture;
 uniform float u_textureScale;
 uniform int u_textureBlendMode;
 uniform vec2 u_brushTextureSize;
+uniform vec2 u_strokeOrigin;
+uniform float u_textureRotation;
 out vec4 fragColor;
 
 float dabHash(vec2 center, float seed) {
