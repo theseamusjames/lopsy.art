@@ -121,6 +121,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Polygon sides**: 3 - 64
 - **Corner radius**: 0 - 200 px
 - **Aspect ratio lock**: width/height ratio constraint
+- **Cmd/Meta+drag**: holding meta while dragging temporarily forces a 1:1 aspect ratio (perfect square / circle / regular polygon) regardless of the persistent aspect-ratio toggle. Releasing meta returns to the unconstrained or persistently-locked behavior.
 
 ### Path / Pen Tool
 - **Stroke width**: 1 - 50 px
@@ -328,7 +329,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Box Blur**: radius
 - **Motion Blur**: angle (degrees), distance (px)
 - **Radial Blur**: amount (centered)
-- **Tilt-Shift Blur**: focus position 0–100% (center of sharp band along blur axis), focus width 0–100% (width of the sharp band), blur radius 1–32 px (max blur intensity in out-of-focus regions), angle 0–360° (rotation of the focus plane). Creates selective-focus miniature photography effects by blurring areas outside a configurable focus band while leaving the focus zone sharp.
+- **Tilt-Shift Blur**: focus position 0–100% (center of sharp band along blur axis), focus width 0–100% (width of the sharp band), blur radius 1–32 px (max blur intensity in out-of-focus regions), angle 0–360° (rotation of the focus plane). Creates selective-focus miniature photography effects by blurring areas outside a configurable focus band while leaving the focus zone sharp. **Cmd/Meta+drag** on the on-canvas angle handle snaps the focus-plane rotation to 15° increments.
 
 ### Sharpen
 - **Unsharp Mask**: radius, amount, threshold
@@ -537,6 +538,7 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 - **Axes**: horizontal, vertical, or both (4-way)
 - **Center**: configurable (defaults to canvas center)
 - Available on brush, pencil, and eraser
+- **Cmd/Meta+click** on the canvas while any symmetry mode (horizontal, vertical, or radial with 2+ segments) is active moves the symmetry center to the click point without painting a dab. Lets the user reposition the mirror axis directly from the canvas without opening a settings panel.
 
 ---
 
