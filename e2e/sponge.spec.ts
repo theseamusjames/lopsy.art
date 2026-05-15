@@ -291,7 +291,7 @@ test.describe('Sponge Tool', () => {
     });
     await page.waitForTimeout(200);
 
-    const before = await readActiveLayerPixels(page);
+    const before = await readCompositedPixels(page);
 
     await page.keyboard.press('y');
     await page.waitForTimeout(100);
@@ -306,14 +306,14 @@ test.describe('Sponge Tool', () => {
     await drawStroke(page, { x: 100, y: 150 }, { x: 300, y: 150 }, 10);
     await page.waitForTimeout(200);
 
-    const afterStroke = await readActiveLayerPixels(page);
+    const afterStroke = await readCompositedPixels(page);
     expect(pixelDiff(before, afterStroke)).toBeGreaterThan(100);
 
     // Undo the sponge stroke (handleSpongeDown pushed history internally)
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
-    const afterUndo = await readActiveLayerPixels(page);
+    const afterUndo = await readCompositedPixels(page);
     await page.screenshot({ path: 'e2e/screenshots/sponge-07-undo.png' });
 
     // After undo, the diff from the baseline should be small

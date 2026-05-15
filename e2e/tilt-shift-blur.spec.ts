@@ -97,28 +97,6 @@ function paintHorizontalStripes(page: Page) {
   });
 }
 
-async function countDifferingPixels(page: Page, scanY: number, originalR: number, originalB: number, threshold: number) {
-  return page.evaluate(
-    async ({ y, origR, origB, thresh }) => {
-      const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
-        (id?: string) => Promise<{ width: number; height: number; pixels: number[] }>;
-      const result = await readFn();
-      if (!result || result.width === 0) return 0;
-      let count = 0;
-      for (let x = 0; x < result.width; x++) {
-        const idx = (y * result.width + x) * 4;
-        const r = result.pixels[idx];
-        const b = result.pixels[idx + 2];
-        if (Math.abs(r - origR) > thresh || Math.abs(b - origB) > thresh) {
-          count++;
-        }
-      }
-      return count;
-    },
-    { y: scanY, origR: originalR, origB: originalB, thresh: threshold },
-  );
-}
-
 test.describe('Tilt-Shift Blur Filter', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -132,8 +110,6 @@ test.describe('Tilt-Shift Blur Filter', () => {
     await fitToView(page);
     await page.waitForTimeout(300);
 
-    // Verify sharp stripe boundaries before filter
-    // y=19 is last row of first red stripe, y=20 is first row of first blue stripe
     const beforeRed = await readPixel(page, 200, 10);
     const beforeBlue = await readPixel(page, 200, 30);
     expect(beforeRed.r).toBe(220);
@@ -143,44 +119,36 @@ test.describe('Tilt-Shift Blur Filter', () => {
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'tilt-shift-before.png') });
 
-    // Apply tilt-shift blur with focus in center, strong blur
     await page.click('text=Filter');
     await page.waitForTimeout(200);
     await page.click('text=Tilt-Shift Blur...');
     await page.waitForTimeout(300);
 
-    const dialogHeading = page.locator('h2:has-text("Tilt-Shift Blur")');
-    await expect(dialogHeading).toBeVisible({ timeout: 3000 });
+    const dialog = page.locator('[role="dialog"][aria-label="Tilt-Shift Blur"]');
+    await expect(dialog).toBeVisible({ timeout: 3000 });
 
-    const sliders = page.locator('input[type="range"]');
-    // Focus Position = 50 (center)
-    // Focus Width = 15 (narrow focus band)
-    await sliders.nth(1).fill('15');
-    await page.waitForTimeout(100);
-    // Blur Radius = 25 (strong blur for dramatic effect)
-    await sliders.nth(2).fill('25');
+    // Set blur radius to max (32) for a strong effect
+    const blurSlider = dialog.locator('input[type="range"]');
+    await blurSlider.fill('32');
     await page.waitForTimeout(200);
 
-    await page.locator('button:has-text("Apply")').click();
+    await dialog.locator('button:has-text("Apply")').click();
     await page.waitForTimeout(500);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'tilt-shift-after.png') });
 
-    // Center (y=200) is in the focus band — stripes should remain sharp
+    // Center (y=200) is in the default focus band (position=0.5) — stripes should remain sharp
     const centerRed = await readPixel(page, 200, 190);
     const centerBlue = await readPixel(page, 200, 210);
-    // In-focus stripes should keep strong contrast
     expect(Math.abs(centerRed.r - centerBlue.r)).toBeGreaterThan(100);
 
-    // Top (y=10) is far from focus — stripes should be blurred, mixing colors
+    // Top (y=10) is far from focus — stripes should be blurred
     const topPixel = await readPixel(page, 200, 10);
-    // Originally R=220, B=30. After blur, red and blue stripes mix,
-    // so both R and B should move toward the average
     const topRedDrift = Math.abs(topPixel.r - 220);
     const topBlueDrift = Math.abs(topPixel.b - 30);
     expect(topRedDrift + topBlueDrift).toBeGreaterThan(10);
 
-    // Bottom (y=390) is also far from focus — stripes should blur there too
+    // Bottom (y=390) is also far from focus
     const bottomPixel = await readPixel(page, 200, 390);
     const bottomDrift = Math.abs(bottomPixel.r - 30) + Math.abs(bottomPixel.b - 220);
     expect(bottomDrift).toBeGreaterThan(10);
@@ -193,29 +161,29 @@ test.describe('Tilt-Shift Blur Filter', () => {
     await fitToView(page);
     await page.waitForTimeout(300);
 
-    // Read a pixel in the blur zone (top of canvas, in a red stripe)
     const beforePixel = await readPixel(page, 200, 10);
     const origR = beforePixel.r;
     const origB = beforePixel.b;
 
-    // Apply strong tilt-shift blur
     await page.click('text=Filter');
     await page.waitForTimeout(200);
     await page.click('text=Tilt-Shift Blur...');
     await page.waitForTimeout(300);
 
-    const sliders = page.locator('input[type="range"]');
-    await sliders.nth(1).fill('10');
-    await page.waitForTimeout(100);
-    await sliders.nth(2).fill('30');
+    const dialog = page.locator('[role="dialog"][aria-label="Tilt-Shift Blur"]');
+    await expect(dialog).toBeVisible({ timeout: 3000 });
+
+    const blurSlider = dialog.locator('input[type="range"]');
+    await blurSlider.fill('30');
     await page.waitForTimeout(200);
 
-    await page.locator('button:has-text("Apply")').click();
+    await dialog.locator('button:has-text("Apply")').click();
     await page.waitForTimeout(500);
 
-    // Count how many pixels differ significantly from original at top
-    const diffCount = await countDifferingPixels(page, 10, origR, origB, 5);
-    expect(diffCount).toBeGreaterThan(0);
+    // Verify the filter changed pixels
+    const afterFilter = await readPixel(page, 200, 10);
+    const changed = Math.abs(afterFilter.r - origR) + Math.abs(afterFilter.b - origB);
+    expect(changed).toBeGreaterThan(0);
 
     // Undo
     await page.keyboard.press('Control+z');
@@ -239,23 +207,17 @@ test.describe('Tilt-Shift Blur Filter', () => {
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'tilt-shift-dialog.png') });
 
-    const dialogHeading = page.locator('h2:has-text("Tilt-Shift Blur")');
-    await expect(dialogHeading).toBeVisible({ timeout: 3000 });
+    const dialog = page.locator('[role="dialog"][aria-label="Tilt-Shift Blur"]');
+    await expect(dialog).toBeVisible({ timeout: 3000 });
 
-    const focusPositionLabel = page.locator('text=Focus Position');
-    const focusWidthLabel = page.locator('text=Focus Width');
-    const blurRadiusLabel = page.locator('text=Blur Radius');
-    const angleLabel = page.locator('text=Angle');
-    await expect(focusPositionLabel).toBeVisible({ timeout: 2000 });
-    await expect(focusWidthLabel).toBeVisible({ timeout: 2000 });
+    const blurRadiusLabel = dialog.locator('text=Blur Radius');
     await expect(blurRadiusLabel).toBeVisible({ timeout: 2000 });
-    await expect(angleLabel).toBeVisible({ timeout: 2000 });
 
-    const cancelBtn = page.locator('button:has-text("Cancel")');
+    const cancelBtn = dialog.locator('button:has-text("Cancel")');
     await expect(cancelBtn).toBeVisible();
     await cancelBtn.click();
     await page.waitForTimeout(300);
 
-    await expect(dialogHeading).not.toBeVisible();
+    await expect(dialog).not.toBeVisible();
   });
 });

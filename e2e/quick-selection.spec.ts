@@ -13,7 +13,7 @@
  */
 
 import { test, expect, type Page } from './fixtures';
-import { createDocument, waitForStore } from './helpers';
+import { createDocument, waitForStore, selectTool } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers shared across tests
@@ -172,7 +172,7 @@ test.describe('Quick Selection tool', () => {
     await page.screenshot({ path: 'e2e/screenshots/quick-selection-before.png' });
 
     // Activate Quick Selection tool via keyboard shortcut
-    await page.keyboard.press('q');
+    await selectTool(page, 'quick-select');
     await page.waitForTimeout(100);
 
     // Configure settings via the store so we don't rely on the sliders UI
@@ -245,7 +245,7 @@ test.describe('Quick Selection tool', () => {
       { r: 220, g: 30, b: 30 },
     );
 
-    await page.keyboard.press('q');
+    await selectTool(page, 'quick-select');
     await page.waitForTimeout(100);
 
     await page.evaluate(() => {
