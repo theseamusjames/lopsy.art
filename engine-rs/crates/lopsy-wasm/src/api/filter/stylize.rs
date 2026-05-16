@@ -345,6 +345,44 @@ pub fn filter_bloom(
     engine.inner.mark_layer_dirty(layer_id);
 }
 
+#[wasm_bindgen(js_name = "filterFilmGrain")]
+pub fn filter_film_grain(
+    engine: &mut Engine,
+    layer_id: &str,
+    amount: f32,
+    size: f32,
+    roughness: f32,
+    monochrome: bool,
+    seed: f32,
+) {
+    let amount = amount.clamp(0.0, 1.0);
+    let size = size.clamp(1.0, 5.0);
+    let roughness = roughness.clamp(0.0, 1.0);
+    let seed = seed.clamp(0.0, 999.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.film_grain,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_amount") {
+                gl.uniform1f(Some(&loc), amount);
+            }
+            if let Some(loc) = shader.location(gl, "u_size") {
+                gl.uniform1f(Some(&loc), size);
+            }
+            if let Some(loc) = shader.location(gl, "u_roughness") {
+                gl.uniform1f(Some(&loc), roughness);
+            }
+            if let Some(loc) = shader.location(gl, "u_monochrome") {
+                gl.uniform1i(Some(&loc), if monochrome { 1 } else { 0 });
+            }
+            if let Some(loc) = shader.location(gl, "u_seed") {
+                gl.uniform1f(Some(&loc), seed);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterVoronoi")]
 pub fn filter_voronoi(
     engine: &mut Engine,

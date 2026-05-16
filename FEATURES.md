@@ -345,6 +345,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 ### Noise
 - **Add Noise**: amount 0 - 255, monochrome on/off
 - **Fill with Noise**: monochrome on/off
+- **Film Grain**: amount 1 - 100%, grain size 1 - 5 px (clump size), roughness 0 - 100% (multi-octave detail blend). Luminance-aware: grain intensity follows a bell curve peaking in the midtones and fading in shadows/highlights, mimicking real photographic silver halide response. Two-octave PCG3D noise with roughness-controlled blending between octaves. Available as color or monochrome variant. GPU-accelerated, randomized seed per application.
 
 ### Pixelate
 - **Pixelate / Mosaic**: block size 2 - 64 px

@@ -45,7 +45,9 @@ export type FilterDialogId =
   | 'pattern-fill'
   | 'emboss'
   | 'voronoi'
-  | 'fibers';
+  | 'fibers'
+  | 'film-grain'
+  | 'film-grain-mono';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;

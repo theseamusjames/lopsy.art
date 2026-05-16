@@ -31,6 +31,8 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Bloom...', action: () => showFilterDialog('bloom') },
       { label: 'Voronoi...', action: () => showFilterDialog('voronoi') },
       { separator: true, label: '' },
+      { label: 'Film Grain...', action: () => showFilterDialog('film-grain') },
+      { label: 'Film Grain (Mono)...', action: () => showFilterDialog('film-grain-mono') },
       { label: 'Add Noise...', action: () => showFilterDialog('add-noise') },
       { label: 'Fill with Noise...', action: () => showFilterDialog('fill-noise') },
       { separator: true, label: '' },
