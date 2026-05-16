@@ -70,6 +70,7 @@ pub const EMBOSS_FRAG: &str = include_str!("shaders/filters/emboss.glsl");
 pub const VORONOI_FRAG: &str = include_str!("shaders/filters/voronoi.glsl");
 pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
 pub const SURFACE_BLUR_FRAG: &str = include_str!("shaders/filters/surface_blur.glsl");
+pub const FIBERS_FRAG: &str = include_str!("shaders/filters/fibers.glsl");
 
 // Brush (assembled from header + variant + footer at compile_all time)
 const BRUSH_DAB_HEADER: &str = include_str!("shaders/brush/brush_dab_header.glsl");
@@ -240,6 +241,7 @@ pub struct ShaderPrograms {
     pub voronoi: ShaderProgram,
     pub selection_mask_blend: ShaderProgram,
     pub surface_blur: ShaderProgram,
+    pub fibers: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab_circle: ShaderProgram,
     pub brush_dab_alpha: ShaderProgram,
@@ -329,6 +331,7 @@ impl ShaderPrograms {
             voronoi: compile_program(gl, v, VORONOI_FRAG)?,
             selection_mask_blend: compile_program(gl, v, SELECTION_MASK_BLEND_FRAG)?,
             surface_blur: compile_program(gl, v, SURFACE_BLUR_FRAG)?,
+            fibers: compile_program(gl, v, FIBERS_FRAG)?,
             // Brush — assembled from header + variant body + footer
             brush_dab_circle: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_CIRCLE_BODY}{BRUSH_DAB_FOOTER}"))?,
             brush_dab_alpha: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_ALPHA_BODY}{BRUSH_DAB_FOOTER}"))?,

@@ -44,7 +44,8 @@ export type FilterDialogId =
   | 'surface-blur'
   | 'pattern-fill'
   | 'emboss'
-  | 'voronoi';
+  | 'voronoi'
+  | 'fibers';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;

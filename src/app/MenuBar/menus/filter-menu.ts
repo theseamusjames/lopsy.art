@@ -35,6 +35,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Fill with Noise...', action: () => showFilterDialog('fill-noise') },
       { separator: true, label: '' },
       { label: 'Clouds...', action: () => showFilterDialog('clouds') },
+      { label: 'Fibers...', action: () => showFilterDialog('fibers') },
       { label: 'Smoke...', action: () => showFilterDialog('smoke') },
       { separator: true, label: '' },
       { label: 'Brightness/Contrast...', action: () => showFilterDialog('brightness-contrast') },
