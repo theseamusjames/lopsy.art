@@ -1528,6 +1528,8 @@ pub fn read_pixels_u16(
         0,
     );
 
+    engine.gl.finish();
+
     let pixels = engine.texture_pool.read_rgba_u16(&engine.gl, 0, 0, w, h)?;
 
     engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
@@ -1569,6 +1571,9 @@ pub fn read_pixels(
         Some(texture),
         0,
     );
+
+    // Ensure all prior GPU operations complete before reading (Firefox requires this).
+    engine.gl.finish();
 
     let pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h)?;
 

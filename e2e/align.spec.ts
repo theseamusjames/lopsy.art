@@ -50,16 +50,27 @@ async function getPixelAt(page: Page, x: number, y: number, layerId?: string) {
   return page.evaluate(
     ({ x, y, lid }) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { activeLayerId: string } };
+        getState: () => {
+          document: {
+            activeLayerId: string;
+            layers: Array<{ id: string; x: number; y: number }>;
+          };
+        };
       };
       const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
         get: (id: string) => ImageData | undefined;
       };
       const state = store.getState();
       const id = lid ?? state.document.activeLayerId;
+      const layer = state.document.layers.find((l) => l.id === id);
       const data = pixelData.get(id);
       if (!data) return { r: 0, g: 0, b: 0, a: 0 };
-      const idx = (y * data.width + x) * 4;
+      const lx = x - (layer?.x ?? 0);
+      const ly = y - (layer?.y ?? 0);
+      if (lx < 0 || ly < 0 || lx >= data.width || ly >= data.height) {
+        return { r: 0, g: 0, b: 0, a: 0 };
+      }
+      const idx = (ly * data.width + lx) * 4;
       return {
         r: data.data[idx] ?? 0,
         g: data.data[idx + 1] ?? 0,
@@ -200,15 +211,16 @@ test.describe('Align layer content', () => {
     // Paint 40x40 green block at (30,30) — auto-crop shrinks to 40x40 at (30,30)
     await drawRect(page, 30, 30, 40, 40, { r: 0, g: 255, b: 0 });
 
-    // After crop, pixel data is 40x40. Check pixel at local (20,20) — within the green block.
-    const beforePixel = await getPixelAt(page, 20, 20);
+    // Doc coords (50,50) is the center of the green block at layer (30,30)+40x40.
+    const beforePixel = await getPixelAt(page, 50, 50);
     expect(beforePixel.g).toBe(255);
     expect(beforePixel.a).toBe(255);
 
     await clickAlignButton(page, 'Align right');
 
-    // Pixel data in layer-local coords should be unchanged after align
-    const afterPixel = await getPixelAt(page, 20, 20);
+    // After align right, layer moves to x=160 (200-40). Doc (180,50) maps to same
+    // local offset within the layer, so pixel values should be unchanged.
+    const afterPixel = await getPixelAt(page, 180, 50);
     expect(afterPixel.g).toBe(255);
     expect(afterPixel.a).toBe(255);
   });

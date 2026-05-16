@@ -16,7 +16,7 @@ void main() {
     float ndy = (d.b * 256.0 + d.a) / 257.0;
 
     vec2 dispPx = (vec2(ndx, ndy) * 2.0 - 1.0) * u_maxDisp;
-    vec2 srcUv = v_uv + dispPx * u_texelSize;
+    vec2 srcUv = v_uv - dispPx * u_texelSize;
 
     if (srcUv.x < 0.0 || srcUv.x > 1.0 || srcUv.y < 0.0 || srcUv.y > 1.0) {
         fragColor = vec4(0.0);

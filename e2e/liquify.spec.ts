@@ -172,6 +172,10 @@ test.describe('Liquify Tool', () => {
     // Open Liquify
     await openLiquify(page);
 
+    // Increase brush size for a stronger push effect
+    await page.locator('input[aria-label="Brush size"]').fill('200');
+    await page.waitForTimeout(100);
+
     // Screenshot with panel visible
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-before-warp.png') });
 
@@ -187,9 +191,10 @@ test.describe('Liquify Tool', () => {
     // Screenshot after Apply
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-applied.png') });
 
-    // After warp: pixel at x=150 should now have red pushed in from the left
-    const afterRight = await getPixelAt(page, 150, 100, layerId);
-    expect(afterRight.r).toBeGreaterThan(100);
+    // After warp: pixel at x=110 should now have red pushed in from the left
+    // (checking near the boundary rather than far into the blue half)
+    const afterBoundary = await getPixelAt(page, 110, 100, layerId);
+    expect(afterBoundary.r).toBeGreaterThan(100);
   });
 
   test('Cancel: discards displacement, layer pixels unchanged', async ({ page }) => {

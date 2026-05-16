@@ -441,6 +441,10 @@ test.describe('Composition 2: Geometric Design', () => {
     // PHASE 5: MOVE TOOL — Nudge with arrow keys
     // =====================================================================
     await page.locator(`[data-layer-id="${triLayerId}"]`).click();
+    await page.waitForTimeout(100);
+    // Press move tool shortcut to ensure canvas has keyboard focus (Firefox focus quirk)
+    await page.keyboard.press('v');
+    await page.waitForTimeout(100);
 
     const posBefore = await page.evaluate((lid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
