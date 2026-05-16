@@ -81,6 +81,40 @@ pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), Stri
     Ok(())
 }
 
+/// Pre-allocate the GPU resources that `begin_stroke` would otherwise
+/// allocate at the start of a stroke, so the first stroke on a large canvas
+/// doesn't pay a visible texture-allocation hesitation. Idempotent — safe to
+/// call repeatedly. No-op when there is already an active stroke for this
+/// layer.
+pub fn prewarm_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
+    // If a stroke is already in progress, the resources are already live —
+    // don't disturb them.
+    if engine.stroke_textures.contains_key(layer_id) {
+        return Ok(());
+    }
+
+    engine.ensure_layer_full_size(layer_id)?;
+
+    if engine.stroke_fbo.is_none() {
+        let fbo = engine.fbo_pool.create(&engine.gl)?;
+        engine.stroke_fbo = Some(fbo);
+    }
+
+    if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
+        if let Some((w, h)) = engine.texture_pool.get_size(layer_tex) {
+            if w > 0 && h > 0 {
+                // Acquire a stroke-sized texture and release it immediately
+                // so a freshly-sized texture sits in the pool ready for the
+                // next `begin_stroke` call.
+                let warm = engine.texture_pool.acquire(&engine.gl, w, h)?;
+                engine.texture_pool.release(warm);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn apply_dab(
     engine: &mut EngineInner,
     layer_id: &str,

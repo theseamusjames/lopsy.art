@@ -22,6 +22,7 @@ import { GuideColorPicker } from '../components/GuideColorPicker/GuideColorPicke
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useCanvasInteraction } from './useCanvasInteraction';
+import { useBrushPrewarm } from './useBrushPrewarm';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
@@ -151,6 +152,10 @@ export function App() {
 
   // Canvas interaction (drawing tools)
   const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove, nudgeSelection } = useCanvasInteraction(screenToCanvas, containerRef);
+
+  // Pre-warm brush GPU resources on paint-tool activation so the first
+  // stroke on a large canvas doesn't pay a visible allocation cost.
+  useBrushPrewarm();
 
   // Cursor management
   const { updateHoveredHandle } = useCanvasCursor(containerRef, pointerMode);
