@@ -38,7 +38,7 @@ test.describe('Export Dialog', () => {
     await page.screenshot({ path: 'e2e/screenshots/export-dialog-png.png' });
   });
 
-  test('PNG shows quality toggle (Regular/High) instead of quality slider', async ({ page }) => {
+  test('quality slider is hidden when PNG is selected', async ({ page }) => {
     await page.getByRole('button', { name: 'File' }).click();
     await page.waitForTimeout(150);
     await page.getByRole('menuitem', { name: 'Export…' }).click();
@@ -46,13 +46,11 @@ test.describe('Export Dialog', () => {
 
     const dialog = page.getByRole('dialog', { name: 'Export' });
 
-    // PNG has a Regular/High quality toggle instead of a quality slider
-    await expect(dialog.getByRole('button', { name: 'Regular' })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'High' })).toBeVisible();
-    // The lossy quality slider (range input with aria-label "Quality") should NOT be present
-    await expect(dialog.locator('[aria-label="Quality"]')).not.toBeVisible();
+    // PNG is the default format — quality range slider should not be present
+    // (PNG has a Regular/High toggle instead, which also has a "Quality" label)
+    await expect(dialog.locator('[aria-label="Quality value"]')).not.toBeVisible();
 
-    await page.screenshot({ path: 'e2e/screenshots/export-dialog-png-quality-toggle.png' });
+    await page.screenshot({ path: 'e2e/screenshots/export-dialog-png-no-quality.png' });
   });
 
   test('quality slider appears when JPEG is selected', async ({ page }) => {
@@ -67,8 +65,8 @@ test.describe('Export Dialog', () => {
     await dialog.getByRole('button', { name: 'JPEG' }).click();
     await page.waitForTimeout(100);
 
-    // Quality slider should be visible for lossy formats
-    await expect(dialog.locator('[aria-label="Quality"]')).toBeVisible();
+    // Quality range slider should now be visible for lossy format
+    await expect(dialog.locator('[aria-label="Quality value"]')).toBeVisible();
 
     await page.screenshot({ path: 'e2e/screenshots/export-dialog-jpeg-quality.png' });
   });
@@ -81,7 +79,7 @@ test.describe('Export Dialog', () => {
 
     const dialog = page.getByRole('dialog', { name: 'Export' });
 
-    // Document is 200×150
+    // Document is 200×150 — dimensions should be displayed
     await expect(dialog.getByText('200 × 150 px')).toBeVisible();
 
     await page.screenshot({ path: 'e2e/screenshots/export-dialog-dimensions.png' });
@@ -116,7 +114,7 @@ test.describe('Export Dialog', () => {
     await dialog.getByRole('button', { name: 'Export' }).click();
 
     const download = await downloadPromise;
-    // Default format is PNG, filename defaults to document name 'Untitled'
+    // Default format is PNG, filename defaults to document name 'lopsy'
     expect(download.suggestedFilename()).toBe('lopsy.png');
 
     await page.screenshot({ path: 'e2e/screenshots/export-dialog-downloaded.png' });

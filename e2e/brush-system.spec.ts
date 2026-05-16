@@ -313,20 +313,14 @@ test.describe('Brush System', () => {
     await openBrushModal(page);
     await page.waitForTimeout(200);
 
-    /**
-     * Read the BrushPreview canvas (the 240×80 preview swatch inside the
-     * brush modal) directly via the DOM. This is the canvas the test
-     * needs to assert against — the main composited screen pixels do
-     * not contain it.
-     */
     const readPreview = async () =>
       page.evaluate(() => {
         const dialog = document.querySelector('[role="dialog"][aria-label="Brushes"]');
         if (!dialog) return null;
-        const canvases = Array.from(dialog.querySelectorAll('canvas'));
-        // BrushStrokePreview canvas has CSS height:100px — pick the tallest.
-        const preview = canvases.reduce<HTMLCanvasElement | null>((best, c) =>
-          !best || c.clientHeight > best.clientHeight ? c : best, null);
+        const canvases = Array.from(dialog.querySelectorAll('canvas')) as HTMLCanvasElement[];
+        const preview = canvases.reduce((best, c) =>
+          c.width * c.height > best.width * best.height ? c : best,
+        canvases[0]);
         if (!preview) return null;
         const ctx = preview.getContext('2d');
         if (!ctx) return null;
@@ -346,28 +340,33 @@ test.describe('Brush System', () => {
     }
     expect(beforeOpaque).toBeGreaterThan(0);
 
-    // Change spacing (100 → 200) via the store — this produces a very
-    // visible difference in dab density along the bezier path.
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setBrushSpacing: (v: number) => void };
-      };
-      store.getState().setBrushSpacing(200);
-    });
-    // Wait for the debounced preview to fire (200ms debounce + rendering).
+    // Bump the brush size to 60 — the preview clamps to 40, far larger
+    // than the original 4.
+    await setToolOption(page, 'Size', 60);
     await page.waitForTimeout(500);
-    // Force a repaint by scrolling or interacting
-    await page.evaluate(() => new Promise(r => requestAnimationFrame(r)));
-    await page.waitForTimeout(200);
+
+    const newSize = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { brushSize: number };
+      };
+      return store.getState().brushSize;
+    });
+    expect(newSize).toBe(60);
 
     const after = await readPreview();
     expect(after).not.toBeNull();
 
+    // Larger brush → many more opaque pixels in the preview.
+    let afterOpaque = 0;
+    for (let i = 3; i < after!.pixels.length; i += 4) {
+      if ((after!.pixels[i] ?? 0) > 0) afterOpaque++;
+    }
+    expect(afterOpaque).toBeGreaterThan(beforeOpaque * 2);
+
     // The two preview rasters must differ in a substantial number of
     // pixels (anti-aliasing alone would be a few dozen at most).
     let differing = 0;
-    const minLen = Math.min(before!.pixels.length, after!.pixels.length);
-    for (let i = 0; i < minLen; i += 4) {
+    for (let i = 0; i < before!.pixels.length; i += 4) {
       const da = Math.abs((before!.pixels[i + 3] ?? 0) - (after!.pixels[i + 3] ?? 0));
       if (da > 20) differing++;
     }

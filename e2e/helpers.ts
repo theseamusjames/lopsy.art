@@ -288,7 +288,7 @@ export async function redo(page: Page): Promise<void> {
 const TOOL_SHORTCUTS: Record<string, string> = {
   move: 'v', brush: 'b', pencil: 'n', eraser: 'e', fill: 'g',
   eyedropper: 'i', stamp: 's', dodge: 'o', sponge: 'y', smudge: 'r', spray: 'j',
-  'marquee-rect': 'm', lasso: 'l', wand: 'w',
+  'marquee-rect': 'm', lasso: 'l', wand: 'w', 'quick-select': 'q',
   shape: 'u', text: 't', crop: 'c', path: 'p',
 };
 
@@ -362,11 +362,23 @@ export async function closeBrushModal(page: Page): Promise<void> {
 export async function setBrushModalOption(page: Page, label: string, value: number): Promise<void> {
   await openBrushModal(page);
   const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
+
+  const shapeLabels = ['Size', 'Spacing', 'Hardness', 'Opacity', 'Taper'];
   const dynamicsLabels = ['Scatter', 'Size Jitter', 'Hardness Jitter', 'Angle Jitter', 'Opacity Jitter', 'Speed Size'];
   const textureLabels = ['Scale'];
-  const targetTab = dynamicsLabels.includes(label) ? 'Dynamics' : textureLabels.includes(label) ? 'Texture' : 'Shape';
-  await dialog.locator(`[role="option"]:has-text("${targetTab}")`).click();
-  await page.waitForTimeout(50);
+
+  let tabName: string;
+  if (shapeLabels.includes(label)) tabName = 'Shape';
+  else if (dynamicsLabels.includes(label)) tabName = 'Dynamics';
+  else if (textureLabels.includes(label)) tabName = 'Texture';
+  else tabName = 'Shape';
+
+  const tab = dialog.locator(`[role="option"]:has-text("${tabName}")`);
+  if (!(await tab.getAttribute('aria-selected'))?.includes('true')) {
+    await tab.click();
+    await page.waitForTimeout(50);
+  }
+
   const input = dialog.locator(`[aria-label="${label} value"]`);
   await input.fill(String(value));
   await input.press('Enter');
@@ -442,6 +454,14 @@ export async function setAdjustment(page: Page, label: string, value: number): P
     Vignette: { nodeType: 'vignette', key: 'vignette' },
   };
 
+  const input = page.locator(`[aria-label="${label} value"]`);
+  if (await input.isVisible({ timeout: 500 }).catch(() => false)) {
+    await input.fill(String(value));
+    await input.press('Enter');
+    await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+    return;
+  }
+
   const mapping = LABEL_TO_NODE[label];
   if (!mapping) throw new Error(`Unknown adjustment label: ${label}`);
 
@@ -452,28 +472,7 @@ export async function setAdjustment(page: Page, label: string, value: number): P
     return store.getState().document.rootGroupId;
   });
 
-  const drawer = page.getByTestId('effects-drawer');
-  const input = drawer.locator(`[aria-label="${label} value"]`);
-
-  if (!(await input.isVisible({ timeout: 500 }).catch(() => false))) {
-    await openGroupEffectsPanel(page, rootGroupId);
-
-    if (!(await input.isVisible({ timeout: 500 }).catch(() => false))) {
-      await addAdjustment(page, rootGroupId, mapping.nodeType);
-    }
-
-    if (!(await input.isVisible({ timeout: 1000 }).catch(() => false))) {
-      const expandBtn = drawer.locator('[aria-label="Expand"]').last();
-      if (await expandBtn.isVisible().catch(() => false)) {
-        await expandBtn.click();
-        await page.waitForTimeout(100);
-      }
-    }
-  }
-
-  await input.fill(String(value));
-  await input.press('Enter');
-  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await addAdjustment(page, rootGroupId, mapping.nodeType, { [mapping.key]: value });
 }
 
 // ---------------------------------------------------------------------------
