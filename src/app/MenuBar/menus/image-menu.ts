@@ -5,8 +5,11 @@ import {
   rotateLayer90,
   setDocumentSize,
 } from '../../../engine-wasm/wasm-bridge';
+import { readLayerAsImageData } from '../../../engine-wasm/gpu-pixel-access';
 import { pixelDataManager } from '../../../engine/pixel-data-manager';
-import type { Layer } from '../../../types';
+import { computeAutoTone, computeAutoContrast, computeAutoColor } from '../../../filters/auto-enhance';
+import type { Layer, GroupLayer } from '../../../types';
+import type { AdjustmentNode } from '../../../types/adjustment-nodes';
 import type { MenuDef } from './types';
 
 export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
@@ -118,6 +121,90 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
   });
 }
 
+function getActiveGroupId(): string | null {
+  const state = useEditorStore.getState();
+  const doc = state.document;
+  const activeId = doc.activeLayerId;
+  if (activeId) {
+    const active = doc.layers.find((l) => l.id === activeId);
+    if (active?.type === 'group') return active.id;
+  }
+  return doc.rootGroupId ?? null;
+}
+
+function getActiveLayerPixels(): Uint8ClampedArray | null {
+  const state = useEditorStore.getState();
+  const activeId = state.document.activeLayerId;
+  if (!activeId) return null;
+  const imageData = readLayerAsImageData(activeId);
+  return imageData?.data ?? null;
+}
+
+function addAdjustmentAndCommit(node: AdjustmentNode, label: string): void {
+  const groupId = getActiveGroupId();
+  if (!groupId) return;
+
+  const state = useEditorStore.getState();
+  state.pushHistory(label);
+
+  const doc = useEditorStore.getState().document;
+  const group = doc.layers.find((l) => l.id === groupId) as GroupLayer | undefined;
+  if (!group || group.type !== 'group') return;
+
+  const layers = doc.layers.map((l) => {
+    if (l.id !== groupId || l.type !== 'group') return l;
+    const updated = { ...l, adjustments: [...l.adjustments, node] } as GroupLayer;
+    if (updated.blendMode === 'pass-through') {
+      return { ...updated, blendMode: 'normal' } as Layer;
+    }
+    return updated as Layer;
+  });
+  useEditorStore.setState({ document: { ...doc, layers } });
+  state.notifyRender();
+}
+
+export function applyAutoTone(): void {
+  const pixels = getActiveLayerPixels();
+  if (!pixels) return;
+
+  const levels = computeAutoTone(pixels);
+  const node: AdjustmentNode = {
+    id: crypto.randomUUID(),
+    enabled: true,
+    type: 'levels',
+    levels,
+  };
+  addAdjustmentAndCommit(node, 'Auto Tone');
+}
+
+export function applyAutoContrast(): void {
+  const pixels = getActiveLayerPixels();
+  if (!pixels) return;
+
+  const levels = computeAutoContrast(pixels);
+  const node: AdjustmentNode = {
+    id: crypto.randomUUID(),
+    enabled: true,
+    type: 'levels',
+    levels,
+  };
+  addAdjustmentAndCommit(node, 'Auto Contrast');
+}
+
+export function applyAutoColor(): void {
+  const pixels = getActiveLayerPixels();
+  if (!pixels) return;
+
+  const curves = computeAutoColor(pixels);
+  const node: AdjustmentNode = {
+    id: crypto.randomUUID(),
+    enabled: true,
+    type: 'curves',
+    curves,
+  };
+  addAdjustmentAndCommit(node, 'Auto Color');
+}
+
 export type ImageDialogId = 'canvas-size' | 'image-size';
 
 export function createImageMenu(showDialog: (id: ImageDialogId) => void): MenuDef {
@@ -126,6 +213,10 @@ export function createImageMenu(showDialog: (id: ImageDialogId) => void): MenuDe
   items: [
     { label: 'Canvas Size...', action: () => showDialog('canvas-size') },
     { label: 'Image Size...', action: () => showDialog('image-size') },
+    { separator: true, label: '' },
+    { label: 'Auto Tone', shortcut: '\u21E7\u2318L', action: applyAutoTone },
+    { label: 'Auto Contrast', shortcut: '\u2325\u21E7\u2318L', action: applyAutoContrast },
+    { label: 'Auto Color', shortcut: '\u21E7\u2318B', action: applyAutoColor },
     { separator: true, label: '' },
     { label: 'Rotate 90\u00B0 CW', action: () => rotateImage('cw') },
     { label: 'Rotate 90\u00B0 CCW', action: () => rotateImage('ccw') },

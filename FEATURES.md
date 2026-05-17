@@ -466,6 +466,18 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 
 ---
 
+## Auto Enhance (Image Menu)
+
+One-click image correction commands that analyze the active layer's pixel histogram and apply non-destructive adjustment nodes to the active group.
+
+- **Auto Tone** (`⇧⌘L`): stretches each R/G/B channel independently to fill the full tonal range, clipping the darkest and brightest 0.1% of pixels per channel. Adds a Levels adjustment node with per-channel input black/white points.
+- **Auto Contrast** (`⌥⇧⌘L`): stretches the luminance histogram uniformly across all channels, preserving relative color balance. Adds a Levels adjustment node on the master RGB channel only.
+- **Auto Color** (`⇧⌘B`): neutralizes color casts by computing each channel's weighted mean and mapping it toward a neutral gray target, then stretching the tonal range. Adds a Curves adjustment node with per-channel midpoint correction.
+
+All three operations are fully undoable, read pixels from the GPU via `readLayerAsImageData`, and auto-switch the target group from pass-through to normal blend mode when adding adjustments (required for the compositor to apply group-level adjustment nodes).
+
+---
+
 ## Viewport & Workspace
 
 ### Viewport

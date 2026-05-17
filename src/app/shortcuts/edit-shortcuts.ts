@@ -1,6 +1,7 @@
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { selectAll, invertSelectionAction } from '../MenuBar/menus/select-menu';
+import { applyAutoTone, applyAutoContrast, applyAutoColor } from '../MenuBar/menus/image-menu';
 import { openLiquify } from '../MenuBar/liquify-actions';
 import { scheduleFallbackPaste } from '../useKeyboardShortcuts';
 
@@ -78,6 +79,24 @@ export function handleEditShortcut(
     } else {
       useEditorStore.getState().undo();
     }
+    return true;
+  }
+  // Shift+Cmd+L — Auto Tone
+  if ((e.key === 'l' || e.key === 'L') && e.shiftKey && !e.altKey) {
+    e.preventDefault();
+    applyAutoTone();
+    return true;
+  }
+  // Alt+Shift+Cmd+L — Auto Contrast
+  if ((e.key === 'l' || e.key === 'L') && e.shiftKey && e.altKey) {
+    e.preventDefault();
+    applyAutoContrast();
+    return true;
+  }
+  // Shift+Cmd+B — Auto Color
+  if ((e.key === 'b' || e.key === 'B') && e.shiftKey) {
+    e.preventDefault();
+    applyAutoColor();
     return true;
   }
   return false;
