@@ -331,6 +331,38 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
   }
 }
 
+/**
+ * Walk a group's children recursively and collect every descendant layer ID.
+ * Sub-groups are included so the compositor sees both the marker and its
+ * contents — the WASM side ignores Group-type entries via a strict layer-type
+ * check, so the extra IDs are harmless.
+ *
+ * The compositor's `child_to_group` map needs every descendant of an adjusted
+ * group so all descendants get routed into the group scratch FBO. Sending only
+ * direct children causes sub-group descendants to bypass the scratch and
+ * render directly onto the composite, where the group's normal-blend finalize
+ * later covers them up.
+ */
+export function flattenGroupDescendants(
+  layers: readonly Layer[],
+  groupId: string,
+): string[] {
+  const layerMap = new Map<string, Layer>();
+  for (const l of layers) layerMap.set(l.id, l);
+  const result: string[] = [];
+  const walk = (id: string): void => {
+    const layer = layerMap.get(id);
+    if (!layer || layer.type !== 'group') return;
+    const group = layer as import('../types').GroupLayer;
+    for (const childId of group.children) {
+      result.push(childId);
+      walk(childId);
+    }
+  };
+  walk(groupId);
+  return result;
+}
+
 export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): void {
   clearGroupAdjustments(engine);
   for (const layer of layers) {
@@ -366,7 +398,7 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     setGroupAdjustments(
       engine,
       group.id,
-      JSON.stringify(group.children),
+      JSON.stringify(flattenGroupDescendants(layers, group.id)),
       adj?.exposure ?? 0,
       adj?.contrast ?? 0,
       adj?.highlights ?? 0,
