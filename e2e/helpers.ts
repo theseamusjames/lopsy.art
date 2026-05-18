@@ -741,6 +741,11 @@ const ADJUSTMENT_MENU_LABELS: Record<string, string> = {
   levels: 'Levels',
   invert: 'Invert',
   'hue-saturation': 'Hue / Saturation',
+  'color-balance': 'Color Balance',
+  'black-white': 'Black & White',
+  'photo-filter': 'Photo Filter',
+  'channel-mixer': 'Channel Mixer',
+  'gradient-map': 'Gradient Map',
 };
 
 const ADJUSTMENT_SLIDER_LABELS: Record<string, Record<string, string>> = {
@@ -754,6 +759,12 @@ const ADJUSTMENT_SLIDER_LABELS: Record<string, Record<string, string>> = {
   },
   saturation: { saturation: 'Saturation', vibrance: 'Vibrance' },
   vignette: { vignette: 'Vignette' },
+  'hue-saturation': { hue: 'Hue', saturation: 'Saturation', lightness: 'Lightness' },
+  'photo-filter': { density: 'Density' },
+  'black-white': {
+    reds: 'Reds', yellows: 'Yellows', greens: 'Greens',
+    cyans: 'Cyans', blues: 'Blues', magentas: 'Magentas',
+  },
 };
 
 export async function openGroupEffectsPanel(page: Page, groupId: string): Promise<void> {

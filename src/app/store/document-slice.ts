@@ -372,11 +372,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   addAdjustmentNode: (groupId, nodeType) => {
     const doc = get().document;
     const node = createDefaultNode(nodeType);
-    const layers = doc.layers.map((l) =>
-      l.id === groupId && l.type === 'group'
-        ? { ...l, adjustments: [...l.adjustments, node] }
-        : l,
-    );
+    const layers = doc.layers.map((l) => {
+      if (l.id !== groupId || l.type !== 'group') return l;
+      // Pass-through groups bypass the group composite FBO, so adjustments
+      // would be silently ignored. Switch to normal so the adjustment renders.
+      const blendMode = l.blendMode === 'pass-through' ? 'normal' : l.blendMode;
+      return { ...l, blendMode, adjustments: [...l.adjustments, node] };
+    });
     set({ document: { ...doc, layers } });
   },
 
