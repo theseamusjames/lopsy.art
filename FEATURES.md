@@ -220,13 +220,14 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 
 ### Move
 - Drag to reposition layers
-- Arrow key nudge
+- Arrow key nudge — 1 px by default; when grid + snap-to-grid is enabled, each key press nudges by exactly one grid cell. Arrow keys also nudge the active marquee bounds when a selection tool is active.
 - Snap to grid
 - Snap to guides
 - **Snap to layers** (View menu → "Snap to Layers"): while dragging, the moving layer's left/right/top/bottom edges and X/Y centers attract to the matching edges and centers of every other visible layer within a 5 px threshold. Magenta alignment guides span the document while a snap is engaged and clear on mouse-up.
 - **Align**: left, center-h, right, top, center-v, bottom
 - **Fit** (options-bar button): scales the active raster layer so its longest side matches the canvas — preserving aspect ratio — and centers it on the artboard. Useful for bringing an oversized pasted/dropped image into view; reuses the GPU `scaleLayerTexture` path so no pixel data round-trips through JS.
-- **Alt/Option+drag**: with no active selection, duplicates the active layer before moving; with an active marquee, leaves the original pixels behind and moves a floating copy
+- **Alt/Option+drag (no active marquee)**: duplicates the active layer in place, then moves the new copy — leaves the original layer untouched.
+- **Alt/Option+drag (with an active marquee)**: copies the selected pixels of the active layer into a floating duplicate and moves that copy, leaving the original pixels under the selection intact (Photoshop-style "alt-drag the selection").
 - **Cmd/Meta+drag (transform handles)**: constrains aspect ratio when scaling and snaps rotation to 15° increments. Grid + snap-to-grid also forces snapping automatically during the transform.
 
 ### Paste / Drop behavior
@@ -499,6 +500,29 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Mask edit mode**: on/off
 - **Draggable modals & panels**: filter dialogs, pattern fill, layer effects, adjustments, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked)
 - **Filter / pattern preview overlay**: when live preview is enabled the dim backdrop is removed and pointer-events on the overlay are disabled so the canvas is fully visible while the modal stays interactive
+
+### Global UI Conventions
+- **Slider double-click → reset**: every numeric slider in the UI (brush size, opacity, hardness, adjustment sliders, filter sliders, etc.) snaps back to its default value on double-click. The numeric text input inside the slider is exempt so double-clicks there select the value for editing instead.
+- **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the status bar resets the viewport zoom to 100% (1×).
+- **Color swatch double-click**: double-clicking the foreground or background swatch in the Color panel both selects that swatch and auto-expands the Color panel (useful when the panel is collapsed). Recent-color swatches behave the same way.
+
+### Canvas Right-Click Context Menu
+Right-clicking the canvas opens a small menu with:
+- **Define Brush Preset** — only shown when a marquee selection is active. Captures the selected pixels of the active layer as a new brush tip and opens the Brushes modal with the new preset selected. Same code path as Edit → "Define Brush from Selection".
+- **Deselect** — clears the active marquee selection (disabled when there is none).
+- **Select All** — selects every pixel in the document (equivalent to ⌘A).
+
+The menu is suppressed on coarse-pointer devices (touch) so long-press doesn't accidentally open it.
+
+### Single-Key Shortcuts
+In addition to per-tool toolbox shortcuts (`B`, `E`, `J`, `Y`, `R`, `S`, `H`, `O`, `G`, `I`, `V`, `M`, `L`, `W`, `T`, `N`, `U`, `P`, `C`, …) the editor ships these global keys:
+
+- **`X`** — swap foreground and background colors
+- **`D`** — reset foreground/background to the defaults (black / white)
+- **`Q`** — toggle Quick Mask mode
+- **`[` / `]`** — decrement / increment the active tool's size by 1 (works for brush, dodge & burn, smudge, pencil, eraser, clone stamp, healing brush, pen-tool stroke width, and shape-tool stroke width — the bracket maps to whichever size slider the current tool exposes)
+- **`Space+drag`** / **middle-click drag** — temporary pan from any tool
+- **`Cmd/Ctrl+scroll`** — zoom centered on the cursor; plain scroll pans
 
 ---
 
