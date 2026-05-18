@@ -162,10 +162,16 @@ void main() {
         vec3 filtered = c.rgb * u_pf_color;
         vec3 result = mix(c.rgb, filtered, u_pf_density);
         if (u_pf_luminosity > 0.5) {
-            vec3 origHsl   = rgb2hsl(c.rgb);
-            vec3 resultHsl = rgb2hsl(result);
-            resultHsl.z = origHsl.z;
-            result = hsl2rgb(resultHsl);
+            // Scale result to match the original luminance rather than swapping
+            // the HSL L channel. The L-swap causes unexpected hue shifts when
+            // the filter and source are complementary (e.g. orange on blue sky).
+            vec3 lum = vec3(0.2126, 0.7152, 0.0722);
+            float origLum   = dot(c.rgb, lum);
+            float resultLum = dot(result,  lum);
+            if (resultLum > 0.001) {
+                result *= origLum / resultLum;
+            }
+            result = clamp(result, 0.0, 1.0);
         }
         c.rgb = result;
     }
