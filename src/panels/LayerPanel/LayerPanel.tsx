@@ -81,10 +81,12 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       e.preventDefault();
       selectLayerRange(activeLayerId, layerId);
     } else {
-      // Plain click: select only this layer
+      // Selecting the layer row exits mask-edit mode; the mask thumbnail is
+      // the only entry point, so clicking the layer makes it the paint target.
       onSelectLayer(layerId);
+      setMaskEditMode(false);
     }
-  }, [toggleLayerSelection, selectLayerRange, onSelectLayer, activeLayerId]);
+  }, [toggleLayerSelection, selectLayerRange, onSelectLayer, activeLayerId, setMaskEditMode]);
 
   // Keyboard shortcuts: Cmd+A to select all, Delete/Backspace to delete selected
   useEffect(() => {
@@ -442,9 +444,8 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                   ].filter(Boolean).join(' ')}
                   onClick={(e) => {
                     e.stopPropagation();
-                    const isAlreadyEditing = maskEditMode && layer.id === activeLayerId;
                     onSelectLayer(layer.id);
-                    setMaskEditMode(!isAlreadyEditing);
+                    setMaskEditMode(true);
                   }}
                   role="button"
                   tabIndex={0}
