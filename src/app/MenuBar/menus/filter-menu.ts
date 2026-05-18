@@ -47,6 +47,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Threshold...', action: () => showFilterDialog('threshold') },
       { label: 'Solarize...', action: () => showFilterDialog('solarize') },
       { label: 'Emboss...', action: () => showFilterDialog('emboss') },
+      { label: 'CRT / Scanline...', action: () => showFilterDialog('crt') },
     ],
   };
 }

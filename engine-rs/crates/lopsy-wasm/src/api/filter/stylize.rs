@@ -345,6 +345,45 @@ pub fn filter_bloom(
     engine.inner.mark_layer_dirty(layer_id);
 }
 
+#[wasm_bindgen(js_name = "filterCrt")]
+pub fn filter_crt(
+    engine: &mut Engine,
+    layer_id: &str,
+    scanline_intensity: f32,
+    scanline_spacing: f32,
+    curvature: f32,
+    phosphor: f32,
+    vignette: f32,
+) {
+    let scanline_intensity = scanline_intensity.clamp(0.0, 1.0);
+    let scanline_spacing = scanline_spacing.clamp(1.0, 8.0);
+    let curvature = curvature.clamp(0.0, 1.0);
+    let phosphor = phosphor.clamp(0.0, 1.0);
+    let vignette = vignette.clamp(0.0, 1.0);
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.crt,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_scanlineIntensity") {
+                gl.uniform1f(Some(&loc), scanline_intensity);
+            }
+            if let Some(loc) = shader.location(gl, "u_scanlineSpacing") {
+                gl.uniform1f(Some(&loc), scanline_spacing);
+            }
+            if let Some(loc) = shader.location(gl, "u_curvature") {
+                gl.uniform1f(Some(&loc), curvature);
+            }
+            if let Some(loc) = shader.location(gl, "u_phosphor") {
+                gl.uniform1f(Some(&loc), phosphor);
+            }
+            if let Some(loc) = shader.location(gl, "u_vignette") {
+                gl.uniform1f(Some(&loc), vignette);
+            }
+        },
+    );
+}
+
 #[wasm_bindgen(js_name = "filterVoronoi")]
 pub fn filter_voronoi(
     engine: &mut Engine,
