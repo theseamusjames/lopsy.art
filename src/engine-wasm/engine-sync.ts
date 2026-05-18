@@ -336,7 +336,6 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
   for (const layer of layers) {
     if (layer.type !== 'group') continue;
     const group = layer as import('../types').GroupLayer;
-    if (group.blendMode === 'pass-through') continue;
     const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
     const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
     const hasCurves = adj?.curves != null && !isIdentityCurves(adj.curves);

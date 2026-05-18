@@ -330,6 +330,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Motion Blur**: angle (degrees), distance (px)
 - **Radial Blur**: amount (centered)
 - **Tilt-Shift Blur**: focus position 0–100% (center of sharp band along blur axis), focus width 0–100% (width of the sharp band), blur radius 1–32 px (max blur intensity in out-of-focus regions), angle 0–360° (rotation of the focus plane). Creates selective-focus miniature photography effects by blurring areas outside a configurable focus band while leaving the focus zone sharp. **Cmd/Meta+drag** on the on-canvas angle handle snaps the focus-plane rotation to 15° increments.
+- **Surface Blur**: radius 1 – 50 px (auto-scales with document size), threshold 1 – 255 (max channel difference a neighbour is allowed to have before being excluded from the blur). Edge-preserving blur that smooths low-contrast regions (skin, gradients, noise) while leaving edges sharp — a Bilateral-style filter implemented as a single GPU pass.
 
 ### Sharpen
 - **Unsharp Mask**: radius, amount, threshold
@@ -531,6 +532,30 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 - **Zoom slider**: log-scaled, mapping slider position to `64^(value/100)` so the full 0.01× – 64× zoom range is reachable without coarse jumps
 - **Zoom readout**: displays the current zoom as a percentage
 - Collapsible; collapsed state persists in localStorage
+
+---
+
+## Channels Panel
+
+A per-layer view of the active layer's RGBA channels, modeled on Photoshop's Channels palette.
+
+- **Rows**: RGB (composite), Red, Green, Blue, Alpha. Each row has a colored swatch dot, a label, and (when expanded) a live grayscale thumbnail of that channel sampled from the active layer's GPU texture.
+- **Active channel**: clicking a row marks that channel as the active view — used by tools like the eyedropper / curves to operate on a single channel.
+- **Per-channel visibility**: each non-composite row has an eye/eye-off toggle that hides or shows that channel in the composite output. The composite RGB row reflects the current visibility mask of R / G / B.
+- **Thumbnails**: extracted on the JS side from the layer's RGBA bytes (red, green, blue, or alpha mapped into a grayscale image) and re-rendered whenever the layer's pixel-data version increments, so the panel stays in sync with painting.
+- Collapsible; collapsed state persists in localStorage.
+
+---
+
+## Info Panel
+
+A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
+
+- **Cursor X / Y**: current pointer position in document coordinates.
+- **Canvas W / H**: document dimensions.
+- **Layer X / Y / W / H**: the active layer's origin and (when applicable) its raster width and height.
+- **Selection X / Y / W / H**: the active marquee's bounding box, only shown when a selection is active. When a selection is active, the Cursor X / Y readout switches to the selection's top-left so the values stay coherent during transform / move operations.
+- Collapsible; the collapsed view drops Canvas / Selection rows and keeps the most-load-bearing layer fields.
 
 ---
 
