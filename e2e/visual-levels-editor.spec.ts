@@ -159,12 +159,6 @@ test.describe('Visual levels editor', () => {
     expect(brightened.g).toBeGreaterThan(baseline.g + 50);
     expect(brightened.b).toBeGreaterThan(baseline.b + 50);
 
-    // Isolated snapshot of just the editor — keeps the screenshot stable
-    // against changes elsewhere in the app chrome.
-    await drawer.getByTestId('levels-editor').screenshot({
-      path: 'e2e/screenshots/visual-levels-editor-after-drag.png',
-    });
-
     // Drag output black handle right — clamps darks higher, brightening
     // even further. Combined with the white drag the pixel should be
     // very bright or saturated.
@@ -179,19 +173,126 @@ test.describe('Visual levels editor', () => {
     const outBlackValue = Number((outBlackText ?? '').trim());
     expect(outBlackValue).toBeGreaterThan(60);
 
-    await drawer.getByTestId('levels-editor').screenshot({
-      path: 'e2e/screenshots/visual-levels-editor-with-output-clamped.png',
-    });
-
     // Reset button restores identity — pixel returns close to baseline.
     await drawer.getByTestId('levels-reset').click();
     await page.waitForTimeout(200);
     const afterReset = await readCompositedAtDoc(page, 100, 100);
     expect(Math.abs(afterReset.r - baseline.r)).toBeLessThan(8);
+  });
 
-    await drawer.getByTestId('levels-editor').screenshot({
-      path: 'e2e/screenshots/visual-levels-editor-identity.png',
+  test('histogram renders a realistic spread for a varied scene', async ({ page }) => {
+    // Paint a synthetic "photo-like" image: horizontal exposure gradient,
+    // colour-biased regions, and a sprinkle of noise. This produces three
+    // visibly distinct R/G/B distributions — exactly what the layered
+    // grayscale histogram is designed to display.
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; width: number; height: number };
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          pushHistory: (label?: string) => void;
+        };
+      };
+      const s = store.getState();
+      const w = s.document.width;
+      const h = s.document.height;
+      const data = new ImageData(w, h);
+
+      // Cheap deterministic PRNG so the screenshot is byte-stable across runs.
+      let seed = 0xc0ffee;
+      const rand = () => {
+        seed = (seed * 1664525 + 1013904223) | 0;
+        return ((seed >>> 0) % 1000) / 1000;
+      };
+
+      const clamp = (v: number) => Math.max(0, Math.min(255, v | 0));
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const tx = x / (w - 1);
+          const ty = y / (h - 1);
+          // Base luminance gradient — dark on the left, mid on the right.
+          const luma = 30 + tx * 170;
+          // Per-channel bias: a warm sky on top, cool shadow at the bottom.
+          let r = luma + (1 - ty) * 35 - ty * 15;
+          let g = luma + (1 - ty) * 10;
+          let b = luma + ty * 40 - (1 - ty) * 20;
+          // Two splotches to introduce extra peaks.
+          const dxR = x - w * 0.25;
+          const dyR = y - h * 0.65;
+          if (dxR * dxR + dyR * dyR < (w * 0.18) ** 2) {
+            r += 60; g -= 20; b -= 25;
+          }
+          const dxB = x - w * 0.78;
+          const dyB = y - h * 0.3;
+          if (dxB * dxB + dyB * dyB < (w * 0.12) ** 2) {
+            r -= 20; g -= 10; b += 70;
+          }
+          // Mild noise so each channel covers a continuous range rather
+          // than a few sharp bins — gives the histogram its photo-like spread.
+          const n = (rand() - 0.5) * 18;
+          const idx = (y * w + x) * 4;
+          data.data[idx] = clamp(r + n);
+          data.data[idx + 1] = clamp(g + n);
+          data.data[idx + 2] = clamp(b + n);
+          data.data[idx + 3] = 255;
+        }
+      }
+
+      s.pushHistory('Seed scene');
+      s.updateLayerPixelData(s.document.activeLayerId, data);
     });
+    await page.waitForTimeout(300);
+
+    const rootGroupId = await getRootGroupId(page);
+    await setGroupBlendMode(page, rootGroupId, 'normal');
+    await openGroupEffectsPanel(page, rootGroupId);
+    await addAdjustment(page, rootGroupId, 'levels');
+    // Give the histogram a few rAFs to read the layer texture.
+    await page.waitForTimeout(600);
+
+    const drawer = page.getByTestId('effects-drawer');
+    await drawer.getByTestId('levels-channel-tab-rgb').click();
+    await drawer.getByTestId('levels-editor').screenshot({
+      path: 'e2e/screenshots/visual-levels-editor-rgb-spread.png',
+    });
+
+    // Switch to each single-channel tab so the screenshot also documents
+    // how a single channel reads against the muted others.
+    await drawer.getByTestId('levels-channel-tab-r').click();
+    await page.waitForTimeout(100);
+    await drawer.getByTestId('levels-editor').screenshot({
+      path: 'e2e/screenshots/visual-levels-editor-red-channel.png',
+    });
+
+    await drawer.getByTestId('levels-channel-tab-b').click();
+    await page.waitForTimeout(100);
+
+    // Drag a few handles inward so the screenshot also shows non-identity state.
+    await drawer.getByTestId('levels-channel-tab-rgb').click();
+    await dragHandleAlongTrack(page, 'levels-input-track', 'levels-input-black-handle', 0.18);
+    await dragHandleAlongTrack(page, 'levels-input-track', 'levels-input-white-handle', 0.82);
+    await drawer.getByTestId('levels-editor').screenshot({
+      path: 'e2e/screenshots/visual-levels-editor-rgb-spread-adjusted.png',
+    });
+
+    // Verify the histogram is non-empty by reading a few pixels from the
+    // canvas — if the histogram drew nothing the canvas is all-dark
+    // (rgba(0,0,0,0.35) bg). At least one mid-row pixel should be brighter.
+    const histPixelSpread = await drawer.getByTestId('levels-editor').evaluate((root) => {
+      const canvas = root.querySelector('canvas') as HTMLCanvasElement | null;
+      if (!canvas) return 0;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return 0;
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let maxLuma = 0;
+      for (let i = 0; i < img.data.length; i += 4) {
+        const l = (img.data[i]! + img.data[i + 1]! + img.data[i + 2]!) / 3;
+        if (l > maxLuma) maxLuma = l;
+      }
+      return maxLuma;
+    });
+    expect(histPixelSpread).toBeGreaterThan(60);
   });
 
   test('switching channel tabs updates the active handle values', async ({ page }) => {
