@@ -1,59 +1,54 @@
-# Composition: Koi Fish Mid-Century Modern Poster
+# Composition: Sacred Decadence (Rococo Zine Cover)
 
-**Date**: 2026-05-06
-**Branch**: `theseamusjames/gpu-masks`
-**Test file**: `e2e/composition-koi-fish.spec.ts`
-**Result**: PASSED (2.5 minutes, chromium/SwiftShader)
+**Date**: 2026-05-19
+**Branch**: `claude/run-composition-skill-oY1bV`
+**Test file**: `e2e/composition-sacred-decadence.spec.ts`
+**Style**: rococo  •  **Project type**: zine cover  •  **Topic letters**: s + d
 
 ## What was tested
 
-### Layer Masks
-- Added masks to three layers (main koi, second koi, title)
-- Entered mask edit mode via UI (clicking mask thumbnail)
-- Painted on mask with brush tool (GPU mask painting path)
-- Used eraser on mask (GPU mask eraser path)
-- Applied gradient-style mask data (top-to-bottom, radial, left-to-right)
-- Verified mask state in store (enabled, non-null)
-- Exited mask edit mode
+### Layers, layer ops, and history
+- 11+ layers (background, gilt frame, cartouche, cherub, scrollwork, roses,
+  ribbon, three text layers, sparkles, grain)
+- Rename layer, add layer, set active layer
+- Push history at every major step; mid-composition multi-undo (4 steps)
+  + multi-redo, and a single undo/redo of the scrollwork layer
 
-### Marquee Selections
-- Rectangular marquee + fill: used extensively for background, geometric bars, and block letter title ("KOI")
-- Elliptical marquee + fill: used for water ripple circles (5 concentric ellipses)
-- Both marquee types verified via tool switching and mouse drag interactions
+### Selections + transforms
+- Elliptical marquee drag (screenshot captured with marquee active)
+- Free-Transform invoked via `Ctrl+T` on the cherub layer, then committed
+  with Enter
 
-### Undo/Redo
-- Undo after mask operations verified (composited output changes)
-- Redo after undo verified (produces valid frame)
-- General undo/redo on detail layer verified
+### Painting tools
+- Brush (cherub silhouette, gold curlicue swooshes, sinusoidal swoops, rose
+  petals) at multiple sizes/hardness/opacities
+- Spray tool used for the sparkle layer (with screen blend)
+- Batched ImageData paint for the background, frame, cartouche rings, and
+  ribbon to side-step the auto-crop pitfall
 
-### Layer Effects
-- Drop shadow on main koi (offset, blur, opacity, color)
-- Outer glow on main koi (size, spread, opacity, color)
-- Inner glow on second koi (size, spread, opacity, color)
-- All effects verified as enabled in store state
+### Text
+- Three rasterized typography layers (`SACRED` in Garamond bold,
+  `decadence.` in Brush Script MT italic, issue tag in Palatino) — drawn
+  via Canvas2D fillText and pushed as raster pixels so the GPU compositor
+  renders them
 
-### Blend Modes & Opacity
-- Screen blend mode on water ripples layer
-- Layer opacity set to 60% on ripples layer
+### Effects
+- Drop Shadow, Outer Glow, and Stroke configured on the SACRED title
+- Drop Shadow on the decadence. title
+- Sparkles layer set to Screen blend mode, grain layer set to Overlay at
+  18% opacity
 
-### Brush Tool
-- Multiple brush sizes (25-100px), hardness levels, opacity levels
-- Color changes via store (orange, red, white, black)
-- Multiple stroke segments forming koi body shapes
+### Adjustments (document-level)
+- Vignette (+35), Contrast (+14), Saturation -10 / Vibrance +18 added as
+  adjustment nodes on the root group
 
-## Known Limitation
+### Filters
+- Add Noise filter on the grain layer (raster, gray base) → Overlay blend
 
-GPU mask readback (`readMaskTexture`) does not produce correct results in the
-headless SwiftShader environment. The existing `tools.spec.ts` mask painting
-test also fails for the same reason. Mask data assertions in this composition
-test use store-based mask writes rather than GPU-painted mask readback.
+## Final pixel sanity check
+- >60% opaque pixel coverage
+- Warm-side palette confirmed (rAvg > bAvg)
 
-## Screenshots
-
-19 screenshots saved to `e2e/screenshots/koi-fish-*.png`:
-- `01-background` through `18-details`: incremental build phases
-- `koi-fish-final.png`: completed composition
-
-## Document Specs
-- 800 x 1000 px (portrait poster format)
-- 8 layers: background, main koi (with mask), geometry bars, water ripples, second koi (with mask), title "KOI" (with mask), decorative details, plus the root group
+## Output
+- `e2e/screenshots/sacred-decadence.png` — final PNG export
+- `e2e/screenshots/sacred-decadence-{01..18}-*.png` — phase screenshots
