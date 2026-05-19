@@ -100,13 +100,13 @@
 
 .track {
   position: relative;
-  height: 12px;
+  height: 18px;
   touch-action: none;
 }
 
 .handle {
   position: absolute;
-  top: 0;
+  top: 6px;
   transform: translateX(-50%);
   width: 10px;
   height: 12px;
@@ -118,13 +118,47 @@
   box-shadow: var(--shadow-sm);
 }
 
+.handle::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% - 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid var(--color-border-strong);
+}
+
+.handle::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 4px solid var(--handle-fill);
+}
+
 .handle:hover {
   border-color: var(--color-text-secondary);
+}
+
+.handle:hover::before {
+  border-bottom-color: var(--color-text-secondary);
 }
 
 .handle:focus-visible {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.handle:focus-visible::before {
+  border-bottom-color: var(--color-accent);
 }
 
 .readouts {
