@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { PreciseAdjustmentHandle } from '../../components/PreciseAdjustmentHandle/PreciseAdjustmentHandle';
 import { type Levels, type LevelsChannel, isIdentityChannel } from '../../filters/levels';
 import { clamp } from '../../utils/math';
 import { histogramPercentile, type Histogram } from './histogram-compute';
@@ -228,24 +229,30 @@ function InputAxis({ channel, onChange }: AxisProps) {
   return (
     <div className={styles.axis} data-testid="levels-input-axis">
       <div ref={trackRef} className={styles.track} data-testid="levels-input-track">
-        <Handle
-          position01={channel.inputBlack}
-          color="#0d0d0d"
+        <PreciseAdjustmentHandle
+          position={channel.inputBlack}
+          swatch="#0d0d0d"
           ariaLabel="Input black"
+          ariaValueMax={255}
+          ariaValueNow={Math.round(channel.inputBlack * 255)}
           testId="levels-input-black-handle"
           onPointerDown={handleBlackDrag}
         />
-        <Handle
-          position01={gamma01}
-          color="#7f7f7f"
+        <PreciseAdjustmentHandle
+          position={gamma01}
+          swatch="#7f7f7f"
           ariaLabel="Input gamma"
+          ariaValueMax={255}
+          ariaValueNow={Math.round(gamma01 * 255)}
           testId="levels-input-gamma-handle"
           onPointerDown={handleGammaDrag}
         />
-        <Handle
-          position01={channel.inputWhite}
-          color="#ffffff"
+        <PreciseAdjustmentHandle
+          position={channel.inputWhite}
+          swatch="#ffffff"
           ariaLabel="Input white"
+          ariaValueMax={255}
+          ariaValueNow={Math.round(channel.inputWhite * 255)}
           testId="levels-input-white-handle"
           onPointerDown={handleWhiteDrag}
         />
@@ -275,17 +282,21 @@ function OutputAxis({ channel, onChange }: AxisProps) {
   return (
     <div className={styles.axis} data-testid="levels-output-axis">
       <div ref={trackRef} className={styles.track} data-testid="levels-output-track">
-        <Handle
-          position01={channel.outputBlack}
-          color="#0d0d0d"
+        <PreciseAdjustmentHandle
+          position={channel.outputBlack}
+          swatch="#0d0d0d"
           ariaLabel="Output black"
+          ariaValueMax={255}
+          ariaValueNow={Math.round(channel.outputBlack * 255)}
           testId="levels-output-black-handle"
           onPointerDown={handleBlackDrag}
         />
-        <Handle
-          position01={channel.outputWhite}
-          color="#ffffff"
+        <PreciseAdjustmentHandle
+          position={channel.outputWhite}
+          swatch="#ffffff"
           ariaLabel="Output white"
+          ariaValueMax={255}
+          ariaValueNow={Math.round(channel.outputWhite * 255)}
           testId="levels-output-white-handle"
           onPointerDown={handleWhiteDrag}
         />
@@ -299,33 +310,7 @@ function OutputAxis({ channel, onChange }: AxisProps) {
   );
 }
 
-// ─── Shared handle + drag hook ────────────────────────────────────────────
-
-interface HandleProps {
-  position01: number;
-  color: string;
-  ariaLabel: string;
-  testId: string;
-  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
-}
-
-function Handle({ position01, color, ariaLabel, testId, onPointerDown }: HandleProps) {
-  const left = `${clamp(position01, 0, 1) * 100}%`;
-  return (
-    <div
-      role="slider"
-      aria-label={ariaLabel}
-      aria-valuemin={0}
-      aria-valuemax={255}
-      aria-valuenow={Math.round(position01 * 255)}
-      tabIndex={0}
-      className={styles.handle}
-      data-testid={testId}
-      style={{ left, backgroundColor: color }}
-      onPointerDown={onPointerDown}
-    />
-  );
-}
+// ─── Drag hook ───────────────────────────────────────────────────────────
 
 function useDragHandle(
   trackRef: React.RefObject<HTMLDivElement | null>,
