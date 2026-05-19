@@ -146,3 +146,30 @@ pub fn fill_quick_mask(
     quick_mask_gpu::fill_quick_mask(&mut engine.inner, start_x, start_y, tolerance, contiguous, mode);
 }
 
+#[wasm_bindgen(js_name = "renderQuickMaskLinearGradient")]
+pub fn render_quick_mask_linear_gradient(
+    engine: &mut Engine,
+    start_x: f64,
+    start_y: f64,
+    end_x: f64,
+    end_y: f64,
+    stops_json: &str,
+) {
+    quick_mask_gpu::render_quick_mask_linear_gradient(
+        &mut engine.inner, start_x, start_y, end_x, end_y, stops_json,
+    );
+}
+
+#[wasm_bindgen(js_name = "renderQuickMaskRadialGradient")]
+pub fn render_quick_mask_radial_gradient(
+    engine: &mut Engine,
+    cx: f64,
+    cy: f64,
+    radius: f64,
+    stops_json: &str,
+) {
+    quick_mask_gpu::render_quick_mask_radial_gradient(
+        &mut engine.inner, cx, cy, radius, stops_json,
+    );
+}
+
