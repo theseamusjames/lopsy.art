@@ -13,6 +13,7 @@
 import type { Engine } from './wasm-bridge';
 import { getEngine } from './engine-state';
 import type { Layer } from '../types';
+import type { GradientStop } from '../tools/gradient/gradient';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
@@ -107,7 +108,7 @@ export { resetTrackedState, markPixelDataSynced } from './sync-state';
 export { syncLayers } from './sync-layers';
 
 function buildGradientMapLut(
-  stops: ReadonlyArray<{ position: number; color: { r: number; g: number; b: number } }>,
+  stops: readonly GradientStop[],
 ): Uint8Array {
   const lut = new Uint8Array(256 * 4);
   const sorted = [...stops].sort((a, b) => a.position - b.position);
@@ -331,12 +332,43 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
   }
 }
 
+/**
+ * Walk a group's children recursively and collect every descendant layer ID.
+ * Sub-groups are included so the compositor sees both the marker and its
+ * contents — the WASM side ignores Group-type entries via a strict layer-type
+ * check, so the extra IDs are harmless.
+ *
+ * The compositor's `child_to_group` map needs every descendant of an adjusted
+ * group so all descendants get routed into the group scratch FBO. Sending only
+ * direct children causes sub-group descendants to bypass the scratch and
+ * render directly onto the composite, where the group's normal-blend finalize
+ * later covers them up.
+ */
+export function flattenGroupDescendants(
+  layers: readonly Layer[],
+  groupId: string,
+): string[] {
+  const layerMap = new Map<string, Layer>();
+  for (const l of layers) layerMap.set(l.id, l);
+  const result: string[] = [];
+  const walk = (id: string): void => {
+    const layer = layerMap.get(id);
+    if (!layer || layer.type !== 'group') return;
+    const group = layer as import('../types').GroupLayer;
+    for (const childId of group.children) {
+      result.push(childId);
+      walk(childId);
+    }
+  };
+  walk(groupId);
+  return result;
+}
+
 export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): void {
   clearGroupAdjustments(engine);
   for (const layer of layers) {
     if (layer.type !== 'group') continue;
     const group = layer as import('../types').GroupLayer;
-    if (group.blendMode === 'pass-through') continue;
     const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
     const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
     const hasCurves = adj?.curves != null && !isIdentityCurves(adj.curves);
@@ -366,7 +398,7 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     setGroupAdjustments(
       engine,
       group.id,
-      JSON.stringify(group.children),
+      JSON.stringify(flattenGroupDescendants(layers, group.id)),
       adj?.exposure ?? 0,
       adj?.contrast ?? 0,
       adj?.highlights ?? 0,

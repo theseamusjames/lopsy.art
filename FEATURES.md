@@ -220,13 +220,14 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 
 ### Move
 - Drag to reposition layers
-- Arrow key nudge
+- Arrow key nudge — 1 px by default; when grid + snap-to-grid is enabled, each key press nudges by exactly one grid cell. Arrow keys also nudge the active marquee bounds when a selection tool is active.
 - Snap to grid
 - Snap to guides
 - **Snap to layers** (View menu → "Snap to Layers"): while dragging, the moving layer's left/right/top/bottom edges and X/Y centers attract to the matching edges and centers of every other visible layer within a 5 px threshold. Magenta alignment guides span the document while a snap is engaged and clear on mouse-up.
 - **Align**: left, center-h, right, top, center-v, bottom
 - **Fit** (options-bar button): scales the active raster layer so its longest side matches the canvas — preserving aspect ratio — and centers it on the artboard. Useful for bringing an oversized pasted/dropped image into view; reuses the GPU `scaleLayerTexture` path so no pixel data round-trips through JS.
-- **Alt/Option+drag**: with no active selection, duplicates the active layer before moving; with an active marquee, leaves the original pixels behind and moves a floating copy
+- **Alt/Option+drag (no active marquee)**: duplicates the active layer in place, then moves the new copy — leaves the original layer untouched.
+- **Alt/Option+drag (with an active marquee)**: copies the selected pixels of the active layer into a floating duplicate and moves that copy, leaving the original pixels under the selection intact (Photoshop-style "alt-drag the selection").
 - **Cmd/Meta+drag (transform handles)**: constrains aspect ratio when scaling and snaps rotation to 15° increments. Grid + snap-to-grid also forces snapping automatically during the transform.
 
 ### Paste / Drop behavior
@@ -330,6 +331,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Motion Blur**: angle (degrees), distance (px)
 - **Radial Blur**: amount (centered)
 - **Tilt-Shift Blur**: focus position 0–100% (center of sharp band along blur axis), focus width 0–100% (width of the sharp band), blur radius 1–32 px (max blur intensity in out-of-focus regions), angle 0–360° (rotation of the focus plane). Creates selective-focus miniature photography effects by blurring areas outside a configurable focus band while leaving the focus zone sharp. **Cmd/Meta+drag** on the on-canvas angle handle snaps the focus-plane rotation to 15° increments.
+- **Surface Blur**: radius 1 – 50 px (auto-scales with document size), threshold 1 – 255 (max channel difference a neighbour is allowed to have before being excluded from the blur). Edge-preserving blur that smooths low-contrast regions (skin, gradients, noise) while leaving edges sharp — a Bilateral-style filter implemented as a single GPU pass.
 
 ### Sharpen
 - **Unsharp Mask**: radius, amount, threshold
@@ -511,6 +513,29 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Draggable modals & panels**: filter dialogs, pattern fill, layer effects, adjustments, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked)
 - **Filter / pattern preview overlay**: when live preview is enabled the dim backdrop is removed and pointer-events on the overlay are disabled so the canvas is fully visible while the modal stays interactive
 
+### Global UI Conventions
+- **Slider double-click → reset**: every numeric slider in the UI (brush size, opacity, hardness, adjustment sliders, filter sliders, etc.) snaps back to its default value on double-click. The numeric text input inside the slider is exempt so double-clicks there select the value for editing instead.
+- **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the status bar resets the viewport zoom to 100% (1×).
+- **Color swatch double-click**: double-clicking the foreground or background swatch in the Color panel both selects that swatch and auto-expands the Color panel (useful when the panel is collapsed). Recent-color swatches behave the same way.
+
+### Canvas Right-Click Context Menu
+Right-clicking the canvas opens a small menu with:
+- **Define Brush Preset** — only shown when a marquee selection is active. Captures the selected pixels of the active layer as a new brush tip and opens the Brushes modal with the new preset selected. Same code path as Edit → "Define Brush from Selection".
+- **Deselect** — clears the active marquee selection (disabled when there is none).
+- **Select All** — selects every pixel in the document (equivalent to ⌘A).
+
+The menu is suppressed on coarse-pointer devices (touch) so long-press doesn't accidentally open it.
+
+### Single-Key Shortcuts
+In addition to per-tool toolbox shortcuts (`B`, `E`, `J`, `Y`, `R`, `S`, `H`, `O`, `G`, `I`, `V`, `M`, `L`, `W`, `T`, `N`, `U`, `P`, `C`, …) the editor ships these global keys:
+
+- **`X`** — swap foreground and background colors
+- **`D`** — reset foreground/background to the defaults (black / white)
+- **`Q`** — toggle Quick Mask mode
+- **`[` / `]`** — decrement / increment the active tool's size by 1 (works for brush, dodge & burn, smudge, pencil, eraser, clone stamp, healing brush, pen-tool stroke width, and shape-tool stroke width — the bracket maps to whichever size slider the current tool exposes)
+- **`Space+drag`** / **middle-click drag** — temporary pan from any tool
+- **`Cmd/Ctrl+scroll`** — zoom centered on the cursor; plain scroll pans
+
 ---
 
 ## Reference Image Drawer
@@ -543,6 +568,30 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 - **Zoom slider**: log-scaled, mapping slider position to `64^(value/100)` so the full 0.01× – 64× zoom range is reachable without coarse jumps
 - **Zoom readout**: displays the current zoom as a percentage
 - Collapsible; collapsed state persists in localStorage
+
+---
+
+## Channels Panel
+
+A per-layer view of the active layer's RGBA channels, modeled on Photoshop's Channels palette.
+
+- **Rows**: RGB (composite), Red, Green, Blue, Alpha. Each row has a colored swatch dot, a label, and (when expanded) a live grayscale thumbnail of that channel sampled from the active layer's GPU texture.
+- **Active channel**: clicking a row marks that channel as the active view — used by tools like the eyedropper / curves to operate on a single channel.
+- **Per-channel visibility**: each non-composite row has an eye/eye-off toggle that hides or shows that channel in the composite output. The composite RGB row reflects the current visibility mask of R / G / B.
+- **Thumbnails**: extracted on the JS side from the layer's RGBA bytes (red, green, blue, or alpha mapped into a grayscale image) and re-rendered whenever the layer's pixel-data version increments, so the panel stays in sync with painting.
+- Collapsible; collapsed state persists in localStorage.
+
+---
+
+## Info Panel
+
+A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
+
+- **Cursor X / Y**: current pointer position in document coordinates.
+- **Canvas W / H**: document dimensions.
+- **Layer X / Y / W / H**: the active layer's origin and (when applicable) its raster width and height.
+- **Selection X / Y / W / H**: the active marquee's bounding box, only shown when a selection is active. When a selection is active, the Cursor X / Y readout switches to the selection's top-left so the values stay coherent during transform / move operations.
+- Collapsible; the collapsed view drops Canvas / Selection rows and keeps the most-load-bearing layer fields.
 
 ---
 
