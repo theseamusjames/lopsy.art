@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilterDialog } from '../../components/FilterDialog/FilterDialog';
 import { NoiseDialog, FillNoiseDialog } from '../../components/FilterDialog/NoiseDialog';
 import { PatternFillDialog } from '../../components/PatternFillDialog/PatternFillDialog';
+import { ColorLutDialog } from '../../components/ColorLutDialog/ColorLutDialog';
 import { ExportDialog } from '../../components/ExportDialog/ExportDialog';
 import {
   type FilterDialogId,
@@ -21,6 +22,14 @@ import {
   cancelPatternPreview,
   applyPatternFillWithPreview,
 } from './pattern-actions';
+import {
+  applyColorLut,
+  applyColorLutDirect,
+  beginColorLutPreview,
+  previewColorLut,
+  cancelColorLutPreview,
+} from './color-lut-actions';
+import type { LutPreset } from '../../filters/color-lut';
 import {
   exportCanvasWithOptions,
   buildExportPreview,
@@ -184,6 +193,33 @@ export function MenuBar() {
     previewPatternFill(patternId, scale, offsetX, offsetY);
   }, []);
 
+  const handleColorLutApply = useCallback((preset: LutPreset, intensity: number) => {
+    if (previewActiveRef.current) {
+      applyColorLut(preset, intensity);
+      previewActiveRef.current = false;
+    } else {
+      applyColorLutDirect(preset, intensity);
+    }
+    setActiveDialog(null);
+  }, []);
+
+  const handleColorLutPreviewStart = useCallback(() => {
+    previewActiveRef.current = true;
+    beginColorLutPreview();
+  }, []);
+
+  const handleColorLutPreviewStop = useCallback(() => {
+    if (previewActiveRef.current) {
+      cancelColorLutPreview();
+      previewActiveRef.current = false;
+    }
+  }, []);
+
+  const handleColorLutPreviewChange = useCallback((preset: LutPreset, intensity: number) => {
+    if (!previewActiveRef.current) return;
+    previewColorLut(preset, intensity);
+  }, []);
+
   const handleExportDialogExport = useCallback((options: ExportOptions) => {
     setShowExportDialog(false);
     exportCanvasWithOptions(options);
@@ -220,7 +256,7 @@ export function MenuBar() {
     setSelectDialog(null);
   }, [selectDialog]);
 
-  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill'
+  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill' && activeDialog !== 'color-lut'
     ? getFilterDialogConfig(activeDialog)
     : null;
 
@@ -302,6 +338,15 @@ export function MenuBar() {
           onPreviewStart={handlePatternPreviewStart}
           onPreviewStop={handlePatternPreviewStop}
           onPreviewChange={handlePatternPreviewChange}
+        />
+      )}
+      {activeDialog === 'color-lut' && (
+        <ColorLutDialog
+          onApply={handleColorLutApply}
+          onCancel={handleDialogCancel}
+          onPreviewStart={handleColorLutPreviewStart}
+          onPreviewStop={handleColorLutPreviewStop}
+          onPreviewChange={handleColorLutPreviewChange}
         />
       )}
       {imageDialog === 'canvas-size' && (
