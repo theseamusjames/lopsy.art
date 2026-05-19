@@ -1,3 +1,76 @@
+/// Compute an edge distance field from a grayscale alpha mask.
+/// For each pixel with alpha > threshold, stores the distance to the nearest
+/// edge pixel (adjacent to a transparent pixel), normalized to [0, 255].
+/// Pixels outside the shape get 0.
+pub fn compute_edge_distance(alpha: &[u8], width: usize, height: usize, threshold: u8) -> Vec<u8> {
+    let n = width * height;
+    if n == 0 {
+        return Vec::new();
+    }
+
+    let inside = |i: usize| -> bool { alpha.get(i).copied().unwrap_or(0) > threshold };
+    let mut dist = vec![f32::MAX; n];
+
+    for y in 0..height {
+        for x in 0..width {
+            let i = y * width + x;
+            if !inside(i) {
+                dist[i] = 0.0;
+                continue;
+            }
+            let at_border = x == 0 || x == width - 1 || y == 0 || y == height - 1;
+            if at_border {
+                dist[i] = 0.0;
+                continue;
+            }
+            let has_outside_neighbor =
+                !inside(i - 1) || !inside(i + 1) ||
+                !inside(i - width) || !inside(i + width);
+            if has_outside_neighbor {
+                dist[i] = 0.0;
+            }
+        }
+    }
+
+    // Forward pass (top-left to bottom-right)
+    for y in 0..height {
+        for x in 0..width {
+            let i = y * width + x;
+            if dist[i] == 0.0 { continue; }
+            if x > 0 { dist[i] = dist[i].min(dist[i - 1] + 1.0); }
+            if y > 0 { dist[i] = dist[i].min(dist[i - width] + 1.0); }
+            if x > 0 && y > 0 { dist[i] = dist[i].min(dist[i - width - 1] + 1.414); }
+            if x + 1 < width && y > 0 { dist[i] = dist[i].min(dist[i - width + 1] + 1.414); }
+        }
+    }
+
+    // Backward pass (bottom-right to top-left)
+    for y in (0..height).rev() {
+        for x in (0..width).rev() {
+            let i = y * width + x;
+            if dist[i] == 0.0 { continue; }
+            if x + 1 < width { dist[i] = dist[i].min(dist[i + 1] + 1.0); }
+            if y + 1 < height { dist[i] = dist[i].min(dist[i + width] + 1.0); }
+            if x + 1 < width && y + 1 < height { dist[i] = dist[i].min(dist[i + width + 1] + 1.414); }
+            if x > 0 && y + 1 < height { dist[i] = dist[i].min(dist[i + width - 1] + 1.414); }
+        }
+    }
+
+    let max_dist = dist.iter().copied().fold(0.0f32, f32::max);
+    if max_dist < 0.001 {
+        return vec![0u8; n];
+    }
+    let mut result = vec![0u8; n];
+    for i in 0..n {
+        if !inside(i) {
+            result[i] = 0;
+        } else {
+            result[i] = (dist[i] / max_dist * 255.0).round().clamp(0.0, 255.0) as u8;
+        }
+    }
+    result
+}
+
 /// Generate a circular brush stamp with hardness falloff
 /// Returns a flat array of alpha values (size x size), row-major
 pub fn generate_brush_stamp(size: u32, hardness: f32) -> Vec<f32> {
@@ -27,7 +100,8 @@ pub fn generate_brush_stamp(size: u32, hardness: f32) -> Vec<f32> {
                 1.0
             } else {
                 let t = (dist - hard_radius) / (radius - hard_radius);
-                1.0 - t * t // quadratic falloff
+                let s = t * t * (3.0 - 2.0 * t);
+                1.0 - s
             };
 
             stamp[y as usize * s + x as usize] = alpha;
@@ -135,6 +209,39 @@ pub fn interpolate_points_with_scatter(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_edge_distance_solid_rect() {
+        // 5x5 solid block — center pixel should have the highest distance
+        let alpha = vec![255u8; 25];
+        let dist = compute_edge_distance(&alpha, 5, 5, 5);
+        assert_eq!(dist.len(), 25);
+        // Edges should be 0 (border pixels)
+        assert_eq!(dist[0], 0);
+        assert_eq!(dist[4], 0);
+        assert_eq!(dist[20], 0);
+        // Center (2,2) = index 12 should be the maximum
+        assert_eq!(dist[12], 255);
+        // Adjacent to center should be less
+        assert!(dist[11] < dist[12]);
+    }
+
+    #[test]
+    fn test_edge_distance_empty() {
+        let alpha = vec![0u8; 16];
+        let dist = compute_edge_distance(&alpha, 4, 4, 5);
+        assert!(dist.iter().all(|&v| v == 0));
+    }
+
+    #[test]
+    fn test_edge_distance_single_pixel() {
+        // 3x3 with only center filled
+        let mut alpha = vec![0u8; 9];
+        alpha[4] = 255;
+        let dist = compute_edge_distance(&alpha, 3, 3, 5);
+        // Single interior pixel touching edge on all sides → distance 0
+        assert_eq!(dist[4], 0);
+    }
 
     #[test]
     fn test_brush_stamp_center() {

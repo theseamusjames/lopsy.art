@@ -12,6 +12,7 @@ import {
   clearFilterPreview,
 } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
+import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { filterRegistry } from '../../filters/filter-registry';
 import type { FilterDefinition } from '../../filters/filter-types';
 
@@ -40,7 +41,11 @@ export type FilterDialogId =
   | 'pixel-stretch'
   | 'lens-distortion'
   | 'bloom'
-  | 'pattern-fill';
+  | 'surface-blur'
+  | 'pattern-fill'
+  | 'emboss'
+  | 'voronoi'
+  | 'fibers';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;
@@ -73,6 +78,11 @@ export function beginFilterPreview(): void {
   if (!activeId) return;
   const engine = getEngine();
   if (!engine) return;
+  // Ensure all layer data is synced to the GPU before saving the preview.
+  // Without this, the engine may have stale/empty textures if no frame
+  // has rendered since the last state change.
+  const state = useEditorStore.getState();
+  flushLayerSync(state);
   saveFilterPreview(engine, activeId);
 }
 

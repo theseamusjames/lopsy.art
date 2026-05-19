@@ -83,6 +83,130 @@ pub fn clear_image_adjustments(engine: &mut Engine) {
         engine.inner.texture_pool.release(tex);
     }
     engine.inner.adjustments.has_levels = false;
+    engine.inner.adjustments.hue_shift = 0.0;
+    engine.inner.adjustments.hsl_saturation = 0.0;
+    engine.inner.adjustments.lightness = 0.0;
+    engine.inner.adjustments.cb_shadows = [0.0; 3];
+    engine.inner.adjustments.cb_midtones = [0.0; 3];
+    engine.inner.adjustments.cb_highlights = [0.0; 3];
+    engine.inner.adjustments.pf_color = [1.0; 3];
+    engine.inner.adjustments.pf_density = 0.0;
+    engine.inner.adjustments.pf_preserve_luminosity = true;
+    engine.inner.adjustments.bw_enabled = false;
+    engine.inner.adjustments.cm_enabled = false;
+    engine.inner.adjustments.invert = false;
+    if let Some(tex) = engine.inner.adjustments.gradient_map_texture.take() {
+        engine.inner.texture_pool.release(tex);
+    }
+    engine.inner.adjustments.has_gradient_map = false;
+    engine.inner.needs_recomposite = true;
+}
+
+// ============================================================
+// New effect setters
+// ============================================================
+
+#[wasm_bindgen(js_name = "setImageInvert")]
+pub fn set_image_invert(engine: &mut Engine, enabled: bool) {
+    engine.inner.adjustments.invert = enabled;
+    engine.inner.needs_recomposite = true;
+}
+
+#[wasm_bindgen(js_name = "setImageHueSaturation")]
+pub fn set_image_hue_saturation(engine: &mut Engine, hue: f32, saturation: f32, lightness: f32) {
+    engine.inner.adjustments.hue_shift = hue;
+    engine.inner.adjustments.hsl_saturation = saturation;
+    engine.inner.adjustments.lightness = lightness;
+    engine.inner.needs_recomposite = true;
+}
+
+#[wasm_bindgen(js_name = "setImageColorBalance")]
+pub fn set_image_color_balance(
+    engine: &mut Engine,
+    sh_r: f32, sh_g: f32, sh_b: f32,
+    mt_r: f32, mt_g: f32, mt_b: f32,
+    hi_r: f32, hi_g: f32, hi_b: f32,
+) {
+    engine.inner.adjustments.cb_shadows    = [sh_r, sh_g, sh_b];
+    engine.inner.adjustments.cb_midtones   = [mt_r, mt_g, mt_b];
+    engine.inner.adjustments.cb_highlights = [hi_r, hi_g, hi_b];
+    engine.inner.needs_recomposite = true;
+}
+
+#[wasm_bindgen(js_name = "setImagePhotoFilter")]
+pub fn set_image_photo_filter(engine: &mut Engine, r: f32, g: f32, b: f32, density: f32, preserve_luminosity: bool) {
+    engine.inner.adjustments.pf_color = [r, g, b];
+    engine.inner.adjustments.pf_density = density;
+    engine.inner.adjustments.pf_preserve_luminosity = preserve_luminosity;
+    engine.inner.needs_recomposite = true;
+}
+
+#[wasm_bindgen(js_name = "setImageBlackWhite")]
+pub fn set_image_black_white(engine: &mut Engine, reds: f32, yellows: f32, greens: f32, cyans: f32, blues: f32, magentas: f32) {
+    engine.inner.adjustments.bw_reds     = reds;
+    engine.inner.adjustments.bw_yellows  = yellows;
+    engine.inner.adjustments.bw_greens   = greens;
+    engine.inner.adjustments.bw_cyans    = cyans;
+    engine.inner.adjustments.bw_blues    = blues;
+    engine.inner.adjustments.bw_magentas = magentas;
+    engine.inner.adjustments.bw_enabled  = true;
+    engine.inner.needs_recomposite = true;
+}
+
+#[wasm_bindgen(js_name = "clearImageBlackWhite")]
+pub fn clear_image_black_white(engine: &mut Engine) {
+    engine.inner.adjustments.bw_enabled = false;
+    engine.inner.needs_recomposite = true;
+}
+
+#[wasm_bindgen(js_name = "setImageChannelMixer")]
+pub fn set_image_channel_mixer(
+    engine: &mut Engine,
+    rr: f32, rg: f32, rb: f32, rc: f32,
+    gr: f32, gg: f32, gb: f32, gc: f32,
+    br: f32, bg: f32, bb: f32, bc: f32,
+) {
+    engine.inner.adjustments.cm_r = [rr, rg, rb, rc];
+    engine.inner.adjustments.cm_g = [gr, gg, gb, gc];
+    engine.inner.adjustments.cm_b = [br, bg, bb, bc];
+    engine.inner.adjustments.cm_enabled = true;
+    engine.inner.needs_recomposite = true;
+}
+
+#[wasm_bindgen(js_name = "clearImageChannelMixer")]
+pub fn clear_image_channel_mixer(engine: &mut Engine) {
+    engine.inner.adjustments.cm_enabled = false;
+    engine.inner.needs_recomposite = true;
+}
+
+#[wasm_bindgen(js_name = "setImageGradientMapLut")]
+pub fn set_image_gradient_map_lut(engine: &mut Engine, lut: &[u8]) -> Result<(), JsError> {
+    if lut.len() != 256 * 4 {
+        return Err(JsError::new("Gradient map LUT must be exactly 256 * 4 bytes"));
+    }
+    let inner = &mut engine.inner;
+    let tex = match inner.adjustments.gradient_map_texture {
+        Some(t) => t,
+        None => {
+            let t = inner.texture_pool.acquire(&inner.gl, 256, 1)
+                .map_err(|e| JsError::new(&e))?;
+            inner.adjustments.gradient_map_texture = Some(t);
+            t
+        }
+    };
+    inner.texture_pool.upload_rgba(&inner.gl, tex, 0, 0, 256, 1, lut)
+        .map_err(|e| JsError::new(&e))?;
+    inner.adjustments.has_gradient_map = true;
+    inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "clearImageGradientMap")]
+pub fn clear_image_gradient_map(engine: &mut Engine) {
+    if let Some(tex) = engine.inner.adjustments.gradient_map_texture.take() {
+        engine.inner.texture_pool.release(tex);
+    }
+    engine.inner.adjustments.has_gradient_map = false;
     engine.inner.needs_recomposite = true;
 }
 
@@ -252,6 +376,7 @@ pub fn clear_group_adjustments(engine: &mut Engine) {
             let mut v = Vec::new();
             if let Some(t) = ga.adjustments.curves_texture { v.push(t); }
             if let Some(t) = ga.adjustments.levels_texture { v.push(t); }
+            if let Some(t) = ga.adjustments.gradient_map_texture { v.push(t); }
             v
         })
         .collect();
@@ -260,6 +385,144 @@ pub fn clear_group_adjustments(engine: &mut Engine) {
     }
     engine.inner.group_adjustments.clear();
     engine.inner.needs_recomposite = true;
+}
+
+// ============================================================
+// Group new effect setters — mirror of per-image setters above
+// ============================================================
+
+#[wasm_bindgen(js_name = "setGroupInvert")]
+pub fn set_group_invert(engine: &mut Engine, group_id: &str, enabled: bool) -> Result<(), JsError> {
+    let ga = engine.inner.group_adjustments.get_mut(group_id)
+        .ok_or_else(|| JsError::new("Group not found"))?;
+    ga.adjustments.invert = enabled;
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "setGroupHueSaturation")]
+pub fn set_group_hue_saturation(engine: &mut Engine, group_id: &str, hue: f32, saturation: f32, lightness: f32) -> Result<(), JsError> {
+    let ga = engine.inner.group_adjustments.get_mut(group_id)
+        .ok_or_else(|| JsError::new("Group not found"))?;
+    ga.adjustments.hue_shift = hue;
+    ga.adjustments.hsl_saturation = saturation;
+    ga.adjustments.lightness = lightness;
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "setGroupColorBalance")]
+pub fn set_group_color_balance(
+    engine: &mut Engine, group_id: &str,
+    sh_r: f32, sh_g: f32, sh_b: f32,
+    mt_r: f32, mt_g: f32, mt_b: f32,
+    hi_r: f32, hi_g: f32, hi_b: f32,
+) -> Result<(), JsError> {
+    let ga = engine.inner.group_adjustments.get_mut(group_id)
+        .ok_or_else(|| JsError::new("Group not found"))?;
+    ga.adjustments.cb_shadows    = [sh_r, sh_g, sh_b];
+    ga.adjustments.cb_midtones   = [mt_r, mt_g, mt_b];
+    ga.adjustments.cb_highlights = [hi_r, hi_g, hi_b];
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "setGroupPhotoFilter")]
+pub fn set_group_photo_filter(engine: &mut Engine, group_id: &str, r: f32, g: f32, b: f32, density: f32, preserve_luminosity: bool) -> Result<(), JsError> {
+    let ga = engine.inner.group_adjustments.get_mut(group_id)
+        .ok_or_else(|| JsError::new("Group not found"))?;
+    ga.adjustments.pf_color = [r, g, b];
+    ga.adjustments.pf_density = density;
+    ga.adjustments.pf_preserve_luminosity = preserve_luminosity;
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "setGroupBlackWhite")]
+pub fn set_group_black_white(engine: &mut Engine, group_id: &str, reds: f32, yellows: f32, greens: f32, cyans: f32, blues: f32, magentas: f32) -> Result<(), JsError> {
+    let ga = engine.inner.group_adjustments.get_mut(group_id)
+        .ok_or_else(|| JsError::new("Group not found"))?;
+    ga.adjustments.bw_reds     = reds;
+    ga.adjustments.bw_yellows  = yellows;
+    ga.adjustments.bw_greens   = greens;
+    ga.adjustments.bw_cyans    = cyans;
+    ga.adjustments.bw_blues    = blues;
+    ga.adjustments.bw_magentas = magentas;
+    ga.adjustments.bw_enabled  = true;
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "clearGroupBlackWhite")]
+pub fn clear_group_black_white(engine: &mut Engine, group_id: &str) -> Result<(), JsError> {
+    let ga = engine.inner.group_adjustments.get_mut(group_id)
+        .ok_or_else(|| JsError::new("Group not found"))?;
+    ga.adjustments.bw_enabled = false;
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "setGroupChannelMixer")]
+pub fn set_group_channel_mixer(
+    engine: &mut Engine, group_id: &str,
+    rr: f32, rg: f32, rb: f32, rc: f32,
+    gr: f32, gg: f32, gb: f32, gc: f32,
+    br: f32, bg: f32, bb: f32, bc: f32,
+) -> Result<(), JsError> {
+    let ga = engine.inner.group_adjustments.get_mut(group_id)
+        .ok_or_else(|| JsError::new("Group not found"))?;
+    ga.adjustments.cm_r = [rr, rg, rb, rc];
+    ga.adjustments.cm_g = [gr, gg, gb, gc];
+    ga.adjustments.cm_b = [br, bg, bb, bc];
+    ga.adjustments.cm_enabled = true;
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "clearGroupChannelMixer")]
+pub fn clear_group_channel_mixer(engine: &mut Engine, group_id: &str) -> Result<(), JsError> {
+    let ga = engine.inner.group_adjustments.get_mut(group_id)
+        .ok_or_else(|| JsError::new("Group not found"))?;
+    ga.adjustments.cm_enabled = false;
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "setGroupGradientMapLut")]
+pub fn set_group_gradient_map_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> Result<(), JsError> {
+    if lut.len() != 256 * 4 {
+        return Err(JsError::new("Gradient map LUT must be exactly 256 * 4 bytes"));
+    }
+    if !engine.inner.group_adjustments.contains_key(group_id) {
+        return Err(JsError::new("Group not found — call setGroupAdjustments first"));
+    }
+    let existing = engine.inner.group_adjustments.get(group_id).unwrap().adjustments.gradient_map_texture;
+    let tex = match existing {
+        Some(t) => t,
+        None => {
+            let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
+                .map_err(|e| JsError::new(&e))?;
+            engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.gradient_map_texture = Some(t);
+            t
+        }
+    };
+    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.has_gradient_map = true;
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
+#[wasm_bindgen(js_name = "clearGroupGradientMap")]
+pub fn clear_group_gradient_map(engine: &mut Engine, group_id: &str) -> Result<(), JsError> {
+    if let Some(ga) = engine.inner.group_adjustments.get_mut(group_id) {
+        if let Some(tex) = ga.adjustments.gradient_map_texture.take() {
+            engine.inner.texture_pool.release(tex);
+        }
+        ga.adjustments.has_gradient_map = false;
+        engine.inner.needs_recomposite = true;
+    }
+    Ok(())
 }
 
 // ============================================================

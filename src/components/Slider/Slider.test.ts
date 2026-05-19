@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { commitSliderValue } from './Slider';
+import { commitSliderValue, sliderKnobPosition } from './Slider';
 
 describe('commitSliderValue', () => {
   it('clamps a typed value above max down to max', () => {
@@ -40,5 +40,31 @@ describe('commitSliderValue', () => {
     const result = commitSliderValue('15', 0, -5, 5);
     expect(result).toBe(5);
     expect(result).toBeLessThanOrEqual(5);
+  });
+});
+
+describe('sliderKnobPosition', () => {
+  it('returns the value unchanged when within slider range (linear)', () => {
+    expect(sliderKnobPosition(150, 1, 300)).toBe(150);
+  });
+
+  it('clamps a value above sliderMax to sliderMax (linear)', () => {
+    // Issue #364: brush size can be typed up to e.g. 2880 but the slider
+    // visual range is 1..300. The knob must pin at sliderMax so it stays
+    // visible at the right edge instead of overflowing.
+    expect(sliderKnobPosition(2880, 1, 300)).toBe(300);
+  });
+
+  it('clamps a value below sliderMin to sliderMin (linear)', () => {
+    expect(sliderKnobPosition(-10, 1, 300)).toBe(1);
+  });
+
+  it('maps log scale within bounds and clamps outside the range', () => {
+    // At sliderMin and sliderMax the log mapping is identity (norm 0 and 1).
+    expect(sliderKnobPosition(1, 1, 1000, 'log')).toBe(1);
+    expect(sliderKnobPosition(1000, 1, 1000, 'log')).toBe(1000);
+    // A value beyond sliderMax must clamp before the log mapping so the knob
+    // doesn't slide off the right end of the track.
+    expect(sliderKnobPosition(5000, 1, 1000, 'log')).toBe(1000);
   });
 });

@@ -11,12 +11,14 @@
 
 .logo {
   position: absolute;
-  top: var(--space-3);
-  right: var(--space-3);
+  top: 0;
+  right: var(--space-1);
+  height: var(--header-height);
   padding: 0 var(--space-3);
   font-family: 'Jersey 10', cursive;
   font-size: 22px;
   color: var(--color-text-secondary);
+  line-height: var(--header-height);
   letter-spacing: 0.05em;
 }
 

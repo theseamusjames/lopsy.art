@@ -1,24 +1,66 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useToolSettingsStore, abrBrushToPreset } from '../../app/tool-settings-store';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { Slider } from '../Slider/Slider';
 import { AngleControl } from './AngleControl';
-import { BrushPreview } from './BrushPreview';
+import { BrushDabPreview } from './BrushDabPreview';
 import { BrushThumbnail } from './BrushThumbnail';
 import type { BrushTipData, BrushTextureBlendMode } from '../../types/brush';
 import { describeError, notifyError } from '../../app/notifications-store';
+import { importPresetsFromFile } from '../../tools/brush/preset-io';
 import { docScaledMax } from '../../utils/slider-ranges';
+import { BrushStrokePreview } from './BrushStrokePreview';
+import { BrushExportModal } from './BrushExportModal';
 import styles from './BrushModal.module.css';
 
+type TabKey = 'shape' | 'dynamics' | 'texture' | 'presets' | 'sub-brushes';
+
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'presets', label: 'Presets' },
+  { key: 'shape', label: 'Shape' },
+  { key: 'dynamics', label: 'Dynamics' },
+  { key: 'texture', label: 'Texture' },
+  { key: 'sub-brushes', label: 'Sub-Brushes' },
+];
+
+let nextTextureId = 1;
+
 export function BrushModal() {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textureFileInputRef = useRef<HTMLInputElement>(null);
+  const [textureImporting, setTextureImporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>('presets');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+
+  const handleTitleMouseDown = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    const panel = (e.currentTarget as HTMLElement).parentElement!;
+    const rect = panel.getBoundingClientRect();
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: rect.left, origY: rect.top };
+    const handleMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const dx = ev.clientX - dragRef.current.startX;
+      const dy = ev.clientY - dragRef.current.startY;
+      setPanelPos({ x: dragRef.current.origX + dx, y: dragRef.current.origY + dy });
+    };
+    const handleUp = () => {
+      dragRef.current = null;
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+  }, []);
 
   const presets = useToolSettingsStore((s) => s.presets);
   const activePresetId = useToolSettingsStore((s) => s.activePresetId);
   const setActivePreset = useToolSettingsStore((s) => s.setActivePreset);
+  const setTipFromPreset = useToolSettingsStore((s) => s.setTipFromPreset);
   const removePreset = useToolSettingsStore((s) => s.removePreset);
   const addPresets = useToolSettingsStore((s) => s.addPresets);
+  const saveCurrentAsPreset = useToolSettingsStore((s) => s.saveCurrentAsPreset);
   const setShowBrushModal = useUIStore((s) => s.setShowBrushModal);
 
   const brushSize = useToolSettingsStore((s) => s.brushSize);
@@ -35,15 +77,23 @@ export function BrushModal() {
   const setBrushSpacing = useToolSettingsStore((s) => s.setBrushSpacing);
   const setBrushScatter = useToolSettingsStore((s) => s.setBrushScatter);
   const setBrushAngle = useToolSettingsStore((s) => s.setBrushAngle);
+  const brushTaper = useToolSettingsStore((s) => s.brushTaper);
+  const setBrushTaper = useToolSettingsStore((s) => s.setBrushTaper);
 
   const sizeJitter = useToolSettingsStore((s) => s.brushSizeJitter);
+  const hardnessJitter = useToolSettingsStore((s) => s.brushHardnessJitter);
   const angleJitter = useToolSettingsStore((s) => s.brushAngleJitter);
   const opacityJitter = useToolSettingsStore((s) => s.brushOpacityJitter);
   const speedSize = useToolSettingsStore((s) => s.brushSpeedSize);
+  const speedSizeInvert = useToolSettingsStore((s) => s.brushSpeedSizeInvert);
+  const speedSensitivity = useToolSettingsStore((s) => s.brushSpeedSensitivity);
   const setSizeJitter = useToolSettingsStore((s) => s.setBrushSizeJitter);
+  const setHardnessJitter = useToolSettingsStore((s) => s.setBrushHardnessJitter);
   const setAngleJitter = useToolSettingsStore((s) => s.setBrushAngleJitter);
   const setOpacityJitter = useToolSettingsStore((s) => s.setBrushOpacityJitter);
   const setSpeedSize = useToolSettingsStore((s) => s.setBrushSpeedSize);
+  const setSpeedSizeInvert = useToolSettingsStore((s) => s.setBrushSpeedSizeInvert);
+  const setSpeedSensitivity = useToolSettingsStore((s) => s.setBrushSpeedSensitivity);
 
   const textureData = useToolSettingsStore((s) => s.brushTextureData);
   const textureBlendMode = useToolSettingsStore((s) => s.brushTextureBlendMode);
@@ -52,36 +102,54 @@ export function BrushModal() {
   const setTextureData = useToolSettingsStore((s) => s.setBrushTextureData);
   const setTextureBlendMode = useToolSettingsStore((s) => s.setBrushTextureBlendMode);
   const setTextureScale = useToolSettingsStore((s) => s.setBrushTextureScale);
+  const addBrushTexture = useToolSettingsStore((s) => s.addBrushTexture);
+  const removeBrushTexture = useToolSettingsStore((s) => s.removeBrushTexture);
+
+  const activeSubBrushes = useToolSettingsStore((s) => s.activeSubBrushes);
+  const addSubBrush = useToolSettingsStore((s) => s.addSubBrush);
+  const removeSubBrush = useToolSettingsStore((s) => s.removeSubBrush);
+  const updateSubBrush = useToolSettingsStore((s) => s.updateSubBrush);
 
   const activePreset = presets.find((p) => p.id === activePresetId);
   const isActiveCustom = activePreset?.isCustom ?? false;
 
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
+  const taperMax = docScaledMax(docWidth, docHeight, 2000);
   const sizeMax = docScaledMax(docWidth, docHeight, 2000);
 
   const handleClose = useCallback(() => {
     setShowBrushModal(false);
   }, [setShowBrushModal]);
 
-  const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      handleClose();
-    }
-  }, [handleClose]);
-
   const handleImportClick = useCallback(() => {
-    fileInputRef.current?.click();
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.abr,.json';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.name.endsWith('.json')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(reader.result as string) as { presets: unknown[] };
+            if (Array.isArray(parsed.presets)) {
+              importPresetsFromFile(file);
+            }
+          } catch { /* not valid JSON, ignore */ }
+        };
+        reader.readAsText(file);
+      } else {
+        handleAbrFile(file);
+      }
+    };
+    input.click();
   }, []);
 
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleAbrFile = useCallback((file: File) => {
     const reader = new FileReader();
-    reader.onerror = () => {
-      notifyError('Failed to read brush file.');
-    };
+    reader.onerror = () => notifyError('Failed to read brush file.');
     reader.onload = () => {
       const buffer = reader.result as ArrayBuffer;
       const worker = new Worker(
@@ -89,13 +157,8 @@ export function BrushModal() {
         { type: 'module' },
       );
       worker.onmessage = (msg: MessageEvent<Array<{ name: string; width: number; height: number; data: Uint8ClampedArray; spacing?: number }>>) => {
-        const brushes = msg.data;
-        const newPresets = brushes.map((b) => {
-          const tip: BrushTipData = {
-            width: b.width,
-            height: b.height,
-            data: b.data,
-          };
+        const newPresets = msg.data.map((b) => {
+          const tip: BrushTipData = { width: b.width, height: b.height, data: b.data };
           return abrBrushToPreset(b.name, tip, b.spacing);
         });
         addPresets(newPresets);
@@ -108,17 +171,20 @@ export function BrushModal() {
       worker.postMessage(buffer, [buffer]);
     };
     reader.readAsArrayBuffer(file);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
   }, [addPresets]);
 
   const handleDelete = useCallback(() => {
-    if (activePresetId && isActiveCustom) {
+    if (activePresetId && isActiveCustom && confirm(`Delete "${activePreset?.name}"?`)) {
       removePreset(activePresetId);
     }
-  }, [activePresetId, isActiveCustom, removePreset]);
+  }, [activePresetId, isActiveCustom, activePreset?.name, removePreset]);
+
+  const handleSavePreset = useCallback(() => {
+    const name = prompt('Preset name:');
+    if (name) saveCurrentAsPreset(name);
+  }, [saveCurrentAsPreset]);
+
+
 
   const handleTextureChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value;
@@ -134,78 +200,166 @@ export function BrushModal() {
     setTextureBlendMode(e.target.value as BrushTextureBlendMode);
   }, [setTextureBlendMode]);
 
-  return (
-    <div className={styles.overlay} onMouseDown={handleOverlayClick}>
-      <div className={styles.modal} role="dialog" aria-label="Brushes">
-        <div className={styles.header}>
-          <h2>Brushes</h2>
-        </div>
-        <div className={styles.content}>
-          <div className={styles.leftPanel}>
-            <div className={styles.presetGrid}>
-              {presets.map((preset) => (
-                <button
-                  key={preset.id}
-                  className={`${styles.presetItem}${preset.id === activePresetId ? ` ${styles.presetItemActive}` : ''}`}
-                  onClick={() => setActivePreset(preset.id)}
-                  aria-label={`Brush preset: ${preset.name}`}
-                  aria-pressed={preset.id === activePresetId}
-                  title={preset.name}
-                >
-                  <BrushThumbnail preset={preset} size={44} />
-                </button>
-              ))}
+  const handleTextureImportClick = useCallback(() => {
+    textureFileInputRef.current?.click();
+  }, []);
+
+  const handleTextureFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setTextureImporting(true);
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { URL.revokeObjectURL(url); setTextureImporting(false); return; }
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, img.width, img.height);
+      const grayscale = new Uint8ClampedArray(img.width * img.height);
+      for (let i = 0; i < grayscale.length; i++) {
+        const r = imageData.data[i * 4]!;
+        const g = imageData.data[i * 4 + 1]!;
+        const b = imageData.data[i * 4 + 2]!;
+        grayscale[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      }
+      const name = file.name.replace(/\.[^.]+$/, '');
+      const tex = { id: `texture-custom-${nextTextureId++}`, name, width: img.width, height: img.height, data: grayscale };
+      addBrushTexture(tex);
+      setTextureData(tex);
+      URL.revokeObjectURL(url);
+      setTextureImporting(false);
+    };
+    img.onerror = () => { notifyError('Failed to load texture image.'); URL.revokeObjectURL(url); setTextureImporting(false); };
+    img.src = url;
+    if (textureFileInputRef.current) textureFileInputRef.current.value = '';
+  }, [addBrushTexture, setTextureData]);
+
+  const handleTextureDelete = useCallback(() => {
+    if (textureData && textureData.id.startsWith('texture-custom-')) removeBrushTexture(textureData.id);
+  }, [textureData, removeBrushTexture]);
+
+  const isCustomTexture = textureData !== null && textureData.id.startsWith('texture-custom-');
+
+  function renderPanel() {
+    switch (activeTab) {
+      case 'presets':
+        return (
+          <>
+            <div className={styles.galleryFull}>
+              <div className={styles.galleryGrid}>
+                {presets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    className={`${styles.presetItem}${preset.id === activePresetId ? ` ${styles.presetItemActive}` : ''}`}
+                    onClick={() => setActivePreset(preset.id)}
+                    aria-label={`Brush preset: ${preset.name}`}
+                    aria-pressed={preset.id === activePresetId}
+                    title={preset.name}
+                  >
+                    <BrushThumbnail preset={preset} size={36} />
+                  </button>
+                ))}
+              </div>
             </div>
             <div className={styles.presetActions}>
-              <button className={styles.importButton} onClick={handleImportClick}>
-                Import ABR
-              </button>
-              <button
-                className={styles.deleteButton}
-                onClick={handleDelete}
-                disabled={!isActiveCustom}
-              >
-                Delete
-              </button>
+              <button className={styles.smallButton} onClick={handleImportClick}>Import</button>
+              <button className={styles.smallButton} onClick={handleDelete} disabled={!isActiveCustom}>Delete</button>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".abr"
-              className={styles.hiddenInput}
-              aria-label="Import ABR brush file"
-              onChange={handleFileChange}
-            />
-          </div>
-          <div className={styles.rightPanel}>
+          </>
+        );
+      case 'shape':
+        return (
+          <>
+            <div className={styles.galleryStage}>
+              <div className={styles.galleryGrid}>
+                {presets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    className={`${styles.presetItem}${(preset.tip !== null && activeBrushTip === preset.tip) || (preset.tip === null && activeBrushTip === null && preset.id === activePresetId) ? ` ${styles.presetItemActive}` : ''}`}
+                    onClick={() => setTipFromPreset(preset.id)}
+                    aria-label={`Brush shape: ${preset.name}`}
+                    title={preset.name}
+                  >
+                    <BrushThumbnail preset={preset} size={36} />
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className={styles.sliderSection}>
               <Slider label="Size" value={brushSize} min={1} max={sizeMax} onChange={setBrushSize} />
               <Slider label="Spacing" value={brushSpacing} min={1} max={200} onChange={setBrushSpacing} />
               <Slider label="Hardness" value={brushHardness} min={0} max={100} onChange={setBrushHardness} />
-              <Slider label="Scatter" value={brushScatter} min={0} max={100} onChange={setBrushScatter} />
               <Slider label="Opacity" value={brushOpacity} min={1} max={100} onChange={setBrushOpacity} />
+              <Slider label="Taper" value={brushTaper} min={0} max={taperMax} onChange={setBrushTaper} suffix="px" />
             </div>
             <div className={styles.angleRow}>
               <AngleControl angle={brushAngle} onAngleChange={setBrushAngle} />
-              <BrushPreview
+              <BrushDabPreview
                 size={brushSize}
                 hardness={brushHardness}
-                spacing={brushSpacing}
                 opacity={brushOpacity}
+                angle={brushAngle}
                 tip={activeBrushTip}
               />
             </div>
-
-            <div className={styles.sectionLabel}>Dynamics</div>
-            <div className={styles.sliderSection}>
-              <Slider label="Size Jitter" value={sizeJitter} min={0} max={100} onChange={setSizeJitter} />
-              <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
-              <Slider label="Opacity Jitter" value={opacityJitter} min={0} max={100} onChange={setOpacityJitter} />
-              <Slider label="Speed Size" value={speedSize} min={0} max={100} onChange={setSpeedSize} />
+          </>
+        );
+      case 'dynamics':
+        return (
+          <div className={styles.sliderSection}>
+            <Slider label="Scatter" value={brushScatter} min={0} max={100} onChange={setBrushScatter} />
+            <Slider label="Size Jitter" value={sizeJitter} min={0} max={100} onChange={setSizeJitter} />
+            <Slider label="Hardness Jitter" value={hardnessJitter} min={0} max={100} onChange={setHardnessJitter} />
+            <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
+            <Slider label="Opacity Jitter" value={opacityJitter} min={0} max={100} onChange={setOpacityJitter} />
+            <Slider label="Speed Size" value={speedSize} min={0} max={speedSizeInvert ? 300 : 100} onChange={setSpeedSize} />
+            <div className={styles.speedToggleRow}>
+              <span className={styles.speedToggleLabel}>Faster is</span>
+              <div className={styles.speedToggleGroup}>
+                <button
+                  className={`${styles.speedToggle}${!speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
+                  onClick={() => { setSpeedSizeInvert(false); if (speedSize > 100) setSpeedSize(100); }}
+                >
+                  Thinner
+                </button>
+                <button
+                  className={`${styles.speedToggle}${speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
+                  onClick={() => setSpeedSizeInvert(true)}
+                >
+                  Wider
+                </button>
+              </div>
+              <span className={styles.speedToggleLabel}>Sensitivity</span>
+              <div className={styles.speedToggleGroup}>
+                <button
+                  className={`${styles.speedToggle}${speedSensitivity === 'low' ? ` ${styles.speedToggleActive}` : ''}`}
+                  onClick={() => setSpeedSensitivity('low')}
+                >
+                  Low
+                </button>
+                <button
+                  className={`${styles.speedToggle}${speedSensitivity === 'med' ? ` ${styles.speedToggleActive}` : ''}`}
+                  onClick={() => setSpeedSensitivity('med')}
+                >
+                  Med
+                </button>
+                <button
+                  className={`${styles.speedToggle}${speedSensitivity === 'high' ? ` ${styles.speedToggleActive}` : ''}`}
+                  onClick={() => setSpeedSensitivity('high')}
+                >
+                  High
+                </button>
+              </div>
             </div>
-
-            <div className={styles.sectionLabel}>Texture</div>
-            <div className={styles.textureSection}>
+          </div>
+        );
+      case 'texture':
+        return (
+          <div className={styles.textureSection}>
+            <div className={styles.textureRow}>
               <select
                 className={styles.select}
                 value={textureData?.id ?? 'none'}
@@ -217,30 +371,145 @@ export function BrushModal() {
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
-              {textureData && (
-                <>
-                  <select
-                    className={styles.select}
-                    value={textureBlendMode}
-                    onChange={handleBlendModeChange}
-                    title="Texture blend mode"
-                  >
-                    <option value="multiply">Multiply</option>
-                    <option value="subtract">Subtract</option>
-                    <option value="overlay">Overlay</option>
-                  </select>
-                  <Slider label="Scale" value={textureScale} min={10} max={200} onChange={setTextureScale} />
-                </>
+              <button className={styles.smallButton} onClick={handleTextureImportClick} disabled={textureImporting}>
+                {textureImporting ? 'Loading...' : 'Import'}
+              </button>
+              {isCustomTexture && (
+                <button className={styles.smallButton} onClick={handleTextureDelete}>Delete</button>
               )}
             </div>
+            <input
+              ref={textureFileInputRef}
+              type="file"
+              accept="image/*"
+              className={styles.hiddenInput}
+              aria-label="Import texture image"
+              onChange={handleTextureFileChange}
+            />
+            {textureData && (
+              <>
+                <select
+                  className={styles.select}
+                  value={textureBlendMode}
+                  onChange={handleBlendModeChange}
+                  title="Texture blend mode"
+                >
+                  <option value="multiply">Multiply</option>
+                  <option value="subtract">Subtract</option>
+                  <option value="overlay">Overlay</option>
+                </select>
+                <Slider label="Scale" value={textureScale} min={10} max={300} onChange={setTextureScale} />
+              </>
+            )}
           </div>
+        );
+      case 'sub-brushes':
+        return (
+          <div className={styles.sliderSection}>
+            {activeSubBrushes.map((sub, idx) => (
+              <div key={idx} className={styles.textureSection}>
+                <div className={styles.textureRow}>
+                  <span className={styles.speedToggleLabel}>Sub-Brush {idx + 1}</span>
+                  <button className={styles.smallButton} onClick={() => removeSubBrush(idx)}>Remove</button>
+                </div>
+                <div className={styles.galleryStage}>
+                  <div className={styles.galleryGrid}>
+                    {presets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        className={`${styles.presetItem}${sub.tip !== null && sub.tip === preset.tip ? ` ${styles.presetItemActive}` : ''}`}
+                        onClick={() => updateSubBrush(idx, { tip: preset.tip })}
+                        aria-label={`Sub-brush tip: ${preset.name}`}
+                        title={preset.name}
+                      >
+                        <BrushThumbnail preset={preset} size={28} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Slider label="Size Ratio" value={Math.round(sub.sizeRatio * 100)} min={10} max={200} onChange={(v) => updateSubBrush(idx, { sizeRatio: v / 100 })} />
+                <Slider label="Hardness" value={sub.hardness} min={0} max={100} onChange={(v) => updateSubBrush(idx, { hardness: v })} />
+                <Slider label="Opacity Ratio" value={Math.round(sub.opacityRatio * 100)} min={1} max={100} onChange={(v) => updateSubBrush(idx, { opacityRatio: v / 100 })} />
+                <Slider label="Angle Offset" value={sub.angleOffset} min={0} max={360} onChange={(v) => updateSubBrush(idx, { angleOffset: v })} />
+                <Slider label="Size Jitter" value={sub.sizeJitter} min={0} max={100} onChange={(v) => updateSubBrush(idx, { sizeJitter: v })} />
+                <Slider label="Angle Jitter" value={sub.angleJitter} min={0} max={100} onChange={(v) => updateSubBrush(idx, { angleJitter: v })} />
+                <Slider label="Opacity Jitter" value={sub.opacityJitter} min={0} max={100} onChange={(v) => updateSubBrush(idx, { opacityJitter: v })} />
+              </div>
+            ))}
+            <button
+              className={styles.smallButton}
+              onClick={() => addSubBrush({
+                tip: null,
+                sizeRatio: 0.5,
+                hardness: 100,
+                opacityRatio: 0.5,
+                angleOffset: 0,
+                sizeJitter: 0,
+                angleJitter: 0,
+                opacityJitter: 0,
+              })}
+            >
+              Add Sub-Brush
+            </button>
+          </div>
+        );
+    }
+  }
+
+  return (
+    <div
+      className={styles.panel}
+      role="dialog"
+      aria-label="Brushes"
+      style={panelPos ? { left: panelPos.x, top: panelPos.y, transform: 'none' } : undefined}
+    >
+      <div className={styles.titleBar} onMouseDown={handleTitleMouseDown}>
+        <span className={styles.titleText}>Brushes</span>
+        <button className={styles.closeX} onClick={handleClose} aria-label="Close">&times;</button>
+      </div>
+      <div className={styles.tabContainer}>
+        <div className={styles.tabList} role="listbox" aria-label="Brush settings">
+          {TABS.map(({ key, label }) => (
+            <div
+              key={key}
+              className={`${styles.tabItem}${activeTab === key ? ` ${styles.tabItemActive}` : ''}`}
+              onClick={() => setActiveTab(key)}
+              role="option"
+              aria-selected={activeTab === key}
+            >
+              {label}
+            </div>
+          ))}
         </div>
-        <div className={styles.footer}>
-          <button className={styles.closeButton} onClick={handleClose}>
-            Close
-          </button>
+        <div className={styles.tabPanel}>
+          {renderPanel()}
         </div>
       </div>
+
+      <BrushStrokePreview
+        size={brushSize}
+        hardness={brushHardness}
+        spacing={brushSpacing}
+        opacity={brushOpacity}
+        scatter={brushScatter}
+        angle={brushAngle}
+        tip={activeBrushTip}
+        sizeJitter={sizeJitter}
+        hardnessJitter={hardnessJitter}
+        angleJitter={angleJitter}
+        opacityJitter={opacityJitter}
+        speedSize={speedSize}
+        speedSizeInvert={speedSizeInvert}
+        taper={brushTaper}
+        texture={textureData}
+        textureBlendMode={textureBlendMode}
+        textureScale={textureScale}
+      />
+      <div className={styles.footer}>
+        <button className={styles.smallButton} onClick={() => setShowExportModal(true)}>Export</button>
+        <button className={styles.smallButton} onClick={handleSavePreset}>Save Current</button>
+      </div>
+      {showExportModal && <BrushExportModal onClose={() => setShowExportModal(false)} />}
     </div>
   );
 }

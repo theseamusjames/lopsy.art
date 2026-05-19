@@ -21,6 +21,11 @@ import { chromaticAberration } from './chromatic-aberration';
 import { pixelStretch } from './pixel-stretch';
 import { lensDistortion } from './lens-distortion';
 import { bloom } from './bloom';
+import { tiltShiftBlur } from './tilt-shift-blur';
+import { emboss } from './emboss';
+import { voronoiFilter } from './voronoi';
+import { surfaceBlur } from './surface-blur';
+import { fibers } from './fibers';
 
 export type { FilterDefinition };
 
@@ -47,6 +52,11 @@ const allFilters: FilterDefinition[] = [
   pixelStretch,
   lensDistortion,
   bloom,
+  tiltShiftBlur,
+  emboss,
+  voronoiFilter,
+  surfaceBlur,
+  fibers,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(

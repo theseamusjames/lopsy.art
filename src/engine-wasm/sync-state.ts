@@ -27,10 +27,15 @@ export interface TrackedState {
    *  also unchanged and we can skip JSON.stringify entirely. */
   layerRefs: Map<string, Layer>;
   layerEffectiveVisible: Map<string, boolean>;
+  /** Cached pass-through opacity multiplier per layer. When a pass-through
+   *  group's opacity changes, children must be re-synced even though their
+   *  own references haven't changed. */
+  layerPassThroughOpacity: Map<string, number>;
   /** Layer ids currently known to have a mask on the engine side. Used to
    *  decide whether a removeLayerMask call is needed — previously done by
    *  substring-sniffing the cached descriptor JSON, which was fragile. */
   masksOnEngine: Set<string>;
+  maskDataRefs: Map<string, Uint8ClampedArray>;
   pixelDataVersions: Map<string, ImageData | undefined>;
   sparseVersions: Map<string, SparseLayerEntry | undefined>;
   layerOrder: string;
@@ -44,6 +49,8 @@ export interface TrackedState {
   brushTipData: BrushTipData | null;
   brushAngle: number;
   brushHasTip: boolean;
+  brushTipIsColor: boolean;
+  brushTipHardness: number;
   brushTextureData: BrushTextureData | null;
   brushHasTexture: boolean;
   brushTextureScale: number;
@@ -79,7 +86,9 @@ function createTrackedState(): TrackedState {
     layerVersions: new Map(),
     layerRefs: new Map(),
     layerEffectiveVisible: new Map(),
+    layerPassThroughOpacity: new Map(),
     masksOnEngine: new Set(),
+    maskDataRefs: new Map(),
     pixelDataVersions: new Map(),
     sparseVersions: new Map(),
     layerOrder: '',
@@ -93,6 +102,8 @@ function createTrackedState(): TrackedState {
     brushTipData: null,
     brushAngle: 0,
     brushHasTip: false,
+    brushTipIsColor: false,
+    brushTipHardness: 100,
     brushTextureData: null,
     brushHasTexture: false,
     brushTextureScale: 1,

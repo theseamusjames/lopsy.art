@@ -18,7 +18,7 @@ export function SprayOptions() {
 
   return (
     <>
-      <Slider label="Size" value={spraySize} min={1} max={sizeMax} onChange={setSpraySize} />
+      <Slider label="Size" value={spraySize} min={1} max={sizeMax} sliderMax={500} onChange={setSpraySize} />
       <Slider label="Density" value={sprayDensity} min={1} max={100} onChange={setSprayDensity} />
       <Slider label="Opacity" value={sprayOpacity} min={1} max={100} onChange={setSprayOpacity} />
       <Slider label="Softness" value={sprayHardness} min={0} max={100} onChange={setSprayHardness} />

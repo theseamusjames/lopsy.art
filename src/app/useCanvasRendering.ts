@@ -14,6 +14,7 @@ import {
   syncGrid,
   syncRulers,
   syncSeamlessPattern,
+  syncChannelVisibility,
   syncAdjustments,
   syncGroupAdjustments,
   syncMaskEditMode,
@@ -27,10 +28,11 @@ import {
 import { renderGrid, renderPixelGrid, renderRulers } from './rendering/render-grid';
 import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
 import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
-import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor } from './rendering/render-overlays';
+import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor, renderSymmetryCenter } from './rendering/render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './rendering/render-text-overlay';
 import { hitTestTextLayer } from '../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './rendering/render-guides';
+import { renderTiltShiftOverlay } from './rendering/render-tilt-shift-overlay';
 import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
@@ -125,6 +127,7 @@ function renderFrameGpu(
 
   const activeTool = uiState.activeTool;
   const cursorPosition = uiState.cursorPosition;
+  const cursorOnCanvas = uiState.cursorOnCanvas;
   const showGrid = uiState.showGrid;
   const showPixelGrid = uiState.showPixelGrid;
   const showRulers = uiState.showRulers;
@@ -199,10 +202,11 @@ function renderFrameGpu(
   syncGrid(engine, showGrid, gridSize);
   syncRulers(engine, showRulers);
   syncSeamlessPattern(engine, uiState.showSeamlessPattern, uiState.dimSeamlessPattern);
+  syncChannelVisibility(engine, uiState.channelVisibility);
   syncAdjustments(engine, adjustments, adjustmentsEnabled);
   syncGroupAdjustments(engine, layers);
   syncMaskEditMode(engine, uiState.maskEditMode, doc.activeLayerId);
-  syncBrushTip(engine, toolState.activeBrushTip, toolState.brushAngle * Math.PI / 180);
+  syncBrushTip(engine, toolState.activeBrushTip, -toolState.brushAngle * Math.PI / 180, toolState.brushHardness);
   syncBrushTexture(engine, toolState.brushTextureData, toolState.brushTextureScale, toolState.brushTextureBlendMode);
 
   renderEngine(engine);
@@ -228,6 +232,10 @@ function renderFrameGpu(
     if (meshWarp) {
       renderMeshWarpOverlay(overlayCtx, meshWarp, viewport.zoom);
     }
+    const tiltShift = uiState.tiltShift;
+    if (tiltShift) {
+      renderTiltShiftOverlay(overlayCtx, tiltShift, doc.width, doc.height, viewport.zoom);
+    }
     const selectedPath = editorState.selectedPathId
       ? editorState.paths.find((p) => p.id === editorState.selectedPathId)
       : undefined;
@@ -252,7 +260,7 @@ function renderFrameGpu(
     }
     if (textEditing && !editingLayerIsPathText) {
       const ts = toolState;
-      const glyphPositions = Array.from(getGlyphPositions(engine, textEditing.layerId));
+      const glyphPositions = Array.from(getGlyphPositions(engine, textEditing.layerId)) as number[];
       renderTextEditOverlay(overlayCtx, textEditing, {
         fontSize: ts.textFontSize,
         fontFamily: ts.textFontFamily,
@@ -266,13 +274,18 @@ function renderFrameGpu(
     }
 
     const brushCursorInfo = getBrushCursorInfo(activeTool);
-    if (brushCursorInfo !== null) {
+    if (brushCursorInfo !== null && cursorOnCanvas) {
       const size = activeTool === 'brush' ? toolState.brushSize
         : activeTool === 'pencil' ? toolState.pencilSize
         : activeTool === 'eraser' ? toolState.eraserSize
         : activeTool === 'stamp' ? toolState.stampSize
+        : activeTool === 'sponge' ? toolState.spongeSize
         : brushCursorInfo.size;
-      renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape);
+      renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip, brushCursorInfo.angle);
+    }
+
+    if (uiState.liquify && cursorOnCanvas) {
+      renderBrushCursor(overlayCtx, cursorPosition, uiState.liquify.settings.brushSize, viewport.zoom, 'circle', null, 0);
     }
 
     renderSnapLines(overlayCtx, snapLines, doc.width, doc.height, viewport.zoom);
@@ -282,6 +295,11 @@ function renderFrameGpu(
       if (rulerHover && !hoveredGuideId) {
         renderGuidePreview(overlayCtx, rulerHover, doc.width, doc.height, viewport.zoom, guideColor);
       }
+    }
+
+    if (toolState.symmetryRadialSegments >= 2 || toolState.symmetryHorizontal || toolState.symmetryVertical) {
+      const symCenter = toolState.symmetryCenter ?? { x: doc.width / 2, y: doc.height / 2 };
+      renderSymmetryCenter(overlayCtx, symCenter, viewport.zoom, guideColor);
     }
 
     overlayCtx.restore();

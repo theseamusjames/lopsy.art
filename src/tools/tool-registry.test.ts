@@ -10,7 +10,7 @@ import type { ToolId } from '../types';
 
 const ALL_TOOL_IDS: ToolId[] = [
   'move', 'brush', 'pencil', 'eraser', 'fill', 'gradient', 'eyedropper',
-  'stamp', 'healing', 'dodge', 'smudge', 'marquee-rect', 'marquee-ellipse',
+  'stamp', 'healing', 'dodge', 'sponge', 'smudge', 'marquee-rect', 'marquee-ellipse',
   'lasso', 'lasso-magnetic', 'wand', 'quick-select', 'shape', 'text', 'crop', 'path', 'spray',
 ];
 
@@ -25,13 +25,13 @@ describe('tool registry', () => {
 
   it('exposes the same paint set the manual constant used to', () => {
     expect(new Set(PAINT_TOOLS)).toEqual(new Set<ToolId>([
-      'brush', 'pencil', 'eraser', 'dodge', 'stamp', 'healing', 'spray',
+      'brush', 'pencil', 'eraser', 'dodge', 'sponge', 'stamp', 'healing', 'spray',
     ]));
   });
 
   it('exposes the same GPU set the manual constant used to', () => {
     expect(new Set(GPU_TOOLS)).toEqual(new Set<ToolId>([
-      'brush', 'pencil', 'eraser', 'dodge', 'stamp', 'gradient', 'shape', 'spray',
+      'brush', 'pencil', 'eraser', 'dodge', 'sponge', 'stamp', 'gradient', 'shape', 'spray',
     ]))
   });
 
@@ -53,6 +53,7 @@ describe('tool registry', () => {
       s: 'stamp',
       h: 'healing',
       o: 'dodge',
+      y: 'sponge',
       r: 'smudge',
       j: 'spray',
     };

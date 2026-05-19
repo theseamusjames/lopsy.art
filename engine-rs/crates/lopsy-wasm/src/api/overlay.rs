@@ -87,6 +87,12 @@ pub fn set_seamless_pattern(engine: &mut Engine, enabled: bool, dim: bool) {
     engine.inner.needs_recomposite = true;
 }
 
+#[wasm_bindgen(js_name = "setChannelMask")]
+pub fn set_channel_mask(engine: &mut Engine, r: f32, g: f32, b: f32, a: f32) {
+    engine.inner.channel_mask = [r, g, b, a];
+    engine.inner.needs_recomposite = true;
+}
+
 // ============================================================
 // ImageBitmap upload
 // ============================================================

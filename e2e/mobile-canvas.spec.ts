@@ -2,14 +2,17 @@ import { test, expect } from './fixtures';
 import { waitForStore, createDocument, getEditorState } from './helpers';
 
 test.describe('Mobile canvas', () => {
-  test.skip(({ browserName }) => browserName !== 'chromium', 'mobile emulation requires Chromium');
-
   test.use({
     ...({ isMobile: true } as Record<string, unknown>),
     viewport: { width: 390, height: 844 },
   });
 
   test('canvas container is visible on mobile', async ({ page }) => {
+    // This test needs real mobile device emulation from the mobile-chrome project.
+    // Desktop chromium with isMobile:true doesn't properly enable touch/mobile layout.
+    const hasTouch = await page.evaluate(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0);
+    test.skip(!hasTouch, 'requires mobile-chrome project with touch emulation');
+
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);

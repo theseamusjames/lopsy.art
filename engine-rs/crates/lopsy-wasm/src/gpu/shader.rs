@@ -62,12 +62,22 @@ pub const PIXEL_STRETCH_FRAG: &str = include_str!("shaders/filters/pixel_stretch
 pub const LENS_DISTORTION_FRAG: &str = include_str!("shaders/filters/lens_distortion.glsl");
 pub const PATTERN_FILL_FRAG: &str = include_str!("shaders/filters/pattern_fill.glsl");
 pub const MESH_WARP_FRAG: &str = include_str!("shaders/filters/mesh_warp.glsl");
+pub const LIQUIFY_WARP_FRAG: &str = include_str!("shaders/filters/liquify_warp.glsl");
 pub const BLOOM_THRESHOLD_FRAG: &str = include_str!("shaders/filters/bloom_threshold.glsl");
 pub const BLOOM_COMBINE_FRAG: &str = include_str!("shaders/filters/bloom_combine.glsl");
+pub const TILT_SHIFT_BLUR_FRAG: &str = include_str!("shaders/filters/tilt_shift_blur.glsl");
+pub const EMBOSS_FRAG: &str = include_str!("shaders/filters/emboss.glsl");
+pub const VORONOI_FRAG: &str = include_str!("shaders/filters/voronoi.glsl");
 pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
+pub const SURFACE_BLUR_FRAG: &str = include_str!("shaders/filters/surface_blur.glsl");
+pub const FIBERS_FRAG: &str = include_str!("shaders/filters/fibers.glsl");
 
-// Brush
-pub const BRUSH_DAB_FRAG: &str = include_str!("shaders/brush/brush_dab.glsl");
+// Brush (assembled from header + variant + footer at compile_all time)
+const BRUSH_DAB_HEADER: &str = include_str!("shaders/brush/brush_dab_header.glsl");
+const BRUSH_DAB_FOOTER: &str = include_str!("shaders/brush/brush_dab_footer.glsl");
+const BRUSH_DAB_CIRCLE_BODY: &str = include_str!("shaders/brush/brush_dab_circle.glsl");
+const BRUSH_DAB_ALPHA_BODY: &str = include_str!("shaders/brush/brush_dab_alpha.glsl");
+const BRUSH_DAB_COLOR_BODY: &str = include_str!("shaders/brush/brush_dab_color.glsl");
 pub const ERASER_DAB_FRAG: &str = include_str!("shaders/brush/eraser_dab.glsl");
 pub const QUICK_MASK_DAB_FRAG: &str = include_str!("shaders/brush/quick_mask_dab.glsl");
 pub const DODGE_BURN_FRAG: &str = include_str!("shaders/brush/dodge_burn.glsl");
@@ -77,6 +87,7 @@ pub const CLONE_STAMP_FRAG: &str = include_str!("shaders/brush/clone_stamp.glsl"
 pub const HEALING_DAB_FRAG: &str = include_str!("shaders/brush/healing_dab.glsl");
 pub const HEALING_MEAN_FRAG: &str = include_str!("shaders/brush/healing_mean.glsl");
 pub const OPACITY_CLAMP_FRAG: &str = include_str!("shaders/brush/opacity_clamp.glsl");
+pub const SPONGE_FRAG: &str = include_str!("shaders/brush/sponge.glsl");
 
 // Gradient
 pub const GRADIENT_LINEAR_FRAG: &str = include_str!("shaders/gradient/gradient_linear.glsl");
@@ -222,11 +233,19 @@ pub struct ShaderPrograms {
     pub lens_distortion: ShaderProgram,
     pub pattern_fill: ShaderProgram,
     pub mesh_warp: ShaderProgram,
+    pub liquify_warp: ShaderProgram,
     pub bloom_threshold: ShaderProgram,
     pub bloom_combine: ShaderProgram,
+    pub tilt_shift_blur: ShaderProgram,
+    pub emboss: ShaderProgram,
+    pub voronoi: ShaderProgram,
     pub selection_mask_blend: ShaderProgram,
+    pub surface_blur: ShaderProgram,
+    pub fibers: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
-    pub brush_dab: ShaderProgram,
+    pub brush_dab_circle: ShaderProgram,
+    pub brush_dab_alpha: ShaderProgram,
+    pub brush_dab_color: ShaderProgram,
     pub eraser_dab: ShaderProgram,
     pub quick_mask_dab: ShaderProgram,
     pub dodge_burn: ShaderProgram,
@@ -236,6 +255,7 @@ pub struct ShaderPrograms {
     pub healing_dab: ShaderProgram,
     pub healing_mean: ShaderProgram,
     pub opacity_clamp: ShaderProgram,
+    pub sponge: ShaderProgram,
     // Gradient
     pub gradient_linear: ShaderProgram,
     pub gradient_radial: ShaderProgram,
@@ -303,11 +323,19 @@ impl ShaderPrograms {
             lens_distortion: compile_program(gl, v, LENS_DISTORTION_FRAG)?,
             pattern_fill: compile_program(gl, v, PATTERN_FILL_FRAG)?,
             mesh_warp: compile_program(gl, v, MESH_WARP_FRAG)?,
+            liquify_warp: compile_program(gl, v, LIQUIFY_WARP_FRAG)?,
             bloom_threshold: compile_program(gl, v, BLOOM_THRESHOLD_FRAG)?,
             bloom_combine: compile_program(gl, v, BLOOM_COMBINE_FRAG)?,
+            tilt_shift_blur: compile_program(gl, v, TILT_SHIFT_BLUR_FRAG)?,
+            emboss: compile_program(gl, v, EMBOSS_FRAG)?,
+            voronoi: compile_program(gl, v, VORONOI_FRAG)?,
             selection_mask_blend: compile_program(gl, v, SELECTION_MASK_BLEND_FRAG)?,
-            // Brush — use standard fullscreen quad vert; dab positioning via fragment shader
-            brush_dab: compile_program(gl, v, BRUSH_DAB_FRAG)?,
+            surface_blur: compile_program(gl, v, SURFACE_BLUR_FRAG)?,
+            fibers: compile_program(gl, v, FIBERS_FRAG)?,
+            // Brush — assembled from header + variant body + footer
+            brush_dab_circle: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_CIRCLE_BODY}{BRUSH_DAB_FOOTER}"))?,
+            brush_dab_alpha: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_ALPHA_BODY}{BRUSH_DAB_FOOTER}"))?,
+            brush_dab_color: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_COLOR_BODY}{BRUSH_DAB_FOOTER}"))?,
             eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,
             quick_mask_dab: compile_program(gl, v, QUICK_MASK_DAB_FRAG)?,
             dodge_burn: compile_program(gl, v, DODGE_BURN_FRAG)?,
@@ -317,6 +345,7 @@ impl ShaderPrograms {
             healing_dab: compile_program(gl, v, HEALING_DAB_FRAG)?,
             healing_mean: compile_program(gl, v, HEALING_MEAN_FRAG)?,
             opacity_clamp: compile_program(gl, v, OPACITY_CLAMP_FRAG)?,
+            sponge: compile_program(gl, v, SPONGE_FRAG)?,
             // Gradient
             gradient_linear: compile_program(gl, v, GRADIENT_LINEAR_FRAG)?,
             gradient_radial: compile_program(gl, v, GRADIENT_RADIAL_FRAG)?,

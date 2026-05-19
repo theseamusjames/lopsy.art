@@ -7,9 +7,10 @@
 
 import type { Engine } from './wasm-bridge';
 import { initWasm, createEngine, clearAllLayers } from './wasm-bridge';
-import { resetTrackedState } from './engine-sync';
+import { resetTrackedState, cacheSubBrushTips } from './engine-sync';
 import { setEngine as setGpuPixelEngine } from './gpu-pixel-access';
 import { canvasColorSpace } from '../engine/color-space';
+import { useToolSettingsStore } from '../app/tool-settings-store';
 
 let engine: Engine | null = null;
 let engineCanvas: HTMLCanvasElement | null = null;
@@ -24,6 +25,7 @@ export function getEngineCanvas(): HTMLCanvasElement | null {
 
 export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   await initWasm();
+  import('../tools/brush/builtin-brushes').then((m) => m.loadBuiltinBitmapBrushes()).catch(() => {});
   engine = createEngine(canvas);
   engineCanvas = canvas;
 
@@ -39,6 +41,28 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
     // drawingBufferColorSpace not supported — fall back silently
   }
   setGpuPixelEngine(engine);
+
+  // Pre-cache sub-brush tip textures whenever the sub-brush list changes.
+  // Debounced so slider drags don't re-cache on every mouse move.
+  const initialSubs = useToolSettingsStore.getState().activeSubBrushes;
+  if (initialSubs.length > 0) {
+    cacheSubBrushTips(engine, initialSubs);
+  }
+  let prevSubBrushes = initialSubs;
+  let cacheTimer: ReturnType<typeof setTimeout> | null = null;
+  useToolSettingsStore.subscribe((state) => {
+    if (state.activeSubBrushes !== prevSubBrushes) {
+      prevSubBrushes = state.activeSubBrushes;
+      if (cacheTimer) clearTimeout(cacheTimer);
+      const subs = state.activeSubBrushes;
+      cacheTimer = setTimeout(() => {
+        cacheTimer = null;
+        const eng = getEngine();
+        if (!eng || subs.length === 0) return;
+        cacheSubBrushTips(eng, subs);
+      }, 150);
+    }
+  });
 
   // Expose for e2e testing (memory profiling needs to query GPU texture dimensions)
   const w = window as unknown as Record<string, unknown>;

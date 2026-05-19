@@ -14,6 +14,9 @@ export interface InteractionState {
   layerStartX: number;
   layerStartY: number;
   maskMode: boolean;
+  /** Captured at interaction-start so the path doesn't change if quick-mask
+   *  mode is toggled mid-drag. Currently only used by the gradient tool. */
+  quickMaskMode?: boolean;
   transformHandle: TransformHandle | null;
   transformStartState: TransformState | null;
   transformStartAngle: number;
@@ -31,11 +34,25 @@ export interface InteractionState {
   strokeColor?: { r: number; g: number; b: number; a: number };
   lastPointTime?: number;
   smoothedSpeed?: number;
+  speedHistory?: number[];
+  speedSizeCurrent?: number;
+  sizeJitterCurrent?: number;
+  sizeJitterTarget?: number;
+  sizeJitterPrevTarget?: number;
+  sizeJitterTransitionDist?: number;
+  sizeJitterDistTraveled?: number;
+  hardnessJitterCurrent?: number;
+  hardnessJitterTarget?: number;
+  hardnessJitterPrevTarget?: number;
+  hardnessJitterTransitionDist?: number;
+  hardnessJitterDistTraveled?: number;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
   selectionOnlyTransform?: boolean;
   /** Set when a mesh warp handle drag is in progress. */
   meshWarpDragging?: boolean;
+  /** Set when a tilt-shift overlay drag is in progress. */
+  tiltShiftDragging?: boolean;
 }
 
 export const DEFAULT_TRANSFORM_FIELDS = {

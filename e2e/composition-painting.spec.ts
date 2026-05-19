@@ -246,7 +246,8 @@ async function addLayer(page: Page): Promise<string> {
 // ---------------------------------------------------------------------------
 
 test.describe('Composition 1: Painted Landscape', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'composition tests require sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 600, 400, false);

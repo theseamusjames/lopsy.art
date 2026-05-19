@@ -4,6 +4,7 @@ import { useToolSettingsStore } from '../../tool-settings-store';
 import { Slider } from '../../../components/Slider/Slider';
 import { ColorSwatch } from '../../../components/ColorSwatch/ColorSwatch';
 import { ColorPicker } from '../../../components/ColorPicker/ColorPicker';
+import { setPanelCollapsed } from '../../../panels/usePanelCollapse';
 import { AspectRatioControl } from './AspectRatioControl';
 import type { Color } from '../../../types';
 import type { ShapeMode, ShapeOutput } from '../../../tools/shape/shape';
@@ -55,6 +56,7 @@ export function ShapeOptions() {
   const setShapeOutput = useToolSettingsStore((s) => s.setShapeOutput);
   const setShapeFillColor = useToolSettingsStore((s) => s.setShapeFillColor);
   const setShapeStrokeColor = useToolSettingsStore((s) => s.setShapeStrokeColor);
+  const setForegroundColor = useToolSettingsStore((s) => s.setForegroundColor);
   const setShapeStrokeWidth = useToolSettingsStore((s) => s.setShapeStrokeWidth);
   const setShapePolygonSides = useToolSettingsStore((s) => s.setShapePolygonSides);
   const setShapeCornerRadius = useToolSettingsStore((s) => s.setShapeCornerRadius);
@@ -129,6 +131,11 @@ export function ShapeOptions() {
             color={shapeFillColor}
             size="sm"
             onClick={() => setOpenPopover(openPopover === 'fill' ? null : 'fill')}
+            onDoubleClick={() => {
+              setOpenPopover(null);
+              setForegroundColor(shapeFillColor);
+              setPanelCollapsed('color', false);
+            }}
           />
         ) : (
           <button
@@ -162,6 +169,11 @@ export function ShapeOptions() {
             color={shapeStrokeColor}
             size="sm"
             onClick={() => setOpenPopover(openPopover === 'stroke' ? null : 'stroke')}
+            onDoubleClick={() => {
+              setOpenPopover(null);
+              setForegroundColor(shapeStrokeColor);
+              setPanelCollapsed('color', false);
+            }}
           />
         ) : (
           <button

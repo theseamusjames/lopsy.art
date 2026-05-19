@@ -225,6 +225,18 @@ pub fn get_layer_texture_dimensions(engine: &Engine, layer_id: &str) -> Vec<u32>
     vec![0, 0]
 }
 
+#[wasm_bindgen(js_name = "getLayerEngineBounds")]
+pub fn get_layer_engine_bounds(engine: &Engine, layer_id: &str) -> Vec<i32> {
+    let (x, y) = engine.inner.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| (l.x, l.y))
+        .unwrap_or((0, 0));
+    let (w, h) = engine.inner.layer_textures.get(layer_id)
+        .and_then(|&tex| engine.inner.texture_pool.get_size(tex))
+        .unwrap_or((0, 0));
+    vec![x, y, w as i32, h as i32]
+}
+
 #[wasm_bindgen(js_name = "getLayerContentBounds")]
 pub fn get_layer_content_bounds(engine: &Engine, layer_id: &str) -> Vec<i32> {
     // Read layer pixels and find content bounds

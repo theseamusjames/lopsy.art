@@ -85,6 +85,8 @@ export function handleQuickSelectDown(ctx: InteractionContext): InteractionState
   if (bounds) {
     editorState.setSelection(bounds, seedMask, docW, docH);
     useUIStore.getState().setTransform(createTransformState(bounds));
+  } else {
+    editorState.clearSelection();
   }
 
   return {
@@ -132,6 +134,8 @@ export function handleQuickSelectMove(
   if (bounds) {
     editorState.setSelection(bounds, updatedMask, session.docWidth, session.docHeight);
     useUIStore.getState().setTransform(createTransformState(bounds));
+  } else {
+    editorState.clearSelection();
   }
 }
 

@@ -17,6 +17,12 @@ uniform sampler2D u_maskTex;    // layer mask texture
 uniform int u_hasMask;          // 1 if layer mask is active
 uniform vec2 u_maskSize;        // mask texture size in pixels
 uniform int u_maskOverlay;      // 1 = render mask as blue overlay (edit mode)
+// Optional brush texture (modulates stroke alpha during composite)
+uniform sampler2D u_brushTexture;
+uniform int u_hasBrushTexture;
+uniform float u_textureScale;
+uniform int u_textureBlendMode;
+uniform vec2 u_brushTextureSize;
 out vec4 fragColor;
 
 // RGB <-> HSL helpers

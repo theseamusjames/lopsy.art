@@ -211,6 +211,7 @@ export function syncLayers(
       tracked.layerVersions.delete(id);
       tracked.layerRefs.delete(id);
       tracked.layerEffectiveVisible.delete(id);
+      tracked.layerPassThroughOpacity.delete(id);
       tracked.masksOnEngine.delete(id);
       tracked.pixelDataVersions.delete(id);
       tracked.sparseVersions.delete(id);
@@ -235,10 +236,11 @@ export function syncLayers(
     // frames re-render without any layer mutation.
     const refUnchanged = tracked.layerRefs.get(layer.id) === layer;
     const visUnchanged = tracked.layerEffectiveVisible.get(layer.id) === effectiveVisible;
+    const opacityMultUnchanged = tracked.layerPassThroughOpacity.get(layer.id) === opacityMultiplier;
     const isKnown = tracked.layerIds.has(layer.id);
 
     let descJson: string | undefined;
-    if (!isKnown || !refUnchanged || !visUnchanged) {
+    if (!isKnown || !refUnchanged || !visUnchanged || !opacityMultUnchanged) {
       descJson = layerToDescJson(layer, effectiveVisible, opacityMultiplier, isPassThrough);
     }
 
@@ -248,6 +250,7 @@ export function syncLayers(
         tracked.layerVersions.set(layer.id, descJson!);
         tracked.layerRefs.set(layer.id, layer);
         tracked.layerEffectiveVisible.set(layer.id, effectiveVisible);
+        tracked.layerPassThroughOpacity.set(layer.id, opacityMultiplier);
       } catch (e) {
         console.error('[syncLayers] addLayer failed:', layer.id, e);
         failedAdds.add(layer.id);
@@ -261,9 +264,11 @@ export function syncLayers(
       }
       tracked.layerRefs.set(layer.id, layer);
       tracked.layerEffectiveVisible.set(layer.id, effectiveVisible);
+      tracked.layerPassThroughOpacity.set(layer.id, opacityMultiplier);
     } else if (descJson !== undefined) {
       tracked.layerRefs.set(layer.id, layer);
       tracked.layerEffectiveVisible.set(layer.id, effectiveVisible);
+      tracked.layerPassThroughOpacity.set(layer.id, opacityMultiplier);
     }
 
     // Upload pixel data if changed or marked dirty (including GPU paint dirty).
@@ -309,10 +314,15 @@ export function syncLayers(
       }
     }
 
-    // Upload mask
+    // Upload mask — only when the JS-side data reference actually changes,
+    // so GPU-painted mask data isn't overwritten by a stale re-upload.
     if (layer.mask) {
-      const maskBytes = new Uint8Array(layer.mask.data.buffer, layer.mask.data.byteOffset, layer.mask.data.byteLength);
-      uploadLayerMask(engine, layer.id, maskBytes, layer.mask.width, layer.mask.height);
+      const prevMaskData = tracked.maskDataRefs.get(layer.id);
+      if (prevMaskData !== layer.mask.data) {
+        const maskBytes = new Uint8Array(layer.mask.data.buffer, layer.mask.data.byteOffset, layer.mask.data.byteLength);
+        uploadLayerMask(engine, layer.id, maskBytes, layer.mask.width, layer.mask.height);
+        tracked.maskDataRefs.set(layer.id, layer.mask.data);
+      }
       tracked.masksOnEngine.add(layer.id);
     } else if (tracked.masksOnEngine.has(layer.id)) {
       removeLayerMask(engine, layer.id);

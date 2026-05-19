@@ -1,8 +1,66 @@
 use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
+use crate::gpu::shader::ShaderProgram;
+
+pub fn set_brush_texture_uniforms(
+    engine: &EngineInner,
+    shader: &ShaderProgram,
+    layer_id: &str,
+    texture_unit: u32,
+) {
+    let gl = &engine.gl;
+    let use_tex = engine.brush_has_texture && engine.brush_texture.is_some();
+    if use_tex {
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0 + texture_unit);
+        if let Some(tex_handle) = engine.brush_texture {
+            if let Some(tex_gl) = engine.texture_pool.get(tex_handle) {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex_gl));
+            }
+        }
+        if let Some(loc) = shader.location(gl, "u_brushTexture") {
+            gl.uniform1i(Some(&loc), texture_unit as i32);
+        }
+    }
+    if let Some(loc) = shader.location(gl, "u_hasBrushTexture") {
+        gl.uniform1i(Some(&loc), if use_tex { 1 } else { 0 });
+    }
+    if let Some(loc) = shader.location(gl, "u_textureScale") {
+        gl.uniform1f(Some(&loc), engine.brush_texture_scale);
+    }
+    if let Some(loc) = shader.location(gl, "u_textureBlendMode") {
+        gl.uniform1i(Some(&loc), engine.brush_texture_blend_mode as i32);
+    }
+    if let Some(loc) = shader.location(gl, "u_brushTextureSize") {
+        gl.uniform2f(Some(&loc), engine.brush_texture_width as f32, engine.brush_texture_height as f32);
+    }
+    let (layer_ox, layer_oy) = engine.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| (l.x as f32, l.y as f32))
+        .unwrap_or((0.0, 0.0));
+    if let Some(loc) = shader.location(gl, "u_layerOffset") {
+        gl.uniform2f(Some(&loc), layer_ox, layer_oy);
+    }
+}
 
 pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
     engine.ensure_layer_full_size(layer_id)?;
+
+    // Track whether this stroke should apply the brush texture during compositing.
+    // Only brush strokes use texture; pencil/eraser override this to false.
+    engine.stroke_use_brush_texture.insert(
+        layer_id.to_string(),
+        engine.brush_has_texture,
+    );
+
+    // Generate random texture rotation for this stroke.
+    // Use a simple hash of the layer_id bytes as seed since we don't have rand.
+    let seed: u32 = layer_id.bytes().enumerate().fold(0x9E3779B9u32, |acc, (i, b)| {
+        acc.wrapping_add((b as u32).wrapping_mul(i as u32 + 1))
+            .wrapping_mul(0x85EBCA6Bu32)
+    });
+    let seed = seed ^ (js_sys::Date::now() as u32);
+    engine.stroke_texture_rotation = (seed as f32 / u32::MAX as f32) * std::f32::consts::TAU;
+    engine.stroke_texture_origin_set = false;
 
     // Create a stroke texture matching the layer size
     if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
@@ -20,6 +78,40 @@ pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), Stri
             engine.fbo_pool.unbind(&engine.gl);
         }
     }
+    Ok(())
+}
+
+/// Pre-allocate the GPU resources that `begin_stroke` would otherwise
+/// allocate at the start of a stroke, so the first stroke on a large canvas
+/// doesn't pay a visible texture-allocation hesitation. Idempotent — safe to
+/// call repeatedly. No-op when there is already an active stroke for this
+/// layer.
+pub fn prewarm_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
+    // If a stroke is already in progress, the resources are already live —
+    // don't disturb them.
+    if engine.stroke_textures.contains_key(layer_id) {
+        return Ok(());
+    }
+
+    engine.ensure_layer_full_size(layer_id)?;
+
+    if engine.stroke_fbo.is_none() {
+        let fbo = engine.fbo_pool.create(&engine.gl)?;
+        engine.stroke_fbo = Some(fbo);
+    }
+
+    if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
+        if let Some((w, h)) = engine.texture_pool.get_size(layer_tex) {
+            if w > 0 && h > 0 {
+                // Acquire a stroke-sized texture and release it immediately
+                // so a freshly-sized texture sits in the pool ready for the
+                // next `begin_stroke` call.
+                let warm = engine.texture_pool.acquire(&engine.gl, w, h)?;
+                engine.texture_pool.release(warm);
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -90,15 +182,28 @@ pub fn apply_dab_batch(
     gl.active_texture(WebGl2RenderingContext::TEXTURE2);
     gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
-    // MAX blending for dab accumulation on the stroke texture.
-    // Each pixel takes the maximum of the existing value and the new dab value.
-    // Since output is premultiplied (color*a, a), MAX selects the highest-alpha
-    // dab at each pixel, preventing opacity compounding from overlapping dabs.
-    // Opacity is applied as a uniform multiplier in the shader.
+    // Dab accumulation blending.
+    // Alpha/circle brushes: MAX blending — each pixel takes the highest
+    // alpha from any overlapping dab, preventing opacity compounding.
+    // Color brushes: premultiplied alpha "over" compositing — overlapping
+    // rotated dabs layer correctly instead of per-channel MAX which would
+    // create phantom colors (e.g. blue + orange → pink).
     gl.enable(WebGl2RenderingContext::BLEND);
-    gl.blend_equation(WebGl2RenderingContext::MAX);
+    let is_color_tip = engine.brush_has_tip && engine.brush_tip_is_color;
+    if is_color_tip {
+        gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
+        gl.blend_func(WebGl2RenderingContext::ONE, WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA);
+    } else {
+        gl.blend_equation(WebGl2RenderingContext::MAX);
+    }
 
-    let shader = &engine.shaders.brush_dab;
+    let shader = if is_color_tip {
+        &engine.shaders.brush_dab_color
+    } else if engine.brush_has_tip {
+        &engine.shaders.brush_dab_alpha
+    } else {
+        &engine.shaders.brush_dab_circle
+    };
     gl.use_program(Some(&shader.program));
 
     // Set uniforms (no stamp texture needed — computed analytically in shader)
@@ -149,7 +254,7 @@ pub fn apply_dab_batch(
         gl.uniform2f(Some(&loc), layer_ox, layer_oy);
     }
 
-    // Bind custom brush tip texture if present
+    // Bind custom brush tip texture if present (for alpha and color variants)
     let use_brush_tip = engine.brush_has_tip && engine.brush_tip_texture.is_some();
     if use_brush_tip {
         gl.active_texture(WebGl2RenderingContext::TEXTURE1);
@@ -161,9 +266,6 @@ pub fn apply_dab_batch(
         if let Some(loc) = shader.location(gl, "u_brushTip") {
             gl.uniform1i(Some(&loc), 1);
         }
-    }
-    if let Some(loc) = shader.location(gl, "u_hasBrushTip") {
-        gl.uniform1i(Some(&loc), if use_brush_tip { 1 } else { 0 });
     }
     if let Some(loc) = shader.location(gl, "u_angle") {
         gl.uniform1f(Some(&loc), if use_brush_tip { engine.brush_angle } else { 0.0 });
@@ -218,6 +320,18 @@ pub fn apply_dab_batch(
         gl.uniform2f(Some(&loc), engine.brush_texture_width as f32, engine.brush_texture_height as f32);
     }
 
+    // Set stroke origin from first dab position if not yet set
+    if !engine.stroke_texture_origin_set && points.len() >= 2 {
+        engine.stroke_texture_origin = (points[0] as f32, points[1] as f32);
+        engine.stroke_texture_origin_set = true;
+    }
+    if let Some(loc) = shader.location(gl, "u_strokeOrigin") {
+        gl.uniform2f(Some(&loc), engine.stroke_texture_origin.0, engine.stroke_texture_origin.1);
+    }
+    if let Some(loc) = shader.location(gl, "u_textureRotation") {
+        gl.uniform1f(Some(&loc), engine.stroke_texture_rotation);
+    }
+
     // Scissor each dab to its bounding box so the fragment shader only
     // runs on the pixels it will actually write. Without this, every dab
     // runs the FS on the full stroke texture (e.g. 2550x3300 for a letter
@@ -254,8 +368,8 @@ pub fn apply_dab_batch(
 
     gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
     gl.disable(WebGl2RenderingContext::BLEND);
-    // Reset blend equation to default ADD for subsequent passes
     gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
+    gl.blend_func(WebGl2RenderingContext::ONE, WebGl2RenderingContext::ZERO);
 
     gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
 
@@ -393,10 +507,9 @@ pub fn apply_eraser_dab_batch(
 }
 
 pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
-    // Opacity is already baked into the stroke texture via the clamp pass,
-    // so composite at full strength.
     let _stroke_opacity = engine.stroke_opacity.remove(layer_id).unwrap_or(1.0);
 
+    engine.stroke_use_brush_texture.remove(layer_id);
     let Some(stroke_tex) = engine.stroke_textures.remove(layer_id) else {
         engine.mark_layer_dirty(layer_id);
         return;
@@ -452,6 +565,11 @@ pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
                     if let Some(loc) = engine.shaders.composite.location(gl, "u_opacity") {
                         gl.uniform1f(Some(&loc), 1.0);
                     }
+                    // Stroke texture size for brush texture doc-space sampling
+                    if let Some(loc) = engine.shaders.composite.location(gl, "u_strokeTexSize") {
+                        gl.uniform2f(Some(&loc), w as f32, h as f32);
+                    }
+                    set_brush_texture_uniforms(engine, &engine.shaders.composite, layer_id, 2);
                     engine.draw_fullscreen_quad();
                 });
 

@@ -14,6 +14,7 @@ import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import type { ActionResult, SliceCreator, SparseLayerEntry } from './types';
 import { useUIStore } from '../ui-store';
+import { cancelLiquify } from '../MenuBar/liquify-actions';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 
 import { computeCreateDocument } from './actions/create-document';
@@ -200,6 +201,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   documentReady: false,
 
   createDocument: (width, height, transparentBg) => {
+    cancelLiquify();
     clearEngine();
     const result = computeCreateDocument(width, height, transparentBg);
     applyActionResult(set, result);
@@ -211,6 +213,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   openImageAsDocument: (imageData, name) => {
+    cancelLiquify();
     clearEngine();
     const result = computeOpenImage(imageData, name);
     applyActionResult(set, result);
@@ -369,11 +372,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   addAdjustmentNode: (groupId, nodeType) => {
     const doc = get().document;
     const node = createDefaultNode(nodeType);
-    const layers = doc.layers.map((l) =>
-      l.id === groupId && l.type === 'group'
-        ? { ...l, adjustments: [...l.adjustments, node] }
-        : l,
-    );
+    const layers = doc.layers.map((l) => {
+      if (l.id !== groupId || l.type !== 'group') return l;
+      // Pass-through groups bypass the group composite FBO, so adjustments
+      // would be silently ignored. Switch to normal so the adjustment renders.
+      const blendMode = l.blendMode === 'pass-through' ? 'normal' : l.blendMode;
+      return { ...l, blendMode, adjustments: [...l.adjustments, node] };
+    });
     set({ document: { ...doc, layers } });
   },
 
@@ -761,11 +766,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const parentGroup = findParentGroup(doc.layers, firstId);
     const targetGroupId = parentGroup?.id ?? doc.rootGroupId ?? null;
 
-    // Remove selected layers from their current parents, add new group
-    let newLayers = [...doc.layers, group];
+    // Remove selected layers from their current parents BEFORE adding the
+    // group — otherwise removeFromParentGroup also strips children from
+    // the newly created group.
+    let newLayers = [...doc.layers];
     for (const id of orderedIds) {
       newLayers = removeFromParentGroup(newLayers, id);
     }
+    newLayers = [...newLayers, group];
     if (targetGroupId) {
       newLayers = addToGroupUtil(newLayers, group.id, targetGroupId);
     }

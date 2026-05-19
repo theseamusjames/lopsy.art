@@ -1,69 +1,152 @@
-.overlay {
+.panel {
   position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  width: 600px;
-  max-height: 80vh;
+  width: 640px;
+  height: 600px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  z-index: var(--z-modal);
 }
 
-.header {
-  padding: var(--space-3) var(--space-4);
+/* ------------------------------------------------------------------ */
+/* Title bar                                                          */
+/* ------------------------------------------------------------------ */
+
+.titleBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-3);
+  height: 32px;
+  background: var(--color-bg-tertiary);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
 }
 
-.header h2 {
-  margin: 0;
+.titleBar:active {
+  cursor: grabbing;
+}
+
+.titleText {
   font-family: var(--font-ui);
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-text-primary);
 }
 
-.content {
+.closeX {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.closeX:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Tab list (left) + panel (right)                                    */
+/* ------------------------------------------------------------------ */
+
+.tabContainer {
   display: flex;
   flex: 1;
   min-height: 0;
 }
 
-.leftPanel {
-  width: 200px;
-  border-right: 1px solid var(--color-border);
+.tabList {
   display: flex;
   flex-direction: column;
+  width: 120px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border);
+  padding: var(--space-1) 0;
 }
 
-.presetGrid {
+.tabItem {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  user-select: none;
+}
+
+.tabItem:hover {
+  background: var(--color-bg-hover);
+}
+
+.tabItemActive {
+  background: var(--color-accent-subtle);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.tabItemActive:hover {
+  background: var(--color-accent-subtle);
+}
+
+.tabPanel {
   flex: 1;
+  min-width: 0;
+  padding: var(--space-3);
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ------------------------------------------------------------------ */
+/* Shape tab: brush gallery                                           */
+/* ------------------------------------------------------------------ */
+
+.galleryStage {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: var(--space-2);
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.galleryFull {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.galleryGrid {
   display: grid;
-  grid-template-columns: repeat(3, 48px);
-  gap: var(--space-2);
-  align-content: start;
-  justify-content: center;
+  grid-template-columns: repeat(8, 1fr);
+  gap: var(--space-1);
 }
 
 .presetItem {
-  width: 48px;
-  height: 48px;
+  aspect-ratio: 1;
   border: 2px solid transparent;
   border-radius: var(--radius-sm);
-  background: var(--color-bg-primary);
+  background: var(--color-bg-tertiary);
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -83,50 +166,13 @@
 
 .presetActions {
   display: flex;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border-top: 1px solid var(--color-border);
-  flex-shrink: 0;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.importButton,
-.deleteButton {
-  flex: 1;
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-1) var(--space-2);
-  color: var(--color-text-primary);
-  font-family: var(--font-ui);
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background var(--transition-fast);
-  text-align: center;
-}
-
-.importButton:hover,
-.deleteButton:hover {
-  background: var(--color-bg-hover);
-}
-
-.deleteButton:disabled {
-  color: var(--color-text-disabled);
-  cursor: default;
-}
-
-.deleteButton:disabled:hover {
-  background: var(--color-bg-tertiary);
-}
-
-.rightPanel {
-  flex: 1;
-  padding: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  overflow-y: auto;
-}
+/* ------------------------------------------------------------------ */
+/* Panel contents                                                     */
+/* ------------------------------------------------------------------ */
 
 .sliderSection {
   display: flex;
@@ -140,19 +186,21 @@
   gap: var(--space-4);
 }
 
-.sectionLabel {
-  font-family: var(--font-ui);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
 .textureSection {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.textureRow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.textureRow .select {
+  flex: 1;
+  min-width: 0;
 }
 
 .select {
@@ -165,43 +213,99 @@
   padding: var(--space-1) var(--space-2);
 }
 
+.speedToggleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+}
+
+.speedToggleLabel {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.speedToggleGroup {
+  display: flex;
+  gap: 1px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.speedToggle {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  border: none;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.speedToggle:hover {
+  background: var(--color-bg-hover);
+}
+
+.speedToggleActive {
+  background: var(--color-accent);
+  color: var(--color-text-on-accent, #fff);
+}
+
+.speedToggleActive:hover {
+  background: var(--color-accent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Footer                                                             */
+/* ------------------------------------------------------------------ */
+
 .footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding: var(--space-3) var(--space-4);
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
-.closeButton {
+.footerLeft,
+.footerRight {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.smallButton {
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-5);
+  padding: var(--space-1) var(--space-2);
   color: var(--color-text-primary);
   font-family: var(--font-ui);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: 500;
   cursor: pointer;
   transition: background var(--transition-fast);
+  text-align: center;
+  white-space: nowrap;
 }
 
-.closeButton:hover {
+.smallButton:hover {
   background: var(--color-bg-hover);
+}
+
+.smallButton:disabled {
+  color: var(--color-text-disabled);
+  cursor: default;
+}
+
+.smallButton:disabled:hover {
+  background: var(--color-bg-tertiary);
 }
 
 .hiddenInput {
   display: none;
-}
-
-.presetName {
-  font-family: var(--font-ui);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 48px;
 }

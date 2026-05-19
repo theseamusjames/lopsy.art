@@ -96,7 +96,7 @@ export function GradientEditor({ stops, selectedIndex, onStopsChange, onSelectSt
           style={{ background: buildGradientCss(sorted) }}
         />
       </div>
-      <div className={styles.handlesRow} data-testid="gradient-handles">
+      <div className={styles.handlesRow} onClick={handleBarClick} data-testid="gradient-handles">
         {sorted.map((stop, index) => (
           <div
             key={index}
@@ -112,6 +112,7 @@ export function GradientEditor({ stops, selectedIndex, onStopsChange, onSelectSt
             aria-valuenow={Math.round(stop.position * 100)}
             tabIndex={0}
             onMouseDown={(e) => handleHandleMouseDown(e, index)}
+            onClick={(e) => e.stopPropagation()}
             data-testid={`gradient-stop-${index}`}
           />
         ))}

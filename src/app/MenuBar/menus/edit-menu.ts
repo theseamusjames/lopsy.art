@@ -5,6 +5,7 @@ import { clearJsPixelData } from '../../store/clear-js-pixel-data';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { fillWithColor } from '../../../engine-wasm/wasm-bridge';
 import { definePattern } from '../pattern-actions';
+import { defineBrush } from '../brush-actions';
 import type { FilterDialogId } from '../filter-actions';
 import type { MenuDef } from './types';
 
@@ -51,6 +52,8 @@ export function createEditMenu(showFilterDialog: (id: FilterDialogId) => void): 
       { label: 'Crop', action: () => cropToSelection(), disabled: !hasSelection },
       { separator: true, label: '' },
       { label: 'Define Pattern', action: () => definePattern() },
+      { label: 'Define Brush...', action: () => defineBrush(false), disabled: !hasSelection },
+      { label: 'Define Color Brush...', action: () => defineBrush(true), disabled: !hasSelection },
       { separator: true, label: '' },
       { label: 'Clear Guides', action: () => useUIStore.getState().clearGuides() },
     ],

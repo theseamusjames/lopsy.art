@@ -57,6 +57,36 @@ pub struct ImageAdjustmentState {
     pub levels_b: [f32; 5],
     pub levels_texture: Option<TextureHandle>,
     pub has_levels: bool,
+    // Hue/Saturation
+    pub hue_shift: f32,
+    pub hsl_saturation: f32,
+    pub lightness: f32,
+    // Color Balance (CMY→RGB shifts per tonal range, -100..100)
+    pub cb_shadows: [f32; 3],
+    pub cb_midtones: [f32; 3],
+    pub cb_highlights: [f32; 3],
+    // Photo Filter
+    pub pf_color: [f32; 3],
+    pub pf_density: f32,
+    pub pf_preserve_luminosity: bool,
+    // Black & White
+    pub bw_reds: f32,
+    pub bw_yellows: f32,
+    pub bw_greens: f32,
+    pub bw_cyans: f32,
+    pub bw_blues: f32,
+    pub bw_magentas: f32,
+    pub bw_enabled: bool,
+    // Channel Mixer (row per output channel: [from_r, from_g, from_b, constant])
+    pub cm_r: [f32; 4],
+    pub cm_g: [f32; 4],
+    pub cm_b: [f32; 4],
+    pub cm_enabled: bool,
+    // Invert
+    pub invert: bool,
+    // Gradient Map
+    pub gradient_map_texture: Option<TextureHandle>,
+    pub has_gradient_map: bool,
 }
 
 impl Default for ImageAdjustmentState {
@@ -79,6 +109,29 @@ impl Default for ImageAdjustmentState {
             levels_b: [0.0, 1.0, 1.0, 0.0, 1.0],
             levels_texture: None,
             has_levels: false,
+            hue_shift: 0.0,
+            hsl_saturation: 0.0,
+            lightness: 0.0,
+            cb_shadows: [0.0; 3],
+            cb_midtones: [0.0; 3],
+            cb_highlights: [0.0; 3],
+            pf_color: [1.0; 3],
+            pf_density: 0.0,
+            pf_preserve_luminosity: true,
+            bw_reds: 40.0,
+            bw_yellows: 60.0,
+            bw_greens: 40.0,
+            bw_cyans: 60.0,
+            bw_blues: 20.0,
+            bw_magentas: 80.0,
+            bw_enabled: false,
+            cm_r: [1.0, 0.0, 0.0, 0.0],
+            cm_g: [0.0, 1.0, 0.0, 0.0],
+            cm_b: [0.0, 0.0, 1.0, 0.0],
+            cm_enabled: false,
+            invert: false,
+            gradient_map_texture: None,
+            has_gradient_map: false,
         }
     }
 }
@@ -110,6 +163,7 @@ pub struct EngineInner {
     // Brush state
     pub stroke_textures: HashMap<String, TextureHandle>,
     pub stroke_opacity: HashMap<String, f32>,
+    pub stroke_use_brush_texture: HashMap<String, bool>,
     pub stroke_fbo: Option<FramebufferHandle>,
     /// Dodge/burn per-stroke coverage texture: a scalar strength field
     /// (RGBA, all four channels equal) MAX-accumulated across dabs so
@@ -124,12 +178,23 @@ pub struct EngineInner {
     /// 0 = dodge, 1 = burn — captured on `begin_dodge_burn_stroke` so the
     /// compositor preview and bake share the mode.
     pub stroke_dodge_modes: HashMap<String, u32>,
+    pub stroke_sponge_textures: HashMap<String, TextureHandle>,
+    pub stroke_sponge_preview_textures: HashMap<String, TextureHandle>,
+    pub stroke_sponge_modes: HashMap<String, u32>,
     // Custom brush tip
     pub brush_tip_texture: Option<TextureHandle>,
     pub brush_tip_width: u32,
     pub brush_tip_height: u32,
     pub brush_has_tip: bool,
+    pub brush_tip_is_color: bool,
     pub brush_angle: f32,
+    // Sub-brush tip cache: pre-processed textures to avoid per-dab Gaussian blur
+    pub sub_brush_tips: Vec<Option<(TextureHandle, u32, u32, bool)>>,
+    pub saved_primary_tip: Option<(TextureHandle, u32, u32, bool)>,
+    // Per-stroke texture state (origin + rotation for stroke-relative UV)
+    pub stroke_texture_origin: (f32, f32),
+    pub stroke_texture_rotation: f32,
+    pub stroke_texture_origin_set: bool,
     // Custom brush texture
     pub brush_texture: Option<TextureHandle>,
     pub brush_texture_width: u32,
@@ -143,9 +208,15 @@ pub struct EngineInner {
     // Shape preview (stores pre-drag layer content for live preview)
     pub shape_preview_texture: Option<TextureHandle>,
     pub shape_preview_layer_id: Option<String>,
+    pub shape_preview_x: i32,
+    pub shape_preview_y: i32,
+    pub shape_preview_w: u32,
+    pub shape_preview_h: u32,
     // Filter preview (stores pre-filter layer content for live preview)
     pub filter_preview_texture: Option<TextureHandle>,
     pub filter_preview_layer_id: Option<String>,
+    // Liquify persistent displacement texture (lives for the session)
+    pub liquify_disp_texture: Option<TextureHandle>,
     // Gradient preview (stores pre-drag layer content for live preview)
     pub gradient_preview_texture: Option<TextureHandle>,
     pub gradient_preview_layer_id: Option<String>,
@@ -181,6 +252,7 @@ pub struct EngineInner {
     pub path_overlay: Option<String>,
     pub seamless_pattern: bool,
     pub seamless_dim: bool,
+    pub channel_mask: [f32; 4],
     pub selection_time: f64,
     /// Per-document image adjustments — exposure/contrast/highlights/
     /// shadows/whites/blacks/vignette/saturation/vibrance plus curves and
@@ -255,15 +327,25 @@ impl EngineInner {
             needs_recomposite: true,
             stroke_textures: HashMap::new(),
             stroke_opacity: HashMap::new(),
+            stroke_use_brush_texture: HashMap::new(),
             stroke_fbo: None,
             stroke_dodge_textures: HashMap::new(),
             stroke_dodge_preview_textures: HashMap::new(),
             stroke_dodge_modes: HashMap::new(),
+            stroke_sponge_textures: HashMap::new(),
+            stroke_sponge_preview_textures: HashMap::new(),
+            stroke_sponge_modes: HashMap::new(),
             brush_tip_texture: None,
             brush_tip_width: 0,
             brush_tip_height: 0,
             brush_has_tip: false,
+            brush_tip_is_color: false,
             brush_angle: 0.0,
+            sub_brush_tips: Vec::new(),
+            saved_primary_tip: None,
+            stroke_texture_origin: (0.0, 0.0),
+            stroke_texture_rotation: 0.0,
+            stroke_texture_origin_set: false,
             brush_texture: None,
             brush_texture_width: 0,
             brush_texture_height: 0,
@@ -274,8 +356,13 @@ impl EngineInner {
             quick_mask_texture: None,
             shape_preview_texture: None,
             shape_preview_layer_id: None,
+            shape_preview_x: 0,
+            shape_preview_y: 0,
+            shape_preview_w: 0,
+            shape_preview_h: 0,
             filter_preview_texture: None,
             filter_preview_layer_id: None,
+            liquify_disp_texture: None,
             gradient_preview_texture: None,
             gradient_preview_layer_id: None,
             clipboard_texture: None,
@@ -306,6 +393,7 @@ impl EngineInner {
             path_overlay: None,
             seamless_pattern: false,
             seamless_dim: true,
+            channel_mask: [1.0, 1.0, 1.0, 1.0],
             selection_time: 0.0,
             adjustments: ImageAdjustmentState::default(),
             group_adjustments: HashMap::new(),
@@ -371,31 +459,42 @@ impl EngineInner {
     /// Called before any GPU operation that writes to the layer texture
     /// (gradient, shape, brush stroke). No-op if already full size.
     pub fn ensure_layer_full_size(&mut self, layer_id: &str) -> Result<(), String> {
+        self.ensure_layer_covers(layer_id, 0, 0, self.doc_width as i32, self.doc_height as i32)
+    }
+
+    /// Expand the layer texture so it covers the union of its current content,
+    /// the document area, and the additional rectangle `(extra_min_x..extra_max_x,
+    /// extra_min_y..extra_max_y)`. No-op if the texture already covers all three.
+    pub fn ensure_layer_covers(
+        &mut self,
+        layer_id: &str,
+        extra_min_x: i32,
+        extra_min_y: i32,
+        extra_max_x: i32,
+        extra_max_y: i32,
+    ) -> Result<(), String> {
         let layer_tex = match self.layer_textures.get(layer_id) {
             Some(&t) => t,
             None => return Ok(()),
         };
         let (lw, lh) = self.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
 
-        // Get the layer's current position so we can place the old content
-        // correctly in the new full-size texture.
         let (layer_x, layer_y) = self.layer_stack.iter()
             .find(|l| l.id == layer_id)
             .map(|l| (l.x, l.y))
             .unwrap_or((0, 0));
 
-        // Skip only when the layer already fully contains the document area.
-        // Checking size alone (lw >= doc_width && lh >= doc_height) is wrong
-        // when the layer has been offset (e.g. aligned right): a 1920-wide
-        // texture at x=1820 covers doc columns 1820..3740, leaving 0..1820
-        // uncovered. JS-side expansion logic would then desync from WASM.
-        let doc_w = self.doc_width as i32;
-        let doc_h = self.doc_height as i32;
-        let fully_contains_doc = layer_x <= 0
-            && layer_y <= 0
-            && layer_x + lw as i32 >= doc_w
-            && layer_y + lh as i32 >= doc_h;
-        if fully_contains_doc {
+        let min_x = 0i32.min(layer_x).min(extra_min_x);
+        let min_y = 0i32.min(layer_y).min(extra_min_y);
+        let max_x = (self.doc_width as i32).max(layer_x + lw as i32).max(extra_max_x);
+        let max_y = (self.doc_height as i32).max(layer_y + lh as i32).max(extra_max_y);
+        let new_w = (max_x - min_x) as u32;
+        let new_h = (max_y - min_y) as u32;
+
+        if layer_x <= min_x && layer_y <= min_y
+            && layer_x + lw as i32 >= max_x
+            && layer_y + lh as i32 >= max_y
+        {
             return Ok(());
         }
 
@@ -422,15 +521,6 @@ impl EngineInner {
         } else {
             None
         };
-
-        // Compute the union of the document area and the layer content area
-        // so that offscreen content is preserved.
-        let min_x = 0i32.min(layer_x);
-        let min_y = 0i32.min(layer_y);
-        let max_x = (self.doc_width as i32).max(layer_x + lw as i32);
-        let max_y = (self.doc_height as i32).max(layer_y + lh as i32);
-        let new_w = (max_x - min_x) as u32;
-        let new_h = (max_y - min_y) as u32;
 
         let new_tex = self.texture_pool.acquire(&self.gl, new_w, new_h)?;
 
@@ -517,6 +607,10 @@ impl EngineInner {
             self.texture_pool.release(tex);
         }
         self.filter_preview_layer_id = None;
+        // Liquify displacement
+        if let Some(tex) = self.liquify_disp_texture.take() {
+            self.texture_pool.release(tex);
+        }
         // Gradient preview
         if let Some(tex) = self.gradient_preview_texture.take() {
             self.texture_pool.release(tex);
@@ -571,6 +665,22 @@ impl EngineInner {
             self.texture_pool.release(tex);
         }
         self.adjustments.has_curves = false;
+        self.adjustments.hue_shift = 0.0;
+        self.adjustments.hsl_saturation = 0.0;
+        self.adjustments.lightness = 0.0;
+        self.adjustments.cb_shadows = [0.0; 3];
+        self.adjustments.cb_midtones = [0.0; 3];
+        self.adjustments.cb_highlights = [0.0; 3];
+        self.adjustments.pf_color = [1.0; 3];
+        self.adjustments.pf_density = 0.0;
+        self.adjustments.pf_preserve_luminosity = true;
+        self.adjustments.bw_enabled = false;
+        self.adjustments.cm_enabled = false;
+        self.adjustments.invert = false;
+        if let Some(tex) = self.adjustments.gradient_map_texture.take() {
+            self.texture_pool.release(tex);
+        }
+        self.adjustments.has_gradient_map = false;
         self.needs_recomposite = true;
         // Clear text renderer layer state so stale text layouts don't persist
         // across document switches.

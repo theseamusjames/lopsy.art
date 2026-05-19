@@ -85,10 +85,11 @@ export function computeMergeDown(
   let layers = removeFromParentGroup(doc.layers, activeId);
   layers = layers.filter((l) => l.id !== activeId);
 
-  // mergeLayers always produces a doc-sized result at (0, 0).
+  // mergeLayers bakes both layers' opacities and blend modes into the
+  // merged content, so the result layer resets to opacity 1 / normal blend.
   layers = layers.map((l) => {
     if (l.id !== belowId) return l;
-    return { ...l, effects: DEFAULT_EFFECTS, x: 0, y: 0, width: doc.width, height: doc.height } as typeof l;
+    return { ...l, effects: DEFAULT_EFFECTS, opacity: 1, blendMode: 'normal' as const, x: 0, y: 0, width: doc.width, height: doc.height } as typeof l;
   });
 
   return {

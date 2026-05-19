@@ -15,7 +15,7 @@ function isPathEditMode(): boolean {
   return ui.activeTool === 'path' && editor.selectedPathId !== null;
 }
 
-type BrushTool = 'brush' | 'pencil' | 'eraser' | 'stamp' | 'dodge';
+type BrushTool = 'brush' | 'pencil' | 'eraser' | 'stamp' | 'dodge' | 'sponge';
 
 const BRUSH_TOOLS: ReadonlySet<string> = new Set<BrushTool>([
   'brush',
@@ -23,6 +23,7 @@ const BRUSH_TOOLS: ReadonlySet<string> = new Set<BrushTool>([
   'eraser',
   'stamp',
   'dodge',
+  'sponge',
 ]);
 
 function isBrushTool(tool: ToolId): tool is BrushTool {
@@ -34,6 +35,8 @@ function getToolSize(tool: BrushTool, settings: ReturnType<typeof useToolSetting
     case 'brush':
     case 'dodge':
       return settings.brushSize;
+    case 'sponge':
+      return settings.spongeSize;
     case 'pencil':
       return settings.pencilSize;
     case 'eraser':
@@ -54,6 +57,7 @@ function getCursorClassForTool(tool: ToolId): string {
     case 'eraser':
     case 'stamp':
     case 'dodge':
+    case 'sponge':
       return styles.canvasNone ?? '';
     case 'marquee-rect':
     case 'marquee-ellipse':
@@ -94,6 +98,7 @@ export function useCanvasCursor(
   const activeTool = useUIStore((s) => s.activeTool);
   const hoveredHandle = useUIStore((s) => s.activeTransformHandle);
   const transform = useUIStore((s) => s.transform);
+  const isLiquifyOpen = useUIStore((s) => s.liquify !== null);
   const selectionActive = useEditorStore((s) => s.selection.active);
   const selectedPathId = useEditorStore((s) => s.selectedPathId);
 
@@ -106,6 +111,8 @@ export function useCanvasCursor(
 
     if (showsGrabCursor(pointerMode)) {
       cursorClass = styles.canvasGrab ?? '';
+    } else if (isLiquifyOpen) {
+      cursorClass = styles.canvasNone ?? '';
     } else if (hoveredHandle) {
       cursorClass = getCursorClassForHandle(hoveredHandle);
     } else if (isPathEditMode()) {
@@ -133,7 +140,7 @@ export function useCanvasCursor(
     if (cursorClass) {
       container.classList.add(cursorClass);
     }
-  }, [containerRef, pointerMode, activeTool, hoveredHandle, transform, selectionActive, selectedPathId]);
+  }, [containerRef, pointerMode, activeTool, hoveredHandle, transform, isLiquifyOpen, selectionActive, selectedPathId]);
 
   // Hit test transform handles on hover
   const updateHoveredHandle = useCallback(
@@ -161,6 +168,8 @@ export function useCanvasCursor(
 export interface BrushCursorInfo {
   readonly size: number;
   readonly shape: 'circle' | 'square';
+  readonly tip: import('../types/brush').BrushTipData | null;
+  readonly angle: number;
 }
 
 export function getBrushCursorInfo(tool: ToolId): BrushCursorInfo | null {
@@ -169,5 +178,7 @@ export function getBrushCursorInfo(tool: ToolId): BrushCursorInfo | null {
   return {
     size: getToolSize(tool, settings),
     shape: tool === 'pencil' ? 'square' : 'circle',
+    tip: tool === 'brush' ? settings.activeBrushTip : null,
+    angle: tool === 'brush' ? (settings.brushAngle * Math.PI) / 180 : 0,
   };
 }

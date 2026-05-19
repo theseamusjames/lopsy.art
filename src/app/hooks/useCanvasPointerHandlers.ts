@@ -282,6 +282,8 @@ export function useCanvasPointerHandlers({
       const isToolPointer = toolPointerIdRef.current === e.pointerId;
       const isPan = deps.pointerMode.kind === 'panning';
 
+      useUIStore.getState().setCursorOnCanvas(inside);
+
       // Outside canvas and not driving any active interaction — ignore.
       if (!inside && !isToolPointer && !isPan) {
         deps.setRulerHover(null);

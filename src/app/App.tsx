@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WebGL2Warning, checkWebGL2Support } from '../components/WebGL2Warning/WebGL2Warning';
+import { LiquifyPanel } from '../components/LiquifyPanel/LiquifyPanel';
 import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
@@ -9,6 +10,7 @@ import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
 import { AdjustmentsPanel } from '../panels/AdjustmentsPanel/AdjustmentsPanel';
 import { PathsPanel } from '../panels/PathsPanel/PathsPanel';
 import { NavigatorPanel } from '../panels/NavigatorPanel/NavigatorPanel';
+import { ChannelsPanel } from '../panels/ChannelsPanel/ChannelsPanel';
 import { ReferenceImagePanel } from '../panels/ReferenceImagePanel/ReferenceImagePanel';
 import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
 import { MenuBar } from './MenuBar/MenuBar';
@@ -20,6 +22,7 @@ import { GuideColorPicker } from '../components/GuideColorPicker/GuideColorPicke
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useCanvasInteraction } from './useCanvasInteraction';
+import { useBrushPrewarm } from './useBrushPrewarm';
 import { useCanvasRendering } from './useCanvasRendering';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useCanvasCursor } from './useCanvasCursor';
@@ -28,6 +31,7 @@ import { ContextMenu } from '../components/ContextMenu/ContextMenu';
 import { Toasts } from '../components/Toasts/Toasts';
 import { TextActionButtons } from '../components/TextActionButtons/TextActionButtons';
 import { PathActionButtons } from '../components/PathActionButtons/PathActionButtons';
+import { TiltShiftControls } from './OptionsBar/tool-options/TiltShiftControls';
 import { POINTER_IDLE, type PointerMode } from './pointer-mode';
 import { useCanvasPointerHandlers } from './hooks/useCanvasPointerHandlers';
 import { useAppEffects } from './hooks/useAppEffects';
@@ -86,6 +90,7 @@ export function App() {
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const showReferenceModal = useUIStore((s) => s.showReferenceModal);
   const loadingMessage = useUIStore((s) => s.modal?.kind === 'loading' ? s.modal.message : null);
+  const isLiquifyOpen = useUIStore((s) => s.liquify !== null);
 
   useEffect(() => {
     if (documentReady) return;
@@ -147,6 +152,10 @@ export function App() {
 
   // Canvas interaction (drawing tools)
   const { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove, nudgeSelection } = useCanvasInteraction(screenToCanvas, containerRef);
+
+  // Pre-warm brush GPU resources on paint-tool activation so the first
+  // stroke on a large canvas doesn't pay a visible allocation cost.
+  useBrushPrewarm();
 
   // Cursor management
   const { updateHoveredHandle } = useCanvasCursor(containerRef, pointerMode);
@@ -221,6 +230,7 @@ export function App() {
           <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} aria-hidden="true" />
           <TextActionButtons containerRef={containerRef} />
           <PathActionButtons containerRef={containerRef} />
+          <TiltShiftControls />
           <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
         </main>
         {contextMenu.visible && (
@@ -232,6 +242,7 @@ export function App() {
           />
         )}
         <GuideColorPicker />
+        {isLiquifyOpen && <LiquifyPanel />}
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div
@@ -262,6 +273,7 @@ export function App() {
                 {visiblePanels.has('navigator') && <NavigatorPanel />}
                 {visiblePanels.has('info') && <InfoPanel />}
                 {visiblePanels.has('color') && <ColorPanel />}
+                {visiblePanels.has('channels') && <ChannelsPanel />}
                 {visiblePanels.has('history') && <HistoryPanel />}
                 {visiblePanels.has('paths') && <PathsPanel />}
               </div>

@@ -3,7 +3,8 @@ import type { Color, FontStyle, TextAlign } from '../types';
 import type { GradientStop, GradientType } from '../tools/gradient/gradient';
 import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { DodgeMode } from '../tools/dodge/dodge';
-import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../types/brush';
+import type { SpongeMode } from '../tools/sponge/sponge';
+import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
 import { colorEquals } from '../utils/color';
 
 const MAX_RECENT_COLORS = 28;
@@ -157,39 +158,83 @@ function generateLeafTip(size: number): BrushTipData {
 // Built-in brush textures
 // ---------------------------------------------------------------------------
 
+function tileHash(x: number, y: number, seed: number): number {
+  let h = (x * 374761393 + y * 668265263 + seed) | 0;
+  h = (h ^ (h >> 13)) * 1274126177;
+  h = h ^ (h >> 16);
+  return ((h >>> 0) & 0xFF) / 255;
+}
+
+function generateSeamlessNoise(size: number, octaves: number, seed: number): Float64Array {
+  const data = new Float64Array(size * size);
+  for (let oct = 0; oct < octaves; oct++) {
+    const freq = 1 << oct;
+    const amp = 1 / (1 << oct);
+    const cellSize = size / freq;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const cx = x / cellSize;
+        const cy = y / cellSize;
+        const x0 = Math.floor(cx) % freq;
+        const y0 = Math.floor(cy) % freq;
+        const x1 = (x0 + 1) % freq;
+        const y1 = (y0 + 1) % freq;
+        const fx = cx - Math.floor(cx);
+        const fy = cy - Math.floor(cy);
+        const sx = fx * fx * (3 - 2 * fx);
+        const sy = fy * fy * (3 - 2 * fy);
+        const v00 = tileHash(x0, y0, seed + oct * 997);
+        const v10 = tileHash(x1, y0, seed + oct * 997);
+        const v01 = tileHash(x0, y1, seed + oct * 997);
+        const v11 = tileHash(x1, y1, seed + oct * 997);
+        const v = (v00 * (1 - sx) + v10 * sx) * (1 - sy) + (v01 * (1 - sx) + v11 * sx) * sy;
+        const idx = y * size + x;
+        data[idx] = (data[idx] ?? 0) + v * amp;
+      }
+    }
+  }
+  return data;
+}
+
 function generateNoiseTexture(size: number): BrushTextureData {
+  const raw = generateSeamlessNoise(size, 4, 42);
   const data = new Uint8ClampedArray(size * size);
-  let seed = 42;
-  for (let i = 0; i < size * size; i++) {
-    seed ^= seed << 13;
-    seed ^= seed >> 17;
-    seed ^= seed << 5;
-    data[i] = (seed >>> 0) % 256;
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i]! < min) min = raw[i]!;
+    if (raw[i]! > max) max = raw[i]!;
+  }
+  const range = max - min || 1;
+  for (let i = 0; i < raw.length; i++) {
+    data[i] = Math.round(((raw[i]! - min) / range) * 255);
   }
   return { id: 'texture-noise', name: 'Noise', width: size, height: size, data };
 }
 
 function generateCanvasTexture(size: number): BrushTextureData {
+  const raw = generateSeamlessNoise(size, 3, 100);
   const data = new Uint8ClampedArray(size * size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const h = (y % 4 < 2) ? 180 : 255;
-      const v = (x % 4 < 2) ? 180 : 255;
-      data[y * size + x] = Math.round((h + v) / 2);
+      const weave = ((y % 4 < 2) ? 0.7 : 1.0) * ((x % 4 < 2) ? 0.7 : 1.0);
+      const noise = raw[y * size + x]!;
+      data[y * size + x] = Math.round((weave * 0.7 + noise * 0.3) * 255);
     }
   }
   return { id: 'texture-canvas', name: 'Canvas', width: size, height: size, data };
 }
 
 function generateGrainTexture(size: number): BrushTextureData {
+  const raw = generateSeamlessNoise(size, 5, 7);
   const data = new Uint8ClampedArray(size * size);
-  let seed = 7;
-  for (let i = 0; i < size * size; i++) {
-    seed ^= seed << 13;
-    seed ^= seed >> 17;
-    seed ^= seed << 5;
-    const r = ((seed >>> 0) / 0xFFFFFFFF);
-    data[i] = Math.round(r * 100 + 155);
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i]! < min) min = raw[i]!;
+    if (raw[i]! > max) max = raw[i]!;
+  }
+  const range = max - min || 1;
+  for (let i = 0; i < raw.length; i++) {
+    data[i] = Math.round(((raw[i]! - min) / range) * 60 + 195);
   }
   return { id: 'texture-grain', name: 'Grain', width: size, height: size, data };
 }
@@ -211,7 +256,7 @@ const BUILTIN_PRESETS: BrushPreset[] = [
     tip: null,
     size: 10,
     hardness: 100,
-    spacing: 0,
+    spacing: 1,
     scatter: 0,
     angle: 0,
     opacity: 100,
@@ -224,7 +269,7 @@ const BUILTIN_PRESETS: BrushPreset[] = [
     tip: null,
     size: 20,
     hardness: 0,
-    spacing: 0,
+    spacing: 1,
     scatter: 0,
     angle: 0,
     opacity: 100,
@@ -237,7 +282,7 @@ const BUILTIN_PRESETS: BrushPreset[] = [
     tip: null,
     size: 40,
     hardness: 0,
-    spacing: 15,
+    spacing: 1,
     scatter: 0,
     angle: 0,
     opacity: 30,
@@ -250,7 +295,7 @@ const BUILTIN_PRESETS: BrushPreset[] = [
     tip: generateSquareTip(32),
     size: 20,
     hardness: 100,
-    spacing: 0,
+    spacing: 1,
     scatter: 0,
     angle: 0,
     opacity: 100,
@@ -263,7 +308,7 @@ const BUILTIN_PRESETS: BrushPreset[] = [
     tip: generateCrossHatchTip(48),
     size: 30,
     hardness: 100,
-    spacing: 50,
+    spacing: 1,
     scatter: 0,
     angle: 0,
     opacity: 100,
@@ -276,7 +321,7 @@ const BUILTIN_PRESETS: BrushPreset[] = [
     tip: generateDiamondTip(32),
     size: 20,
     hardness: 100,
-    spacing: 0,
+    spacing: 1,
     scatter: 0,
     angle: 0,
     opacity: 100,
@@ -289,7 +334,7 @@ const BUILTIN_PRESETS: BrushPreset[] = [
     tip: generateStarTip(48, 5),
     size: 30,
     hardness: 100,
-    spacing: 80,
+    spacing: 1,
     scatter: 0,
     angle: 0,
     opacity: 100,
@@ -302,7 +347,7 @@ const BUILTIN_PRESETS: BrushPreset[] = [
     tip: generateSlashTip(8, 32),
     size: 20,
     hardness: 100,
-    spacing: 0,
+    spacing: 1,
     scatter: 0,
     angle: 0,
     opacity: 100,
@@ -315,7 +360,7 @@ const BUILTIN_PRESETS: BrushPreset[] = [
     tip: generateNoiseTip(32),
     size: 15,
     hardness: 100,
-    spacing: 30,
+    spacing: 1,
     scatter: 20,
     angle: 0,
     opacity: 80,
@@ -328,7 +373,7 @@ const BUILTIN_PRESETS: BrushPreset[] = [
     tip: generateNoiseTip(48),
     size: 25,
     hardness: 100,
-    spacing: 60,
+    spacing: 1,
     scatter: 80,
     angle: 0,
     opacity: 50,
@@ -341,7 +386,7 @@ const BUILTIN_PRESETS: BrushPreset[] = [
     tip: generateLeafTip(48),
     size: 30,
     hardness: 100,
-    spacing: 0,
+    spacing: 1,
     scatter: 0,
     angle: 0,
     opacity: 100,
@@ -379,6 +424,9 @@ interface ToolSettings {
   pathStrokeWidth: number;
   dodgeExposure: number;
   dodgeMode: DodgeMode;
+  spongeMode: SpongeMode;
+  spongeStrength: number;
+  spongeSize: number;
   smudgeSize: number;
   smudgeStrength: number;
   wandTolerance: number;
@@ -403,9 +451,12 @@ interface ToolSettings {
   brushScatter: number;
   brushAngle: number;
   brushFade: number;
+  brushTaper: number;
   activeBrushTip: BrushTipData | null;
   symmetryHorizontal: boolean;
   symmetryVertical: boolean;
+  symmetryRadialSegments: number;
+  symmetryCenter: { x: number; y: number } | null;
   foregroundColor: Color;
   backgroundColor: Color;
   recentColors: readonly Color[];
@@ -416,21 +467,30 @@ interface ToolSettings {
   brushSizeJitter: number;
   brushAngleJitter: number;
   brushOpacityJitter: number;
+  brushHardnessJitter: number;
   brushSpeedSize: number;
+  brushSpeedSizeInvert: boolean;
+  brushSpeedSensitivity: 'low' | 'med' | 'high';
   brushTextureData: BrushTextureData | null;
   brushTextureBlendMode: BrushTextureBlendMode;
   brushTextureScale: number;
   brushTextures: BrushTextureData[];
   presets: BrushPreset[];
   activePresetId: string | null;
+  activeSubBrushes: SubBrush[];
 
   setBrushSizeJitter: (jitter: number) => void;
   setBrushAngleJitter: (jitter: number) => void;
   setBrushOpacityJitter: (jitter: number) => void;
+  setBrushHardnessJitter: (jitter: number) => void;
   setBrushSpeedSize: (value: number) => void;
+  setBrushSpeedSizeInvert: (invert: boolean) => void;
+  setBrushSpeedSensitivity: (sensitivity: 'low' | 'med' | 'high') => void;
   setBrushTextureData: (texture: BrushTextureData | null) => void;
   setBrushTextureBlendMode: (mode: BrushTextureBlendMode) => void;
   setBrushTextureScale: (scale: number) => void;
+  addBrushTexture: (texture: BrushTextureData) => void;
+  removeBrushTexture: (id: string) => void;
   setSpraySize: (size: number) => void;
   setSprayDensity: (density: number) => void;
   /** Spray opacity in **percent**, range `1–100` (not normalised `0–1`). */
@@ -438,6 +498,7 @@ interface ToolSettings {
   setSprayHardness: (hardness: number) => void;
   setBrushSize: (size: number) => void;
   setBrushFade: (fade: number) => void;
+  setBrushTaper: (taper: number) => void;
   setBrushSpacing: (spacing: number) => void;
   setBrushScatter: (scatter: number) => void;
   setBrushAngle: (angle: number) => void;
@@ -449,6 +510,9 @@ interface ToolSettings {
   setPathStrokeWidth: (width: number) => void;
   setDodgeExposure: (exposure: number) => void;
   setDodgeMode: (mode: DodgeMode) => void;
+  setSpongeMode: (mode: SpongeMode) => void;
+  setSpongeStrength: (strength: number) => void;
+  setSpongeSize: (size: number) => void;
   setSmudgeSize: (size: number) => void;
   setSmudgeStrength: (strength: number) => void;
   setWandTolerance: (tolerance: number) => void;
@@ -497,16 +561,24 @@ interface ToolSettings {
   updateGradientStop: (index: number, stop: Partial<GradientStop>) => void;
   setSymmetryHorizontal: (enabled: boolean) => void;
   setSymmetryVertical: (enabled: boolean) => void;
+  setSymmetryRadialSegments: (segments: number) => void;
+  setSymmetryCenter: (center: { x: number; y: number } | null) => void;
   setForegroundColor: (color: Color) => void;
   setBackgroundColor: (color: Color) => void;
   swapColors: () => void;
   resetColors: () => void;
   addRecentColor: (color: Color) => void;
+  addSubBrush: (sub: SubBrush) => void;
+  removeSubBrush: (index: number) => void;
+  updateSubBrush: (index: number, patch: Partial<SubBrush>) => void;
+  clearSubBrushes: () => void;
   addPreset: (preset: BrushPreset) => void;
   addPresets: (presets: BrushPreset[]) => void;
+  saveCurrentAsPreset: (name: string) => void;
   removePreset: (id: string) => void;
   updatePreset: (id: string, patch: Partial<Omit<BrushPreset, 'id'>>) => void;
   setActivePreset: (id: string) => void;
+  setTipFromPreset: (id: string) => void;
 }
 
 export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
@@ -541,6 +613,9 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   pathStrokeWidth: 2,
   dodgeExposure: 50,
   dodgeMode: 'dodge',
+  spongeMode: 'desaturate',
+  spongeStrength: 50,
+  spongeSize: 30,
   smudgeSize: 30,
   smudgeStrength: 50,
   wandTolerance: 32,
@@ -565,9 +640,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushScatter: 0,
   brushAngle: 0,
   brushFade: 0,
+  brushTaper: 0,
   activeBrushTip: null,
   symmetryHorizontal: false,
   symmetryVertical: false,
+  symmetryRadialSegments: 0,
+  symmetryCenter: null,
   foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
   backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
   recentColors: [
@@ -607,21 +685,33 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushSizeJitter: 0,
   brushAngleJitter: 0,
   brushOpacityJitter: 0,
+  brushHardnessJitter: 0,
   brushSpeedSize: 0,
+  brushSpeedSizeInvert: false,
+  brushSpeedSensitivity: 'med',
   brushTextureData: null,
   brushTextureBlendMode: 'multiply',
   brushTextureScale: 100,
   brushTextures: BUILTIN_TEXTURES,
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
+  activeSubBrushes: [],
 
   setBrushSizeJitter: (jitter) => set({ brushSizeJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushAngleJitter: (jitter) => set({ brushAngleJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushOpacityJitter: (jitter) => set({ brushOpacityJitter: Math.max(0, Math.min(100, jitter)) }),
-  setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(100, value)) }),
+  setBrushHardnessJitter: (jitter) => set({ brushHardnessJitter: Math.max(0, Math.min(100, jitter)) }),
+  setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(300, value)) }),
+  setBrushSpeedSizeInvert: (invert) => set({ brushSpeedSizeInvert: invert }),
+  setBrushSpeedSensitivity: (sensitivity) => set({ brushSpeedSensitivity: sensitivity }),
   setBrushTextureData: (texture) => set({ brushTextureData: texture }),
   setBrushTextureBlendMode: (mode) => set({ brushTextureBlendMode: mode }),
-  setBrushTextureScale: (scale) => set({ brushTextureScale: Math.max(10, Math.min(200, scale)) }),
+  setBrushTextureScale: (scale) => set({ brushTextureScale: Math.max(10, Math.min(300, scale)) }),
+  addBrushTexture: (texture) => set((s) => ({ brushTextures: [...s.brushTextures, texture] })),
+  removeBrushTexture: (id) => set((s) => ({
+    brushTextures: s.brushTextures.filter((t) => t.id !== id),
+    brushTextureData: s.brushTextureData?.id === id ? null : s.brushTextureData,
+  })),
   setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(5000, size)) }),
   setSprayDensity: (density) => set({ sprayDensity: Math.max(1, Math.min(100, density)) }),
   setSprayOpacity: (opacity) => {
@@ -631,6 +721,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setSprayHardness: (hardness) => set({ sprayHardness: Math.max(0, Math.min(100, hardness)) }),
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(5000, size)) }),
   setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(5000, fade)) }),
+  setBrushTaper: (taper) => set({ brushTaper: Math.max(0, Math.min(5000, taper)) }),
   setBrushSpacing: (spacing) => set({ brushSpacing: Math.max(0, Math.min(200, spacing)) }),
   setBrushScatter: (scatter) => set({ brushScatter: Math.max(0, Math.min(100, scatter)) }),
   setBrushAngle: (angle) => set({ brushAngle: ((angle % 360) + 360) % 360 }),
@@ -697,6 +788,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   }),
   setSymmetryHorizontal: (enabled) => set({ symmetryHorizontal: enabled }),
   setSymmetryVertical: (enabled) => set({ symmetryVertical: enabled }),
+  setSymmetryRadialSegments: (segments) => set({ symmetryRadialSegments: Math.max(0, Math.min(32, Math.round(segments))) }),
+  setSymmetryCenter: (center) => set({ symmetryCenter: center }),
   setStampSize: (size) => set({ stampSize: Math.max(1, Math.min(5000, size)) }),
   setHealingSize: (size) => set({ healingSize: Math.max(1, Math.min(5000, size)) }),
   setHealingOpacity: (opacity) => {
@@ -706,6 +799,9 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setPathStrokeWidth: (width) => set({ pathStrokeWidth: Math.max(1, Math.min(50, width)) }),
   setDodgeExposure: (exposure) => set({ dodgeExposure: Math.max(1, Math.min(100, exposure)) }),
   setDodgeMode: (mode) => set({ dodgeMode: mode }),
+  setSpongeMode: (mode) => set({ spongeMode: mode }),
+  setSpongeStrength: (strength) => set({ spongeStrength: Math.max(1, Math.min(100, strength)) }),
+  setSpongeSize: (size) => set({ spongeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeSize: (size) => set({ smudgeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeStrength: (strength) => set({ smudgeStrength: Math.max(0, Math.min(100, strength)) }),
   setWandTolerance: (tolerance) => set({ wandTolerance: Math.max(0, Math.min(255, tolerance)) }),
@@ -746,8 +842,43 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       return { recentColors: [color, ...filtered].slice(0, MAX_RECENT_COLORS) };
     }),
 
+  addSubBrush: (sub) => set((s) => ({ activeSubBrushes: [...s.activeSubBrushes, sub] })),
+  removeSubBrush: (index) => set((s) => ({
+    activeSubBrushes: s.activeSubBrushes.filter((_, i) => i !== index),
+  })),
+  updateSubBrush: (index, patch) => set((s) => ({
+    activeSubBrushes: s.activeSubBrushes.map((sub, i) => i === index ? { ...sub, ...patch } : sub),
+  })),
+  clearSubBrushes: () => set({ activeSubBrushes: [] }),
   addPreset: (preset) => set((s) => ({ presets: [...s.presets, preset] })),
   addPresets: (presets) => set((s) => ({ presets: [...s.presets, ...presets] })),
+  saveCurrentAsPreset: (name) => {
+    const s = get();
+    const preset: BrushPreset = {
+      id: uid(),
+      name,
+      tip: s.activeBrushTip,
+      size: s.brushSize,
+      hardness: s.brushHardness,
+      spacing: s.brushSpacing,
+      scatter: s.brushScatter,
+      angle: s.brushAngle,
+      opacity: s.brushOpacity,
+      flow: 100,
+      isCustom: true,
+      sizeJitter: s.brushSizeJitter,
+      hardnessJitter: s.brushHardnessJitter,
+      angleJitter: s.brushAngleJitter,
+      opacityJitter: s.brushOpacityJitter,
+      speedSize: s.brushSpeedSize,
+      speedSizeInvert: s.brushSpeedSizeInvert,
+      speedSensitivity: s.brushSpeedSensitivity,
+      fade: s.brushFade,
+      taper: s.brushTaper,
+      subBrushes: s.activeSubBrushes.length > 0 ? s.activeSubBrushes : undefined,
+    };
+    set((state) => ({ presets: [...state.presets, preset], activePresetId: preset.id }));
+  },
   removePreset: (id) =>
     set((s) => ({
       presets: s.presets.filter((p) => p.id !== id),
@@ -761,13 +892,34 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     const state = get();
     const preset = state.presets.find((p) => p.id === id);
     if (!preset) return;
-    set({ activePresetId: id });
-    state.setBrushSize(preset.size);
-    state.setBrushHardness(preset.hardness);
-    state.setBrushOpacity(preset.opacity);
-    state.setBrushSpacing(preset.spacing);
-    state.setBrushScatter(preset.scatter);
-    state.setBrushAngle(preset.angle);
+    set({
+      activePresetId: id,
+      brushSize: preset.size,
+      brushHardness: preset.hardness,
+      brushOpacity: preset.opacity,
+      brushSpacing: preset.spacing,
+      brushScatter: preset.scatter,
+      brushAngle: preset.angle,
+      activeBrushTip: preset.tip,
+      brushSizeJitter: preset.sizeJitter ?? 0,
+      brushHardnessJitter: preset.hardnessJitter ?? 0,
+      brushAngleJitter: preset.angleJitter ?? 0,
+      brushOpacityJitter: preset.opacityJitter ?? 0,
+      brushSpeedSize: preset.speedSize ?? 0,
+      brushSpeedSizeInvert: preset.speedSizeInvert ?? false,
+      brushSpeedSensitivity: preset.speedSensitivity ?? 'med',
+      brushFade: preset.fade ?? 0,
+      brushTaper: preset.taper ?? 0,
+      brushTextureData: null,
+      brushTextureBlendMode: 'multiply',
+      brushTextureScale: 100,
+      activeSubBrushes: preset.subBrushes ?? [],
+    });
+  },
+  setTipFromPreset: (id) => {
+    const state = get();
+    const preset = state.presets.find((p) => p.id === id);
+    if (!preset) return;
     state.setActiveBrushTip(preset.tip);
   },
 }));
