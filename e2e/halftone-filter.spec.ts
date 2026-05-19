@@ -27,16 +27,31 @@ test.describe('Halftone Filter', () => {
   test('applies halftone filter via menu and renders dot pattern', async ({ page }) => {
     await createDocument(page, 400, 300, false);
 
-    // Paint a gradient-like pattern with colored stripes so halftone dots are visible
-    for (let i = 0; i < 20; i++) {
-      const t = i / 19;
-      const color = {
-        r: Math.round(255 * (1 - t)),
-        g: Math.round(100 * t),
-        b: Math.round(255 * t),
+    // Paint a gradient-like pattern programmatically so halftone dots are visible.
+    // Using store API here because drawing 20 rects via UI exceeds the timeout.
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string };
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
       };
-      await drawRect(page, i * 20, 0, 20, 300, color);
-    }
+      const s = store.getState();
+      const data = s.getOrCreateLayerPixelData(s.document.activeLayerId);
+      for (let y = 0; y < 300; y++) {
+        for (let x = 0; x < 400; x++) {
+          const t = x / 399;
+          const idx = (y * 400 + x) * 4;
+          data.data[idx] = Math.round(255 * (1 - t));
+          data.data[idx + 1] = Math.round(100 * t);
+          data.data[idx + 2] = Math.round(255 * t);
+          data.data[idx + 3] = 255;
+        }
+      }
+      s.updateLayerPixelData(s.document.activeLayerId, data);
+    });
+    await page.waitForTimeout(200);
 
     await fitToView(page);
     await page.waitForTimeout(300);

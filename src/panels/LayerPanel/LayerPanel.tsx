@@ -266,7 +266,11 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
         className={collapsed ? styles.listCollapsed : styles.list}
       >
         {displayList.map(({ layer, depth }, ri) => (
-          <div key={layer.id} className={styles.itemWrapper}>
+          <div key={layer.id} className={[
+                styles.itemWrapper,
+                layer.id === activeLayerId ? styles.active : '',
+                layer.id !== activeLayerId && selectedLayerIds.includes(layer.id) ? styles.selected : '',
+              ].filter(Boolean).join(' ')} data-layer-id={layer.id}>
             <div
               className={[
                 styles.item,
@@ -285,7 +289,6 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                 .filter(Boolean)
                 .join(' ')}
               style={{ '--layer-depth': depth } as React.CSSProperties}
-              data-layer-id={layer.id}
               onClick={(e) => handleLayerClick(e, layer.id)}
               onContextMenu={(e) => handleContextMenu(e, layer.id)}
             >

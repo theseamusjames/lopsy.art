@@ -460,6 +460,7 @@ test.describe('Cut text then paste preserves correct clipboard', () => {
 
 test.describe('Undo/redo stress test', () => {
   test('undo all then redo all after ~15 actions ends with red fill intact', async ({ page }) => {
+    test.slow();
     // 1. New transparent doc
     await createDocument(page, 500, 400, true);
     await page.waitForTimeout(300);

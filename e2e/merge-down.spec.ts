@@ -303,15 +303,46 @@ test.describe('Merge Down', () => {
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
 
-    // Paint specific pattern on background
-    await setActiveLayer(page, bgId);
-    await drawRect(page, 0, 0, 30, 30, { r: 200, g: 100, b: 50 });
+    // Paint specific pattern on background (programmatic to avoid slow UI rect draws)
+    await page.evaluate(({ bgId }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
+      };
+      const s = store.getState();
+      const data = s.getOrCreateLayerPixelData(bgId);
+      for (let y = 0; y < 30; y++) {
+        for (let x = 0; x < 30; x++) {
+          const idx = (y * 100 + x) * 4;
+          data.data[idx] = 200; data.data[idx+1] = 100; data.data[idx+2] = 50; data.data[idx+3] = 255;
+        }
+      }
+      s.updateLayerPixelData(bgId, data);
+    }, { bgId });
 
     // Add and paint layer
     await addLayer(page);
     const s1 = await getEditorState(page);
     const topId = s1.document.activeLayerId;
-    await drawRect(page, 70, 70, 30, 30, { r: 50, g: 100, b: 200 });
+    await page.evaluate(({ topId }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          getOrCreateLayerPixelData: (id: string) => ImageData;
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+        };
+      };
+      const s = store.getState();
+      const data = s.getOrCreateLayerPixelData(topId);
+      for (let y = 70; y < 100; y++) {
+        for (let x = 70; x < 100; x++) {
+          const idx = (y * 100 + x) * 4;
+          data.data[idx] = 50; data.data[idx+1] = 100; data.data[idx+2] = 200; data.data[idx+3] = 255;
+        }
+      }
+      s.updateLayerPixelData(topId, data);
+    }, { topId });
 
     // Snapshot composited canvas before merge
     await page.waitForTimeout(200);

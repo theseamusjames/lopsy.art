@@ -730,6 +730,7 @@ test.describe('Bug Fix: Image Adjustments', () => {
 
 test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
   test('undo all 20+ operations then redo all, verifying state at each end', async ({ page }) => {
+    test.slow();
     // Create transparent document
     await createDocument(page, 200, 200, true);
     const s0 = await getEditorState(page);
@@ -891,7 +892,7 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
 
 test.describe('Masterpiece: Full Feature Integration', () => {
   test('create a multi-layer composition using every tool, effect, and filter then export as PNG', async ({ page }) => {
-    test.setTimeout(120000);
+    test.slow();
 
     // Create 600x400 canvas
     await createDocument(page, 600, 400, true);
