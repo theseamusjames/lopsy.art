@@ -43,6 +43,10 @@ import { SprayOptions } from '../app/OptionsBar/tool-options/SprayOptions';
 
 import { useToolSettingsStore } from '../app/tool-settings-store';
 
+// Tracks whether the shape tool has been activated at least once in this
+// session — used to make the foreground → fill seed a one-shot. See #424.
+let shapeFillSeededFromForeground = false;
+
 /**
  * Single source of truth for every tool. Adding a new tool is a single-file
  * change: append a descriptor here. The router, options bar, keyboard
@@ -279,9 +283,13 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
       move: (ctx, state) => handleShapeMove(state, ctx.layerPos, ctx.metaKey),
       up: (ctx, state) => handleShapeUp(state, ctx.layerPos, ctx.metaKey),
     },
-    // Seed the shape's fill color from the current foreground on activation —
-    // users expect "pick a color, then click shape" to draw in that color.
+    // Seed the shape's fill color from the current foreground on the FIRST
+    // activation only — users expect "pick a color, then click shape" to draw
+    // in that color. After that, the user's chosen fill is preserved across
+    // tool switches and re-activations (issue #424).
     onActivate: () => {
+      if (shapeFillSeededFromForeground) return;
+      shapeFillSeededFromForeground = true;
       const ts = useToolSettingsStore.getState();
       ts.setShapeFillColor(ts.foregroundColor);
     },

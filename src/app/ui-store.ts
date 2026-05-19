@@ -328,10 +328,8 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setActiveTool: (tool) => {
     const current = useUIStore.getState();
-    if (current.activeTool !== tool) {
-      toolRegistry[current.activeTool]?.onDeactivate?.();
-    }
-    // Clear path when switching away from path tool
+    if (current.activeTool === tool) return;
+    toolRegistry[current.activeTool]?.onDeactivate?.();
     if (current.activeTool === 'path' && tool !== 'path') {
       set({ activeTool: tool, pathAnchors: [], pathClosed: false });
     } else {
