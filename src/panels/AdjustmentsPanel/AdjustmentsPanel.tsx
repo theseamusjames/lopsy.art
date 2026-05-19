@@ -37,6 +37,7 @@ import type {
 import {
   ADJUSTMENT_NODE_LABELS,
 } from '../../filters/adjustment-node-utils';
+import type { GradientStop } from '../../tools/gradient/gradient';
 import styles from './AdjustmentsPanel.module.css';
 
 const CHANNEL_COLORS: Record<CurveChannel, string> = {
@@ -578,10 +579,11 @@ function ChannelMixerControls({ node, onChange }: { node: ChannelMixerNode; onCh
 function GradientMapControls({ node, onChange }: { node: GradientMapNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
   const toHex = (c: { r: number; g: number; b: number }) =>
     '#' + [c.r, c.g, c.b].map((v) => v.toString(16).padStart(2, '0')).join('');
-  const fromHex = (hex: string): { r: number; g: number; b: number } => ({
+  const fromHex = (hex: string): GradientStop['color'] => ({
     r: parseInt(hex.slice(1, 3), 16),
     g: parseInt(hex.slice(3, 5), 16),
     b: parseInt(hex.slice(5, 7), 16),
+    a: 1,
   });
 
   const updateStop = (index: number, field: 'color' | 'position', value: unknown) => {
@@ -594,7 +596,7 @@ function GradientMapControls({ node, onChange }: { node: GradientMapNode; onChan
   const addStop = () => {
     const sorted = [...node.stops].sort((a, b) => a.position - b.position);
     const last = sorted[sorted.length - 1]!;
-    onChange({ stops: [...node.stops, { position: Math.min(1, last.position + 0.1), color: { r: 128, g: 128, b: 128 } }] });
+    onChange({ stops: [...node.stops, { position: Math.min(1, last.position + 0.1), color: { r: 128, g: 128, b: 128, a: 1 } }] });
   };
 
   const removeStop = (index: number) => {
@@ -626,7 +628,7 @@ function GradientMapControls({ node, onChange }: { node: GradientMapNode; onChan
   );
 }
 
-function buildCssGradient(stops: ReadonlyArray<{ position: number; color: { r: number; g: number; b: number } }>): string {
+function buildCssGradient(stops: readonly GradientStop[]): string {
   const sorted = [...stops].sort((a, b) => a.position - b.position);
   const parts = sorted.map((s) => `rgb(${s.color.r},${s.color.g},${s.color.b}) ${Math.round(s.position * 100)}%`);
   return `linear-gradient(to right, ${parts.join(', ')})`;

@@ -13,6 +13,7 @@
 import type { Engine } from './wasm-bridge';
 import { getEngine } from './engine-state';
 import type { Layer } from '../types';
+import type { GradientStop } from '../tools/gradient/gradient';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
@@ -107,7 +108,7 @@ export { resetTrackedState, markPixelDataSynced } from './sync-state';
 export { syncLayers } from './sync-layers';
 
 function buildGradientMapLut(
-  stops: ReadonlyArray<{ position: number; color: { r: number; g: number; b: number } }>,
+  stops: readonly GradientStop[],
 ): Uint8Array {
   const lut = new Uint8Array(256 * 4);
   const sorted = [...stops].sort((a, b) => a.position - b.position);
