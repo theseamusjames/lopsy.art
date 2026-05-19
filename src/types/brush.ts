@@ -1,8 +1,13 @@
-/** Grayscale alpha map for a custom brush tip (0 = transparent, 255 = full paint). */
+/**
+ * Custom brush tip data.
+ * - kind 'alpha' (default): grayscale alpha map, 1 byte/pixel (0 = transparent, 255 = full paint).
+ * - kind 'color': RGBA color brush, 4 bytes/pixel (premultiplied alpha).
+ */
 export interface BrushTipData {
   readonly width: number;
   readonly height: number;
   readonly data: Uint8ClampedArray;
+  readonly kind?: 'alpha' | 'color';
 }
 
 /** Grayscale tileable texture applied to brush strokes. */
@@ -15,6 +20,18 @@ export interface BrushTextureData {
 }
 
 export type BrushTextureBlendMode = 'multiply' | 'subtract' | 'overlay';
+
+/** Additional nozzle that fires alongside the primary brush at each dab position. */
+export interface SubBrush {
+  readonly tip: BrushTipData | null;
+  readonly sizeRatio: number;
+  readonly hardness: number;
+  readonly opacityRatio: number;
+  readonly angleOffset: number;
+  readonly sizeJitter: number;
+  readonly angleJitter: number;
+  readonly opacityJitter: number;
+}
 
 /** A saved brush preset with tip shape and stroke parameters. */
 export interface BrushPreset {
@@ -44,4 +61,5 @@ export interface BrushPreset {
   readonly speedSensitivity?: 'low' | 'med' | 'high';
   readonly fade?: number;
   readonly taper?: number;
+  readonly subBrushes?: SubBrush[];
 }

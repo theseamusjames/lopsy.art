@@ -8,7 +8,6 @@ import {
   beginStroke, endStroke, hasFloat, dropFloat,
   applyBrushDabBatch as gpuBrushDabBatch,
   uploadLayerPixels,
-  getLayerTextureDimensions,
   setSelectionMask,
   readMaskTexture,
 } from '../engine-wasm/wasm-bridge';
@@ -21,6 +20,7 @@ import { useToolSettingsStore } from './tool-settings-store';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { clearPendingStroke, setPendingStroke } from './interactions/pending-stroke';
+import { syncLayerAfterFullSize } from './sync-layer-after-full-size';
 import type {
   InteractionState, InteractionContext,
   FloatingSelection, PersistentTransform, LastPaintPoint,
@@ -246,44 +246,10 @@ export function useCanvasInteraction(
             // which expands a cropped layer texture to the union of the
             // document area and the existing content area (preserving
             // offscreen content). Sync the JS store to match.
-            const docState = useEditorStore.getState().document;
-            const currentLayer = docState.layers.find((l) => l.id === activeLayerId);
-            if (currentLayer && currentLayer.type !== 'group') {
-              let layerW: number;
-              let layerH: number;
-              if (currentLayer.type === 'raster') {
-                layerW = currentLayer.width;
-                layerH = currentLayer.height;
-              } else {
-                const dims = getLayerTextureDimensions(engine, activeLayerId);
-                layerW = dims?.[0] ?? docState.width;
-                layerH = dims?.[1] ?? docState.height;
-              }
-              const newX = Math.min(0, currentLayer.x);
-              const newY = Math.min(0, currentLayer.y);
-              const newW = Math.max(docState.width, currentLayer.x + layerW) - newX;
-              const newH = Math.max(docState.height, currentLayer.y + layerH) - newY;
-              const needsSync = currentLayer.x !== newX || currentLayer.y !== newY
-                || (currentLayer.type === 'raster' && (currentLayer.width !== newW || currentLayer.height !== newH));
-              if (needsSync) {
-              const updatedLayers = docState.layers.map((l) => {
-                if (l.id !== activeLayerId) return l;
-                if (l.type === 'raster') {
-                  return { ...l, x: newX, y: newY, width: newW, height: newH } as Layer;
-                }
-                return { ...l, x: newX, y: newY } as Layer;
-              });
-              pixelDataManager.remove(activeLayerId);
-              const dirtyIds = new Set(useEditorStore.getState().dirtyLayerIds);
-              dirtyIds.add(activeLayerId);
-              useEditorStore.setState({
-                document: { ...docState, layers: updatedLayers },
-                dirtyLayerIds: dirtyIds,
-              });
-              // Re-read activeLayer so layerPos computation below uses updated position
-              expandedLayer = updatedLayers.find((l) => l.id === activeLayerId) ?? activeLayer;
+            const synced = syncLayerAfterFullSize(engine, activeLayerId);
+            if (synced) {
+              expandedLayer = synced;
               layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
-              }
             }
           }
         }

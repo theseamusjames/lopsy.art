@@ -9,24 +9,54 @@ use crate::filter_gpu;
 #[wasm_bindgen(js_name = "filterGaussianBlur")]
 pub fn filter_gaussian_blur(engine: &mut Engine, layer_id: &str, radius: u32) {
     if radius == 0 { return; }
-    let kernel = lopsy_core::filters::blur::gaussian_kernel(radius);
-    filter_gpu::apply_separable_blur(
-        &mut engine.inner,
-        layer_id,
-        |e| &e.shaders.gaussian_blur,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_radius") {
-                gl.uniform1i(Some(&loc), radius as i32);
-            }
-            // Upload kernel weights
-            for (i, &w) in kernel.iter().enumerate().take(64) {
-                let name = format!("u_weights[{i}]");
-                if let Some(loc) = shader.location(gl, &name) {
-                    gl.uniform1f(Some(&loc), w);
+
+    if radius <= 63 {
+        // Small radius: single-pass exact Gaussian
+        let kernel = lopsy_core::filters::blur::gaussian_kernel(radius);
+        let center = radius as usize;
+        let count = (radius as usize) + 1;
+        let mut weights: Vec<f32> = kernel[center..center + count].to_vec();
+        let raw_sum = weights[0] + 2.0 * weights[1..].iter().sum::<f32>();
+        if raw_sum > 0.0 {
+            for w in &mut weights { *w /= raw_sum; }
+        }
+        filter_gpu::apply_separable_blur(
+            &mut engine.inner,
+            layer_id,
+            |e| &e.shaders.gaussian_blur,
+            |gl, shader| {
+                if let Some(loc) = shader.location(gl, "u_radius") {
+                    gl.uniform1i(Some(&loc), radius as i32);
                 }
-            }
-        },
-    );
+                for (i, &w) in weights.iter().enumerate() {
+                    let name = format!("u_weights[{i}]");
+                    if let Some(loc) = shader.location(gl, &name) {
+                        gl.uniform1f(Some(&loc), w);
+                    }
+                }
+            },
+        );
+    } else {
+        // Large radius: 3 passes of strided box blur approximates Gaussian.
+        // The stride lets each pass cover the full radius with only 63 samples.
+        let step = ((radius + 62) / 63).max(1);
+        let sample_radius = (radius / step).min(63);
+        for _ in 0..3 {
+            filter_gpu::apply_separable_blur(
+                &mut engine.inner,
+                layer_id,
+                |e| &e.shaders.box_blur,
+                |gl, shader| {
+                    if let Some(loc) = shader.location(gl, "u_radius") {
+                        gl.uniform1i(Some(&loc), sample_radius as i32);
+                    }
+                    if let Some(loc) = shader.location(gl, "u_step") {
+                        gl.uniform1i(Some(&loc), step as i32);
+                    }
+                },
+            );
+        }
+    }
 }
 
 #[wasm_bindgen(js_name = "filterBoxBlur")]

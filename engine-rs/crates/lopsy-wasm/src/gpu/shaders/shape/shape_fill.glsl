@@ -23,11 +23,11 @@ float sdRect(vec2 p, vec2 b, float r) {
     vec2 q = abs(p) - b + r;
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
-// Signed distance to a convex polygon with N vertices placed at
-// circumradius `circumR` from the origin, rotated by `rot` radians.
-// Uses an explicit per-edge loop so that visual rotation (flat-top vs
-// pointy-top) works correctly — the symmetry-based folding trick
-// can't distinguish rotations that are multiples of π/N.
+// Signed distance to a convex polygon with N vertices, sized so the
+// polygon's vertex bounding box fits inside `halfSize`. Uses an explicit
+// per-edge loop so that visual rotation (flat-top vs pointy-top) works
+// correctly — the symmetry-based folding trick can't distinguish rotations
+// that are multiples of π/N.
 //
 // After computing the inset polygon's SDF, subtracts `cr` to round
 // the corners outward.
@@ -37,9 +37,34 @@ float sdPolygon(vec2 p, vec2 halfSize, int n, float cr) {
     float an = PI / float(n);
     float cosAn = cos(an);
 
-    // Face (inscribed) radius = halfSize; circumradius = halfSize / cos(π/n).
-    float faceR = min(halfSize.x, halfSize.y);
-    float circumR = faceR / cosAn;
+    // Rotation: even-sided polygons get +an so flat edges face up/down.
+    // Odd-sided polygons get +PI so the top vertex points up in screen
+    // coordinates (where +Y = down), matching the JS polygon orientation.
+    float rot = (n / 2 * 2 == n) ? an : PI;
+
+    // Measure natural polygon extents at unit circumradius. For odd n the
+    // polygon is not symmetric vertically (pointy top, flat bottom), so we
+    // also need a vertical centering offset.
+    float xMaxUnit = 0.0;
+    float yMaxUnit = -1.0;
+    float yMinUnit = 1.0;
+    for (int i = 0; i < 64; i++) {
+        if (i >= n) break;
+        float a = rot + 2.0 * PI * float(i) / float(n);
+        xMaxUnit = max(xMaxUnit, abs(sin(a)));
+        yMaxUnit = max(yMaxUnit, cos(a));
+        yMinUnit = min(yMinUnit, cos(a));
+    }
+
+    // Pick circumR so the polygon fits inside (2*halfSize.x, 2*halfSize.y).
+    // For even n this preserves the prior apothem-fit behavior (n=4 square
+    // touches all four bbox edges). For odd n it shrinks the polygon so the
+    // top vertex no longer extends past the bbox top — the previous
+    // apothem-only fit put the top vertex at 2× the bbox height for n=3.
+    float scaleX = halfSize.x / max(xMaxUnit, 1e-6);
+    float scaleY = (2.0 * halfSize.y) / max(yMaxUnit - yMinUnit, 1e-6);
+    float circumR = min(scaleX, scaleY);
+    float faceR = circumR * cosAn;
 
     float maxCr = faceR * 0.99;
     float clampedCr = min(cr, maxCr);
@@ -48,10 +73,13 @@ float sdPolygon(vec2 p, vec2 halfSize, int n, float cr) {
     float insetFaceR = faceR - clampedCr;
     float insetCircumR = insetFaceR / cosAn;
 
-    // Rotation: even-sided polygons get +an so flat edges face up/down.
-    // Odd-sided polygons stay at the natural orientation (vertex up).
-    // The rotation uses the atan(x,y) convention where angle 0 = +y.
-    float rot = (n / 2 * 2 == n) ? an : 0.0;
+    // Shift the test point so the polygon's bbox center maps to (0, 0).
+    // The polygon centroid is at the origin; its bbox center sits at
+    // (yMaxUnit + yMinUnit) / 2 * circumR. For even n that's zero; for odd n
+    // it's positive (the pointy vertex is farther from origin than the flat
+    // bottom edge).
+    float yShift = (yMaxUnit + yMinUnit) * 0.5 * circumR;
+    vec2 pShifted = p + vec2(0.0, yShift);
 
     // Compute signed distance to the inset polygon via explicit edge loop.
     float minEdgeDist = 1e6;
@@ -69,10 +97,10 @@ float sdPolygon(vec2 p, vec2 halfSize, int n, float cr) {
         vec2 v1 = insetCircumR * vec2(sin(a1), cos(a1));
 
         vec2 edge = v1 - v0;
-        vec2 toP = p - v0;
+        vec2 toP = pShifted - v0;
         float t = clamp(dot(toP, edge) / dot(edge, edge), 0.0, 1.0);
         vec2 closest = v0 + edge * t;
-        float dist = length(p - closest);
+        float dist = length(pShifted - closest);
         minEdgeDist = min(minEdgeDist, dist);
 
         float cross = edge.x * toP.y - edge.y * toP.x;

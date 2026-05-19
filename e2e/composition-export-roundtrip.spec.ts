@@ -390,7 +390,8 @@ async function waitForLayerCount(page: Page, count: number, timeout = 10_000) {
 // ---------------------------------------------------------------------------
 
 test.describe('Composition: Neon City — Export Round-Trip', () => {
-  test('builds 20+ layer composition and verifies PNG/PSD export round-trip', async ({ page, allowConsoleErrors }) => {
+  test('builds 20+ layer composition and verifies PNG/PSD export round-trip', async ({ page, isMobile, allowConsoleErrors }) => {
+    test.skip(isMobile, 'composition tests require sidebar, hidden on touch devices');
     // Vite HMR WebSocket can disconnect during reload
     (allowConsoleErrors as RegExp[]).push(/WebSocket connection/);
     test.setTimeout(600_000);

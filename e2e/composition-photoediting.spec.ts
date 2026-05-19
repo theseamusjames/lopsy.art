@@ -333,7 +333,8 @@ async function applyFilterViaMenu(
 // ---------------------------------------------------------------------------
 
 test.describe('Composition 3: Photo Editing Workflow', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'composition tests require sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 500, 400, false);

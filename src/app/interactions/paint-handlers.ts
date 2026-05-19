@@ -5,6 +5,9 @@ import { interpolatePoints, interpolatePointsWithScatter, resetScatterSpacingRem
 import type { InteractionContext, InteractionState } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import { getEngine } from '../../engine-wasm/engine-state';
+import { swapBrushTip, restorePrimaryBrushTip } from '../../engine-wasm/engine-sync';
+import type { Engine } from '../../engine-wasm/wasm-bridge';
+import type { SubBrush } from '../../types/brush';
 import {
   applyBrushDab as gpuBrushDab,
   applyBrushDabBatch as gpuBrushDabBatch,
@@ -23,6 +26,37 @@ import type { SymmetryConfig } from '../../tools/symmetry';
 import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from '../../tools/symmetry';
 
 type PaintTool = 'brush' | 'pencil' | 'eraser';
+
+function emitSubBrushDabs(
+  engine: Engine,
+  layerId: string,
+  pts: Float64Array,
+  baseSize: number,
+  r: number, g: number, b: number, a: number,
+  opacity: number,
+  subBrushes: readonly SubBrush[],
+  sym: SymmetryConfig,
+): void {
+  for (let i = 0; i < subBrushes.length; i++) {
+    const sub = subBrushes[i]!;
+    swapBrushTip(engine, i, sub.tip, sub.angleOffset);
+    const subSize = baseSize * sub.sizeRatio;
+    const subOpacity = opacity * sub.opacityRatio;
+    const subHardness = sub.hardness / 100;
+    const sJ = sub.sizeJitter / 100;
+    const subAJ = sub.angleJitter / 100;
+    const subOJ = sub.opacityJitter / 100;
+    gpuBrushDabBatch(engine, layerId, pts, subSize, subHardness, r, g, b, a, subOpacity, 1, sJ, subAJ, subOJ);
+    for (const m of mirrorBatchPoints(pts, sym)) {
+      gpuBrushDabBatch(engine, layerId, m, subSize, subHardness, r, g, b, a, subOpacity, 1, sJ, subAJ, subOJ);
+    }
+  }
+  restorePrimaryBrushTip(engine);
+}
+
+function getActiveSubBrushes(): readonly SubBrush[] {
+  return useToolSettingsStore.getState().activeSubBrushes;
+}
 
 function getSymmetryConfig(center: { x: number; y: number }): SymmetryConfig {
   const { symmetryHorizontal, symmetryVertical, symmetryRadialSegments } = useToolSettingsStore.getState();
@@ -324,6 +358,8 @@ export function handlePaintDown(
           for (const m of mirrorBatchPoints(pts, sym)) {
             gpuBrushDabBatch(engine, activeLayerId, m, baseSize, baseHardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
           }
+          const subs = getActiveSubBrushes();
+          if (subs.length > 0) emitSubBrushDabs(engine, activeLayerId, pts, baseSize, r, g, b, color.a, opacity, subs, sym);
         }
       }
     } else {
@@ -332,6 +368,11 @@ export function handlePaintDown(
         gpuBrushDab(engine, activeLayerId, layerPos.x, layerPos.y, baseSize, baseHardness, r, g, b, color.a, fadedOpacity, 1, 0, aJ, oJ);
         for (const mp of getMirroredPoints(layerPos.x, layerPos.y, sym)) {
           gpuBrushDab(engine, activeLayerId, mp.x, mp.y, baseSize, baseHardness, r, g, b, color.a, fadedOpacity, 1, 0, aJ, oJ);
+        }
+        const subs = getActiveSubBrushes();
+        if (subs.length > 0) {
+          const pts = new Float64Array([layerPos.x, layerPos.y]);
+          emitSubBrushDabs(engine, activeLayerId, pts, baseSize, r, g, b, color.a, fadedOpacity, subs, sym);
         }
       }
     }
@@ -663,6 +704,8 @@ export function handlePaintMove(
           for (const m of mirrorBatchPoints(pts, sym)) {
             gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
           }
+          const subs = getActiveSubBrushes();
+          if (subs.length > 0) emitSubBrushDabs(engine, state.layerId, pts, size, r, g, b, color.a, opacity, subs, sym);
         }
       } else {
         const { points: pts, remainder: spacingRem } = interpolateWithSpacing(state.lastPoint, layerLocalPos, spacing, state.spacingRemainder ?? 0);
@@ -674,6 +717,8 @@ export function handlePaintMove(
           for (const m of mirrorBatchPoints(pts, sym)) {
             gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
           }
+          const subs2 = getActiveSubBrushes();
+          if (subs2.length > 0) emitSubBrushDabs(engine, state.layerId, pts, size, r, g, b, color.a, opacity, subs2, sym);
         }
       }
 

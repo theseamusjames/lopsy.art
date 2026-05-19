@@ -1,7 +1,7 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   margin-top: var(--space-2);
 }
 
@@ -10,6 +10,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 
 .label {
@@ -46,14 +47,6 @@
   background: var(--color-bg-active);
 }
 
-.sliders {
-  --slider-label-width: 85px;
-
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
 .resetBtn {
   display: flex;
   align-items: center;
@@ -76,4 +69,97 @@
 .resetBtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ─── Histogram ───────────────────────────────────────────────────────── */
+
+.histogram {
+  width: 256px;
+  align-self: center;
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-top-left-radius: var(--radius-sm);
+  border-top-right-radius: var(--radius-sm);
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.histogramCanvas {
+  display: block;
+  width: 256px;
+  height: 90px;
+}
+
+/* ─── Axes (input + output) ──────────────────────────────────────────── */
+
+.axis {
+  display: flex;
+  flex-direction: column;
+  align-self: center;
+  width: 256px;
+  gap: 2px;
+}
+
+.track {
+  position: relative;
+  height: 12px;
+  touch-action: none;
+}
+
+.handle {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 12px;
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 2px;
+  box-shadow: var(--shadow-sm);
+}
+
+.handle:hover {
+  border-color: var(--color-text-secondary);
+}
+
+.handle:focus-visible {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.readouts {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: 1px;
+}
+
+.readouts > :nth-child(1) {
+  text-align: left;
+  padding-left: 2px;
+}
+
+.readouts > :nth-child(2) {
+  text-align: center;
+}
+
+.readouts > :nth-child(3) {
+  text-align: right;
+  padding-right: 2px;
+}
+
+/* ─── Gradient bar between input & output axes ───────────────────────── */
+
+.gradient {
+  align-self: center;
+  width: 256px;
+  height: 12px;
+  background: linear-gradient(to right, #000 0%, #fff 100%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-1);
 }

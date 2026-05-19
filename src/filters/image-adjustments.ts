@@ -3,6 +3,7 @@ import { IDENTITY_CURVES, isIdentityCurves, applyCurvesToImageData } from './cur
 import type { Levels } from './levels';
 import { IDENTITY_LEVELS, isIdentityLevels, applyLevelsToImageData } from './levels';
 import type { AdjustmentNode } from '../types/adjustment-nodes';
+import type { GradientStop } from '../tools/gradient/gradient';
 import { nodesToLegacyAdjustments } from './adjustment-node-utils';
 
 export interface ImageAdjustments {
@@ -15,17 +16,37 @@ export interface ImageAdjustments {
   vignette: number;
   saturation: number;
   vibrance: number;
-  /**
-   * Per-channel tone curves. Optional so existing documents keep working
-   * without a migration; absent / identity curves skip the GPU + JS path.
-   */
   curves?: Curves;
-  /**
-   * Per-channel levels (input/output black/white + gamma). Optional so
-   * existing documents keep working; absent / identity levels skip the GPU
-   * + JS path.
-   */
   levels?: Levels;
+  // Hue/Saturation (HSL-space)
+  hueSatHue?: number;
+  hueSatSaturation?: number;
+  hueSatLightness?: number;
+  // Color Balance
+  colorBalanceShadows?: [number, number, number];
+  colorBalanceMidtones?: [number, number, number];
+  colorBalanceHighlights?: [number, number, number];
+  // Photo Filter
+  photoFilterColor?: { r: number; g: number; b: number };
+  photoFilterDensity?: number;
+  photoFilterPreserveLuminosity?: boolean;
+  // Black & White
+  bwEnabled?: boolean;
+  bwReds?: number;
+  bwYellows?: number;
+  bwGreens?: number;
+  bwCyans?: number;
+  bwBlues?: number;
+  bwMagentas?: number;
+  // Channel Mixer: [from_r, from_g, from_b, constant] per output channel
+  channelMixerEnabled?: boolean;
+  channelMixerR?: [number, number, number, number];
+  channelMixerG?: [number, number, number, number];
+  channelMixerB?: [number, number, number, number];
+  // Invert
+  invert?: boolean;
+  // Gradient Map stops
+  gradientMapStops?: readonly GradientStop[];
 }
 
 export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {

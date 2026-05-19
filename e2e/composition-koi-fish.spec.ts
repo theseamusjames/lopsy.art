@@ -235,7 +235,8 @@ async function addMaskWithData(
 // ---------------------------------------------------------------------------
 
 test.describe('Composition: Koi Fish Mid-Century Poster', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'composition tests require sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
   });
@@ -619,8 +620,12 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     // =====================================================================
     const snapBeforeBigUndo = await snapshot(page);
 
+    // Undo twice: first reverses the pushHistory snapshot (no visual change),
+    // second reverses the last fillEllipse which actually changed pixels.
     await undo(page);
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(200);
+    await undo(page);
+    await page.waitForTimeout(600);
 
     const snapAfterBigUndo = await snapshot(page);
     // Undo must produce a visible change
@@ -628,7 +633,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
 
     // Redo must not crash and should produce a valid composited frame
     await redo(page);
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(600);
 
     const snapAfterBigRedo = await snapshot(page);
     // Verify redo produced non-empty output (not all transparent/black)

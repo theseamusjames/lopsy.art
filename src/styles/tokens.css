@@ -30,6 +30,8 @@
   --color-accent-active: #3a8eef;
   --color-accent-subtle: rgba(74, 158, 255, 0.15);
 
+  --color-input-bg: #3d3d3d;
+
   --color-error: #f44336;
   --color-warning: #ff9800;
   --color-success: #4caf50;

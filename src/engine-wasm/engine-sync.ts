@@ -13,6 +13,7 @@
 import type { Engine } from './wasm-bridge';
 import { getEngine } from './engine-state';
 import type { Layer } from '../types';
+import type { GradientStop } from '../tools/gradient/gradient';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
@@ -42,10 +43,27 @@ import {
   setImageLevelsLut,
   clearImageLevels,
   clearImageAdjustments,
+  setImageInvert,
+  setImageHueSaturation,
+  setImageColorBalance,
+  setImagePhotoFilter,
+  setImageBlackWhite,
+  clearImageBlackWhite,
+  setImageChannelMixer,
+  clearImageChannelMixer,
+  setImageGradientMapLut,
+  clearImageGradientMap,
   setGroupAdjustments,
   setGroupCurvesLut,
   setGroupLevelsLut,
   clearGroupAdjustments,
+  setGroupInvert,
+  setGroupHueSaturation,
+  setGroupColorBalance,
+  setGroupPhotoFilter,
+  setGroupBlackWhite,
+  setGroupChannelMixer,
+  setGroupGradientMapLut,
   setSeamlessPattern,
   setChannelMask,
   setLassoPreview,
@@ -60,8 +78,14 @@ import {
   setMaskEditLayer,
   clearMaskEditLayer,
   uploadBrushTip,
+  uploadBrushTipRGBA,
   clearBrushTip,
   setBrushTipState,
+  cacheSubBrushTip,
+  cacheSubBrushTipRGBA,
+  activateSubBrushTip as wasmActivateSubBrushTip,
+  deactivateSubBrushTip as wasmDeactivateSubBrushTip,
+  clearSubBrushTipCache,
   uploadBrushTexture,
   clearBrushTexture,
   setBrushTextureState,
@@ -72,7 +96,7 @@ import {
 } from './wasm-bridge';
 import type { PathAnchor, TextEditingState, ChannelVisibility } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
-import type { BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../types/brush';
+import type { BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
 import type { Color } from '../types';
 import type { TextLayer } from '../types/layers';
 import type { StoredPath } from '../types/paths';
@@ -82,6 +106,32 @@ import { syncLayers } from './sync-layers';
 
 export { resetTrackedState, markPixelDataSynced } from './sync-state';
 export { syncLayers } from './sync-layers';
+
+function buildGradientMapLut(
+  stops: readonly GradientStop[],
+): Uint8Array {
+  const lut = new Uint8Array(256 * 4);
+  const sorted = [...stops].sort((a, b) => a.position - b.position);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255;
+    let lo = sorted[0]!;
+    let hi = sorted[sorted.length - 1]!;
+    for (let j = 0; j < sorted.length - 1; j++) {
+      if (t >= sorted[j]!.position && t <= sorted[j + 1]!.position) {
+        lo = sorted[j]!;
+        hi = sorted[j + 1]!;
+        break;
+      }
+    }
+    const span = hi.position - lo.position;
+    const f = span > 1e-6 ? Math.max(0, Math.min(1, (t - lo.position) / span)) : 0;
+    lut[i * 4 + 0] = Math.round(lo.color.r + (hi.color.r - lo.color.r) * f);
+    lut[i * 4 + 1] = Math.round(lo.color.g + (hi.color.g - lo.color.g) * f);
+    lut[i * 4 + 2] = Math.round(lo.color.b + (hi.color.b - lo.color.b) * f);
+    lut[i * 4 + 3] = 255;
+  }
+  return lut;
+}
 
 export function invalidatePathTextCache(layerId: string): void {
   const engine = getEngine();
@@ -205,8 +255,6 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
   setImageSaturation(engine, adjustments.saturation);
   setImageVibrance(engine, adjustments.vibrance);
 
-  // Levels: build the 256x4 RGBA LUT and upload only when the values
-  // changed (reference equality on the levels object).
   const levels = adjustments.levels;
   if (!levels || isIdentityLevels(levels)) {
     if (tracked.levelsIdentity !== true) {
@@ -221,9 +269,6 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
     tracked.levelsIdentity = false;
   }
 
-  // Curves: build the 256x4 RGBA LUT and upload only when the points
-  // changed (cheap identity check via reference equality on the curves
-  // object held in the document model).
   const curves = adjustments.curves;
   if (!curves || isIdentityCurves(curves)) {
     if (tracked.curvesIdentity !== true) {
@@ -237,6 +282,86 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
     tracked.curvesRef = curves;
     tracked.curvesIdentity = false;
   }
+
+  // New effects
+  setImageInvert(engine, adjustments.invert ?? false);
+
+  const hs = adjustments;
+  setImageHueSaturation(engine, hs.hueSatHue ?? 0, hs.hueSatSaturation ?? 0, hs.hueSatLightness ?? 0);
+
+  const cbS = adjustments.colorBalanceShadows    ?? [0, 0, 0];
+  const cbM = adjustments.colorBalanceMidtones   ?? [0, 0, 0];
+  const cbH = adjustments.colorBalanceHighlights ?? [0, 0, 0];
+  setImageColorBalance(engine, cbS[0], cbS[1], cbS[2], cbM[0], cbM[1], cbM[2], cbH[0], cbH[1], cbH[2]);
+
+  const pfc = adjustments.photoFilterColor ?? { r: 255, g: 160, b: 0 };
+  setImagePhotoFilter(engine, pfc.r / 255, pfc.g / 255, pfc.b / 255,
+    adjustments.photoFilterDensity ?? 0,
+    adjustments.photoFilterPreserveLuminosity !== false,
+  );
+
+  if (adjustments.bwEnabled) {
+    setImageBlackWhite(engine,
+      adjustments.bwReds ?? 40, adjustments.bwYellows ?? 60,
+      adjustments.bwGreens ?? 40, adjustments.bwCyans ?? 60,
+      adjustments.bwBlues ?? 20, adjustments.bwMagentas ?? 80,
+    );
+  } else {
+    clearImageBlackWhite(engine);
+  }
+
+  if (adjustments.channelMixerEnabled) {
+    const cmR = adjustments.channelMixerR ?? [100, 0, 0, 0];
+    const cmG = adjustments.channelMixerG ?? [0, 100, 0, 0];
+    const cmB = adjustments.channelMixerB ?? [0, 0, 100, 0];
+    setImageChannelMixer(engine,
+      cmR[0], cmR[1], cmR[2], cmR[3],
+      cmG[0], cmG[1], cmG[2], cmG[3],
+      cmB[0], cmB[1], cmB[2], cmB[3],
+    );
+  } else {
+    clearImageChannelMixer(engine);
+  }
+
+  const stops = adjustments.gradientMapStops;
+  if (stops && stops.length >= 2) {
+    const lut = buildGradientMapLut(stops);
+    setImageGradientMapLut(engine, lut);
+  } else {
+    clearImageGradientMap(engine);
+  }
+}
+
+/**
+ * Walk a group's children recursively and collect every descendant layer ID.
+ * Sub-groups are included so the compositor sees both the marker and its
+ * contents — the WASM side ignores Group-type entries via a strict layer-type
+ * check, so the extra IDs are harmless.
+ *
+ * The compositor's `child_to_group` map needs every descendant of an adjusted
+ * group so all descendants get routed into the group scratch FBO. Sending only
+ * direct children causes sub-group descendants to bypass the scratch and
+ * render directly onto the composite, where the group's normal-blend finalize
+ * later covers them up.
+ */
+export function flattenGroupDescendants(
+  layers: readonly Layer[],
+  groupId: string,
+): string[] {
+  const layerMap = new Map<string, Layer>();
+  for (const l of layers) layerMap.set(l.id, l);
+  const result: string[] = [];
+  const walk = (id: string): void => {
+    const layer = layerMap.get(id);
+    if (!layer || layer.type !== 'group') return;
+    const group = layer as import('../types').GroupLayer;
+    for (const childId of group.children) {
+      result.push(childId);
+      walk(childId);
+    }
+  };
+  walk(groupId);
+  return result;
 }
 
 export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): void {
@@ -244,12 +369,6 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
   for (const layer of layers) {
     if (layer.type !== 'group') continue;
     const group = layer as import('../types').GroupLayer;
-    // Pass-through groups normally bypass the scratch FBO, but when a
-    // pass-through group has adjustments or a mask it must use the scratch
-    // FBO path so adjustments/mask apply to the composited group output.
-    const hasAdjNodes = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
-    const groupHasMask = group.mask != null && group.mask.enabled;
-    if (group.blendMode === 'pass-through' && !hasAdjNodes && !groupHasMask) continue;
     const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
     const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
     const hasCurves = adj?.curves != null && !isIdentityCurves(adj.curves);
@@ -264,18 +383,22 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       Math.abs(adj.saturation) > 1e-6 ||
       Math.abs(adj.vibrance) > 1e-6 ||
       Math.abs(adj.vignette) > 1e-6 ||
-      hasCurves ||
-      hasLevels
+      hasCurves || hasLevels ||
+      !!adj.invert ||
+      (adj.hueSatHue ?? 0) !== 0 || (adj.hueSatSaturation ?? 0) !== 0 || (adj.hueSatLightness ?? 0) !== 0 ||
+      (adj.colorBalanceShadows ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
+      (adj.colorBalanceMidtones ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
+      (adj.colorBalanceHighlights ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
+      (adj.photoFilterDensity ?? 0) > 1e-6 ||
+      !!adj.bwEnabled || !!adj.channelMixerEnabled ||
+      (adj.gradientMapStops?.length ?? 0) >= 2
     );
     const hasMask = group.mask != null && group.mask.enabled;
-    // Register this group with the engine if it has adjustments OR a mask.
-    // Groups with masks need the group scratch FBO path so the mask can be
-    // applied to the composited group output before blending into the parent.
     if (!hasAdjustments && !hasMask) continue;
     setGroupAdjustments(
       engine,
       group.id,
-      JSON.stringify(group.children),
+      JSON.stringify(flattenGroupDescendants(layers, group.id)),
       adj?.exposure ?? 0,
       adj?.contrast ?? 0,
       adj?.highlights ?? 0,
@@ -293,6 +416,44 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     if (hasLevels && adj?.levels) {
       const lut = buildLevelsLutRgba(adj.levels);
       setGroupLevelsLut(engine, group.id, lut);
+    }
+    // New effects for groups
+    if (adj?.invert) setGroupInvert(engine, group.id, true);
+    const hh = adj?.hueSatHue ?? 0, hs2 = adj?.hueSatSaturation ?? 0, hl = adj?.hueSatLightness ?? 0;
+    if (Math.abs(hh) > 1e-6 || Math.abs(hs2) > 1e-6 || Math.abs(hl) > 1e-6) {
+      setGroupHueSaturation(engine, group.id, hh, hs2, hl);
+    }
+    const cbS = adj?.colorBalanceShadows    ?? [0, 0, 0];
+    const cbM = adj?.colorBalanceMidtones   ?? [0, 0, 0];
+    const cbH = adj?.colorBalanceHighlights ?? [0, 0, 0];
+    if ([...cbS, ...cbM, ...cbH].some(v => Math.abs(v) > 1e-6)) {
+      setGroupColorBalance(engine, group.id, cbS[0], cbS[1], cbS[2], cbM[0], cbM[1], cbM[2], cbH[0], cbH[1], cbH[2]);
+    }
+    const pfDensity = adj?.photoFilterDensity ?? 0;
+    if (pfDensity > 1e-6) {
+      const pfc = adj?.photoFilterColor ?? { r: 255, g: 160, b: 0 };
+      setGroupPhotoFilter(engine, group.id, pfc.r / 255, pfc.g / 255, pfc.b / 255, pfDensity, adj?.photoFilterPreserveLuminosity !== false);
+    }
+    if (adj?.bwEnabled) {
+      setGroupBlackWhite(engine, group.id,
+        adj.bwReds ?? 40, adj.bwYellows ?? 60, adj.bwGreens ?? 40,
+        adj.bwCyans ?? 60, adj.bwBlues ?? 20, adj.bwMagentas ?? 80,
+      );
+    }
+    if (adj?.channelMixerEnabled) {
+      const cmR = adj.channelMixerR ?? [100, 0, 0, 0];
+      const cmG = adj.channelMixerG ?? [0, 100, 0, 0];
+      const cmB = adj.channelMixerB ?? [0, 0, 100, 0];
+      setGroupChannelMixer(engine, group.id,
+        cmR[0], cmR[1], cmR[2], cmR[3],
+        cmG[0], cmG[1], cmG[2], cmG[3],
+        cmB[0], cmB[1], cmB[2], cmB[3],
+      );
+    }
+    const gStops = adj?.gradientMapStops;
+    if (gStops && gStops.length >= 2) {
+      const lut = buildGradientMapLut(gStops);
+      setGroupGradientMapLut(engine, group.id, lut);
     }
   }
 }
@@ -369,9 +530,11 @@ export function syncBrushTip(
   engine: Engine,
   activeBrushTip: BrushTipData | null,
   brushAngle: number,
+  brushHardness: number = 100,
 ): void {
   const tracked = getTracked(engine);
   const hasTip = activeBrushTip !== null;
+  const isColor = activeBrushTip?.kind === 'color';
   const tipChanged = tracked.brushTipData !== activeBrushTip;
 
   if (tipChanged) {
@@ -381,18 +544,66 @@ export function syncBrushTip(
         activeBrushTip.data.byteOffset,
         activeBrushTip.data.byteLength,
       );
-      uploadBrushTip(engine, bytes, activeBrushTip.width, activeBrushTip.height);
+      if (isColor) {
+        uploadBrushTipRGBA(engine, bytes, activeBrushTip.width, activeBrushTip.height);
+      } else {
+        uploadBrushTip(engine, bytes, activeBrushTip.width, activeBrushTip.height);
+      }
     } else {
       clearBrushTip(engine);
     }
     tracked.brushTipData = activeBrushTip;
+    tracked.brushTipHardness = brushHardness;
   }
 
-  if (tracked.brushHasTip !== hasTip || tracked.brushAngle !== brushAngle) {
-    setBrushTipState(engine, hasTip, brushAngle);
+  if (tracked.brushHasTip !== hasTip || tracked.brushAngle !== brushAngle || tracked.brushTipIsColor !== isColor) {
+    setBrushTipState(engine, hasTip, brushAngle, isColor);
     tracked.brushHasTip = hasTip;
     tracked.brushAngle = brushAngle;
+    tracked.brushTipIsColor = isColor;
   }
+}
+
+/**
+ * Pre-process and cache all sub-brush tip textures on the GPU.
+ * Call once at stroke start so per-dab swaps are just pointer changes.
+ */
+export function cacheSubBrushTips(engine: Engine, subBrushes: readonly SubBrush[]): void {
+  clearSubBrushTipCache(engine);
+  for (let i = 0; i < subBrushes.length; i++) {
+    const sub = subBrushes[i]!;
+    if (sub.tip) {
+      const bytes = new Uint8Array(sub.tip.data.buffer, sub.tip.data.byteOffset, sub.tip.data.byteLength);
+      if (sub.tip.kind === 'color') {
+        cacheSubBrushTipRGBA(engine, i, bytes, sub.tip.width, sub.tip.height);
+      } else {
+        cacheSubBrushTip(engine, i, bytes, sub.tip.width, sub.tip.height);
+      }
+    }
+  }
+}
+
+/**
+ * Activate a cached sub-brush tip by index. No texture re-upload or
+ * Gaussian blur — just swaps the active GPU texture handle.
+ */
+export function swapBrushTip(engine: Engine, subIndex: number, tip: BrushTipData | null, angleDeg: number = 0): void {
+  const angleRad = -angleDeg * Math.PI / 180;
+  if (tip) {
+    wasmActivateSubBrushTip(engine, subIndex, angleRad, tip.kind === 'color');
+  } else {
+    wasmActivateSubBrushTip(engine, subIndex, angleRad, false);
+  }
+}
+
+/**
+ * Restore the primary brush tip after sub-brush rendering.
+ * Just swaps the GPU texture handle back — no re-upload.
+ */
+export function restorePrimaryBrushTip(engine: Engine): void {
+  const tracked = getTracked(engine);
+  wasmDeactivateSubBrushTip(engine);
+  setBrushTipState(engine, tracked.brushHasTip, tracked.brushAngle, tracked.brushTipIsColor);
 }
 
 const BLEND_MODE_MAP: Record<BrushTextureBlendMode, number> = {
