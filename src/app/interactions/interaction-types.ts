@@ -14,6 +14,9 @@ export interface InteractionState {
   layerStartX: number;
   layerStartY: number;
   maskMode: boolean;
+  /** Captured at interaction-start so the path doesn't change if quick-mask
+   *  mode is toggled mid-drag. Currently only used by the gradient tool. */
+  quickMaskMode?: boolean;
   transformHandle: TransformHandle | null;
   transformStartState: TransformState | null;
   transformStartAngle: number;

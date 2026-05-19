@@ -1,5 +1,6 @@
 use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
+use crate::gradient_gpu::{GradientStop, set_gradient_uniforms};
 
 /// Flood-fill the quick mask texture. Reads the mask from the GPU, runs a
 /// region-fill based on mask-value tolerance, and writes the result back.
@@ -364,6 +365,154 @@ pub fn draw_quick_mask_pencil_line(
             );
         }
     }
+
+    engine.needs_recomposite = true;
+}
+
+/// Render a linear gradient into the quick mask texture. Mirrors
+/// `mask_paint_gpu::render_mask_linear_gradient` but targets
+/// `engine.quick_mask_texture`. The quick mask texture covers the whole
+/// document, so no per-layer offset is applied.
+pub fn render_quick_mask_linear_gradient(
+    engine: &mut EngineInner,
+    start_x: f64,
+    start_y: f64,
+    end_x: f64,
+    end_y: f64,
+    stops_json: &str,
+) {
+    let stops: Vec<GradientStop> = match serde_json::from_str(stops_json) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let Some(tex_handle) = engine.quick_mask_texture else { return };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let mask_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    let gl = &engine.gl;
+
+    engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
+    gl.viewport(0, 0, w as i32, h as i32);
+    gl.disable(WebGl2RenderingContext::BLEND);
+    gl.use_program(Some(&engine.shaders.blit.program));
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
+    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+    engine.draw_fullscreen_quad();
+
+    let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
+
+    engine.render_to_texture(&mask_tex, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.gradient_linear;
+        gl.use_program(Some(&shader.program));
+
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(s) = &scratch_tex {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
+        }
+        if let Some(loc) = shader.location(gl, "u_existingTex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        if let Some(loc) = shader.location(gl, "u_hasMask") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        if let Some(loc) = shader.location(gl, "u_docSize") {
+            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+        }
+        if let Some(loc) = shader.location(gl, "u_layerOffset") {
+            gl.uniform2f(Some(&loc), 0.0, 0.0);
+        }
+
+        set_gradient_uniforms(gl, shader, &stops, w, h);
+        if let Some(loc) = shader.location(gl, "u_start") {
+            gl.uniform2f(Some(&loc), start_x as f32, start_y as f32);
+        }
+        if let Some(loc) = shader.location(gl, "u_end") {
+            gl.uniform2f(Some(&loc), end_x as f32, end_y as f32);
+        }
+
+        engine.draw_fullscreen_quad();
+    });
+
+    engine.needs_recomposite = true;
+}
+
+/// Render a radial gradient into the quick mask texture. Mirrors
+/// `mask_paint_gpu::render_mask_radial_gradient` but targets
+/// `engine.quick_mask_texture`.
+pub fn render_quick_mask_radial_gradient(
+    engine: &mut EngineInner,
+    center_x: f64,
+    center_y: f64,
+    radius: f64,
+    stops_json: &str,
+) {
+    let stops: Vec<GradientStop> = match serde_json::from_str(stops_json) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let Some(tex_handle) = engine.quick_mask_texture else { return };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let mask_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    let gl = &engine.gl;
+
+    engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
+    gl.viewport(0, 0, w as i32, h as i32);
+    gl.disable(WebGl2RenderingContext::BLEND);
+    gl.use_program(Some(&engine.shaders.blit.program));
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
+    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+    engine.draw_fullscreen_quad();
+
+    let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
+
+    engine.render_to_texture(&mask_tex, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.gradient_radial;
+        gl.use_program(Some(&shader.program));
+
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(s) = &scratch_tex {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
+        }
+        if let Some(loc) = shader.location(gl, "u_existingTex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        if let Some(loc) = shader.location(gl, "u_hasMask") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        if let Some(loc) = shader.location(gl, "u_docSize") {
+            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+        }
+        if let Some(loc) = shader.location(gl, "u_layerOffset") {
+            gl.uniform2f(Some(&loc), 0.0, 0.0);
+        }
+
+        set_gradient_uniforms(gl, shader, &stops, w, h);
+        if let Some(loc) = shader.location(gl, "u_center") {
+            gl.uniform2f(Some(&loc), center_x as f32, center_y as f32);
+        }
+        if let Some(loc) = shader.location(gl, "u_radius") {
+            gl.uniform1f(Some(&loc), radius as f32);
+        }
+
+        engine.draw_fullscreen_quad();
+    });
 
     engine.needs_recomposite = true;
 }
