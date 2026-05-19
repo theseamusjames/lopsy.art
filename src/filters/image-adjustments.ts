@@ -3,6 +3,7 @@ import { IDENTITY_CURVES, isIdentityCurves, applyCurvesToImageData } from './cur
 import type { Levels } from './levels';
 import { IDENTITY_LEVELS, isIdentityLevels, applyLevelsToImageData } from './levels';
 import type { AdjustmentNode } from '../types/adjustment-nodes';
+import type { GradientStop } from '../tools/gradient/gradient';
 import { nodesToLegacyAdjustments } from './adjustment-node-utils';
 
 export interface ImageAdjustments {
@@ -45,7 +46,7 @@ export interface ImageAdjustments {
   // Invert
   invert?: boolean;
   // Gradient Map stops
-  gradientMapStops?: ReadonlyArray<{ position: number; color: { r: number; g: number; b: number } }>;
+  gradientMapStops?: readonly GradientStop[];
 }
 
 export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {
