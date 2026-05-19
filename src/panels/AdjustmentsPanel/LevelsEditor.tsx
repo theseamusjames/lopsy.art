@@ -321,7 +321,7 @@ function Handle({ position01, color, ariaLabel, testId, onPointerDown }: HandleP
       tabIndex={0}
       className={styles.handle}
       data-testid={testId}
-      style={{ left, backgroundColor: color, ['--handle-fill' as string]: color }}
+      style={{ left, backgroundColor: color }}
       onPointerDown={onPointerDown}
     />
   );
