@@ -102,49 +102,31 @@
 
 .track {
   position: relative;
-  height: 16px;
+  height: 12px;
   touch-action: none;
 }
 
 .handle {
   position: absolute;
-  top: 1px;
-  /* Centre the hit area on the value position. */
+  top: 0;
   transform: translateX(-50%);
-  width: 14px;
-  height: 14px;
-  cursor: ew-resize;
+  width: 10px;
+  height: 12px;
+  cursor: grab;
   touch-action: none;
   outline: none;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 2px;
+  box-shadow: var(--shadow-sm);
 }
 
-.handle::before {
-  /* Outline triangle so the handle stays visible against either bg. */
-  content: '';
-  position: absolute;
-  top: -1px;
-  left: 0;
-  width: 0;
-  height: 0;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-bottom: 14px solid var(--handle-ring, transparent);
+.handle:hover {
+  border-color: var(--color-text-secondary);
 }
 
-.handle::after {
-  content: '';
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 12px solid var(--handle-fill, #888);
-}
-
-.handle:focus-visible::before {
-  border-bottom-color: var(--color-accent);
+.handle:focus-visible {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
 }
 
 .readouts {

@@ -224,7 +224,6 @@ function InputAxis({ channel, onChange }: AxisProps) {
         <Handle
           position01={channel.inputBlack}
           color="#0d0d0d"
-          ringColor="#9a9a9a"
           ariaLabel="Input black"
           testId="levels-input-black-handle"
           onPointerDown={handleBlackDrag}
@@ -232,7 +231,6 @@ function InputAxis({ channel, onChange }: AxisProps) {
         <Handle
           position01={gamma01}
           color="#7f7f7f"
-          ringColor="#cfcfcf"
           ariaLabel="Input gamma"
           testId="levels-input-gamma-handle"
           onPointerDown={handleGammaDrag}
@@ -240,7 +238,6 @@ function InputAxis({ channel, onChange }: AxisProps) {
         <Handle
           position01={channel.inputWhite}
           color="#ffffff"
-          ringColor="#7a7a7a"
           ariaLabel="Input white"
           testId="levels-input-white-handle"
           onPointerDown={handleWhiteDrag}
@@ -274,7 +271,6 @@ function OutputAxis({ channel, onChange }: AxisProps) {
         <Handle
           position01={channel.outputBlack}
           color="#0d0d0d"
-          ringColor="#9a9a9a"
           ariaLabel="Output black"
           testId="levels-output-black-handle"
           onPointerDown={handleBlackDrag}
@@ -282,7 +278,6 @@ function OutputAxis({ channel, onChange }: AxisProps) {
         <Handle
           position01={channel.outputWhite}
           color="#ffffff"
-          ringColor="#7a7a7a"
           ariaLabel="Output white"
           testId="levels-output-white-handle"
           onPointerDown={handleWhiteDrag}
@@ -302,13 +297,12 @@ function OutputAxis({ channel, onChange }: AxisProps) {
 interface HandleProps {
   position01: number;
   color: string;
-  ringColor: string;
   ariaLabel: string;
   testId: string;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
 }
 
-function Handle({ position01, color, ringColor, ariaLabel, testId, onPointerDown }: HandleProps) {
+function Handle({ position01, color, ariaLabel, testId, onPointerDown }: HandleProps) {
   const left = `${clamp(position01, 0, 1) * 100}%`;
   return (
     <div
@@ -320,7 +314,7 @@ function Handle({ position01, color, ringColor, ariaLabel, testId, onPointerDown
       tabIndex={0}
       className={styles.handle}
       data-testid={testId}
-      style={{ left, ['--handle-fill' as string]: color, ['--handle-ring' as string]: ringColor }}
+      style={{ left, backgroundColor: color }}
       onPointerDown={onPointerDown}
     />
   );
