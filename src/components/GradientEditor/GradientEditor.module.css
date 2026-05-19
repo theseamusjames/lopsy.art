@@ -26,6 +26,7 @@
 .handlesRow {
   position: relative;
   height: 12px;
+  cursor: crosshair;
 }
 
 .handle {
