@@ -1,10 +1,22 @@
-import type { BrushPreset, BrushTipData } from '../../types/brush';
+import type { BrushPreset, BrushTipData, SubBrush } from '../../types/brush';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 
 interface SerializedTip {
   width: number;
   height: number;
   data: string;
+  kind?: 'alpha' | 'color';
+}
+
+interface SerializedSubBrush {
+  tip: SerializedTip | null;
+  sizeRatio: number;
+  hardness: number;
+  opacityRatio: number;
+  angleOffset: number;
+  sizeJitter: number;
+  angleJitter: number;
+  opacityJitter: number;
 }
 
 interface SerializedPreset {
@@ -26,6 +38,7 @@ interface SerializedPreset {
   speedSensitivity?: 'low' | 'med' | 'high';
   fade?: number;
   taper?: number;
+  subBrushes?: SerializedSubBrush[];
 }
 
 function tipToJson(tip: BrushTipData): SerializedTip {
@@ -33,7 +46,9 @@ function tipToJson(tip: BrushTipData): SerializedTip {
   for (let i = 0; i < tip.data.length; i++) {
     binary += String.fromCharCode(tip.data[i]!);
   }
-  return { width: tip.width, height: tip.height, data: btoa(binary) };
+  const s: SerializedTip = { width: tip.width, height: tip.height, data: btoa(binary) };
+  if (tip.kind === 'color') s.kind = 'color';
+  return s;
 }
 
 function tipFromJson(s: SerializedTip): BrushTipData {
@@ -42,7 +57,35 @@ function tipFromJson(s: SerializedTip): BrushTipData {
   for (let i = 0; i < binary.length; i++) {
     data[i] = binary.charCodeAt(i);
   }
-  return { width: s.width, height: s.height, data };
+  const tip: BrushTipData = { width: s.width, height: s.height, data };
+  if (s.kind === 'color') return { ...tip, kind: 'color' };
+  return tip;
+}
+
+function subBrushToJson(sub: SubBrush): SerializedSubBrush {
+  return {
+    tip: sub.tip ? tipToJson(sub.tip) : null,
+    sizeRatio: sub.sizeRatio,
+    hardness: sub.hardness,
+    opacityRatio: sub.opacityRatio,
+    angleOffset: sub.angleOffset,
+    sizeJitter: sub.sizeJitter,
+    angleJitter: sub.angleJitter,
+    opacityJitter: sub.opacityJitter,
+  };
+}
+
+function subBrushFromJson(s: SerializedSubBrush): SubBrush {
+  return {
+    tip: s.tip ? tipFromJson(s.tip) : null,
+    sizeRatio: s.sizeRatio,
+    hardness: s.hardness,
+    opacityRatio: s.opacityRatio,
+    angleOffset: s.angleOffset,
+    sizeJitter: s.sizeJitter,
+    angleJitter: s.angleJitter,
+    opacityJitter: s.opacityJitter,
+  };
 }
 
 let nextImportId = 1;
@@ -73,6 +116,7 @@ export function exportPresets(ids?: Set<string>): void {
     speedSensitivity: p.speedSensitivity,
     fade: p.fade,
     taper: p.taper,
+    subBrushes: p.subBrushes?.map(subBrushToJson),
   }));
 
   const json = JSON.stringify({ version: 1, presets: serialized }, null, 2);
@@ -112,6 +156,7 @@ export async function importPresetsFromFile(file: File): Promise<number> {
           speedSensitivity: s.speedSensitivity,
           fade: s.fade,
           taper: s.taper,
+          subBrushes: s.subBrushes?.map(subBrushFromJson),
         }));
         useToolSettingsStore.getState().addPresets(presets);
         resolve(presets.length);

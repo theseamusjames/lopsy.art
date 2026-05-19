@@ -1,4 +1,4 @@
-//! Noise-based generation filters: add noise, fill with noise, clouds, smoke.
+//! Noise-based generation filters: add noise, fill with noise, clouds, smoke, fibers.
 
 use wasm_bindgen::prelude::*;
 
@@ -67,6 +67,26 @@ pub fn filter_smoke(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32, 
             }
             if let Some(loc) = shader.location(gl, "u_turbulence") {
                 gl.uniform1f(Some(&loc), turbulence);
+            }
+        },
+    );
+}
+
+#[wasm_bindgen(js_name = "filterFibers")]
+pub fn filter_fibers(engine: &mut Engine, layer_id: &str, variance: f32, strength: f32, seed: f32) {
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.fibers,
+        |gl, shader| {
+            if let Some(loc) = shader.location(gl, "u_variance") {
+                gl.uniform1f(Some(&loc), variance);
+            }
+            if let Some(loc) = shader.location(gl, "u_strength") {
+                gl.uniform1f(Some(&loc), strength);
+            }
+            if let Some(loc) = shader.location(gl, "u_seed") {
+                gl.uniform1f(Some(&loc), seed);
             }
         },
     );

@@ -15,7 +15,7 @@
   flex: 1;
   -webkit-appearance: none;
   appearance: none;
-  height: 20px;
+  height: 10px;
   background: #1e1e1e;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-xs);
@@ -30,7 +30,7 @@
   width: 20px;
   height: 22px;
   border-radius: var(--radius-sm);
-  background: var(--color-bg-tertiary);
+  background: var(--color-input-bg);
   border: 1px solid var(--color-border-subtle);
   cursor: ew-resize;
 }

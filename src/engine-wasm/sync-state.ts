@@ -49,6 +49,8 @@ export interface TrackedState {
   brushTipData: BrushTipData | null;
   brushAngle: number;
   brushHasTip: boolean;
+  brushTipIsColor: boolean;
+  brushTipHardness: number;
   brushTextureData: BrushTextureData | null;
   brushHasTexture: boolean;
   brushTextureScale: number;
@@ -100,6 +102,8 @@ function createTrackedState(): TrackedState {
     brushTipData: null,
     brushAngle: 0,
     brushHasTip: false,
+    brushTipIsColor: false,
+    brushTipHardness: 100,
     brushTextureData: null,
     brushHasTexture: false,
     brushTextureScale: 1,

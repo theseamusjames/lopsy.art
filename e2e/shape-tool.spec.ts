@@ -453,6 +453,91 @@ test.describe('Shape tool click-and-drag', () => {
     expect(center.a).toBe(0);
   });
 
+  test('stroke-only triangle (sides=3) renders a closed outline, not a diagonal line (#394)', async ({ page }) => {
+    // Regression test for #394: with the old apothem-fit polygon SDF, a
+    // stroke-only n=3 polygon placed its vertices at 2× the bbox extent,
+    // so most of the triangle was off-canvas and only a single edge segment
+    // crossed the visible region — reading as "a diagonal line."
+    // With the bbox-fit SDF the entire triangle outline is visible inside
+    // its bounding rectangle.
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 3);
+    await setToolOption(page, 'Corner Radius', 0);
+    await setToolSetting(page, 'setShapeFillColor', null);
+    await setToolSetting(page, 'setShapeStrokeColor', { r: 255, g: 0, b: 128, a: 1 });
+    await setToolOption(page, 'Width', 3);
+
+    // Drag from canvas center to lower-right so the bbox sits inside the
+    // 400×300 canvas: bbox spans (120, 70) to (280, 230).
+    await dragShape(page, { x: 200, y: 150 }, { x: 280, y: 230 });
+
+    await page.screenshot({ path: 'test-results/screenshots/shape-triangle-stroke-only.png' });
+
+    // The triangle interior must be hollow (no fill).
+    const interior = await getPixelAt(page, 200, 160);
+    expect(interior.a).toBe(0);
+
+    // Opaque pixels should be the stroke band around the perimeter — much
+    // more than a single diagonal line, but far less than a filled triangle.
+    // A filled triangle inside this bbox is ~10k pixels; the stroke band
+    // around it is ~700 pixels. A single diagonal stroke across the bbox
+    // would be ~200 pixels.
+    const opaqueCount = await countOpaquePixels(page);
+    expect(opaqueCount).toBeGreaterThan(300);
+    expect(opaqueCount).toBeLessThan(4000);
+
+    // The outline must close on itself: opaque pixels should exist near
+    // three distinct vertex regions. With the bbox-fit SDF the vertices
+    // (for an x-constrained triangle in a square bbox) sit at:
+    //   top vertex     ≈ (200, 80)
+    //   bottom-left    ≈ (120, 220)
+    //   bottom-right   ≈ (280, 220)
+    // We check a small neighborhood around each (the corner radius is 0 and
+    // the stroke width is 3, so the pixel is ±a few px from the ideal).
+    async function strokeNearby(cx: number, cy: number, r = 6) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          const px = await getPixelAt(page, cx + dx, cy + dy);
+          if ((px.a ?? 0) > 0) return true;
+        }
+      }
+      return false;
+    }
+
+    expect(await strokeNearby(200, 82)).toBe(true);
+    expect(await strokeNearby(130, 215)).toBe(true);
+    expect(await strokeNearby(270, 215)).toBe(true);
+  });
+
+  test('stroke-only triangle stays inside its bounding box (#394)', async ({ page }) => {
+    // Companion to the above test. The previous apothem-fit SDF made the
+    // top vertex extend twice the bbox height above the drag center, so a
+    // stroke-only triangle could paint stroke pixels well above the bbox.
+    // Verify that with the fix, no opaque pixels appear above the bbox top.
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 3);
+    await setToolOption(page, 'Corner Radius', 0);
+    await setToolSetting(page, 'setShapeFillColor', null);
+    await setToolSetting(page, 'setShapeStrokeColor', { r: 0, g: 0, b: 0, a: 1 });
+    await setToolOption(page, 'Width', 3);
+
+    // Drag from (200, 150) to (260, 210). bbox = (140, 90) → (260, 210).
+    // The pre-fix top vertex would land at y = 150 - 120 = 30 (well above
+    // bbox top at y = 90). With the fix, nothing should render above y ≈ 90.
+    await dragShape(page, { x: 200, y: 150 }, { x: 260, y: 210 });
+
+    // Sample a strip well above the bbox top (y = 30..60). No stroke pixels
+    // should leak up there.
+    for (let y = 30; y <= 60; y += 6) {
+      for (let x = 100; x <= 300; x += 20) {
+        const px = await getPixelAt(page, x, y);
+        expect(px.a, `unexpected stroke pixel above bbox at (${x}, ${y})`).toBe(0);
+      }
+    }
+  });
+
   test('successive shapes can be drawn without errors', async ({ page }) => {
     await setForegroundColor(page, 255, 0, 0);
     await selectTool(page, 'shape');

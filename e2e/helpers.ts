@@ -361,7 +361,25 @@ export async function closeBrushModal(page: Page): Promise<void> {
 
 export async function setBrushModalOption(page: Page, label: string, value: number): Promise<void> {
   await openBrushModal(page);
-  const input = page.locator(`[role="dialog"][aria-label="Brushes"] [aria-label="${label} value"]`);
+  const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
+
+  const shapeLabels = ['Size', 'Spacing', 'Hardness', 'Opacity', 'Taper'];
+  const dynamicsLabels = ['Scatter', 'Size Jitter', 'Hardness Jitter', 'Angle Jitter', 'Opacity Jitter', 'Speed Size'];
+  const textureLabels = ['Scale'];
+
+  let tabName: string;
+  if (shapeLabels.includes(label)) tabName = 'Shape';
+  else if (dynamicsLabels.includes(label)) tabName = 'Dynamics';
+  else if (textureLabels.includes(label)) tabName = 'Texture';
+  else tabName = 'Shape';
+
+  const tab = dialog.locator(`[role="option"]:has-text("${tabName}")`);
+  if (!(await tab.getAttribute('aria-selected'))?.includes('true')) {
+    await tab.click();
+    await page.waitForTimeout(50);
+  }
+
+  const input = dialog.locator(`[aria-label="${label} value"]`);
   await input.fill(String(value));
   await input.press('Enter');
 }
@@ -424,33 +442,37 @@ export async function applyFilter(
 }
 
 export async function setAdjustment(page: Page, label: string, value: number): Promise<void> {
-  const valuesSliders = ['Exposure', 'Contrast', 'Highlights', 'Shadows', 'Whites', 'Blacks', 'Vignette'];
-  const tab = valuesSliders.includes(label) ? 'Values' : 'Colors';
+  const LABEL_TO_NODE: Record<string, { nodeType: string; key: string }> = {
+    Exposure: { nodeType: 'exposure', key: 'exposure' },
+    Contrast: { nodeType: 'contrast', key: 'contrast' },
+    Highlights: { nodeType: 'highlights-shadows', key: 'highlights' },
+    Shadows: { nodeType: 'highlights-shadows', key: 'shadows' },
+    Whites: { nodeType: 'highlights-shadows', key: 'whites' },
+    Blacks: { nodeType: 'highlights-shadows', key: 'blacks' },
+    Saturation: { nodeType: 'saturation', key: 'saturation' },
+    Vibrance: { nodeType: 'saturation', key: 'vibrance' },
+    Vignette: { nodeType: 'vignette', key: 'vignette' },
+  };
 
   const input = page.locator(`[aria-label="${label} value"]`);
-  if (!(await input.isVisible({ timeout: 500 }).catch(() => false))) {
-    const tabLocator = page.locator(`role=tab[name="${tab}"]`);
-    if (await tabLocator.isVisible({ timeout: 500 }).catch(() => false)) {
-      await tabLocator.click();
-      await page.waitForTimeout(100);
-    } else {
-      const rootGroupId = await page.evaluate(() => {
-        const store = (window as unknown as Record<string, unknown>).__editorStore as {
-          getState: () => { document: { rootGroupId: string } };
-        };
-        return store.getState().document.rootGroupId;
-      });
-      await page.locator(`[data-layer-id="${rootGroupId}"] button[aria-label*="effects"]`).click();
-      await page.waitForTimeout(200);
-      const tabAfter = page.locator(`role=tab[name="${tab}"]`);
-      if (await tabAfter.isVisible({ timeout: 500 }).catch(() => false)) {
-        await tabAfter.click();
-      }
-    }
+  if (await input.isVisible({ timeout: 500 }).catch(() => false)) {
+    await input.fill(String(value));
+    await input.press('Enter');
+    await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+    return;
   }
-  await input.fill(String(value));
-  await input.press('Enter');
-  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+
+  const mapping = LABEL_TO_NODE[label];
+  if (!mapping) throw new Error(`Unknown adjustment label: ${label}`);
+
+  const rootGroupId = await page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { rootGroupId: string } };
+    };
+    return store.getState().document.rootGroupId;
+  });
+
+  await addAdjustment(page, rootGroupId, mapping.nodeType, { [mapping.key]: value });
 }
 
 // ---------------------------------------------------------------------------
@@ -719,6 +741,11 @@ const ADJUSTMENT_MENU_LABELS: Record<string, string> = {
   levels: 'Levels',
   invert: 'Invert',
   'hue-saturation': 'Hue / Saturation',
+  'color-balance': 'Color Balance',
+  'black-white': 'Black & White',
+  'photo-filter': 'Photo Filter',
+  'channel-mixer': 'Channel Mixer',
+  'gradient-map': 'Gradient Map',
 };
 
 const ADJUSTMENT_SLIDER_LABELS: Record<string, Record<string, string>> = {
@@ -732,6 +759,12 @@ const ADJUSTMENT_SLIDER_LABELS: Record<string, Record<string, string>> = {
   },
   saturation: { saturation: 'Saturation', vibrance: 'Vibrance' },
   vignette: { vignette: 'Vignette' },
+  'hue-saturation': { hue: 'Hue', saturation: 'Saturation', lightness: 'Lightness' },
+  'photo-filter': { density: 'Density' },
+  'black-white': {
+    reds: 'Reds', yellows: 'Yellows', greens: 'Greens',
+    cyans: 'Cyans', blues: 'Blues', magentas: 'Magentas',
+  },
 };
 
 export async function openGroupEffectsPanel(page: Page, groupId: string): Promise<void> {

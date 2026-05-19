@@ -213,7 +213,7 @@ export function renderBrushCursor(
   size: number,
   zoom: number,
   shape: 'circle' | 'square',
-  tip?: { width: number; height: number; data: Uint8ClampedArray } | null,
+  tip?: { width: number; height: number; data: Uint8ClampedArray; kind?: 'alpha' | 'color' } | null,
   angle = 0,
 ): void {
   const half = size / 2;
@@ -256,11 +256,21 @@ export function renderBrushCursor(
     const tipCtx = tipCanvas.getContext('2d');
     if (tipCtx) {
       const imgData = tipCtx.createImageData(tip.width, tip.height);
-      for (let i = 0; i < tip.data.length; i++) {
-        imgData.data[i * 4] = 255;
-        imgData.data[i * 4 + 1] = 255;
-        imgData.data[i * 4 + 2] = 255;
-        imgData.data[i * 4 + 3] = tip.data[i]! > 30 ? 255 : 0;
+      const pixelCount = tip.width * tip.height;
+      if (tip.kind === 'color') {
+        for (let i = 0; i < pixelCount; i++) {
+          imgData.data[i * 4] = 255;
+          imgData.data[i * 4 + 1] = 255;
+          imgData.data[i * 4 + 2] = 255;
+          imgData.data[i * 4 + 3] = tip.data[i * 4 + 3]! > 30 ? 255 : 0;
+        }
+      } else {
+        for (let i = 0; i < pixelCount; i++) {
+          imgData.data[i * 4] = 255;
+          imgData.data[i * 4 + 1] = 255;
+          imgData.data[i * 4 + 2] = 255;
+          imgData.data[i * 4 + 3] = tip.data[i]! > 30 ? 255 : 0;
+        }
       }
       tipCtx.putImageData(imgData, 0, 0);
 

@@ -185,19 +185,6 @@ void main() {
         }
     }
 
-    // Brush texture modulation (for stroke compositing)
-    if (u_hasBrushTexture == 1 && src.a > 0.001) {
-        vec2 texUV = docPos / (u_brushTextureSize * u_textureScale);
-        float texVal = texture(u_brushTexture, fract(texUV)).r;
-        if (u_textureBlendMode == 0) {
-            src.a *= texVal;
-        } else if (u_textureBlendMode == 1) {
-            src.a *= (1.0 - texVal);
-        } else {
-            src.a = src.a < 0.5 ? 2.0 * src.a * texVal : 1.0 - 2.0 * (1.0 - src.a) * (1.0 - texVal);
-        }
-    }
-
     float sa = src.a * u_opacity;
     float da = dst.a;
 
