@@ -217,3 +217,82 @@ describe('syncGroupAdjustments — group mask registration', () => {
     expect(vi.mocked(bridge.setGroupAdjustments)).not.toHaveBeenCalled();
   });
 });
+
+describe('flattenGroupDescendants', () => {
+  it('returns the direct children of a flat group', () => {
+    const a = createRasterLayer({ name: 'A', width: 10, height: 10 });
+    const b = createRasterLayer({ name: 'B', width: 10, height: 10 });
+    const group = createGroupLayer({ name: 'Group', children: [a.id, b.id] });
+    const out = sync.flattenGroupDescendants([a, b, group], group.id);
+    expect(out).toEqual([a.id, b.id]);
+  });
+
+  it('includes descendants of a nested sub-group', () => {
+    const a = createRasterLayer({ name: 'A', width: 10, height: 10 });
+    const b = createRasterLayer({ name: 'B', width: 10, height: 10 });
+    const sub = createGroupLayer({ name: 'Sub', children: [a.id, b.id] });
+    const c = createRasterLayer({ name: 'C', width: 10, height: 10 });
+    const root = createGroupLayer({ name: 'Root', children: [sub.id, c.id] });
+    const out = sync.flattenGroupDescendants([a, b, sub, c, root], root.id);
+    // Sub-group marker is included along with its descendants. The WASM
+    // compositor skips Group-type entries when iterating layer_stack, so
+    // including them is harmless and keeps the descendant walk simple.
+    expect(out).toEqual([sub.id, a.id, b.id, c.id]);
+  });
+
+  it('walks deeply nested groups recursively', () => {
+    const leaf = createRasterLayer({ name: 'Leaf', width: 10, height: 10 });
+    const inner = createGroupLayer({ name: 'Inner', children: [leaf.id] });
+    const mid = createGroupLayer({ name: 'Mid', children: [inner.id] });
+    const root = createGroupLayer({ name: 'Root', children: [mid.id] });
+    const out = sync.flattenGroupDescendants([leaf, inner, mid, root], root.id);
+    expect(out).toEqual([mid.id, inner.id, leaf.id]);
+  });
+
+  it('returns empty array when group id is unknown', () => {
+    const a = createRasterLayer({ name: 'A', width: 10, height: 10 });
+    expect(sync.flattenGroupDescendants([a], 'no-such-group')).toEqual([]);
+  });
+
+  it('returns empty array for a leaf layer (non-group)', () => {
+    const a = createRasterLayer({ name: 'A', width: 10, height: 10 });
+    expect(sync.flattenGroupDescendants([a], a.id)).toEqual([]);
+  });
+});
+
+describe('syncGroupAdjustments — nested descendants are routed to the group', () => {
+  beforeEach(() => {
+    vi.mocked(bridge.setGroupAdjustments).mockClear();
+    vi.mocked(bridge.clearGroupAdjustments).mockClear();
+  });
+
+  it('passes every descendant id (not just direct children) when the root group has adjustments', () => {
+    // This is the regression test for #395. Before the fix the root group's
+    // setGroupAdjustments call only listed direct children, so the on-screen
+    // compositor's child_to_group lookup missed sub-group descendants and
+    // they rendered directly onto the composite. The group's normal-blend
+    // finalize then covered them with the (partial) scratch contents, which
+    // is what the user reported as "viewport near-black, export correct".
+    const engine = makeFakeEngine();
+    const bg = createRasterLayer({ name: 'Background', width: 100, height: 100 });
+    const leaf1 = createRasterLayer({ name: 'Leaf 1', width: 100, height: 100 });
+    const leaf2 = createRasterLayer({ name: 'Leaf 2', width: 100, height: 100 });
+    const subGroup = createGroupLayer({ name: 'Sub', children: [leaf1.id, leaf2.id] });
+    const root = {
+      ...createGroupLayer({ name: 'Root', children: [bg.id, subGroup.id] }),
+      blendMode: 'normal' as const,
+      adjustmentsEnabled: true,
+      adjustments: [{ id: 'c-1', type: 'contrast' as const, enabled: true, contrast: 0.15 }],
+    };
+    sync.syncGroupAdjustments(engine, [bg, leaf1, leaf2, subGroup, root]);
+    expect(vi.mocked(bridge.setGroupAdjustments)).toHaveBeenCalledOnce();
+    const [, , childrenJson] = vi.mocked(bridge.setGroupAdjustments).mock.calls[0]!;
+    const ids = JSON.parse(childrenJson as string) as string[];
+    // Direct children
+    expect(ids).toContain(bg.id);
+    expect(ids).toContain(subGroup.id);
+    // Sub-group descendants — these are the IDs the pre-fix code dropped
+    expect(ids).toContain(leaf1.id);
+    expect(ids).toContain(leaf2.id);
+  });
+});

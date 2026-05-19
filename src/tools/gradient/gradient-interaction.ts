@@ -13,6 +13,8 @@ import {
   endGradientPreview as gpuEndGradientPreview,
   renderMaskLinearGradient as gpuRenderMaskLinearGradient,
   renderMaskRadialGradient as gpuRenderMaskRadialGradient,
+  renderQuickMaskLinearGradient as gpuRenderQuickMaskLinearGradient,
+  renderQuickMaskRadialGradient as gpuRenderQuickMaskRadialGradient,
   uploadLayerMask,
 } from '../../engine-wasm/wasm-bridge';
 
@@ -20,11 +22,15 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer } = ctx;
   const editorState = useEditorStore.getState();
   const ts = useToolSettingsStore.getState();
-  const maskEditMode = useUIStore.getState().maskEditMode;
+  const ui = useUIStore.getState();
+  const maskEditMode = ui.maskEditMode;
+  const isQuickMaskMode = ui.isQuickMaskMode;
 
   const engine = getEngine();
 
-  if (maskEditMode && activeLayer.mask) {
+  if (isQuickMaskMode) {
+    editorState.pushHistory(ts.gradientType === 'radial' ? 'Quick Mask Radial Gradient' : 'Quick Mask Linear Gradient');
+  } else if (maskEditMode && activeLayer.mask) {
     editorState.pushHistory(ts.gradientType === 'radial' ? 'Mask Radial Gradient' : 'Mask Linear Gradient');
     if (engine) {
       const maskBytes = new Uint8Array(activeLayer.mask.data.buffer, activeLayer.mask.data.byteOffset, activeLayer.mask.data.byteLength);
@@ -36,7 +42,7 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   ts.addRecentColor(ts.foregroundColor);
   ts.addRecentColor(ts.backgroundColor);
 
-  if (engine && !maskEditMode) gpuSaveGradientPreview(engine, activeLayerId);
+  if (engine && !maskEditMode && !isQuickMaskMode) gpuSaveGradientPreview(engine, activeLayerId);
 
   return {
     drawing: true,
@@ -50,6 +56,7 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
     layerStartY: activeLayer.y,
     ...DEFAULT_TRANSFORM_FIELDS,
     maskMode: maskEditMode && !!activeLayer.mask,
+    quickMaskMode: isQuickMaskMode,
   };
 }
 
@@ -95,7 +102,16 @@ export function handleGradientMove(state: InteractionState, layerLocalPos: Point
     endY = startY + dist * Math.sin(snappedAngle);
   }
 
-  if (state.maskMode) {
+  if (state.quickMaskMode) {
+    if (gradType === 'linear') {
+      gpuRenderQuickMaskLinearGradient(engine, startX, startY, endX, endY, stopsJson);
+    } else {
+      const dx = endX - startX;
+      const dy = endY - startY;
+      const radius = Math.sqrt(dx * dx + dy * dy);
+      gpuRenderQuickMaskRadialGradient(engine, startX, startY, radius, stopsJson);
+    }
+  } else if (state.maskMode) {
     if (gradType === 'linear') {
       gpuRenderMaskLinearGradient(engine, state.layerId, startX, startY, endX, endY, stopsJson);
     } else {

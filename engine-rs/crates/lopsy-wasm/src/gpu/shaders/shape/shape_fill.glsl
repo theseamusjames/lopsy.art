@@ -38,9 +38,9 @@ float sdPolygon(vec2 p, vec2 halfSize, int n, float cr) {
     float cosAn = cos(an);
 
     // Rotation: even-sided polygons get +an so flat edges face up/down.
-    // Odd-sided polygons stay at the natural orientation (vertex up).
-    // The rotation uses the atan(x,y) convention where angle 0 = +y.
-    float rot = (n / 2 * 2 == n) ? an : 0.0;
+    // Odd-sided polygons get +PI so the top vertex points up in screen
+    // coordinates (where +Y = down), matching the JS polygon orientation.
+    float rot = (n / 2 * 2 == n) ? an : PI;
 
     // Measure natural polygon extents at unit circumradius. For odd n the
     // polygon is not symmetric vertically (pointy top, flat bottom), so we

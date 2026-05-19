@@ -1,5 +1,6 @@
 import type { Curves } from '../filters/curves';
 import type { Levels } from '../filters/levels';
+import type { GradientStop } from '../tools/gradient/gradient';
 
 export interface BaseAdjustmentNode {
   readonly id: string;
@@ -54,7 +55,7 @@ export interface ColorBalanceNode extends BaseAdjustmentNode {
 
 export interface GradientMapNode extends BaseAdjustmentNode {
   readonly type: 'gradient-map';
-  readonly stops: ReadonlyArray<{ readonly position: number; readonly color: { readonly r: number; readonly g: number; readonly b: number } }>;
+  readonly stops: readonly GradientStop[];
 }
 
 export interface BlackWhiteNode extends BaseAdjustmentNode {
