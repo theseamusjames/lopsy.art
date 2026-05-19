@@ -1,59 +1,69 @@
-# Composition: Koi Fish Mid-Century Modern Poster
+# Composition: Zephyr & Eagle Heritage Outdoor Co.
 
-**Date**: 2026-05-06
-**Branch**: `theseamusjames/gpu-masks`
-**Test file**: `e2e/composition-koi-fish.spec.ts`
-**Result**: PASSED (2.5 minutes, chromium/SwiftShader)
+**Date**: 2026-05-19
+**Branch**: `claude/search-compose-skill-hKMrs`
+**Test file**: `e2e/composition-zephyr-eagle.spec.ts`
+**Style**: Etching / vintage engraving
+**Project**: Logo (circular badge, 900×900)
+**Result**: PASSED (15.8 minutes, chromium/SwiftShader)
 
-## What was tested
+## Evaluation
 
-### Layer Masks
-- Added masks to three layers (main koi, second koi, title)
-- Entered mask edit mode via UI (clicking mask thumbnail)
-- Painted on mask with brush tool (GPU mask painting path)
-- Used eraser on mask (GPU mask eraser path)
-- Applied gradient-style mask data (top-to-bottom, radial, left-to-right)
-- Verified mask state in store (enabled, non-null)
-- Exited mask edit mode
+Spun an evaluator agent — no context about the project — to identify
+the work and rate it 1–5 on creativity and execution.
 
-### Marquee Selections
-- Rectangular marquee + fill: used extensively for background, geometric bars, and block letter title ("KOI")
-- Elliptical marquee + fill: used for water ripple circles (5 concentric ellipses)
-- Both marquee types verified via tool switching and mouse drag interactions
+- **Identified as**: a heritage-style outdoor brand logo badge (Filson /
+  REI / national-park-patch lineage) — eagle, mountains, sun rays,
+  banner, circular border.
+- **Creativity**: 2 / 5 — concept is conventional for the genre.
+- **Execution**: 2 / 5 — silhouette reads, but bottom text overlaps the
+  inner ring, eagle body reads as a blob, red banner floats unanchored.
 
-### Undo/Redo
-- Undo after mask operations verified (composited output changes)
-- Redo after undo verified (produces valid frame)
-- General undo/redo on detail layer verified
+## Features exercised
 
-### Layer Effects
-- Drop shadow on main koi (offset, blur, opacity, color)
-- Outer glow on main koi (size, spread, opacity, color)
-- Inner glow on second koi (size, spread, opacity, color)
-- All effects verified as enabled in store state
+### Tools
+- Shape tool (ellipse + polygon, both fill + stroke variants)
+- Brush (crosshatch shading, eagle-feather lines on pencil)
+- Pencil (sun rays radiating from horizon)
+- Spray (parchment grain texture)
+- Fill bucket (background parchment)
+- Text tool (banner + top + bottom labels; Garamond / Times fallback)
+- Marquee rectangle (captured with active marching ants over banner)
+- Move tool (tool switching between text + shape phases)
 
-### Blend Modes & Opacity
-- Screen blend mode on water ripples layer
-- Layer opacity set to 60% on ripples layer
+### Layers & ops
+- 18+ named layers: Parchment, Paper Grain, Outer Badge, Inner Field,
+  Gold Ring, Inner Ring, Sun Rays, Mountains, Snow Caps, Eagle, Banner,
+  Mountain Stipple, Crosshatch, Banner Text, Top Text, Bottom Text, Stars,
+  decorative dots.
+- Add layer, rename layer.
+- Layer opacity (Paper Grain, Sun Rays at 55%).
+- Layer blend mode (Crosshatch → Multiply).
+- Group selected layers (post-export, to test the feature).
 
-### Brush Tool
-- Multiple brush sizes (25-100px), hardness levels, opacity levels
-- Color changes via store (orange, red, white, black)
-- Multiple stroke segments forming koi body shapes
+### Effects
+- Drop Shadow on Outer Badge.
+- Stroke on Banner (parchment outline).
+- Outer Glow on Eagle (gold).
 
-## Known Limitation
+### History
+- Multiple undo / redo cycles after the stars phase, with redo back to
+  the same state.
 
-GPU mask readback (`readMaskTexture`) does not produce correct results in the
-headless SwiftShader environment. The existing `tools.spec.ts` mask painting
-test also fails for the same reason. Mask data assertions in this composition
-test use store-based mask writes rather than GPU-painted mask readback.
+### Selection
+- Active rectangular marquee captured (screenshot with marching ants).
+- Ctrl+D deselect.
 
-## Screenshots
+### Export
+- Composited PNG export via `__readCompositedPixels`, flipped top-down,
+  saved as `Zephyr & Eagle Heritage Outdoor Co.png` (900×900).
 
-19 screenshots saved to `e2e/screenshots/koi-fish-*.png`:
-- `01-background` through `18-details`: incremental build phases
-- `koi-fish-final.png`: completed composition
+## Notable findings
 
-## Document Specs
-- 800 x 1000 px (portrait poster format)
-- 8 layers: background, main koi (with mask), geometry bars, water ripples, second koi (with mask), title "KOI" (with mask), decorative details, plus the root group
+- Shape tool `onActivate` resets `shapeFillColor` to `foregroundColor`
+  every time the tool is activated — even if it was already active.
+  Workaround: set shape style **after** `selectTool('shape')`, not before.
+- Shape tool drag is **centered** on the start point (size = drag × 2),
+  not corner-to-corner. Helpers adapted accordingly.
+- `Escape` cancels text editing and removes the new layer; use
+  `Shift+Enter` (or Tab) to commit.
