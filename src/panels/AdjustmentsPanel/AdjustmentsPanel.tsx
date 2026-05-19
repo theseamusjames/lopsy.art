@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Eye, EyeOff, X, ChevronDown, ChevronRight, GripVertical, Trash2, Plus } from 'lucide-react';
 import { Slider } from '../../components/Slider/Slider';
 import { IconButton } from '../../components/IconButton/IconButton';
@@ -37,6 +37,10 @@ import type {
 import {
   ADJUSTMENT_NODE_LABELS,
 } from '../../filters/adjustment-node-utils';
+import type { GradientStop } from '../../tools/gradient/gradient';
+import type { Color } from '../../types';
+import { GradientEditor } from '../../components/GradientEditor/GradientEditor';
+import { ColorPicker } from '../../components/ColorPicker/ColorPicker';
 import styles from './AdjustmentsPanel.module.css';
 
 const CHANNEL_COLORS: Record<CurveChannel, string> = {
@@ -576,58 +580,58 @@ function ChannelMixerControls({ node, onChange }: { node: ChannelMixerNode; onCh
 }
 
 function GradientMapControls({ node, onChange }: { node: GradientMapNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
-  const toHex = (c: { r: number; g: number; b: number }) =>
-    '#' + [c.r, c.g, c.b].map((v) => v.toString(16).padStart(2, '0')).join('');
-  const fromHex = (hex: string): { r: number; g: number; b: number } => ({
-    r: parseInt(hex.slice(1, 3), 16),
-    g: parseInt(hex.slice(3, 5), 16),
-    b: parseInt(hex.slice(5, 7), 16),
-  });
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const updateStop = (index: number, field: 'color' | 'position', value: unknown) => {
-    const newStops = node.stops.map((s, i) =>
-      i === index ? { ...s, [field]: value } : s,
+  const sorted = [...node.stops].sort((a, b) => a.position - b.position);
+  const selectedStop = sorted[selectedIndex];
+
+  const handleStopsChange = useCallback((stops: readonly GradientStop[]) => {
+    onChange({ stops });
+  }, [onChange]);
+
+  const handleColorChange = useCallback((color: Color) => {
+    const newStops = sorted.map((stop, i) =>
+      i === selectedIndex ? { ...stop, color } : stop,
     );
     onChange({ stops: newStops });
-  };
+  }, [sorted, selectedIndex, onChange]);
 
-  const addStop = () => {
-    const sorted = [...node.stops].sort((a, b) => a.position - b.position);
-    const last = sorted[sorted.length - 1]!;
-    onChange({ stops: [...node.stops, { position: Math.min(1, last.position + 0.1), color: { r: 128, g: 128, b: 128 } }] });
-  };
-
-  const removeStop = (index: number) => {
+  const handleDelete = useCallback(() => {
     if (node.stops.length <= 2) return;
-    onChange({ stops: node.stops.filter((_, i) => i !== index) });
-  };
+    const newStops = sorted.filter((_, i) => i !== selectedIndex);
+    onChange({ stops: newStops });
+    setSelectedIndex(Math.min(selectedIndex, newStops.length - 1));
+  }, [node.stops.length, sorted, selectedIndex, onChange]);
 
   return (
     <div className={styles.gradientMapSection}>
-      <div className={styles.gradientPreview} style={{ background: buildCssGradient(node.stops) }} />
-      {node.stops.map((stop, i) => (
-        <div key={i} className={styles.gradientStop}>
-          <input type="color" className={styles.colorSwatch} value={toHex(stop.color)}
-            onChange={(e) => updateStop(i, 'color', fromHex(e.target.value))}
-            aria-label={`Stop ${i + 1} color`}
-          />
-          <input type="number" className={styles.positionInput}
-            value={Math.round(stop.position * 100)} min={0} max={100} step={1}
-            onChange={(e) => updateStop(i, 'position', Number(e.target.value) / 100)}
-            aria-label={`Stop ${i + 1} position`}
-          />
-          <span className={styles.positionUnit}>%</span>
-          <button type="button" className={styles.removeStopBtn} onClick={() => removeStop(i)}
-            disabled={node.stops.length <= 2} aria-label={`Remove stop ${i + 1}`}>×</button>
-        </div>
-      ))}
-      <button type="button" className={styles.textBtn} onClick={addStop}>+ Add Stop</button>
+      <GradientEditor
+        stops={sorted}
+        selectedIndex={selectedIndex}
+        onStopsChange={handleStopsChange}
+        onSelectStop={setSelectedIndex}
+      />
+      <div className={styles.gradientStopInfo}>
+        {selectedStop && (
+          <>
+            <div
+              className={styles.stopColorPreview}
+              style={{ backgroundColor: `rgb(${selectedStop.color.r},${selectedStop.color.g},${selectedStop.color.b})` }}
+            />
+            <span>Stop {selectedIndex + 1} of {sorted.length}</span>
+            <span>Position: {Math.round(selectedStop.position * 100)}%</span>
+            <IconButton
+              icon={<Trash2 size={12} />}
+              label="Delete stop"
+              onClick={handleDelete}
+              disabled={node.stops.length <= 2}
+            />
+          </>
+        )}
+      </div>
+      {selectedStop && (
+        <ColorPicker color={selectedStop.color} onChange={handleColorChange} />
+      )}
     </div>
   );
-}
-
-function buildCssGradient(stops: ReadonlyArray<{ position: number; color: { r: number; g: number; b: number } }>): string {
-  const sorted = [...stops].sort((a, b) => a.position - b.position);
-  const parts = sorted.map((s) => `rgb(${s.color.r},${s.color.g},${s.color.b}) ${Math.round(s.position * 100)}%`);
-  return `linear-gradient(to right, ${parts.join(', ')})`;
 }

@@ -174,7 +174,7 @@ export function createDefaultNode(type: AdjustmentNodeType): AdjustmentNode {
     case 'color-balance':
       return { id, enabled: true, type: 'color-balance', shadowsCMY: [0, 0, 0], midtonesCMY: [0, 0, 0], highlightsCMY: [0, 0, 0] };
     case 'gradient-map':
-      return { id, enabled: true, type: 'gradient-map', stops: [{ position: 0, color: { r: 0, g: 0, b: 0 } }, { position: 1, color: { r: 255, g: 255, b: 255 } }] };
+      return { id, enabled: true, type: 'gradient-map', stops: [{ position: 0, color: { r: 0, g: 0, b: 0, a: 1 } }, { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } }] };
     case 'black-white':
       return { id, enabled: true, type: 'black-white', reds: 40, yellows: 60, greens: 40, cyans: 60, blues: 20, magentas: 80 };
     case 'photo-filter':
