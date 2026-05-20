@@ -3,6 +3,7 @@ import { Eye, EyeOff, X, ChevronDown, ChevronRight, GripVertical, Trash2, Plus }
 import { Slider } from '../../components/Slider/Slider';
 import { IconButton } from '../../components/IconButton/IconButton';
 import type { DragProps } from '../../app/hooks/useDraggablePanel';
+import { useGroupHistogram } from './useGroupHistogram';
 import { CurveEditor } from '../../components/CurveEditor/CurveEditor';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
@@ -44,6 +45,13 @@ import { ColorPicker } from '../../components/ColorPicker/ColorPicker';
 import styles from './AdjustmentsPanel.module.css';
 
 const CHANNEL_COLORS: Record<CurveChannel, string> = {
+  rgb: '#e0e0e0',
+  r: '#e0e0e0',
+  g: '#e0e0e0',
+  b: '#e0e0e0',
+};
+
+const CHANNEL_TAB_COLORS: Record<CurveChannel, string> = {
   rgb: '#e0e0e0',
   r: '#ff5e5e',
   g: '#5eff7e',
@@ -403,6 +411,7 @@ function VignetteControls({ node, onChange }: { node: VignetteNode; onChange: (p
 
 function CurvesControls({ node, onChange }: { node: CurvesNode; onChange: (p: Partial<AdjustmentNode>) => void }) {
   const [channel, setChannel] = useState<CurveChannel>('rgb');
+  const histogram = useGroupHistogram(false);
   const curves: Curves = node.curves;
   const points = curves[channel];
   const isIdentity = isIdentityCurve(points);
@@ -427,7 +436,7 @@ function CurvesControls({ node, onChange }: { node: CurvesNode; onChange: (p: Pa
               role="tab"
               aria-selected={channel === c}
               className={`${styles.channelTab} ${channel === c ? styles.channelTabActive : ''}`}
-              style={{ color: CHANNEL_COLORS[c] }}
+              style={{ color: CHANNEL_TAB_COLORS[c] }}
               onClick={() => setChannel(c)}
             >
               {CHANNEL_LABELS[c]}
@@ -447,6 +456,8 @@ function CurvesControls({ node, onChange }: { node: CurvesNode; onChange: (p: Pa
         points={points}
         color={CHANNEL_COLORS[channel]}
         onChange={(pts) => handleCurveChange(channel, pts)}
+        histogram={histogram}
+        channel={channel}
       />
     </div>
   );

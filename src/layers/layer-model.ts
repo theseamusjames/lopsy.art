@@ -66,7 +66,7 @@ export function createTextLayer(params: {
   };
 }
 
-export function createGroupLayer(params: { name: string; children?: string[] }): GroupLayer {
+export function createGroupLayer(params: { name: string; children?: string[]; adjustments?: readonly import('../types/adjustment-nodes').AdjustmentNode[] }): GroupLayer {
   return {
     id: crypto.randomUUID(),
     name: params.name,
@@ -84,7 +84,7 @@ export function createGroupLayer(params: { name: string; children?: string[] }):
     mask: null,
     children: params.children ?? [],
     collapsed: false,
-    adjustments: [],
+    adjustments: params.adjustments ? [...params.adjustments] : [],
     adjustmentsEnabled: true,
   };
 }

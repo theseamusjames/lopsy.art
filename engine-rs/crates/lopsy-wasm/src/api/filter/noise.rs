@@ -8,9 +8,8 @@ use crate::filter_gpu;
 #[wasm_bindgen(js_name = "filterAddNoise")]
 pub fn filter_add_noise(
     engine: &mut Engine, layer_id: &str,
-    amount: f32, monochrome: bool,
+    amount: f32, monochrome: bool, seed: f32,
 ) {
-    let seed = engine.inner.selection_time as f32; // Use time as seed for randomness
     filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
@@ -30,9 +29,8 @@ pub fn filter_add_noise(
 }
 
 #[wasm_bindgen(js_name = "filterFillWithNoise")]
-pub fn filter_fill_with_noise(engine: &mut Engine, layer_id: &str, monochrome: bool) {
-    // Fill with noise = add noise at maximum amount to a cleared layer
-    filter_add_noise(engine, layer_id, 255.0, monochrome);
+pub fn filter_fill_with_noise(engine: &mut Engine, layer_id: &str, monochrome: bool, seed: f32) {
+    filter_add_noise(engine, layer_id, 255.0, monochrome, seed);
 }
 
 #[wasm_bindgen(js_name = "filterClouds")]

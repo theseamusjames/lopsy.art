@@ -2,7 +2,7 @@ import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
 import type { AdjustmentNodeType, AdjustmentNode } from '../../types/adjustment-nodes';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
-import { createDefaultNode } from '../../filters/adjustment-node-utils';
+import { createDefaultNode, createDefaultAdjustments } from '../../filters/adjustment-node-utils';
 import { createImageData } from '../../engine/color-space';
 import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil, buildFlatDisplayList, findParentGroup, removeFromParentGroup } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
@@ -120,7 +120,7 @@ function syncPixelDataToGpu(
 
 function createInitialDocument() {
   const bg = createRasterLayer({ name: 'Background', width: 800, height: 600 });
-  const rootGroup = createGroupLayer({ name: 'Project', children: [bg.id] });
+  const rootGroup = createGroupLayer({ name: 'Project', children: [bg.id], adjustments: createDefaultAdjustments() });
   const imgData = createImageData(800, 600);
   for (let i = 0; i < imgData.data.length; i += 4) {
     imgData.data[i] = 255;

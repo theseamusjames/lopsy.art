@@ -103,7 +103,8 @@ export type ModalState =
   | { kind: 'strokePath'; pathId: string }
   | { kind: 'guideColor' }
   | { kind: 'brush' }
-  | { kind: 'loading'; message: string };
+  | { kind: 'loading'; message: string }
+  | { kind: 'adjustmentLayerInfo' };
 
 export interface SnapLine {
   orientation: 'vertical' | 'horizontal';

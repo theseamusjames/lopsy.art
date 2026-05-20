@@ -2,6 +2,7 @@ import type { Layer } from '../../../types';
 import type { SelectionData, ActionResult } from '../types';
 import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
 import { createImageData } from '../../../engine/color-space';
+import { createDefaultAdjustments } from '../../../filters/adjustment-node-utils';
 
 export function computeCreateDocument(
   width: number,
@@ -34,7 +35,7 @@ export function computeCreateDocument(
     activeLayerId = drawLayer.id;
   }
 
-  const rootGroup = createGroupLayer({ name: 'Project', children: childIds });
+  const rootGroup = createGroupLayer({ name: 'Project', children: childIds, adjustments: createDefaultAdjustments() });
   layers.push(rootGroup);
   layerOrder.push(rootGroup.id);
 

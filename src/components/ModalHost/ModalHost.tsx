@@ -29,7 +29,7 @@ export function ModalHost() {
   // two that didn't before (NewDocument and ShapeSize) to avoid double-firing.
   useEffect(() => {
     if (!modal) return;
-    if (modal.kind !== 'newDocument' && modal.kind !== 'shapeSize') return;
+    if (modal.kind !== 'newDocument' && modal.kind !== 'shapeSize' && modal.kind !== 'adjustmentLayerInfo') return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeModal();
     };
@@ -105,9 +105,70 @@ export function ModalHost() {
       // Rendered separately in App.tsx — it needs canvas-container-relative
       // positioning, not the fixed overlay a ModalHost provides.
       return null;
+    case 'adjustmentLayerInfo':
+      return <AdjustmentLayerInfoModal onClose={closeModal} />;
     case 'loading':
       return <LoadingOverlay message={modal.message} />;
   }
+}
+
+function AdjustmentLayerInfoModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0, 0, 0, 0.6)', zIndex: 9999,
+      }}
+      role="dialog"
+      aria-label="Adjustment layers"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: 'var(--color-bg-secondary, #1e1e1e)',
+        border: '1px solid var(--color-border, #333)',
+        borderRadius: 'var(--radius-lg, 8px)',
+        padding: '24px 28px',
+        maxWidth: 420,
+        color: 'var(--color-text-primary, #e0e0e0)',
+        fontSize: 'var(--font-size-sm, 13px)',
+        lineHeight: 1.6,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+      }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg, 16px)' }}>
+          Group Adjustments
+        </h2>
+        <p style={{ margin: 0, color: 'var(--color-text-secondary, #aaa)' }}>
+          Lopsy uses <strong>group adjustments</strong> instead of separate adjustment layers.
+          Adjustments like Levels, Curves, Exposure, and Hue/Saturation live directly on
+          the Project group and apply non-destructively to all layers within it.
+        </p>
+        <p style={{ margin: 0, color: 'var(--color-text-secondary, #aaa)' }}>
+          The Group Adjustments panel is now open on the right. You can add, remove,
+          reorder, and toggle adjustments from there.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: 'var(--color-accent, #4a9eff)',
+              border: 'none',
+              borderRadius: 'var(--radius-sm, 4px)',
+              padding: '6px 20px',
+              color: '#fff',
+              fontSize: 'var(--font-size-sm, 13px)',
+              cursor: 'pointer',
+            }}
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function LoadingOverlay({ message }: { message: string }) {

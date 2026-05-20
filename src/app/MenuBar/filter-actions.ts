@@ -179,7 +179,7 @@ export function applyAddNoise(amount: number, monochrome: boolean): void {
   if (!engine) return;
 
   useEditorStore.getState().pushHistory('Add Noise');
-  filterAddNoise(engine, activeId, amount, monochrome);
+  filterAddNoise(engine, activeId, amount, monochrome, Math.random() * 1000);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
@@ -192,7 +192,7 @@ export function applyFillWithNoise(monochrome: boolean): void {
   if (!engine) return;
 
   useEditorStore.getState().pushHistory('Fill with Noise');
-  filterFillWithNoise(engine, activeId, monochrome);
+  filterFillWithNoise(engine, activeId, monochrome, Math.random() * 1000);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }

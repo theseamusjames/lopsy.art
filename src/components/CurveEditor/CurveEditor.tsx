@@ -6,7 +6,10 @@ import {
   normalizePoints,
   type CurvePoint,
 } from '../../filters/curves';
+import { histogramPercentile, type Histogram } from '../../panels/AdjustmentsPanel/histogram-compute';
 import styles from './CurveEditor.module.css';
+
+type ChannelKey = 'rgb' | 'r' | 'g' | 'b';
 
 interface CurveEditorProps {
   /**
@@ -17,13 +20,26 @@ interface CurveEditorProps {
   onChange: (points: CurvePoint[]) => void;
   /** Tint of the curve stroke and active control point. */
   color?: string;
-  /** Square size in CSS pixels. */
-  size?: number;
+  histogram?: Histogram;
+  channel?: ChannelKey;
 }
 
 const HIT_RADIUS_PX = 8;
 const POINT_RADIUS_PX = 4;
 const POINT_REMOVE_THRESHOLD_PX = 24;
+
+const HIST_SHADES: Record<'r' | 'g' | 'b', string> = {
+  r: 'rgba(180, 60, 60, 0.45)',
+  g: 'rgba(60, 160, 80, 0.45)',
+  b: 'rgba(60, 90, 180, 0.45)',
+};
+const HIST_SHADE_FOCUS: Record<ChannelKey, string> = {
+  rgb: 'rgba(220, 220, 220, 0.92)',
+  r: 'rgba(200, 80, 80, 0.85)',
+  g: 'rgba(80, 200, 100, 0.85)',
+  b: 'rgba(80, 120, 220, 0.85)',
+};
+const HIST_SHADE_MUTED = 'rgba(60, 60, 60, 0.35)';
 
 interface DragState {
   index: number;
@@ -36,12 +52,11 @@ export function CurveEditor({
   points,
   onChange,
   color = 'var(--color-text-primary)',
-  size = 220,
+  histogram,
+  channel = 'rgb',
 }: CurveEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
-  // Mirror of the props points so dragging stays smooth without waiting
-  // for the parent to re-render between pointer events.
   const [localPoints, setLocalPoints] = useState<readonly CurvePoint[]>(points);
 
   useEffect(() => {
@@ -54,17 +69,54 @@ export function CurveEditor({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const dpr = window.devicePixelRatio || 1;
-    const w = canvas.width;
-    const h = canvas.height;
+    const cw = canvas.clientWidth;
+    const ch = canvas.clientHeight;
+    canvas.width = cw * dpr;
+    canvas.height = ch * dpr;
 
     ctx.save();
     ctx.scale(dpr, dpr);
-    const cw = w / dpr;
-    const ch = h / dpr;
 
     // Background.
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.fillRect(0, 0, cw, ch);
+
+    // Histogram behind everything.
+    if (histogram && histogram.total > 0) {
+      const cap = Math.max(
+        histogramPercentile(histogram.r, 0.995),
+        histogramPercentile(histogram.g, 0.995),
+        histogramPercentile(histogram.b, 0.995),
+        1,
+      );
+
+      const drawHistChannel = (bins: Uint32Array, fill: string) => {
+        ctx.fillStyle = fill;
+        ctx.beginPath();
+        ctx.moveTo(0, ch);
+        for (let i = 0; i < 256; i++) {
+          const x = (i / 255) * cw;
+          const barH = Math.min(1, bins[i]! / cap) * ch;
+          ctx.lineTo(x, ch - barH);
+        }
+        ctx.lineTo(cw, ch);
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      if (channel === 'rgb') {
+        ctx.globalCompositeOperation = 'lighter';
+        drawHistChannel(histogram.b, HIST_SHADES.b);
+        drawHistChannel(histogram.g, HIST_SHADES.g);
+        drawHistChannel(histogram.r, HIST_SHADES.r);
+        ctx.globalCompositeOperation = 'source-over';
+      } else {
+        const others: Array<'r' | 'g' | 'b'> = (['r', 'g', 'b'] as const).filter((c) => c !== channel);
+        drawHistChannel(histogram[others[0]!], HIST_SHADE_MUTED);
+        drawHistChannel(histogram[others[1]!], HIST_SHADE_MUTED);
+        drawHistChannel(histogram[channel], HIST_SHADE_FOCUS[channel]);
+      }
+    }
 
     // Grid (quarters + diagonal reference).
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
@@ -109,19 +161,9 @@ export function CurveEditor({
     }
 
     ctx.restore();
-  }, [localPoints, color]);
+  }, [localPoints, color, histogram, channel]);
 
-  // Resize for HiDPI.
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
-    canvas.style.width = `${size}px`;
-    canvas.style.height = `${size}px`;
-    draw();
-  }, [size, draw]);
+  useEffect(() => { draw(); }, [draw]);
 
   useEffect(() => { draw(); }, [draw]);
 

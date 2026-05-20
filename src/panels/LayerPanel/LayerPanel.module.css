@@ -208,6 +208,14 @@
   color: var(--color-accent);
 }
 
+.effectsBtnHasEffects {
+  color: #4caf50;
+}
+
+.effectsBtnHasEffects:hover {
+  color: #66bb6a;
+}
+
 .opacity {
   appearance: none;
   background: none;
