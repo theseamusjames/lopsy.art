@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { PreciseAdjustmentHandle } from '../../components/PreciseAdjustmentHandle/PreciseAdjustmentHandle';
 import { type Levels, type LevelsChannel, isIdentityChannel } from '../../filters/levels';
 import { clamp } from '../../utils/math';
 import { histogramPercentile, type Histogram } from './histogram-compute';
@@ -91,22 +92,31 @@ export function LevelsEditor({ levels, onChange, onReset, histogram: histOverrid
 // ─── Histogram canvas ──────────────────────────────────────────────────────
 
 function HistogramView({ histogram, channel }: { histogram: Histogram; channel: ChannelKey }) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const histRef = useRef(histogram);
+  const channelRef = useRef(channel);
+  histRef.current = histogram;
+  channelRef.current = channel;
 
-  useEffect(() => {
+  const draw = useCallback(() => {
+    const container = containerRef.current;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!container || !canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const w = container.clientWidth;
+    const h = container.clientHeight;
     const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
     canvas.width = w * dpr;
     canvas.height = h * dpr;
 
     ctx.save();
     ctx.scale(dpr, dpr);
+
+    const hist = histRef.current;
+    const ch = channelRef.current;
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
     ctx.fillRect(0, 0, w, h);
@@ -121,7 +131,7 @@ function HistogramView({ histogram, channel }: { histogram: Histogram; channel: 
       ctx.stroke();
     }
 
-    if (histogram.total === 0) {
+    if (hist.total === 0) {
       ctx.fillStyle = 'rgba(160, 160, 160, 0.4)';
       ctx.font = '11px var(--font-ui)';
       ctx.textAlign = 'center';
@@ -131,9 +141,9 @@ function HistogramView({ histogram, channel }: { histogram: Histogram; channel: 
     }
 
     const cap = Math.max(
-      histogramPercentile(histogram.r, 0.995),
-      histogramPercentile(histogram.g, 0.995),
-      histogramPercentile(histogram.b, 0.995),
+      histogramPercentile(hist.r, 0.995),
+      histogramPercentile(hist.g, 0.995),
+      histogramPercentile(hist.b, 0.995),
       1,
     );
 
@@ -151,24 +161,36 @@ function HistogramView({ histogram, channel }: { histogram: Histogram; channel: 
       ctx.fill();
     };
 
-    if (channel === 'rgb') {
+    if (ch === 'rgb') {
       ctx.globalCompositeOperation = 'lighter';
-      drawChannel(histogram.b, HIST_SHADES.b);
-      drawChannel(histogram.g, HIST_SHADES.g);
-      drawChannel(histogram.r, HIST_SHADES.r);
+      drawChannel(hist.b, HIST_SHADES.b);
+      drawChannel(hist.g, HIST_SHADES.g);
+      drawChannel(hist.r, HIST_SHADES.r);
     } else {
       ctx.globalCompositeOperation = 'source-over';
-      const others: Array<'r' | 'g' | 'b'> = (['r', 'g', 'b'] as const).filter((c) => c !== channel);
-      drawChannel(histogram[others[0]!], HIST_SHADE_MUTED);
-      drawChannel(histogram[others[1]!], HIST_SHADE_MUTED);
-      drawChannel(histogram[channel], HIST_SHADE_FOCUS[channel]);
+      const others: Array<'r' | 'g' | 'b'> = (['r', 'g', 'b'] as const).filter((c) => c !== ch);
+      drawChannel(hist[others[0]!], HIST_SHADE_MUTED);
+      drawChannel(hist[others[1]!], HIST_SHADE_MUTED);
+      drawChannel(hist[ch], HIST_SHADE_FOCUS[ch]);
     }
 
     ctx.restore();
-  }, [histogram, channel]);
+  }, []);
+
+  useEffect(() => {
+    draw();
+  }, [histogram, channel, draw]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(draw);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [draw]);
 
   return (
-    <div className={styles.histogram} data-testid="levels-histogram">
+    <div ref={containerRef} className={styles.histogram} data-testid="levels-histogram">
       <canvas ref={canvasRef} className={styles.histogramCanvas} aria-label="Levels histogram" />
     </div>
   );
@@ -200,7 +222,6 @@ function InputAxis({ channel, onChange }: AxisProps) {
     const range = channel.inputWhite - channel.inputBlack;
     if (range <= 0) return;
     const fraction = clamp((v - channel.inputBlack) / range, 0.02, 0.98);
-    // gamma = -log2(fraction); fraction = 0.5^gamma
     const nextGamma = clamp(-Math.log(fraction) / Math.LN2, 0.1, 10);
     onChange({ ...channel, gamma: nextGamma });
   });
@@ -208,24 +229,30 @@ function InputAxis({ channel, onChange }: AxisProps) {
   return (
     <div className={styles.axis} data-testid="levels-input-axis">
       <div ref={trackRef} className={styles.track} data-testid="levels-input-track">
-        <Handle
-          position01={channel.inputBlack}
-          color="#0d0d0d"
+        <PreciseAdjustmentHandle
+          position={channel.inputBlack}
+          swatch="#0d0d0d"
           ariaLabel="Input black"
+          ariaValueMax={255}
+          ariaValueNow={Math.round(channel.inputBlack * 255)}
           testId="levels-input-black-handle"
           onPointerDown={handleBlackDrag}
         />
-        <Handle
-          position01={gamma01}
-          color="#7f7f7f"
+        <PreciseAdjustmentHandle
+          position={gamma01}
+          swatch="#7f7f7f"
           ariaLabel="Input gamma"
+          ariaValueMax={255}
+          ariaValueNow={Math.round(gamma01 * 255)}
           testId="levels-input-gamma-handle"
           onPointerDown={handleGammaDrag}
         />
-        <Handle
-          position01={channel.inputWhite}
-          color="#ffffff"
+        <PreciseAdjustmentHandle
+          position={channel.inputWhite}
+          swatch="#ffffff"
           ariaLabel="Input white"
+          ariaValueMax={255}
+          ariaValueNow={Math.round(channel.inputWhite * 255)}
           testId="levels-input-white-handle"
           onPointerDown={handleWhiteDrag}
         />
@@ -255,17 +282,21 @@ function OutputAxis({ channel, onChange }: AxisProps) {
   return (
     <div className={styles.axis} data-testid="levels-output-axis">
       <div ref={trackRef} className={styles.track} data-testid="levels-output-track">
-        <Handle
-          position01={channel.outputBlack}
-          color="#0d0d0d"
+        <PreciseAdjustmentHandle
+          position={channel.outputBlack}
+          swatch="#0d0d0d"
           ariaLabel="Output black"
+          ariaValueMax={255}
+          ariaValueNow={Math.round(channel.outputBlack * 255)}
           testId="levels-output-black-handle"
           onPointerDown={handleBlackDrag}
         />
-        <Handle
-          position01={channel.outputWhite}
-          color="#ffffff"
+        <PreciseAdjustmentHandle
+          position={channel.outputWhite}
+          swatch="#ffffff"
           ariaLabel="Output white"
+          ariaValueMax={255}
+          ariaValueNow={Math.round(channel.outputWhite * 255)}
           testId="levels-output-white-handle"
           onPointerDown={handleWhiteDrag}
         />
@@ -279,33 +310,7 @@ function OutputAxis({ channel, onChange }: AxisProps) {
   );
 }
 
-// ─── Shared handle + drag hook ────────────────────────────────────────────
-
-interface HandleProps {
-  position01: number;
-  color: string;
-  ariaLabel: string;
-  testId: string;
-  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
-}
-
-function Handle({ position01, color, ariaLabel, testId, onPointerDown }: HandleProps) {
-  const left = `${clamp(position01, 0, 1) * 100}%`;
-  return (
-    <div
-      role="slider"
-      aria-label={ariaLabel}
-      aria-valuemin={0}
-      aria-valuemax={255}
-      aria-valuenow={Math.round(position01 * 255)}
-      tabIndex={0}
-      className={styles.handle}
-      data-testid={testId}
-      style={{ left, backgroundColor: color }}
-      onPointerDown={onPointerDown}
-    />
-  );
-}
+// ─── Drag hook ───────────────────────────────────────────────────────────
 
 function useDragHandle(
   trackRef: React.RefObject<HTMLDivElement | null>,
@@ -346,8 +351,6 @@ function GradientBar() {
 
 // ─── Math helpers ─────────────────────────────────────────────────────────
 
-/** Fraction along [inputBlack, inputWhite] where gamma's midtone handle sits.
- *  Inverse of: gamma = -log2(fraction). */
 function inputBlackToGammaFraction(gamma: number): number {
   return Math.pow(0.5, clamp(gamma, 0.1, 10));
 }

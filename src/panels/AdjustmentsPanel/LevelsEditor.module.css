@@ -100,31 +100,8 @@
 
 .track {
   position: relative;
-  height: 12px;
+  height: 16px;
   touch-action: none;
-}
-
-.handle {
-  position: absolute;
-  top: 0;
-  transform: translateX(-50%);
-  width: 10px;
-  height: 12px;
-  cursor: grab;
-  touch-action: none;
-  outline: none;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 2px;
-  box-shadow: var(--shadow-sm);
-}
-
-.handle:hover {
-  border-color: var(--color-text-secondary);
-}
-
-.handle:focus-visible {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 1px var(--color-accent);
 }
 
 .readouts {

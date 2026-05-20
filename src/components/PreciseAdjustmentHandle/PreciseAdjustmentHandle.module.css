@@ -1,0 +1,53 @@
+.handle {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 12px;
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 2px;
+  box-shadow: var(--shadow-sm);
+}
+
+.handle::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% - 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 6px solid var(--color-border-strong);
+}
+
+.handle:hover {
+  border-color: var(--color-text-secondary);
+}
+
+.handle:hover::before {
+  border-bottom-color: var(--color-text-secondary);
+}
+
+.handleActive {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+  z-index: 1;
+}
+
+.handleActive::before {
+  border-bottom-color: var(--color-accent);
+}
+
+.handle:focus-visible {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.handle:focus-visible::before {
+  border-bottom-color: var(--color-accent);
+}

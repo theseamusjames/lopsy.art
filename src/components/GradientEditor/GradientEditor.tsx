@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GradientStop } from '../../tools/gradient/gradient';
 import { interpolateGradient } from '../../tools/gradient/gradient';
+import { PreciseAdjustmentHandle } from '../PreciseAdjustmentHandle/PreciseAdjustmentHandle';
 import styles from './GradientEditor.module.css';
 
 interface GradientEditorProps {
@@ -98,22 +99,17 @@ export function GradientEditor({ stops, selectedIndex, onStopsChange, onSelectSt
       </div>
       <div className={styles.handlesRow} onClick={handleBarClick} data-testid="gradient-handles">
         {sorted.map((stop, index) => (
-          <div
+          <PreciseAdjustmentHandle
             key={index}
-            className={`${styles.handle} ${index === selectedIndex ? styles.handleActive : ''}`}
-            style={{
-              left: `${stop.position * 100}%`,
-              backgroundColor: `rgb(${stop.color.r},${stop.color.g},${stop.color.b})`,
-            }}
-            role="slider"
-            aria-label={`Gradient stop ${index + 1}`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(stop.position * 100)}
-            tabIndex={0}
+            position={stop.position}
+            swatch={`rgb(${stop.color.r},${stop.color.g},${stop.color.b})`}
+            active={index === selectedIndex}
+            ariaLabel={`Gradient stop ${index + 1}`}
+            ariaValueMax={100}
+            ariaValueNow={Math.round(stop.position * 100)}
             onMouseDown={(e) => handleHandleMouseDown(e, index)}
             onClick={(e) => e.stopPropagation()}
-            data-testid={`gradient-stop-${index}`}
+            testId={`gradient-stop-${index}`}
           />
         ))}
       </div>
