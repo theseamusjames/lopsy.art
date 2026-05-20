@@ -249,11 +249,13 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
 
   useEffect(() => {
     if (!contextMenu) return;
-    const handler = () => closeContextMenu();
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContextMenu(); });
+    const onMouseDown = () => closeContextMenu();
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') closeContextMenu(); };
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
     };
   }, [contextMenu, closeContextMenu]);
 
