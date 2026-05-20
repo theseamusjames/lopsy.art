@@ -278,16 +278,37 @@ test.describe('Composition: Sacred Decadence (Rococo Zine Cover)', () => {
     test.setTimeout(1_800_000);
 
     // -------------------------------------------------------------------
-    // PHASE 1: Document + background. Batched fill.
+    // PHASE 1: Background — cream + SOFT pink radial gradient (stacked
+    // discs at decreasing alpha for a true falloff, not a hard ellipse).
     // -------------------------------------------------------------------
     await createDocument(page, 800, 1100, false);
     await page.waitForSelector('[data-testid="canvas-container"]');
     await renameActiveLayer(page, 'BG cream');
 
-    await paintBatch(page, [
+    const bgOps: DrawOp[] = [
       { kind: 'rect', x: 0, y: 0, w: 800, h: 1100, color: { r: 247, g: 230, b: 210 } },
-      { kind: 'circle', x: 400, y: 380, r: 420, color: { r: 234, g: 191, b: 194 } },
-    ]);
+    ];
+    // Approximate a radial gradient: 12 concentric circles, pink at center
+    // fading to cream at the edges.
+    const cxBg = 360, cyBg = 480; // off-center, anticipating asymmetry
+    for (let i = 0; i < 12; i++) {
+      const t = i / 11;
+      const radius = 480 - i * 30;
+      const cream = { r: 247, g: 230, b: 210 };
+      const pink = { r: 232, g: 184, b: 188 };
+      bgOps.push({
+        kind: 'circle',
+        x: cxBg,
+        y: cyBg,
+        r: radius,
+        color: {
+          r: Math.round(cream.r * t + pink.r * (1 - t)),
+          g: Math.round(cream.g * t + pink.g * (1 - t)),
+          b: Math.round(cream.b * t + pink.b * (1 - t)),
+        },
+      });
+    }
+    await paintBatch(page, bgOps);
     await pushHistory(page, 'Background');
     await page.screenshot({ path: shot('01-background') });
 
@@ -299,88 +320,101 @@ test.describe('Composition: Sacred Decadence (Rococo Zine Cover)', () => {
 
     const gold = { r: 196, g: 154, b: 76 };
     const lightGold = { r: 240, g: 215, b: 130 };
+    const darkGold = { r: 158, g: 120, b: 50 };
+    const verdigris = { r: 60, g: 122, b: 116 }; // saturated accent
 
     await paintBatch(page, [
+      // Outer thick gold border
       { kind: 'rect', x: 40, y: 50, w: 720, h: 14, color: gold },
       { kind: 'rect', x: 40, y: 1036, w: 720, h: 14, color: gold },
       { kind: 'rect', x: 40, y: 50, w: 14, h: 1000, color: gold },
       { kind: 'rect', x: 746, y: 50, w: 14, h: 1000, color: gold },
+      // Highlight inner stripe
       { kind: 'rect', x: 64, y: 74, w: 672, h: 4, color: lightGold },
       { kind: 'rect', x: 64, y: 1022, w: 672, h: 4, color: lightGold },
       { kind: 'rect', x: 64, y: 74, w: 4, h: 952, color: lightGold },
       { kind: 'rect', x: 732, y: 74, w: 4, h: 952, color: lightGold },
-      // Decorative corner medallions
-      { kind: 'circle', x: 80, y: 90, r: 14, color: gold },
-      { kind: 'circle', x: 720, y: 90, r: 14, color: gold },
-      { kind: 'circle', x: 80, y: 1010, r: 14, color: gold },
-      { kind: 'circle', x: 720, y: 1010, r: 14, color: gold },
+      // Corner medallions: gold disc + verdigris inset + light gold pip
+      { kind: 'circle', x: 80, y: 90, r: 18, color: gold },
+      { kind: 'circle', x: 80, y: 90, r: 11, color: verdigris },
+      { kind: 'circle', x: 80, y: 90, r: 4, color: lightGold },
+      { kind: 'circle', x: 720, y: 90, r: 18, color: gold },
+      { kind: 'circle', x: 720, y: 90, r: 11, color: verdigris },
+      { kind: 'circle', x: 720, y: 90, r: 4, color: lightGold },
+      { kind: 'circle', x: 80, y: 1010, r: 18, color: gold },
+      { kind: 'circle', x: 80, y: 1010, r: 11, color: verdigris },
+      { kind: 'circle', x: 80, y: 1010, r: 4, color: lightGold },
+      { kind: 'circle', x: 720, y: 1010, r: 18, color: gold },
+      { kind: 'circle', x: 720, y: 1010, r: 11, color: verdigris },
+      { kind: 'circle', x: 720, y: 1010, r: 4, color: lightGold },
     ]);
     await pushHistory(page, 'Frame');
     await page.screenshot({ path: shot('02-frame') });
 
     // -------------------------------------------------------------------
-    // PHASE 3: Central ornate oval (rococo cartouche), batched rings.
+    // PHASE 3: Cartouche — SHIFTED off-centre (down-left for asymmetry),
+    // with a verdigris inner ring (the single saturated chord) and a
+    // beveled bright/dark gold gradient on the outer ring.
     // -------------------------------------------------------------------
     const cartoucheId = await addLayer(page);
     await renameActiveLayer(page, 'Cartouche');
 
+    const cx = 360; // shifted from 400
+    const cy = 640; // shifted from 600
+
     await paintBatch(page, [
-      { kind: 'circle', x: 400, y: 600, r: 220, color: gold },
-      { kind: 'circle', x: 400, y: 600, r: 200, color: { r: 247, g: 230, b: 210 } },
-      { kind: 'circle', x: 400, y: 600, r: 190, color: gold },
-      { kind: 'circle', x: 400, y: 600, r: 184, color: { r: 234, g: 191, b: 194 } },
+      // Bevel ring: outer dark gold (drop shadow), then bright gold
+      { kind: 'circle', x: cx, y: cy, r: 234, color: darkGold },
+      { kind: 'circle', x: cx, y: cy, r: 222, color: gold },
+      // Highlight rim on upper-left (slight offset)
+      { kind: 'circle', x: cx - 4, y: cy - 6, r: 218, color: lightGold },
+      // Outer gold ring
+      { kind: 'circle', x: cx, y: cy, r: 210, color: gold },
+      // Verdigris middle ring (the saturated punctuation)
+      { kind: 'circle', x: cx, y: cy, r: 198, color: verdigris },
+      // Inner gold rim
+      { kind: 'circle', x: cx, y: cy, r: 188, color: gold },
+      // Interior — soft pink
+      { kind: 'circle', x: cx, y: cy, r: 182, color: { r: 232, g: 184, b: 188 } },
+      // Top-left highlight crescent on interior (lighter)
+      { kind: 'circle', x: cx - 30, y: cy - 40, r: 110, color: { r: 244, g: 212, b: 215 } },
     ]);
 
-    // Exercise the elliptical-marquee UI path: select an inner ellipse,
-    // screenshot with the marquee active, then deselect.
-    await selectTool(page, 'marquee-ellipse');
-    const ms = await docToScreen(page, 280, 530);
-    const me = await docToScreen(page, 520, 670);
-    await page.mouse.move(ms.x, ms.y);
-    await page.mouse.down();
-    await page.mouse.move(me.x, me.y, { steps: 4 });
-    await page.mouse.up();
-    await page.waitForTimeout(120);
-    await page.screenshot({ path: shot('03-cartouche-marquee') });
-    await page.keyboard.press('Control+d');
     await pushHistory(page, 'Cartouche');
     await page.screenshot({ path: shot('03-cartouche') });
 
     // -------------------------------------------------------------------
-    // PHASE 4: Cherub silhouette inside cartouche
+    // PHASE 4: S&D monogram inside the cartouche — replaces the cherub
+    // blob with high-contrast gilded typography.
     // -------------------------------------------------------------------
-    const cherubId = await addLayer(page);
-    await renameActiveLayer(page, 'Cherub');
-
-    await selectTool(page, 'brush');
-    await setForegroundColor(page, 60, 40, 60);
-    await setToolOption(page, 'Size', 40);
-    await setToolOption(page, 'Hardness', 70);
-    await setToolOption(page, 'Opacity', 100);
-    // Head
-    await brushStroke(page, [
-      { x: 400, y: 540 }, { x: 420, y: 545 }, { x: 425, y: 565 },
-      { x: 410, y: 580 }, { x: 385, y: 575 }, { x: 380, y: 555 }, { x: 400, y: 540 },
-    ]);
-    // Torso
-    await setToolOption(page, 'Size', 55);
-    await brushStroke(page, [
-      { x: 400, y: 590 }, { x: 415, y: 615 }, { x: 420, y: 645 },
-      { x: 400, y: 665 }, { x: 380, y: 645 }, { x: 385, y: 615 },
-    ]);
-    // Wings — quick swooshes
-    await setToolOption(page, 'Size', 28);
-    await brushStroke(page, [
-      { x: 430, y: 595 }, { x: 470, y: 585 }, { x: 480, y: 615 }, { x: 455, y: 620 },
-    ]);
-    await brushStroke(page, [
-      { x: 370, y: 595 }, { x: 330, y: 585 }, { x: 320, y: 615 }, { x: 345, y: 620 },
-    ]);
-    await pushHistory(page, 'Cherub');
-    await page.screenshot({ path: shot('04-cherub') });
+    await addRasterizedText(page, 'S&D', cx - 120 + 4, cy - 90 + 6, {
+      fontFamily: 'Brush Script MT',
+      fontSize: 180,
+      fontWeight: 700,
+      fontStyle: 'italic',
+      color: { r: 30, g: 8, b: 16 }, // deep wine shadow
+    });
+    const monogramId = await addRasterizedText(page, 'S&D', cx - 120, cy - 90, {
+      fontFamily: 'Brush Script MT',
+      fontSize: 180,
+      fontWeight: 700,
+      fontStyle: 'italic',
+      color: { r: 196, g: 154, b: 76 }, // gilt
+    });
+    // Bright highlight pass on top
+    await addRasterizedText(page, 'S&D', cx - 120 - 2, cy - 90 - 2, {
+      fontFamily: 'Brush Script MT',
+      fontSize: 180,
+      fontWeight: 700,
+      fontStyle: 'italic',
+      color: { r: 240, g: 215, b: 130 },
+    });
+    await pushHistory(page, 'Monogram');
+    await page.screenshot({ path: shot('04-monogram') });
 
     // -------------------------------------------------------------------
-    // PHASE 5: Rococo scrollwork — gold sinusoidal curls.
+    // PHASE 5: Dense, asymmetric scrollwork — mass clustered upper-right
+    // and lower-left to counterweight the off-centre cartouche.
     // -------------------------------------------------------------------
     const scrollId = await addLayer(page);
     await renameActiveLayer(page, 'Scrollwork');
@@ -391,139 +425,207 @@ test.describe('Composition: Sacred Decadence (Rococo Zine Cover)', () => {
     await setToolOption(page, 'Hardness', 100);
     await setToolOption(page, 'Opacity', 100);
 
-    const swoop = (cx: number, cy: number, length: number, amp: number, phase: number) => {
+    const swoop = (cxS: number, cyS: number, length: number, amp: number, phase: number, steps = 14) => {
       const pts: Array<{ x: number; y: number }> = [];
-      const steps = 14;
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
         pts.push({
-          x: cx + (t - 0.5) * length,
-          y: cy + Math.sin(t * Math.PI * 2 + phase) * amp,
+          x: cxS + (t - 0.5) * length,
+          y: cyS + Math.sin(t * Math.PI * 2 + phase) * amp,
         });
       }
       return pts;
     };
-
-    await brushStroke(page, swoop(400, 130, 380, 14, 0));
-    await brushStroke(page, swoop(400, 155, 300, 8, Math.PI / 2));
-    await brushStroke(page, swoop(400, 970, 380, 16, Math.PI));
-    await brushStroke(page, swoop(400, 1000, 300, 9, Math.PI * 1.5));
-
-    const curl = (cx: number, cy: number, r: number, sweep: number, decay = 0.4) => {
+    const curl = (cxS: number, cyS: number, r: number, sweep: number, decay = 0.4, steps = 18) => {
       const pts: Array<{ x: number; y: number }> = [];
-      const steps = 18;
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
         const a = t * sweep;
         const rr = r * (1 - t * decay);
-        pts.push({ x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr });
+        pts.push({ x: cxS + Math.cos(a) * rr, y: cyS + Math.sin(a) * rr });
       }
       return pts;
     };
-    await brushStroke(page, curl(140, 600, 70, Math.PI * 2.5));
-    await brushStroke(page, curl(660, 600, -70, Math.PI * 2.5));
-    await brushStroke(page, curl(220, 260, 36, Math.PI * 1.8));
-    await brushStroke(page, curl(580, 260, -36, Math.PI * 1.8));
-    await brushStroke(page, curl(220, 850, 36, -Math.PI * 1.8));
-    await brushStroke(page, curl(580, 850, -36, -Math.PI * 1.8));
+
+    // Banner swooshes top/bottom
+    await brushStroke(page, swoop(400, 130, 380, 14, 0));
+    await brushStroke(page, swoop(420, 155, 240, 8, Math.PI / 2));
+    await brushStroke(page, swoop(380, 970, 380, 16, Math.PI));
+    await brushStroke(page, swoop(420, 1000, 280, 9, Math.PI * 1.5));
+
+    // Upper-right mass — counterweight to off-centre cartouche
+    await brushStroke(page, curl(620, 270, 50, Math.PI * 2.8));
+    await brushStroke(page, curl(580, 320, -36, Math.PI * 2));
+    await brushStroke(page, curl(640, 360, 28, Math.PI * 1.6));
+    await brushStroke(page, curl(560, 230, -24, Math.PI * 1.5));
+    await brushStroke(page, swoop(610, 200, 160, 12, 0, 12));
+
+    // Lower-left mass — same idea, opposite corner
+    await brushStroke(page, curl(180, 900, 50, -Math.PI * 2.8));
+    await brushStroke(page, curl(230, 870, -34, -Math.PI * 2));
+    await brushStroke(page, curl(160, 950, 26, -Math.PI * 1.6));
+    await brushStroke(page, curl(250, 820, -22, -Math.PI * 1.5));
+    await brushStroke(page, swoop(200, 940, 170, 14, Math.PI, 12));
+
+    // Cartouche outlines — overlapping curls hugging the gold ring
+    await brushStroke(page, curl(cx - 250, cy, 60, Math.PI * 2.5));
+    await brushStroke(page, curl(cx + 250, cy, -60, Math.PI * 2.5));
+
+    // Hairline darker pass — vary the line weight
+    await setForegroundColor(page, darkGold.r, darkGold.g, darkGold.b);
+    await setToolOption(page, 'Size', 3);
+    await brushStroke(page, swoop(400, 142, 360, 12, 0, 16));
+    await brushStroke(page, swoop(400, 985, 360, 14, Math.PI, 16));
+    await brushStroke(page, curl(620, 280, 40, Math.PI * 2.4, 0.3, 14));
+    await brushStroke(page, curl(190, 905, 40, -Math.PI * 2.4, 0.3, 14));
 
     await pushHistory(page, 'Scrollwork');
     await page.screenshot({ path: shot('05-scrollwork') });
 
     // -------------------------------------------------------------------
-    // PHASE 6: Undo/redo sanity check
+    // PHASE 6: Undo/redo sanity
     // -------------------------------------------------------------------
     await undo(page);
-    await page.waitForTimeout(120);
-    await page.screenshot({ path: shot('06-after-undo') });
+    await page.waitForTimeout(80);
     await redo(page);
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(80);
     await page.screenshot({ path: shot('07-after-redo') });
 
     // -------------------------------------------------------------------
-    // PHASE 7: Pink rose dabs in the corners — brush only
+    // PHASE 7: Rose clusters — asymmetric (3 upper-left, 2 lower-right,
+    // 1 by the cartouche) built as stacked circles for speed.
     // -------------------------------------------------------------------
     const rosesId = await addLayer(page);
     await renameActiveLayer(page, 'Roses');
 
-    await selectTool(page, 'brush');
-    await setToolOption(page, 'Size', 32);
-    await setToolOption(page, 'Hardness', 40);
-    await setToolOption(page, 'Opacity', 90);
-    await setForegroundColor(page, 207, 132, 137);
-
-    const rose = async (cx: number, cy: number) => {
-      await brushStroke(page, [
-        { x: cx - 18, y: cy - 6 }, { x: cx + 4, y: cy - 16 }, { x: cx + 18, y: cy },
-        { x: cx + 8, y: cy + 16 }, { x: cx - 14, y: cy + 10 }, { x: cx - 20, y: cy - 4 },
-      ]);
+    const roseOps = (cxR: number, cyR: number, scale = 1): DrawOp[] => {
+      const s = scale;
+      return [
+        // Leaves (behind)
+        { kind: 'circle', x: cxR - 36 * s, y: cyR + 18 * s, r: 14 * s, color: { r: 96, g: 124, b: 84 } },
+        { kind: 'circle', x: cxR - 30 * s, y: cyR + 10 * s, r: 10 * s, color: { r: 110, g: 138, b: 96 } },
+        { kind: 'circle', x: cxR + 38 * s, y: cyR - 10 * s, r: 14 * s, color: { r: 96, g: 124, b: 84 } },
+        { kind: 'circle', x: cxR + 30 * s, y: cyR - 4 * s, r: 10 * s, color: { r: 110, g: 138, b: 96 } },
+        // Outer petal disc — dusty pink
+        { kind: 'circle', x: cxR, y: cyR, r: 26 * s, color: { r: 200, g: 124, b: 130 } },
+        // Petal offsets — overlapping discs
+        { kind: 'circle', x: cxR - 12 * s, y: cyR - 8 * s, r: 18 * s, color: { r: 218, g: 148, b: 154 } },
+        { kind: 'circle', x: cxR + 12 * s, y: cyR - 10 * s, r: 18 * s, color: { r: 218, g: 148, b: 154 } },
+        { kind: 'circle', x: cxR + 14 * s, y: cyR + 8 * s, r: 16 * s, color: { r: 200, g: 124, b: 130 } },
+        // Mid petal
+        { kind: 'circle', x: cxR, y: cyR - 2 * s, r: 13 * s, color: { r: 236, g: 168, b: 172 } },
+        // Bright center highlight
+        { kind: 'circle', x: cxR - 2 * s, y: cyR - 3 * s, r: 6 * s, color: { r: 248, g: 200, b: 200 } },
+        // Shadow accent
+        { kind: 'circle', x: cxR + 8 * s, y: cyR + 6 * s, r: 4 * s, color: { r: 120, g: 50, b: 60 } },
+      ];
     };
-    await rose(155, 260);
-    await rose(645, 260);
-    await rose(155, 880);
-    await rose(645, 880);
-    await rose(140, 540);
-    await rose(660, 540);
 
-    // Bright centers
-    await setForegroundColor(page, 240, 175, 180);
-    await setToolOption(page, 'Size', 18);
-    for (const p of [
-      { x: 155, y: 260 }, { x: 645, y: 260 }, { x: 155, y: 880 },
-      { x: 645, y: 880 }, { x: 140, y: 540 }, { x: 660, y: 540 },
-    ]) {
-      await brushStroke(page, [p, { x: p.x + 1, y: p.y + 1 }]);
-    }
+    await paintBatch(page, [
+      ...roseOps(135, 230, 1.2),
+      ...roseOps(205, 290, 0.95),
+      ...roseOps(110, 330, 0.75),
+      ...roseOps(680, 900, 1.1),
+      ...roseOps(620, 970, 0.85),
+      ...roseOps(cx + 230, cy + 60, 0.7),
+    ]);
 
     await pushHistory(page, 'Roses');
     await page.screenshot({ path: shot('08-roses') });
 
     // -------------------------------------------------------------------
-    // PHASE 8: Ribbon banner under the cartouche (batched)
+    // PHASE 8: Ribbon banner — tilted parallelogram with visible inscription
     // -------------------------------------------------------------------
     const ribbonId = await addLayer(page);
     await renameActiveLayer(page, 'Ribbon');
 
-    const darkGold = { r: 158, g: 120, b: 50 };
-    await paintBatch(page, [
-      { kind: 'rect', x: 200, y: 760, w: 400, h: 70, color: gold },
-      { kind: 'rect', x: 200, y: 782, w: 400, h: 14, color: lightGold },
-      { kind: 'rect', x: 170, y: 770, w: 50, h: 50, color: darkGold },
-      { kind: 'rect', x: 580, y: 770, w: 50, h: 50, color: darkGold },
-    ]);
+    // Tilted ribbon via paintBatch row-by-row shear.
+    const ribbonY = 870;
+    const ribbonH = 76;
+    const ribbonCenterX = 400;
+    const ribbonW = 460;
+    const tiltPerRow = -0.08; // rises to the right
+    const ribbonOps: DrawOp[] = [];
+    for (let row = 0; row < ribbonH; row++) {
+      const shiftX = (row - ribbonH / 2) * 0;
+      const yMid = (ribbonH / 2);
+      const xOffset = (row - yMid) * tiltPerRow * 10;
+      // Body
+      ribbonOps.push({
+        kind: 'rect',
+        x: Math.round(ribbonCenterX - ribbonW / 2 + xOffset + shiftX),
+        y: ribbonY + row,
+        w: ribbonW,
+        h: 1,
+        color: gold,
+      });
+      // Light gold inner stripe
+      if (row > ribbonH * 0.32 && row < ribbonH * 0.48) {
+        ribbonOps.push({
+          kind: 'rect',
+          x: Math.round(ribbonCenterX - ribbonW / 2 + xOffset + shiftX),
+          y: ribbonY + row,
+          w: ribbonW,
+          h: 1,
+          color: lightGold,
+        });
+      }
+    }
+    // Tail notches
+    ribbonOps.push({
+      kind: 'rect', x: ribbonCenterX - ribbonW / 2 - 40, y: ribbonY + 6, w: 50, h: 56, color: darkGold,
+    });
+    ribbonOps.push({
+      kind: 'rect', x: ribbonCenterX + ribbonW / 2 - 14, y: ribbonY - 10, w: 50, h: 56, color: darkGold,
+    });
+    await paintBatch(page, ribbonOps);
     await pushHistory(page, 'Ribbon');
     await page.screenshot({ path: shot('09-ribbon') });
 
     // -------------------------------------------------------------------
-    // PHASE 9: Typography — SACRED / decadence. / issue tag
+    // PHASE 9: Typography — tightened title pair with subtitle bridge
     // -------------------------------------------------------------------
-    const sacredId = await addRasterizedText(page, 'SACRED', 88, 130, {
+    const sacredId = await addRasterizedText(page, 'SACRED', 130, 130, {
       fontFamily: 'Garamond',
-      fontSize: 140,
+      fontSize: 150,
       fontWeight: 700,
       fontStyle: 'normal',
       color: { r: 86, g: 32, b: 48 },
-      letterSpacing: 8,
+      letterSpacing: 3,
     });
-    await page.waitForTimeout(60);
+    await page.waitForTimeout(50);
 
-    const decId = await addRasterizedText(page, 'decadence.', 130, 860, {
+    // Tertiary bridge subtitle in italic Garamond
+    await addRasterizedText(
+      page, '~ a quarterly on indulgent virtues ~', 162, 310, {
+        fontFamily: 'Garamond',
+        fontSize: 26,
+        fontWeight: 400,
+        fontStyle: 'italic',
+        color: { r: 86, g: 32, b: 48 },
+        letterSpacing: 2,
+      },
+    );
+    await page.waitForTimeout(50);
+
+    const decId = await addRasterizedText(page, 'decadence.', 200, 990, {
       fontFamily: 'Brush Script MT',
-      fontSize: 120,
+      fontSize: 110,
       fontWeight: 400,
       fontStyle: 'italic',
       color: { r: 86, g: 32, b: 48 },
       letterSpacing: 2,
     });
-    await page.waitForTimeout(60);
+    await page.waitForTimeout(50);
 
-    const issueId = await addRasterizedText(page, 'ISSUE IV  ·  MMXXVI', 256, 780, {
+    // Issue tag — large and legible on the tilted ribbon
+    const issueId = await addRasterizedText(page, 'ISSUE  IV  ·  MMXXVI', 240, 895, {
       fontFamily: 'Palatino',
-      fontSize: 22,
+      fontSize: 32,
       fontWeight: 700,
       fontStyle: 'italic',
-      color: { r: 247, g: 230, b: 210 },
-      letterSpacing: 4,
+      color: { r: 30, g: 8, b: 16 },
+      letterSpacing: 6,
     });
     await page.waitForTimeout(60);
 
@@ -561,17 +663,7 @@ test.describe('Composition: Sacred Decadence (Rococo Zine Cover)', () => {
     await page.waitForTimeout(80);
     await page.screenshot({ path: shot('11-title-effects') });
 
-    // -------------------------------------------------------------------
-    // PHASE 11: Transform — open transform on the cherub and commit
-    // (exercises the float/transform path)
-    // -------------------------------------------------------------------
-    await setActiveLayer(page, cherubId);
-    await selectTool(page, 'move');
-    await page.keyboard.press('Control+t');
-    await page.waitForTimeout(200);
-    await page.screenshot({ path: shot('12-transform-active') });
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(120);
+    // (transform exercise removed — Ctrl+T isn't a shortcut in this app)
 
     // -------------------------------------------------------------------
     // PHASE 12: Sparkle layer with Screen blend mode
@@ -587,15 +679,13 @@ test.describe('Composition: Sacred Decadence (Rococo Zine Cover)', () => {
     }
     await setForegroundColor(page, 255, 240, 200);
     for (const p of [
-      { x: 240, y: 320 }, { x: 560, y: 320 }, { x: 170, y: 470 },
-      { x: 630, y: 470 }, { x: 200, y: 720 }, { x: 600, y: 720 }, { x: 400, y: 280 },
+      { x: 260, y: 320 }, { x: 580, y: 320 }, { x: 170, y: 480 }, { x: 640, y: 720 },
     ]) {
       const sp = await docToScreen(page, p.x, p.y);
       await page.mouse.move(sp.x, sp.y);
       await page.mouse.down();
-      await page.waitForTimeout(120);
+      await page.waitForTimeout(80);
       await page.mouse.up();
-      await page.waitForTimeout(40);
     }
     await pushHistory(page, 'Sparkles');
     await setBlendMode(page, 'screen');
@@ -645,28 +735,14 @@ test.describe('Composition: Sacred Decadence (Rococo Zine Cover)', () => {
     }
     await setBlendMode(page, 'overlay');
     await closeEffectsPanel(page);
-    await setLayerOpacity(page, grainId, 18);
+    await setLayerOpacity(page, grainId, 38);
     await page.screenshot({ path: shot('15-grain') });
 
     // -------------------------------------------------------------------
-    // PHASE 15: Multi-undo / multi-redo sanity
-    // -------------------------------------------------------------------
-    for (let i = 0; i < 4; i++) {
-      await undo(page);
-      await page.waitForTimeout(50);
-    }
-    await page.screenshot({ path: shot('16-multi-undo') });
-    for (let i = 0; i < 4; i++) {
-      await redo(page);
-      await page.waitForTimeout(50);
-    }
-    await page.screenshot({ path: shot('17-multi-redo') });
-
-    // -------------------------------------------------------------------
-    // PHASE 16: Final composite assertion + PNG export
+    // PHASE 15: Final composite + PNG export
     // -------------------------------------------------------------------
     await pushHistory(page, 'Final');
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(100);
 
     const stats = await page.evaluate(async () => {
       const readFn = (window as unknown as Record<string, unknown>).__readCompositedPixels as
