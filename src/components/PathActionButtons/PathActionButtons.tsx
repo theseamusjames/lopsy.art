@@ -3,14 +3,20 @@ import { Check, X } from 'lucide-react';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { commitCurrentPath } from '../../app/interactions/path-stroke';
+import type { PathAnchor } from '../../app/ui-store';
 import styles from './PathActionButtons.module.css';
+
+// Stable reference so the selector returns the same array when the draft
+// is null — useUIStore would otherwise see a fresh `[]` every render and
+// re-fire the subscription.
+const EMPTY_ANCHORS: PathAnchor[] = [];
 
 interface PathActionButtonsProps {
   containerRef: RefObject<HTMLDivElement | null>;
 }
 
 export function PathActionButtons({ containerRef }: PathActionButtonsProps) {
-  const pathAnchors = useUIStore((s) => s.pathAnchors);
+  const pathAnchors = useUIStore((s) => s.pathDraft?.anchors ?? EMPTY_ANCHORS);
   const viewport = useEditorStore((s) => s.viewport);
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
