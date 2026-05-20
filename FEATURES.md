@@ -306,18 +306,18 @@ Available node types (Add menu):
   `CurveEditor` (drag points, click to add, double-click or yank to remove).
   Runs as a single 256×1 RGBA LUT texture sampled in the GPU adjustments
   shader; identity curves bypass the lookup.
-- **Levels** — per-channel input/output remap (RGB master + R / G / B) with
-  Input Black, Input White, Gamma (0.01 – 10, log slider), Output Black,
-  and Output White controls. Master is applied first, then per-channel
-  levels. Compiled to a 256×1 LUT and shares the GPU adjustments path with
-  Curves; identity levels bypass the lookup.
+- **Levels** — Photoshop-style visual editor with a layered RGB histogram and handle-driven controls (no sliders). Per-channel input/output remap with RGB master + R / G / B tabs:
+  - **Input black / gamma / white**: three rectangular handles below the histogram strip drive Input Black, Gamma (0.01 – 10, log scale), and Input White. Drag the handles directly; numeric readouts update live.
+  - **Output black / white**: two handles on a gradient bar drive Output Black and Output White.
+  - **Histogram visualization**: R, G, and B histograms render layered as distinct shades of gray with additive ("lighter") compositing, so common ranges read brighter; histogram is sampled live from the active layer's GPU pixels and refreshes as paint operations advance. RGB tab shows all three layers; per-channel tabs focus the active channel and mute the others.
+  - Master is applied first, then per-channel levels. Compiled to a 256×1 LUT and shares the GPU adjustments path with Curves; identity levels bypass the lookup.
 - **Invert** — single toggle (no numeric controls); inverts RGB at composite time.
 - **Hue / Saturation** — Hue -180° to +180°, Saturation -100 to +100, Lightness -100 to +100. Operates per-pixel in HSL space.
 - **Color Balance** — tone-range tabs (Shadows, Midtones, Highlights) each with Cyan ↔ Red, Magenta ↔ Green, and Yellow ↔ Blue sliders (-100 to +100). Per-pixel weighting determines how much each tonal range contributes to the shift.
 - **Photo Filter** — Color (color picker), Density 0 - 100, Preserve Luminosity (checkbox). Blends a tinted overlay over the pixel; when Preserve Luminosity is on, the tinted result is re-luminance-matched to the source.
 - **Black & White** — six channel sliders (Reds, Yellows, Greens, Cyans, Blues, Magentas), each -200 to +300, controlling how strongly that hue contributes to the monochrome output luminance.
 - **Channel Mixer** — output-channel tabs (R / G / B) each with Red, Green, Blue (-200 to +200), and Constant (-200 to +200) sliders. Lets a single output channel be remixed as a linear combination of the source channels plus a bias.
-- **Gradient Map** — editable gradient stops with per-stop color picker and position (0 - 100%). The stack of stops is compiled into a 256×1 RGBA LUT at sync time and applied as a luminance-indexed lookup in the GPU adjustments shader.
+- **Gradient Map** — visual gradient editor (shared `GradientEditor` component) with draggable rectangular stop handles on a live gradient bar; clicking an empty spot on the handle row inserts a new stop at that position. The selected stop drives a full `ColorPicker` (HSV square + hue strip + RGB/HSV/hex fields). A minimum of 2 stops is enforced. The stop list is compiled into a 256×1 RGBA LUT at sync time and applied as a luminance-indexed lookup in the GPU adjustments shader.
 
 All 14 adjustment types now have first-class UI controls and are fully GPU-accelerated. Internally the node list compiles down to the legacy flat `ImageAdjustments` shape so the GPU compositor's adjustment pass is unchanged.
 
@@ -505,6 +505,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Slider double-click → reset**: every numeric slider in the UI (brush size, opacity, hardness, adjustment sliders, filter sliders, etc.) snaps back to its default value on double-click. The numeric text input inside the slider is exempt so double-clicks there select the value for editing instead.
 - **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the status bar resets the viewport zoom to 100% (1×).
 - **Color swatch double-click**: double-clicking the foreground or background swatch in the Color panel both selects that swatch and auto-expands the Color panel (useful when the panel is collapsed). Recent-color swatches behave the same way.
+- **Layer name double-click → rename**: double-clicking a layer row's name turns it into an inline text input; Enter commits, Escape cancels.
 
 ### Canvas Right-Click Context Menu
 Right-clicking the canvas opens a small menu with:
