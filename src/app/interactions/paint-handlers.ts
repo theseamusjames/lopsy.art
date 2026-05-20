@@ -76,6 +76,8 @@ export function handlePaintDown(
   const { canvasPos, layerPos, activeLayer, activeLayerId, shiftKey, lastPaintPointRef } = ctx;
   const toolSettings = useToolSettingsStore.getState();
 
+  useUIStore.getState().setIsStroking(true);
+
   const shiftLine = shiftKey
     && lastPaintPointRef.current
     && lastPaintPointRef.current.layerId === activeLayerId;

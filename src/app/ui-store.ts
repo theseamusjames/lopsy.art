@@ -242,6 +242,11 @@ interface UIState {
   activeChannel: ActiveChannel;
   toggleChannelVisibility: (channel: keyof ChannelVisibility) => void;
   setActiveChannel: (channel: ActiveChannel) => void;
+  /** True while a paint stroke (brush/pencil/eraser) is in progress. Used by
+   *  panels that read back from the GPU (e.g. NavigatorPanel) to skip
+   *  expensive readback during the brush hot path. */
+  isStroking: boolean;
+  setIsStroking: (stroking: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -426,4 +431,8 @@ export const useUIStore = create<UIState>((set, get) => ({
       channelVisibility: { ...s.channelVisibility, [channel]: !s.channelVisibility[channel] },
     })),
   setActiveChannel: (channel) => set({ activeChannel: channel }),
+  isStroking: false,
+  setIsStroking: (stroking) => {
+    if (get().isStroking !== stroking) set({ isStroking: stroking });
+  },
 }));
