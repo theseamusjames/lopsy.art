@@ -84,26 +84,45 @@ export function openFileFromDisk(): void {
 
     const img = new Image();
     const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      // Use sRGB context — internal pipeline works in sRGB
-      const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
-      if (ctx) {
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, img.width, img.height);
-        const name = file.name.replace(/\.[^.]+$/, '');
-        useEditorStore.getState().openImageAsDocument(imageData, name);
-        // Seed the bitmap cache from the original file so the rendering
-        // path uses the browser's native decoded bitmap rather than one
-        // rebuilt from the canvas-round-tripped ImageData.
-        const layerId = useEditorStore.getState().document.activeLayerId;
-        if (layerId) seedBitmapFromBlob(layerId, file);
-        useEditorStore.getState().fitToView();
-      }
+    // Revoke runs in every branch (success, decode error, fallback timeout).
+    // Without an explicit error path, a corrupt or unsupported image leaked
+    // the blob URL for the lifetime of the tab.
+    let revoked = false;
+    const revoke = () => {
+      if (revoked) return;
+      revoked = true;
       URL.revokeObjectURL(url);
     };
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        // Use sRGB context — internal pipeline works in sRGB
+        const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, img.width, img.height);
+          const name = file.name.replace(/\.[^.]+$/, '');
+          useEditorStore.getState().openImageAsDocument(imageData, name);
+          // Seed the bitmap cache from the original file so the rendering
+          // path uses the browser's native decoded bitmap rather than one
+          // rebuilt from the canvas-round-tripped ImageData.
+          const layerId = useEditorStore.getState().document.activeLayerId;
+          if (layerId) seedBitmapFromBlob(layerId, file);
+          useEditorStore.getState().fitToView();
+        }
+      } finally {
+        revoke();
+      }
+    };
+    img.onerror = () => {
+      notifyError(`Failed to open image: ${file.name}`);
+      revoke();
+    };
+    // Browser quirk fallback: if neither onload nor onerror fires within
+    // a generous window (shouldn't happen in practice), reclaim the blob.
+    setTimeout(revoke, 60_000);
     img.src = url;
   };
   input.click();
