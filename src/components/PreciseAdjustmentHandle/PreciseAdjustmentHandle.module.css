@@ -2,8 +2,8 @@
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  width: 10px;
-  height: 12px;
+  width: 12px;
+  height: 14px;
   cursor: grab;
   touch-action: none;
   outline: none;
