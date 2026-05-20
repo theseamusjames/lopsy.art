@@ -129,9 +129,12 @@ test.describe('Dynamic adjustment node list on groups', () => {
 
     const withNode = await readCompositedAtDoc(page, 100, 100);
 
-    // Click the eye toggle button on the node to disable it.
+    // Click the eye toggle button on the saturation node specifically.
+    // Default adjustment nodes (levels, curves, exposure, hue-saturation)
+    // precede the newly added saturation node, so we target the last
+    // "Disable node" button which corresponds to the saturation node.
     const drawer = page.getByTestId('effects-drawer');
-    await drawer.locator('[aria-label="Disable node"]').first().click();
+    await drawer.locator('[aria-label="Disable node"]').last().click();
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: 'e2e/screenshots/dynamic-adj-toggle-off.png' });
@@ -150,17 +153,29 @@ test.describe('Dynamic adjustment node list on groups', () => {
   test('reordering nodes changes their order in the store', async ({ page }) => {
     const rootGroupId = await getRootGroupId(page);
 
+    // The root group starts with 4 default nodes (levels, curves, exposure,
+    // hue-saturation). Record the baseline count before adding more.
+    const baselineNodes = await getGroupAdjustments(page, rootGroupId);
+    const baselineCount = baselineNodes.length;
+
     // Add three different node types via the UI.
-    await addAdjustment(page, rootGroupId, 'exposure');
     await addAdjustment(page, rootGroupId, 'contrast');
+    await addAdjustment(page, rootGroupId, 'saturation');
     await addAdjustment(page, rootGroupId, 'vignette');
     await page.waitForTimeout(100);
 
     const nodes = await getGroupAdjustments(page, rootGroupId);
-    expect(nodes).toHaveLength(3);
-    const [expId, conId, vigId] = nodes.map((n) => n.id);
+    expect(nodes).toHaveLength(baselineCount + 3);
 
-    // Reorder via store — drag-and-drop is too fragile for e2e.
+    // Find the three nodes we just added (they come after the defaults).
+    const addedNodes = nodes.slice(baselineCount);
+    const [conId, satId, vigId] = addedNodes.map((n) => n.id);
+
+    // Reorder the full list, placing our three added nodes in reversed order.
+    const reorderedIds = [
+      ...baselineNodes.map((n) => n.id),
+      vigId, satId, conId,
+    ];
     await page.evaluate(
       ({ gid, order }) => {
         const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -168,18 +183,24 @@ test.describe('Dynamic adjustment node list on groups', () => {
         };
         store.getState().reorderAdjustmentNodes(gid, order);
       },
-      { gid: rootGroupId, order: [vigId, conId, expId] },
+      { gid: rootGroupId, order: reorderedIds },
     );
     await page.waitForTimeout(100);
 
     const reordered = await getGroupAdjustments(page, rootGroupId);
-    expect(reordered[0]?.type).toBe('vignette');
-    expect(reordered[1]?.type).toBe('contrast');
-    expect(reordered[2]?.type).toBe('exposure');
+    const reorderedAdded = reordered.slice(baselineCount);
+    expect(reorderedAdded[0]?.type).toBe('vignette');
+    expect(reorderedAdded[1]?.type).toBe('saturation');
+    expect(reorderedAdded[2]?.type).toBe('contrast');
   });
 
   test('adjustments panel Add button shows menu with node types', async ({ page }) => {
     const rootGroupId = await getRootGroupId(page);
+
+    // Record the baseline node count (includes default adjustment nodes).
+    const baselineNodes = await getGroupAdjustments(page, rootGroupId);
+    const baselineCount = baselineNodes.length;
+
     await setActiveLayer(page, rootGroupId);
     await page.waitForTimeout(100);
 
@@ -198,13 +219,13 @@ test.describe('Dynamic adjustment node list on groups', () => {
 
     await page.screenshot({ path: 'e2e/screenshots/dynamic-adj-add-menu.png' });
 
-    // Click an item to add a node.
-    await page.getByRole('menuitem', { name: 'Exposure', exact: true }).click();
+    // Click an item to add a vignette node (not already in defaults).
+    await page.getByRole('menuitem', { name: 'Vignette', exact: true }).click();
     await page.waitForTimeout(200);
 
     const nodes = await getGroupAdjustments(page, rootGroupId);
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0]?.type).toBe('exposure');
+    expect(nodes).toHaveLength(baselineCount + 1);
+    expect(nodes[nodes.length - 1]?.type).toBe('vignette');
 
     await page.screenshot({ path: 'e2e/screenshots/dynamic-adj-panel-with-nodes.png' });
   });

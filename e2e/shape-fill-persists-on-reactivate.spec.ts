@@ -162,24 +162,20 @@ test.describe('Shape tool fill color persists on re-activation (#424)', () => {
     expect(fillAfter).toEqual({ ...CRIMSON, a: 1 });
 
     // The options-bar Fill swatch must visually still show crimson, not
-    // gold. The swatch is rendered as an inline background-color on the
-    // ColorSwatch button. We read its computed style.
-    const swatchColor = await page.evaluate(() => {
-      // Fill swatch is the first ColorSwatch inside the shape options group.
+    // gold. The ColorSwatch button has an aria-label like
+    // "Color: rgb(r, g, b)" — read that directly.
+    const swatchLabel = await page.evaluate(() => {
       const fillLabel = Array.from(document.querySelectorAll('span'))
         .find((el) => el.textContent === 'Fill');
       if (!fillLabel) return null;
       const group = fillLabel.nextElementSibling as HTMLElement | null;
       if (!group) return null;
-      const swatch = group.querySelector('button, div[role="button"], div[style*="background"]')
-        ?? group.firstElementChild;
+      const swatch = group.querySelector('button[aria-label^="Color:"]');
       if (!swatch) return null;
-      const style = window.getComputedStyle(swatch as HTMLElement);
-      return style.backgroundColor;
+      return swatch.getAttribute('aria-label');
     });
-    // backgroundColor is "rgb(r, g, b)" or "rgba(...)". Parse and compare.
-    expect(swatchColor).toBeTruthy();
-    const match = (swatchColor ?? '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    expect(swatchLabel).toBeTruthy();
+    const match = (swatchLabel ?? '').match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
     expect(match).not.toBeNull();
     const [, r, g, b] = match!;
     expect(Math.abs(Number(r) - CRIMSON.r)).toBeLessThan(8);

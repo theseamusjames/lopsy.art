@@ -439,7 +439,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
               </div>
             )}
             {layer.mask && (
-              <div className={styles.maskRow}>
+              <div className={styles.maskRow} data-mask-layer-id={layer.id}>
                 <div
                   className={[
                     styles.maskThumbnail,
