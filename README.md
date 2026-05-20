@@ -23,6 +23,21 @@ The rendering pipeline is GPU-accelerated via WebGL 2, compiled from Rust to Web
 
 Lopsy supports canvases up to 32,000 x 32,000 pixels, Display P3 wide-gamut color on supported displays, and pen tablet pressure sensitivity.
 
+## Contributing
+
+PRs must pass four required CI checks before merge:
+
+| Job        | What it runs                                   |
+| ---------- | ---------------------------------------------- |
+| `lint`     | `eslint src` + `scripts/check-pixel-debt.mjs`  |
+| `typecheck`| `tsc --noEmit`                                 |
+| `test`     | `vitest run`                                   |
+| `e2e`      | `playwright test --project=chromium`           |
+
+The same gates run on `git push` via `.githooks/pre-push`. To temporarily bypass during local iteration set `FAST_PUSH=1` (skips lint + test) or the per-gate `SKIP_LINT=1` / `SKIP_TEST=1`. Never bypass on a final push of an upstreaming branch.
+
+See [AGENTS.md](AGENTS.md) for the contribution workflow and [CLAUDE.md](CLAUDE.md) for the project layout and rules.
+
 ## License
 
 Commons Clause + MIT. See [LICENSE.md](LICENSE.md) for details.

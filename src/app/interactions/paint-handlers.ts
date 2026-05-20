@@ -670,7 +670,7 @@ export function handlePaintMove(
 
       const jittered = advanceJitterWalk(state, segDist, size, baseHardness, sizeJitter, hardnessJitter);
       size = jittered.size;
-      let hardness = jittered.hardness;
+      const hardness = jittered.hardness;
 
       // Taper: shrink brush size to zero over taperDistance
       const brushTaper = toolSettings.brushTaper;
