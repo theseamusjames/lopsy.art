@@ -10,8 +10,18 @@ struct TextureEntry {
     in_use: bool,
 }
 
+/// How many free textures of the same (width, height) the pool keeps
+/// before evicting the next one on `release`. Two keeps a warm texture
+/// for resize ping-pong without retaining N×layer-count zombies.
+const MAX_FREE_PER_SIZE: usize = 2;
+
 pub struct TexturePool {
-    entries: Vec<TextureEntry>,
+    /// `None` slots are tombstones for textures that were evicted (deleted
+    /// in `release` because the free pool for their size was already
+    /// saturated). New `acquire` calls reuse tombstones before pushing.
+    /// Handles index into this vector and must remain stable, so we never
+    /// shift entries — only replace slots in place.
+    entries: Vec<Option<TextureEntry>>,
     use_float: bool,
 }
 
@@ -81,9 +91,23 @@ impl TexturePool {
     /// the WebGL textures alive in the context until the context itself
     /// dies, which for an SPA may be never.
     pub fn destroy(&mut self, gl: &WebGl2RenderingContext) {
-        for entry in self.entries.drain(..) {
+        for entry in self.entries.drain(..).flatten() {
             gl.delete_texture(Some(&entry.texture));
         }
+    }
+
+    /// Total live (non-tombstone) entry count. Test / e2e helper.
+    pub fn live_entry_count(&self) -> usize {
+        self.entries.iter().filter(|e| e.is_some()).count()
+    }
+
+    /// Free-entry count across all sizes. Test / e2e helper.
+    pub fn free_entry_count(&self) -> usize {
+        self.entries
+            .iter()
+            .filter_map(|e| e.as_ref())
+            .filter(|e| !e.in_use)
+            .count()
     }
 
     pub fn acquire(
@@ -92,26 +116,36 @@ impl TexturePool {
         width: u32,
         height: u32,
     ) -> Result<TextureHandle, String> {
+        // Evict any free entries that exceed the per-size budget. This runs
+        // on every acquire instead of on every release because `release` is
+        // called from 100+ sites that don't have a gl context handy. Some
+        // delay between "no longer needed" and "actually deleted" is fine —
+        // what matters is that the pool can't grow unbounded across resize
+        // / crop cycles. See MAX_FREE_PER_SIZE above.
+        self.evict_excess_free_entries(gl);
+
         // Look for a free texture of matching size
-        for (i, entry) in self.entries.iter_mut().enumerate() {
-            if !entry.in_use && entry.width == width && entry.height == height {
-                entry.in_use = true;
-                // Clear via temporary FBO (works for both RGBA8 and RGBA16F)
-                let fbo = gl.create_framebuffer().ok_or("Failed to create temp FBO for clear")?;
-                gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
-                gl.framebuffer_texture_2d(
-                    WebGl2RenderingContext::FRAMEBUFFER,
-                    WebGl2RenderingContext::COLOR_ATTACHMENT0,
-                    WebGl2RenderingContext::TEXTURE_2D,
-                    Some(&entry.texture),
-                    0,
-                );
-                gl.viewport(0, 0, width as i32, height as i32);
-                gl.clear_color(0.0, 0.0, 0.0, 0.0);
-                gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-                gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-                gl.delete_framebuffer(Some(&fbo));
-                return Ok(TextureHandle(i));
+        for (i, slot) in self.entries.iter_mut().enumerate() {
+            if let Some(entry) = slot {
+                if !entry.in_use && entry.width == width && entry.height == height {
+                    entry.in_use = true;
+                    // Clear via temporary FBO (works for both RGBA8 and RGBA16F)
+                    let fbo = gl.create_framebuffer().ok_or("Failed to create temp FBO for clear")?;
+                    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+                    gl.framebuffer_texture_2d(
+                        WebGl2RenderingContext::FRAMEBUFFER,
+                        WebGl2RenderingContext::COLOR_ATTACHMENT0,
+                        WebGl2RenderingContext::TEXTURE_2D,
+                        Some(&entry.texture),
+                        0,
+                    );
+                    gl.viewport(0, 0, width as i32, height as i32);
+                    gl.clear_color(0.0, 0.0, 0.0, 0.0);
+                    gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+                    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+                    gl.delete_framebuffer(Some(&fbo));
+                    return Ok(TextureHandle(i));
+                }
             }
         }
 
@@ -151,35 +185,80 @@ impl TexturePool {
             WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
         );
 
-        let handle = TextureHandle(self.entries.len());
-        self.entries.push(TextureEntry {
+        let new_entry = TextureEntry {
             texture,
             width,
             height,
             in_use: true,
-        });
+        };
 
+        // Prefer reusing a tombstone slot so handle indices grow only when
+        // the working-set size actually grows.
+        for (i, slot) in self.entries.iter_mut().enumerate() {
+            if slot.is_none() {
+                *slot = Some(new_entry);
+                return Ok(TextureHandle(i));
+            }
+        }
+
+        let handle = TextureHandle(self.entries.len());
+        self.entries.push(Some(new_entry));
         Ok(handle)
     }
 
+    /// Return a texture to the pool. Cheap (no gl parameter, no syscalls).
+    /// Excess free entries are reaped at the start of the next `acquire`
+    /// by `evict_excess_free_entries`.
     pub fn release(&mut self, handle: TextureHandle) {
-        if let Some(entry) = self.entries.get_mut(handle.0) {
+        if let Some(entry) = self.entries.get_mut(handle.0).and_then(|e| e.as_mut()) {
             entry.in_use = false;
         }
     }
 
+    /// Walk the entries and delete any free entries above the per-size cap.
+    /// Called from `acquire` so the gl context is always available. The
+    /// pool's worst-case free-entry count is therefore
+    /// (distinct sizes ever seen) × MAX_FREE_PER_SIZE between acquires —
+    /// well bounded even on documents that crop and resize repeatedly.
+    fn evict_excess_free_entries(&mut self, gl: &WebGl2RenderingContext) {
+        let mut counts: std::collections::HashMap<(u32, u32), usize> =
+            std::collections::HashMap::new();
+        for slot in self.entries.iter_mut() {
+            // Use take() so the post-condition is "all evictable entries
+            // are None" — we restore the survivors below.
+            let entry = match slot.take() {
+                Some(e) => e,
+                None => continue,
+            };
+            if entry.in_use {
+                *slot = Some(entry);
+                continue;
+            }
+            let key = (entry.width, entry.height);
+            let count = counts.entry(key).or_insert(0);
+            if *count >= MAX_FREE_PER_SIZE {
+                gl.delete_texture(Some(&entry.texture));
+                // Leave the slot as `None` (tombstone) so next acquire
+                // reuses the index rather than growing the vec.
+            } else {
+                *count += 1;
+                *slot = Some(entry);
+            }
+        }
+    }
+
     pub fn get(&self, handle: TextureHandle) -> Option<&WebGlTexture> {
-        self.entries.get(handle.0).map(|e| &e.texture)
+        self.entries.get(handle.0).and_then(|e| e.as_ref()).map(|e| &e.texture)
     }
 
     pub fn get_size(&self, handle: TextureHandle) -> Option<(u32, u32)> {
-        self.entries.get(handle.0).map(|e| (e.width, e.height))
+        self.entries.get(handle.0).and_then(|e| e.as_ref()).map(|e| (e.width, e.height))
     }
 
     /// Set NEAREST filtering on a texture (for system textures that are always
     /// sampled at exact texel centers — avoids interpolation precision issues).
     pub fn set_nearest_filter(&self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
-        if let Some(entry) = self.entries.get(handle.0) {
+        if let Some(entry) = self.entries.get(handle.0).and_then(|e| e.as_ref()) {
             gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&entry.texture));
             gl.tex_parameteri(
                 WebGl2RenderingContext::TEXTURE_2D,
@@ -195,7 +274,7 @@ impl TexturePool {
     }
 
     pub fn set_linear_filter(&self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
-        if let Some(entry) = self.entries.get(handle.0) {
+        if let Some(entry) = self.entries.get(handle.0).and_then(|e| e.as_ref()) {
             gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&entry.texture));
             gl.tex_parameteri(
                 WebGl2RenderingContext::TEXTURE_2D,
@@ -303,7 +382,7 @@ impl TexturePool {
             ).map_err(|e| format!("tex_image_2d canvas float failed: {:?}", e))?;
 
             // Resize entry if needed
-            if let Some(entry) = self.entries.get(handle.0) {
+            if let Some(entry) = self.entries.get(handle.0).and_then(|e| e.as_ref()) {
                 if entry.width != w || entry.height != h {
                     // entry is immutable here; sizes are already correct
                     // from the acquire/resize step in the caller
