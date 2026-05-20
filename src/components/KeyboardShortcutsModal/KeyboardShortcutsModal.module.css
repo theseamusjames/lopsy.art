@@ -13,7 +13,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  width: 480px;
+  width: 520px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
@@ -22,6 +22,9 @@
 .header {
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .header h2 {
@@ -30,6 +33,34 @@
   font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--color-text-primary);
+}
+
+.resetAllButton {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.resetAllButton:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.conflictBanner {
+  background: rgba(255, 152, 0, 0.12);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  color: var(--color-warning);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  padding: var(--space-2) var(--space-3);
 }
 
 .body {
@@ -69,6 +100,12 @@
   color: var(--color-text-primary);
 }
 
+.shortcutControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .shortcutKey {
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
@@ -79,6 +116,41 @@
   padding: var(--space-1) var(--space-2);
   min-width: 24px;
   text-align: center;
+}
+
+.shortcutKeyEditable {
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.shortcutKeyEditable:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+.shortcutKeyListening {
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  min-width: 96px;
+}
+
+.resetButton {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  line-height: 1;
+  transition: color var(--transition-fast);
+}
+
+.resetButton:hover {
+  color: var(--color-text-primary);
 }
 
 .footer {
