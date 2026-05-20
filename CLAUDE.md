@@ -3,8 +3,13 @@
 Read SPEC.md for the full product specification.
 
 ## Additional Guides
-e2e/GUIDE.md - Read this before writing any e2e tests.
-MEMORY.md - good for storing small facts about the code base.
+- `AGENTS.md` — contributor workflow for AI-assisted PRs (process,
+  commit style, what's wanted).
+- `e2e/GUIDE.md` — read this before writing any e2e tests.
+- `MEMORY.md` — small facts about the codebase worth remembering.
+- `docs/pixel-data-debt.md` — authoritative tracker for places where
+  pixel buffers still live on the JS side, with the migration plan
+  for each.
 
 ## Language & Types
 
@@ -35,7 +40,10 @@ src/
       brush.test.ts     # Unit tests for the logic
       BrushOptions.tsx   # Options bar UI for this tool
       BrushOptions.module.css
-  engine/           # Legacy JS engine utilities (color-space detection, etc.)
+  engine/           # JS engine utilities that remain CPU-side: color-space
+                    # detection, PixelBuffer / PixelDataManager, bitmap cache,
+                    # canvas-ops (wide-gamut ImageData plumbing). Shrinks
+                    # as features migrate into engine-wasm/.
   engine-wasm/      # WASM bridge layer (see Rust/WASM Engine section below)
     engine-state.ts   # Engine lifecycle: create, destroy, get current engine
     engine-sync.ts    # Syncs Zustand state → WASM engine each frame
@@ -46,7 +54,11 @@ src/
   history/          # Undo/redo system
   selection/        # Selection model and operations
   filters/          # Filter implementations (blur, sharpen, noise, etc.)
-  adjustments/      # Image adjustment implementations
+                    # Adjustment node definitions also live here (see
+                    # adjustment-node-utils.ts and the per-type LUT
+                    # builders in curves.ts / levels.ts). The Adjustments
+                    # UI lives at panels/AdjustmentsPanel/ — there is no
+                    # separate src/adjustments/ directory.
   icons/            # Custom SVG icon components (Lucide style)
   styles/           # Global CSS: tokens.css, reset.css, fonts.css
   types/            # Shared TypeScript type definitions
@@ -195,7 +207,10 @@ Each tool follows this pattern:
 3. `src/tools/<name>/<Name>Options.tsx` — React component for the tool's options bar. Reads/writes tool settings via Zustand.
 4. `src/tools/<name>/<Name>Options.module.css` — styles for the options bar.
 
-Tool logic modules must not import React, DOM APIs, or any rendering code.
+Tool logic modules must not import React, DOM APIs, or any rendering
+code. A small set of pre-rule files still violate this (path/path.ts,
+path/boolean-ops.ts, text/render-text-on-path.ts, brush/preset-io.ts)
+and are tracked for cleanup — new code must not extend the list.
 
 ## Components
 
@@ -217,7 +232,9 @@ Tool logic modules must not import React, DOM APIs, or any rendering code.
 - **E2E tests**: Playwright. Located in `e2e/` directory.
 - **Storybook**: Storybook 8+. Stories co-located with components.
 - Tool logic must have unit tests. Test the math, not the rendering.
-- Every new component needs a Storybook story before it's considered complete.
+- New components should ship with a Storybook story. A handful of legacy
+  components (BrushModal, CanvasSizeModal, ModalHost, etc.) predate this
+  rule and are tracked for backfill — see the GitHub issue for the list.
 - IMPORTANT: e2e tests should always test the UI, not manipulate the zustand stores directly. When we make UI changes, we update the test for the new UI. This is critical to making sure the UI works as the user would experience it.
 
 ## Commands
