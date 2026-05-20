@@ -139,6 +139,15 @@ interface UIState {
   pathClosed: boolean;
   lassoPoints: Point[];
   cropRect: { x: number; y: number; width: number; height: number } | null;
+  /** When set, the crop tool is in perspective mode with 4 draggable corners. */
+  perspectiveCropQuad: {
+    topLeft: { x: number; y: number };
+    topRight: { x: number; y: number };
+    bottomRight: { x: number; y: number };
+    bottomLeft: { x: number; y: number };
+  } | null;
+  /** Index of the perspective crop corner being dragged (0=TL,1=TR,2=BR,3=BL), or null. */
+  perspectiveCropDragging: 0 | 1 | 2 | 3 | null;
   transform: TransformState | null;
   activeTransformHandle: TransformHandle | null;
   meshWarp: MeshWarpSession | null;
@@ -193,6 +202,8 @@ interface UIState {
   setLassoPoints: (points: Point[]) => void;
   clearLassoPoints: () => void;
   setCropRect: (rect: { x: number; y: number; width: number; height: number } | null) => void;
+  setPerspectiveCropQuad: (quad: UIState['perspectiveCropQuad']) => void;
+  setPerspectiveCropDragging: (idx: 0 | 1 | 2 | 3 | null) => void;
   setTransform: (transform: TransformState | null) => void;
   setActiveTransformHandle: (handle: TransformHandle | null) => void;
   setMeshWarp: (session: MeshWarpSession | null) => void;
@@ -268,6 +279,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   pathClosed: false,
   lassoPoints: [],
   cropRect: null,
+  perspectiveCropQuad: null,
+  perspectiveCropDragging: null,
   transform: null,
   activeTransformHandle: null,
   meshWarp: null,
@@ -338,6 +351,8 @@ export const useUIStore = create<UIState>((set, get) => ({
     toolRegistry[current.activeTool]?.onDeactivate?.();
     if (current.activeTool === 'path' && tool !== 'path') {
       set({ activeTool: tool, pathAnchors: [], pathClosed: false });
+    } else if (current.activeTool === 'crop' && tool !== 'crop') {
+      set({ activeTool: tool, perspectiveCropQuad: null, perspectiveCropDragging: null });
     } else {
       set({ activeTool: tool });
     }
@@ -373,6 +388,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   setLassoPoints: (points) => set({ lassoPoints: points }),
   clearLassoPoints: () => set({ lassoPoints: [] }),
   setCropRect: (rect) => set({ cropRect: rect }),
+  setPerspectiveCropQuad: (quad) => set({ perspectiveCropQuad: quad }),
+  setPerspectiveCropDragging: (idx) => set({ perspectiveCropDragging: idx }),
   setTransform: (transform) => set({ transform }),
   setActiveTransformHandle: (handle) => set({ activeTransformHandle: handle }),
   setMeshWarp: (session) => set({ meshWarp: session }),
