@@ -1,12 +1,13 @@
 import type { SelectionData, ActionResult } from '../types';
 import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
+import { createDefaultAdjustments } from '../../../filters/adjustment-node-utils';
 
 export function computeOpenImage(
   imageData: ImageData,
   name: string,
 ): ActionResult {
   const layer = createRasterLayer({ name: 'Background', width: imageData.width, height: imageData.height });
-  const rootGroup = createGroupLayer({ name: 'Project', children: [layer.id] });
+  const rootGroup = createGroupLayer({ name: 'Project', children: [layer.id], adjustments: createDefaultAdjustments() });
   const pixelData = new Map<string, ImageData>();
   pixelData.set(layer.id, imageData);
   const selection: SelectionData = { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 };

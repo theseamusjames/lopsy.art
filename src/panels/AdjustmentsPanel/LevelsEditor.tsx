@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { useEditorStore } from '../../app/editor-store';
-import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
-import { pixelDataManager } from '../../engine/pixel-data-manager';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { type Levels, type LevelsChannel, isIdentityChannel } from '../../filters/levels';
 import { clamp } from '../../utils/math';
-import { computeHistogram, EMPTY_HISTOGRAM, histogramPercentile, type Histogram } from './histogram-compute';
+import { histogramPercentile, type Histogram } from './histogram-compute';
+import { useGroupHistogram } from './useGroupHistogram';
 import styles from './LevelsEditor.module.css';
 
 const CHANNEL_ORDER = ['rgb', 'r', 'g', 'b'] as const;
@@ -18,9 +16,6 @@ const CHANNEL_TAB_COLORS: Record<ChannelKey, string> = {
   b: '#789cff',
 };
 
-/** Distinct shades of gray for each channel's layered histogram. Lightest
- *  on top, darkest on bottom; with 'lighter' compositing the overlap is
- *  additive so common ranges read as near-white. */
 const HIST_SHADES: Record<'r' | 'g' | 'b', string> = {
   r: 'rgba(210, 210, 210, 0.55)',
   g: 'rgba(140, 140, 140, 0.55)',
@@ -28,14 +23,11 @@ const HIST_SHADES: Record<'r' | 'g' | 'b', string> = {
 };
 const HIST_SHADE_FOCUS: Record<'r' | 'g' | 'b' | 'rgb', string> = {
   rgb: 'rgba(220, 220, 220, 0.92)',
-  r: 'rgba(220, 220, 220, 0.92)',
-  g: 'rgba(160, 160, 160, 0.92)',
-  b: 'rgba(110, 110, 110, 0.92)',
+  r: 'rgba(200, 80, 80, 0.85)',
+  g: 'rgba(80, 200, 100, 0.85)',
+  b: 'rgba(80, 120, 220, 0.85)',
 };
 const HIST_SHADE_MUTED = 'rgba(60, 60, 60, 0.35)';
-
-const TRACK_W = 256;
-const HISTOGRAM_H = 90;
 
 interface LevelsEditorProps {
   levels: Levels;
@@ -108,25 +100,24 @@ function HistogramView({ histogram, channel }: { histogram: Histogram; channel: 
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = TRACK_W * dpr;
-    canvas.height = HISTOGRAM_H * dpr;
-    canvas.style.width = `${TRACK_W}px`;
-    canvas.style.height = `${HISTOGRAM_H}px`;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
 
     ctx.save();
     ctx.scale(dpr, dpr);
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx.fillRect(0, 0, TRACK_W, HISTOGRAM_H);
+    ctx.fillRect(0, 0, w, h);
 
-    // Quartile reference grid.
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
     ctx.lineWidth = 1;
     for (let i = 1; i < 4; i++) {
-      const x = (i / 4) * TRACK_W;
+      const x = (i / 4) * w;
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.lineTo(x, HISTOGRAM_H);
+      ctx.lineTo(x, h);
       ctx.stroke();
     }
 
@@ -134,13 +125,11 @@ function HistogramView({ histogram, channel }: { histogram: Histogram; channel: 
       ctx.fillStyle = 'rgba(160, 160, 160, 0.4)';
       ctx.font = '11px var(--font-ui)';
       ctx.textAlign = 'center';
-      ctx.fillText('No image data', TRACK_W / 2, HISTOGRAM_H / 2 + 4);
+      ctx.fillText('No image data', w / 2, h / 2 + 4);
       ctx.restore();
       return;
     }
 
-    // Use the 99.5th-percentile bin height as the vertical scale so
-    // a single dominant column doesn't squash everything to a flat line.
     const cap = Math.max(
       histogramPercentile(histogram.r, 0.995),
       histogramPercentile(histogram.g, 0.995),
@@ -151,25 +140,23 @@ function HistogramView({ histogram, channel }: { histogram: Histogram; channel: 
     const drawChannel = (bins: Uint32Array, fill: string) => {
       ctx.fillStyle = fill;
       ctx.beginPath();
-      ctx.moveTo(0, HISTOGRAM_H);
+      ctx.moveTo(0, h);
       for (let i = 0; i < 256; i++) {
-        const x = (i / 255) * TRACK_W;
-        const h = Math.min(1, bins[i]! / cap) * HISTOGRAM_H;
-        ctx.lineTo(x, HISTOGRAM_H - h);
+        const x = (i / 255) * w;
+        const barH = Math.min(1, bins[i]! / cap) * h;
+        ctx.lineTo(x, h - barH);
       }
-      ctx.lineTo(TRACK_W, HISTOGRAM_H);
+      ctx.lineTo(w, h);
       ctx.closePath();
       ctx.fill();
     };
 
     if (channel === 'rgb') {
-      // Layered shades of gray, additively blended so common ranges read brighter.
       ctx.globalCompositeOperation = 'lighter';
       drawChannel(histogram.b, HIST_SHADES.b);
       drawChannel(histogram.g, HIST_SHADES.g);
       drawChannel(histogram.r, HIST_SHADES.r);
     } else {
-      // Single-channel: mute the others, emphasise the active one.
       ctx.globalCompositeOperation = 'source-over';
       const others: Array<'r' | 'g' | 'b'> = (['r', 'g', 'b'] as const).filter((c) => c !== channel);
       drawChannel(histogram[others[0]!], HIST_SHADE_MUTED);
@@ -355,66 +342,6 @@ function useDragHandle(
 
 function GradientBar() {
   return <div className={styles.gradient} aria-hidden="true" />;
-}
-
-// ─── Active group's histogram ─────────────────────────────────────────────
-
-function useGroupHistogram(skip: boolean): Histogram {
-  // Cheap subscription that fires on any layer pixel mutation.
-  const pixelVersion = useSyncExternalStore(
-    pixelDataManager.subscribe.bind(pixelDataManager),
-    () => pixelDataManager.version(),
-  );
-  const activeGroupChildren = useEditorStore((s) => {
-    const id = s.document.activeLayerId;
-    const layers = s.document.layers;
-    const active = id ? layers.find((l) => l.id === id) : undefined;
-    if (active?.type === 'group') return active.children;
-    const root = layers.find((l) => l.id === s.document.rootGroupId);
-    return root?.type === 'group' ? root.children : [];
-  });
-  const layersMap = useEditorStore((s) => s.document.layers);
-
-  const [histogram, setHistogram] = useState<Histogram>(EMPTY_HISTOGRAM);
-
-  const childKey = useMemo(() => activeGroupChildren.join(','), [activeGroupChildren]);
-
-  useEffect(() => {
-    if (skip) return;
-    let cancelled = false;
-    let retries = 0;
-
-    const tryRead = () => {
-      if (cancelled) return;
-      const images: ImageData[] = [];
-      for (const id of activeGroupChildren) {
-        const layer = layersMap.find((l) => l.id === id);
-        if (!layer || !layer.visible) continue;
-        if (layer.type === 'group') continue;
-        const img = readLayerAsImageData(id);
-        if (img) images.push(img);
-      }
-      if (images.length === 0) {
-        // Texture may not be uploaded yet for a brand-new layer — retry a few frames.
-        if (retries < 8) {
-          retries++;
-          requestAnimationFrame(tryRead);
-        } else {
-          setHistogram(EMPTY_HISTOGRAM);
-        }
-        return;
-      }
-      setHistogram(computeHistogram(images));
-    };
-
-    const rafId = requestAnimationFrame(tryRead);
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(rafId);
-    };
-  }, [skip, childKey, pixelVersion, activeGroupChildren, layersMap]);
-
-  return histogram;
 }
 
 // ─── Math helpers ─────────────────────────────────────────────────────────

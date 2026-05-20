@@ -365,8 +365,39 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
                   {layer.name}
                 </span>
               )}
+              {!isRootGroup(layer.id) && (
+                <button
+                  className={styles.opacity}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingOpacityId(editingOpacityId === layer.id ? null : layer.id);
+                  }}
+                  type="button"
+                  aria-label={`Opacity ${Math.round(layer.opacity * 100)}% for ${layer.name}`}
+                  title="Click to adjust opacity"
+                >
+                  {Math.round(layer.opacity * 100)}%
+                </button>
+              )}
+              {!isRootGroup(layer.id) && (
+                <button
+                  className={styles.visibilityBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleVisibility(layer.id);
+                  }}
+                  type="button"
+                  aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
+                >
+                  {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                </button>
+              )}
               <button
-                className={`${styles.effectsBtn} ${showEffectsDrawer && layer.id === activeLayerId ? styles.effectsBtnActive : ''}`}
+                className={[
+                  styles.effectsBtn,
+                  showEffectsDrawer && layer.id === activeLayerId ? styles.effectsBtnActive : '',
+                  hasActiveEffects(layer) ? styles.effectsBtnHasEffects : '',
+                ].filter(Boolean).join(' ')}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (showEffectsDrawer && layer.id === activeLayerId) {
@@ -382,20 +413,6 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
               >
                 <Sparkles size={12} />
               </button>
-              {!isRootGroup(layer.id) && (
-                <button
-                  className={styles.opacity}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingOpacityId(editingOpacityId === layer.id ? null : layer.id);
-                  }}
-                  type="button"
-                  aria-label={`Opacity ${Math.round(layer.opacity * 100)}% for ${layer.name}`}
-                  title="Click to adjust opacity"
-                >
-                  {Math.round(layer.opacity * 100)}%
-                </button>
-              )}
               <button
                 className={`${styles.lockBtn} ${layer.locked ? styles.lockBtnActive : ''}`}
                 onClick={(e) => {
@@ -407,19 +424,6 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
               >
                 {layer.locked ? <Lock size={12} /> : <Unlock size={12} />}
               </button>
-              {!isRootGroup(layer.id) && (
-                <button
-                  className={styles.visibilityBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleVisibility(layer.id);
-                  }}
-                  type="button"
-                  aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
-                >
-                  {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
-                </button>
-              )}
             </div>
             {editingOpacityId === layer.id && !isRootGroup(layer.id) && (
               <div className={styles.opacitySlider}>
@@ -564,6 +568,17 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
     )}
     </>
   );
+}
+
+function hasActiveEffects(layer: import('../../types').Layer): boolean {
+  const fx = layer.effects;
+  if (fx.stroke.enabled || fx.dropShadow.enabled || fx.outerGlow.enabled || fx.innerGlow.enabled || fx.colorOverlay.enabled) {
+    return true;
+  }
+  if (layer.type === 'group') {
+    return layer.adjustments.length > 0;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------

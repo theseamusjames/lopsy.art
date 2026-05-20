@@ -188,6 +188,16 @@ export function createDefaultNode(type: AdjustmentNodeType): AdjustmentNode {
   }
 }
 
+/** Default adjustment nodes added to every new document's root group. */
+export function createDefaultAdjustments(): AdjustmentNode[] {
+  return [
+    createDefaultNode('levels'),
+    createDefaultNode('curves'),
+    createDefaultNode('exposure'),
+    createDefaultNode('hue-saturation'),
+  ];
+}
+
 /** Human-readable label for each node type, shown in the Add menu and node headers. */
 export const ADJUSTMENT_NODE_LABELS: Record<AdjustmentNodeType, string> = {
   'exposure': 'Exposure',

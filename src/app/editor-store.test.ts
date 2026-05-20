@@ -138,7 +138,7 @@ describe('adjustment node actions — dynamic AdjustmentNode list on groups', ()
   it('addAdjustmentNode appends a new enabled node with defaults', () => {
     const state = useEditorStore.getState();
     state.addGroup('Test Group');
-    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group')!.id;
+    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group' && l.name === 'Test Group')!.id;
 
     state.addAdjustmentNode(groupId, 'exposure');
     state.addAdjustmentNode(groupId, 'contrast');
@@ -156,7 +156,7 @@ describe('adjustment node actions — dynamic AdjustmentNode list on groups', ()
   it('updateAdjustmentNode changes node params without affecting other nodes', () => {
     const state = useEditorStore.getState();
     state.addGroup('Test Group');
-    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group')!.id;
+    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group' && l.name === 'Test Group')!.id;
 
     state.addAdjustmentNode(groupId, 'exposure');
     state.addAdjustmentNode(groupId, 'saturation');
@@ -179,7 +179,7 @@ describe('adjustment node actions — dynamic AdjustmentNode list on groups', ()
   it('removeAdjustmentNode removes only the specified node', () => {
     const state = useEditorStore.getState();
     state.addGroup('Test Group');
-    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group')!.id;
+    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group' && l.name === 'Test Group')!.id;
 
     state.addAdjustmentNode(groupId, 'exposure');
     state.addAdjustmentNode(groupId, 'vignette');
@@ -198,7 +198,7 @@ describe('adjustment node actions — dynamic AdjustmentNode list on groups', ()
   it('toggleAdjustmentNode flips the enabled field', () => {
     const state = useEditorStore.getState();
     state.addGroup('Test Group');
-    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group')!.id;
+    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group' && l.name === 'Test Group')!.id;
 
     state.addAdjustmentNode(groupId, 'exposure');
     const midGroup = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
@@ -219,7 +219,7 @@ describe('adjustment node actions — dynamic AdjustmentNode list on groups', ()
   it('reorderAdjustmentNodes reorders nodes to the requested sequence', () => {
     const state = useEditorStore.getState();
     state.addGroup('Test Group');
-    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group')!.id;
+    const groupId = useEditorStore.getState().document.layers.find((l) => l.type === 'group' && l.name === 'Test Group')!.id;
 
     state.addAdjustmentNode(groupId, 'exposure');
     state.addAdjustmentNode(groupId, 'contrast');
