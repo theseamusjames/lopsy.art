@@ -3,6 +3,7 @@ import { FilterDialog } from '../../components/FilterDialog/FilterDialog';
 import { NoiseDialog, FillNoiseDialog } from '../../components/FilterDialog/NoiseDialog';
 import { PatternFillDialog } from '../../components/PatternFillDialog/PatternFillDialog';
 import { ColorLutDialog } from '../../components/ColorLutDialog/ColorLutDialog';
+import { DisplacementMapDialog } from '../../components/DisplacementMapDialog/DisplacementMapDialog';
 import { ExportDialog } from '../../components/ExportDialog/ExportDialog';
 import {
   type FilterDialogId,
@@ -30,6 +31,13 @@ import {
   cancelColorLutPreview,
 } from './color-lut-actions';
 import type { LutPreset } from '../../filters/color-lut';
+import {
+  applyDisplacementMap,
+  applyDisplacementMapDirect,
+  beginDisplacementMapPreview,
+  previewDisplacementMap,
+  cancelDisplacementMapPreview,
+} from './displacement-map-actions';
 import {
   exportCanvasWithOptions,
   buildExportPreview,
@@ -220,6 +228,33 @@ export function MenuBar() {
     previewColorLut(preset, intensity);
   }, []);
 
+  const handleDisplacementMapApply = useCallback((sourceLayerId: string, scaleX: number, scaleY: number, edgeMode: number) => {
+    if (previewActiveRef.current) {
+      applyDisplacementMap(sourceLayerId, scaleX, scaleY, edgeMode);
+      previewActiveRef.current = false;
+    } else {
+      applyDisplacementMapDirect(sourceLayerId, scaleX, scaleY, edgeMode);
+    }
+    setActiveDialog(null);
+  }, []);
+
+  const handleDisplacementMapPreviewStart = useCallback(() => {
+    previewActiveRef.current = true;
+    beginDisplacementMapPreview();
+  }, []);
+
+  const handleDisplacementMapPreviewStop = useCallback(() => {
+    if (previewActiveRef.current) {
+      cancelDisplacementMapPreview();
+      previewActiveRef.current = false;
+    }
+  }, []);
+
+  const handleDisplacementMapPreviewChange = useCallback((sourceLayerId: string, scaleX: number, scaleY: number, edgeMode: number) => {
+    if (!previewActiveRef.current) return;
+    previewDisplacementMap(sourceLayerId, scaleX, scaleY, edgeMode);
+  }, []);
+
   const handleExportDialogExport = useCallback((options: ExportOptions) => {
     setShowExportDialog(false);
     exportCanvasWithOptions(options);
@@ -256,7 +291,7 @@ export function MenuBar() {
     setSelectDialog(null);
   }, [selectDialog]);
 
-  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill' && activeDialog !== 'color-lut'
+  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill' && activeDialog !== 'color-lut' && activeDialog !== 'displacement-map'
     ? getFilterDialogConfig(activeDialog)
     : null;
 
@@ -347,6 +382,15 @@ export function MenuBar() {
           onPreviewStart={handleColorLutPreviewStart}
           onPreviewStop={handleColorLutPreviewStop}
           onPreviewChange={handleColorLutPreviewChange}
+        />
+      )}
+      {activeDialog === 'displacement-map' && (
+        <DisplacementMapDialog
+          onApply={handleDisplacementMapApply}
+          onCancel={handleDialogCancel}
+          onPreviewStart={handleDisplacementMapPreviewStart}
+          onPreviewStop={handleDisplacementMapPreviewStop}
+          onPreviewChange={handleDisplacementMapPreviewChange}
         />
       )}
       {imageDialog === 'canvas-size' && (

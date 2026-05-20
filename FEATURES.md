@@ -375,6 +375,13 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
   - **Brush Size**: 4 - 500 px
   - **Pressure**: 1 - 100% (multiplier for displacement intensity)
   - Quintic radial falloff inside each dab so the warp eases off smoothly at the brush edge
+- **Displacement Map** (Filter menu → "Displacement Map…"): uses another layer's red and green channels to offset pixels in the active layer. Red channel controls horizontal displacement, green channel controls vertical displacement — channel values are mapped from [0,1] to [-1,1] range and multiplied by the user-specified scale.
+  - **Source Layer**: dropdown selector listing all non-active, non-group, visible raster layers
+  - **Horizontal Scale**: 0 - 200 (displacement magnitude in pixels for the red channel)
+  - **Vertical Scale**: 0 - 200 (displacement magnitude in pixels for the green channel)
+  - **Edge Mode**: Transparent (out-of-bounds → clear), Clamp (stretch edge pixels), Wrap (tile)
+  - Live preview support, undo support
+  - GPU-accelerated GLSL shader with bilinear interpolation on the displacement map texture
 
 ### Render
 - **Clouds**: scale, seed

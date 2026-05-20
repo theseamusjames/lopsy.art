@@ -46,7 +46,8 @@ export type FilterDialogId =
   | 'emboss'
   | 'voronoi'
   | 'fibers'
-  | 'color-lut';
+  | 'color-lut'
+  | 'displacement-map';
 
 function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;

@@ -1,10 +1,102 @@
-//! Distortion filters: mesh warp, liquify warp.
+//! Distortion filters: mesh warp, liquify warp, displacement map.
 
 use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
 use crate::filter_gpu;
+
+#[wasm_bindgen(js_name = "filterDisplacementMap")]
+pub fn filter_displacement_map(
+    engine: &mut Engine,
+    layer_id: &str,
+    disp_data: &[u8],
+    disp_width: u32,
+    disp_height: u32,
+    scale_x: f32,
+    scale_y: f32,
+    edge_mode: i32,
+) {
+    if disp_width == 0 || disp_height == 0 || disp_data.is_empty() {
+        return;
+    }
+
+    let gl = &engine.inner.gl;
+
+    let disp_handle = match engine.inner.texture_pool.acquire(gl, disp_width, disp_height) {
+        Ok(h) => h,
+        Err(_) => return,
+    };
+    let _ = engine.inner.texture_pool.upload_rgba(
+        gl, disp_handle, 0, 0, disp_width, disp_height, disp_data,
+    );
+    let disp_tex = engine.inner.texture_pool.get(disp_handle).cloned();
+
+    if let Some(ref t) = disp_tex {
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
+        gl.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+            WebGl2RenderingContext::LINEAR as i32,
+        );
+        gl.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+            WebGl2RenderingContext::LINEAR as i32,
+        );
+        gl.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_WRAP_S,
+            WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+        );
+        gl.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_WRAP_T,
+            WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+        );
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    }
+
+    let tex_handle = match engine.inner.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => {
+            engine.inner.texture_pool.release(disp_handle);
+            return;
+        }
+    };
+    let (w, h) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let texel_w = 1.0 / w as f32;
+    let texel_h = 1.0 / h as f32;
+
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.displacement_map,
+        |gl, shader| {
+            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+            if let Some(t) = &disp_tex {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
+            }
+            if let Some(loc) = shader.location(gl, "u_dispMap") {
+                gl.uniform1i(Some(&loc), 1);
+            }
+            if let Some(loc) = shader.location(gl, "u_scaleX") {
+                gl.uniform1f(Some(&loc), scale_x);
+            }
+            if let Some(loc) = shader.location(gl, "u_scaleY") {
+                gl.uniform1f(Some(&loc), scale_y);
+            }
+            if let Some(loc) = shader.location(gl, "u_texelSize") {
+                gl.uniform2f(Some(&loc), texel_w, texel_h);
+            }
+            if let Some(loc) = shader.location(gl, "u_edgeMode") {
+                gl.uniform1i(Some(&loc), edge_mode);
+            }
+        },
+    );
+
+    engine.inner.texture_pool.release(disp_handle);
+}
 
 #[wasm_bindgen(js_name = "filterMeshWarp")]
 pub fn filter_mesh_warp(

@@ -72,6 +72,7 @@ pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/select
 pub const SURFACE_BLUR_FRAG: &str = include_str!("shaders/filters/surface_blur.glsl");
 pub const FIBERS_FRAG: &str = include_str!("shaders/filters/fibers.glsl");
 pub const COLOR_LUT_FRAG: &str = include_str!("shaders/filters/color_lut.glsl");
+pub const DISPLACEMENT_MAP_FRAG: &str = include_str!("shaders/filters/displacement_map.glsl");
 
 // Brush (assembled from header + variant + footer at compile_all time)
 const BRUSH_DAB_HEADER: &str = include_str!("shaders/brush/brush_dab_header.glsl");
@@ -244,6 +245,7 @@ pub struct ShaderPrograms {
     pub surface_blur: ShaderProgram,
     pub fibers: ShaderProgram,
     pub color_lut: ShaderProgram,
+    pub displacement_map: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab_circle: ShaderProgram,
     pub brush_dab_alpha: ShaderProgram,
@@ -335,6 +337,7 @@ impl ShaderPrograms {
             surface_blur: compile_program(gl, v, SURFACE_BLUR_FRAG)?,
             fibers: compile_program(gl, v, FIBERS_FRAG)?,
             color_lut: compile_program(gl, v, COLOR_LUT_FRAG)?,
+            displacement_map: compile_program(gl, v, DISPLACEMENT_MAP_FRAG)?,
             // Brush — assembled from header + variant body + footer
             brush_dab_circle: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_CIRCLE_BODY}{BRUSH_DAB_FOOTER}"))?,
             brush_dab_alpha: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_ALPHA_BODY}{BRUSH_DAB_FOOTER}"))?,
