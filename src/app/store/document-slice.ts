@@ -262,6 +262,15 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       if (eng) removeTextLayerState(eng, id);
     }
 
+    // Close any cached ImageBitmap for the removed layer (and descendants
+    // when it's a group) so the bitmaps actually get GC'd.
+    invalidateBitmapCache(id);
+    if (removedLayer && removedLayer.type === 'group') {
+      for (const descId of getDescendantIdsUtil(s.document.layers, id)) {
+        invalidateBitmapCache(descId);
+      }
+    }
+
     s.pushHistory('Delete Layer');
     applyActionResult(set, result);
   },
@@ -719,6 +728,19 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     );
     if (toRemove.length === 0) return;
     s.pushHistory('Delete Layers');
+
+    // Close cached ImageBitmaps for every layer that's about to vanish —
+    // walk the pre-delete doc so descendants of groups are reachable.
+    for (const id of toRemove) {
+      const layer = doc.layers.find((l) => l.id === id);
+      invalidateBitmapCache(id);
+      if (layer && layer.type === 'group') {
+        for (const descId of getDescendantIdsUtil(doc.layers, id)) {
+          invalidateBitmapCache(descId);
+        }
+      }
+    }
+
     let currentDoc = doc;
     for (const id of toRemove) {
       const result = computeRemoveLayer(
