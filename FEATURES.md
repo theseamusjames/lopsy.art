@@ -199,6 +199,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - White paint adds to the selection, black (or the eraser) subtracts; intermediate gray values produce partial selection coverage
 - Exiting Quick Mask reads the painted mask back from the GPU and replaces the selection (with feather applied if a feather radius is set on the marquee)
 - Works regardless of the active layer — painting only affects the selection mask, not pixels
+- **Fill (paint bucket) and Gradient tools route into the quick mask** instead of the active layer while quick mask is on, so smooth selection falloffs (linear or radial gradients) and bucket fills of the selection mask are first-class operations. Quick mask mode takes precedence over layer-mask edit mode if both are somehow active.
 
 ---
 
@@ -245,10 +246,14 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Type**: linear, radial
 - **Stops**: multiple color stops with position (0-1)
 - **Reverse**: on/off
-- **Cmd/Meta+drag**: snaps the gradient angle to 15° increments while dragging
+- **Cmd/Meta+drag**: snaps the gradient angle to 15° increments while dragging (handy for aligning a gradient to a horizontal, vertical, or 45° axis without having to drag a perfectly straight line)
+- **Mask edit mode**: when the active layer's mask is being edited, gradient drags paint into the mask texture instead of the layer pixels.
+- **Quick Mask mode**: when Quick Mask is active, gradient drags paint into the GPU quick-mask texture in document space — produces smooth selection falloffs.
 
 ### Crop
-- Interactive drag to define crop rectangle
+- **Modes**: Normal (rectangular) or Perspective (4-point quadrilateral correction). The mode dropdown lives in the options bar; switching to Perspective shows Apply / Cancel buttons next to the dropdown.
+- **Normal mode**: interactive drag to define crop rectangle.
+- **Perspective mode**: on first activation a quadrilateral is seeded over the full document. Dragging any of the four corner handles repositions that corner; on Apply, every raster layer is warped by the inverse homography (8×8 DLT solver, bilinear inverse-warp) and the document is resized to the inferred output dimensions (edge-length heuristic). Lets you rectify perspective-distorted photographs of paintings, documents, signs, etc.
 
 ---
 
@@ -306,6 +311,7 @@ Available node types (Add menu):
   `CurveEditor` (drag points, click to add, double-click or yank to remove).
   Runs as a single 256×1 RGBA LUT texture sampled in the GPU adjustments
   shader; identity curves bypass the lookup.
+  - **Histogram background**: the active layer's R / G / B histograms render behind the curve as colored channel shading (red/green/blue translucent fills on per-channel tabs, neutral gray on the RGB master). Sampled live from the GPU via the shared `useGroupHistogram` hook so the histogram tracks paint operations in real time.
 - **Levels** — Photoshop-style visual editor with a layered RGB histogram and handle-driven controls (no sliders). Per-channel input/output remap with RGB master + R / G / B tabs:
   - **Input black / gamma / white**: three rectangular handles below the histogram strip drive Input Black, Gamma (0.01 – 10, log scale), and Input White. Drag the handles directly; numeric readouts update live.
   - **Output black / white**: two handles on a gradient bar drive Output Black and Output White.
@@ -320,6 +326,10 @@ Available node types (Add menu):
 - **Gradient Map** — visual gradient editor (shared `GradientEditor` component) with draggable rectangular stop handles on a live gradient bar; clicking an empty spot on the handle row inserts a new stop at that position. The selected stop drives a full `ColorPicker` (HSV square + hue strip + RGB/HSV/hex fields). A minimum of 2 stops is enforced. The stop list is compiled into a 256×1 RGBA LUT at sync time and applied as a luminance-indexed lookup in the GPU adjustments shader.
 
 All 14 adjustment types now have first-class UI controls and are fully GPU-accelerated. Internally the node list compiles down to the legacy flat `ImageAdjustments` shape so the GPU compositor's adjustment pass is unchanged.
+
+**Default adjustment stack on new documents**: every freshly created document (and every image opened or flattened) seeds the root group with four identity-state adjustment nodes — Levels, Curves, Exposure, and Hue/Saturation — so users can grade an image without first hunting through the Add menu. Identity nodes are bypassed in the GPU pipeline so there is no performance cost until a slider is moved.
+
+**Adjustment Layer… menu (Layer menu)**: a one-click entry that selects the document's root group, opens the effects/adjustments drawer, and shows a brief explanatory info modal — designed to onboard new users to Lopsy's adjustment-node model (Photoshop puts each adjustment on its own layer; Lopsy stacks them inside the group's adjustment list).
 
 ---
 
@@ -380,7 +390,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Clouds**: scale, seed
 - **Smoke**: scale, seed, turbulence
 - **Fibers**: variance 1 - 64 (color variation between strands), strength 1 - 64 (vertical coherence — higher values produce straighter fibers, lower values produce more wavy/tangled fibers), seed. Generates random vertical fiber textures resembling paper, cloth, or hair using multi-octave 1D noise with 2D wander perturbation. GPU-accelerated GLSL shader.
-- **Regenerate** button: randomized filters (Clouds, Smoke, Fibers) show a circular-arrow button next to the Preview checkbox in the filter dialog. Clicking it picks a new random seed and refreshes the preview, so users can spin through variations without re-opening the dialog. Confirming the dialog with Preview active commits the exact previewed pixels (the seed is captured at preview time and the GPU result is snapshotted, so what you see is what you get).
+- **Regenerate** button: randomized filters (Clouds, Smoke, Fibers, and the Add Noise variants) show a circular-arrow button next to the Preview checkbox in the filter dialog. Clicking it picks a new random seed and refreshes the preview, so users can spin through variations without re-opening the dialog. Confirming the dialog with Preview active commits the exact previewed pixels (the seed is captured at preview time and the GPU result is snapshotted, so what you see is what you get). The Add Noise filter now also re-seeds on every dialog open so opening the dialog twice produces different noise patterns.
 - **Pattern Fill**: tiles a user-defined pattern across the active layer
   - **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern
   - **Scale**: 10 - 1000% (tile size relative to original pattern dimensions)
@@ -445,6 +455,11 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Cmd/Ctrl+click a layer thumbnail**: loads that layer's alpha as a marquee selection (non-transparent pixels become the selection)
 - **Click a layer's mask thumbnail**: always enters mask edit mode (focus switches to the mask reliably; no toggle behavior).
 - **Set layer color tag**: right-click a layer row to open a context menu with the 7 tag colors plus "None" to clear.
+
+### Layers Panel Row Layout
+- Each layer row shows (left to right): the visibility eye, the layer thumbnail (plus mask thumbnail if a mask is present), the layer name, an **Effects button**, and the lock toggle on the far right.
+- **Effects button**: opens that layer's effects/adjustments drawer. The icon turns green when the layer has at least one active effect or adjustment node, so it's possible to spot effected layers at a glance from anywhere in the stack.
+- **Color tag bar**: optional swatch (set via right-click → color tag) appears as a vertical bar on the left edge of the row.
 
 ### Multi-Select in the Layers Panel
 - **Plain click**: selects only the clicked layer (standard behavior)
@@ -537,6 +552,15 @@ In addition to per-tool toolbox shortcuts (`B`, `E`, `J`, `Y`, `R`, `S`, `H`, `O
 - **`[` / `]`** — decrement / increment the active tool's size by 1 (works for brush, dodge & burn, smudge, pencil, eraser, clone stamp, healing brush, pen-tool stroke width, and shape-tool stroke width — the bracket maps to whichever size slider the current tool exposes)
 - **`Space+drag`** / **middle-click drag** — temporary pan from any tool
 - **`Cmd/Ctrl+scroll`** — zoom centered on the cursor; plain scroll pans
+
+### Keyboard Shortcut Customization
+Every tool shortcut (`B`, `E`, `J`, …) and the non-tool single-key actions (`X` swap colors, `D` reset colors, `Q` toggle quick mask) are user-rebindable through the **Keyboard Shortcuts modal**.
+
+- Each row shows the action label and its current key. Clicking a key enters **listening mode** — the next key the user presses becomes the new binding (lower-cased, single-character bindings only).
+- **Conflict detection**: if the chosen key is already bound to another action, the modal flags the conflict inline; the user can confirm the swap or pick a different key.
+- **Reset**: a per-row reset button reverts that one binding to its default; a "Reset All" button at the bottom of the modal clears every override at once.
+- **Persistence**: custom bindings live in `localStorage` (Zustand `persist` middleware), so they survive reloads and follow the user across sessions on the same browser.
+- The same store is the single source of truth for keyboard handling everywhere in the app — shortcuts dispatched from menus, the toolbox, and global key handlers all read through `useShortcutStore.getKey(actionId)` so a rebind takes effect immediately without a reload.
 
 ---
 
