@@ -1,22 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Color } from '../../types';
-import { bresenhamLine, drawPencilLine, defaultPencilSettings } from './pencil';
-import type { PixelSurface } from './pencil';
-
-function createMockSurface(w: number, h: number): PixelSurface & { pixels: Map<string, Color> } {
-  const pixels = new Map<string, Color>();
-  return {
-    width: w,
-    height: h,
-    pixels,
-    getPixel(x: number, y: number): Color {
-      return pixels.get(`${x},${y}`) ?? { r: 0, g: 0, b: 0, a: 0 };
-    },
-    setPixel(x: number, y: number, color: Color): void {
-      pixels.set(`${x},${y}`, color);
-    },
-  };
-}
+import { bresenhamLine, defaultPencilSettings } from './pencil';
 
 describe('defaultPencilSettings', () => {
   it('returns size 1', () => {
@@ -50,16 +33,5 @@ describe('bresenhamLine', () => {
     const points = bresenhamLine(5, 5, 5, 5);
     expect(points.length).toBe(1);
     expect(points[0]).toEqual({ x: 5, y: 5 });
-  });
-});
-
-describe('drawPencilLine', () => {
-  it('modifies surface pixels', () => {
-    const surface = createMockSurface(10, 10);
-    const red: Color = { r: 255, g: 0, b: 0, a: 1 };
-    drawPencilLine(surface, { x: 0, y: 0 }, { x: 3, y: 0 }, red, 1);
-    expect(surface.pixels.size).toBeGreaterThan(0);
-    expect(surface.getPixel(0, 0)).toEqual(red);
-    expect(surface.getPixel(3, 0)).toEqual(red);
   });
 });

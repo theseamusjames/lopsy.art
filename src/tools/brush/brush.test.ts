@@ -1,34 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import type { Color } from '../../types';
 import {
   generateBrushStamp,
   interpolatePoints,
-  applyBrushDab,
-  computeShiftClickLine,
   defaultBrushSettings,
 } from './brush';
-import type { PixelSurface } from '../../types';
-
-function createMockSurface(w: number, h: number): PixelSurface & { data: Color[][] } {
-  const data: Color[][] = [];
-  for (let y = 0; y < h; y++) {
-    data[y] = [];
-    for (let x = 0; x < w; x++) {
-      data[y]![x] = { r: 0, g: 0, b: 0, a: 0 };
-    }
-  }
-  return {
-    width: w,
-    height: h,
-    data,
-    getPixel(x: number, y: number): Color {
-      return data[y]?.[x] ?? { r: 0, g: 0, b: 0, a: 0 };
-    },
-    setPixel(x: number, y: number, color: Color): void {
-      if (data[y]) data[y]![x] = color;
-    },
-  };
-}
 
 describe('defaultBrushSettings', () => {
   it('returns valid defaults', () => {
@@ -72,25 +47,5 @@ describe('interpolatePoints', () => {
     const points = interpolatePoints({ x: 5, y: 5 }, { x: 5, y: 5 }, 1);
     expect(points.length).toBe(1);
     expect(points[0]).toEqual({ x: 5, y: 5 });
-  });
-});
-
-describe('applyBrushDab', () => {
-  it('modifies surface pixels', () => {
-    const surface = createMockSurface(10, 10);
-    const stamp = generateBrushStamp(3, 1);
-    applyBrushDab(surface, { x: 5, y: 5 }, stamp, 3, { r: 255, g: 0, b: 0, a: 1 }, 1, 1);
-
-    const pixel = surface.getPixel(5, 5);
-    expect(pixel.r).toBe(255);
-    expect(pixel.a).toBeGreaterThan(0);
-  });
-});
-
-describe('computeShiftClickLine', () => {
-  it('returns the two points', () => {
-    const result = computeShiftClickLine({ x: 0, y: 0 }, { x: 10, y: 10 });
-    expect(result.start).toEqual({ x: 0, y: 0 });
-    expect(result.end).toEqual({ x: 10, y: 10 });
   });
 });

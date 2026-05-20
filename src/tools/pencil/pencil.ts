@@ -1,11 +1,4 @@
-import type { Color, Point } from '../../types';
-
-export interface PixelSurface {
-  readonly width: number;
-  readonly height: number;
-  getPixel(x: number, y: number): Color;
-  setPixel(x: number, y: number, color: Color): void;
-}
+import type { Point } from '../../types';
 
 export interface PencilSettings {
   readonly size: number;
@@ -40,32 +33,4 @@ export function bresenhamLine(x0: number, y0: number, x1: number, y1: number): P
     }
   }
   return points;
-}
-
-export function drawPencilLine(
-  surface: PixelSurface,
-  from: Point,
-  to: Point,
-  color: Color,
-  size: number,
-): void {
-  const points = bresenhamLine(
-    Math.round(from.x),
-    Math.round(from.y),
-    Math.round(to.x),
-    Math.round(to.y),
-  );
-
-  const half = Math.floor(size / 2);
-  for (const p of points) {
-    for (let dy = -half; dy <= half; dy++) {
-      for (let dx = -half; dx <= half; dx++) {
-        const px = p.x + dx;
-        const py = p.y + dy;
-        if (px >= 0 && px < surface.width && py >= 0 && py < surface.height) {
-          surface.setPixel(px, py, color);
-        }
-      }
-    }
-  }
 }

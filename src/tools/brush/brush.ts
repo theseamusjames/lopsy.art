@@ -1,4 +1,4 @@
-import type { Color, Point, PixelSurface } from '../../types';
+import type { Point } from '../../types';
 
 export interface BrushSettings {
   readonly size: number;
@@ -71,111 +71,6 @@ export function interpolatePoints(from: Point, to: Point, spacing: number): Poin
   return points;
 }
 
-/**
- * Fast path: apply brush dab directly to a Uint8ClampedArray buffer.
- * Eliminates per-pixel getPixel/setPixel virtual dispatch and Color
- * object allocation that causes GC pressure during sustained painting.
- */
-export function applyBrushDabDirect(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  center: Point,
-  stamp: Float32Array,
-  stampSize: number,
-  color: Color,
-  opacity: number,
-  flow: number,
-): void {
-  const halfSize = Math.floor(stampSize / 2);
-  const startX = Math.round(center.x) - halfSize;
-  const startY = Math.round(center.y) - halfSize;
-  const combinedAlpha = opacity * flow * color.a;
-  const cr = color.r;
-  const cg = color.g;
-  const cb = color.b;
-
-  // Clamp loop bounds to avoid per-pixel bounds checks
-  const minSx = Math.max(0, -startX);
-  const minSy = Math.max(0, -startY);
-  const maxSx = Math.min(stampSize, width - startX);
-  const maxSy = Math.min(stampSize, height - startY);
-
-  for (let sy = minSy; sy < maxSy; sy++) {
-    const py = startY + sy;
-    const rowOffset = py * width;
-    const stampRow = sy * stampSize;
-    for (let sx = minSx; sx < maxSx; sx++) {
-      const stampAlpha = stamp[stampRow + sx]!;
-      if (stampAlpha <= 0) continue;
-
-      const alpha = stampAlpha * combinedAlpha;
-      const px = startX + sx;
-      const offset = (rowOffset + px) * 4;
-
-      const ea = (data[offset + 3]!) / 255;
-      const outA = alpha + ea * (1 - alpha);
-      if (outA <= 0) continue;
-
-      const invOutA = 1 / outA;
-      const eaOneMinusAlpha = ea * (1 - alpha);
-      data[offset] = Math.min(255, Math.max(0, Math.round((cr * alpha + (data[offset]!) * eaOneMinusAlpha) * invOutA)));
-      data[offset + 1] = Math.min(255, Math.max(0, Math.round((cg * alpha + (data[offset + 1]!) * eaOneMinusAlpha) * invOutA)));
-      data[offset + 2] = Math.min(255, Math.max(0, Math.round((cb * alpha + (data[offset + 2]!) * eaOneMinusAlpha) * invOutA)));
-      data[offset + 3] = Math.min(255, Math.round(outA * 255));
-    }
-  }
-}
-
-export function applyBrushDab(
-  surface: PixelSurface,
-  center: Point,
-  stamp: Float32Array,
-  stampSize: number,
-  color: Color,
-  opacity: number,
-  flow: number,
-): void {
-  // Fast path for surfaces with direct buffer access
-  if ('rawData' in surface) {
-    const raw = surface as { rawData: Uint8ClampedArray };
-    applyBrushDabDirect(raw.rawData, surface.width, surface.height, center, stamp, stampSize, color, opacity, flow);
-    return;
-  }
-
-  const halfSize = Math.floor(stampSize / 2);
-  const startX = Math.round(center.x) - halfSize;
-  const startY = Math.round(center.y) - halfSize;
-
-  for (let sy = 0; sy < stampSize; sy++) {
-    for (let sx = 0; sx < stampSize; sx++) {
-      const px = startX + sx;
-      const py = startY + sy;
-
-      if (px < 0 || px >= surface.width || py < 0 || py >= surface.height) continue;
-
-      const stampAlpha = stamp[sy * stampSize + sx] ?? 0;
-      if (stampAlpha <= 0) continue;
-
-      const alpha = stampAlpha * opacity * flow * color.a;
-      const existing = surface.getPixel(px, py);
-
-      const outA = alpha + existing.a * (1 - alpha);
-      if (outA <= 0) continue;
-
-      const outR = Math.round((color.r * alpha + existing.r * existing.a * (1 - alpha)) / outA);
-      const outG = Math.round((color.g * alpha + existing.g * existing.a * (1 - alpha)) / outA);
-      const outB = Math.round((color.b * alpha + existing.b * existing.a * (1 - alpha)) / outA);
-
-      surface.setPixel(px, py, {
-        r: Math.min(255, Math.max(0, outR)),
-        g: Math.min(255, Math.max(0, outG)),
-        b: Math.min(255, Math.max(0, outB)),
-        a: Math.min(1, outA),
-      });
-    }
-  }
-}
 
 /**
  * Tracks leftover distance for scatter interpolation (mirrors the
@@ -235,6 +130,3 @@ export function interpolatePointsWithScatter(
   return points;
 }
 
-export function computeShiftClickLine(from: Point, to: Point): { start: Point; end: Point } {
-  return { start: from, end: to };
-}

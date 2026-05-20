@@ -1,5 +1,4 @@
-import type { Color, Point, Rect } from '../../types';
-import type { PixelSurface } from '../fill/fill';
+import type { Color, Point, Rect, PixelSurface } from '../../types';
 import type { PathAnchor } from '../path/path';
 
 export type ShapeMode = 'ellipse' | 'polygon';
