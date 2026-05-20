@@ -15,7 +15,6 @@ pub mod smudge_gpu;
 pub mod clone_stamp_gpu;
 pub mod healing_brush_gpu;
 pub mod overlay_renderer;
-pub mod color_mgmt;
 pub mod glyph_atlas;
 pub mod text_gpu;
 pub mod woff2;
@@ -24,7 +23,7 @@ pub mod api;
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
-use lopsy_core::color::{BlendMode, ColorSpace};
+use lopsy_core::color::BlendMode;
 use lopsy_core::geometry;
 
 use crate::engine::EngineInner;
@@ -176,11 +175,6 @@ pub fn screen_delta_to_canvas(dx: f64, dy: f64, zoom: f64) -> Vec<f64> {
 // Pixel Operations (CPU-side via WASM)
 // ============================================================
 
-#[wasm_bindgen(js_name = "clonePixelData")]
-pub fn clone_pixel_data(data: &[u8]) -> Vec<u8> {
-    lopsy_core::pixel_buffer::clone_pixel_data(data)
-}
-
 #[wasm_bindgen(js_name = "cropToContentBounds")]
 pub fn crop_to_content_bounds(data: &[u8], width: u32, height: u32) -> Vec<u8> {
     let (cropped, _rect) = lopsy_core::pixel_buffer::crop_to_content_bounds(data, width, height);
@@ -232,17 +226,6 @@ pub fn crop_layer_pixel_data(
     lopsy_core::pixel_buffer::crop_layer_pixel_data(data, src_w, src_h, layer_x, layer_y, crop_x, crop_y, crop_w, crop_h)
 }
 
-#[wasm_bindgen(js_name = "createMaskSurface")]
-pub fn create_mask_surface(mask_data: &[u8], width: u32, height: u32) -> Vec<u8> {
-    lopsy_core::pixel_buffer::create_mask_surface(mask_data, width, height)
-}
-
-#[wasm_bindgen(js_name = "extractMaskFromSurface")]
-pub fn extract_mask_from_surface(surface_data: &[u8], width: u32, height: u32) -> Vec<u8> {
-    lopsy_core::pixel_buffer::extract_mask_from_surface(surface_data, width, height)
-}
-
-
 // ============================================================
 // Color Management
 // ============================================================
@@ -256,24 +239,6 @@ pub fn detect_color_space() -> u32 {
         }
     }
     0 // sRGB default
-}
-
-#[wasm_bindgen(js_name = "convertColorSpace")]
-pub fn convert_color_space(
-    data: &[u8], width: u32, height: u32,
-    from_space: u32, to_space: u32,
-) -> Vec<u8> {
-    color_mgmt::convert_color_space(data, width, height, from_space, to_space)
-}
-
-#[wasm_bindgen(js_name = "buildIccProfile")]
-pub fn build_icc_profile(color_space: u32) -> Vec<u8> {
-    let cs = match color_space {
-        1 => ColorSpace::DisplayP3,
-        2 => ColorSpace::Rec2020,
-        _ => ColorSpace::Srgb,
-    };
-    lopsy_core::export::build_icc_profile(cs)
 }
 
 // ============================================================

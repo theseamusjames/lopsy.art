@@ -1,10 +1,5 @@
 use crate::geometry::Rect;
 
-/// Clone pixel data
-pub fn clone_pixel_data(data: &[u8]) -> Vec<u8> {
-    data.to_vec()
-}
-
 /// Find bounding box of non-transparent pixels and crop to it
 /// Returns (cropped data, bounding rect)
 pub fn crop_to_content_bounds(data: &[u8], width: u32, height: u32) -> (Vec<u8>, Rect) {
@@ -215,31 +210,6 @@ pub fn crop_layer_pixel_data(
     out
 }
 
-/// Create RGBA surface from grayscale mask (white pixels with mask as alpha)
-pub fn create_mask_surface(mask_data: &[u8], width: u32, height: u32) -> Vec<u8> {
-    let total = (width * height) as usize;
-    assert_eq!(mask_data.len(), total);
-    let mut out = vec![0u8; total * 4];
-    for i in 0..total {
-        out[i * 4] = 255;
-        out[i * 4 + 1] = 255;
-        out[i * 4 + 2] = 255;
-        out[i * 4 + 3] = mask_data[i];
-    }
-    out
-}
-
-/// Extract alpha channel from RGBA surface as grayscale mask
-pub fn extract_mask_from_surface(surface: &[u8], width: u32, height: u32) -> Vec<u8> {
-    let total = (width * height) as usize;
-    assert_eq!(surface.len(), total * 4);
-    let mut mask = vec![0u8; total];
-    for i in 0..total {
-        mask[i] = surface[i * 4 + 3];
-    }
-    mask
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,19 +263,6 @@ mod tests {
         for &v in &scaled {
             assert!((v as i32 - 100).unsigned_abs() <= 1);
         }
-    }
-
-    #[test]
-    fn test_mask_surface_roundtrip() {
-        let mask = vec![0u8, 128, 255, 50];
-        let surface = create_mask_surface(&mask, 2, 2);
-        assert_eq!(surface.len(), 16);
-        assert_eq!(surface[3], 0);
-        assert_eq!(surface[7], 128);
-        assert_eq!(surface[11], 255);
-
-        let extracted = extract_mask_from_surface(&surface, 2, 2);
-        assert_eq!(extracted, mask);
     }
 
     #[test]

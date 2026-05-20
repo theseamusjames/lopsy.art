@@ -104,7 +104,7 @@ import { renderTextOnPath } from '../tools/text/render-text-on-path';
 import { getTracked } from './sync-state';
 import { syncLayers } from './sync-layers';
 
-export { resetTrackedState, markPixelDataSynced } from './sync-state';
+export { resetTrackedState } from './sync-state';
 export { syncLayers } from './sync-layers';
 
 function buildGradientMapLut(

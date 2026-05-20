@@ -4,8 +4,8 @@
 //! selection, thumbnail readback).
 //!
 //! Each function is a thin `#[wasm_bindgen]` wrapper over `layer_manager`
-//! (or specific helpers like `clone_pixel_data`/`crop_pixel_data` in
-//! `lopsy_core`). The grouping matches the "layers" mental model: anything
+//! (or specific helpers in `lopsy_core`). The grouping matches the
+//! "layers" mental model: anything
 //! you do *to* a layer — and the layer-bound clipboard/float state that's
 //! logically a bolted-on layer feature — lives here.
 

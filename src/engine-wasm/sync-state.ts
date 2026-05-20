@@ -131,11 +131,3 @@ export function resetTrackedState(engine: Engine): void {
   trackedByEngine.set(engine, createTrackedState());
 }
 
-/**
- * Mark a layer's pixel data as already synced to the GPU.
- * Use this when uploading via a non-standard path (e.g. canvas upload)
- * to prevent syncLayers from re-uploading stale byte data.
- */
-export function markPixelDataSynced(engine: Engine, layerId: string, data: ImageData): void {
-  getTracked(engine).pixelDataVersions.set(layerId, data);
-}

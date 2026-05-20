@@ -1,12 +1,7 @@
 //! Viewport- and overlay-side UI state: grid, rulers, the path/lasso/crop
-//! previews, gradient guide, brush cursor, and transform overlay. Also
-//! hosts `uploadLayerFromImageBitmap` — it's a layer texture upload but
-//! specifically for the browser's ImageBitmap path (drag-drop, paste), so
-//! it lives alongside the other canvas-display plumbing rather than in the
-//! general layer API.
+//! previews, gradient guide, brush cursor, and transform overlay.
 
 use wasm_bindgen::prelude::*;
-use web_sys::WebGl2RenderingContext;
 
 use crate::{Engine, overlay_renderer};
 
@@ -93,78 +88,3 @@ pub fn set_channel_mask(engine: &mut Engine, r: f32, g: f32, b: f32, a: f32) {
     engine.inner.needs_recomposite = true;
 }
 
-// ============================================================
-// ImageBitmap upload
-// ============================================================
-
-#[wasm_bindgen(js_name = "uploadLayerFromImageBitmap")]
-pub fn upload_layer_from_image_bitmap(
-    engine: &mut Engine, layer_id: &str, bitmap: web_sys::ImageBitmap,
-) {
-    let gl = &engine.inner.gl;
-    let width = bitmap.width();
-    let height = bitmap.height();
-
-    // Ensure texture exists and is correct size
-    if let Some(&tex_handle) = engine.inner.layer_textures.get(layer_id) {
-        let (tw, th) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
-        if tw != width || th != height {
-            engine.inner.texture_pool.release(tex_handle);
-            if let Ok(new_tex) = engine.inner.texture_pool.acquire(gl, width, height) {
-                engine.inner.layer_textures.insert(layer_id.to_string(), new_tex);
-            }
-        }
-    }
-
-    if let Some(&tex_handle) = engine.inner.layer_textures.get(layer_id) {
-        if engine.inner.texture_pool.use_float() {
-            // RGBA16F textures can't accept ImageBitmap directly.
-            // Upload to a temp RGBA8 texture, then blit to the float texture.
-            let temp_tex = match gl.create_texture() {
-                Some(t) => t,
-                None => { engine.inner.mark_layer_dirty(layer_id); return; }
-            };
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&temp_tex));
-            let _ = gl.tex_image_2d_with_u32_and_u32_and_image_bitmap(
-                WebGl2RenderingContext::TEXTURE_2D,
-                0,
-                WebGl2RenderingContext::RGBA as i32,
-                WebGl2RenderingContext::RGBA,
-                WebGl2RenderingContext::UNSIGNED_BYTE,
-                &bitmap,
-            );
-            gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MIN_FILTER, WebGl2RenderingContext::LINEAR as i32);
-            gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MAG_FILTER, WebGl2RenderingContext::LINEAR as i32);
-
-            // Blit from temp to float texture via the blit shader
-            if let Some(dest_tex) = engine.inner.texture_pool.get(tex_handle).cloned() {
-                engine.inner.render_to_texture(&dest_tex, width as i32, height as i32, |eng| {
-                    let gl = &eng.gl;
-                    gl.use_program(Some(&eng.shaders.blit.program));
-                    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-                    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&temp_tex));
-                    if let Some(loc) = eng.shaders.blit.location(gl, "u_tex") {
-                        gl.uniform1i(Some(&loc), 0);
-                    }
-                    eng.draw_fullscreen_quad();
-                });
-            }
-
-            engine.inner.gl.delete_texture(Some(&temp_tex));
-        } else {
-            if let Some(texture) = engine.inner.texture_pool.get(tex_handle) {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
-                let _ = gl.tex_image_2d_with_u32_and_u32_and_image_bitmap(
-                    WebGl2RenderingContext::TEXTURE_2D,
-                    0,
-                    WebGl2RenderingContext::RGBA as i32,
-                    WebGl2RenderingContext::RGBA,
-                    WebGl2RenderingContext::UNSIGNED_BYTE,
-                    &bitmap,
-                );
-            }
-        }
-    }
-
-    engine.inner.mark_layer_dirty(layer_id);
-}
