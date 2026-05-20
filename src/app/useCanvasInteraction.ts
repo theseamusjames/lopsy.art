@@ -72,6 +72,12 @@ function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } |
   useEditorStore.getState().notifyRender();
 }
 
+// Tools that don't need a pixel buffer (selection tools, eyedropper, text, etc.)
+// still receive an InteractionContext with non-null pixelBuffer/paintSurface
+// fields. Reuse one 1×1 placeholder rather than allocating per pointer-down.
+// TODO: drop these fields from InteractionContext entirely — nothing reads them.
+const PLACEHOLDER_PIXEL_BUFFER = PixelBuffer.wrapImageData(new ImageData(1, 1));
+
 const INITIAL_STATE: InteractionState = {
   drawing: false,
   lastPoint: null,
@@ -253,11 +259,8 @@ export function useCanvasInteraction(
             }
           }
         }
-        // Create a minimal dummy buffer for the context (tool handlers
-        // ignore it when the GPU engine is available).
-        const dummyData = new ImageData(1, 1);
-        pixelBuffer = PixelBuffer.wrapImageData(dummyData);
-        paintSurface = pixelBuffer;
+        pixelBuffer = PLACEHOLDER_PIXEL_BUFFER;
+        paintSurface = PLACEHOLDER_PIXEL_BUFFER;
       } else {
         // Finalize any pending GPU stroke so the layer texture includes it
         // before we read pixel data back for non-GPU tools (e.g. move).
@@ -280,9 +283,8 @@ export function useCanvasInteraction(
           createPaintingCanvas(activeLayerId, imageData);
           paintSurface = wrapWithSelectionMask(pixelBuffer, expandedLayer.x, expandedLayer.y);
         } else {
-          const dummyData = new ImageData(1, 1);
-          pixelBuffer = PixelBuffer.wrapImageData(dummyData);
-          paintSurface = pixelBuffer;
+          pixelBuffer = PLACEHOLDER_PIXEL_BUFFER;
+          paintSurface = PLACEHOLDER_PIXEL_BUFFER;
         }
       }
       const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer, pixelBuffer, paintSurface);

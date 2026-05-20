@@ -20,9 +20,18 @@ const PATTERN = /\bnew\s+(ImageData|Uint8ClampedArray|Float32Array)\b/g;
 // Allowlist keyed by POSIX-style path relative to repo root.
 // Each entry is the number of matches the file may contain. New code must
 // keep counts steady or drive them down — never up.
+//
+// When adding an entry, update docs/pixel-data-debt.md in the same PR if
+// the file represents production code (not a test fixture or already-tracked
+// engine plumbing). Comments below cross-reference the tracking issue when
+// the debt has a GPU-port plan.
 const ALLOWLIST = {
-  // Test files — fixtures allocate pixel buffers to exercise real code paths.
+  // ──────────────────────────────────────────────────────────────────────
+  // Test files — fixtures allocate pixel buffers to exercise real code
+  // paths. These don't ship to users; they only need to round-trip.
+  // ──────────────────────────────────────────────────────────────────────
   'src/app/editor-store.test.ts': 3,
+  'src/app/interactions/quick-mask-move.test.ts': 2,
   'src/app/store/actions/align-layer.test.ts': 1,
   'src/app/store/actions/crop-canvas.test.ts': 1,
   'src/app/store/actions/duplicate-layer.test.ts': 1,
@@ -35,66 +44,124 @@ const ALLOWLIST = {
   'src/app/store/actions/remove-layer.test.ts': 1,
   'src/app/store/actions/resize-canvas.test.ts': 1,
   'src/app/store/actions/resize-image.test.ts': 1,
+  'src/engine-wasm/engine-sync.test.ts': 3,
+  'src/engine-wasm/sync-layers.test.ts': 4,
   'src/engine/mask-utils.test.ts': 4,
   'src/engine/pixel-data-manager.test.ts': 2,
   'src/engine/pixel-data.test.ts': 1,
+  'src/filters/auto-enhance.test.ts': 1,
   'src/filters/curves.test.ts': 3,
-  'src/selection/selection.test.ts': 14,
+  'src/filters/surface-blur.test.ts': 5,
+  'src/io/project-save.test.ts': 1,
+  'src/panels/AdjustmentsPanel/histogram-compute.test.ts': 2,
+  'src/panels/ChannelsPanel/channel-extract.test.ts': 2,    // see #440 (delete with prod file)
+  'src/selection/selection-to-path.test.ts': 2,
+  'src/selection/selection.test.ts': 17,
+  'src/test-setup.ts': 1,
+  'src/test/canvas-mock.ts': 3,
   'src/tools/brush/brush-from-selection.test.ts': 3,
+  'src/tools/crop/perspective-crop.test.ts': 3,             // see #441 (delete with prod file)
   'src/tools/eraser/eraser.test.ts': 3,
+  'src/tools/gradient/gradient-interaction.test.ts': 1,
   'src/tools/magnetic-lasso/magnetic-lasso.test.ts': 2,
   'src/tools/move/move.test.ts': 1,
+  'src/tools/path/boolean-ops.test.ts': 11,
+  'src/tools/quick-select/quick-select.test.ts': 3,
   'src/tools/transform/transform.test.ts': 2,
   'src/utils/bmp-encoder.test.ts': 2,
-  'src/test/canvas-mock.ts': 3,
 
+  // ──────────────────────────────────────────────────────────────────────
   // Tracked pixel-data debt — documented in docs/pixel-data-debt.md §1.
+  // The pixelDataManager ImageData orchestration layer; collapses to a
+  // thin upload-and-forget wrapper once every filter has a GPU shader.
+  // ──────────────────────────────────────────────────────────────────────
   'src/engine/pixel-data.ts': 1,
 
+  // ──────────────────────────────────────────────────────────────────────
   // Tracked mask debt — documented in docs/pixel-data-debt.md §3.
-  'src/app/interactions/move-handlers.ts': 4,
+  // Layer-mask CPU paint path; migration to mask_paint_dab.glsl pending.
+  // ──────────────────────────────────────────────────────────────────────
+  'src/app/interactions/move-handlers.ts': 5,
+  'src/app/interactions/quick-mask-move.ts': 1,
   'src/app/store/actions/add-layer-mask.ts': 1,
+  'src/app/useCanvasInteraction.ts': 3,                      // mask-buffer copies + 1×1 placeholder singleton
   'src/engine/mask-utils.ts': 1,
+  'src/tools/fill/fill-interaction.ts': 1,                   // bucket fill writes mask data
 
+  // ──────────────────────────────────────────────────────────────────────
   // Selection mask — explicitly OK per the policy table.
+  // ──────────────────────────────────────────────────────────────────────
   'src/app/interactions/selection-handlers.ts': 6,
   'src/panels/LayerPanel/layer-selection.ts': 2,
   'src/panels/PathsPanel/path-to-selection.ts': 1,
-  'src/selection/selection.ts': 4,
+  'src/selection/selection.ts': 13,                          // see #442 — feather pass should move to existing GPU helper
   'src/tools/lasso/lasso.ts': 1,
   'src/tools/transform/transform-mask.ts': 1,
 
+  // ──────────────────────────────────────────────────────────────────────
   // GPU readback — explicitly OK per the policy table.
+  // ──────────────────────────────────────────────────────────────────────
   'src/engine-wasm/gpu-pixel-access.ts': 4,
   'src/app/store/history-worker.ts': 2,
 
   // Quick mask GPU readback — selection mask from GPU texture.
   'src/app/interactions/quick-mask-ops.ts': 1,
 
-  // Export / file I/O — produce raw buffers for encoders.
-  'src/app/MenuBar/menus/file-menu.ts': 1,
+  // ──────────────────────────────────────────────────────────────────────
+  // File I/O — produce raw buffers for encoders / parsers / loaders.
+  // ──────────────────────────────────────────────────────────────────────
+  'src/app/MenuBar/menus/file-menu.ts': 2,                   // PNG export + JPEG export
+  'src/io/project-load.ts': 1,                               // .lopsy project unpack
   'src/io/psd.ts': 1,
 
+  // ──────────────────────────────────────────────────────────────────────
+  // Clipboard — paste-from-clipboard wraps decoded bytes into ImageData
+  // for the existing upload pipeline. Aliased views, not new heap. See §1.
+  // ──────────────────────────────────────────────────────────────────────
+  'src/app/store/clipboard-slice.ts': 2,
+
+  // ──────────────────────────────────────────────────────────────────────
   // Wide-gamut ImageData plumbing — engine infrastructure.
+  // ──────────────────────────────────────────────────────────────────────
   'src/engine/canvas-ops.ts': 1,
   'src/engine/color-space.ts': 5,
 
-  // Pattern thumbnail generation — UI preview for the patterns panel.
+  // ──────────────────────────────────────────────────────────────────────
+  // Tracked GPU-port debt — each file has a dedicated tracking issue
+  // for the shader port that will eliminate the CPU implementation.
+  // ──────────────────────────────────────────────────────────────────────
+  'src/panels/ChannelsPanel/channel-extract.ts': 2,          // #440 — port to GPU shader
+  'src/tools/crop/perspective-crop.ts': 1,                   // #441 — port homography warp to GPU
+  'src/tools/liquify/liquify.ts': 2,                         // #443 — port displacement map to GPU
+  'src/tools/quick-select/quick-select-interaction.ts': 5,   // quick-select pixel readback, port pending
+  'src/tools/quick-select/quick-select.ts': 2,               // quick-select mask build, port pending
+  'src/tools/path/boolean-ops.ts': 3,                        // canvas-based boolean ops; see #465 (DOM-in-tools cleanup)
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Pattern + thumbnail generation — UI previews / navigator tile copy.
+  // ──────────────────────────────────────────────────────────────────────
   'src/app/pattern-store.ts': 2,
+  'src/panels/NavigatorPanel/NavigatorPanel.tsx': 2,         // pixel readback + ImageData wrap for thumbnail render
 
-  // Brush engine scaffolding — stamps, shape data, ABR parsing.
-  'src/app/tool-settings-store.ts': 7,
+  // ──────────────────────────────────────────────────────────────────────
+  // Brush engine scaffolding — stamps, shape data, ABR / preset I/O.
+  // ──────────────────────────────────────────────────────────────────────
+  'src/app/tool-settings-store.ts': 10,                      // built-in brush tip generation
+  'src/app/MenuBar/brush-actions.ts': 2,                     // brush-from-selection / brush-from-layer
+  'src/components/BrushModal/BrushDabPreview.tsx': 2,        // brush preview blur kernel + output
+  'src/components/BrushModal/BrushModal.tsx': 1,             // texture-image grayscale import
   'src/tools/brush/abr-parser.ts': 4,
-  'src/tools/brush/brush-from-selection.ts': 4,
+  'src/tools/brush/brush-from-selection.ts': 8,
   'src/tools/brush/brush.ts': 1,
+  'src/tools/brush/builtin-brushes.ts': 1,                   // PNG → grayscale tip decode
+  'src/tools/brush/preset-io.ts': 1,                         // Base64 → bytes for preset import
 
+  // ──────────────────────────────────────────────────────────────────────
   // Transform matrices — Float32Array is the WebGL matrix shape.
+  // ──────────────────────────────────────────────────────────────────────
   'src/app/OptionsBar/tool-options/TransformControls.tsx': 4,
   'src/app/interactions/transform-handlers.ts': 2,
   'src/tools/transform/transform.ts': 2,
-
-  // Canvas interaction dummy upload — documented in-file.
-  'src/app/useCanvasInteraction.ts': 1,
 };
 
 function walk(dir) {

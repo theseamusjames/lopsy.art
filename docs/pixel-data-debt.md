@@ -10,11 +10,38 @@ the reason each exception exists and the plan to retire it.
 
 New code **must not** introduce new violations. Reduce, don't grow.
 
+The authoritative per-file budget is `scripts/check-pixel-debt.mjs`,
+which runs as part of `npm run lint`. This doc explains the *why* behind
+each category; the script enforces the *how many*.
+
 ---
 
-## Active exceptions
+## How to read this doc
 
-### 1. `src/app/store/pixel-data-slice.ts` — ImageData orchestration layer
+Every category below maps to a section of comments in the linter
+allowlist. If you add or remove a file from the allowlist, refresh the
+matching section here in the same PR.
+
+| Category                                              | Status   |
+|-------------------------------------------------------|----------|
+| Test fixtures                                         | OK       |
+| Tracked pixel-data debt (§1)                          | Debt     |
+| Tracked mask debt (§2)                                | Debt     |
+| Selection mask                                        | OK       |
+| GPU readback                                          | OK       |
+| File I/O (PNG/JPEG/PSD/DNG/.lopsy)                    | OK       |
+| Clipboard paste                                       | OK       |
+| Wide-gamut ImageData plumbing                         | OK       |
+| Tracked GPU-port debt (§3)                            | Debt     |
+| Pattern + thumbnail generation                        | OK       |
+| Brush engine scaffolding (§4)                         | Mixed    |
+| Transform matrices                                    | OK       |
+
+---
+
+## §1 — Active pixel-data debt
+
+### `src/engine/pixel-data.ts` — ImageData orchestration layer
 
 Holds per-layer `ImageData` in the `pixelDataManager`, supports dense +
 sparse storage, and re-uploads to the GPU on mutation.
@@ -34,9 +61,7 @@ last CPU filter path is retired, this slice collapses into a thin
 **Tracked layers:** raster only. Text, shape, group, and adjustment
 layers are not cached here.
 
----
-
-### 2. `src/tools/text/**` — text rasterization via `<canvas>`
+### `src/tools/text/**` — text rasterization via `<canvas>`
 
 Text layers currently render through `CanvasRenderingContext2D.fillText`
 into an `ImageData`, which is then uploaded to a layer texture.
@@ -53,12 +78,24 @@ opaque upload. No other code leaks through this boundary.
 
 ---
 
-### 3. Layer masks — CPU paint path (migration pending)
+## §2 — Layer-mask CPU paint path (migration pending)
 
 `handleMaskPaintMove` in `src/app/interactions/paint-handlers.ts` runs a
-CPU per-pixel loop (`applyBrushDab`) against a `Uint8ClampedArray` owned
-by the layer model. `src/app/interactions/mask-buffer.ts` keeps a shared
-preview buffer that `useCanvasRendering` uploads to the GPU each frame.
+CPU per-pixel loop against a `Uint8ClampedArray` owned by the layer
+model. `src/app/interactions/mask-buffer.ts` keeps a shared preview
+buffer that `useCanvasRendering` uploads to the GPU each frame. The
+nudge path in `useCanvasInteraction.ts` allocates a fresh full-size
+mask buffer; `move-handlers.ts` and `quick-mask-move.ts` clone mask
+data to preserve a snapshot during a drag.
+
+**Allowlisted files in this category:**
+
+- `src/app/interactions/move-handlers.ts` — drag-clones of `selection.mask`.
+- `src/app/interactions/quick-mask-move.ts` — full-size mask alloc on commit.
+- `src/app/store/actions/add-layer-mask.ts` — initial mask allocation.
+- `src/app/useCanvasInteraction.ts` — placeholder `PixelBuffer` singleton + nudge/mask copies.
+- `src/engine/mask-utils.ts` — mask surface ↔ RGBA helpers.
+- `src/tools/fill/fill-interaction.ts` — bucket fill writes mask data when active.
 
 **Why it's still here.** The mask is conceptually a scalar field but
 uploaded as RGBA. The GPU brush/eraser shaders are written for RGBA
@@ -78,7 +115,52 @@ additive/subtractive mask coverage. A proper migration wants:
    `handleMaskPaintMove` and its imports, and delete
    `createMaskSurface` if nothing else uses it.
 
-**Plan.** Tracked. Not blocking any other cleanup. Next sprint.
+**Plan.** Tracked. Not blocking any other cleanup.
+
+---
+
+## §3 — Tracked GPU-port debt (per-file)
+
+Each file below has a dedicated tracking issue. The CPU implementation
+remains until the shader lands; new code must not grow the per-file
+budget.
+
+| File                                                       | Issue | What it does                                  |
+|------------------------------------------------------------|-------|-----------------------------------------------|
+| `src/panels/ChannelsPanel/channel-extract.ts`              | #440  | R/G/B/A channel preview generation            |
+| `src/tools/crop/perspective-crop.ts`                       | #441  | Projective warp + bilinear interp             |
+| `src/tools/liquify/liquify.ts`                             | #443  | Displacement-map liquify CPU pipeline         |
+| `src/tools/quick-select/quick-select-interaction.ts`       | tbd   | GPU pixel readback into mask                  |
+| `src/tools/quick-select/quick-select.ts`                   | tbd   | Magic-wand mask build                         |
+| `src/tools/path/boolean-ops.ts`                            | #465  | Path boolean ops rendered through `<canvas>`  |
+
+The `selection.ts` feather pass is also in this category but it isn't
+listed above because the GPU helper (`featherSelectionMask` in
+`wasm-bridge.ts`) already exists — see #442 for the migration to delete
+the CPU box-blur and route every caller through the bridge.
+
+---
+
+## §4 — Brush engine scaffolding
+
+The brush stack still allocates `Uint8ClampedArray` in a handful of
+support paths. None of these are pixel painting; they're tip generation
+and import/export plumbing that runs once per brush, not per dab.
+
+| File                                                       | Why                                              |
+|------------------------------------------------------------|--------------------------------------------------|
+| `src/app/tool-settings-store.ts`                           | Built-in tip generation (procedural circle etc.) |
+| `src/app/MenuBar/brush-actions.ts`                         | brush-from-selection / brush-from-layer rasterize |
+| `src/components/BrushModal/BrushDabPreview.tsx`            | Modal-side preview blur                          |
+| `src/components/BrushModal/BrushModal.tsx`                 | Imported texture image → grayscale               |
+| `src/tools/brush/abr-parser.ts`                            | Photoshop `.abr` binary import                   |
+| `src/tools/brush/brush-from-selection.ts`                  | "Define brush from selection" rasterize          |
+| `src/tools/brush/brush.ts`                                 | `interpolatePoints` scratch (single Float64)     |
+| `src/tools/brush/builtin-brushes.ts`                       | PNG → grayscale tip decode                       |
+| `src/tools/brush/preset-io.ts`                             | Base64 → bytes for preset import                 |
+
+These can stay CPU-side — they run on user action (import / define / open
+modal), not on every frame. Mark as "OK" unless they grow further.
 
 ---
 
@@ -91,9 +173,11 @@ additive/subtractive mask coverage. A proper migration wants:
 | PSD import (Rust → GPU, no ImageData detour)           | OK          |
 | Filter computed on CPU and then uploaded               | **Debt**    |
 | Brush/eraser touching a JS pixel buffer                | **Debt**    |
-| Selection mask built by `selection-ops.ts`             | OK          |
-| Font rasterizer in JS (text only)                      | OK (§2)     |
+| Selection mask built by `selection.ts`                 | OK          |
+| Font rasterizer in JS (text only)                      | OK (§1)     |
 | Pattern thumbnail preview (`pattern-store.ts`)         | OK          |
+| Navigator thumbnail wrap                               | OK          |
+| Brush tip / texture / preset import                    | OK (§4)     |
 
 Anything in the **Debt** column needs a GitHub issue and a GPU
 implementation plan, or it does not land.
@@ -104,5 +188,7 @@ implementation plan, or it does not land.
 
 The linter rule lives at `scripts/check-pixel-debt.mjs` and runs as part
 of `npm run lint`. It rejects `new ImageData`, `new Uint8ClampedArray`,
-and `new Float32Array` outside an explicit allowlist. When you need to
-add an allowlist entry, update this doc in the same PR.
+and `new Float32Array` outside an explicit allowlist. The allowlist is
+the canonical, machine-readable shape of this document — its comments
+mirror the section headings above. When you add an allowlist entry,
+refresh the matching section here in the same PR.
