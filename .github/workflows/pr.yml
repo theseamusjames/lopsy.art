@@ -1,0 +1,147 @@
+name: PR Checks
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+# Cancel in-progress runs for the same ref when a new push arrives.
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wasm-build:
+    name: Build WASM engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache WASM pkg output
+        id: wasm-cache
+        uses: actions/cache@v4
+        with:
+          path: src/engine-wasm/pkg
+          key: wasm-pkg-${{ hashFiles('engine-rs/**/*.rs', 'engine-rs/**/Cargo.toml', 'engine-rs/**/Cargo.lock', 'engine-rs/**/*.glsl') }}
+
+      - name: Cache cargo registry, git, and target
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            engine-rs/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('engine-rs/**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Install wasm-pack
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install dependencies
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Build WASM
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: npm run wasm:build
+
+      - name: Upload WASM pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: src/engine-wasm/pkg
+          retention-days: 1
+
+  lint:
+    name: Lint (ESLint + pixel-debt)
+    runs-on: ubuntu-latest
+    needs: wasm-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download WASM pkg artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: src/engine-wasm/pkg
+      - run: npm run lint
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    needs: wasm-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download WASM pkg artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: src/engine-wasm/pkg
+      - run: npm run typecheck
+
+  test:
+    name: Unit tests (Vitest)
+    runs-on: ubuntu-latest
+    needs: wasm-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download WASM pkg artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: src/engine-wasm/pkg
+      - run: npm run test
+
+  e2e:
+    name: E2E tests (Playwright, chromium)
+    runs-on: ubuntu-latest
+    needs: wasm-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download WASM pkg artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: src/engine-wasm/pkg
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run e2e tests (chromium only)
+        run: npx playwright test --project=chromium
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
