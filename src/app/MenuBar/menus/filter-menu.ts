@@ -40,6 +40,7 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { separator: true, label: '' },
       { label: 'Brightness/Contrast...', action: () => showFilterDialog('brightness-contrast') },
       { label: 'Hue/Saturation...', action: () => showFilterDialog('hue-saturation') },
+      { label: 'Color LUT...', action: () => showFilterDialog('color-lut') },
       { separator: true, label: '' },
       { label: 'Invert', action: () => applyInvert() },
       { label: 'Desaturate', action: () => applyDesaturate() },

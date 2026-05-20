@@ -1,4 +1,4 @@
-//! Render filters: pattern fill (tile a pattern texture across a layer).
+//! Render filters: pattern fill, color LUT (texture-based filters).
 
 use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
@@ -75,4 +75,78 @@ pub fn filter_pattern_fill(
     );
 
     engine.inner.texture_pool.release(pattern_handle);
+}
+
+#[wasm_bindgen(js_name = "filterColorLut")]
+pub fn filter_color_lut(
+    engine: &mut Engine,
+    layer_id: &str,
+    lut_data: &[u8],
+    lut_size: u32,
+    intensity: f32,
+) {
+    if lut_size == 0 || lut_data.is_empty() {
+        return;
+    }
+
+    let strip_w = lut_size * lut_size;
+    let strip_h = lut_size;
+
+    let gl = &engine.inner.gl;
+
+    let lut_handle = match engine.inner.texture_pool.acquire(gl, strip_w, strip_h) {
+        Ok(h) => h,
+        Err(_) => return,
+    };
+    let _ = engine.inner.texture_pool.upload_rgba(
+        gl, lut_handle, 0, 0, strip_w, strip_h, lut_data,
+    );
+    let lut_tex = engine.inner.texture_pool.get(lut_handle).cloned();
+
+    let size_f = lut_size as f32;
+    let intensity = intensity.clamp(0.0, 1.0);
+
+    filter_gpu::apply_filter(
+        &mut engine.inner,
+        layer_id,
+        |e| &e.shaders.color_lut,
+        |gl, shader| {
+            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+            if let Some(t) = &lut_tex {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
+                gl.tex_parameteri(
+                    WebGl2RenderingContext::TEXTURE_2D,
+                    WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+                    WebGl2RenderingContext::LINEAR as i32,
+                );
+                gl.tex_parameteri(
+                    WebGl2RenderingContext::TEXTURE_2D,
+                    WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+                    WebGl2RenderingContext::LINEAR as i32,
+                );
+                gl.tex_parameteri(
+                    WebGl2RenderingContext::TEXTURE_2D,
+                    WebGl2RenderingContext::TEXTURE_WRAP_S,
+                    WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+                );
+                gl.tex_parameteri(
+                    WebGl2RenderingContext::TEXTURE_2D,
+                    WebGl2RenderingContext::TEXTURE_WRAP_T,
+                    WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+                );
+            }
+            if let Some(loc) = shader.location(gl, "u_lut") {
+                gl.uniform1i(Some(&loc), 1);
+            }
+            if let Some(loc) = shader.location(gl, "u_lutSize") {
+                gl.uniform1f(Some(&loc), size_f);
+            }
+            if let Some(loc) = shader.location(gl, "u_intensity") {
+                gl.uniform1f(Some(&loc), intensity);
+            }
+            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        },
+    );
+
+    engine.inner.texture_pool.release(lut_handle);
 }

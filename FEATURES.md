@@ -363,6 +363,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Chromatic Aberration**: amount 1 - 50 px, direction 0 - 360 degrees (splits RGB channels along a configurable axis, creating retro lens fringing and glitch effects)
 - **Bloom**: threshold 0 - 100%, soft knee 0 - 100%, radius 1 - 64 px, intensity 0 - 200% (extracts bright areas above the threshold, applies Gaussian blur, and additively blends the glow back onto the original image — creates cinematic light bloom and soft glow effects around highlights)
 - **Emboss**: angle 0 - 360° (light direction), strength 1 - 100 (relief height), type: emboss or pillow emboss (creates a 3D relief effect by computing directional highlights and shadows from luminance gradients — emboss mode applies uniform relief, pillow emboss fades the effect toward edges for a raised-pillow appearance)
+- **Color LUT**: 8 built-in presets (Warm Vintage, Teal & Orange, Noir, Cross Process, Faded Film, Sunset, Cool Blue, Cyberpunk), intensity 0 - 100%, .cube file import (applies 3D color lookup table color grading via a GPU shader that samples a 2D-unwrapped LUT strip texture — supports industry-standard .cube files and procedurally generated presets with trilinear interpolation between blue slices)
 - **Voronoi**: cells 2 - 200, edge width 0 - 20 px, seed 0 - 999 (partitions the image into irregular Voronoi cells, each filled with the color sampled at the cell center, with configurable black edge lines between cells — creates a stained glass / crystallize effect)
 
 ### Distort
