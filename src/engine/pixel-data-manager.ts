@@ -83,6 +83,11 @@ export class PixelDataManager {
     const hadDense = this.pixelData.delete(layerId);
     const hadSparse = this.sparseData.delete(layerId);
     if (hadDense || hadSparse) this.bump(layerId);
+    // Drop the version entry too — the layer is gone, no remaining
+    // subscriber should be observing it (components that displayed it
+    // have unmounted). Without this, layerVersions accumulates one
+    // entry per layer the document ever saw, for the document's life.
+    this.layerVersions.delete(layerId);
   }
 
   /** Drop the dense entry but keep any sparse entry. Used after a
@@ -110,18 +115,19 @@ export class PixelDataManager {
 
   /** Drop every layer's data. Used on document create/open. */
   clearAll(): void {
-    if (this.pixelData.size === 0 && this.sparseData.size === 0) return;
+    if (this.pixelData.size === 0 && this.sparseData.size === 0 && this.layerVersions.size === 0) return;
     this.pixelData.clear();
     this.sparseData.clear();
-    // Don't reset versionOf — callers watching a specific layer should see
-    // the cleanup bump, not a silent rewind to zero.
-    const touched = new Set<string>();
-    for (const id of this.layerVersions.keys()) touched.add(id);
-    for (const id of touched) {
+    // Bump every known layer once so any still-mounted subscriber sees
+    // the change, then drop the entries. The document is going away,
+    // so callers will unmount; surviving subscribers re-mount against
+    // the new document with fresh ids.
+    for (const id of this.layerVersions.keys()) {
       this.layerVersions.set(id, (this.layerVersions.get(id) ?? 0) + 1);
     }
     this.globalVersion++;
     this.notify();
+    this.layerVersions.clear();
   }
 
   // ─── Subscriptions ─────────────────────────────────────────────────
