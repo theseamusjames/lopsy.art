@@ -46,8 +46,11 @@ const uiStateValues: { gradientPreview: unknown; isQuickMaskMode: boolean; maskE
 };
 const uiState = {
   setGradientPreview: vi.fn((p: unknown) => { uiStateValues.gradientPreview = p; }),
-  get isQuickMaskMode() { return uiStateValues.isQuickMaskMode; },
-  get maskEditMode() { return uiStateValues.maskEditMode; },
+  get maskMode(): 'off' | 'layerMask' | 'quickMask' {
+    if (uiStateValues.isQuickMaskMode) return 'quickMask';
+    if (uiStateValues.maskEditMode) return 'layerMask';
+    return 'off';
+  },
 };
 vi.mock('../../app/ui-store', () => ({
   useUIStore: { getState: () => uiState },

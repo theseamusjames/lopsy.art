@@ -192,8 +192,9 @@ export function useCanvasInteraction(
 
       const engine = getEngine();
       const isPaintTool = PAINT_TOOLS.has(activeTool);
-      const maskEditMode = useUIStore.getState().maskEditMode;
-      const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+      const maskMode = useUIStore.getState().maskMode;
+      const maskEditMode = maskMode === 'layerMask';
+      const isQuickMaskMode = maskMode === 'quickMask';
 
       // Fall back to CPU when:
       // - mask edit mode (paints on mask surface)
@@ -590,7 +591,7 @@ export function useCanvasInteraction(
 
     // Sync mask GPU texture back to store
     if (state.maskMode && state.layerId) {
-      const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+      const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
       if (!isQuickMaskMode) {
         const engine = getEngine();
         if (engine) {

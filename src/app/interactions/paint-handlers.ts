@@ -84,8 +84,9 @@ export function handlePaintDown(
   const lineFrom = shiftLine ? lastPaintPointRef.current!.point : layerPos;
 
   const editorState = useEditorStore.getState();
-  const maskEditMode = useUIStore.getState().maskEditMode;
-  const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+  const maskMode = useUIStore.getState().maskMode;
+  const maskEditMode = maskMode === 'layerMask';
+  const isQuickMaskMode = maskMode === 'quickMask';
 
   // Quick Mask Mode: paint on the GPU quick mask texture in doc-space.
   // Brush paints white (add to selection), eraser paints black (remove).
@@ -598,7 +599,7 @@ export function handlePaintMove(
 
   // Mask modes: quick mask and layer mask both route to GPU
   if (state.maskMode) {
-    const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+    const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
     const engine = getEngine();
     if (!engine) return;
     if (isQuickMaskMode) {

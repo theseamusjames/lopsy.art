@@ -153,8 +153,11 @@ interface UIState {
   meshWarp: MeshWarpSession | null;
   tiltShift: TiltShiftSession | null;
   liquify: LiquifySession | null;
-  maskEditMode: boolean;
-  isQuickMaskMode: boolean;
+  /** Discriminates between editing a layer mask, editing the global quick
+   *  mask, and neither. Replaces the prior pair of mutually-exclusive
+   *  booleans (maskEditMode + isQuickMaskMode) — the illegal "both true"
+   *  combination is now unrepresentable. */
+  maskMode: 'off' | 'layerMask' | 'quickMask';
   /** Active modal, or null when nothing is open. Only one at a time. */
   modal: ModalState | null;
   showEffectsDrawer: boolean;
@@ -286,8 +289,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   meshWarp: null,
   tiltShift: null,
   liquify: null,
-  maskEditMode: false,
-  isQuickMaskMode: false,
+  maskMode: 'off',
   modal: null,
   showEffectsDrawer: false,
   showReferenceModal: false,
@@ -305,8 +307,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   gradientPreview: null,
   setCursorPosition: (pos) => set({ cursorPosition: pos }),
   setCursorOnCanvas: (onCanvas) => set({ cursorOnCanvas: onCanvas }),
-  setMaskEditMode: (mode) => set({ maskEditMode: mode }),
-  toggleQuickMaskMode: () => set((state) => ({ isQuickMaskMode: !state.isQuickMaskMode })),
+  setMaskEditMode: (mode) => set({ maskMode: mode ? 'layerMask' : 'off' }),
+  toggleQuickMaskMode: () => set((state) => ({
+    maskMode: state.maskMode === 'quickMask' ? 'off' : 'quickMask',
+  })),
 
   // ─── Modal slot ────────────────────────────────────────────────────────
   openModal: (next) => set({ modal: next }),

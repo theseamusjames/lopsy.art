@@ -26,7 +26,7 @@ import { translateSelectionMask } from './quick-mask-move';
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
-  const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+  const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
   editorState.pushHistory(ctx.altKey && !(sel.active && sel.mask) ? 'Duplicate Layer' : 'Move');
   const {
     canvasPos,
@@ -189,7 +189,7 @@ export function handleMoveMove(
   // float exists (handleMoveDown bypasses it for quick-mask mode to avoid
   // corrupting the layer texture — issue #315).
   if (
-    useUIStore.getState().isQuickMaskMode
+    useUIStore.getState().maskMode === 'quickMask'
     && !floatingSelectionRef.current
     && state.moveOriginalMask
     && state.moveOriginalBounds
@@ -329,7 +329,7 @@ export function handleNudgeMove(
   if (!layer || layer.locked) return;
 
   const sel = editor.selection;
-  const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+  const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
   editor.pushHistory('Nudge');
 
   // Quick-mask + marquee nudge: translate the marquee in JS only. Floating

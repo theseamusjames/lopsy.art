@@ -65,7 +65,7 @@ export function exitQuickMaskMode(): void {
 }
 
 export function toggleQuickMaskMode(): void {
-  const isActive = useUIStore.getState().isQuickMaskMode;
+  const isActive = useUIStore.getState().maskMode === 'quickMask';
   if (isActive) {
     exitQuickMaskMode();
   } else {
