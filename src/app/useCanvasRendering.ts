@@ -150,7 +150,6 @@ function renderFrameGpu(
   const guideColor = uiState.guideColor;
 
   const textEditing = uiState.textEditing;
-  const artboards = editorState.artboards;
 
   syncDocumentSize(engine, doc.width, doc.height);
   syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
@@ -248,7 +247,6 @@ function renderFrameGpu(
       renderPerspectiveCropOverlay(overlayCtx, perspectiveCropQuad, viewport.zoom);
     }
     renderGradientPreview(overlayCtx, gradientPreview, viewport.zoom);
-    renderArtboards(overlayCtx, artboards, viewport.zoom);
 
     // Text tool overlays
     const textDrag = uiState.textDrag;
