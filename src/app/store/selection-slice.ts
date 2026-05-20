@@ -1,5 +1,5 @@
 import type { Rect } from '../../types';
-import type { SelectionData, SliceCreator } from './types';
+import { EMPTY_SELECTION, type SelectionData, type SliceCreator } from './types';
 
 export interface SelectionSlice {
   selection: SelectionData;
@@ -8,13 +8,16 @@ export interface SelectionSlice {
 }
 
 export const createSelectionSlice: SliceCreator<SelectionSlice> = (set, get) => ({
-  selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
+  selection: EMPTY_SELECTION,
 
   setSelection: (bounds: Rect, mask: Uint8ClampedArray, maskWidth: number, maskHeight: number) => {
-    set({ selection: { active: true, bounds, mask, maskWidth, maskHeight }, renderVersion: get().renderVersion + 1 });
+    set({
+      selection: { active: true, bounds, mask, maskWidth, maskHeight },
+      renderVersion: get().renderVersion + 1,
+    });
   },
 
   clearSelection: () => {
-    set({ selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 }, renderVersion: get().renderVersion + 1 });
+    set({ selection: EMPTY_SELECTION, renderVersion: get().renderVersion + 1 });
   },
 });

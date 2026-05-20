@@ -4,13 +4,36 @@ import type { StoredPath } from '../../types/paths';
 import type { PathAnchor } from '../../tools/path/path';
 import type { AlignEdge } from '../../tools/move/move';
 
-export interface SelectionData {
-  active: boolean;
-  bounds: Rect | null;
-  mask: Uint8ClampedArray | null;
-  maskWidth: number;
-  maskHeight: number;
-}
+/**
+ * Selection state — discriminated by `active`. When inactive, every
+ * companion field is structurally null/zero so callers cannot read mask
+ * data without first narrowing. When active, bounds + mask + dimensions
+ * are guaranteed non-null. Replaces the previous shape that allowed
+ * `active: true; mask: null` as a representable bug.
+ */
+export type SelectionData =
+  | {
+      readonly active: false;
+      readonly bounds: null;
+      readonly mask: null;
+      readonly maskWidth: 0;
+      readonly maskHeight: 0;
+    }
+  | {
+      readonly active: true;
+      readonly bounds: Rect;
+      readonly mask: Uint8ClampedArray;
+      readonly maskWidth: number;
+      readonly maskHeight: number;
+    };
+
+export const EMPTY_SELECTION: SelectionData = {
+  active: false,
+  bounds: null,
+  mask: null,
+  maskWidth: 0,
+  maskHeight: 0,
+};
 
 export interface CropInfo {
   x: number;
