@@ -51,7 +51,10 @@ function snapshotGpuLayers(
     if (!dirtyIds.has(layerId) && previous?.gpuSnapshots.has(layerId)) {
       const curLayer = layers.find((l) => l.id === layerId);
       const prevLayer = previous.document.layers.find((l) => l.id === layerId);
-      if (curLayer && prevLayer && curLayer.x === prevLayer.x && curLayer.y === prevLayer.y) {
+      const posMatch = curLayer && prevLayer && curLayer.x === prevLayer.x && curLayer.y === prevLayer.y;
+      const dimsChanged = curLayer?.type === 'raster' && prevLayer?.type === 'raster' &&
+        (curLayer.width !== prevLayer.width || curLayer.height !== prevLayer.height);
+      if (posMatch && !dimsChanged) {
         gpuSnapshots.set(layerId, previous.gpuSnapshots.get(layerId)!);
         continue;
       }
