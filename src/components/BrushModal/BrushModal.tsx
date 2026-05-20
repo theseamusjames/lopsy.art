@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { useDraggablePanel } from '../../app/hooks/useDraggablePanel';
 import { useToolSettingsStore, abrBrushToPreset } from '../../app/tool-settings-store';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
@@ -31,28 +32,7 @@ export function BrushModal() {
   const [textureImporting, setTextureImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('presets');
   const [showExportModal, setShowExportModal] = useState(false);
-  const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
-  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
-
-  const handleTitleMouseDown = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    const panel = (e.currentTarget as HTMLElement).parentElement!;
-    const rect = panel.getBoundingClientRect();
-    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: rect.left, origY: rect.top };
-    const handleMove = (ev: MouseEvent) => {
-      if (!dragRef.current) return;
-      const dx = ev.clientX - dragRef.current.startX;
-      const dy = ev.clientY - dragRef.current.startY;
-      setPanelPos({ x: dragRef.current.origX + dx, y: dragRef.current.origY + dy });
-    };
-    const handleUp = () => {
-      dragRef.current = null;
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-    };
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-  }, []);
+  const { offset: dragOffset, dragProps: titleDragProps } = useDraggablePanel();
 
   const presets = useToolSettingsStore((s) => s.presets);
   const activePresetId = useToolSettingsStore((s) => s.activePresetId);
@@ -461,9 +441,9 @@ export function BrushModal() {
       className={styles.panel}
       role="dialog"
       aria-label="Brushes"
-      style={panelPos ? { left: panelPos.x, top: panelPos.y, transform: 'none' } : undefined}
+      style={{ transform: `translate(-50%, -50%) translate(${dragOffset.x}px, ${dragOffset.y}px)` }}
     >
-      <div className={styles.titleBar} onMouseDown={handleTitleMouseDown}>
+      <div className={styles.titleBar} {...titleDragProps}>
         <span className={styles.titleText}>Brushes</span>
         <button className={styles.closeX} onClick={handleClose} aria-label="Close">&times;</button>
       </div>
