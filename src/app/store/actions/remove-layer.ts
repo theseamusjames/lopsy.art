@@ -53,5 +53,6 @@ export function computeRemoveLayer(
     document: { ...doc, layers, layerOrder, activeLayerId, selectedLayerIds: finalSelectedIds },
     layerPixelData: pixelData,
     sparseLayerData: sparse,
+    removedLayerIds: Array.from(idsToRemove),
   };
 }

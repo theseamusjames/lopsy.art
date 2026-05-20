@@ -166,8 +166,15 @@ export type SliceCreator<T> = StateCreator<EditorState, [], [], T>;
  * the store (they're in PixelDataManager), so callers extract the pixel
  * fields, push them to the manager, and spread the remaining EditorState
  * delta into `set()`.
+ *
+ * `removedLayerIds` is metadata (not store state). Actions that delete
+ * layers populate it with the full set of removed ids — including any
+ * descendants when a group is removed — so the caller can run engine-side
+ * cleanup (e.g. `removeTextLayerState`) for every gone layer.
+ * `applyActionResult` strips this field before calling `set()`.
  */
 export type ActionResult = Partial<EditorState> & {
   layerPixelData?: Map<string, ImageData>;
   sparseLayerData?: Map<string, SparseLayerEntry>;
+  removedLayerIds?: string[];
 };
