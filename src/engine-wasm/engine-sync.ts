@@ -395,6 +395,11 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     );
     const hasMask = group.mask != null && group.mask.enabled;
     if (!hasAdjustments && !hasMask) continue;
+    // Pass-through groups composite their children directly with no group
+    // texture, so there's no layer to register adjustments against. The
+    // adjustments are effectively no-ops here; skipping prevents
+    // setGroupAdjustments from creating a phantom compositing target.
+    if (group.blendMode === 'pass-through') continue;
     setGroupAdjustments(
       engine,
       group.id,
