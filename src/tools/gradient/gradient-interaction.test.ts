@@ -31,6 +31,11 @@ vi.mock('../../app/store/clear-js-pixel-data', () => ({
   clearJsPixelData: vi.fn(),
 }));
 
+const syncLayerAfterFullSize = vi.fn();
+vi.mock('../../app/sync-layer-after-full-size', () => ({
+  syncLayerAfterFullSize: (...args: unknown[]) => syncLayerAfterFullSize(...args),
+}));
+
 const editorState = {
   pushHistory: vi.fn(),
   notifyRender: vi.fn(),
@@ -151,6 +156,41 @@ describe('gradient drag lifecycle (issue #338)', () => {
     expect(uiState.setGradientPreview).toHaveBeenCalled();
     handleGradientUp(state);
     expect(uiState.setGradientPreview).toHaveBeenLastCalledWith(null);
+  });
+
+  // Issue #494 — gpuRenderLinearGradient calls ensure_layer_full_size on the
+  // WASM side, expanding cropped textures. The JS layer.x/y/w/h must be
+  // synced afterward or downstream cmd+click alpha selection reads stale
+  // coordinates and produces a misaligned selection.
+  it('syncs layer position after the gradient commit (issue #494)', () => {
+    syncLayerAfterFullSize.mockClear();
+    const state = handleGradientDown(makeCtx());
+    handleGradientUp(state);
+    expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
+    expect(syncLayerAfterFullSize).toHaveBeenCalledWith(expect.anything(), 'layer-1');
+  });
+
+  it('does not sync layer position when the gradient was on a layer mask', () => {
+    syncLayerAfterFullSize.mockClear();
+    uiStateValues.maskEditMode = true;
+    // Stub a mask on the active layer so the maskMode branch is taken.
+    const ctx = makeCtx();
+    (ctx.activeLayer as unknown as { mask: { data: Uint8ClampedArray; width: number; height: number } }).mask = {
+      data: new Uint8ClampedArray(4),
+      width: 2,
+      height: 2,
+    };
+    const state = handleGradientDown(ctx);
+    handleGradientUp(state);
+    expect(syncLayerAfterFullSize).not.toHaveBeenCalled();
+  });
+
+  it('does not sync layer position when the gradient was on the quick mask', () => {
+    syncLayerAfterFullSize.mockClear();
+    uiStateValues.isQuickMaskMode = true;
+    const state = handleGradientDown(makeCtx());
+    handleGradientUp(state);
+    expect(syncLayerAfterFullSize).not.toHaveBeenCalled();
   });
 });
 
