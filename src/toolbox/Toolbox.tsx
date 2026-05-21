@@ -117,7 +117,7 @@ const toolGroups: ToolDef[][] = [
 export function Toolbox() {
   const activeTool = useUIStore((s) => s.activeTool);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
-  const isQuickMaskMode = useUIStore((s) => s.isQuickMaskMode);
+  const isQuickMaskMode = useUIStore((s) => s.maskMode === 'quickMask');
 
   return (
     <div className={styles.toolbox} role="toolbar" aria-label="Drawing tools">

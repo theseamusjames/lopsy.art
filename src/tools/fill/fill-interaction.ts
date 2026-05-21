@@ -19,7 +19,7 @@ import {
 export function handleFillDown(ctx: InteractionContext): void {
   const { layerPos, canvasPos, activeLayerId } = ctx;
   const editorState = useEditorStore.getState();
-  const isQuickMaskMode = useUIStore.getState().isQuickMaskMode;
+  const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
 
   // In quick mask mode: fill the quick mask texture instead of the layer
   if (isQuickMaskMode) {
@@ -40,7 +40,7 @@ export function handleFillDown(ctx: InteractionContext): void {
   }
 
   // Mask edit mode: fill the layer mask texture
-  const maskEditMode = useUIStore.getState().maskEditMode;
+  const maskEditMode = useUIStore.getState().maskMode === 'layerMask';
   const maskLayer = editorState.document.layers.find((l) => l.id === activeLayerId);
   if (maskEditMode && maskLayer?.mask) {
     editorState.pushHistory('Mask Fill');

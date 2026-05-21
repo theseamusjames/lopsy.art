@@ -42,7 +42,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const setLayerColorTag = useEditorStore((s) => s.setLayerColorTag);
   const rootGroupId = useEditorStore((s) => s.document.rootGroupId);
   const layerOrder = useEditorStore((s) => s.document.layerOrder);
-  const maskEditMode = useUIStore((s) => s.maskEditMode);
+  const maskEditMode = useUIStore((s) => s.maskMode === 'layerMask');
   const setMaskEditMode = useUIStore((s) => s.setMaskEditMode);
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);

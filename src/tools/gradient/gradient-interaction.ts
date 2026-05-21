@@ -23,8 +23,8 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   const editorState = useEditorStore.getState();
   const ts = useToolSettingsStore.getState();
   const ui = useUIStore.getState();
-  const maskEditMode = ui.maskEditMode;
-  const isQuickMaskMode = ui.isQuickMaskMode;
+  const maskEditMode = ui.maskMode === 'layerMask';
+  const isQuickMaskMode = ui.maskMode === 'quickMask';
 
   const engine = getEngine();
 
