@@ -15,6 +15,13 @@ import { useToolSettingsStore } from '../app/tool-settings-store';
 let engine: Engine | null = null;
 let engineCanvas: HTMLCanvasElement | null = null;
 
+// Resources held by the current engine that must be released on
+// destroyEngine. Without this, WebGL context-loss → initEngine adds a new
+// Zustand subscriber on every recovery and the previous setTimeout fires
+// against a freed engine.
+let subBrushUnsubscribe: (() => void) | null = null;
+let subBrushCacheTimer: ReturnType<typeof setTimeout> | null = null;
+
 export function getEngine(): Engine | null {
   return engine;
 }
@@ -49,14 +56,13 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
     cacheSubBrushTips(engine, initialSubs);
   }
   let prevSubBrushes = initialSubs;
-  let cacheTimer: ReturnType<typeof setTimeout> | null = null;
-  useToolSettingsStore.subscribe((state) => {
+  subBrushUnsubscribe = useToolSettingsStore.subscribe((state) => {
     if (state.activeSubBrushes !== prevSubBrushes) {
       prevSubBrushes = state.activeSubBrushes;
-      if (cacheTimer) clearTimeout(cacheTimer);
+      if (subBrushCacheTimer) clearTimeout(subBrushCacheTimer);
       const subs = state.activeSubBrushes;
-      cacheTimer = setTimeout(() => {
-        cacheTimer = null;
+      subBrushCacheTimer = setTimeout(() => {
+        subBrushCacheTimer = null;
         const eng = getEngine();
         if (!eng || subs.length === 0) return;
         cacheSubBrushTips(eng, subs);
@@ -85,6 +91,17 @@ export function clearEngine(): void {
 }
 
 export function destroyEngine(): void {
+  // Release engine-scoped subscriptions and timers before freeing the
+  // engine itself — otherwise the next initEngine stacks a second
+  // subscriber and a stale timer can fire against a dropped engine.
+  if (subBrushUnsubscribe) {
+    subBrushUnsubscribe();
+    subBrushUnsubscribe = null;
+  }
+  if (subBrushCacheTimer) {
+    clearTimeout(subBrushCacheTimer);
+    subBrushCacheTimer = null;
+  }
   if (engine) {
     engine.free();
   }
