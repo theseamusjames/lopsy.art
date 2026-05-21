@@ -10,6 +10,7 @@ const renderMaskRadialGradient = vi.fn();
 const renderQuickMaskLinearGradient = vi.fn();
 const renderQuickMaskRadialGradient = vi.fn();
 const uploadLayerMask = vi.fn();
+const getLayerEngineBounds = vi.fn((_engine: unknown, _layerId: unknown) => new Int32Array(0));
 
 vi.mock('../../engine-wasm/wasm-bridge', () => ({
   renderLinearGradient: (...args: unknown[]) => renderLinearGradient(...args),
@@ -21,6 +22,7 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
   renderQuickMaskLinearGradient: (...args: unknown[]) => renderQuickMaskLinearGradient(...args),
   renderQuickMaskRadialGradient: (...args: unknown[]) => renderQuickMaskRadialGradient(...args),
   uploadLayerMask: (...args: unknown[]) => uploadLayerMask(...args),
+  getLayerEngineBounds: (engine: unknown, layerId: unknown) => getLayerEngineBounds(engine, layerId),
 }));
 
 vi.mock('../../engine-wasm/engine-state', () => ({

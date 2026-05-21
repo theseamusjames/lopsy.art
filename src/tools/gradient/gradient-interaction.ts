@@ -16,6 +16,7 @@ import {
   renderQuickMaskLinearGradient as gpuRenderQuickMaskLinearGradient,
   renderQuickMaskRadialGradient as gpuRenderQuickMaskRadialGradient,
   uploadLayerMask,
+  getLayerEngineBounds,
 } from '../../engine-wasm/wasm-bridge';
 
 export function handleGradientDown(ctx: InteractionContext): InteractionState {
@@ -60,10 +61,31 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   };
 }
 
-export function handleGradientUp(_state: InteractionState): void {
+export function handleGradientUp(state: InteractionState): void {
   const engine = getEngine();
   if (engine) gpuEndGradientPreview(engine);
   useUIStore.getState().setGradientPreview(null);
+
+  if (engine && state.layerId && !state.maskMode && !state.quickMaskMode) {
+    const bounds = getLayerEngineBounds(engine, state.layerId);
+    if (bounds.length === 4) {
+      const [ex, ey, ew, eh] = bounds;
+      const store = useEditorStore.getState();
+      const layer = store.document.layers.find((l) => l.id === state.layerId);
+      if (layer && (layer.x !== ex || layer.y !== ey)) {
+        useEditorStore.setState((s) => ({
+          document: {
+            ...s.document,
+            layers: s.document.layers.map((l) =>
+              l.id === state.layerId
+                ? { ...l, x: ex!, y: ey!, ...('width' in l ? { width: ew!, height: eh! } : {}) } as typeof l
+                : l,
+            ),
+          },
+        }));
+      }
+    }
+  }
 }
 
 export function handleGradientMove(state: InteractionState, layerLocalPos: Point, metaKey = false): void {
