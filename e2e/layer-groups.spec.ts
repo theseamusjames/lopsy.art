@@ -274,9 +274,11 @@ test.describe('Layer Groups', () => {
     const doc = await getDocInfo(page);
     const rootId = doc.rootGroupId!;
 
-    // Add adjustments via the AdjustmentsPanel UI
-    await addAdjustment(page, rootId, 'exposure', { exposure: 1.5 });
+    // Add adjustments via the AdjustmentsPanel UI. Use types that are
+    // NOT in the default node set (levels, curves, exposure, hue-saturation)
+    // so we can unambiguously find them in the store.
     await addAdjustment(page, rootId, 'contrast', { contrast: 20 });
+    await addAdjustment(page, rootId, 'vignette', { vignette: 50 });
 
     // Verify the nodes are persisted in the store
     const adj = await page.evaluate(
@@ -289,8 +291,8 @@ test.describe('Layer Groups', () => {
       },
       { rootId },
     );
-    expect(adj.find((n) => n.type === 'exposure')?.exposure).toBe(1.5);
     expect(adj.find((n) => n.type === 'contrast')?.contrast).toBe(20);
+    expect(adj.find((n) => n.type === 'vignette')?.vignette).toBe(50);
   });
 
   test('move tool on group moves all descendants', async ({ page }) => {

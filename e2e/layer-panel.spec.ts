@@ -180,17 +180,17 @@ test.describe('Mask Sub-Row', () => {
     await page.locator(`[data-layer-id="${layer2Id}"]`).click();
     await addMaskViaStore(page, layer2Id);
 
-    // Click layer1's mask thumbnail — enter mask edit for layer1
-    await page.locator(`[data-layer-id="${layer1Id}"]`)
-      .locator('[title="Click to edit mask"]').click();
+    // Click layer1's mask thumbnail — enter mask edit for layer1.
+    // The mask row is a sibling of the data-layer-id element, so use
+    // data-mask-layer-id to scope mask queries to a specific layer.
+    await page.locator(`[data-mask-layer-id="${layer1Id}"] [title="Click to edit mask"]`).click();
     let ui = await getUIState(page);
     expect(ui.maskEditMode).toBe(true);
     let editorState = await getEditorState(page);
     expect(editorState.document.activeLayerId).toBe(layer1Id);
 
     // Click layer2's mask thumbnail — switch mask edit to layer2 (no toggle off)
-    await page.locator(`[data-layer-id="${layer2Id}"]`)
-      .locator('[title="Click to edit mask"]').click();
+    await page.locator(`[data-mask-layer-id="${layer2Id}"] [title="Click to edit mask"]`).click();
     ui = await getUIState(page);
     expect(ui.maskEditMode).toBe(true);
     editorState = await getEditorState(page);
