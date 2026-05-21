@@ -64,6 +64,7 @@ export function finalizePendingStrokeGlobal(): void {
     pendingByKind.delete('dodge');
     if (engine) {
       endDodgeBurnStroke(engine, dodgeLayer);
+      clearJsPixelData(dodgeLayer);
     }
   }
 
@@ -72,6 +73,7 @@ export function finalizePendingStrokeGlobal(): void {
     pendingByKind.delete('sponge');
     if (engine) {
       endSpongeStroke(engine, spongeLayer);
+      clearJsPixelData(spongeLayer);
     }
   }
 
