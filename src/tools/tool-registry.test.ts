@@ -31,7 +31,7 @@ describe('tool registry', () => {
 
   it('exposes the same GPU set the manual constant used to', () => {
     expect(new Set(GPU_TOOLS)).toEqual(new Set<ToolId>([
-      'brush', 'pencil', 'eraser', 'dodge', 'sponge', 'stamp', 'gradient', 'shape', 'spray',
+      'brush', 'pencil', 'eraser', 'dodge', 'sponge', 'stamp', 'healing', 'gradient', 'shape', 'spray',
     ]))
   });
 
@@ -78,7 +78,7 @@ describe('tool registry', () => {
   });
 
   it('most paint tools also render on the GPU', () => {
-    const exceptions = new Set<ToolId>(['healing']);
+    const exceptions = new Set<ToolId>([]);
     for (const id of PAINT_TOOLS) {
       if (exceptions.has(id)) continue;
       expect(GPU_TOOLS.has(id)).toBe(true);
