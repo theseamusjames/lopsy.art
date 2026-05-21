@@ -260,6 +260,59 @@ describe('syncLayers — group mask upload', () => {
   });
 });
 
+describe('syncLayers — tracked-state cleanup on layer removal', () => {
+  beforeEach(() => {
+    vi.mocked(bridge.addLayer).mockClear();
+    vi.mocked(bridge.removeLayer).mockClear();
+    vi.mocked(bridge.uploadLayerMask).mockClear();
+  });
+
+  it('drains every per-layer Map / Set when a layer is removed', async () => {
+    const { getTracked, resetTrackedState } = await import('./sync-state');
+    const engine = makeFakeEngine();
+    resetTrackedState(engine);
+
+    const maskData = new Uint8ClampedArray(64 * 64).fill(128);
+    const raster: RasterLayer = {
+      ...baseRasterLayer,
+      id: 'r1',
+      mask: { id: 'm1', enabled: true, data: maskData, width: 64, height: 64 },
+    };
+
+    // First sync: layer is present.
+    syncLayers(engine, [raster], [raster.id], new Set([raster.id]));
+    const tracked = getTracked(engine);
+    // Pre-condition: every per-layer Map / Set carries an entry for r1.
+    expect(tracked.layerIds.has('r1')).toBe(true);
+    expect(tracked.layerVersions.has('r1')).toBe(true);
+    expect(tracked.layerRefs.has('r1')).toBe(true);
+    expect(tracked.layerEffectiveVisible.has('r1')).toBe(true);
+    expect(tracked.layerPassThroughOpacity.has('r1')).toBe(true);
+    expect(tracked.masksOnEngine.has('r1')).toBe(true);
+    expect(tracked.maskDataRefs.has('r1')).toBe(true);
+
+    // Seed pathTextKeys directly so the invariant covers it even though
+    // we don't have a path-text layer in this fixture.
+    if (!tracked.pathTextKeys) tracked.pathTextKeys = new Map();
+    tracked.pathTextKeys.set('r1', 'fake-key');
+
+    // Second sync: layer is gone.
+    syncLayers(engine, [], [], new Set());
+
+    // Post-condition: every per-layer Map / Set is empty for r1.
+    expect(tracked.layerIds.has('r1')).toBe(false);
+    expect(tracked.layerVersions.has('r1')).toBe(false);
+    expect(tracked.layerRefs.has('r1')).toBe(false);
+    expect(tracked.layerEffectiveVisible.has('r1')).toBe(false);
+    expect(tracked.layerPassThroughOpacity.has('r1')).toBe(false);
+    expect(tracked.masksOnEngine.has('r1')).toBe(false);
+    expect(tracked.maskDataRefs.has('r1')).toBe(false);
+    expect(tracked.pixelDataVersions.has('r1')).toBe(false);
+    expect(tracked.sparseVersions.has('r1')).toBe(false);
+    expect(tracked.pathTextKeys?.has('r1')).toBe(false);
+  });
+});
+
 const baseGroup: GroupLayer = {
   id: 'group-1',
   name: 'Group 1',

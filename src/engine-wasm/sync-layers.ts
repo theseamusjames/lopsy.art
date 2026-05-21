@@ -200,7 +200,9 @@ export function syncLayers(
   // Build pass-through opacity multipliers once per sync (O(n*depth)).
   const passThroughOpacity = buildPassThroughOpacityMap(layers, index);
 
-  // Remove layers no longer present
+  // Remove layers no longer present. Every per-layer Map / Set on
+  // tracked-state must be drained here — otherwise stale entries linger
+  // on the engine's WeakMap for the document's lifetime.
   for (const id of tracked.layerIds) {
     if (!currentIds.has(id)) {
       try {
@@ -213,8 +215,10 @@ export function syncLayers(
       tracked.layerEffectiveVisible.delete(id);
       tracked.layerPassThroughOpacity.delete(id);
       tracked.masksOnEngine.delete(id);
+      tracked.maskDataRefs.delete(id);
       tracked.pixelDataVersions.delete(id);
       tracked.sparseVersions.delete(id);
+      tracked.pathTextKeys?.delete(id);
     }
   }
 
