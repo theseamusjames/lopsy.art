@@ -171,6 +171,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     shortcut: 'h',
     optionsComponent: HealingOptions,
     isPaint: true,
+    isGpu: true,
     handler: {
       down: (ctx) => handleHealingDown(ctx),
       move: (ctx, state) => handleHealingMove(state, ctx.layerPos, ctx.stampOffsetRef),
