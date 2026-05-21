@@ -16,6 +16,8 @@ export function computeMoveLayer(
   const movedLayer = layerMap.get(movedId);
   if (!movedLayer) return undefined;
 
+  const rootGroupId = doc.rootGroupId;
+
   if (isGroupLayer(movedLayer)) {
     const descendantIds = new Set(getDescendantIds(doc.layers, movedId));
     const blockIds = new Set([movedId, ...descendantIds]);
@@ -59,6 +61,13 @@ export function computeMoveLayer(
       }
     }
 
+    if (rootGroupId) {
+      const rootIdx = restEntries.indexOf(rootGroupId);
+      if (rootIdx !== -1 && insertAt > rootIdx) {
+        insertAt = rootIdx;
+      }
+    }
+
     restEntries.splice(insertAt, 0, ...blockEntries);
     const newLayers = restEntries.map((id) => layerMap.get(id)!);
 
@@ -68,9 +77,16 @@ export function computeMoveLayer(
     };
   }
 
-  // Single item move
+  // Single item move — clamp so nothing goes above the root group
   order.splice(fromIndex, 1);
-  order.splice(toIndex, 0, movedId);
+  let clampedTo = toIndex;
+  if (rootGroupId) {
+    const rootIdx = order.indexOf(rootGroupId);
+    if (rootIdx !== -1 && clampedTo > rootIdx) {
+      clampedTo = rootIdx;
+    }
+  }
+  order.splice(clampedTo, 0, movedId);
 
   // After the flat reorder, check if the layer's neighbor has a different
   // parent group. If so, re-parent the moved layer to match its new neighbor.

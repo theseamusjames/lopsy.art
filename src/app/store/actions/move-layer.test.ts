@@ -262,6 +262,23 @@ describe('group block contiguity invariant', () => {
     }
   });
 
+  it('never places a single layer above the root group', () => {
+    const doc = makeGroupDoc();
+    // layerOrder: [BG(0), L1(1), L2(2), L3(3), L4(4), G1(5), Root(6)]
+    // Try moving BG (index 0) to index 6 (where Root is) and beyond
+    const result = computeMoveLayer(doc, 0, 0, 6)!;
+    const order = namesByOrder(result.document!);
+    expect(order[order.length - 1]).toBe('Root');
+  });
+
+  it('never places a group block above the root group', () => {
+    const doc = makeGroupDoc();
+    // Try moving G1 (index 5) to index 7 (beyond Root)
+    const result = computeMoveLayer(doc, 0, 5, 7)!;
+    const order = namesByOrder(result.document!);
+    expect(order[order.length - 1]).toBe('Root');
+  });
+
   it('holds after successive moves', () => {
     let doc = makeGroupDoc();
     // Move L1 into G1, then move it back out, then move BG around
