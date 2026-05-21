@@ -32,7 +32,7 @@ function toggleAnchorSpline(
 export function handlePathDown(ctx: InteractionContext): InteractionState | undefined {
   const { layerPos, canvasPos, activeLayerId, activeLayer, metaKey } = ctx;
   const uiState = useUIStore.getState();
-  const anchors = uiState.pathAnchors;
+  const anchors = uiState.pathDraft?.anchors ?? [];
   const editorState = useEditorStore.getState();
   const selectedPathId = editorState.selectedPathId;
 

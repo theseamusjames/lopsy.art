@@ -135,8 +135,11 @@ interface UIState {
   gridSize: number;
   guideColor: Color;
   sidebarCollapsed: boolean;
-  pathAnchors: PathAnchor[];
-  pathClosed: boolean;
+  /** In-progress path being drawn with the path tool. null when the tool
+   *  is inactive or has been cleared. `closed` is only meaningful while
+   *  draft exists; closing without anchors was previously representable
+   *  but nonsense. */
+  pathDraft: { anchors: PathAnchor[]; closed: boolean } | null;
   lassoPoints: Point[];
   cropRect: { x: number; y: number; width: number; height: number } | null;
   /** When set, the crop tool is in perspective mode with 4 draggable corners. */
@@ -275,8 +278,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   gridSize: 16,
   guideColor: { r: 0, g: 180, b: 255, a: 1 },
   sidebarCollapsed: false,
-  pathAnchors: [],
-  pathClosed: false,
+  pathDraft: null,
   lassoPoints: [],
   cropRect: null,
   perspectiveCropQuad: null,
@@ -350,7 +352,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (current.activeTool === tool) return;
     toolRegistry[current.activeTool]?.onDeactivate?.();
     if (current.activeTool === 'path' && tool !== 'path') {
-      set({ activeTool: tool, pathAnchors: [], pathClosed: false });
+      set({ activeTool: tool, pathDraft: null });
     } else if (current.activeTool === 'crop' && tool !== 'crop') {
       set({ activeTool: tool, perspectiveCropQuad: null, perspectiveCropDragging: null });
     } else {
@@ -374,17 +376,27 @@ export const useUIStore = create<UIState>((set, get) => ({
   setGridSize: (size) => set({ gridSize: size }),
   setGuideColor: (color) => set({ guideColor: color }),
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-  addPathAnchor: (anchor) => set((state) => ({ pathAnchors: [...state.pathAnchors, anchor] })),
+  addPathAnchor: (anchor) =>
+    set((state) => {
+      const prev = state.pathDraft;
+      const anchors = prev ? [...prev.anchors, anchor] : [anchor];
+      return { pathDraft: { anchors, closed: prev?.closed ?? false } };
+    }),
   updateLastPathAnchor: (anchor) =>
     set((state) => {
-      const anchors = [...state.pathAnchors];
-      if (anchors.length > 0) {
-        anchors[anchors.length - 1] = anchor;
-      }
-      return { pathAnchors: anchors };
+      const prev = state.pathDraft;
+      if (!prev || prev.anchors.length === 0) return {};
+      const anchors = [...prev.anchors];
+      anchors[anchors.length - 1] = anchor;
+      return { pathDraft: { anchors, closed: prev.closed } };
     }),
-  closePath: () => set({ pathClosed: true }),
-  clearPath: () => set({ pathAnchors: [], pathClosed: false }),
+  closePath: () =>
+    set((state) => {
+      const prev = state.pathDraft;
+      if (!prev) return {};
+      return { pathDraft: { anchors: prev.anchors, closed: true } };
+    }),
+  clearPath: () => set({ pathDraft: null }),
   setLassoPoints: (points) => set({ lassoPoints: points }),
   clearLassoPoints: () => set({ lassoPoints: [] }),
   setCropRect: (rect) => set({ cropRect: rect }),

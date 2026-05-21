@@ -46,11 +46,12 @@ export function rasterizePathToLayer(
 export function commitCurrentPath(): void {
   const uiState = useUIStore.getState();
   const editorState = useEditorStore.getState();
-  const anchors = uiState.pathAnchors;
-  if (anchors.length < 2) {
+  const draft = uiState.pathDraft;
+  if (!draft || draft.anchors.length < 2) {
     uiState.clearPath();
     return;
   }
+  const anchors = draft.anchors;
 
   // Convert from layer-local to document space
   const activeLayer = editorState.document.layers.find(
@@ -68,7 +69,7 @@ export function commitCurrentPath(): void {
       : null,
   }));
 
-  editorState.addPath(docAnchors, uiState.pathClosed);
+  editorState.addPath(docAnchors, draft.closed);
   uiState.clearPath();
 }
 

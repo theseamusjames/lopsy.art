@@ -134,8 +134,8 @@ function renderFrameGpu(
   const gridSize = uiState.gridSize;
   const adjustments = uiState.adjustments;
   const adjustmentsEnabled = uiState.adjustmentsEnabled;
-  const pathAnchors = uiState.pathAnchors;
-  const pathClosed = uiState.pathClosed;
+  const pathAnchors = uiState.pathDraft?.anchors ?? [];
+  const pathClosed = uiState.pathDraft?.closed ?? false;
   const lassoPoints = uiState.lassoPoints;
   const cropRect = uiState.cropRect;
   const perspectiveCropQuad = uiState.perspectiveCropQuad;

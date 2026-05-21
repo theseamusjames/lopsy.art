@@ -121,7 +121,7 @@ export function useKeyboardShortcuts({
 
       if (e.key === 'Escape') {
         const uiState = useUIStore.getState();
-        if (uiState.activeTool === 'path' && uiState.pathAnchors.length > 0) {
+        if (uiState.activeTool === 'path' && (uiState.pathDraft?.anchors.length ?? 0) > 0) {
           uiState.clearPath();
         } else {
           useEditorStore.getState().clearSelection();
@@ -133,7 +133,7 @@ export function useKeyboardShortcuts({
 
       if (e.key === 'Enter') {
         const uiState = useUIStore.getState();
-        if (uiState.activeTool === 'path' && uiState.pathAnchors.length >= 2) {
+        if (uiState.activeTool === 'path' && (uiState.pathDraft?.anchors.length ?? 0) >= 2) {
           strokeCurrentPath();
         }
         return;
