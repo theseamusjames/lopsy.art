@@ -76,14 +76,30 @@ describe('PixelDataManager', () => {
     expect(mgr.version()).toBe(v);
   });
 
-  it('remove() drains the layerVersions entry so it does not accumulate', () => {
-    // Set + remove a layer 10 times; versionOf should always reset to 0
-    // after the remove (i.e. no permanent entry per id ever seen).
-    for (let i = 0; i < 10; i++) {
-      mgr.setDense(`layer-${i}`, makeImageData());
-      mgr.remove(`layer-${i}`);
-      expect(mgr.versionOf(`layer-${i}`)).toBe(0);
-    }
+  it('remove() preserves the layerVersions entry so consecutive evictions still bump (issue #498)', () => {
+    // clearJsPixelData() does remove() followed by bumpVersion() on every
+    // GPU-side stroke. If remove() drains the version entry, the next
+    // bumpVersion sets it to 1 instead of incrementing, so consecutive
+    // strokes produce version=1 every time and LayerThumbnail subscribers
+    // (useSyncExternalStore) see no change and stop re-rendering.
+    mgr.setDense('a', makeImageData());
+    mgr.remove('a');
+    mgr.bumpVersion('a');
+    const afterFirstStroke = mgr.versionOf('a');
+    mgr.remove('a');
+    mgr.bumpVersion('a');
+    const afterSecondStroke = mgr.versionOf('a');
+    expect(afterSecondStroke).toBeGreaterThan(afterFirstStroke);
+  });
+
+  it('dropLayer() drains both data and the version entry — for actual layer removal', () => {
+    // Used in the layer-removal flow so layerVersions does not accumulate
+    // one entry per layer the document ever saw.
+    mgr.setDense('a', makeImageData());
+    expect(mgr.versionOf('a')).toBe(1);
+    mgr.dropLayer('a');
+    expect(mgr.get('a')).toBeUndefined();
+    expect(mgr.versionOf('a')).toBe(0);
   });
 
   it('removeDense leaves sparse data alone', () => {

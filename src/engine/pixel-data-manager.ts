@@ -78,15 +78,26 @@ export class PixelDataManager {
     this.bump(layerId);
   }
 
-  /** Remove any data (dense or sparse) for a layer. */
+  /** Remove the cached pixel data (dense or sparse) for a layer that still
+   *  exists in the document — e.g. after a GPU operation makes the JS cache
+   *  stale. The layer's version entry is preserved so consecutive cache
+   *  evictions keep producing monotonically increasing versions; otherwise
+   *  per-layer subscribers (LayerThumbnail) would see the version oscillate
+   *  back to 1 on every stroke and stop re-rendering. To fully drain a
+   *  layer that's being removed from the document, call dropLayer(). */
   remove(layerId: string): void {
     const hadDense = this.pixelData.delete(layerId);
     const hadSparse = this.sparseData.delete(layerId);
     if (hadDense || hadSparse) this.bump(layerId);
-    // Drop the version entry too — the layer is gone, no remaining
-    // subscriber should be observing it (components that displayed it
-    // have unmounted). Without this, layerVersions accumulates one
-    // entry per layer the document ever saw, for the document's life.
+  }
+
+  /** Remove cached data AND the version entry. Use this when a layer is
+   *  actually removed from the document, so layerVersions doesn't accumulate
+   *  an entry per layer the document ever saw. */
+  dropLayer(layerId: string): void {
+    const hadDense = this.pixelData.delete(layerId);
+    const hadSparse = this.sparseData.delete(layerId);
+    if (hadDense || hadSparse) this.bump(layerId);
     this.layerVersions.delete(layerId);
   }
 

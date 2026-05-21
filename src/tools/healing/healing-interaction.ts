@@ -9,7 +9,7 @@ import { applyHealingDab, applyHealingDabBatch } from '../../engine-wasm/wasm-br
 import { interpolateFlat } from '../common/dab-interpolation';
 
 /**
- * Apply a healing dab at doc-space position `pos` on the given layer,
+ * Apply a healing dab at layer-local position `pos` on the given layer,
  * sampling source from `pos + offset`. Runs entirely on the GPU via
  * the WASM engine to preserve FP16 color precision.
  */
@@ -17,15 +17,7 @@ function applyHealDab(layerId: string, pos: Point, offset: Point, size: number, 
   const engine = getEngine();
   if (!engine) return;
 
-  const layer = useEditorStore.getState().document.layers.find((l) => l.id === layerId);
-  const docX = layer?.x ?? 0;
-  const docY = layer?.y ?? 0;
-
-  // Convert to layer-local coordinates
-  const localX = pos.x - docX;
-  const localY = pos.y - docY;
-
-  applyHealingDab(engine, layerId, localX, localY, offset.x, offset.y, size, opacity / 100);
+  applyHealingDab(engine, layerId, pos.x, pos.y, offset.x, offset.y, size, opacity / 100);
   useEditorStore.getState().notifyRender();
 }
 
@@ -63,15 +55,7 @@ export function handleHealingDown(ctx: InteractionContext): InteractionState | u
   if (shiftKey && ctx.lastPaintPointRef.current && ctx.lastPaintPointRef.current.layerId === activeLayerId) {
     const spacing = Math.max(1, healingSize * 0.25);
     const pts = interpolateFlat(ctx.lastPaintPointRef.current.point, layerPos, spacing);
-    const layer = activeLayer;
-    const docX = layer?.x ?? 0;
-    const docY = layer?.y ?? 0;
-    const localPts = new Float64Array(pts.length);
-    for (let i = 0; i < pts.length; i += 2) {
-      localPts[i] = pts[i]! - docX;
-      localPts[i + 1] = pts[i + 1]! - docY;
-    }
-    applyHealDabBatch(activeLayerId, localPts, ctx.stampOffsetRef.current, healingSize, healingOpacity);
+    applyHealDabBatch(activeLayerId, pts, ctx.stampOffsetRef.current, healingSize, healingOpacity);
   } else {
     applyHealDab(activeLayerId, layerPos, ctx.stampOffsetRef.current, healingSize, healingOpacity);
   }
@@ -102,15 +86,7 @@ export function handleHealingMove(
   const spacing = Math.max(1, healingSize * 0.25);
 
   const pts = interpolateFlat(state.lastPoint, layerLocalPos, spacing);
-  const layer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
-  const docX = layer?.x ?? 0;
-  const docY = layer?.y ?? 0;
-  const localPts = new Float64Array(pts.length);
-  for (let i = 0; i < pts.length; i += 2) {
-    localPts[i] = pts[i]! - docX;
-    localPts[i + 1] = pts[i + 1]! - docY;
-  }
-  applyHealDabBatch(state.layerId, localPts, stampOffsetRef.current, healingSize, healingOpacity);
+  applyHealDabBatch(state.layerId, pts, stampOffsetRef.current, healingSize, healingOpacity);
 
   state.lastPoint = layerLocalPos;
 }

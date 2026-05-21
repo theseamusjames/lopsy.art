@@ -5,6 +5,7 @@ import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
+import { syncLayerAfterFullSize } from '../../app/sync-layer-after-full-size';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   renderLinearGradient as gpuRenderLinearGradient,
@@ -60,9 +61,19 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   };
 }
 
-export function handleGradientUp(_state: InteractionState): void {
+export function handleGradientUp(state: InteractionState): void {
   const engine = getEngine();
-  if (engine) gpuEndGradientPreview(engine);
+  if (engine) {
+    gpuEndGradientPreview(engine);
+    // The render path calls ensure_layer_full_size on the WASM side, which
+    // expands a cropped layer texture. Sync the JS store so layer.x/y/w/h
+    // match the new GPU texture extent — otherwise downstream operations
+    // (cmd+click alpha selection, content bounds) read the stale offsets
+    // and produce misaligned results. Issue #494.
+    if (state.layerId && !state.maskMode && !state.quickMaskMode) {
+      syncLayerAfterFullSize(engine, state.layerId);
+    }
+  }
   useUIStore.getState().setGradientPreview(null);
 }
 
