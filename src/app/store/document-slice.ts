@@ -82,7 +82,10 @@ function applyActionResult(
   set: (partial: Partial<import('./types').EditorState>) => void,
   result: ActionResult,
 ): void {
-  const { layerPixelData, sparseLayerData, ...storeDelta } = result;
+  // removedLayerIds is metadata for engine-side cleanup; the caller drives
+  // those side effects before calling applyActionResult. Strip it so it
+  // doesn't leak into the store state via the spread below.
+  const { layerPixelData, sparseLayerData, removedLayerIds: _removedLayerIds, ...storeDelta } = result;
   if (layerPixelData !== undefined || sparseLayerData !== undefined) {
     pixelDataManager.replace(
       layerPixelData ?? new Map(),
@@ -90,6 +93,25 @@ function applyActionResult(
     );
   }
   set(storeDelta);
+}
+
+/**
+ * Drop engine-side state held for every removed layer that was a text
+ * layer. The Rust engine keeps a HashMap<String, TextLayerState> keyed
+ * by layer id; entries linger if we forget to evict them on delete.
+ * The document still has the pre-delete layer list (`doc`), so type
+ * lookup is exact.
+ */
+function cleanupRemovedTextLayers(doc: { readonly layers: readonly Layer[] }, removedIds: readonly string[]): void {
+  if (removedIds.length === 0) return;
+  const eng = getEngine();
+  if (!eng) return;
+  for (const id of removedIds) {
+    const layer = doc.layers.find((l) => l.id === id);
+    if (layer?.type === 'text') {
+      removeTextLayerState(eng, id);
+    }
+  }
 }
 
 /** Upload all pixel data entries to the GPU engine.
@@ -255,12 +277,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     );
     if (!result) return;
 
-    // Clean up text renderer state if this was a text layer.
-    const removedLayer = s.document.layers.find((l) => l.id === id);
-    if (removedLayer?.type === 'text') {
-      const eng = getEngine();
-      if (eng) removeTextLayerState(eng, id);
-    }
+    // Clean up text renderer state for every removed layer — when `id`
+    // points to a group, every text descendant is gone too.
+    cleanupRemovedTextLayers(s.document, result.removedLayerIds ?? []);
 
     s.pushHistory('Delete Layer');
     applyActionResult(set, result);
@@ -720,6 +739,10 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (toRemove.length === 0) return;
     s.pushHistory('Delete Layers');
     let currentDoc = doc;
+    // Accumulate every removed id across the per-selection iterations so
+    // we can run engine-side text-layer cleanup once at the end, against
+    // the pre-delete document (text-layer type is only knowable there).
+    const allRemovedIds: string[] = [];
     for (const id of toRemove) {
       const result = computeRemoveLayer(
         currentDoc,
@@ -729,7 +752,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       );
       if (!result || !result.document) continue;
       currentDoc = result.document as typeof doc;
+      if (result.removedLayerIds) allRemovedIds.push(...result.removedLayerIds);
     }
+    cleanupRemovedTextLayers(doc, allRemovedIds);
     const activeId = currentDoc.activeLayerId;
     set({
       document: {
