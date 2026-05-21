@@ -130,6 +130,8 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - Stroke path to pixels
 - Convert path to selection
 - **Cmd/Meta+click an anchor**: toggles between corner (no handles) and smooth spline (double-click does the same)
+- **Enter** (with the Path tool active and ≥ 2 anchors placed): strokes the in-progress anchor list directly to pixels on the active layer using the current stroke width — no need to commit the path through the Paths panel first.
+- **Escape** (with the Path tool active and anchors placed): discards the in-progress anchor list without stroking. When no path is in progress, Escape falls through to its global behavior (clears any active selection and cancels any pending transform).
 - **Boolean path operations** (Path options bar buttons + **Path** menu in the menu bar): Unite, Subtract, Intersect, Exclude. Operates between the selected path and the most recently added other path; both source paths are consumed and replaced by the result. Implemented by flattening Bezier paths to polygons, rasterizing to binary masks, combining pixel-wise, then tracing contours with marching squares and refitting Catmull-Rom/Bezier anchors. Buttons are disabled until the document contains at least 2 paths and one is selected.
 
 ### Text Tool
@@ -144,6 +146,12 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Strikethrough (`S`)**: toggle a horizontal stroke 32% of the font size above the baseline, 8% of font-size thick
 - **Mode**: point text (no wrap) or area text (fixed width with wrapping)
 - **Bind to path**: a Path dropdown in the text options bar lists every stored path. Once bound, glyphs are placed one by one along the path's arc-length and rotated to match the local Bezier tangent (works on both open and closed paths). Live editing (typing) re-flows the type along the curve in real time, and editing the path's anchors invalidates the cached layout so the text follows. Selecting "None" unbinds and restores the layer's pre-bind position.
+
+**Editing keys** (active while a text layer is being edited)
+- **Shift+Enter** or **Tab**: commit the edit and exit text editing (plain Enter inserts a newline). Tab also swallows the browser's default focus change so the next single-key shortcut isn't captured by a newly-focused element.
+- **Escape**: cancel the edit. If the layer was newly created in this editing session, it is removed entirely; otherwise the layer keeps its prior text.
+- **Cmd/Ctrl + A**: jumps the cursor to the end of the buffer (simplified select-all — no highlighted-selection support).
+- Arrow keys, Home / End, Backspace / Delete behave as standard text-input keys against the editing buffer.
 
 ---
 
@@ -504,12 +512,16 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Fit to view**: auto-zoom with padding
 - **Space+drag** or **middle-click drag**: temporarily pan from any tool
 - **Cmd/Ctrl+scroll**: zoom centered on the cursor; plain scroll pans
+- **Cmd/Ctrl + `=`** / **Cmd/Ctrl + `-`**: zoom in / out by 1.5× (clamped to the 0.01× – 64× range)
+- **Cmd/Ctrl + `0`**: fit document to view (90% of the smaller canvas-to-document ratio, pan reset to origin)
+- **Cmd/Ctrl + `1`**: jump to 100% (1×) zoom and recenter
 - **Pixel grid**: automatically rendered as a 1-CSS-px translucent gray lattice when the viewport zoom exceeds 800% (8×), so individual document pixels are visible while pixel-accurate editing
 
 ### Grid
 - **Show grid**: on/off
 - **Grid size**: configurable (default 16 px)
 - **Snap to grid**: on/off (auto-enabled with grid)
+- **Cmd/Ctrl + `'`**: toggle grid visibility from anywhere in the app
 
 ### Rulers
 - **Show rulers**: on/off (default on)
@@ -519,6 +531,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Guide color**: configurable
 - **Orientation**: horizontal or vertical
 - Drag from ruler to create
+- **Cmd/Ctrl + `;`**: toggle guides visibility from anywhere in the app
 
 ### UI
 - **Foreground / background color**: with swap and reset
@@ -552,6 +565,10 @@ In addition to per-tool toolbox shortcuts (`B`, `E`, `J`, `Y`, `R`, `S`, `H`, `O
 - **`[` / `]`** — decrement / increment the active tool's size by 1 (works for brush, dodge & burn, smudge, pencil, eraser, clone stamp, healing brush, pen-tool stroke width, and shape-tool stroke width — the bracket maps to whichever size slider the current tool exposes)
 - **`Space+drag`** / **middle-click drag** — temporary pan from any tool
 - **`Cmd/Ctrl+scroll`** — zoom centered on the cursor; plain scroll pans
+- **`Backspace` / `Delete`** (canvas focused) — when a marquee selection is active, clears the selected pixels on the active layer (GPU clear, undoable as "Clear Selection"); when no selection is active, removes the active layer from the document. Suppressed while a text input or text-layer edit is focused.
+- **`Escape`** — cancels in-progress state: clears unstroked Path-tool anchors first, otherwise clears the active selection and any pending transform; ends text editing with the prior layer state restored.
+- **`Enter`** — when the Path tool is active and ≥ 2 anchors are placed, strokes the in-progress path to pixels.
+- **`Cmd/Ctrl + E`** — merge the active layer down into the layer below.
 
 ### Keyboard Shortcut Customization
 Every tool shortcut (`B`, `E`, `J`, …) and the non-tool single-key actions (`X` swap colors, `D` reset colors, `Q` toggle quick mask) are user-rebindable through the **Keyboard Shortcuts modal**.
