@@ -76,6 +76,16 @@ describe('PixelDataManager', () => {
     expect(mgr.version()).toBe(v);
   });
 
+  it('remove() drains the layerVersions entry so it does not accumulate', () => {
+    // Set + remove a layer 10 times; versionOf should always reset to 0
+    // after the remove (i.e. no permanent entry per id ever seen).
+    for (let i = 0; i < 10; i++) {
+      mgr.setDense(`layer-${i}`, makeImageData());
+      mgr.remove(`layer-${i}`);
+      expect(mgr.versionOf(`layer-${i}`)).toBe(0);
+    }
+  });
+
   it('removeDense leaves sparse data alone', () => {
     mgr.setSparse('a', makeSparse());
     // Directly populate dense too for the test (bypasses the setDense
