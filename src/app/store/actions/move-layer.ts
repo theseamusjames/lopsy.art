@@ -16,6 +16,17 @@ export function computeMoveLayer(
   const movedLayer = layerMap.get(movedId);
   if (!movedLayer) return undefined;
 
+  // Root group must remain the topmost item in layerOrder (last in array)
+  // so nothing renders outside it — issue #495. Clamp toIndex if a non-root
+  // move would place the layer at or past the root's post-splice position.
+  if (doc.rootGroupId && movedId !== doc.rootGroupId) {
+    const rootIdx = order.indexOf(doc.rootGroupId);
+    if (rootIdx !== -1) {
+      const newRootIdx = fromIndex < rootIdx ? rootIdx - 1 : rootIdx;
+      if (toIndex > newRootIdx) toIndex = newRootIdx;
+    }
+  }
+
   if (isGroupLayer(movedLayer)) {
     const descendantIds = new Set(getDescendantIds(doc.layers, movedId));
     const blockIds = new Set([movedId, ...descendantIds]);

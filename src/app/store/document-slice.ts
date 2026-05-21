@@ -288,6 +288,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     // cleanupRemovedTextLayers helper above.
     for (const descId of result.removedLayerIds ?? [id]) {
       invalidateBitmapCache(descId);
+      pixelDataManager.dropLayer(descId);
     }
 
     s.pushHistory('Delete Layer');
@@ -777,6 +778,10 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       if (result.removedLayerIds) allRemovedIds.push(...result.removedLayerIds);
     }
     cleanupRemovedTextLayers(doc, allRemovedIds);
+    for (const removedId of allRemovedIds) {
+      invalidateBitmapCache(removedId);
+      pixelDataManager.dropLayer(removedId);
+    }
     const activeId = currentDoc.activeLayerId;
     set({
       document: {

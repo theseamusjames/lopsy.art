@@ -262,6 +262,18 @@ describe('group block contiguity invariant', () => {
     }
   });
 
+  it('keeps the root group last in layerOrder no matter what toIndex is requested (issue #495)', () => {
+    const doc = makeGroupDoc();
+    // Root is at layerOrder index 6. Try every possible move of L1 (index 1)
+    // including positions past the root (e.g. toIndex = layerOrder.length).
+    for (let to = 0; to <= doc.layerOrder.length; to++) {
+      const result = computeMoveLayer(doc, 0, 1, to);
+      if (!result) continue;
+      const newOrder = result.document!.layerOrder;
+      expect(newOrder[newOrder.length - 1]).toBe(doc.rootGroupId);
+    }
+  });
+
   it('holds after successive moves', () => {
     let doc = makeGroupDoc();
     // Move L1 into G1, then move it back out, then move BG around
