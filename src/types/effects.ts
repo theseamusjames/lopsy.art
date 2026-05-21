@@ -5,12 +5,28 @@ export interface ColorOverlayEffect {
   readonly color: Color;
 }
 
+export type BlendIfChannel = 'gray' | 'red' | 'green' | 'blue';
+
+export interface BlendIfEffect {
+  readonly enabled: boolean;
+  readonly channel: BlendIfChannel;
+  readonly thisLayerBlack: number;     // 0-255
+  readonly thisLayerBlackFeather: number; // 0-255, upper split point
+  readonly thisLayerWhite: number;     // 0-255
+  readonly thisLayerWhiteFeather: number; // 0-255, lower split point
+  readonly underlyingBlack: number;
+  readonly underlyingBlackFeather: number;
+  readonly underlyingWhite: number;
+  readonly underlyingWhiteFeather: number;
+}
+
 export interface LayerEffects {
   readonly stroke: StrokeEffect;
   readonly dropShadow: ShadowEffect;
   readonly outerGlow: GlowEffect;
   readonly innerGlow: GlowEffect;
   readonly colorOverlay: ColorOverlayEffect;
+  readonly blendIf: BlendIfEffect;
 }
 
 export interface StrokeEffect {

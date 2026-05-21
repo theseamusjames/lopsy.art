@@ -23,6 +23,11 @@ uniform int u_hasBrushTexture;
 uniform float u_textureScale;
 uniform int u_textureBlendMode;
 uniform vec2 u_brushTextureSize;
+// Blend If: conditional blending based on luminance/channel values
+uniform int u_blendIfEnabled;       // 1 if Blend If is active
+uniform int u_blendIfChannel;       // 0=gray, 1=red, 2=green, 3=blue
+uniform vec4 u_blendIfThisLayer;    // (black, blackFeather, whiteFeather, white) normalized
+uniform vec4 u_blendIfUnderlying;   // (black, blackFeather, whiteFeather, white) normalized
 out vec4 fragColor;
 
 // RGB <-> HSL helpers
@@ -187,6 +192,53 @@ void main() {
 
     float sa = src.a * u_opacity;
     float da = dst.a;
+
+    // Blend If: modulate source alpha based on channel values
+    if (u_blendIfEnabled == 1) {
+        float srcVal, dstVal;
+        if (u_blendIfChannel == 0) {
+            srcVal = lum(src.rgb);
+            dstVal = lum(dst.rgb);
+        } else if (u_blendIfChannel == 1) {
+            srcVal = src.r; dstVal = dst.r;
+        } else if (u_blendIfChannel == 2) {
+            srcVal = src.g; dstVal = dst.g;
+        } else {
+            srcVal = src.b; dstVal = dst.b;
+        }
+        // This Layer range: black..blackFeather fully visible, whiteFeather..white fully visible
+        // Below black or above white: hidden. Feather zones: smooth transition.
+        float thisAlpha = 1.0;
+        float tlBlack = u_blendIfThisLayer.x;
+        float tlBlackF = u_blendIfThisLayer.y;
+        float tlWhiteF = u_blendIfThisLayer.z;
+        float tlWhite = u_blendIfThisLayer.w;
+        if (srcVal < tlBlack) {
+            thisAlpha = 0.0;
+        } else if (srcVal < tlBlackF) {
+            thisAlpha = smoothstep(tlBlack, tlBlackF, srcVal);
+        } else if (srcVal > tlWhite) {
+            thisAlpha = 0.0;
+        } else if (srcVal > tlWhiteF) {
+            thisAlpha = smoothstep(tlWhite, tlWhiteF, srcVal);
+        }
+        // Underlying Layer range
+        float ulAlpha = 1.0;
+        float ulBlack = u_blendIfUnderlying.x;
+        float ulBlackF = u_blendIfUnderlying.y;
+        float ulWhiteF = u_blendIfUnderlying.z;
+        float ulWhite = u_blendIfUnderlying.w;
+        if (dstVal < ulBlack) {
+            ulAlpha = 0.0;
+        } else if (dstVal < ulBlackF) {
+            ulAlpha = smoothstep(ulBlack, ulBlackF, dstVal);
+        } else if (dstVal > ulWhite) {
+            ulAlpha = 0.0;
+        } else if (dstVal > ulWhiteF) {
+            ulAlpha = smoothstep(ulWhite, ulWhiteF, dstVal);
+        }
+        sa *= thisAlpha * ulAlpha;
+    }
 
     if (sa < 0.001) { fragColor = dst; return; }
     if (da < 0.001) { fragColor = vec4(src.rgb, sa); return; }

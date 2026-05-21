@@ -206,6 +206,7 @@ function parseEffectsJson(json: string | undefined): LayerEffects {
       outerGlow: parsed.outerGlow ?? DEFAULT_EFFECTS.outerGlow,
       innerGlow: parsed.innerGlow ?? DEFAULT_EFFECTS.innerGlow,
       colorOverlay: parsed.colorOverlay ?? DEFAULT_EFFECTS.colorOverlay,
+      blendIf: parsed.blendIf ?? DEFAULT_EFFECTS.blendIf,
     };
   } catch {
     return DEFAULT_EFFECTS;

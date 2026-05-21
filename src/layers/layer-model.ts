@@ -6,6 +6,18 @@ export const DEFAULT_EFFECTS: LayerEffects = {
   outerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
   innerGlow: { enabled: false, color: { r: 255, g: 255, b: 100, a: 1 }, size: 10, spread: 0, opacity: 0.75 },
   colorOverlay: { enabled: false, color: { r: 255, g: 0, b: 0, a: 1 } },
+  blendIf: {
+    enabled: false,
+    channel: 'gray',
+    thisLayerBlack: 0,
+    thisLayerBlackFeather: 0,
+    thisLayerWhite: 255,
+    thisLayerWhiteFeather: 255,
+    underlyingBlack: 0,
+    underlyingBlackFeather: 0,
+    underlyingWhite: 255,
+    underlyingWhiteFeather: 255,
+  },
 };
 
 export function createRasterLayer(params: {
@@ -104,7 +116,7 @@ export function reorderLayers(
 export function hasEnabledEffects(effects: LayerEffects): boolean {
   return effects.dropShadow.enabled || effects.stroke.enabled ||
     effects.outerGlow.enabled || effects.innerGlow.enabled ||
-    effects.colorOverlay.enabled;
+    effects.colorOverlay.enabled || effects.blendIf.enabled;
 }
 
 export function duplicateLayer(layer: Layer): Layer {

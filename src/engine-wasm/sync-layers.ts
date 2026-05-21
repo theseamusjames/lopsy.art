@@ -101,6 +101,23 @@ export function layerToDescJson(
       opacity: 1.0,
     };
   }
+  if (eff.blendIf?.enabled) {
+    const channelMap: Record<string, string> = {
+      'gray': 'Gray', 'red': 'Red', 'green': 'Green', 'blue': 'Blue',
+    };
+    effects.blend_if = {
+      enabled: true,
+      channel: channelMap[eff.blendIf.channel] ?? 'Gray',
+      this_layer_black: eff.blendIf.thisLayerBlack / 255,
+      this_layer_black_feather: eff.blendIf.thisLayerBlackFeather / 255,
+      this_layer_white: eff.blendIf.thisLayerWhite / 255,
+      this_layer_white_feather: eff.blendIf.thisLayerWhiteFeather / 255,
+      underlying_black: eff.blendIf.underlyingBlack / 255,
+      underlying_black_feather: eff.blendIf.underlyingBlackFeather / 255,
+      underlying_white: eff.blendIf.underlyingWhite / 255,
+      underlying_white_feather: eff.blendIf.underlyingWhiteFeather / 255,
+    };
+  }
 
   const width = 'width' in layer ? (layer.width ?? 0) : 0;
   const height = 'height' in layer ? (layer.height ?? 0) : 0;

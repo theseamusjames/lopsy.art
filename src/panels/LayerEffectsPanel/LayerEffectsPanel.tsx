@@ -10,9 +10,10 @@ import { DropShadowForm } from './DropShadowForm';
 import { StrokeForm } from './StrokeForm';
 import { GlowForm } from './GlowForm';
 import { ColorOverlayForm } from './ColorOverlayForm';
+import { BlendIfForm } from './BlendIfForm';
 import styles from './LayerEffectsPanel.module.css';
 
-type EffectKey = 'dropShadow' | 'stroke' | 'outerGlow' | 'innerGlow' | 'colorOverlay';
+type EffectKey = 'dropShadow' | 'stroke' | 'outerGlow' | 'innerGlow' | 'colorOverlay' | 'blendIf';
 
 // Grouping is a UX choice, not a Rust-side concept — the engine treats all
 // blend modes uniformly. Display labels are pulled from the shared
@@ -38,6 +39,7 @@ const EFFECT_LIST: { key: EffectKey; label: string }[] = [
   { key: 'outerGlow', label: 'Outer Glow' },
   { key: 'innerGlow', label: 'Inner Glow' },
   { key: 'colorOverlay', label: 'Color Overlay' },
+  { key: 'blendIf', label: 'Blend If' },
 ];
 
 interface LayerEffectsPanelProps {
@@ -125,6 +127,7 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
   const outerGlow = effects?.outerGlow;
   const innerGlow = effects?.innerGlow;
   const colorOverlay = effects?.colorOverlay;
+  const blendIf = effects?.blendIf;
 
   const hasAnyEffect = !!(
     shadow?.enabled || stroke?.enabled || outerGlow?.enabled || innerGlow?.enabled || colorOverlay?.enabled
@@ -152,6 +155,10 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
       case 'colorOverlay':
         return colorOverlay ? (
           <ColorOverlayForm overlay={colorOverlay} onChange={(o) => update({ colorOverlay: o })} />
+        ) : null;
+      case 'blendIf':
+        return blendIf ? (
+          <BlendIfForm blendIf={blendIf} onChange={(b) => updateLive({ blendIf: b })} onDragStart={beginEffectsDrag} />
         ) : null;
       default:
         return null;

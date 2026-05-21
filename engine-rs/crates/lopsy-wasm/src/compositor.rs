@@ -3,7 +3,7 @@ use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::framebuffer::FramebufferHandle;
-use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc};
+use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc, BlendIfDesc};
 
 /// Main compositing pipeline — called every frame
 pub fn composite(engine: &mut EngineInner) {
@@ -58,6 +58,7 @@ pub fn composite(engine: &mut EngineInner) {
             drop_shadow,
             stroke_eff,
             color_overlay,
+            blend_if,
             is_mask_editing,
         ) = {
             let layer = &engine.layer_stack[idx];
@@ -77,6 +78,7 @@ pub fn composite(engine: &mut EngineInner) {
                 layer.effects.drop_shadow.as_ref().filter(|s| s.enabled).cloned(),
                 layer.effects.stroke.as_ref().filter(|s| s.enabled).cloned(),
                 layer.effects.color_overlay.as_ref().filter(|o| o.enabled).cloned(),
+                layer.effects.blend_if.as_ref().filter(|b| b.enabled).cloned(),
                 is_editing,
             )
         };
@@ -128,6 +130,7 @@ pub fn composite(engine: &mut EngineInner) {
                             true,
                             None,
                             group_mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)),
+                            None,
                         );
                     }
                     active_group_id = None;
@@ -243,13 +246,14 @@ pub fn composite(engine: &mut EngineInner) {
             None
         };
         let (src_handle, src_w, src_h) = composite_src.unwrap_or((tex_handle, tw, th));
+        let blend_if_ref = blend_if.as_ref();
         if let Some(src_tex) = engine.texture_pool.get(src_handle).cloned() {
             if is_group_child {
                 let gs_tex = engine.group_scratch_texture.unwrap();
                 let gs_fbo = engine.group_scratch_fbo.unwrap();
-                blend_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+                blend_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo, blend_if_ref);
             } else {
-                blend_onto_composite(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                blend_onto_composite(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), blend_if_ref);
             }
         }
 
@@ -264,9 +268,9 @@ pub fn composite(engine: &mut EngineInner) {
                     if is_group_child {
                         let gs_tex = engine.group_scratch_texture.unwrap();
                         let gs_fbo = engine.group_scratch_fbo.unwrap();
-                        blend_onto_target(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+                        blend_onto_target(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo, None);
                     } else {
-                        blend_onto_composite(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                        blend_onto_composite(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), None);
                     }
                 }
             }
@@ -348,6 +352,7 @@ fn blend_onto_composite(
     premultiplied: bool,
     overlay: Option<&ColorOverlayDesc>,
     mask_tex: Option<(&web_sys::WebGlTexture, u32, u32)>,
+    blend_if: Option<&BlendIfDesc>,
 ) {
     let doc_w = engine.doc_width as f32;
     let doc_h = engine.doc_height as f32;
@@ -391,6 +396,8 @@ fn blend_onto_composite(
     }
     if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
 
+    set_blend_if_uniforms(&engine.gl, shader, blend_if);
+
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     // Explicit viewport: earlier passes (e.g. render_layer_plus_stroke) may
     // have left the viewport at an oversized layer texture size, and
@@ -433,6 +440,7 @@ fn blend_onto_target(
     mask_tex: Option<(&web_sys::WebGlTexture, u32, u32)>,
     dst_texture: TextureHandle,
     dst_fbo: FramebufferHandle,
+    blend_if: Option<&BlendIfDesc>,
 ) {
     let doc_w = engine.doc_width as f32;
     let doc_h = engine.doc_height as f32;
@@ -474,6 +482,8 @@ fn blend_onto_target(
     }
     if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
 
+    set_blend_if_uniforms(&engine.gl, shader, blend_if);
+
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     engine.draw_fullscreen_quad();
@@ -490,6 +500,31 @@ fn blend_onto_target(
     }
     if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
     engine.draw_fullscreen_quad();
+}
+
+fn set_blend_if_uniforms(
+    gl: &WebGl2RenderingContext,
+    shader: &crate::gpu::shader::ShaderProgram,
+    blend_if: Option<&BlendIfDesc>,
+) {
+    if let Some(bi) = blend_if {
+        let channel = match bi.channel {
+            lopsy_core::layer::BlendIfChannel::Gray => 0,
+            lopsy_core::layer::BlendIfChannel::Red => 1,
+            lopsy_core::layer::BlendIfChannel::Green => 2,
+            lopsy_core::layer::BlendIfChannel::Blue => 3,
+        };
+        if let Some(loc) = shader.location(gl, "u_blendIfEnabled") { gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(gl, "u_blendIfChannel") { gl.uniform1i(Some(&loc), channel); }
+        if let Some(loc) = shader.location(gl, "u_blendIfThisLayer") {
+            gl.uniform4f(Some(&loc), bi.this_layer_black, bi.this_layer_black_feather, bi.this_layer_white_feather, bi.this_layer_white);
+        }
+        if let Some(loc) = shader.location(gl, "u_blendIfUnderlying") {
+            gl.uniform4f(Some(&loc), bi.underlying_black, bi.underlying_black_feather, bi.underlying_white_feather, bi.underlying_white);
+        }
+    } else {
+        if let Some(loc) = shader.location(gl, "u_blendIfEnabled") { gl.uniform1i(Some(&loc), 0); }
+    }
 }
 
 /// Render the mask as a translucent blue overlay on top of the composite.
@@ -1258,7 +1293,7 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
                         apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
                     }
                     if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
-                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None);
+                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None, None);
                     }
                     active_group_id = None;
                     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
@@ -1322,9 +1357,9 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
             if is_group_child {
                 let gs_tex = engine.group_scratch_texture.unwrap();
                 let gs_fbo = engine.group_scratch_fbo.unwrap();
-                blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+                blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo, None);
             } else {
-                blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), None);
             }
         }
 
@@ -1385,7 +1420,7 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
                         apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
                     }
                     if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
-                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None);
+                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None, None);
                     }
                     active_group_id = None;
                     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
@@ -1449,9 +1484,9 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
             if is_group_child {
                 let gs_tex = engine.group_scratch_texture.unwrap();
                 let gs_fbo = engine.group_scratch_fbo.unwrap();
-                blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+                blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo, None);
             } else {
-                blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), None);
             }
         }
 
@@ -1496,7 +1531,7 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Resul
         // Layer content with color overlay (use Normal blend, not the layer's blend mode)
         let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
         if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
-            blend_onto_composite(engine, &src_tex, opacity, 0, layer_x, layer_y, tw, th, false, overlay_desc, None);
+            blend_onto_composite(engine, &src_tex, opacity, 0, layer_x, layer_y, tw, th, false, overlay_desc, None, None);
         }
 
         // On-top effects

@@ -286,6 +286,18 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 ### Color Overlay
 - **Color**: RGBA
 
+### Blend If
+- **Channel**: Gray, Red, Green, or Blue — selects which channel's luminance/value drives the visibility calculation
+- **This Layer**: controls which tonal ranges of the current layer are visible
+  - **Black** / **Black Feather**: pixels with channel values below Black are hidden; values between Black and Black Feather fade in smoothly (smoothstep)
+  - **White Feather** / **White**: pixels with channel values above White are hidden; values between White Feather and White fade out smoothly
+- **Underlying Layer**: controls which tonal ranges of the composite below make the current layer visible
+  - **Black** / **Black Feather**: the layer is hidden where the underlying composite's channel value is below Black, with a smooth fade between Black and Black Feather
+  - **White Feather** / **White**: the layer is hidden where the underlying composite's channel value is above White, with a smooth fade between White Feather and White
+- All eight range values are 0 - 255 with ordering constraints enforced in the UI (black ≤ blackFeather ≤ whiteFeather ≤ white)
+- GPU-accelerated: evaluated per-pixel in the blend shader with smoothstep transitions for feathered edges
+- Matches Photoshop's "Blend If" (Layer Style → Blending Options) behavior
+
 ---
 
 ## Image Adjustments (Non-Destructive)
@@ -438,7 +450,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Locked**: on/off
 - **Position**: x, y
 - **Clip to below**: on/off (clipping mask)
-- **Effects**: drop shadow, outer glow, inner glow, stroke, color overlay
+- **Effects**: drop shadow, outer glow, inner glow, stroke, color overlay, blend if
 - **Mask**: grayscale mask with enable/disable toggle. All mask painting (brush, eraser, pencil, gradient, fill) runs directly on the GPU mask texture — no per-frame CPU→GPU upload, so editing a mask is as fast as painting pixels.
 - **Color tag**: optional swatch (red, orange, yellow, green, blue, purple, gray, or none) shown as a vertical bar on the left edge of the layer row. Set via the layer row's right-click context menu; useful for visually grouping/organizing layers in a deep stack.
 

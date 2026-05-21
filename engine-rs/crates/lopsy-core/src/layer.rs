@@ -53,6 +53,28 @@ pub struct ColorOverlayDesc {
     pub opacity: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BlendIfChannel {
+    Gray,
+    Red,
+    Green,
+    Blue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlendIfDesc {
+    pub enabled: bool,
+    pub channel: BlendIfChannel,
+    pub this_layer_black: f32,
+    pub this_layer_black_feather: f32,
+    pub this_layer_white: f32,
+    pub this_layer_white_feather: f32,
+    pub underlying_black: f32,
+    pub underlying_black_feather: f32,
+    pub underlying_white: f32,
+    pub underlying_white_feather: f32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EffectsDesc {
     pub outer_glow: Option<GlowDesc>,
@@ -60,6 +82,7 @@ pub struct EffectsDesc {
     pub drop_shadow: Option<ShadowDesc>,
     pub stroke: Option<StrokeDesc>,
     pub color_overlay: Option<ColorOverlayDesc>,
+    pub blend_if: Option<BlendIfDesc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

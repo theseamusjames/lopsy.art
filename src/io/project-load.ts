@@ -67,6 +67,7 @@ function parseEffects(raw: unknown): LayerEffects {
     outerGlow: e.outerGlow ?? DEFAULT_EFFECTS.outerGlow,
     innerGlow: e.innerGlow ?? DEFAULT_EFFECTS.innerGlow,
     colorOverlay: e.colorOverlay ?? DEFAULT_EFFECTS.colorOverlay,
+    blendIf: e.blendIf ?? DEFAULT_EFFECTS.blendIf,
   };
 }
 
