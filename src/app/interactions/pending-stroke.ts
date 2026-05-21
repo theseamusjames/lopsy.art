@@ -3,36 +3,43 @@ import { endStroke, endDodgeBurnStroke, endSpongeStroke } from '../../engine-was
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { useEditorStore } from '../editor-store';
 
-let pendingLayerId: string | null = null;
-let pendingDodgeLayerId: string | null = null;
-let pendingSpongeLayerId: string | null = null;
+/**
+ * Pending-stroke registry: tracks which layer (if any) has an in-flight
+ * GPU stroke per stroke kind. Previously a trio of parallel
+ * `let pending...LayerId: string | null` globals; the Map shape makes
+ * adding a new stroke kind a one-line change and keeps the
+ * "all-globals are equally suspect" smell from spreading.
+ */
+type PendingStrokeKind = 'brush' | 'dodge' | 'sponge';
+
+const pendingByKind = new Map<PendingStrokeKind, string>();
 
 export function setPendingStroke(layerId: string): void {
-  pendingLayerId = layerId;
+  pendingByKind.set('brush', layerId);
 }
 
 export function clearPendingStroke(): void {
-  pendingLayerId = null;
+  pendingByKind.delete('brush');
 }
 
 export function hasPendingStroke(): boolean {
-  return pendingLayerId !== null;
+  return pendingByKind.has('brush');
 }
 
 export function setPendingDodgeStroke(layerId: string): void {
-  pendingDodgeLayerId = layerId;
+  pendingByKind.set('dodge', layerId);
 }
 
 export function clearPendingDodgeStroke(): void {
-  pendingDodgeLayerId = null;
+  pendingByKind.delete('dodge');
 }
 
 export function setPendingSpongeStroke(layerId: string): void {
-  pendingSpongeLayerId = layerId;
+  pendingByKind.set('sponge', layerId);
 }
 
 export function clearPendingSpongeStroke(): void {
-  pendingSpongeLayerId = null;
+  pendingByKind.delete('sponge');
 }
 
 /**
@@ -40,31 +47,31 @@ export function clearPendingSpongeStroke(): void {
  * the most recent stroke is committed before taking a snapshot.
  */
 export function finalizePendingStrokeGlobal(): void {
-  if (!pendingLayerId && !pendingDodgeLayerId && !pendingSpongeLayerId) return;
+  if (pendingByKind.size === 0) return;
   const engine = getEngine();
 
-  if (pendingLayerId) {
-    const layerId = pendingLayerId;
-    pendingLayerId = null;
+  const brushLayer = pendingByKind.get('brush');
+  if (brushLayer !== undefined) {
+    pendingByKind.delete('brush');
     if (engine) {
-      endStroke(engine, layerId);
-      clearJsPixelData(layerId);
+      endStroke(engine, brushLayer);
+      clearJsPixelData(brushLayer);
     }
   }
 
-  if (pendingDodgeLayerId) {
-    const layerId = pendingDodgeLayerId;
-    pendingDodgeLayerId = null;
+  const dodgeLayer = pendingByKind.get('dodge');
+  if (dodgeLayer !== undefined) {
+    pendingByKind.delete('dodge');
     if (engine) {
-      endDodgeBurnStroke(engine, layerId);
+      endDodgeBurnStroke(engine, dodgeLayer);
     }
   }
 
-  if (pendingSpongeLayerId) {
-    const layerId = pendingSpongeLayerId;
-    pendingSpongeLayerId = null;
+  const spongeLayer = pendingByKind.get('sponge');
+  if (spongeLayer !== undefined) {
+    pendingByKind.delete('sponge');
     if (engine) {
-      endSpongeStroke(engine, layerId);
+      endSpongeStroke(engine, spongeLayer);
     }
   }
 
