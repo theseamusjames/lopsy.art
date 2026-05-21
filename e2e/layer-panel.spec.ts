@@ -166,35 +166,45 @@ test.describe('Mask Sub-Row', () => {
   });
 
   test('clicking a different layer mask switches edit target to that layer', async ({ page }) => {
-    // Add a second layer so we have two layers with masks
-    await addLayer(page);
+    // We need two non-group layers. The document has Background and
+    // Layer 1 (both raster). Filter out the root group by ID.
     const state = await getEditorState(page);
-    const layer1Id = state.document.layers[0]!.id;
-    const layer2Id = state.document.layers[1]!.id;
+    const rootGroupId = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { rootGroupId: string | null } };
+      };
+      return store.getState().document.rootGroupId;
+    });
+    const rasterLayers = state.document.layers.filter(
+      (l) => l.id !== rootGroupId,
+    );
+    const layer1 = rasterLayers[0]!;
+    const layer2 = rasterLayers[1]!;
 
-    // Add mask to layer1 (active layer is layer2 since it was just added)
-    await page.locator(`[data-layer-id="${layer1Id}"]`).click();
-    await addMaskViaStore(page, layer1Id);
+    // Add mask to layer1
+    await page.locator(`[data-layer-id="${layer1.id}"]`).click();
+    await addMaskViaStore(page, layer1.id);
+    await page.locator(`[aria-label="Edit mask for ${layer1.name}"]`).waitFor({ state: 'visible' });
 
     // Add mask to layer2
-    await page.locator(`[data-layer-id="${layer2Id}"]`).click();
-    await addMaskViaStore(page, layer2Id);
+    await page.locator(`[data-layer-id="${layer2.id}"]`).click();
+    await addMaskViaStore(page, layer2.id);
+    await page.locator(`[aria-label="Edit mask for ${layer2.name}"]`).waitFor({ state: 'visible' });
 
     // Click layer1's mask thumbnail — enter mask edit for layer1
-    await page.locator(`[data-layer-id="${layer1Id}"]`)
-      .locator('[title="Click to edit mask"]').click();
+    // The mask row is a sibling of [data-layer-id], so scope via aria-label.
+    await page.locator(`[aria-label="Edit mask for ${layer1.name}"]`).click();
     let ui = await getUIState(page);
     expect(ui.maskEditMode).toBe(true);
     let editorState = await getEditorState(page);
-    expect(editorState.document.activeLayerId).toBe(layer1Id);
+    expect(editorState.document.activeLayerId).toBe(layer1.id);
 
     // Click layer2's mask thumbnail — switch mask edit to layer2 (no toggle off)
-    await page.locator(`[data-layer-id="${layer2Id}"]`)
-      .locator('[title="Click to edit mask"]').click();
+    await page.locator(`[aria-label="Edit mask for ${layer2.name}"]`).click();
     ui = await getUIState(page);
     expect(ui.maskEditMode).toBe(true);
     editorState = await getEditorState(page);
-    expect(editorState.document.activeLayerId).toBe(layer2Id);
+    expect(editorState.document.activeLayerId).toBe(layer2.id);
   });
 
   test('deleting mask exits mask edit mode', async ({ page }) => {

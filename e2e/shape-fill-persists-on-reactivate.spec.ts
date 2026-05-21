@@ -165,17 +165,19 @@ test.describe('Shape tool fill color persists on re-activation (#424)', () => {
     // gold. The swatch is rendered as an inline background-color on the
     // ColorSwatch button. We read its computed style.
     const swatchColor = await page.evaluate(() => {
-      // Fill swatch is the first ColorSwatch inside the shape options group.
+      // Fill swatch is a ColorSwatch button whose inner div has the
+      // background-color style. The button itself has an aria-label
+      // like "Color: rgb(r, g, b)".
       const fillLabel = Array.from(document.querySelectorAll('span'))
         .find((el) => el.textContent === 'Fill');
       if (!fillLabel) return null;
       const group = fillLabel.nextElementSibling as HTMLElement | null;
       if (!group) return null;
-      const swatch = group.querySelector('button, div[role="button"], div[style*="background"]')
-        ?? group.firstElementChild;
-      if (!swatch) return null;
-      const style = window.getComputedStyle(swatch as HTMLElement);
-      return style.backgroundColor;
+      const btn = group.querySelector('button') as HTMLElement | null;
+      if (!btn) return null;
+      const colorDiv = btn.querySelector('div') as HTMLElement | null;
+      if (!colorDiv) return null;
+      return window.getComputedStyle(colorDiv).backgroundColor;
     });
     // backgroundColor is "rgb(r, g, b)" or "rgba(...)". Parse and compare.
     expect(swatchColor).toBeTruthy();

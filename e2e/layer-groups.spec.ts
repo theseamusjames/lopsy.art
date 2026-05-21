@@ -289,8 +289,8 @@ test.describe('Layer Groups', () => {
       },
       { rootId },
     );
-    expect(adj.find((n) => n.type === 'exposure')?.exposure).toBe(1.5);
-    expect(adj.find((n) => n.type === 'contrast')?.contrast).toBe(20);
+    expect(adj.findLast((n) => n.type === 'exposure')?.exposure).toBe(1.5);
+    expect(adj.findLast((n) => n.type === 'contrast')?.contrast).toBe(20);
   });
 
   test('move tool on group moves all descendants', async ({ page }) => {
