@@ -395,11 +395,14 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     );
     const hasMask = group.mask != null && group.mask.enabled;
     if (!hasAdjustments && !hasMask) continue;
-    // Pass-through groups composite their children directly with no group
-    // texture, so there's no layer to register adjustments against. The
-    // adjustments are effectively no-ops here; skipping prevents
-    // setGroupAdjustments from creating a phantom compositing target.
-    if (group.blendMode === 'pass-through') continue;
+    // Pass-through groups register here too. Pass-through controls how the
+    // group's pre-composited result blends with what's BELOW it — it does
+    // NOT determine whether the group's own children get their adjustments
+    // applied. The Rust side stores { adjustments, child_ids } and applies
+    // them during compositing regardless of the parent group's blend mode.
+    // The default Project root group is pass-through (layer-model.ts:79),
+    // so skipping this call silently drops curves/levels/exposure on every
+    // default document. Don't.
     setGroupAdjustments(
       engine,
       group.id,

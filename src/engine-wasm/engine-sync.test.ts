@@ -196,7 +196,14 @@ describe('syncGroupAdjustments — group mask registration', () => {
     expect(vi.mocked(bridge.setGroupAdjustments)).toHaveBeenCalledOnce();
   });
 
-  it('does not register a pass-through group even when it has adjustments', () => {
+  it('registers a pass-through group when it has adjustments (regression: PR #492)', () => {
+    // createGroupLayer defaults blendMode to 'pass-through' (layer-model.ts:79),
+    // so the Project root group is pass-through by default. If
+    // syncGroupAdjustments skips pass-through groups, curves / levels /
+    // exposure on the Project group silently no-op — which is exactly what
+    // shipped briefly in #492. Lock the correct contract in place: the
+    // group MUST register so the engine knows which child ids to apply the
+    // adjustments to during compositing.
     const engine = makeFakeEngine();
     const raster = createRasterLayer({ name: 'Layer 1', width: 100, height: 100 });
     const group = {
@@ -206,7 +213,7 @@ describe('syncGroupAdjustments — group mask registration', () => {
       adjustments: [{ id: 'exp-1', type: 'exposure' as const, enabled: true, exposure: 1.5 }],
     };
     sync.syncGroupAdjustments(engine, [raster, group]);
-    expect(vi.mocked(bridge.setGroupAdjustments)).not.toHaveBeenCalled();
+    expect(vi.mocked(bridge.setGroupAdjustments)).toHaveBeenCalledOnce();
   });
 
   it('does not register a pass-through group with no adjustments and no mask', () => {
