@@ -60,7 +60,6 @@ const ALLOWLIST = {
   'src/test/canvas-mock.ts': 3,
   'src/tools/brush/brush-from-selection.test.ts': 3,
   'src/tools/crop/perspective-crop.test.ts': 3,             // see #441 (delete with prod file)
-  'src/tools/eraser/eraser.test.ts': 3,
   'src/tools/gradient/gradient-interaction.test.ts': 1,
   'src/tools/magnetic-lasso/magnetic-lasso.test.ts': 2,
   'src/tools/move/move.test.ts': 1,
