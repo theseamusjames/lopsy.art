@@ -45,8 +45,7 @@ const ALLOWLIST = {
   'src/app/store/actions/resize-canvas.test.ts': 1,
   'src/app/store/actions/resize-image.test.ts': 1,
   'src/engine-wasm/engine-sync.test.ts': 3,
-  'src/engine-wasm/sync-layers.test.ts': 4,
-  'src/engine/mask-utils.test.ts': 4,
+  'src/engine-wasm/sync-layers.test.ts': 5,
   'src/engine/pixel-data-manager.test.ts': 2,
   'src/engine/pixel-data.test.ts': 1,
   'src/filters/auto-enhance.test.ts': 1,
@@ -85,7 +84,6 @@ const ALLOWLIST = {
   'src/app/interactions/quick-mask-move.ts': 1,
   'src/app/store/actions/add-layer-mask.ts': 1,
   'src/app/useCanvasInteraction.ts': 3,                      // mask-buffer copies + 1×1 placeholder singleton
-  'src/engine/mask-utils.ts': 1,
   'src/tools/fill/fill-interaction.ts': 1,                   // bucket fill writes mask data
 
   // ──────────────────────────────────────────────────────────────────────
