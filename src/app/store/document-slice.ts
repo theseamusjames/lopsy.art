@@ -281,13 +281,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     // points to a group, every text descendant is gone too.
     cleanupRemovedTextLayers(s.document, result.removedLayerIds ?? []);
 
-    // Close any cached ImageBitmap for the removed layer (and descendants
-    // when it's a group) so the bitmaps actually get GC'd.
-    invalidateBitmapCache(id);
-    if (removedLayer && removedLayer.type === 'group') {
-      for (const descId of getDescendantIdsUtil(s.document.layers, id)) {
-        invalidateBitmapCache(descId);
-      }
+    // Close any cached ImageBitmap for every layer that's about to vanish.
+    // Use result.removedLayerIds so the descendant walk for groups is the
+    // same one computeRemoveLayer already did — and so we don't reference
+    // a removedLayer variable that #478 dropped when introducing the
+    // cleanupRemovedTextLayers helper above.
+    for (const descId of result.removedLayerIds ?? [id]) {
+      invalidateBitmapCache(descId);
     }
 
     s.pushHistory('Delete Layer');
