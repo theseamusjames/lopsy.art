@@ -165,14 +165,6 @@ export function invalidateBitmapCache(layerId: string): void {
   cache.delete(layerId);
 }
 
-/** Remove a layer's cached bitmap (e.g. when the layer is deleted). */
-export function removeBitmapCache(layerId: string): void {
-  pending.delete(layerId);
-  const old = cache.get(layerId);
-  if (old) old.close();
-  cache.delete(layerId);
-}
-
 /** Clear the entire cache (e.g. when creating a new document). */
 export function clearBitmapCache(): void {
   for (const bitmap of cache.values()) bitmap.close();
