@@ -251,7 +251,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const s = get();
     const result = computeAddLayer(s.document);
     if (!result) return;
-    s.pushHistory('Add Layer');
+    s.pushHistoryMetadata('Add Layer');
     set(result);
   },
 
@@ -259,7 +259,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const s = get();
     const result = computeAddTextLayer(s.document, layer);
     if (!result) return;
-    s.pushHistory('Add Text Layer');
+    s.pushHistoryMetadata('Add Text Layer');
     set(result);
   },
 
@@ -304,7 +304,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   toggleLayerVisibility: (id) => {
     const s = get();
-    s.pushHistory('Toggle Visibility');
+    s.pushHistoryMetadata('Toggle Visibility');
     set(computeToggleVisibility(s.document, id));
   },
 
@@ -473,7 +473,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const s = get();
     const result = computeMoveLayer(s.document, s.renderVersion, fromIndex, toIndex);
     if (!result) return;
-    s.pushHistory('Reorder Layer');
+    s.pushHistoryMetadata('Reorder Layer');
     set(result);
   },
 
@@ -617,7 +617,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   updateLayerEffects: (id: string, effects, skipHistory?: boolean) => {
     finalizePendingStrokeGlobal();
     const s = get();
-    if (!skipHistory) s.pushHistory('Edit Effect');
+    if (!skipHistory) s.pushHistoryMetadata('Edit Effect');
     set(computeUpdateEffects(s.document, s.renderVersion, id, effects));
   },
 
@@ -625,7 +625,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const s = get();
     const result = computeAddLayerMask(s.document, s.renderVersion, id);
     if (!result) return;
-    s.pushHistory('Add Mask');
+    s.pushHistoryMetadata('Add Mask');
     set(result);
   },
 
@@ -633,7 +633,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const s = get();
     const result = computeRemoveLayerMask(s.document, s.renderVersion, id);
     if (!result) return;
-    s.pushHistory('Remove Mask');
+    s.pushHistoryMetadata('Remove Mask');
     set(result);
   },
 
@@ -641,7 +641,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const s = get();
     const result = computeToggleMask(s.document, s.renderVersion, id);
     if (!result) return;
-    s.pushHistory('Toggle Mask');
+    s.pushHistoryMetadata('Toggle Mask');
     set(result);
   },
 
@@ -840,7 +840,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       ...filteredOrder.slice(insertAt),
     ];
 
-    s.pushHistory('Group Layers');
+    s.pushHistoryMetadata('Group Layers');
     set({
       document: {
         ...doc,

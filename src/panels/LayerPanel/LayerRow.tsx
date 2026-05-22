@@ -224,7 +224,7 @@ export function LayerRow({
             max={100}
             value={Math.round(layer.opacity * 100)}
             aria-label={`${layer.name} opacity`}
-            onPointerDown={() => useEditorStore.getState().pushHistory('Change Opacity')}
+            onPointerDown={() => useEditorStore.getState().pushHistoryMetadata('Change Opacity')}
             onChange={(e) => onUpdateOpacity(layer.id, Number(e.target.value) / 100)}
           />
         </div>

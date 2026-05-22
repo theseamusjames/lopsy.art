@@ -73,7 +73,7 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
   const update = useCallback(
     (partial: Partial<LayerEffects>, label?: string) => {
       if (!activeLayerId || !effects) return;
-      useEditorStore.getState().pushHistory(label ?? `Edit ${effectLabel(selectedEffect)}`);
+      useEditorStore.getState().pushHistoryMetadata(label ?? `Edit ${effectLabel(selectedEffect)}`);
       updateLayerEffects(activeLayerId, { ...effects, ...partial }, true);
     },
     [activeLayerId, effects, updateLayerEffects, selectedEffect],
@@ -82,7 +82,7 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
   // Push one undo entry at the START of a slider drag so undo restores
   // the pre-drag state (not the post-drag state).
   const beginEffectsDrag = useCallback(() => {
-    useEditorStore.getState().pushHistory(`Edit ${effectLabel(selectedEffect)}`);
+    useEditorStore.getState().pushHistoryMetadata(`Edit ${effectLabel(selectedEffect)}`);
   }, [selectedEffect]);
 
   const handleToggle = useCallback(
@@ -98,7 +98,7 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
   const handleBlendModeChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       if (!activeLayerId) return;
-      useEditorStore.getState().pushHistory('Change Blend Mode');
+      useEditorStore.getState().pushHistoryMetadata('Change Blend Mode');
       updateLayerBlendMode(activeLayerId, e.target.value as BlendMode);
     },
     [activeLayerId, updateLayerBlendMode],

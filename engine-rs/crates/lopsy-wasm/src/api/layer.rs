@@ -618,18 +618,22 @@ pub fn read_layer_pixels_compressed_u16(engine: &Engine, layer_id: &str) -> Vec<
         return Vec::new();
     }
 
-    // 24-byte header (same layout as u8 variant) + u16 pixel data as LE bytes
-    let pixel_bytes = cropped.len() * 2;
-    let mut result = Vec::with_capacity(24 + pixel_bytes);
+    // Convert cropped u16 values to LE bytes for compression
+    let raw_bytes: Vec<u8> = cropped.iter().flat_map(|v| v.to_le_bytes()).collect();
+    let rle = lopsy_core::compress::rle_compress_u16(&raw_bytes);
+
+    // 28-byte header + uncompressed_size (u32 LE) + RLE data
+    let uncompressed_size = raw_bytes.len() as u32;
+    let mut result = Vec::with_capacity(28 + rle.len());
     result.extend_from_slice(&rect.x.to_le_bytes());
     result.extend_from_slice(&rect.y.to_le_bytes());
     result.extend_from_slice(&(rect.width as i32).to_le_bytes());
     result.extend_from_slice(&(rect.height as i32).to_le_bytes());
     result.extend_from_slice(&(w as i32).to_le_bytes());
     result.extend_from_slice(&(h as i32).to_le_bytes());
-    for &val in &cropped {
-        result.extend_from_slice(&val.to_le_bytes());
-    }
+    result.extend_from_slice(&1i32.to_le_bytes()); // flags: 1 = RLE compressed
+    result.extend_from_slice(&uncompressed_size.to_le_bytes());
+    result.extend_from_slice(&rle);
     result
 }
 
@@ -650,15 +654,30 @@ pub fn upload_layer_pixels_compressed_u16(engine: &mut Engine, layer_id: &str, c
         return Err(JsError::new("Invalid dimensions in compressed header"));
     }
 
-    let pixel_bytes = &compressed[24..];
     let expected_u16_count = (crop_w as usize) * (crop_h as usize) * 4;
-    let expected_byte_len = expected_u16_count * 2;
-    if pixel_bytes.len() < expected_byte_len {
-        return Err(JsError::new("Snapshot pixel data shorter than header dimensions"));
-    }
+    let expected_raw_len = expected_u16_count * 2;
 
-    // Decode LE u16 values
-    let cropped: Vec<u16> = pixel_bytes[..expected_byte_len]
+    // Detect format: 24-byte header + raw data (old) vs 28-byte header + RLE (new).
+    // Old format: data.len() == 24 + expected_raw_len
+    // New format: header[24..28] == flags, header[28..32] == uncompressed_size, then RLE
+    let cropped_bytes: Vec<u8> = if compressed.len() == 24 + expected_raw_len {
+        // Old format: raw u16 bytes after 24-byte header
+        compressed[24..24 + expected_raw_len].to_vec()
+    } else if compressed.len() >= 32 {
+        let flags = i32::from_le_bytes([compressed[24], compressed[25], compressed[26], compressed[27]]);
+        if flags == 1 {
+            let uncompressed_size = u32::from_le_bytes([compressed[28], compressed[29], compressed[30], compressed[31]]) as usize;
+            lopsy_core::compress::rle_decompress_u16(&compressed[32..], uncompressed_size)
+        } else {
+            // flags == 0 means raw, data starts at offset 32
+            compressed[32..].to_vec()
+        }
+    } else {
+        return Err(JsError::new("Snapshot data too short for any known format"));
+    };
+
+    // Decode LE u16 values from the (decompressed) byte stream
+    let cropped: Vec<u16> = cropped_bytes
         .chunks_exact(2)
         .map(|c| u16::from_le_bytes([c[0], c[1]]))
         .collect();
