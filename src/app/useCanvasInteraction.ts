@@ -54,6 +54,16 @@ import { pixelDataManager } from '../engine/pixel-data-manager';
 export { strokeCurrentPath } from './interactions/path-stroke';
 
 import type { Point, Layer } from '../types';
+
+export interface ToolEvent {
+  readonly clientX: number;
+  readonly clientY: number;
+  readonly button: number;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+  readonly metaKey: boolean;
+  readonly ctrlKey: boolean;
+}
 import type { MaskedPixelBuffer } from '../engine/pixel-data';
 
 /** Finalize a deferred stroke from a previous mouseup. */
@@ -123,7 +133,7 @@ export function useCanvasInteraction(
   useEffect(() => cancelHoldTimer, [cancelHoldTimer]);
 
   const buildContext = useCallback(
-    (e: React.MouseEvent, canvasPos: Point, layerPos: Point, activeLayerId: string, activeLayer: Layer, pixelBuffer: PixelBuffer, paintSurface: PixelBuffer | MaskedPixelBuffer): InteractionContext => ({
+    (e: ToolEvent, canvasPos: Point, layerPos: Point, activeLayerId: string, activeLayer: Layer, pixelBuffer: PixelBuffer, paintSurface: PixelBuffer | MaskedPixelBuffer): InteractionContext => ({
       canvasPos, layerPos,
       shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
       clientX: e.clientX, clientY: e.clientY,
@@ -136,7 +146,7 @@ export function useCanvasInteraction(
   );
 
   const handleToolDown = useCallback(
-    (e: React.MouseEvent) => {
+    (e: ToolEvent) => {
       if (e.button !== 0) return;
 
       // Cancel any pending hold-to-smooth timer from the previous stroke
@@ -326,7 +336,7 @@ export function useCanvasInteraction(
   );
 
   const handleToolMove = useCallback(
-    (e: React.MouseEvent) => {
+    (e: ToolEvent) => {
       const state = stateRef.current;
       if (!state.drawing || !state.layerId) return;
 
@@ -489,7 +499,7 @@ export function useCanvasInteraction(
     [screenToCanvas, containerRef, cancelHoldTimer],
   );
 
-  const handleToolUp = useCallback((e: React.MouseEvent) => {
+  const handleToolUp = useCallback((e: ToolEvent) => {
     // Cancel any in-progress hold-to-smooth timer
     cancelHoldTimer();
 

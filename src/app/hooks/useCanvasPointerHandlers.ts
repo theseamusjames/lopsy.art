@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import type { ToolEvent } from '../useCanvasInteraction';
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { isPanning, POINTER_IDLE, type PointerMode } from '../pointer-mode';
@@ -14,9 +15,9 @@ interface PointerHandlerDeps {
   screenToCanvas: (screenX: number, screenY: number) => Point;
   pointerMode: PointerMode;
   setPointerMode: (next: PointerMode | ((prev: PointerMode) => PointerMode)) => void;
-  handleToolDown: (e: React.PointerEvent) => void;
-  handleToolMove: (e: React.PointerEvent) => void;
-  handleToolUp: (e: React.PointerEvent) => void;
+  handleToolDown: (e: ToolEvent) => void;
+  handleToolMove: (e: ToolEvent) => void;
+  handleToolUp: (e: ToolEvent) => void;
   updateHoveredHandle: (pos: Point) => void;
 }
 
@@ -175,9 +176,9 @@ export function useCanvasPointerHandlers({
         const toolId = toolPointerIdRef.current;
         if (toolId !== null) {
           const toolPointer = pointersRef.current.get(toolId);
-          const toolUpEvent = toolPointer
-            ? { ...e, clientX: toolPointer.clientX, clientY: toolPointer.clientY, pointerId: toolId } as unknown as React.PointerEvent
-            : e as unknown as React.PointerEvent;
+          const toolUpEvent: ToolEvent = toolPointer
+            ? { clientX: toolPointer.clientX, clientY: toolPointer.clientY, button: e.button, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey }
+            : e;
           deps.handleToolUp(toolUpEvent);
           toolPointerIdRef.current = null;
         }
@@ -251,7 +252,7 @@ export function useCanvasPointerHandlers({
 
       if (e.button === 0) {
         toolPointerIdRef.current = e.pointerId;
-        deps.handleToolDown(e as unknown as React.PointerEvent);
+        deps.handleToolDown(e);
       }
     };
 
@@ -331,10 +332,10 @@ export function useCanvasPointerHandlers({
         const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
         if (coalesced.length > 1) {
           for (const ce of coalesced) {
-            deps.handleToolMove(ce as unknown as React.PointerEvent);
+            deps.handleToolMove(ce);
           }
         } else {
-          deps.handleToolMove(e as unknown as React.PointerEvent);
+          deps.handleToolMove(e);
         }
       } else if (toolPointerIdRef.current === null && inside) {
         deps.updateHoveredHandle(canvasPos);
@@ -359,7 +360,7 @@ export function useCanvasPointerHandlers({
 
       if (wasToolPointer) {
         toolPointerIdRef.current = null;
-        deps.handleToolUp(e as unknown as React.PointerEvent);
+        deps.handleToolUp(e);
       }
     };
 
