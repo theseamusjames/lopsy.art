@@ -39,6 +39,11 @@ describe('createGroupLayer', () => {
     expect(g.type).toBe('group');
     expect(g.children).toEqual([]);
   });
+
+  it('defaults to "normal" blend mode for isolated compositing (issue #523)', () => {
+    const g = createGroupLayer({ name: 'Group 1' });
+    expect(g.blendMode).toBe('normal');
+  });
 });
 
 describe('reorderLayers', () => {

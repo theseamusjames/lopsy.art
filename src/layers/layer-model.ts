@@ -74,9 +74,11 @@ export function createGroupLayer(params: { name: string; children?: string[]; ad
     visible: true,
     locked: false,
     opacity: 1,
-    // Pass-through is the Photoshop default: children blend directly onto the
-    // parent composite without pre-compositing into a group FBO.
-    blendMode: 'pass-through',
+    // Groups default to isolated compositing: children are pre-composited,
+    // then the group's opacity/blend mode applies to the result. This matches
+    // user expectation that an opaque top child should hide layers beneath it
+    // within the group regardless of group opacity (issue #523).
+    blendMode: 'normal',
     x: 0,
     y: 0,
     clipToBelow: false,

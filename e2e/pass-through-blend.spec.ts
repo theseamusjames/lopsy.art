@@ -121,10 +121,10 @@ test.describe('Pass-through blend mode', () => {
     await page.waitForTimeout(300);
   });
 
-  test('new groups default to pass-through blend mode', async ({ page }) => {
+  test('new groups default to normal blend mode (isolated compositing) — issue #523', async ({ page }) => {
     const groupId = await addGroup(page, 'TestGroup');
     const mode = await getLayerBlendMode(page, groupId);
-    expect(mode).toBe('pass-through');
+    expect(mode).toBe('normal');
   });
 
   test('pass-through group: 50% opacity group with black child over white yields mid-grey', async ({ page }) => {
@@ -140,6 +140,10 @@ test.describe('Pass-through blend mode', () => {
     await page.waitForTimeout(200);
 
     const groupId = await addGroup(page, 'OpacityGroup');
+    // New groups default to 'normal' isolated compositing — explicitly switch
+    // to pass-through for this test's scenario.
+    await setLayerBlendMode(page, groupId, 'pass-through');
+    await page.waitForTimeout(100);
 
     // Add black layer inside group
     await page.locator('[aria-label="Add Layer"]').click();
@@ -147,7 +151,7 @@ test.describe('Pass-through blend mode', () => {
     await drawRect(page, 0, 0, 100, 100, { r: 0, g: 0, b: 0 });
     await page.waitForTimeout(200);
 
-    // Set group opacity to 50% — group is pass-through by default
+    // Set group opacity to 50%
     await page.evaluate(({ gid }) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
@@ -225,9 +229,9 @@ test.describe('Pass-through blend mode', () => {
     const addBtn = page.locator('[aria-label="Add Adjustment"]');
     await expect(addBtn).toBeVisible();
 
-    // Verify the group defaults to pass-through via the store
+    // Verify the group defaults to normal (isolated) via the store
     const mode = await getLayerBlendMode(page, groupId);
-    expect(mode).toBe('pass-through');
+    expect(mode).toBe('normal');
 
     // Take screenshot showing the adjustments panel for the group
     await page.screenshot({ path: 'e2e/screenshots/pass-through-dropdown.png' });
