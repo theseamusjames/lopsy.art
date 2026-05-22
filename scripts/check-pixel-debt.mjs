@@ -88,7 +88,8 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   // Selection mask — explicitly OK per the policy table.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/interactions/selection-handlers.ts': 3,
+  'src/app/interactions/selection-handlers.ts': 4,
+  'src/app/MenuBar/MenuBar.tsx': 1,                          // GPU feather readback creates Uint8ClampedArray
   'src/tools/marquee/marquee-strategy.ts': 2,
   'src/tools/wand/wand-strategy.ts': 1,
   'src/panels/LayerPanel/layer-selection.ts': 2,

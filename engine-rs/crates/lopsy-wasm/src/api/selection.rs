@@ -22,6 +22,17 @@ pub fn feather_selection_mask(engine: &mut Engine, radius: u32) {
     selection_gpu::feather_selection_mask(&mut engine.inner, radius);
 }
 
+#[wasm_bindgen(js_name = "readSelectionMask")]
+pub fn read_selection_mask(engine: &Engine) -> Vec<u8> {
+    let (w, h, mask) = selection_gpu::read_selection_mask(&engine.inner);
+    if mask.is_empty() { return Vec::new(); }
+    let mut result = Vec::with_capacity(8 + mask.len());
+    result.extend_from_slice(&w.to_le_bytes());
+    result.extend_from_slice(&h.to_le_bytes());
+    result.extend_from_slice(&mask);
+    result
+}
+
 #[wasm_bindgen(js_name = "clearSelection")]
 pub fn clear_selection(engine: &mut Engine) {
     if let Some(tex) = engine.inner.selection_mask_texture.take() {
