@@ -41,6 +41,7 @@ pub const BOX_BLUR_FRAG: &str = include_str!("shaders/filters/box_blur.glsl");
 pub const ADJUSTMENTS_FRAG: &str = include_str!("shaders/filters/adjustments.glsl");
 pub const HUE_SAT_FRAG: &str = include_str!("shaders/filters/hue_sat.glsl");
 pub const INVERT_FRAG: &str = include_str!("shaders/filters/invert.glsl");
+pub const CHANNEL_EXTRACT_FRAG: &str = include_str!("shaders/filters/channel_extract.glsl");
 pub const POSTERIZE_FRAG: &str = include_str!("shaders/filters/posterize.glsl");
 pub const THRESHOLD_FRAG: &str = include_str!("shaders/filters/threshold.glsl");
 pub const NOISE_FRAG: &str = include_str!("shaders/filters/noise.glsl");
@@ -269,6 +270,7 @@ pub struct ShaderPrograms {
     // Color
     pub color_convert: ShaderProgram,
     pub tonemap: ShaderProgram,
+    pub channel_extract: ShaderProgram,
     // Text
     pub text_glyph: ShaderProgram,
 }
@@ -360,6 +362,7 @@ impl ShaderPrograms {
             // Color
             color_convert: compile_program(gl, v, COLOR_CONVERT_FRAG)?,
             tonemap: compile_program(gl, v, TONEMAP_FRAG)?,
+            channel_extract: compile_program(gl, v, CHANNEL_EXTRACT_FRAG)?,
             // Text
             text_glyph: compile_program(gl, v, TEXT_GLYPH_FRAG)?,
         })

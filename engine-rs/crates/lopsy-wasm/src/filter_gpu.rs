@@ -279,3 +279,44 @@ pub fn apply_separable_blur(
 
     engine.mark_layer_dirty(layer_id);
 }
+
+/// Render a single channel of a layer texture as grayscale into a scratch
+/// FBO and read back the result as RGBA pixels. `channel`: 0=R, 1=G, 2=B, 3=A.
+pub fn extract_channel_pixels(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    channel: u32,
+) -> Vec<u8> {
+    let tex_handle = match engine.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return Vec::new(),
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
+    if w == 0 || h == 0 { return Vec::new(); }
+    let layer_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return Vec::new(),
+    };
+
+    let scratch_fbo = engine.scratch_fbo_a;
+    engine.fbo_pool.bind(&engine.gl, scratch_fbo);
+    engine.gl.viewport(0, 0, w as i32, h as i32);
+
+    {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.channel_extract;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        if let Some(loc) = shader.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        if let Some(loc) = shader.location(gl, "u_channel") {
+            gl.uniform1i(Some(&loc), channel as i32);
+        }
+    }
+    engine.draw_fullscreen_quad();
+
+    engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h)
+        .unwrap_or_default()
+}

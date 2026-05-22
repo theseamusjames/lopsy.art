@@ -150,3 +150,12 @@ pub fn filter_color_lut(
 
     engine.inner.texture_pool.release(lut_handle);
 }
+
+#[wasm_bindgen(js_name = "extractChannelPixels")]
+pub fn extract_channel_pixels(
+    engine: &mut Engine,
+    layer_id: &str,
+    channel: u32,
+) -> Vec<u8> {
+    filter_gpu::extract_channel_pixels(&mut engine.inner, layer_id, channel)
+}
