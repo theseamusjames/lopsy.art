@@ -1,7 +1,7 @@
 import type { DocumentState, Layer, Rect } from '../../../types';
 import type { ActionResult } from '../types';
-import { getEngine } from '../../../engine-wasm/engine-state';
 import { cropLayerTexture } from '../../../engine-wasm/wasm-bridge';
+import { mapLayersForTransform } from './_helpers/layer-transform';
 
 export function computeCropCanvas(
   doc: DocumentState,
@@ -21,40 +21,22 @@ export function computeCropCanvas(
   const ch = y2 - y1;
   if (cw <= 0 || ch <= 0) return undefined;
 
-  const engine = getEngine();
-  const newLayers: Layer[] = [];
-
-  for (const layer of doc.layers) {
-    if (layer.type === 'text') {
-      // Text layers: adjust position relative to crop rect — engine re-renders
-      newLayers.push({
-        ...layer,
-        x: Math.round(layer.x - cx),
-        y: Math.round(layer.y - cy),
-      } as Layer);
-      continue;
-    }
-
-    if (layer.type !== 'raster') {
-      newLayers.push(layer);
-      continue;
-    }
-
-    // GPU-side crop
-    if (engine) {
-      cropLayerTexture(engine, layer.id, layer.x, layer.y, cx, cy, cw, ch);
-    }
-
-    newLayers.push({ ...layer, x: 0, y: 0, width: cw, height: ch } as Layer);
-  }
+  const newLayers = mapLayersForTransform(doc.layers, {
+    onText: (layer) => ({
+      ...layer,
+      x: Math.round(layer.x - cx),
+      y: Math.round(layer.y - cy),
+    }) as Layer,
+    onRaster: (layer, engine) => {
+      if (engine) {
+        cropLayerTexture(engine, layer.id, layer.x, layer.y, cx, cy, cw, ch);
+      }
+      return { ...layer, x: 0, y: 0, width: cw, height: ch } as Layer;
+    },
+  });
 
   return {
-    document: {
-      ...doc,
-      width: cw,
-      height: ch,
-      layers: newLayers,
-    },
+    document: { ...doc, width: cw, height: ch, layers: newLayers },
     layerPixelData: new Map(),
     renderVersion: renderVersion + 1,
   };

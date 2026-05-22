@@ -1,7 +1,7 @@
 import type { DocumentState, Layer } from '../../../types';
 import type { ActionResult } from '../types';
-import { getEngine } from '../../../engine-wasm/engine-state';
 import { resizeCanvasTexture } from '../../../engine-wasm/wasm-bridge';
+import { mapLayersForTransform } from './_helpers/layer-transform';
 
 export function computeResizeCanvas(
   doc: DocumentState,
@@ -17,44 +17,26 @@ export function computeResizeCanvas(
   const offsetX = Math.round((newWidth - oldW) * anchorX);
   const offsetY = Math.round((newHeight - oldH) * anchorY);
 
-  const engine = getEngine();
-  const newLayers: Layer[] = [];
-
-  for (const layer of doc.layers) {
-    if (layer.type === 'text') {
-      // Text layers: adjust position by the canvas offset — engine re-renders
-      newLayers.push({
-        ...layer,
-        x: Math.round(layer.x + offsetX),
-        y: Math.round(layer.y + offsetY),
-      } as Layer);
-      continue;
-    }
-
-    if (layer.type !== 'raster') {
-      newLayers.push(layer);
-      continue;
-    }
-
-    // GPU-side canvas resize: reposition pixels within new canvas
-    if (engine) {
-      resizeCanvasTexture(
-        engine, layer.id,
-        layer.x, layer.y, oldW, oldH,
-        newWidth, newHeight, offsetX, offsetY,
-      );
-    }
-
-    newLayers.push({ ...layer, x: 0, y: 0, width: newWidth, height: newHeight } as Layer);
-  }
+  const newLayers = mapLayersForTransform(doc.layers, {
+    onText: (layer) => ({
+      ...layer,
+      x: Math.round(layer.x + offsetX),
+      y: Math.round(layer.y + offsetY),
+    }) as Layer,
+    onRaster: (layer, engine) => {
+      if (engine) {
+        resizeCanvasTexture(
+          engine, layer.id,
+          layer.x, layer.y, oldW, oldH,
+          newWidth, newHeight, offsetX, offsetY,
+        );
+      }
+      return { ...layer, x: 0, y: 0, width: newWidth, height: newHeight } as Layer;
+    },
+  });
 
   return {
-    document: {
-      ...doc,
-      width: newWidth,
-      height: newHeight,
-      layers: newLayers,
-    },
+    document: { ...doc, width: newWidth, height: newHeight, layers: newLayers },
     layerPixelData: new Map(),
     renderVersion: renderVersion + 1,
   };
