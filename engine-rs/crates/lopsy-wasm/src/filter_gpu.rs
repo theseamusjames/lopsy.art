@@ -320,3 +320,81 @@ pub fn extract_channel_pixels(
     engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h)
         .unwrap_or_default()
 }
+
+/// Apply a perspective warp to a layer using a 3x3 inverse homography matrix.
+/// Renders the source texture through the perspective_crop shader at the
+/// requested output dimensions and writes the result back to the layer.
+pub fn apply_perspective_crop(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    inv_h: &[f32; 9],
+    out_w: u32,
+    out_h: u32,
+) {
+    let tex_handle = match engine.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+    let (src_w, src_h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
+    if src_w == 0 || src_h == 0 || out_w == 0 || out_h == 0 { return; }
+    let src_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    let scratch = match engine.texture_pool.acquire(&engine.gl, out_w, out_h) {
+        Ok(h) => h,
+        Err(_) => return,
+    };
+    let scratch_gl = match engine.texture_pool.get(scratch) {
+        Some(t) => t.clone(),
+        None => { engine.texture_pool.release(scratch); return; }
+    };
+
+    let scratch_fbo = engine.scratch_fbo_a;
+    engine.fbo_pool.attach_texture(&engine.gl, scratch_fbo, &scratch_gl);
+    engine.fbo_pool.bind(&engine.gl, scratch_fbo);
+    engine.gl.viewport(0, 0, out_w as i32, out_h as i32);
+    engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+
+    // Enable linear filtering on source for bilinear interpolation
+    engine.texture_pool.set_linear_filter(&engine.gl, tex_handle);
+
+    {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.perspective_crop;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+        if let Some(loc) = shader.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        if let Some(loc) = shader.location(gl, "u_invH") {
+            gl.uniform_matrix3fv_with_f32_array(Some(&loc), false, inv_h);
+        }
+        if let Some(loc) = shader.location(gl, "u_outSize") {
+            gl.uniform2f(Some(&loc), out_w as f32, out_h as f32);
+        }
+        if let Some(loc) = shader.location(gl, "u_srcSize") {
+            gl.uniform2f(Some(&loc), src_w as f32, src_h as f32);
+        }
+    }
+    engine.draw_fullscreen_quad();
+    engine.fbo_pool.unbind(&engine.gl);
+
+    // Restore nearest filtering
+    engine.texture_pool.set_nearest_filter(&engine.gl, tex_handle);
+
+    // Replace the layer texture with the scratch (new dimensions)
+    engine.texture_pool.release(tex_handle);
+    engine.layer_textures.insert(layer_id.to_string(), scratch);
+
+    // Re-attach the original scratch texture to scratch FBO A
+    if let Some(orig_scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
+        let orig = orig_scratch.clone();
+        engine.fbo_pool.attach_texture(&engine.gl, scratch_fbo, &orig);
+    }
+
+    engine.mark_layer_dirty(layer_id);
+}

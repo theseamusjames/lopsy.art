@@ -159,3 +159,17 @@ pub fn extract_channel_pixels(
 ) -> Vec<u8> {
     filter_gpu::extract_channel_pixels(&mut engine.inner, layer_id, channel)
 }
+
+#[wasm_bindgen(js_name = "applyPerspectiveCrop")]
+pub fn apply_perspective_crop(
+    engine: &mut Engine,
+    layer_id: &str,
+    matrix: &[f32],
+    out_w: u32,
+    out_h: u32,
+) {
+    if matrix.len() < 9 { return; }
+    let mut inv_h = [0.0f32; 9];
+    inv_h.copy_from_slice(&matrix[..9]);
+    filter_gpu::apply_perspective_crop(&mut engine.inner, layer_id, &inv_h, out_w, out_h);
+}

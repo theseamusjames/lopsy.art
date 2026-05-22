@@ -90,6 +90,7 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   'src/app/interactions/selection-handlers.ts': 4,
   'src/app/MenuBar/MenuBar.tsx': 1,                          // GPU feather readback creates Uint8ClampedArray
+  'src/tools/crop/perspective-crop-interaction.ts': 1,       // Float32Array for GPU homography matrix
   'src/tools/marquee/marquee-strategy.ts': 2,
   'src/tools/wand/wand-strategy.ts': 1,
   'src/panels/LayerPanel/layer-selection.ts': 2,

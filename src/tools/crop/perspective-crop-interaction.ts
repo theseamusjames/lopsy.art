@@ -11,11 +11,10 @@ import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-typ
 import type { Point } from '../../types';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
-import { computePerspectiveTransform, applyPerspectiveWarp, inferOutputSize } from './perspective-crop';
+import { computePerspectiveTransform, inferOutputSize } from './perspective-crop';
 import type { Quad } from './perspective-crop';
-import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
+import { applyPerspectiveCrop } from '../../engine-wasm/wasm-bridge';
 
 const HANDLE_RADIUS_DOC = 8; // hit-test radius in document space
 
@@ -135,13 +134,6 @@ export function commitPerspectiveCrop(): void {
       return layer;
     }
 
-    // Read current layer pixels from GPU
-    const srcImageData = readLayerAsImageData(layer.id);
-    if (!srcImageData) return layer;
-
-    // Build the warp matrix: maps [0,outW]×[0,outH] → quad corners in doc-space.
-    // We need to account for the layer's offset (x, y) — translate the quad into
-    // layer-local coordinates first.
     const layerQuad: Quad = {
       topLeft:     { x: quad.topLeft.x     - layer.x, y: quad.topLeft.y     - layer.y },
       topRight:    { x: quad.topRight.x    - layer.x, y: quad.topRight.y    - layer.y },
@@ -150,10 +142,8 @@ export function commitPerspectiveCrop(): void {
     };
 
     const matrix = computePerspectiveTransform(layerQuad, outWidth, outHeight);
-    const warped = applyPerspectiveWarp(srcImageData, matrix, outWidth, outHeight);
-
-    // Upload warped pixels back to GPU — output is always positioned at (0,0)
-    uploadLayerPixels(engine, layer.id, new Uint8Array(warped.data.buffer), warped.width, warped.height, 0, 0);
+    const matrixF32 = new Float32Array(matrix);
+    applyPerspectiveCrop(engine, layer.id, matrixF32, outWidth, outHeight);
 
     return { ...layer, x: 0, y: 0, width: outWidth, height: outHeight };
   });

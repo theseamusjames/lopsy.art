@@ -26,6 +26,7 @@ pub const ROTATE90_FRAG: &str = include_str!("shaders/rotate90.glsl");
 pub const BLIT_REGION_FRAG: &str = include_str!("shaders/blit_region.glsl");
 pub const TRANSFORM_AFFINE_FRAG: &str = include_str!("shaders/transform_affine.glsl");
 pub const TRANSFORM_PERSPECTIVE_FRAG: &str = include_str!("shaders/transform_perspective.glsl");
+pub const PERSPECTIVE_CROP_FRAG: &str = include_str!("shaders/perspective_crop.glsl");
 
 // Effects
 pub const GLOW_FRAG: &str = include_str!("shaders/effects/glow.glsl");
@@ -271,6 +272,7 @@ pub struct ShaderPrograms {
     pub color_convert: ShaderProgram,
     pub tonemap: ShaderProgram,
     pub channel_extract: ShaderProgram,
+    pub perspective_crop: ShaderProgram,
     // Text
     pub text_glyph: ShaderProgram,
 }
@@ -363,6 +365,7 @@ impl ShaderPrograms {
             color_convert: compile_program(gl, v, COLOR_CONVERT_FRAG)?,
             tonemap: compile_program(gl, v, TONEMAP_FRAG)?,
             channel_extract: compile_program(gl, v, CHANNEL_EXTRACT_FRAG)?,
+            perspective_crop: compile_program(gl, v, PERSPECTIVE_CROP_FRAG)?,
             // Text
             text_glyph: compile_program(gl, v, TEXT_GLYPH_FRAG)?,
         })
