@@ -153,6 +153,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
 
   const newState: InteractionState = {
     drawing: true,
+    gesture: { kind: 'transform' },
     lastPoint: canvasPos,
     pixelBuffer: null,
     originalPixelBuffer: null,
@@ -202,6 +203,7 @@ function handleSelectionTransformDown(
 
   const newState: InteractionState = {
     drawing: true,
+    gesture: { kind: 'transform' },
     lastPoint: canvasPos,
     pixelBuffer: null,
     originalPixelBuffer: null,

@@ -90,6 +90,7 @@ const PLACEHOLDER_PIXEL_BUFFER = PixelBuffer.wrapImageData(new ImageData(1, 1));
 
 const INITIAL_STATE: InteractionState = {
   drawing: false,
+  gesture: { kind: 'idle' },
   lastPoint: null,
   pixelBuffer: null,
   originalPixelBuffer: null,
@@ -179,17 +180,15 @@ export function useCanvasInteraction(
           return layer ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y } : canvasPos;
         })();
         handleLiquifyDown(layerPos);
-        stateRef.current = { ...INITIAL_STATE, drawing: true, layerId: activeLayerId };
+        stateRef.current = { ...INITIAL_STATE, drawing: true, gesture: { kind: 'liquify' }, layerId: activeLayerId };
         return;
       }
 
-      // Pre-tool: mesh warp handle drag. Captures the click before the
-      // expensive GPU stroke / pixel-buffer setup runs, so dragging a
-      // mesh handle is cheap and doesn't disturb the active layer texture.
       if (handleTiltShiftDown(canvasPos)) {
         stateRef.current = {
           ...INITIAL_STATE,
           drawing: true,
+          gesture: { kind: 'tiltShift' },
           layerId: activeLayerId,
           tiltShiftDragging: true,
         };
@@ -200,6 +199,7 @@ export function useCanvasInteraction(
         stateRef.current = {
           ...INITIAL_STATE,
           drawing: true,
+          gesture: { kind: 'meshWarp' },
           layerId: activeLayerId,
           meshWarpDragging: true,
         };
@@ -306,6 +306,7 @@ export function useCanvasInteraction(
       // Transform handle interaction (pre-tool dispatch)
       const transformResult = handleTransformDown(ctx);
       if (transformResult) {
+        transformResult.gesture = { kind: 'transform' };
         stateRef.current = transformResult;
         return;
       }
@@ -328,6 +329,7 @@ export function useCanvasInteraction(
       const handler = toolHandlers[activeTool];
       const newState = handler?.down?.(ctx);
       if (newState) {
+        newState.gesture = { kind: 'tool' };
         newState._usedGpuStroke = !!useGpuStroke;
         stateRef.current = newState;
       }
@@ -349,31 +351,27 @@ export function useCanvasInteraction(
         y: canvasPos.y - state.layerStartY,
       };
 
-      // Tilt-shift drag (not tool-routed)
-      if (state.tiltShiftDragging) {
-        handleTiltShiftMove(canvasPos, e.metaKey);
-        return;
-      }
-
-      // Liquify painting — all moves feed the displacement map.
-      if (isLiquifyActive()) {
-        const editorState = useEditorStore.getState();
-        const layer = editorState.document.layers.find((l) => l.id === state.layerId);
-        const layerPos = layer ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y } : canvasPos;
-        handleLiquifyMove(layerPos);
-        return;
-      }
-
-      // Mesh warp drag (not tool-routed)
-      if (state.meshWarpDragging) {
-        handleMeshWarpMove(canvasPos);
-        return;
-      }
-
-      // Transform handle drag (not tool-routed)
-      if (state.transformHandle && state.transformStartState && state.startPoint) {
-        handleTransformMove(state, canvasPos, e.metaKey);
-        return;
+      switch (state.gesture.kind) {
+        case 'tiltShift':
+          handleTiltShiftMove(canvasPos, e.metaKey);
+          return;
+        case 'liquify': {
+          const editorState = useEditorStore.getState();
+          const layer = editorState.document.layers.find((l) => l.id === state.layerId);
+          const layerPos = layer ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y } : canvasPos;
+          handleLiquifyMove(layerPos);
+          return;
+        }
+        case 'meshWarp':
+          handleMeshWarpMove(canvasPos);
+          return;
+        case 'transform':
+          handleTransformMove(state, canvasPos, e.metaKey);
+          return;
+        case 'idle':
+          return;
+        case 'tool':
+          break;
       }
 
       if (!state.tool) return;
@@ -505,25 +503,23 @@ export function useCanvasInteraction(
 
     const state = stateRef.current;
 
-    // Tilt-shift drag end — short-circuit before regular tool teardown.
-    if (state.tiltShiftDragging) {
-      handleTiltShiftUp();
-      stateRef.current = { ...INITIAL_STATE };
-      return;
-    }
-
-    // Liquify stroke end — short-circuit before regular tool teardown.
-    if (isLiquifyActive()) {
-      handleLiquifyUp();
-      stateRef.current = { ...INITIAL_STATE };
-      return;
-    }
-
-    // Mesh warp drag end — short-circuit before regular tool teardown.
-    if (state.meshWarpDragging) {
-      handleMeshWarpUp();
-      stateRef.current = { ...INITIAL_STATE };
-      return;
+    switch (state.gesture.kind) {
+      case 'tiltShift':
+        handleTiltShiftUp();
+        stateRef.current = { ...INITIAL_STATE };
+        return;
+      case 'liquify':
+        handleLiquifyUp();
+        stateRef.current = { ...INITIAL_STATE };
+        return;
+      case 'meshWarp':
+        handleMeshWarpUp();
+        stateRef.current = { ...INITIAL_STATE };
+        return;
+      case 'idle':
+      case 'transform':
+      case 'tool':
+        break;
     }
 
     if (!state.tool) {

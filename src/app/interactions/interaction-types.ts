@@ -3,8 +3,26 @@ import type { Point, ToolId, Layer, Rect } from '../../types';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
 import type { PixelBuffer, MaskedPixelBuffer } from '../../engine/pixel-data';
 
+/**
+ * Discriminated union describing which canvas gesture is active.
+ * Replaces the previous bag-of-flags pattern where mutually-exclusive
+ * states like `tiltShiftDragging` and `meshWarpDragging` could both
+ * be true. The `kind` discriminant lets `switch` dispatch in the
+ * move/up handlers with compile-time exhaustiveness checking.
+ */
+export type CanvasGesture =
+  | { kind: 'idle' }
+  | { kind: 'tool' }
+  | { kind: 'liquify' }
+  | { kind: 'tiltShift' }
+  | { kind: 'meshWarp' }
+  | { kind: 'transform' };
+
+export const GESTURE_IDLE: CanvasGesture = { kind: 'idle' };
+
 export interface InteractionState {
   drawing: boolean;
+  gesture: CanvasGesture;
   lastPoint: Point | null;
   pixelBuffer: PixelBuffer | null;
   originalPixelBuffer: PixelBuffer | null;
@@ -14,8 +32,6 @@ export interface InteractionState {
   layerStartX: number;
   layerStartY: number;
   maskMode: boolean;
-  /** Captured at interaction-start so the path doesn't change if quick-mask
-   *  mode is toggled mid-drag. Currently only used by the gradient tool. */
   quickMaskMode?: boolean;
   transformHandle: TransformHandle | null;
   transformStartState: TransformState | null;
@@ -27,10 +43,7 @@ export interface InteractionState {
   strokeDistance?: number;
   spacingRemainder?: number;
   symmetryCenter?: Point;
-  /** Raw stroke points recorded for hold-to-smooth (layer-space). */
   strokePoints?: Array<{ x: number; y: number }>;
-  /** Color captured at stroke start. Colors don't change mid-stroke, so we
-   *  avoid `useUIStore.getState()` on every pointermove. */
   strokeColor?: { r: number; g: number; b: number; a: number };
   lastPointTime?: number;
   smoothedSpeed?: number;
@@ -49,13 +62,12 @@ export interface InteractionState {
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
   selectionOnlyTransform?: boolean;
-  /** Set when a mesh warp handle drag is in progress. */
   meshWarpDragging?: boolean;
-  /** Set when a tilt-shift overlay drag is in progress. */
   tiltShiftDragging?: boolean;
 }
 
 export const DEFAULT_TRANSFORM_FIELDS = {
+  gesture: GESTURE_IDLE as CanvasGesture,
   maskMode: false,
   transformHandle: null as TransformHandle | null,
   transformStartState: null as TransformState | null,
