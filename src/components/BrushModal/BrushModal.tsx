@@ -397,8 +397,8 @@ export function BrushModal() {
                     {presets.map((preset) => (
                       <button
                         key={preset.id}
-                        className={`${styles.presetItem}${sub.tip !== null && sub.tip === preset.tip ? ` ${styles.presetItemActive}` : ''}`}
-                        onClick={() => updateSubBrush(idx, { tip: preset.tip })}
+                        className={`${styles.presetItem}${sub.tipPresetId === preset.id ? ` ${styles.presetItemActive}` : ''}`}
+                        onClick={() => updateSubBrush(idx, { tip: preset.tip, tipPresetId: preset.id })}
                         aria-label={`Sub-brush tip: ${preset.name}`}
                         title={preset.name}
                       >

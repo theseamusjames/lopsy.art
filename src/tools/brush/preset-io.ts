@@ -10,6 +10,7 @@ interface SerializedTip {
 
 interface SerializedSubBrush {
   tip: SerializedTip | null;
+  tipPresetId?: string;
   sizeRatio: number;
   hardness: number;
   opacityRatio: number;
@@ -63,7 +64,7 @@ function tipFromJson(s: SerializedTip): BrushTipData {
 }
 
 function subBrushToJson(sub: SubBrush): SerializedSubBrush {
-  return {
+  const s: SerializedSubBrush = {
     tip: sub.tip ? tipToJson(sub.tip) : null,
     sizeRatio: sub.sizeRatio,
     hardness: sub.hardness,
@@ -73,10 +74,12 @@ function subBrushToJson(sub: SubBrush): SerializedSubBrush {
     angleJitter: sub.angleJitter,
     opacityJitter: sub.opacityJitter,
   };
+  if (sub.tipPresetId) s.tipPresetId = sub.tipPresetId;
+  return s;
 }
 
 function subBrushFromJson(s: SerializedSubBrush): SubBrush {
-  return {
+  const sub: SubBrush = {
     tip: s.tip ? tipFromJson(s.tip) : null,
     sizeRatio: s.sizeRatio,
     hardness: s.hardness,
@@ -86,6 +89,8 @@ function subBrushFromJson(s: SerializedSubBrush): SubBrush {
     angleJitter: s.angleJitter,
     opacityJitter: s.opacityJitter,
   };
+  if (s.tipPresetId) return { ...sub, tipPresetId: s.tipPresetId };
+  return sub;
 }
 
 let nextImportId = 1;

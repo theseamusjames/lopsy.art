@@ -24,6 +24,7 @@ export type BrushTextureBlendMode = 'multiply' | 'subtract' | 'overlay';
 /** Additional nozzle that fires alongside the primary brush at each dab position. */
 export interface SubBrush {
   readonly tip: BrushTipData | null;
+  readonly tipPresetId?: string;
   readonly sizeRatio: number;
   readonly hardness: number;
   readonly opacityRatio: number;
