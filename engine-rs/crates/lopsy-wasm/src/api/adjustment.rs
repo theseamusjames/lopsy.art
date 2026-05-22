@@ -299,7 +299,7 @@ pub fn set_group_adjustments(
 ) -> Result<(), JsError> {
     let child_ids: Vec<String> = serde_json::from_str(child_ids_json)
         .map_err(|e| JsError::new(&format!("Invalid child IDs JSON: {e}")))?;
-    let adj = crate::engine::ImageAdjustmentState {
+    let mut adj = crate::engine::ImageAdjustmentState {
         exposure,
         contrast,
         highlights,
@@ -311,12 +311,38 @@ pub fn set_group_adjustments(
         vignette,
         ..Default::default()
     };
+    // Carry forward LUT texture handles so the subsequent setGroup*Lut
+    // calls reuse the same GPU texture instead of allocating a new one.
+    // Only the handles are carried — has_* flags reset to false so stale
+    // LUTs are never sampled.  If the effect is still active, the
+    // matching setGroup*Lut call re-sets has_* = true.
+    if let Some(prev) = engine.inner.group_adjustments.get(group_id) {
+        adj.curves_texture = prev.adjustments.curves_texture;
+        adj.levels_texture = prev.adjustments.levels_texture;
+        adj.gradient_map_texture = prev.adjustments.gradient_map_texture;
+    }
     engine.inner.group_adjustments.insert(
         group_id.to_string(),
         crate::engine::GroupAdjustment { adjustments: adj, child_ids },
     );
     engine.inner.needs_recomposite = true;
     Ok(())
+}
+
+#[wasm_bindgen(js_name = "removeGroupAdjustment")]
+pub fn remove_group_adjustment(engine: &mut Engine, group_id: &str) {
+    if let Some(ga) = engine.inner.group_adjustments.remove(group_id) {
+        if let Some(t) = ga.adjustments.curves_texture {
+            engine.inner.texture_pool.release(t);
+        }
+        if let Some(t) = ga.adjustments.levels_texture {
+            engine.inner.texture_pool.release(t);
+        }
+        if let Some(t) = ga.adjustments.gradient_map_texture {
+            engine.inner.texture_pool.release(t);
+        }
+        engine.inner.needs_recomposite = true;
+    }
 }
 
 #[wasm_bindgen(js_name = "setGroupCurvesLut")]

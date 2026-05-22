@@ -9,6 +9,7 @@
 import type { Engine } from './wasm-bridge';
 import type { Layer } from '../types';
 import type { SparseLayerEntry } from '../app/store/types';
+import type { AdjustmentNode } from '../types/adjustment-nodes';
 import type { BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../types/brush';
 
 export interface TrackedState {
@@ -70,6 +71,19 @@ export interface TrackedState {
    * path geometry actually changes. Maps layerId → last-rendered key string.
    */
   pathTextKeys: Map<string, string> | null;
+  /** Per-group tracked refs for incremental syncGroupAdjustments.
+   *  Maps groupId → the references last sent to the engine. */
+  groupAdjTracked: Map<string, GroupAdjTrackedEntry>;
+  /** True when the engine's group adjustments may be stale (e.g. after
+   *  undo/redo reset). Forces a full clear + rebuild on next sync. */
+  groupAdjNeedsFullSync: boolean;
+}
+
+export interface GroupAdjTrackedEntry {
+  adjustments: readonly AdjustmentNode[];
+  adjustmentsEnabled: boolean;
+  children: readonly string[];
+  maskEnabled: boolean;
 }
 
 function createTrackedState(): TrackedState {
@@ -113,6 +127,8 @@ function createTrackedState(): TrackedState {
     levelsRef: null,
     levelsIdentity: null,
     pathTextKeys: null,
+    groupAdjTracked: new Map(),
+    groupAdjNeedsFullSync: true,
   };
 }
 
