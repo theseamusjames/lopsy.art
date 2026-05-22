@@ -1,10 +1,9 @@
 /**
  * Liquify tool actions — open/close the session and commit/cancel the warp.
  *
- * The original layer texture is saved on the GPU via saveFilterPreview.
- * A persistent displacement texture lives on the GPU for the session
- * lifetime. Each brush dab encodes only the dirty sub-rectangle and
- * uploads it via texSubImage2D, then the shader renders the warp.
+ * The displacement field lives entirely on the GPU as an RGBA8 texture.
+ * Each brush dab is applied by a GPU shader (liquify_dab.glsl) — no CPU
+ * Float32Array or per-pixel encoding needed.
  */
 
 import { useEditorStore } from '../editor-store';
@@ -15,17 +14,11 @@ import {
   restoreFilterPreview,
   clearFilterPreview,
   liquifyInitDisplacement,
-  liquifyUploadRegion,
   liquifyRender,
   liquifyRelease,
 } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
-import {
-  createDisplacementMap,
-  encodeDisplacementMap,
-  MAX_DISP,
-  defaultLiquifySettings,
-} from '../../tools/liquify/liquify';
+import { MAX_DISP, defaultLiquifySettings } from '../../tools/liquify/liquify';
 import type { LiquifySession } from '../ui-store';
 
 export function openLiquify(): void {
@@ -43,17 +36,19 @@ export function openLiquify(): void {
 
   saveFilterPreview(engine, activeId);
 
-  const displacementMap = createDisplacementMap(width, height);
-  const encodedDisplacement = new Uint8Array(width * height * 4);
-  encodeDisplacementMap(displacementMap, encodedDisplacement);
-  liquifyInitDisplacement(engine, encodedDisplacement, width, height);
+  const zeroed = new Uint8Array(width * height * 4);
+  for (let i = 0; i < width * height; i++) {
+    zeroed[i * 4] = 128;
+    zeroed[i * 4 + 1] = 0;
+    zeroed[i * 4 + 2] = 128;
+    zeroed[i * 4 + 3] = 0;
+  }
+  liquifyInitDisplacement(engine, zeroed, width, height);
 
   const session: LiquifySession = {
     layerId: activeId,
     layerWidth: width,
     layerHeight: height,
-    displacementMap,
-    encodedDisplacement,
     settings: defaultLiquifySettings(),
   };
 
@@ -94,28 +89,5 @@ export function cancelLiquify(): void {
   }
 
   ui.setLiquify(null);
-  useEditorStore.getState().notifyRender();
-}
-
-/**
- * Upload a dirty sub-rectangle to the GPU displacement texture and
- * re-render the warp. Called from the interaction handler after each dab.
- */
-export function previewLiquifyRegion(
-  subData: Uint8Array,
-  rx: number,
-  ry: number,
-  rw: number,
-  rh: number,
-): void {
-  const session = useUIStore.getState().liquify;
-  if (!session) return;
-
-  const engine = getEngine();
-  if (!engine) return;
-
-  liquifyUploadRegion(engine, subData, rx, ry, rw, rh);
-  liquifyRender(engine, session.layerId, MAX_DISP);
-  clearJsPixelData(session.layerId);
   useEditorStore.getState().notifyRender();
 }

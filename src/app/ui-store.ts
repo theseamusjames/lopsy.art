@@ -4,7 +4,7 @@ import type { TransformHandle, TransformState } from '../tools/transform/transfo
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import type { MeshWarpGrid } from '../filters/mesh-warp';
-import type { DisplacementMap, LiquifySettings } from '../tools/liquify/liquify';
+import type { LiquifySettings } from '../tools/liquify/liquify';
 import { toolRegistry } from '../tools/tool-registry';
 
 export interface TextEditingState {
@@ -86,8 +86,6 @@ export interface LiquifySession {
   layerId: string;
   layerWidth: number;
   layerHeight: number;
-  displacementMap: DisplacementMap;
-  encodedDisplacement: Uint8Array;
   settings: LiquifySettings;
 }
 

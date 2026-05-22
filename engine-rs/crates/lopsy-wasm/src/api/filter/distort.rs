@@ -241,3 +241,66 @@ pub fn liquify_release(engine: &mut Engine) {
         engine.inner.texture_pool.release(tex);
     }
 }
+
+#[wasm_bindgen(js_name = "liquifyApplyDabGpu")]
+pub fn liquify_apply_dab_gpu(
+    engine: &mut Engine,
+    cx: f32,
+    cy: f32,
+    radius: f32,
+    pressure: f32,
+    drag_dx: f32,
+    drag_dy: f32,
+    mode: u32,
+) {
+    let disp_handle = match engine.inner.liquify_disp_texture {
+        Some(h) => h,
+        None => return,
+    };
+    let (w, h) = engine.inner.texture_pool.get_size(disp_handle).unwrap_or((0, 0));
+    if w == 0 || h == 0 { return; }
+
+    let disp_tex = match engine.inner.texture_pool.get(disp_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    let scratch = match engine.inner.texture_pool.acquire(&engine.inner.gl, w, h) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let scratch_gl = match engine.inner.texture_pool.get(scratch) {
+        Some(t) => t.clone(),
+        None => { engine.inner.texture_pool.release(scratch); return; }
+    };
+
+    let scratch_fbo = engine.inner.scratch_fbo_a;
+    engine.inner.fbo_pool.attach_texture(&engine.inner.gl, scratch_fbo, &scratch_gl);
+    engine.inner.fbo_pool.bind(&engine.inner.gl, scratch_fbo);
+    engine.inner.gl.viewport(0, 0, w as i32, h as i32);
+
+    {
+        let gl = &engine.inner.gl;
+        let shader = &engine.inner.shaders.liquify_dab;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&disp_tex));
+        if let Some(loc) = shader.location(gl, "u_disp") { gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(gl, "u_center") { gl.uniform2f(Some(&loc), cx, cy); }
+        if let Some(loc) = shader.location(gl, "u_radius") { gl.uniform1f(Some(&loc), radius); }
+        if let Some(loc) = shader.location(gl, "u_pressure") { gl.uniform1f(Some(&loc), pressure); }
+        if let Some(loc) = shader.location(gl, "u_drag") { gl.uniform2f(Some(&loc), drag_dx, drag_dy); }
+        if let Some(loc) = shader.location(gl, "u_mode") { gl.uniform1i(Some(&loc), mode as i32); }
+        if let Some(loc) = shader.location(gl, "u_size") { gl.uniform2f(Some(&loc), w as f32, h as f32); }
+    }
+    engine.inner.draw_fullscreen_quad();
+    engine.inner.fbo_pool.unbind(&engine.inner.gl);
+
+    engine.inner.texture_pool.release(disp_handle);
+    engine.inner.liquify_disp_texture = Some(scratch);
+
+    if let Some(orig_scratch) = engine.inner.texture_pool.get(engine.inner.scratch_texture_a) {
+        let orig = orig_scratch.clone();
+        engine.inner.fbo_pool.attach_texture(&engine.inner.gl, scratch_fbo, &orig);
+    }
+}
