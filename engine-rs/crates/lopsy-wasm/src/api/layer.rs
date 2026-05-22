@@ -600,10 +600,6 @@ pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compr
 
 #[wasm_bindgen(js_name = "readLayerPixelsCompressedU16")]
 pub fn read_layer_pixels_compressed_u16(engine: &Engine, layer_id: &str) -> Vec<u8> {
-    let pixels = match layer_manager::read_pixels_u16(&engine.inner, layer_id) {
-        Ok(p) => p,
-        Err(_) => return Vec::new(),
-    };
     let tex = match engine.inner.layer_textures.get(layer_id) {
         Some(&t) => t,
         None => return Vec::new(),
@@ -613,18 +609,31 @@ pub fn read_layer_pixels_compressed_u16(engine: &Engine, layer_id: &str) -> Vec<
         return Vec::new();
     }
 
-    let (cropped, rect) = lopsy_core::pixel_buffer::crop_to_content_bounds_u16(&pixels, w, h);
-    if cropped.is_empty() {
-        return Vec::new();
-    }
+    // Crop and convert to LE bytes in one pass, dropping the full-size
+    // Vec<u16> before building the byte buffer. This keeps peak WASM
+    // allocation at ~2× the cropped layer size instead of ~4×.
+    let (raw_bytes, rect) = {
+        let pixels = match layer_manager::read_pixels_u16(&engine.inner, layer_id) {
+            Ok(p) => p,
+            Err(_) => return Vec::new(),
+        };
+        let (cropped, rect) = lopsy_core::pixel_buffer::crop_to_content_bounds_u16(&pixels, w, h);
+        drop(pixels);
+        if cropped.is_empty() {
+            return Vec::new();
+        }
+        let mut bytes = Vec::with_capacity(cropped.len() * 2);
+        for &val in &cropped {
+            bytes.extend_from_slice(&val.to_le_bytes());
+        }
+        (bytes, rect)
+    };
 
-    // Convert cropped u16 values to LE bytes for compression
-    let raw_bytes: Vec<u8> = cropped.iter().flat_map(|v| v.to_le_bytes()).collect();
-    let rle = lopsy_core::compress::rle_compress_u16(&raw_bytes);
-
-    // 28-byte header + uncompressed_size (u32 LE) + RLE data
     let uncompressed_size = raw_bytes.len() as u32;
-    let mut result = Vec::with_capacity(28 + rle.len());
+    let rle = lopsy_core::compress::rle_compress_u16(&raw_bytes);
+    drop(raw_bytes);
+
+    let mut result = Vec::with_capacity(32 + rle.len());
     result.extend_from_slice(&rect.x.to_le_bytes());
     result.extend_from_slice(&rect.y.to_le_bytes());
     result.extend_from_slice(&(rect.width as i32).to_le_bytes());
