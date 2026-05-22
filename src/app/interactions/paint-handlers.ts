@@ -599,14 +599,11 @@ export function handlePaintMove(
 
   // Mask modes: quick mask and layer mask both route to GPU
   if (state.maskMode) {
-    const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
+    const maskTarget: MaskTarget = useUIStore.getState().maskMode === 'quickMask' ? 'quickMask' : 'layerMask';
     const engine = getEngine();
     if (!engine) return;
-    if (isQuickMaskMode) {
-      handleQuickMaskPaintMove(engine, state, ctx.canvasPos, toolSettings);
-    } else {
-      handleMaskPaintMoveGpu(engine, state, layerLocalPos, toolSettings);
-    }
+    const maskPos = maskTarget === 'quickMask' ? ctx.canvasPos : layerLocalPos;
+    handleMaskPaintMoveUnified(engine, state, maskPos, toolSettings, maskTarget);
     return;
   }
 
@@ -780,115 +777,53 @@ export function handlePaintMove(
 }
 
 /** GPU mask painting — brush/eraser/pencil on the layer mask texture. */
-function handleMaskPaintMoveGpu(
-  engine: ReturnType<typeof getEngine>,
+type MaskTarget = 'layerMask' | 'quickMask';
+
+function handleMaskPaintMoveUnified(
+  engine: Engine,
   state: InteractionState,
   pos: { x: number; y: number },
   toolSettings: ReturnType<typeof useToolSettingsStore.getState>,
+  target: MaskTarget,
 ): void {
-  if (!state.lastPoint || !engine || !state.layerId) return;
+  if (!state.lastPoint) return;
 
-  // Inverted from quick mask: brush=1 (subtract/hide), eraser=0 (add/reveal)
-  const mode = state.tool === 'eraser' ? 0 : 1;
+  const isQuickMask = target === 'quickMask';
+  const mode = isQuickMask
+    ? (state.tool === 'eraser' ? 1 : 0)
+    : (state.tool === 'eraser' ? 0 : 1);
+
+  const emitDabs = (size: number, hardness: number, opacity: number) => {
+    const spacing = Math.max(1, size * 0.25);
+    const pts = interpolatePoints(state.lastPoint!, pos, spacing);
+    const arr = new Float64Array(pts.length * 2);
+    for (let i = 0; i < pts.length; i++) {
+      arr[i * 2] = pts[i]!.x;
+      arr[i * 2 + 1] = pts[i]!.y;
+    }
+    if (isQuickMask) {
+      gpuQuickMaskDabBatch(engine, arr, size, hardness, opacity, mode);
+    } else {
+      gpuMaskDabBatch(engine, state.layerId!, arr, size, hardness, opacity, mode);
+    }
+  };
 
   switch (state.tool) {
-    case 'brush': {
-      const size = toolSettings.brushSize;
-      const hardness = toolSettings.brushHardness / 100;
-      const opacity = toolSettings.brushOpacity / 100;
-      const spacing = Math.max(1, size * 0.25);
-      const pts = interpolatePoints(state.lastPoint, pos, spacing);
-      const arr = new Float64Array(pts.length * 2);
-      for (let i = 0; i < pts.length; i++) {
-        arr[i * 2] = pts[i]!.x;
-        arr[i * 2 + 1] = pts[i]!.y;
-      }
-      gpuMaskDabBatch(engine, state.layerId, arr, size, hardness, opacity, mode);
+    case 'brush':
+      emitDabs(toolSettings.brushSize, toolSettings.brushHardness / 100, toolSettings.brushOpacity / 100);
       break;
-    }
     case 'pencil': {
       const size = toolSettings.pencilSize;
-      gpuMaskPencilLine(
-        engine, state.layerId,
-        state.lastPoint.x, state.lastPoint.y, pos.x, pos.y,
-        1.0, size, mode,
-      );
-      break;
-    }
-    case 'eraser': {
-      const size = toolSettings.eraserSize;
-      const hardness = 0.8;
-      const opacity = toolSettings.eraserOpacity / 100;
-      const spacing = Math.max(1, size * 0.25);
-      const pts = interpolatePoints(state.lastPoint, pos, spacing);
-      const arr = new Float64Array(pts.length * 2);
-      for (let i = 0; i < pts.length; i++) {
-        arr[i * 2] = pts[i]!.x;
-        arr[i * 2 + 1] = pts[i]!.y;
+      if (isQuickMask) {
+        gpuQuickMaskPencil(engine, state.lastPoint.x, state.lastPoint.y, pos.x, pos.y, 1, 1, 1, 1, size, mode);
+      } else {
+        gpuMaskPencilLine(engine, state.layerId!, state.lastPoint.x, state.lastPoint.y, pos.x, pos.y, 1.0, size, mode);
       }
-      gpuMaskDabBatch(engine, state.layerId, arr, size, hardness, opacity, mode);
       break;
     }
-    default:
+    case 'eraser':
+      emitDabs(toolSettings.eraserSize, 0.8, toolSettings.eraserOpacity / 100);
       break;
-  }
-
-  state.lastPoint = pos;
-  useEditorStore.getState().notifyRender();
-}
-
-/** GPU quick mask painting — brush/eraser/pencil on the GPU quick mask texture. */
-function handleQuickMaskPaintMove(
-  engine: ReturnType<typeof getEngine>,
-  state: InteractionState,
-  pos: { x: number; y: number },
-  toolSettings: ReturnType<typeof useToolSettingsStore.getState>,
-): void {
-  if (!state.lastPoint || !engine) return;
-
-  const mode = state.tool === 'eraser' ? 1 : 0; // 0 = brush (add), 1 = eraser (remove)
-
-  switch (state.tool) {
-    case 'brush': {
-      const size = toolSettings.brushSize;
-      const hardness = toolSettings.brushHardness / 100;
-      const opacity = toolSettings.brushOpacity / 100;
-      const spacing = Math.max(1, size * 0.25);
-      const pts = interpolatePoints(state.lastPoint, pos, spacing);
-      const arr = new Float64Array(pts.length * 2);
-      for (let i = 0; i < pts.length; i++) {
-        arr[i * 2] = pts[i]!.x;
-        arr[i * 2 + 1] = pts[i]!.y;
-      }
-      gpuQuickMaskDabBatch(engine, arr, size, hardness, opacity, mode);
-      break;
-    }
-    case 'pencil': {
-      const size = toolSettings.pencilSize;
-      const color = { r: 255, g: 255, b: 255, a: 1 };
-      gpuQuickMaskPencil(
-        engine,
-        state.lastPoint.x, state.lastPoint.y, pos.x, pos.y,
-        color.r / 255, color.g / 255, color.b / 255, color.a,
-        size,
-        mode,
-      );
-      break;
-    }
-    case 'eraser': {
-      const size = toolSettings.eraserSize;
-      const hardness = 0.8;
-      const opacity = toolSettings.eraserOpacity / 100;
-      const spacing = Math.max(1, size * 0.25);
-      const pts = interpolatePoints(state.lastPoint, pos, spacing);
-      const arr = new Float64Array(pts.length * 2);
-      for (let i = 0; i < pts.length; i++) {
-        arr[i * 2] = pts[i]!.x;
-        arr[i * 2 + 1] = pts[i]!.y;
-      }
-      gpuQuickMaskDabBatch(engine, arr, size, hardness, opacity, mode);
-      break;
-    }
     default:
       break;
   }
