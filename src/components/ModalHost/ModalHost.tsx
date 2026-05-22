@@ -9,6 +9,7 @@ import { NewDocumentModal } from '../NewDocumentModal/NewDocumentModal';
 import { ShapeSizeModal } from '../ShapeSizeModal/ShapeSizeModal';
 import { BrushModal } from '../BrushModal/BrushModal';
 import { StrokePathModal } from '../StrokePathModal/StrokePathModal';
+import { Button } from '../Button/Button';
 import styles from './ModalHost.module.css';
 
 /**
@@ -135,13 +136,9 @@ function AdjustmentLayerInfoModal({ onClose }: { onClose: () => void }) {
           reorder, and toggle adjustments from there.
         </p>
         <div className={styles.infoDialogActions}>
-          <button
-            type="button"
-            onClick={onClose}
-            className={styles.confirmButton}
-          >
+          <Button variant="primary" onClick={onClose}>
             Got it
-          </button>
+          </Button>
         </div>
       </div>
     </div>
