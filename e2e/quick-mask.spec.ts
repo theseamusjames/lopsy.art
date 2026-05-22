@@ -1,7 +1,7 @@
 import { test, expect, type Page } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { waitForStore, createDocument, docToScreen } from './helpers';
+import { waitForStore, createDocument, docToScreen, setForegroundColor } from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -228,7 +228,10 @@ test.describe('Quick Mask Mode', () => {
     await page.keyboard.press('q');
     await page.waitForTimeout(150);
 
-    // Paint with brush (white = select) over the top-left quadrant (doc 0–100, 0–100)
+    // Paint with brush (white = select) over the top-left quadrant (doc 0–100, 0–100).
+    // Set foreground to white explicitly — brush in quick mask respects color
+    // (white grows selection, black shrinks it).
+    await setForegroundColor(page, 255, 255, 255);
     await page.keyboard.press('b');
     await page.waitForTimeout(50);
 
@@ -278,7 +281,9 @@ test.describe('Quick Mask Mode', () => {
     expect(beforePixel.b).toBeGreaterThan(50);
     expect(beforePixel.a).toBeGreaterThan(20);
 
-    // Paint over the center with brush (white = select)
+    // Paint over the center with brush (white = select). Foreground must be
+    // explicitly white because quick-mask brush respects color (issue #521).
+    await setForegroundColor(page, 255, 255, 255);
     await page.keyboard.press('b');
     await page.waitForTimeout(50);
 
@@ -295,6 +300,69 @@ test.describe('Quick Mask Mode', () => {
     const afterPixel = await sampleCompositedAt(page, 100, 100);
     // Painted area should have lower blue than unpainted area
     expect(afterPixel.b).toBeLessThan(beforePixel.b);
+
+    // Exit
+    await page.keyboard.press('q');
+    await page.waitForTimeout(100);
+  });
+
+  test('Quick Mask brush color controls add/remove of the overlay (issue #521)', async ({ page }) => {
+    await createDocument(page, 200, 200, true);
+    await fitToView(page);
+
+    // Start with a full selection so the overlay is initially absent at the
+    // center — that lets us prove the black brush can ADD overlay back.
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          setSelection: (
+            bounds: { x: number; y: number; width: number; height: number },
+            mask: Uint8ClampedArray,
+            w: number,
+            h: number,
+          ) => void;
+        };
+      };
+      const mask = new Uint8ClampedArray(200 * 200);
+      for (let i = 0; i < mask.length; i++) mask[i] = 255;
+      store.getState().setSelection({ x: 0, y: 0, width: 200, height: 200 }, mask, 200, 200);
+    });
+    await page.waitForTimeout(100);
+
+    // Enter Quick Mask Mode — fully selected → no blue overlay anywhere
+    await page.keyboard.press('q');
+    await page.waitForTimeout(150);
+
+    // Confirm the center is clear (no overlay)
+    const baseline = await sampleCompositedAt(page, 100, 100);
+
+    // Paint over the center with a BLACK brush — this should ADD overlay.
+    await setForegroundColor(page, 0, 0, 0);
+    await page.keyboard.press('b');
+    await page.waitForTimeout(50);
+    const centerScreen = await docToScreen(page, 100, 100);
+    await page.mouse.move(centerScreen.x - 20, centerScreen.y);
+    await page.mouse.down();
+    await page.mouse.move(centerScreen.x + 20, centerScreen.y, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+
+    const afterBlack = await sampleCompositedAt(page, 100, 100);
+    // Black brush should have ADDED blue overlay where it painted.
+    expect(afterBlack.b).toBeGreaterThan(baseline.b + 20);
+
+    // Now paint over the same spot with a WHITE brush — this should REMOVE overlay.
+    await setForegroundColor(page, 255, 255, 255);
+    await page.waitForTimeout(50);
+    await page.mouse.move(centerScreen.x - 20, centerScreen.y);
+    await page.mouse.down();
+    await page.mouse.move(centerScreen.x + 20, centerScreen.y, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+
+    const afterWhite = await sampleCompositedAt(page, 100, 100);
+    // White brush should have erased the overlay back down.
+    expect(afterWhite.b).toBeLessThan(afterBlack.b - 20);
 
     // Exit
     await page.keyboard.press('q');
