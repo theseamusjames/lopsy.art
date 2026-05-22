@@ -1,23 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, Folder, FolderPlus, GripVertical, Lock, Plus, RectangleCircle, Sparkles, SquareDashed, Trash2, Type, Unlock, X } from 'lucide-react';
-import type { LayerColorTag } from '../../types/layers';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { Copy, Folder, FolderPlus, Plus, RectangleCircle, Trash2, Type } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { PanelContainer } from '../PanelContainer/PanelContainer';
 import { usePanelCollapse } from '../usePanelCollapse';
-import { LayerThumbnail } from './LayerThumbnail';
-import { MaskThumbnail } from './MaskThumbnail';
 import { selectLayerAlpha, convertMaskToMarquee } from './layer-selection';
-import { buildFlatDisplayList, isGroupLayer, canMoveToGroup, findParentGroup } from '../../layers/group-utils';
+import { buildFlatDisplayList } from '../../layers/group-utils';
+import { useLayerDnd } from './useLayerDnd';
+import { LayerRow } from './LayerRow';
+import { LayerContextMenu } from './LayerContextMenu';
+import { useState } from 'react';
 import styles from './LayerPanel.module.css';
 
 interface LayerPanelProps {
-  /**
-   * The active-layer selection callback intentionally lives on the prop
-   * surface: it clears the persistent transform overlay before swapping
-   * layers, which is interaction-layer state App.tsx owns.
-   */
   onSelectLayer: (id: string) => void;
 }
 
@@ -51,10 +47,21 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const setLayerSelection = useEditorStore((s) => s.setLayerSelection);
   const removeSelectedLayers = useEditorStore((s) => s.removeSelectedLayers);
   const groupSelectedLayers = useEditorStore((s) => s.groupSelectedLayers);
-  const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; layerId: string } | null>(null);
+
+  const displayList = useMemo(
+    () => buildFlatDisplayList(layers, layerOrder),
+    [layers, layerOrder],
+  );
+
+  const {
+    dragIndex, dropGap, dropIntoGroup,
+    editingOpacityId, setEditingOpacityId,
+    listRef, handleGripDown,
+  } = useLayerDnd({ displayList, layers, onReorderLayer, moveLayerToGroup });
+
+  const isRootGroup = useCallback((layerId: string) => layerId === rootGroupId, [rootGroupId]);
 
   const handleThumbnailCmdClick = useCallback((e: React.MouseEvent, layerId: string) => {
     if (!(e.metaKey || e.ctrlKey)) return;
@@ -66,29 +73,44 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
     convertMaskToMarquee(layerId);
   }, []);
 
-  const displayList = useMemo(
-    () => buildFlatDisplayList(layers, layerOrder),
-    [layers, layerOrder],
-  );
-
   const handleLayerClick = useCallback((e: React.MouseEvent, layerId: string) => {
     if (e.metaKey || e.ctrlKey) {
-      // Cmd/Meta+click: toggle layer in multi-selection without changing activeLayerId
       e.preventDefault();
       toggleLayerSelection(layerId);
     } else if (e.shiftKey && activeLayerId) {
-      // Shift+click: select range from activeLayerId to clicked layer
       e.preventDefault();
       selectLayerRange(activeLayerId, layerId);
     } else {
-      // Selecting the layer row exits mask-edit mode; the mask thumbnail is
-      // the only entry point, so clicking the layer makes it the paint target.
       onSelectLayer(layerId);
       setMaskEditMode(false);
     }
   }, [toggleLayerSelection, selectLayerRange, onSelectLayer, activeLayerId, setMaskEditMode]);
 
-  // Keyboard shortcuts: Cmd+A to select all, Delete/Backspace to delete selected
+  const handleContextMenu = useCallback((e: React.MouseEvent, layerId: string) => {
+    if (isRootGroup(layerId)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, layerId });
+  }, [isRootGroup]);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handleToggleEffectsDrawer = useCallback((layerId: string) => {
+    if (showEffectsDrawer && layerId === activeLayerId) {
+      setShowEffectsDrawer(false);
+    } else {
+      onSelectLayer(layerId);
+      setShowEffectsDrawer(true);
+    }
+  }, [showEffectsDrawer, activeLayerId, setShowEffectsDrawer, onSelectLayer]);
+
+  const handleRemoveMask = useCallback((layerId: string) => {
+    removeLayerMask(layerId);
+    setMaskEditMode(false);
+  }, [removeLayerMask, setMaskEditMode]);
+
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
@@ -116,136 +138,9 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       }
     };
 
-    // Attach to document so the panel captures even when focused elements are inside it
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [displayList, rootGroupId, setLayerSelection, removeSelectedLayers]);
-
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dropGap, setDropGap] = useState<number | null>(null);
-  const [dropIntoGroup, setDropIntoGroup] = useState<string | null>(null);
-  const [editingOpacityId, setEditingOpacityId] = useState<string | null>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ from: number; gap: number; intoGroup: string | null } | null>(null);
-
-  const handleGripDown = useCallback((e: React.PointerEvent, ri: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragRef.current = { from: ri, gap: ri, intoGroup: null };
-    setDragIndex(ri);
-    setDropGap(ri);
-    setDropIntoGroup(null);
-
-    const draggedLayer = displayList[ri]?.layer;
-
-    const onMove = (ev: PointerEvent) => {
-      const list = listRef.current;
-      if (!list || !dragRef.current) return;
-      const items = list.querySelectorAll(`.${styles.itemWrapper}`);
-      let gap = items.length;
-      let intoGroup: string | null = null;
-
-      for (let i = 0; i < items.length; i++) {
-        const rect = items[i]!.getBoundingClientRect();
-        const relY = ev.clientY - rect.top;
-        const h = rect.height;
-
-        if (relY < 0) {
-          gap = i;
-          break;
-        }
-
-        if (relY < h) {
-          const entry = displayList[i];
-          // If hovering the center 50% of a group row, offer "drop into"
-          if (entry && isGroupLayer(entry.layer) && relY > h * 0.25 && relY < h * 0.75) {
-            if (draggedLayer && canMoveToGroup(layers, draggedLayer.id, entry.layer.id)) {
-              intoGroup = entry.layer.id;
-              gap = -1; // no gap indicator
-            }
-          } else if (relY < h / 2) {
-            gap = i;
-          } else {
-            gap = i + 1;
-          }
-          break;
-        }
-      }
-
-      dragRef.current.gap = gap;
-      dragRef.current.intoGroup = intoGroup;
-      setDropGap(intoGroup ? null : gap);
-      setDropIntoGroup(intoGroup);
-    };
-
-    const onUp = () => {
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      const drag = dragRef.current;
-      dragRef.current = null;
-      setDragIndex(null);
-      setDropGap(null);
-      setDropIntoGroup(null);
-      if (!drag || !draggedLayer) return;
-
-      // Drop into group
-      if (drag.intoGroup) {
-        moveLayerToGroup(draggedLayer.id, drag.intoGroup);
-        return;
-      }
-
-      const { from, gap } = drag;
-      if (gap === from || gap === from + 1) return;
-
-      // Use the item BELOW the gap to determine which group the drop
-      // position belongs to. This prevents layers from being pulled into
-      // a group when dropped at its lower boundary.
-      const neighborIdx = gap < displayList.length ? gap : gap - 1;
-      const neighbor = displayList[neighborIdx];
-      const draggedParent = findParentGroup(layers, draggedLayer.id);
-
-      if (neighbor) {
-        // Find the group the neighbor belongs to
-        let targetParentId: string | null = null;
-        const neighborParent = findParentGroup(layers, neighbor.layer.id);
-        if (neighborParent) {
-          targetParentId = neighborParent.id;
-        } else if (isGroupLayer(neighbor.layer)) {
-          // Neighbor is the root group (no parent) — target is the root itself
-          targetParentId = neighbor.layer.id;
-        }
-
-        if (targetParentId && draggedParent && targetParentId !== draggedParent.id) {
-          if (canMoveToGroup(layers, draggedLayer.id, targetParentId)) {
-            moveLayerToGroup(draggedLayer.id, targetParentId);
-            return;
-          }
-        }
-      }
-
-      // For gap-based reorder within the same group, use flat reorder
-      const fromArrayIdx = layers.length - 1 - from;
-      const rawToArrayIdx = layers.length - gap;
-      const toArrayIdx = rawToArrayIdx > fromArrayIdx ? rawToArrayIdx - 1 : rawToArrayIdx;
-      onReorderLayer(fromArrayIdx, toArrayIdx);
-    };
-
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-  }, [layers, displayList, onReorderLayer, moveLayerToGroup]);
-
-  const isRootGroup = (layerId: string) => layerId === rootGroupId;
-
-  const handleContextMenu = useCallback((e: React.MouseEvent, layerId: string) => {
-    if (isRootGroup(layerId)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, layerId });
-  }, [rootGroupId]);
-
-  const closeContextMenu = useCallback(() => {
-    setContextMenu(null);
-  }, []);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -268,276 +163,60 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
         className={collapsed ? styles.listCollapsed : styles.list}
       >
         {displayList.map(({ layer, depth }, ri) => (
-          <div key={layer.id} className={styles.itemWrapper}>
-            <div
-              className={[
-                styles.item,
-                layer.id === activeLayerId ? styles.active : '',
-                layer.id !== activeLayerId && selectedLayerIds.includes(layer.id) ? styles.selected : '',
-                layer.locked ? styles.locked : '',
-                isGroupLayer(layer) ? styles.groupRow : '',
-                isRootGroup(layer.id) ? styles.rootGroup : '',
-                dragIndex === ri ? styles.dragging : '',
-                dropGap !== null && dropGap === ri && dropGap !== dragIndex && dropGap !== (dragIndex ?? -1) + 1
-                  ? styles.dropTarget : '',
-                dropGap !== null && dropGap === displayList.length && ri === displayList.length - 1 && dropGap !== (dragIndex ?? -1) + 1
-                  ? styles.dropTargetEnd : '',
-                dropIntoGroup === layer.id ? styles.dropIntoGroup : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              style={{ '--layer-depth': depth } as React.CSSProperties}
-              data-layer-id={layer.id}
-              onClick={(e) => handleLayerClick(e, layer.id)}
-              onContextMenu={(e) => handleContextMenu(e, layer.id)}
-            >
-              {layer.colorTag && (
-                <div
-                  className={styles.colorTagBar}
-                  data-tag={layer.colorTag}
-                  aria-hidden="true"
-                />
-              )}
-              {!isRootGroup(layer.id) && (
-                <span
-                  className={styles.dragHandle}
-                  onPointerDown={(e) => handleGripDown(e, ri)}
-                  role="button"
-                  aria-label={`Drag to reorder ${layer.name}`}
-                  tabIndex={0}
-                >
-                  <GripVertical size={12} />
-                </span>
-              )}
-              {isGroupLayer(layer) ? (
-                <button
-                  className={styles.collapseBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleGroupCollapsed(layer.id);
-                  }}
-                  type="button"
-                  aria-expanded={!layer.collapsed}
-                  aria-label={`${layer.collapsed ? 'Expand' : 'Collapse'} group ${layer.name}`}
-                >
-                  {layer.collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                </button>
-              ) : (
-                <div
-                  className={styles.thumbnail}
-                  onClick={(e) => handleThumbnailCmdClick(e, layer.id)}
-                >
-                  <LayerThumbnail layer={layer} />
-                </div>
-              )}
-              {isGroupLayer(layer) && (
-                <Folder size={14} className={styles.folderIcon} />
-              )}
-              {renamingLayerId === layer.id ? (
-                <input
-                  className={styles.nameInput}
-                  value={renameValue}
-                  aria-label="Layer name"
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onBlur={() => {
-                    if (renameValue.trim()) {
-                      renameLayer(layer.id, renameValue.trim());
-                    }
-                    setRenamingLayerId(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      (e.target as HTMLInputElement).blur();
-                    } else if (e.key === 'Escape') {
-                      setRenamingLayerId(null);
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  autoFocus
-                />
-              ) : (
-                <span
-                  className={styles.name}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    setRenamingLayerId(layer.id);
-                    setRenameValue(layer.name);
-                  }}
-                >
-                  {layer.name}
-                </span>
-              )}
-              {!isRootGroup(layer.id) && (
-                <button
-                  className={styles.opacity}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingOpacityId(editingOpacityId === layer.id ? null : layer.id);
-                  }}
-                  type="button"
-                  aria-label={`Opacity ${Math.round(layer.opacity * 100)}% for ${layer.name}`}
-                  title="Click to adjust opacity"
-                >
-                  {Math.round(layer.opacity * 100)}%
-                </button>
-              )}
-              {!isRootGroup(layer.id) && (
-                <button
-                  className={styles.visibilityBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleVisibility(layer.id);
-                  }}
-                  type="button"
-                  aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
-                >
-                  {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
-                </button>
-              )}
-              <button
-                className={[
-                  styles.effectsBtn,
-                  showEffectsDrawer && layer.id === activeLayerId ? styles.effectsBtnActive : '',
-                  hasActiveEffects(layer) ? styles.effectsBtnHasEffects : '',
-                ].filter(Boolean).join(' ')}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (showEffectsDrawer && layer.id === activeLayerId) {
-                    setShowEffectsDrawer(false);
-                  } else {
-                    onSelectLayer(layer.id);
-                    setShowEffectsDrawer(true);
-                  }
-                }}
-                type="button"
-                aria-label={isGroupLayer(layer) ? `Group effects for ${layer.name}` : `Layer effects for ${layer.name}`}
-                title={isGroupLayer(layer) ? 'Group effects' : 'Layer effects'}
-              >
-                <Sparkles size={12} />
-              </button>
-              <button
-                className={`${styles.lockBtn} ${layer.locked ? styles.lockBtnActive : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleLayerLock(layer.id);
-                }}
-                type="button"
-                aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
-              >
-                {layer.locked ? <Lock size={12} /> : <Unlock size={12} />}
-              </button>
-            </div>
-            {editingOpacityId === layer.id && !isRootGroup(layer.id) && (
-              <div className={styles.opacitySlider}>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={Math.round(layer.opacity * 100)}
-                  aria-label={`${layer.name} opacity`}
-                  onPointerDown={() => useEditorStore.getState().pushHistory('Change Opacity')}
-                  onChange={(e) => onUpdateOpacity(layer.id, Number(e.target.value) / 100)}
-                />
-              </div>
-            )}
-            {layer.mask && (
-              <div className={styles.maskRow} data-mask-layer-id={layer.id}>
-                <div
-                  className={[
-                    styles.maskThumbnail,
-                    maskEditMode && layer.id === activeLayerId ? styles.maskThumbnailActive : '',
-                    !layer.mask.enabled ? styles.maskDisabled : '',
-                  ].filter(Boolean).join(' ')}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectLayer(layer.id);
-                    setMaskEditMode(true);
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Edit mask for ${layer.name}`}
-                  title="Click to edit mask"
-                >
-                  <MaskThumbnail layer={layer} />
-                </div>
-                <span className={styles.maskLabel}>Mask</span>
-                <button
-                  className={styles.maskActionBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleConvertMaskToMarquee(layer.id);
-                  }}
-                  type="button"
-                  aria-label="Convert mask to selection"
-                  title="Convert mask to selection"
-                >
-                  <SquareDashed size={12} />
-                </button>
-                <button
-                  className={styles.maskActionBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeLayerMask(layer.id);
-                    setMaskEditMode(false);
-                  }}
-                  type="button"
-                  aria-label="Delete mask"
-                  title="Delete mask"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            )}
-          </div>
+          <LayerRow
+            key={layer.id}
+            layer={layer}
+            depth={depth}
+            rowIndex={ri}
+            isActive={layer.id === activeLayerId}
+            isSelected={layer.id !== activeLayerId && selectedLayerIds.includes(layer.id)}
+            isRootGroup={isRootGroup(layer.id)}
+            isDragging={dragIndex === ri}
+            isDropTarget={dropGap !== null && dropGap === ri && dropGap !== dragIndex && dropGap !== (dragIndex ?? -1) + 1}
+            isDropTargetEnd={dropGap !== null && dropGap === displayList.length && ri === displayList.length - 1 && dropGap !== (dragIndex ?? -1) + 1}
+            isDropIntoGroup={dropIntoGroup === layer.id}
+            isEditingOpacity={editingOpacityId === layer.id}
+            isMaskEditActive={maskEditMode && layer.id === activeLayerId}
+            showEffectsDrawer={showEffectsDrawer}
+            onClick={handleLayerClick}
+            onContextMenu={handleContextMenu}
+            onGripDown={handleGripDown}
+            onToggleVisibility={onToggleVisibility}
+            onToggleGroupCollapsed={toggleGroupCollapsed}
+            onThumbnailCmdClick={handleThumbnailCmdClick}
+            onSelectLayer={onSelectLayer}
+            onSetMaskEditMode={setMaskEditMode}
+            onToggleLock={toggleLayerLock}
+            onRename={renameLayer}
+            onUpdateOpacity={onUpdateOpacity}
+            onSetEditingOpacity={setEditingOpacityId}
+            onRemoveMask={handleRemoveMask}
+            onConvertMaskToMarquee={handleConvertMaskToMarquee}
+            onToggleEffectsDrawer={handleToggleEffectsDrawer}
+          />
         ))}
       </div>
       <div className={styles.toolbar}>
-        <IconButton
-          icon={<Plus size={16} />}
-          label="Add Layer"
-          onClick={onAddLayer}
-        />
-        <IconButton
-          icon={<FolderPlus size={16} />}
-          label="New Group"
-          onClick={() => addGroup()}
-        />
+        <IconButton icon={<Plus size={16} />} label="Add Layer" onClick={onAddLayer} />
+        <IconButton icon={<FolderPlus size={16} />} label="New Group" onClick={() => addGroup()} />
         {selectedLayerIds.filter((id) => id !== rootGroupId).length >= 2 && (
-          <IconButton
-            icon={<Folder size={16} />}
-            label="Group Layers"
-            onClick={() => groupSelectedLayers()}
-          />
+          <IconButton icon={<Folder size={16} />} label="Group Layers" onClick={() => groupSelectedLayers()} />
         )}
         <IconButton
           icon={<Copy size={16} />}
           label="Duplicate Layer"
-          onClick={() => {
-            if (activeLayerId && !isRootGroup(activeLayerId)) duplicateLayer();
-          }}
+          onClick={() => { if (activeLayerId && !isRootGroup(activeLayerId)) duplicateLayer(); }}
           disabled={!activeLayerId || isRootGroup(activeLayerId ?? '')}
         />
         {activeLayerId && (() => {
           const activeLayer = layers.find((l) => l.id === activeLayerId);
           if (!activeLayer || activeLayer.mask) return null;
-          return (
-            <IconButton
-              icon={<RectangleCircle size={16} />}
-              label="Add Mask"
-              onClick={() => addLayerMask(activeLayerId)}
-            />
-          );
+          return <IconButton icon={<RectangleCircle size={16} />} label="Add Mask" onClick={() => addLayerMask(activeLayerId)} />;
         })()}
         {activeLayerId && (() => {
           const activeLayer = layers.find((l) => l.id === activeLayerId);
           if (!activeLayer || activeLayer.type !== 'text') return null;
-          return (
-            <IconButton
-              icon={<Type size={16} />}
-              label="Rasterize Layer"
-              onClick={() => rasterizeTextLayer()}
-            />
-          );
+          return <IconButton icon={<Type size={16} />} label="Rasterize Layer" onClick={() => rasterizeTextLayer()} />;
         })()}
         <div className={styles.toolbarSpacer} />
         <IconButton
@@ -547,10 +226,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
             const deletable = selectedLayerIds.filter((id) => !isRootGroup(id));
             if (deletable.length > 0) removeSelectedLayers();
           }}
-          disabled={
-            layers.length <= 1 ||
-            selectedLayerIds.filter((id) => !isRootGroup(id)).length === 0
-          }
+          disabled={layers.length <= 1 || selectedLayerIds.filter((id) => !isRootGroup(id)).length === 0}
         />
       </div>
     </div>
@@ -559,7 +235,6 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       <LayerContextMenu
         x={contextMenu.x}
         y={contextMenu.y}
-        layerId={contextMenu.layerId}
         currentTag={layers.find((l) => l.id === contextMenu.layerId)?.colorTag ?? null}
         onSetColorTag={(tag) => {
           setLayerColorTag(contextMenu.layerId, tag);
@@ -569,99 +244,5 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       />
     )}
     </>
-  );
-}
-
-function hasActiveEffects(layer: import('../../types').Layer): boolean {
-  const fx = layer.effects;
-  if (fx.stroke.enabled || fx.dropShadow.enabled || fx.outerGlow.enabled || fx.innerGlow.enabled || fx.colorOverlay.enabled) {
-    return true;
-  }
-  if (layer.type === 'group') {
-    return layer.adjustments.length > 0;
-  }
-  return false;
-}
-
-// ---------------------------------------------------------------------------
-// LayerContextMenu
-// ---------------------------------------------------------------------------
-
-const COLOR_TAG_OPTIONS: Array<{ tag: LayerColorTag; color: string; label: string }> = [
-  { tag: 'red',    color: '#e05555', label: 'Red' },
-  { tag: 'orange', color: '#e07c30', label: 'Orange' },
-  { tag: 'yellow', color: '#c9a820', label: 'Yellow' },
-  { tag: 'green',  color: '#4caf50', label: 'Green' },
-  { tag: 'blue',   color: '#4a9eff', label: 'Blue' },
-  { tag: 'purple', color: '#9c6edd', label: 'Purple' },
-  { tag: 'gray',   color: '#808080', label: 'Gray' },
-];
-
-interface LayerContextMenuProps {
-  x: number;
-  y: number;
-  layerId: string;
-  currentTag: LayerColorTag | null | undefined;
-  onSetColorTag: (tag: LayerColorTag | null) => void;
-  onClose: () => void;
-}
-
-function LayerContextMenu({ x, y, currentTag, onSetColorTag, onClose }: LayerContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Stop the mousedown from propagating so the outside-click handler
-  // on the document doesn't immediately close the menu.
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-  }, []);
-
-  return (
-    <div
-      ref={menuRef}
-      className={styles.contextMenu}
-      style={{ left: x, top: y }}
-      onMouseDown={handleMouseDown}
-      role="menu"
-      aria-label="Layer options"
-      data-testid="layer-context-menu"
-    >
-      <div className={styles.contextMenuLabel}>Color Tag</div>
-      <div className={styles.colorTagGrid}>
-        {COLOR_TAG_OPTIONS.map(({ tag, color, label }) => (
-          <button
-            key={tag}
-            className={[
-              styles.colorTagSwatch,
-              currentTag === tag ? styles.colorTagSwatchActive : '',
-            ].filter(Boolean).join(' ')}
-            style={{ background: color }}
-            onClick={() => onSetColorTag(tag)}
-            type="button"
-            aria-label={label}
-            title={label}
-            data-testid={`color-tag-${tag}`}
-          />
-        ))}
-        <button
-          className={[styles.colorTagSwatch, styles.colorTagSwatchNone, currentTag === null || currentTag === undefined ? styles.colorTagSwatchActive : ''].filter(Boolean).join(' ')}
-          onClick={() => onSetColorTag(null)}
-          type="button"
-          aria-label="No color"
-          title="No color"
-          data-testid="color-tag-none"
-        >
-          ✕
-        </button>
-      </div>
-      <div className={styles.contextMenuDivider} />
-      <button
-        className={styles.contextMenuItem}
-        onClick={onClose}
-        type="button"
-        role="menuitem"
-      >
-        Cancel
-      </button>
-    </div>
   );
 }
