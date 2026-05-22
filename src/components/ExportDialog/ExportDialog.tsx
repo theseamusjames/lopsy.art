@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '../../app/editor-store';
 import { Slider } from '../Slider/Slider';
+import { Button } from '../Button/Button';
 import {
   type ExportFormat,
   type ExportOptions,
@@ -200,12 +201,12 @@ export function ExportDialog({ onExport, onCancel, onPreviewRequest }: ExportDia
         </div>
 
         <div className={styles.footer}>
-          <button className={styles.cancelButton} type="button" onClick={onCancel}>
+          <Button variant="secondary" onClick={onCancel}>
             Cancel
-          </button>
-          <button className={styles.exportButton} type="button" onClick={handleExport}>
+          </Button>
+          <Button variant="primary" onClick={handleExport}>
             Export
-          </button>
+          </Button>
         </div>
       </div>
     </div>

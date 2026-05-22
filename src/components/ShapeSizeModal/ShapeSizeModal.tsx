@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { Button } from '../Button/Button';
 import styles from './ShapeSizeModal.module.css';
 
 interface ShapeSizeModalProps {
@@ -66,8 +67,8 @@ export function ShapeSizeModal({ onConfirm, onCancel }: ShapeSizeModalProps) {
           </div>
         </div>
         <div className={styles.footer}>
-          <button className={styles.cancelButton} onClick={onCancel}>Cancel</button>
-          <button className={styles.confirmButton} onClick={handleConfirm}>Create</button>
+          <Button variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button variant="primary" onClick={handleConfirm}>Create</Button>
         </div>
       </div>
     </div>
