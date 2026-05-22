@@ -9,10 +9,11 @@ import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
-import { uploadLayerPixels, getLayerTextureDimensions, removeTextLayerState } from '../../engine-wasm/wasm-bridge';
+import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState } from '../../engine-wasm/wasm-bridge';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import type { ActionResult, SliceCreator, SparseLayerEntry } from './types';
+import { resolveRasterTextBounds } from './actions/rasterize-text-bounds';
 import { useUIStore } from '../ui-store';
 import { cancelLiquify } from '../MenuBar/liquify-actions';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
@@ -580,10 +581,16 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const engine = getEngine();
     if (!engine) return;
 
-    const dims = getLayerTextureDimensions(engine, activeId);
-    const w = dims[0] ?? 0;
-    const h = dims[1] ?? 0;
-    if (w === 0 || h === 0) return;
+    // Use the engine's authoritative bounds: prior GPU operations
+    // (ensure_layer_full_size from fill/brush/gradient/etc.) may have
+    // expanded the texture and shifted desc.x/desc.y on the Rust side
+    // without notifying JS. Using the stale JS x/y here would place the
+    // resulting raster layer at the wrong document position and the text
+    // would visually jump after rasterize (issue #496).
+    const engineBounds = getLayerEngineBounds(engine, activeId);
+    const textureDims = getLayerTextureDimensions(engine, activeId);
+    const bounds = resolveRasterTextBounds(layer.x, layer.y, engineBounds, textureDims);
+    if (!bounds) return;
 
     s.pushHistory('Rasterize Layer');
     set({
@@ -599,13 +606,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
                 locked: l.locked,
                 opacity: l.opacity,
                 blendMode: l.blendMode,
-                x: l.x,
-                y: l.y,
+                x: bounds.x,
+                y: bounds.y,
                 clipToBelow: l.clipToBelow,
                 effects: l.effects,
                 mask: l.mask,
-                width: w,
-                height: h,
+                width: bounds.width,
+                height: bounds.height,
               }
             : l,
         ),
