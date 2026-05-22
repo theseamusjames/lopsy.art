@@ -88,7 +88,9 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   // Selection mask — explicitly OK per the policy table.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/interactions/selection-handlers.ts': 6,
+  'src/app/interactions/selection-handlers.ts': 3,
+  'src/tools/marquee/marquee-strategy.ts': 2,
+  'src/tools/wand/wand-strategy.ts': 1,
   'src/panels/LayerPanel/layer-selection.ts': 2,
   'src/panels/PathsPanel/path-to-selection.ts': 1,
   'src/selection/selection.ts': 13,                          // see #442 — feather pass should move to existing GPU helper

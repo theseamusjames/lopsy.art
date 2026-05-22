@@ -1,6 +1,6 @@
 import type { InteractionState, InteractionContext } from './interaction-types';
-import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import type { Point } from '../../types';
+import type { SelectionToolId } from './selection-strategy';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
@@ -8,54 +8,32 @@ import {
   createRectSelection as tsCreateRectSelection,
   createEllipseSelection as tsCreateEllipseSelection,
   selectionBounds as tsSelectionBounds,
-  getSelectionMaskValue,
   featherSelection,
 } from '../../selection/selection';
-import { getEngine } from '../../engine-wasm/engine-state';
-import {
-  floodFill as wasmFloodFill,
-  floodFillGraduated as wasmFloodFillGraduated,
-  readLayerPixelsForFill as wasmReadLayerPixelsForFill,
-  magneticLassoBegin as wasmMagneticLassoBegin,
-  magneticLassoSnap as wasmMagneticLassoSnap,
-  magneticLassoSnapPoint as wasmMagneticLassoSnapPoint,
-  magneticLassoEnd as wasmMagneticLassoEnd,
-  hasFloat,
-  dropFloat,
-} from '../../engine-wasm/wasm-bridge';
-import { createPolygonMask as tsCreatePolygonMask } from '../../tools/lasso/lasso';
-import {
-  beginLasso,
-  updateCursor as magneticUpdateCursor,
-  addAnchor as magneticAddAnchor,
-  closeLasso as magneticCloseLasso,
-  flattenPolyline as magneticFlatten,
-  pointsFromFloat32,
-  shouldAutoAnchor,
-  type MagneticLassoState,
-  type SnapFn,
-} from '../../tools/magnetic-lasso/magnetic-lasso';
-import { createTransformState } from '../../tools/transform/transform';
-import { snapPositionToGrid } from '../../tools/move/move';
 import {
   createRectSelection as wasmCreateRectSelection,
   createEllipseSelection as wasmCreateEllipseSelection,
   selectionBounds as wasmSelectionBounds,
   createPolygonMask as wasmCreatePolygonMask,
 } from '../../engine-wasm/wasm-bridge';
+import { createPolygonMask as tsCreatePolygonMask } from '../../tools/lasso/lasso';
+import { createTransformState } from '../../tools/transform/transform';
+import { marqueeStrategy } from '../../tools/marquee/marquee-strategy';
+import { wandStrategy } from '../../tools/wand/wand-strategy';
+import { lassoStrategy } from '../../tools/lasso/lasso-strategy';
+import { magneticLassoStrategy } from '../../tools/magnetic-lasso/magnetic-lasso-strategy';
+import type { SelectionToolStrategy } from './selection-strategy';
 
-/**
- * Active magnetic lasso trace. Kept as a module-local to avoid cluttering
- * the shared InteractionState — only this handler family reads it.
- */
-let magneticLassoTrace: MagneticLassoState | null = null;
+const STRATEGY_MAP: Record<SelectionToolId, SelectionToolStrategy> = {
+  'marquee-rect': marqueeStrategy,
+  'marquee-ellipse': marqueeStrategy,
+  'wand': wandStrategy,
+  'lasso': lassoStrategy,
+  'lasso-magnetic': magneticLassoStrategy,
+};
 
-/**
- * Constrains a marquee width/height to an aspect ratio. When `metaPressed` is
- * true, forces a 1:1 ratio regardless of the persistent aspect-lock setting
- * (the cmd/meta key is a temporary square-lock, like shift in many editors).
- * Otherwise honors the persistent `aspectRatioLocked` toggle.
- */
+// ── Shared helpers used by strategies ────────────────────────────────────
+
 export function constrainMarqueeSize(
   rawW: number,
   rawH: number,
@@ -81,21 +59,7 @@ export function constrainMarqueeSize(
   return { w: w0, h: w0 / ratio };
 }
 
-function makeMagneticSnapFn(): SnapFn {
-  const engine = getEngine();
-  const settings = useToolSettingsStore.getState();
-  const radius = settings.magneticLassoWidth;
-  // Map 1..100 contrast → ~5..255 edge threshold (log-like curve so the low
-  // end is usable).
-  const threshold = Math.max(1, Math.min(255, Math.round(settings.magneticLassoContrast * 2.55)));
-  return (from, to) => {
-    if (!engine) return [from, to];
-    const flat = wasmMagneticLassoSnap(engine, from.x, from.y, to.x, to.y, radius, threshold);
-    return pointsFromFloat32(flat);
-  };
-}
-
-function commitFeatheredSelection(
+export function commitFeatheredSelection(
   bounds: { x: number; y: number; width: number; height: number },
   mask: Uint8ClampedArray,
   docW: number,
@@ -116,14 +80,7 @@ function commitFeatheredSelection(
   useUIStore.getState().setTransform(createTransformState(bounds));
 }
 
-function updateMagneticLassoPreview(state: MagneticLassoState): void {
-  const points = magneticFlatten(state);
-  useUIStore.getState().setLassoPoints(points);
-  useEditorStore.getState().notifyRender();
-}
-
-/** Create a rect selection mask via WASM, falling back to TS. */
-function createRectSelection(
+export function createRectSelection(
   rect: { x: number; y: number; width: number; height: number },
   canvasWidth: number,
   canvasHeight: number,
@@ -140,8 +97,7 @@ function createRectSelection(
   }
 }
 
-/** Create an ellipse selection mask via WASM, falling back to TS. */
-function createEllipseSelection(
+export function createEllipseSelection(
   rect: { x: number; y: number; width: number; height: number },
   canvasWidth: number,
   canvasHeight: number,
@@ -158,8 +114,7 @@ function createEllipseSelection(
   }
 }
 
-/** Compute selection bounds via WASM, falling back to TS. */
-function selectionBounds(
+export function selectionBounds(
   mask: Uint8ClampedArray,
   width: number,
   height: number,
@@ -174,8 +129,7 @@ function selectionBounds(
   }
 }
 
-/** Create a polygon mask via WASM, falling back to TS. */
-function createPolygonMask(
+export function createPolygonMask(
   points: Point[],
   width: number,
   height: number,
@@ -193,127 +147,13 @@ function createPolygonMask(
   }
 }
 
+// ── Dispatchers ──────────────────────────────────────────────────────────
+
 export function handleSelectionDown(
   ctx: InteractionContext,
-  tool: 'marquee-rect' | 'marquee-ellipse' | 'wand' | 'lasso' | 'lasso-magnetic',
+  tool: SelectionToolId,
 ): InteractionState | undefined {
-  const { canvasPos, activeLayerId } = ctx;
-
-  if (tool === 'marquee-rect' || tool === 'marquee-ellipse') {
-    const editorState = useEditorStore.getState();
-    const sel = editorState.selection;
-    const cx = Math.round(canvasPos.x);
-    const cy = Math.round(canvasPos.y);
-    if (sel.active && sel.mask && getSelectionMaskValue(sel, cx, cy) > 0) {
-      const engine = getEngine();
-      if (engine && hasFloat(engine)) {
-        dropFloat(engine);
-      }
-      ctx.floatingSelectionRef.current = null;
-      ctx.persistentTransformRef.current = null;
-      return {
-        drawing: true,
-        lastPoint: canvasPos,
-        pixelBuffer: null,
-        originalPixelBuffer: null,
-        layerId: activeLayerId,
-        tool,
-        startPoint: canvasPos,
-        layerStartX: 0,
-        layerStartY: 0,
-        ...DEFAULT_TRANSFORM_FIELDS,
-        moveOriginalMask: new Uint8ClampedArray(sel.mask),
-        moveOriginalBounds: sel.bounds ? { ...sel.bounds } : null,
-      };
-    }
-    useUIStore.getState().setTransform(null);
-    ctx.persistentTransformRef.current = null;
-    ctx.floatingSelectionRef.current = null;
-    return {
-      drawing: true,
-      lastPoint: canvasPos,
-      pixelBuffer: null,
-      originalPixelBuffer: null,
-      layerId: activeLayerId,
-      tool,
-      startPoint: canvasPos,
-      layerStartX: 0,
-      layerStartY: 0,
-      ...DEFAULT_TRANSFORM_FIELDS,
-    };
-  }
-
-  if (tool === 'wand') {
-    const engine = getEngine();
-    if (!engine) return undefined;
-    const toolSettings = useToolSettingsStore.getState();
-    const wandTolerance = toolSettings.wandTolerance;
-    const wandContiguous = toolSettings.wandContiguous;
-    const wandGraduated = toolSettings.wandGraduated;
-    const editorState = useEditorStore.getState();
-    const { width: docW, height: docH } = editorState.document;
-    // Read layer pixels from GPU for flood fill region detection
-    const pixelData = wasmReadLayerPixelsForFill(engine, activeLayerId);
-    const cx = Math.round(canvasPos.x);
-    const cy = Math.round(canvasPos.y);
-    const wandMaskRaw = wandGraduated
-      ? wasmFloodFillGraduated(pixelData, docW, docH, cx, cy, wandTolerance, wandContiguous)
-      : wasmFloodFill(pixelData, docW, docH, cx, cy, 0, 0, 0, 0, wandTolerance, wandContiguous);
-    const wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
-    const wandBounds = selectionBounds(wandMask, docW, docH);
-    if (wandBounds) {
-      commitFeatheredSelection(wandBounds, wandMask, docW, docH);
-    }
-    return undefined;
-  }
-
-  if (tool === 'lasso-magnetic') {
-    const engine = getEngine();
-    if (!engine) return undefined;
-    try {
-      wasmMagneticLassoBegin(engine, activeLayerId);
-    } catch {
-      return undefined;
-    }
-    // Snap the initial anchor onto the nearest edge so the closing segment
-    // doesn't drag the path back out to an unsnapped cursor position.
-    const settings = useToolSettingsStore.getState();
-    const radius = settings.magneticLassoWidth;
-    const threshold = Math.max(1, Math.min(255, Math.round(settings.magneticLassoContrast * 2.55)));
-    const snapped = wasmMagneticLassoSnapPoint(engine, canvasPos.x, canvasPos.y, radius, threshold);
-    const startPoint = snapped.length >= 2
-      ? { x: snapped[0]!, y: snapped[1]! }
-      : canvasPos;
-    magneticLassoTrace = beginLasso(startPoint);
-    updateMagneticLassoPreview(magneticLassoTrace);
-    return {
-      drawing: true,
-      lastPoint: canvasPos,
-      pixelBuffer: null,
-      originalPixelBuffer: null,
-      layerId: activeLayerId,
-      tool: 'lasso-magnetic',
-      startPoint: canvasPos,
-      layerStartX: 0,
-      layerStartY: 0,
-      ...DEFAULT_TRANSFORM_FIELDS,
-    };
-  }
-
-  // lasso
-  useUIStore.getState().setLassoPoints([canvasPos]);
-  return {
-    drawing: true,
-    lastPoint: canvasPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
-    layerId: activeLayerId,
-    tool: 'lasso',
-    startPoint: canvasPos,
-    layerStartX: 0,
-    layerStartY: 0,
-    ...DEFAULT_TRANSFORM_FIELDS,
-  };
+  return STRATEGY_MAP[tool].onDown(ctx, tool);
 }
 
 export function handleSelectionMove(
@@ -321,96 +161,8 @@ export function handleSelectionMove(
   canvasPos: Point,
   metaKey = false,
 ): void {
-  if (state.tool === 'marquee-rect' || state.tool === 'marquee-ellipse') {
-    if (!state.startPoint) return;
-
-    if (state.moveOriginalMask && state.moveOriginalBounds) {
-      const dx = Math.round(canvasPos.x - state.startPoint.x);
-      const dy = Math.round(canvasPos.y - state.startPoint.y);
-      const orig = state.moveOriginalBounds;
-      const editorState = useEditorStore.getState();
-      const { width: docW, height: docH } = editorState.document;
-      const srcMask = state.moveOriginalMask;
-      const newMask = new Uint8ClampedArray(srcMask.length);
-      for (let y = 0; y < docH; y++) {
-        for (let x = 0; x < docW; x++) {
-          const sx = x - dx;
-          const sy = y - dy;
-          if (sx >= 0 && sx < docW && sy >= 0 && sy < docH) {
-            newMask[y * docW + x] = srcMask[sy * docW + sx]!;
-          }
-        }
-      }
-      const newBounds = { x: orig.x + dx, y: orig.y + dy, width: orig.width, height: orig.height };
-      editorState.setSelection(newBounds, newMask, docW, docH);
-      useUIStore.getState().setTransform(createTransformState(newBounds));
-      return;
-    }
-
-    const editorState = useEditorStore.getState();
-    let mStart = state.startPoint;
-    let mEnd = canvasPos;
-    const uiMarquee = useUIStore.getState();
-    if (uiMarquee.showGrid && uiMarquee.snapToGrid) {
-      const { width: dw, height: dh } = editorState.document;
-      mStart = snapPositionToGrid(mStart.x, mStart.y, uiMarquee.gridSize, dw, dh);
-      mEnd = snapPositionToGrid(mEnd.x, mEnd.y, uiMarquee.gridSize, dw, dh);
-    }
-    const toolSettings = useToolSettingsStore.getState();
-    const { w, h } = constrainMarqueeSize(
-      mEnd.x - mStart.x,
-      mEnd.y - mStart.y,
-      {
-        metaPressed: metaKey,
-        aspectRatioLocked: toolSettings.aspectRatioLocked,
-        aspectRatioW: toolSettings.aspectRatioW,
-        aspectRatioH: toolSettings.aspectRatioH,
-      },
-    );
-    const x = mEnd.x >= mStart.x ? mStart.x : mStart.x - w;
-    const y = mEnd.y >= mStart.y ? mStart.y : mStart.y - h;
-
-    if (w > 0 && h > 0) {
-      const selRect = { x, y, width: w, height: h };
-      const mask = state.tool === 'marquee-rect'
-        ? createRectSelection(selRect, editorState.document.width, editorState.document.height)
-        : createEllipseSelection(selRect, editorState.document.width, editorState.document.height);
-      editorState.setSelection(selRect, mask, editorState.document.width, editorState.document.height);
-      useUIStore.getState().setTransform(createTransformState(selRect));
-    }
-    return;
-  }
-
-  if (state.tool === 'lasso') {
-    const lassoPoints = useUIStore.getState().lassoPoints;
-    useUIStore.getState().setLassoPoints([...lassoPoints, canvasPos]);
-    useEditorStore.getState().notifyRender();
-  }
-
-  if (state.tool === 'lasso-magnetic' && magneticLassoTrace) {
-    const snap = makeMagneticSnapFn();
-    let trace = magneticUpdateCursor(magneticLassoTrace, canvasPos, snap);
-    const frequency = useToolSettingsStore.getState().magneticLassoFrequency;
-    if (shouldAutoAnchor(trace, frequency)) {
-      // Anchor at a locally-snapped point so the committed polyline stays
-      // glued to edges instead of jumping back out to the raw cursor at
-      // every auto-anchor. `snap_segment` does not snap its endpoints, so
-      // we pull the cursor onto the nearest edge explicitly.
-      trace = magneticAddAnchor(trace, snapCursorToEdge(canvasPos), snap);
-    }
-    magneticLassoTrace = trace;
-    updateMagneticLassoPreview(trace);
-  }
-}
-
-function snapCursorToEdge(p: Point): Point {
-  const engine = getEngine();
-  if (!engine) return p;
-  const settings = useToolSettingsStore.getState();
-  const radius = settings.magneticLassoWidth;
-  const threshold = Math.max(1, Math.min(255, Math.round(settings.magneticLassoContrast * 2.55)));
-  const snapped = wasmMagneticLassoSnapPoint(engine, p.x, p.y, radius, threshold);
-  return snapped.length >= 2 ? { x: snapped[0]!, y: snapped[1]! } : p;
+  const tool = state.tool as SelectionToolId;
+  STRATEGY_MAP[tool]?.onMove?.(state, canvasPos, metaKey);
 }
 
 export function handleSelectionUp(
@@ -420,70 +172,6 @@ export function handleSelectionUp(
   containerRef: React.RefObject<HTMLDivElement | null>,
   e: { clientX: number; clientY: number },
 ): void {
-  if (state.tool === 'marquee-rect' || state.tool === 'marquee-ellipse') {
-    if (state.moveOriginalMask) return;
-    if (state.startPoint) {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (rect) {
-        const screenX = e.clientX - rect.left;
-        const screenY = e.clientY - rect.top;
-        const upPos = screenToCanvas(screenX, screenY);
-        const dx = Math.abs(upPos.x - state.startPoint.x);
-        const dy = Math.abs(upPos.y - state.startPoint.y);
-        if (dx < 2 && dy < 2) {
-          useEditorStore.getState().clearSelection();
-          useUIStore.getState().setTransform(null);
-        } else {
-          const sel = useEditorStore.getState().selection;
-          if (sel.active && sel.mask) {
-            const { width: docW, height: docH } = useEditorStore.getState().document;
-            commitFeatheredSelection(sel.bounds!, sel.mask, docW, docH);
-          }
-        }
-      }
-    }
-    return;
-  }
-
-  if (state.tool === 'lasso') {
-    const lassoPoints = useUIStore.getState().lassoPoints;
-    if (lassoPoints.length >= 3) {
-      const editorState = useEditorStore.getState();
-      const { width: docW, height: docH } = editorState.document;
-      const lassoMask = createPolygonMask(lassoPoints, docW, docH);
-      const lassoBounds = selectionBounds(lassoMask, docW, docH);
-      if (lassoBounds) {
-        commitFeatheredSelection(lassoBounds, lassoMask, docW, docH);
-      }
-    }
-    useUIStore.getState().clearLassoPoints();
-  }
-
-  if (state.tool === 'lasso-magnetic') {
-    const engine = getEngine();
-    if (magneticLassoTrace && engine) {
-      const snap = makeMagneticSnapFn();
-      // Commit a final anchor at the mouseup cursor (snapped onto the nearest
-      // edge) so the closing path has real geometry even when no auto-anchor
-      // ever fired. `snap_segment` keeps its endpoints unsnapped, so without
-      // this the polyline would include the raw cursor at the final corner.
-      const endPoint = magneticLassoTrace.liveSegment[magneticLassoTrace.liveSegment.length - 1];
-      const final = endPoint
-        ? magneticAddAnchor(magneticLassoTrace, snapCursorToEdge(endPoint), snap)
-        : magneticLassoTrace;
-      const polyline = magneticCloseLasso(final, snap);
-      if (polyline.length >= 3) {
-        const editorState = useEditorStore.getState();
-        const { width: docW, height: docH } = editorState.document;
-        const mask = createPolygonMask(polyline, docW, docH);
-        const bounds = selectionBounds(mask, docW, docH);
-        if (bounds) {
-          commitFeatheredSelection(bounds, mask, docW, docH);
-        }
-      }
-    }
-    if (engine) wasmMagneticLassoEnd(engine);
-    magneticLassoTrace = null;
-    useUIStore.getState().clearLassoPoints();
-  }
+  const tool = state.tool as SelectionToolId;
+  STRATEGY_MAP[tool]?.onUp?.(state, _canvasPos, { screenToCanvas, containerRef, event: e });
 }
