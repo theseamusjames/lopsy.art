@@ -1,7 +1,7 @@
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
-import { interpolatePoints, interpolatePointsWithScatter, resetScatterSpacingRemainder } from '../../tools/brush/brush';
+import { interpolatePoints, resetScatterSpacingRemainder } from '../../tools/brush/brush';
 import type { InteractionContext, InteractionState } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -24,6 +24,9 @@ import {
 } from '../../engine-wasm/wasm-bridge';
 import type { SymmetryConfig } from '../../tools/symmetry';
 import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from '../../tools/symmetry';
+import { handleBrushStroke } from '../../tools/brush/brush-stroke';
+import { handlePencilStroke } from '../../tools/pencil/pencil-stroke';
+import { handleEraserStroke } from '../../tools/eraser/eraser-stroke';
 
 type PaintTool = 'brush' | 'pencil' | 'eraser';
 
@@ -599,14 +602,11 @@ export function handlePaintMove(
 
   // Mask modes: quick mask and layer mask both route to GPU
   if (state.maskMode) {
-    const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
+    const maskTarget: MaskTarget = useUIStore.getState().maskMode === 'quickMask' ? 'quickMask' : 'layerMask';
     const engine = getEngine();
     if (!engine) return;
-    if (isQuickMaskMode) {
-      handleQuickMaskPaintMove(engine, state, ctx.canvasPos, toolSettings);
-    } else {
-      handleMaskPaintMoveGpu(engine, state, layerLocalPos, toolSettings);
-    }
+    const maskPos = maskTarget === 'quickMask' ? ctx.canvasPos : layerLocalPos;
+    handleMaskPaintMoveUnified(engine, state, maskPos, toolSettings, maskTarget);
     return;
   }
 
@@ -617,278 +617,72 @@ export function handlePaintMove(
   const sym = getSymmetryConfig(symCenter);
 
   switch (state.tool) {
-    case 'brush': {
-      const baseSize = toolSettings.brushSize;
-      const baseHardness = toolSettings.brushHardness / 100;
-      const opacity = toolSettings.brushOpacity / 100;
-      const brushScatter = toolSettings.brushScatter;
-      const brushFade = toolSettings.brushFade;
-      const sizeJitter = toolSettings.brushSizeJitter / 100;
-      const hardnessJitter = toolSettings.brushHardnessJitter / 100;
-      const aJ = toolSettings.brushAngleJitter / 100;
-      const oJ = toolSettings.brushOpacityJitter / 100;
-      const speedSize = toolSettings.brushSpeedSize / 100;
-      const color = state.strokeColor ?? useToolSettingsStore.getState().foregroundColor;
-      const r = color.r / 255;
-      const g = color.g / 255;
-      const b = color.b / 255;
-
-      const dx = layerLocalPos.x - state.lastPoint.x;
-      const dy = layerLocalPos.y - state.lastPoint.y;
-      const segDist = Math.sqrt(dx * dx + dy * dy);
-
-      let size = baseSize;
-
-      // Speed-based size: moving-average speed → smoothed size transition
-      if (speedSize > 0) {
-        const now = performance.now();
-        const dt = now - (state.lastPointTime ?? now);
-        const rawSpeed = dt > 0 ? segDist / dt : 0;
-        const maxSpeed = 5;
-        const normalizedSpeed = Math.min(rawSpeed / maxSpeed, 1);
-
-        const maWindow = toolSettings.brushSpeedSensitivity === 'high' ? 2
-          : toolSettings.brushSpeedSensitivity === 'low' ? 6 : 3;
-        if (!state.speedHistory) state.speedHistory = [];
-        state.speedHistory.push(normalizedSpeed);
-        if (state.speedHistory.length > maWindow) state.speedHistory.shift();
-
-        const avgSpeed = state.speedHistory.reduce((a, b) => a + b, 0) / state.speedHistory.length;
-
-        const invert = toolSettings.brushSpeedSizeInvert;
-        const targetScale = invert
-          ? 1 + speedSize * avgSpeed
-          : 1 - speedSize * avgSpeed;
-
-        const prev = state.speedSizeCurrent ?? 1;
-        const blend = 0.25;
-        const current = prev + (targetScale - prev) * blend;
-        state.speedSizeCurrent = current;
-        state.lastPointTime = now;
-
-        size = Math.max(1, size * current);
-      }
-
-      const jittered = advanceJitterWalk(state, segDist, size, baseHardness, sizeJitter, hardnessJitter);
-      size = jittered.size;
-      const hardness = jittered.hardness;
-
-      // Taper: shrink brush size to zero over taperDistance
-      const brushTaper = toolSettings.brushTaper;
-      if (brushTaper > 0) {
-        const taperFactor = Math.max(0, 1 - (state.strokeDistance ?? 0) / brushTaper);
-        size = size * taperFactor;
-        if (size < 0.5) {
-          state.lastPoint = layerLocalPos;
-          break;
-        }
-      }
-
-      const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
-
-      if (brushFade > 0 && (state.strokeDistance ?? 0) >= brushFade) {
-        state.lastPoint = layerLocalPos;
-        break;
-      }
-
-      if (brushScatter > 0) {
-        const scatterPts = interpolatePointsWithScatter(state.lastPoint, layerLocalPos, spacing, brushScatter, size);
-        if (brushFade > 0) {
-          emitDabsWithFade(engine, state.layerId, scatterPts, state.lastPoint, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym, 0, aJ, oJ);
-        } else {
-          const pts = new Float64Array(scatterPts.length * 2);
-          for (let i = 0; i < scatterPts.length; i++) {
-            pts[i * 2] = scatterPts[i]!.x;
-            pts[i * 2 + 1] = scatterPts[i]!.y;
-          }
-          gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-          for (const m of mirrorBatchPoints(pts, sym)) {
-            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-          }
-          const subs = getActiveSubBrushes();
-          if (subs.length > 0) emitSubBrushDabs(engine, state.layerId, pts, size, r, g, b, color.a, opacity, subs, sym);
-        }
-      } else {
-        const { points: pts, remainder: spacingRem } = interpolateWithSpacing(state.lastPoint, layerLocalPos, spacing, state.spacingRemainder ?? 0);
-        state.spacingRemainder = spacingRem;
-        if (brushFade > 0) {
-          emitFlatDabsWithFade(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym, 0, aJ, oJ);
-        } else {
-          gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-          for (const m of mirrorBatchPoints(pts, sym)) {
-            gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-          }
-          const subs2 = getActiveSubBrushes();
-          if (subs2.length > 0) emitSubBrushDabs(engine, state.layerId, pts, size, r, g, b, color.a, opacity, subs2, sym);
-        }
-      }
-
-      // Update stroke distance for non-fade path (fade helpers update it internally)
-      if (brushFade <= 0) {
-        const sdx = layerLocalPos.x - state.lastPoint.x;
-        const sdy = layerLocalPos.y - state.lastPoint.y;
-        state.strokeDistance = (state.strokeDistance ?? 0) + Math.sqrt(sdx * sdx + sdy * sdy);
-      }
-      // Record point for hold-to-smooth
-      if (state.strokePoints) {
-        state.strokePoints.push({ x: layerLocalPos.x, y: layerLocalPos.y });
-      }
-      state.lastPoint = layerLocalPos;
-      useEditorStore.getState().notifyRender();
+    case 'brush':
+      handleBrushStroke({
+        engine, state, layerLocalPos, sym,
+        interpolateWithSpacing, emitFlatDabsWithFade, emitDabsWithFade,
+        advanceJitterWalk, getActiveSubBrushes, emitSubBrushDabs,
+      });
       break;
-    }
-
-    case 'pencil': {
-      const color = state.strokeColor ?? useToolSettingsStore.getState().foregroundColor;
-      const size = toolSettings.pencilSize;
-      gpuDrawPencilLine(engine, state.layerId,
-        state.lastPoint.x, state.lastPoint.y, layerLocalPos.x, layerLocalPos.y,
-        color.r / 255, color.g / 255, color.b / 255, color.a, size);
-      if (isSymmetryActive(sym)) {
-        const mFrom = getMirroredPoints(state.lastPoint.x, state.lastPoint.y, sym);
-        const mTo = getMirroredPoints(layerLocalPos.x, layerLocalPos.y, sym);
-        for (let i = 0; i < mFrom.length; i++) {
-          gpuDrawPencilLine(engine, state.layerId,
-            mFrom[i]!.x, mFrom[i]!.y, mTo[i]!.x, mTo[i]!.y,
-            color.r / 255, color.g / 255, color.b / 255, color.a, size);
-        }
-      }
-      state.lastPoint = layerLocalPos;
-      useEditorStore.getState().notifyRender();
+    case 'pencil':
+      handlePencilStroke(engine, state, layerLocalPos, sym);
       break;
-    }
-
-    case 'eraser': {
-      const size = toolSettings.eraserSize;
-      const hardness = 0.8;
-      const opacity = toolSettings.eraserOpacity / 100;
-      const spacing = Math.max(1, size * 0.25);
-      const { points: pts, remainder: spacingRem } = interpolateWithSpacing(state.lastPoint, layerLocalPos, spacing, state.spacingRemainder ?? 0);
-      state.spacingRemainder = spacingRem;
-      gpuEraserDabBatch(engine, state.layerId, pts, size, hardness, opacity);
-      for (const m of mirrorBatchPoints(pts, sym)) {
-        gpuEraserDabBatch(engine, state.layerId, m, size, hardness, opacity);
-      }
-      state.lastPoint = layerLocalPos;
-      useEditorStore.getState().notifyRender();
+    case 'eraser':
+      handleEraserStroke(engine, state, layerLocalPos, sym, interpolateWithSpacing);
       break;
-    }
-
     default:
       break;
   }
 }
 
 /** GPU mask painting — brush/eraser/pencil on the layer mask texture. */
-function handleMaskPaintMoveGpu(
-  engine: ReturnType<typeof getEngine>,
+type MaskTarget = 'layerMask' | 'quickMask';
+
+function handleMaskPaintMoveUnified(
+  engine: Engine,
   state: InteractionState,
   pos: { x: number; y: number },
   toolSettings: ReturnType<typeof useToolSettingsStore.getState>,
+  target: MaskTarget,
 ): void {
-  if (!state.lastPoint || !engine || !state.layerId) return;
+  if (!state.lastPoint) return;
 
-  // Inverted from quick mask: brush=1 (subtract/hide), eraser=0 (add/reveal)
-  const mode = state.tool === 'eraser' ? 0 : 1;
+  const isQuickMask = target === 'quickMask';
+  const mode = isQuickMask
+    ? (state.tool === 'eraser' ? 1 : 0)
+    : (state.tool === 'eraser' ? 0 : 1);
+
+  const emitDabs = (size: number, hardness: number, opacity: number) => {
+    const spacing = Math.max(1, size * 0.25);
+    const pts = interpolatePoints(state.lastPoint!, pos, spacing);
+    const arr = new Float64Array(pts.length * 2);
+    for (let i = 0; i < pts.length; i++) {
+      arr[i * 2] = pts[i]!.x;
+      arr[i * 2 + 1] = pts[i]!.y;
+    }
+    if (isQuickMask) {
+      gpuQuickMaskDabBatch(engine, arr, size, hardness, opacity, mode);
+    } else {
+      gpuMaskDabBatch(engine, state.layerId!, arr, size, hardness, opacity, mode);
+    }
+  };
 
   switch (state.tool) {
-    case 'brush': {
-      const size = toolSettings.brushSize;
-      const hardness = toolSettings.brushHardness / 100;
-      const opacity = toolSettings.brushOpacity / 100;
-      const spacing = Math.max(1, size * 0.25);
-      const pts = interpolatePoints(state.lastPoint, pos, spacing);
-      const arr = new Float64Array(pts.length * 2);
-      for (let i = 0; i < pts.length; i++) {
-        arr[i * 2] = pts[i]!.x;
-        arr[i * 2 + 1] = pts[i]!.y;
-      }
-      gpuMaskDabBatch(engine, state.layerId, arr, size, hardness, opacity, mode);
+    case 'brush':
+      emitDabs(toolSettings.brushSize, toolSettings.brushHardness / 100, toolSettings.brushOpacity / 100);
       break;
-    }
     case 'pencil': {
       const size = toolSettings.pencilSize;
-      gpuMaskPencilLine(
-        engine, state.layerId,
-        state.lastPoint.x, state.lastPoint.y, pos.x, pos.y,
-        1.0, size, mode,
-      );
-      break;
-    }
-    case 'eraser': {
-      const size = toolSettings.eraserSize;
-      const hardness = 0.8;
-      const opacity = toolSettings.eraserOpacity / 100;
-      const spacing = Math.max(1, size * 0.25);
-      const pts = interpolatePoints(state.lastPoint, pos, spacing);
-      const arr = new Float64Array(pts.length * 2);
-      for (let i = 0; i < pts.length; i++) {
-        arr[i * 2] = pts[i]!.x;
-        arr[i * 2 + 1] = pts[i]!.y;
+      if (isQuickMask) {
+        gpuQuickMaskPencil(engine, state.lastPoint.x, state.lastPoint.y, pos.x, pos.y, 1, 1, 1, 1, size, mode);
+      } else {
+        gpuMaskPencilLine(engine, state.layerId!, state.lastPoint.x, state.lastPoint.y, pos.x, pos.y, 1.0, size, mode);
       }
-      gpuMaskDabBatch(engine, state.layerId, arr, size, hardness, opacity, mode);
       break;
     }
-    default:
+    case 'eraser':
+      emitDabs(toolSettings.eraserSize, 0.8, toolSettings.eraserOpacity / 100);
       break;
-  }
-
-  state.lastPoint = pos;
-  useEditorStore.getState().notifyRender();
-}
-
-/** GPU quick mask painting — brush/eraser/pencil on the GPU quick mask texture. */
-function handleQuickMaskPaintMove(
-  engine: ReturnType<typeof getEngine>,
-  state: InteractionState,
-  pos: { x: number; y: number },
-  toolSettings: ReturnType<typeof useToolSettingsStore.getState>,
-): void {
-  if (!state.lastPoint || !engine) return;
-
-  const mode = state.tool === 'eraser' ? 1 : 0; // 0 = brush (add), 1 = eraser (remove)
-
-  switch (state.tool) {
-    case 'brush': {
-      const size = toolSettings.brushSize;
-      const hardness = toolSettings.brushHardness / 100;
-      const opacity = toolSettings.brushOpacity / 100;
-      const spacing = Math.max(1, size * 0.25);
-      const pts = interpolatePoints(state.lastPoint, pos, spacing);
-      const arr = new Float64Array(pts.length * 2);
-      for (let i = 0; i < pts.length; i++) {
-        arr[i * 2] = pts[i]!.x;
-        arr[i * 2 + 1] = pts[i]!.y;
-      }
-      gpuQuickMaskDabBatch(engine, arr, size, hardness, opacity, mode);
-      break;
-    }
-    case 'pencil': {
-      const size = toolSettings.pencilSize;
-      const color = { r: 255, g: 255, b: 255, a: 1 };
-      gpuQuickMaskPencil(
-        engine,
-        state.lastPoint.x, state.lastPoint.y, pos.x, pos.y,
-        color.r / 255, color.g / 255, color.b / 255, color.a,
-        size,
-        mode,
-      );
-      break;
-    }
-    case 'eraser': {
-      const size = toolSettings.eraserSize;
-      const hardness = 0.8;
-      const opacity = toolSettings.eraserOpacity / 100;
-      const spacing = Math.max(1, size * 0.25);
-      const pts = interpolatePoints(state.lastPoint, pos, spacing);
-      const arr = new Float64Array(pts.length * 2);
-      for (let i = 0; i < pts.length; i++) {
-        arr[i * 2] = pts[i]!.x;
-        arr[i * 2 + 1] = pts[i]!.y;
-      }
-      gpuQuickMaskDabBatch(engine, arr, size, hardness, opacity, mode);
-      break;
-    }
     default:
       break;
   }
