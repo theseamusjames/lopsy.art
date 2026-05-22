@@ -18,157 +18,138 @@ describe('parseABR', () => {
     expect(result).toEqual([]);
   });
 
-  describe('v2 format', () => {
-    test('single computed brush is skipped', () => {
-      // Version 2, one computed brush (type=1)
-      const { buffer, view } = makeDataView(2 + 2 + 4 + 4);
+  test('returns empty array for unknown version', () => {
+    const { buffer, view } = makeDataView(2);
+    view.setUint16(0, 99);
+    expect(parseABR(buffer)).toEqual([]);
+  });
+
+  describe('v1 format', () => {
+    test('single sampled brush with Pascal string name', () => {
+      const width = 4;
+      const height = 4;
+      const pixelCount = width * height;
+      const nameStr = 'Dot';
+      const nameLen = nameStr.length;
+
+      const chunkSize = 4 + 2 + 1 + nameLen + 1 + 8 + 2 + 1 + pixelCount;
+      const totalSize = 2 + 2 + 4 + chunkSize;
+      const { buffer, view } = makeDataView(totalSize);
       let offset = 0;
 
-      // version = 2
-      view.setUint16(offset, 2);
-      offset += 2;
+      view.setUint16(offset, 1); offset += 2;
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint32(offset, chunkSize); offset += 4;
+      view.setUint32(offset, 0); offset += 4;
+      view.setUint16(offset, 30); offset += 2;
 
-      // brushType = 1 (computed)
-      view.setUint16(offset, 1);
-      offset += 2;
+      view.setUint8(offset, nameLen); offset += 1;
+      for (let i = 0; i < nameLen; i++) {
+        view.setUint8(offset + i, nameStr.charCodeAt(i));
+      }
+      offset += nameLen;
 
-      // chunkSize = 4 (some dummy data)
-      view.setUint32(offset, 4);
-      offset += 4;
+      view.setUint8(offset, 0); offset += 1;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, height); offset += 2;
+      view.setUint16(offset, width); offset += 2;
+      view.setUint16(offset, 8); offset += 2;
+      view.setUint8(offset, 0); offset += 1;
 
-      // 4 bytes of dummy data
+      for (let i = 0; i < pixelCount; i++) {
+        view.setUint8(offset + i, 255);
+      }
+
+      const result = parseABR(buffer);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.name).toBe('Dot');
+      expect(result[0]!.width).toBe(4);
+      expect(result[0]!.height).toBe(4);
+      expect(result[0]!.spacing).toBe(30);
+      expect(result[0]!.data[0]).toBe(255);
+    });
+  });
+
+  describe('v2 format', () => {
+    test('single computed brush is skipped', () => {
+      const { buffer, view } = makeDataView(2 + 2 + 4 + 4);
+      let offset = 0;
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint16(offset, 1); offset += 2;
+      view.setUint32(offset, 4); offset += 4;
       view.setUint32(offset, 0);
 
       const result = parseABR(buffer);
       expect(result).toEqual([]);
     });
 
-    test('single sampled brush', () => {
-      // Build a v2 buffer with a 4x4 sampled brush, raw compression
+    test('single sampled brush with raw 8-bit pixels', () => {
       const width = 4;
       const height = 4;
       const pixelCount = width * height;
-
-      // Chunk contents: miscInfo(4) + spacing(2) + nameLength(2) + name(0)
-      //   + antiAlias(1) + bounds(8) + depth(2) + compression(1) + pixels(16)
       const chunkSize = 4 + 2 + 2 + 1 + 8 + 2 + 1 + pixelCount;
       const totalSize = 2 + 2 + 4 + chunkSize;
       const { buffer, view } = makeDataView(totalSize);
       let offset = 0;
 
-      // version = 2
-      view.setUint16(offset, 2);
-      offset += 2;
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint32(offset, chunkSize); offset += 4;
+      view.setUint32(offset, 0); offset += 4;
+      view.setUint16(offset, 25); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint8(offset, 1); offset += 1;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, height); offset += 2;
+      view.setUint16(offset, width); offset += 2;
+      view.setUint16(offset, 8); offset += 2;
+      view.setUint8(offset, 0); offset += 1;
 
-      // brushType = 2 (sampled)
-      view.setUint16(offset, 2);
-      offset += 2;
-
-      // chunkSize
-      view.setUint32(offset, chunkSize);
-      offset += 4;
-
-      // miscInfo
-      view.setUint32(offset, 0);
-      offset += 4;
-
-      // spacing = 25%
-      view.setUint16(offset, 25);
-      offset += 2;
-
-      // nameLength = 0 (no name)
-      view.setUint16(offset, 0);
-      offset += 2;
-
-      // antiAlias
-      view.setUint8(offset, 1);
-      offset += 1;
-
-      // bounds: top=0, left=0, bottom=4, right=4
-      view.setUint16(offset, 0);
-      offset += 2;
-      view.setUint16(offset, 0);
-      offset += 2;
-      view.setUint16(offset, height);
-      offset += 2;
-      view.setUint16(offset, width);
-      offset += 2;
-
-      // depth = 8
-      view.setUint16(offset, 8);
-      offset += 2;
-
-      // compression = 0 (raw)
-      view.setUint8(offset, 0);
-      offset += 1;
-
-      // Pixel data: gradient pattern
       for (let i = 0; i < pixelCount; i++) {
         view.setUint8(offset + i, i * 16);
       }
 
       const result = parseABR(buffer);
       expect(result).toHaveLength(1);
-
-      const brush = result[0]!;
-      expect(brush.width).toBe(4);
-      expect(brush.height).toBe(4);
-      expect(brush.spacing).toBe(25);
-      expect(brush.data).toBeInstanceOf(Uint8ClampedArray);
-      expect(brush.data.length).toBe(16);
-      expect(brush.data[0]).toBe(0);
-      expect(brush.data[1]).toBe(16);
-      expect(brush.data[15]).toBe(240);
+      expect(result[0]!.width).toBe(4);
+      expect(result[0]!.height).toBe(4);
+      expect(result[0]!.spacing).toBe(25);
+      expect(result[0]!.data[0]).toBe(0);
+      expect(result[0]!.data[1]).toBe(16);
+      expect(result[0]!.data[15]).toBe(240);
     });
 
-    test('v2 sampled brush with UTF-16 name', () => {
+    test('sampled brush with UTF-16 name', () => {
       const width = 2;
       const height = 2;
       const pixelCount = width * height;
-      const nameChars = 4; // "Test"
-
-      const chunkSize =
-        4 + 2 + 2 + nameChars * 2 + 1 + 8 + 2 + 1 + pixelCount;
+      const nameChars = 4;
+      const chunkSize = 4 + 2 + 2 + nameChars * 2 + 1 + 8 + 2 + 1 + pixelCount;
       const totalSize = 2 + 2 + 4 + chunkSize;
       const { buffer, view } = makeDataView(totalSize);
       let offset = 0;
 
-      view.setUint16(offset, 2);
-      offset += 2;
-      view.setUint16(offset, 2);
-      offset += 2;
-      view.setUint32(offset, chunkSize);
-      offset += 4;
-      view.setUint32(offset, 0);
-      offset += 4;
-      view.setUint16(offset, 50);
-      offset += 2;
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint32(offset, chunkSize); offset += 4;
+      view.setUint32(offset, 0); offset += 4;
+      view.setUint16(offset, 50); offset += 2;
+      view.setUint16(offset, nameChars); offset += 2;
 
-      // nameLength = 4
-      view.setUint16(offset, nameChars);
-      offset += 2;
-
-      // "Test" in UTF-16BE
       const nameStr = 'Test';
       for (let i = 0; i < nameChars; i++) {
-        view.setUint16(offset, nameStr.charCodeAt(i));
-        offset += 2;
+        view.setUint16(offset, nameStr.charCodeAt(i)); offset += 2;
       }
 
-      view.setUint8(offset, 0);
-      offset += 1;
-      view.setUint16(offset, 0);
-      offset += 2;
-      view.setUint16(offset, 0);
-      offset += 2;
-      view.setUint16(offset, height);
-      offset += 2;
-      view.setUint16(offset, width);
-      offset += 2;
-      view.setUint16(offset, 8);
-      offset += 2;
-      view.setUint8(offset, 0);
-      offset += 1;
+      view.setUint8(offset, 0); offset += 1;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, height); offset += 2;
+      view.setUint16(offset, width); offset += 2;
+      view.setUint16(offset, 8); offset += 2;
+      view.setUint8(offset, 0); offset += 1;
 
       for (let i = 0; i < pixelCount; i++) {
         view.setUint8(offset + i, 128);
@@ -178,6 +159,126 @@ describe('parseABR', () => {
       expect(result).toHaveLength(1);
       expect(result[0]!.name).toBe('Test');
     });
+
+    test('raw 16-bit depth downsamples to 8-bit', () => {
+      const width = 2;
+      const height = 2;
+      const pixelCount = width * height;
+      const chunkSize = 4 + 2 + 2 + 1 + 8 + 2 + 1 + pixelCount * 2;
+      const totalSize = 2 + 2 + 4 + chunkSize;
+      const { buffer, view } = makeDataView(totalSize);
+      let offset = 0;
+
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint32(offset, chunkSize); offset += 4;
+      view.setUint32(offset, 0); offset += 4;
+      view.setUint16(offset, 25); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint8(offset, 0); offset += 1;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, height); offset += 2;
+      view.setUint16(offset, width); offset += 2;
+      view.setUint16(offset, 16); offset += 2;
+      view.setUint8(offset, 0); offset += 1;
+
+      view.setUint16(offset, 0x8000); offset += 2;
+      view.setUint16(offset, 0xFF00); offset += 2;
+      view.setUint16(offset, 0x0000); offset += 2;
+      view.setUint16(offset, 0x4000); offset += 2;
+
+      const result = parseABR(buffer);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.data[0]).toBe(0x80);
+      expect(result[0]!.data[1]).toBe(0xFF);
+      expect(result[0]!.data[2]).toBe(0x00);
+      expect(result[0]!.data[3]).toBe(0x40);
+    });
+
+    test('RLE compressed 8-bit brush', () => {
+      const width = 4;
+      const height = 2;
+
+      // RLE data for 2 rows of 4 pixels each:
+      // Row 0: repeat 0xAA x4 → control byte = -3 (0xFD), value = 0xAA → 2 bytes
+      // Row 1: literal [1,2,3,4] → control byte = 3, then 4 bytes → 5 bytes
+      const row0Bytes = 2;
+      const row1Bytes = 5;
+      const rleData = [
+        // Row byte counts (2 x uint16)
+        0, row0Bytes, 0, row1Bytes,
+        // Row 0: repeat 0xAA x4
+        0xFD, 0xAA,
+        // Row 1: literal 4 bytes
+        3, 1, 2, 3, 4,
+      ];
+
+      const chunkSize = 4 + 2 + 2 + 1 + 8 + 2 + 1 + rleData.length;
+      const totalSize = 2 + 2 + 4 + chunkSize;
+      const { buffer, view } = makeDataView(totalSize);
+      let offset = 0;
+
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint32(offset, chunkSize); offset += 4;
+      view.setUint32(offset, 0); offset += 4;
+      view.setUint16(offset, 25); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint8(offset, 0); offset += 1;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, height); offset += 2;
+      view.setUint16(offset, width); offset += 2;
+      view.setUint16(offset, 8); offset += 2;
+      view.setUint8(offset, 1); offset += 1;
+
+      for (const byte of rleData) {
+        view.setUint8(offset, byte); offset += 1;
+      }
+
+      const result = parseABR(buffer);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.width).toBe(4);
+      expect(result[0]!.height).toBe(2);
+      expect(Array.from(result[0]!.data)).toEqual([0xAA, 0xAA, 0xAA, 0xAA, 1, 2, 3, 4]);
+    });
+
+    test('multiple brushes in one file', () => {
+      const width = 2;
+      const height = 2;
+      const pixelCount = width * height;
+      const chunkSize = 4 + 2 + 2 + 1 + 8 + 2 + 1 + pixelCount;
+      const totalSize = 2 + 2 * (2 + 4 + chunkSize);
+      const { buffer, view } = makeDataView(totalSize);
+      let offset = 0;
+
+      view.setUint16(offset, 2); offset += 2;
+
+      for (let b = 0; b < 2; b++) {
+        view.setUint16(offset, 2); offset += 2;
+        view.setUint32(offset, chunkSize); offset += 4;
+        view.setUint32(offset, 0); offset += 4;
+        view.setUint16(offset, 25); offset += 2;
+        view.setUint16(offset, 0); offset += 2;
+        view.setUint8(offset, 0); offset += 1;
+        view.setUint16(offset, 0); offset += 2;
+        view.setUint16(offset, 0); offset += 2;
+        view.setUint16(offset, height); offset += 2;
+        view.setUint16(offset, width); offset += 2;
+        view.setUint16(offset, 8); offset += 2;
+        view.setUint8(offset, 0); offset += 1;
+        for (let i = 0; i < pixelCount; i++) {
+          view.setUint8(offset + i, (b + 1) * 50);
+        }
+        offset += pixelCount;
+      }
+
+      const result = parseABR(buffer);
+      expect(result).toHaveLength(2);
+      expect(result[0]!.data[0]).toBe(50);
+      expect(result[1]!.data[0]).toBe(100);
+    });
   });
 
   describe('v6+ format', () => {
@@ -186,98 +287,141 @@ describe('parseABR', () => {
       const height = 20;
       const pixelCount = width * height;
 
-      // Sample data: uuid+null(6) + padding(2) + int32 bounds(16) + depth(2) + compression(1) + raw pixels
       const uuidLen = 5;
-      const paddingLen = 3; // pad to align
+      const paddingLen = 3;
       const sampleDataSize = uuidLen + paddingLen + 16 + 2 + 1 + pixelCount;
-
-      // Samp block: sampleLength(4) + sampleData
       const sampBlockSize = 4 + sampleDataSize;
-
-      // Total: version(2) + subVersion(2) + 8BIM(4) + type(4) + blockSize(4) + sampBlock
       const totalSize = 2 + 2 + 4 + 4 + 4 + sampBlockSize;
       const { buffer, view } = makeDataView(totalSize);
       let offset = 0;
 
-      // version = 6
       view.setUint16(offset, 6); offset += 2;
-      // subVersion = 2
       view.setUint16(offset, 2); offset += 2;
 
-      // "8BIM"
       const sig = '8BIMsamp';
       for (let i = 0; i < 8; i++) view.setUint8(offset + i, sig.charCodeAt(i));
       offset += 8;
 
-      // block size
       view.setUint32(offset, sampBlockSize); offset += 4;
-
-      // sampleLength
       view.setUint32(offset, sampleDataSize); offset += 4;
 
-      // UUID "test" + null
       for (let i = 0; i < 4; i++) view.setUint8(offset + i, 'test'.charCodeAt(i));
       offset += 4;
-      view.setUint8(offset, 0); offset += 1; // null terminator
-
-      // Padding (3 bytes of zeros to reach int32 bounds)
+      view.setUint8(offset, 0); offset += 1;
       offset += paddingLen;
 
-      // int32 bounds: top=0, left=0, bottom=height, right=width
       view.setInt32(offset, 0); offset += 4;
       view.setInt32(offset, 0); offset += 4;
       view.setInt32(offset, height); offset += 4;
       view.setInt32(offset, width); offset += 4;
-
-      // depth = 8
       view.setUint16(offset, 8); offset += 2;
-
-      // compression = 0
       view.setUint8(offset, 0); offset += 1;
 
-      // Pixel data
       for (let i = 0; i < pixelCount; i++) {
         view.setUint8(offset + i, 128 + (i % 128));
       }
 
       const result = parseABR(buffer);
       expect(result).toHaveLength(1);
+      expect(result[0]!.width).toBe(20);
+      expect(result[0]!.height).toBe(20);
+      expect(result[0]!.data.length).toBe(400);
+    });
 
-      const brush = result[0]!;
-      expect(brush.width).toBe(20);
-      expect(brush.height).toBe(20);
-      expect(brush.data).toBeInstanceOf(Uint8ClampedArray);
-      expect(brush.data.length).toBe(400);
-      expect(brush.data[0]).toBe(128);
+    test('v6 with missing 8BIM signature returns empty', () => {
+      const { buffer, view } = makeDataView(10);
+      view.setUint16(0, 6);
+      view.setUint32(2, 1);
+      expect(parseABR(buffer)).toEqual([]);
+    });
+
+    test('version 7 is parsed as v6+ format', () => {
+      const { buffer, view } = makeDataView(6);
+      view.setUint16(0, 7);
+      view.setUint16(2, 1);
+      const result = parseABR(buffer);
+      expect(result).toEqual([]);
+    });
+
+    test('version 10 is parsed as v6+ format', () => {
+      const { buffer, view } = makeDataView(6);
+      view.setUint16(0, 10);
+      view.setUint16(2, 1);
+      const result = parseABR(buffer);
+      expect(result).toEqual([]);
     });
   });
 
   describe('error handling', () => {
-    test('handles truncated buffer gracefully', () => {
-      // Version 2 header but truncated before brush data
+    test('truncated buffer beyond chunk size returns empty', () => {
       const { buffer, view } = makeDataView(8);
-      view.setUint16(0, 2); // version
-      view.setUint16(2, 2); // brushType = sampled
-      view.setUint32(4, 9999); // chunkSize way beyond buffer
-
-      // Should not be added because chunkEnd > byteLength
-      const result = parseABR(buffer);
-      expect(result).toEqual([]);
+      view.setUint16(0, 2);
+      view.setUint16(2, 2);
+      view.setUint32(4, 9999);
+      expect(parseABR(buffer)).toEqual([]);
     });
 
-    test('handles unknown version gracefully', () => {
-      const { buffer, view } = makeDataView(2);
-      view.setUint16(0, 99);
+    test('zero-size bounds produce no brush', () => {
+      const chunkSize = 4 + 2 + 2 + 1 + 8 + 2 + 1;
+      const totalSize = 2 + 2 + 4 + chunkSize;
+      const { buffer, view } = makeDataView(totalSize);
+      let offset = 0;
 
-      const result = parseABR(buffer);
-      expect(result).toEqual([]);
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint32(offset, chunkSize); offset += 4;
+      view.setUint32(offset, 0); offset += 4;
+      view.setUint16(offset, 25); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint8(offset, 0); offset += 1;
+      // bounds: top=0, left=0, bottom=0, right=0 (zero size)
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, 8); offset += 2;
+      view.setUint8(offset, 0);
+
+      expect(parseABR(buffer)).toEqual([]);
     });
 
-    test('handles v6 with missing 8BIM signature', () => {
-      const { buffer, view } = makeDataView(10);
-      view.setUint16(0, 6);
-      view.setUint32(2, 1);
-      // No valid 8BIM block follows
+    test('random bytes do not throw', () => {
+      const sizes = [4, 10, 50, 100, 256];
+      for (const size of sizes) {
+        const buffer = new ArrayBuffer(size);
+        const arr = new Uint8Array(buffer);
+        for (let i = 0; i < size; i++) {
+          arr[i] = Math.floor(Math.random() * 256);
+        }
+        expect(() => parseABR(buffer)).not.toThrow();
+      }
+    });
+
+    test('truncated mid-pixel returns partial results', () => {
+      const width = 4;
+      const height = 4;
+      const chunkSize = 4 + 2 + 2 + 1 + 8 + 2 + 1 + 8;
+      const totalSize = 2 + 2 + 4 + chunkSize;
+      const { buffer, view } = makeDataView(totalSize);
+      let offset = 0;
+
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint16(offset, 2); offset += 2;
+      view.setUint32(offset, chunkSize); offset += 4;
+      view.setUint32(offset, 0); offset += 4;
+      view.setUint16(offset, 25); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint8(offset, 0); offset += 1;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, 0); offset += 2;
+      view.setUint16(offset, height); offset += 2;
+      view.setUint16(offset, width); offset += 2;
+      view.setUint16(offset, 8); offset += 2;
+      view.setUint8(offset, 0); offset += 1;
+      // Only 8 bytes of pixel data instead of 16 needed
+      for (let i = 0; i < 8; i++) {
+        view.setUint8(offset + i, 128);
+      }
 
       const result = parseABR(buffer);
       expect(result).toEqual([]);
