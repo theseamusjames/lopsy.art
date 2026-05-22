@@ -14,6 +14,7 @@ export interface HistorySlice {
   undo: () => void;
   redo: () => void;
   pushHistory: (label?: string) => void;
+  pushHistoryMetadata: (label: string) => void;
   markClean: () => void;
 }
 
@@ -252,6 +253,23 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       undoStack: [...state.undoStack.slice(-49), snapshot],
       redoStack: [],
       dirtyLayerIds: new Set(),
+      isDirty: true,
+      renderVersion: state.renderVersion + 1,
+    });
+  },
+
+  pushHistoryMetadata: (label: string) => {
+    const state = get();
+    lastRestoredSnapshot = null;
+
+    const snapshot: HistorySnapshot = {
+      kind: 'metadata',
+      document: state.document,
+      label,
+    };
+    set({
+      undoStack: [...state.undoStack.slice(-49), snapshot],
+      redoStack: [],
       isDirty: true,
       renderVersion: state.renderVersion + 1,
     });

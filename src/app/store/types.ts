@@ -173,6 +173,7 @@ export interface EditorState {
   undo: () => void;
   redo: () => void;
   pushHistory: (label?: string) => void;
+  pushHistoryMetadata: (label: string) => void;
   markClean: () => void;
 }
 

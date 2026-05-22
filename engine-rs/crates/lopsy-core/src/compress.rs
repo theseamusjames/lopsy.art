@@ -103,6 +103,90 @@ pub fn rle_decompress(data: &[u8], expected_len: usize) -> Vec<u8> {
     out
 }
 
+// ---------------------------------------------------------------------------
+// u16 variant — same RLE scheme but each "pixel" is 4 × u16 = 8 bytes
+// ---------------------------------------------------------------------------
+
+const PIXEL_U16: usize = 8; // 4 channels × 2 bytes
+
+pub fn rle_compress_u16(data: &[u8]) -> Vec<u8> {
+    assert!(data.len() % PIXEL_U16 == 0, "Data length must be a multiple of 8 (RGBA u16)");
+    let pixel_count = data.len() / PIXEL_U16;
+    if pixel_count == 0 {
+        return Vec::new();
+    }
+
+    let mut out = Vec::with_capacity(data.len() + data.len() / 128 + 16);
+    let mut i = 0;
+
+    while i < pixel_count {
+        let pixel = &data[i * PIXEL_U16..(i + 1) * PIXEL_U16];
+        let mut run_len = 1;
+        while i + run_len < pixel_count
+            && run_len < MAX_RUN
+            && data[(i + run_len) * PIXEL_U16..(i + run_len + 1) * PIXEL_U16] == *pixel
+        {
+            run_len += 1;
+        }
+
+        if run_len >= 2 {
+            out.push(0x80 | (run_len as u8 - 1));
+            out.extend_from_slice(pixel);
+            i += run_len;
+        } else {
+            let start = i;
+            let mut lit_len = 0;
+            while i + lit_len < pixel_count && lit_len < MAX_RUN {
+                let p = &data[(i + lit_len) * PIXEL_U16..(i + lit_len + 1) * PIXEL_U16];
+                let mut ahead = 1;
+                while i + lit_len + ahead < pixel_count
+                    && ahead < 2
+                    && data[(i + lit_len + ahead) * PIXEL_U16..(i + lit_len + ahead + 1) * PIXEL_U16] == *p
+                {
+                    ahead += 1;
+                }
+                if ahead >= 2 && lit_len > 0 {
+                    break;
+                }
+                lit_len += 1;
+            }
+            out.push(lit_len as u8 - 1);
+            out.extend_from_slice(&data[start * PIXEL_U16..(start + lit_len) * PIXEL_U16]);
+            i += lit_len;
+        }
+    }
+
+    out
+}
+
+pub fn rle_decompress_u16(data: &[u8], expected_len: usize) -> Vec<u8> {
+    assert!(expected_len % PIXEL_U16 == 0, "Expected length must be a multiple of 8 (RGBA u16)");
+    let mut out = Vec::with_capacity(expected_len);
+    let mut pos = 0;
+
+    while pos < data.len() {
+        let tag = data[pos];
+        pos += 1;
+
+        if tag & 0x80 != 0 {
+            let count = (tag & 0x7F) as usize + 1;
+            let pixel = &data[pos..pos + PIXEL_U16];
+            pos += PIXEL_U16;
+            for _ in 0..count {
+                out.extend_from_slice(pixel);
+            }
+        } else {
+            let count = tag as usize + 1;
+            let bytes = count * PIXEL_U16;
+            out.extend_from_slice(&data[pos..pos + bytes]);
+            pos += bytes;
+        }
+    }
+
+    assert_eq!(out.len(), expected_len, "Decompressed size mismatch");
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,6 +322,86 @@ mod tests {
         let ratio = data.len() as f64 / compressed.len() as f64;
         assert!(ratio > 5.0, "Expected 5x+ compression on typical layer, got {ratio:.1}x");
         let decompressed = rle_decompress(&compressed, data.len());
+        assert_eq!(decompressed, data);
+    }
+
+    // ---------------------------------------------------------------
+    // u16 variant tests
+    // ---------------------------------------------------------------
+
+    fn make_u16_pixel(r: u16, g: u16, b: u16, a: u16) -> [u8; 8] {
+        let mut p = [0u8; 8];
+        p[0..2].copy_from_slice(&r.to_le_bytes());
+        p[2..4].copy_from_slice(&g.to_le_bytes());
+        p[4..6].copy_from_slice(&b.to_le_bytes());
+        p[6..8].copy_from_slice(&a.to_le_bytes());
+        p
+    }
+
+    #[test]
+    fn u16_roundtrip_empty() {
+        let data: Vec<u8> = Vec::new();
+        let compressed = rle_compress_u16(&data);
+        assert!(compressed.is_empty());
+        let decompressed = rle_decompress_u16(&compressed, 0);
+        assert!(decompressed.is_empty());
+    }
+
+    #[test]
+    fn u16_roundtrip_all_transparent() {
+        let pixel = make_u16_pixel(0, 0, 0, 0);
+        let data: Vec<u8> = pixel.iter().copied().cycle().take(1000 * 8).collect();
+        let compressed = rle_compress_u16(&data);
+        assert!(compressed.len() < data.len() / 5);
+        let decompressed = rle_decompress_u16(&compressed, data.len());
+        assert_eq!(decompressed, data);
+    }
+
+    #[test]
+    fn u16_roundtrip_alternating() {
+        let red = make_u16_pixel(65535, 0, 0, 65535);
+        let blue = make_u16_pixel(0, 0, 65535, 65535);
+        let mut data = Vec::with_capacity(200 * 8);
+        for i in 0..200 {
+            data.extend_from_slice(if i % 2 == 0 { &red } else { &blue });
+        }
+        let compressed = rle_compress_u16(&data);
+        let decompressed = rle_decompress_u16(&compressed, data.len());
+        assert_eq!(decompressed, data);
+    }
+
+    #[test]
+    fn u16_roundtrip_mixed() {
+        let mut data = Vec::new();
+        let transparent = make_u16_pixel(0, 0, 0, 0);
+        let white = make_u16_pixel(65535, 65535, 65535, 65535);
+        for _ in 0..50 { data.extend_from_slice(&transparent); }
+        for i in 0..10u16 {
+            data.extend_from_slice(&make_u16_pixel(i * 6553, 32768, 50000, 65535));
+        }
+        for _ in 0..100 { data.extend_from_slice(&white); }
+        let compressed = rle_compress_u16(&data);
+        let decompressed = rle_decompress_u16(&compressed, data.len());
+        assert_eq!(decompressed, data);
+    }
+
+    #[test]
+    fn u16_compression_ratio_sparse_layer() {
+        let width = 200;
+        let height = 200;
+        let transparent = make_u16_pixel(0, 0, 0, 0);
+        let mut data: Vec<u8> = transparent.iter().copied().cycle().take(width * height * 8).collect();
+        for y in 80..120 {
+            for x in 80..120 {
+                let idx = (y * width + x) * 8;
+                let p = make_u16_pixel((x * 300) as u16, (y * 200) as u16, 32768, 65535);
+                data[idx..idx + 8].copy_from_slice(&p);
+            }
+        }
+        let compressed = rle_compress_u16(&data);
+        let ratio = data.len() as f64 / compressed.len() as f64;
+        assert!(ratio > 5.0, "Expected 5x+ compression on sparse u16 layer, got {ratio:.1}x");
+        let decompressed = rle_decompress_u16(&compressed, data.len());
         assert_eq!(decompressed, data);
     }
 }
