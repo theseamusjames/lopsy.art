@@ -43,7 +43,9 @@ import { ImageSizeModal } from '../../components/ImageSizeModal/ImageSizeModal';
 import { KeyboardShortcutsModal } from '../../components/KeyboardShortcutsModal/KeyboardShortcutsModal';
 import { AboutModal } from '../../components/AboutModal/AboutModal';
 import { useEditorStore } from '../editor-store';
-import { growSelection, shrinkSelection, featherSelection, selectionBounds } from '../../selection/selection';
+import { growSelection, shrinkSelection, selectionBounds } from '../../selection/selection';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { setSelectionMask, featherSelectionMask, readSelectionMask } from '../../engine-wasm/wasm-bridge';
 import { createTransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
 import styles from './MenuBar.module.css';
@@ -240,11 +242,30 @@ export function MenuBar() {
     const sel = editor.selection;
     if (!sel.active || !sel.mask) { setSelectDialog(null); return; }
     const { width: docW, height: docH } = editor.document;
-    const newMask = selectDialog === 'grow'
-      ? growSelection(sel.mask, docW, docH, amount)
-      : selectDialog === 'shrink'
-      ? shrinkSelection(sel.mask, docW, docH, amount)
-      : featherSelection(sel.mask, docW, docH, amount);
+    let newMask: Uint8ClampedArray;
+    if (selectDialog === 'feather') {
+      const engine = getEngine();
+      if (engine) {
+        const u8Mask = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
+        setSelectionMask(engine, u8Mask, docW, docH);
+        featherSelectionMask(engine, amount);
+        const readback = readSelectionMask(engine);
+        if (readback.length >= 8) {
+          const dv = new DataView(readback.buffer, readback.byteOffset, readback.byteLength);
+          const rw = dv.getUint32(0, true);
+          const rh = dv.getUint32(4, true);
+          newMask = new Uint8ClampedArray(readback.buffer, readback.byteOffset + 8, rw * rh);
+        } else {
+          newMask = sel.mask;
+        }
+      } else {
+        newMask = sel.mask;
+      }
+    } else {
+      newMask = selectDialog === 'grow'
+        ? growSelection(sel.mask, docW, docH, amount)
+        : shrinkSelection(sel.mask, docW, docH, amount);
+    }
     const newBounds = selectionBounds(newMask, docW, docH);
     if (newBounds) {
       editor.setSelection(newBounds, newMask, docW, docH);

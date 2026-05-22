@@ -8,13 +8,16 @@ import {
   createRectSelection as tsCreateRectSelection,
   createEllipseSelection as tsCreateEllipseSelection,
   selectionBounds as tsSelectionBounds,
-  featherSelection,
 } from '../../selection/selection';
+import { getEngine } from '../../engine-wasm/engine-state';
 import {
   createRectSelection as wasmCreateRectSelection,
   createEllipseSelection as wasmCreateEllipseSelection,
   selectionBounds as wasmSelectionBounds,
   createPolygonMask as wasmCreatePolygonMask,
+  setSelectionMask,
+  featherSelectionMask,
+  readSelectionMask,
 } from '../../engine-wasm/wasm-bridge';
 import { createPolygonMask as tsCreatePolygonMask } from '../../tools/lasso/lasso';
 import { createTransformState } from '../../tools/transform/transform';
@@ -68,12 +71,24 @@ export function commitFeatheredSelection(
   const featherRadius = useToolSettingsStore.getState().marqueeFeather;
   const editorState = useEditorStore.getState();
   if (featherRadius > 0) {
-    const feathered = featherSelection(mask, docW, docH, featherRadius);
-    const newBounds = selectionBounds(feathered, docW, docH);
-    if (newBounds) {
-      editorState.setSelection(newBounds, feathered, docW, docH);
-      useUIStore.getState().setTransform(createTransformState(newBounds));
-      return;
+    const engine = getEngine();
+    if (engine) {
+      const u8Mask = new Uint8Array(mask.buffer, mask.byteOffset, mask.byteLength);
+      setSelectionMask(engine, u8Mask, docW, docH);
+      featherSelectionMask(engine, featherRadius);
+      const readback = readSelectionMask(engine);
+      if (readback.length >= 8) {
+        const dv = new DataView(readback.buffer, readback.byteOffset, readback.byteLength);
+        const rw = dv.getUint32(0, true);
+        const rh = dv.getUint32(4, true);
+        const feathered = new Uint8ClampedArray(readback.buffer, readback.byteOffset + 8, rw * rh);
+        const newBounds = selectionBounds(feathered, rw, rh);
+        if (newBounds) {
+          editorState.setSelection(newBounds, feathered, rw, rh);
+          useUIStore.getState().setTransform(createTransformState(newBounds));
+          return;
+        }
+      }
     }
   }
   editorState.setSelection(bounds, mask, docW, docH);

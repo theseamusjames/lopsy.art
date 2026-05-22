@@ -124,6 +124,47 @@ pub fn feather_selection_mask(engine: &mut EngineInner, radius: u32) {
     engine.needs_recomposite = true;
 }
 
+/// Read the current selection mask texture back from the GPU as a single-channel
+/// byte array. Returns (width, height, mask_bytes). Empty if no mask is set.
+pub fn read_selection_mask(engine: &EngineInner) -> (u32, u32, Vec<u8>) {
+    let mask_handle = match engine.selection_mask_texture {
+        Some(h) => h,
+        None => return (0, 0, Vec::new()),
+    };
+    let (w, h) = engine.texture_pool.get_size(mask_handle).unwrap_or((0, 0));
+    if w == 0 || h == 0 { return (0, 0, Vec::new()); }
+    let texture = match engine.texture_pool.get(mask_handle) {
+        Some(t) => t,
+        None => return (0, 0, Vec::new()),
+    };
+
+    let gl = &engine.gl;
+    let fbo = match gl.create_framebuffer() {
+        Some(f) => f,
+        None => return (0, 0, Vec::new()),
+    };
+    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+    gl.framebuffer_texture_2d(
+        WebGl2RenderingContext::FRAMEBUFFER,
+        WebGl2RenderingContext::COLOR_ATTACHMENT0,
+        WebGl2RenderingContext::TEXTURE_2D,
+        Some(texture),
+        0,
+    );
+
+    let rgba = engine.texture_pool.read_rgba(gl, 0, 0, w, h)
+        .unwrap_or_default();
+
+    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+    gl.delete_framebuffer(Some(&fbo));
+
+    let mut mask = vec![0u8; (w * h) as usize];
+    for i in 0..(w * h) as usize {
+        mask[i] = rgba.get(i * 4).copied().unwrap_or(0);
+    }
+    (w, h, mask)
+}
+
 fn gaussian_weights(radius: usize) -> Vec<f32> {
     let sigma = (radius as f32) / 2.0;
     let mut weights = Vec::with_capacity(radius + 1);
