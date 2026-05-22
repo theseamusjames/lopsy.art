@@ -8,9 +8,8 @@ export interface TranslatedMask {
 /**
  * Shift a selection mask + bounds by (dx, dy) in document space. Returns a
  * new buffer the same size as the document; pixels that fall outside the
- * document are dropped. Used for moving a marquee in quick-mask mode, where
- * we can't float pixels on the GPU (issue #315) and must keep the layer
- * texture untouched.
+ * document are dropped. Used for moving a marquee in quick-mask mode
+ * alongside translateQuickMaskContent (issue #315).
  */
 export function translateSelectionMask(
   origMask: Uint8ClampedArray,
@@ -41,4 +40,53 @@ export function translateSelectionMask(
       height: origBounds.height,
     },
   };
+}
+
+/**
+ * Translate the painted region of a quick-mask texture by (dx, dy) in
+ * document space (issue #315).
+ *
+ * `origPixels` is the full quick-mask texture as a single-channel doc-sized
+ * buffer (255 = selected, 0 = unselected). `marqueeMask` is the selection
+ * marquee defining which region moves. Pixels covered by the marquee are
+ * cut from their original location and pasted at the offset position;
+ * pixels outside the marquee are left untouched. Marquee pixels that land
+ * outside the document are dropped.
+ *
+ * Returns a new buffer the same size as `origPixels`. Does not mutate the
+ * input.
+ */
+export function translateQuickMaskContent(
+  origPixels: Uint8Array,
+  marqueeMask: Uint8ClampedArray,
+  dx: number,
+  dy: number,
+  docW: number,
+  docH: number,
+): Uint8Array {
+  const out = new Uint8Array(origPixels);
+
+  // 1) Clear the original marquee region.
+  for (let i = 0; i < marqueeMask.length; i++) {
+    if (marqueeMask[i]! > 0) out[i] = 0;
+  }
+
+  // 2) Paste the original marquee content at (x+dx, y+dy).
+  for (let y = 0; y < docH; y++) {
+    const dstY = y + dy;
+    if (dstY < 0 || dstY >= docH) continue;
+    const srcRow = y * docW;
+    const dstRow = dstY * docW;
+    for (let x = 0; x < docW; x++) {
+      const dstX = x + dx;
+      if (dstX < 0 || dstX >= docW) continue;
+      if (marqueeMask[srcRow + x]! > 0) {
+        const src = origPixels[srcRow + x]!;
+        const cur = out[dstRow + dstX]!;
+        out[dstRow + dstX] = src > cur ? src : cur;
+      }
+    }
+  }
+
+  return out;
 }

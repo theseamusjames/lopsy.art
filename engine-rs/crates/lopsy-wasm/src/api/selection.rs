@@ -145,6 +145,16 @@ pub fn draw_quick_mask_pencil_line(
     quick_mask_gpu::draw_quick_mask_pencil_line(&mut engine.inner, x0, y0, x1, y1, r, g, b, a, size, mode);
 }
 
+#[wasm_bindgen(js_name = "readQuickMaskPixels")]
+pub fn read_quick_mask_pixels(engine: &mut Engine) -> Option<Vec<u8>> {
+    quick_mask_gpu::read_quick_mask_pixels(&mut engine.inner)
+}
+
+#[wasm_bindgen(js_name = "uploadQuickMaskPixels")]
+pub fn upload_quick_mask_pixels(engine: &mut Engine, data: &[u8], w: u32, h: u32) {
+    quick_mask_gpu::upload_quick_mask_pixels(&mut engine.inner, data, w, h);
+}
+
 #[wasm_bindgen(js_name = "fillQuickMask")]
 pub fn fill_quick_mask(
     engine: &mut Engine,

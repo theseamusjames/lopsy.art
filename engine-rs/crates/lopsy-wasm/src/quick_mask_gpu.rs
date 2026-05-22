@@ -217,6 +217,65 @@ pub fn exit_quick_mask_mode(engine: &mut EngineInner) -> Option<Vec<u8>> {
     })
 }
 
+/// Read the current quick mask texture into a single-channel buffer (R
+/// channel only — selected = 255, unselected = 0). Returns None if no
+/// quick mask texture is allocated.
+pub fn read_quick_mask_pixels(engine: &mut EngineInner) -> Option<Vec<u8>> {
+    let handle = engine.quick_mask_texture?;
+    let (w, h) = engine.texture_pool.get_size(handle)?;
+
+    let fbo = engine.gl.create_framebuffer()?;
+    let tex = engine.texture_pool.get(handle)?.clone();
+    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+    engine.gl.framebuffer_texture_2d(
+        WebGl2RenderingContext::FRAMEBUFFER,
+        WebGl2RenderingContext::COLOR_ATTACHMENT0,
+        WebGl2RenderingContext::TEXTURE_2D,
+        Some(&tex),
+        0,
+    );
+    let rgba = engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h).ok();
+    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+    engine.gl.delete_framebuffer(Some(&fbo));
+
+    rgba.map(|data| {
+        let mut single = vec![0u8; (w * h) as usize];
+        for i in 0..(w * h) as usize {
+            single[i] = data[i * 4];
+        }
+        single
+    })
+}
+
+/// Replace the quick mask texture with the provided single-channel data.
+/// `data.len()` must be `w * h`. Silently no-ops if no quick mask is
+/// allocated or the dimensions don't match the texture.
+pub fn upload_quick_mask_pixels(
+    engine: &mut EngineInner,
+    data: &[u8],
+    w: u32,
+    h: u32,
+) {
+    let Some(tex_handle) = engine.quick_mask_texture else { return };
+    let (tw, th) = match engine.texture_pool.get_size(tex_handle) {
+        Some(s) => s,
+        None => return,
+    };
+    if tw != w || th != h { return }
+    if data.len() != (w * h) as usize { return }
+
+    let mut rgba = vec![0u8; (w * h * 4) as usize];
+    for i in 0..(w * h) as usize {
+        let v = data[i];
+        rgba[i * 4] = v;
+        rgba[i * 4 + 1] = v;
+        rgba[i * 4 + 2] = v;
+        rgba[i * 4 + 3] = 255;
+    }
+    let _ = engine.texture_pool.upload_rgba(&engine.gl, tex_handle, 0, 0, w, h, &rgba);
+    engine.needs_recomposite = true;
+}
+
 /// Paint a brush dab on the quick mask texture. Mode 0 = brush (add), 1 = eraser (remove).
 pub fn paint_quick_mask_dab(
     engine: &mut EngineInner,

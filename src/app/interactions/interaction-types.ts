@@ -48,6 +48,10 @@ export interface InteractionState {
   hardnessJitterDistTraveled?: number;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
+  /** Snapshot of the quick-mask texture at move-down, so each move-move
+   *  pass can compute the translated state from the original (issue #315). */
+  moveQuickMaskOriginalPixels?: Uint8Array | null;
+  moveQuickMaskDocSize?: { width: number; height: number } | null;
   selectionOnlyTransform?: boolean;
   /** Set when a mesh warp handle drag is in progress. */
   meshWarpDragging?: boolean;

@@ -12,6 +12,8 @@ import {
   compositeFloat,
   hasFloat,
   setSelectionMask,
+  readQuickMaskPixels,
+  uploadQuickMaskPixels,
 } from '../../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import type {
@@ -21,7 +23,7 @@ import type {
   PersistentTransform,
 } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
-import { translateSelectionMask } from './quick-mask-move';
+import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
 
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
   const editorState = useEditorStore.getState();
@@ -37,11 +39,16 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   } = ctx;
   let { activeLayerId } = ctx;
 
-  // Quick-mask mode + active marquee: float-on-GPU would cut the underlying
-  // layer pixels (issue #315). Until we have quick-mask-texture float ops,
-  // translate only the marquee bounds/mask in JS and leave both the layer
-  // and the quick-mask texture untouched.
+  // Quick-mask mode + active marquee: float-on-GPU would cut the layer
+  // pixels (the layer texture is not the right target). Instead, snapshot
+  // the current quick-mask texture and translate both the marquee outline
+  // and the painted region on each move-move via a CPU pass + GPU upload
+  // (issue #315).
   if (isQuickMaskMode && sel.active && sel.mask) {
+    const eng = getEngine();
+    const qmPixels = eng ? readQuickMaskPixels(eng) : null;
+    const docW = editorState.document.width;
+    const docH = editorState.document.height;
     return {
       drawing: true,
       lastPoint: canvasPos,
@@ -55,6 +62,8 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       ...DEFAULT_TRANSFORM_FIELDS,
       moveOriginalMask: new Uint8ClampedArray(sel.mask),
       moveOriginalBounds: { ...sel.bounds! },
+      moveQuickMaskOriginalPixels: qmPixels ?? null,
+      moveQuickMaskDocSize: { width: docW, height: docH },
     };
   }
 
@@ -185,9 +194,10 @@ export function handleMoveMove(
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);
   const dragDy = Math.round(canvasPos.y - state.startPoint.y);
 
-  // Quick-mask + marquee move: translate selection bounds/mask only. No GPU
-  // float exists (handleMoveDown bypasses it for quick-mask mode to avoid
-  // corrupting the layer texture — issue #315).
+  // Quick-mask + marquee move: translate both the marquee outline and the
+  // painted quick-mask region (issue #315). The painted content is moved
+  // CPU-side from the snapshot taken in handleMoveDown and uploaded back to
+  // the GPU on each event.
   if (
     useUIStore.getState().maskMode === 'quickMask'
     && !floatingSelectionRef.current
@@ -206,6 +216,26 @@ export function handleMoveMove(
     );
     edState.setSelection(newBounds, newMask, docW, docH);
     useUIStore.getState().setTransform(createTransformState(newBounds));
+
+    const engine = getEngine();
+    if (
+      engine
+      && state.moveQuickMaskOriginalPixels
+      && state.moveQuickMaskDocSize
+      && state.moveQuickMaskDocSize.width === docW
+      && state.moveQuickMaskDocSize.height === docH
+    ) {
+      const next = translateQuickMaskContent(
+        state.moveQuickMaskOriginalPixels,
+        state.moveOriginalMask,
+        dragDx,
+        dragDy,
+        docW,
+        docH,
+      );
+      uploadQuickMaskPixels(engine, next, docW, docH);
+    }
+
     edState.notifyRender();
     return;
   }
