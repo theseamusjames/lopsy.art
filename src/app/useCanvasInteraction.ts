@@ -434,7 +434,7 @@ export function useCanvasInteraction(
           // instead of calling undo(), which would pop the stack.
           const undoStack = useEditorStore.getState().undoStack;
           const preStrokeEntry = undoStack[undoStack.length - 2];
-          if (!preStrokeEntry) return;
+          if (!preStrokeEntry || preStrokeEntry.kind !== 'pixels') return;
           const preStrokeBlob = preStrokeEntry.gpuSnapshots.get(layerId);
           if (preStrokeBlob && preStrokeBlob.length > 0) {
             uploadCompressed(layerId, preStrokeBlob);
