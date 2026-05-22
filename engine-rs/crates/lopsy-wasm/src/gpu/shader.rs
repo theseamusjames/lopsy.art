@@ -71,6 +71,7 @@ pub const EMBOSS_FRAG: &str = include_str!("shaders/filters/emboss.glsl");
 pub const VORONOI_FRAG: &str = include_str!("shaders/filters/voronoi.glsl");
 pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
 pub const SURFACE_BLUR_FRAG: &str = include_str!("shaders/filters/surface_blur.glsl");
+pub const LIQUIFY_DAB_FRAG: &str = include_str!("shaders/filters/liquify_dab.glsl");
 pub const FIBERS_FRAG: &str = include_str!("shaders/filters/fibers.glsl");
 pub const COLOR_LUT_FRAG: &str = include_str!("shaders/filters/color_lut.glsl");
 
@@ -271,6 +272,7 @@ pub struct ShaderPrograms {
     pub color_convert: ShaderProgram,
     pub tonemap: ShaderProgram,
     pub channel_extract: ShaderProgram,
+    pub liquify_dab: ShaderProgram,
     // Text
     pub text_glyph: ShaderProgram,
 }
@@ -363,6 +365,7 @@ impl ShaderPrograms {
             color_convert: compile_program(gl, v, COLOR_CONVERT_FRAG)?,
             tonemap: compile_program(gl, v, TONEMAP_FRAG)?,
             channel_extract: compile_program(gl, v, CHANNEL_EXTRACT_FRAG)?,
+            liquify_dab: compile_program(gl, v, LIQUIFY_DAB_FRAG)?,
             // Text
             text_glyph: compile_program(gl, v, TEXT_GLYPH_FRAG)?,
         })

@@ -1,24 +1,24 @@
 /**
  * Liquify canvas interaction handlers.
  *
- * Paint state is kept in module scope to avoid Zustand writes on every
- * mouse move. After each dab, only the dirty sub-rectangle is encoded
- * and uploaded to the GPU.
+ * Dab application runs entirely on the GPU via `liquifyApplyDabGpu`.
+ * The displacement texture stays in GPU memory — no CPU Float32Array
+ * or RGBA encoding roundtrip.
  */
 
 import { useUIStore } from '../ui-store';
-import { applyDab, encodeDisplacementRegion } from '../../tools/liquify/liquify';
-import { previewLiquifyRegion } from '../MenuBar/liquify-actions';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { liquifyApplyDabGpu, liquifyRender } from '../../engine-wasm/wasm-bridge';
 import type { Point } from '../../types';
 
-/**
- * Single grouped state object instead of independent let-bindings.
- * `null` means no active liquify stroke; non-null carries the
- * last-painted point. The audit flagged the previous
- * `let isPainting = false; let lastPaintPoint = null;` as exactly
- * the "module-level mutable globals" smell the discriminated-union
- * pattern (pointer-mode.ts) was designed to retire.
- */
+const LIQUIFY_MODE_MAP: Record<string, number> = {
+  push: 0,
+  'twirl-cw': 1,
+  'twirl-ccw': 2,
+  bloat: 3,
+  pinch: 4,
+};
+
 let stroke: { lastPoint: Point } | null = null;
 
 export function isLiquifyActive(): boolean {
@@ -38,14 +38,27 @@ export function handleLiquifyMove(layerPos: Point): boolean {
   if (!session) return false;
   if (!stroke) return true;
 
+  const engine = getEngine();
+  if (!engine) return true;
+
   const dragDx = layerPos.x - stroke.lastPoint.x;
   const dragDy = layerPos.y - stroke.lastPoint.y;
+  const mode = LIQUIFY_MODE_MAP[session.settings.mode] ?? 0;
 
-  const dirty = applyDab(session.displacementMap, layerPos.x, layerPos.y, dragDx, dragDy, session.settings);
+  liquifyApplyDabGpu(
+    engine,
+    layerPos.x,
+    layerPos.y,
+    session.settings.brushSize,
+    session.settings.pressure,
+    dragDx,
+    dragDy,
+    mode,
+  );
+
+  liquifyRender(engine, session.layerId, 2048);
+
   stroke = { lastPoint: layerPos };
-
-  const sub = encodeDisplacementRegion(session.displacementMap, session.encodedDisplacement, dirty);
-  previewLiquifyRegion(sub, dirty.x, dirty.y, dirty.w, dirty.h);
   return true;
 }
 
