@@ -9,6 +9,7 @@ import { NewDocumentModal } from '../NewDocumentModal/NewDocumentModal';
 import { ShapeSizeModal } from '../ShapeSizeModal/ShapeSizeModal';
 import { BrushModal } from '../BrushModal/BrushModal';
 import { StrokePathModal } from '../StrokePathModal/StrokePathModal';
+import styles from './ModalHost.module.css';
 
 /**
  * Renders whichever modal is currently open in the ui-store slot. Also
@@ -115,53 +116,29 @@ export function ModalHost() {
 function AdjustmentLayerInfoModal({ onClose }: { onClose: () => void }) {
   return (
     <div
-      style={{
-        position: 'fixed', inset: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0, 0, 0, 0.6)', zIndex: 9999,
-      }}
+      className={styles.overlay}
       role="dialog"
       aria-label="Adjustment layers"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{
-        background: 'var(--color-bg-secondary, #1e1e1e)',
-        border: '1px solid var(--color-border, #333)',
-        borderRadius: 'var(--radius-lg, 8px)',
-        padding: '24px 28px',
-        maxWidth: 420,
-        color: 'var(--color-text-primary, #e0e0e0)',
-        fontSize: 'var(--font-size-sm, 13px)',
-        lineHeight: 1.6,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px',
-      }}>
-        <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg, 16px)' }}>
+      <div className={styles.infoDialog}>
+        <h2 className={styles.infoDialogHeading}>
           Group Adjustments
         </h2>
-        <p style={{ margin: 0, color: 'var(--color-text-secondary, #aaa)' }}>
+        <p className={styles.infoDialogBody}>
           Lopsy uses <strong>group adjustments</strong> instead of separate adjustment layers.
           Adjustments like Levels, Curves, Exposure, and Hue/Saturation live directly on
           the Project group and apply non-destructively to all layers within it.
         </p>
-        <p style={{ margin: 0, color: 'var(--color-text-secondary, #aaa)' }}>
+        <p className={styles.infoDialogBody}>
           The Group Adjustments panel is now open on the right. You can add, remove,
           reorder, and toggle adjustments from there.
         </p>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div className={styles.infoDialogActions}>
           <button
             type="button"
             onClick={onClose}
-            style={{
-              background: 'var(--color-accent, #4a9eff)',
-              border: 'none',
-              borderRadius: 'var(--radius-sm, 4px)',
-              padding: '6px 20px',
-              color: '#fff',
-              fontSize: 'var(--font-size-sm, 13px)',
-              cursor: 'pointer',
-            }}
+            className={styles.confirmButton}
           >
             Got it
           </button>
@@ -171,20 +148,10 @@ function AdjustmentLayerInfoModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function LoadingOverlay({ message }: { message: string }) {
+export function LoadingOverlay({ message }: { message: string }) {
   return (
-    <div style={{
-      position: 'fixed', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0, 0, 0, 0.6)', zIndex: 9999,
-    }} role="dialog" aria-label={message}>
-      <div style={{
-        background: 'var(--color-bg-secondary, #1e1e1e)',
-        borderRadius: 'var(--radius-lg, 8px)',
-        padding: '24px 32px',
-        color: 'var(--color-text-primary, #e0e0e0)',
-        fontSize: 'var(--font-size-sm, 13px)',
-      }}>
+    <div className={styles.overlay} role="dialog" aria-label={message}>
+      <div className={styles.loadingContent}>
         {message}
       </div>
     </div>
