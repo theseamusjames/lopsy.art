@@ -147,7 +147,8 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   // Brush engine scaffolding — stamps, shape data, ABR / preset I/O.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/tool-settings-store.ts': 10,                      // built-in brush tip generation
+  'src/app/tool-settings-store.ts': 0,                       // tip generators moved to builtin-presets
+  'src/tools/brush/builtin-presets.ts': 10,                  // built-in brush tip generation
   'src/app/MenuBar/brush-actions.ts': 2,                     // brush-from-selection / brush-from-layer
   'src/components/BrushModal/BrushDabPreview.tsx': 2,        // brush preview blur kernel + output
   'src/components/BrushModal/BrushModal.tsx': 1,             // texture-image grayscale import
