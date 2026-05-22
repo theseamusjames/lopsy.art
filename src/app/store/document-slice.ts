@@ -249,16 +249,18 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   addLayer: () => {
     finalizePendingStrokeGlobal();
     const s = get();
-    s.pushHistory('Add Layer');
     const result = computeAddLayer(s.document);
-    if (result) set(result);
+    if (!result) return;
+    s.pushHistory('Add Layer');
+    set(result);
   },
 
   addTextLayer: (layer) => {
     const s = get();
-    s.pushHistory('Add Text Layer');
     const result = computeAddTextLayer(s.document, layer);
-    if (result) set(result);
+    if (!result) return;
+    s.pushHistory('Add Text Layer');
+    set(result);
   },
 
   updateTextLayerProperties: (id, props) => {
@@ -469,9 +471,10 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   moveLayer: (fromIndex, toIndex) => {
     const s = get();
-    s.pushHistory('Reorder Layer');
     const result = computeMoveLayer(s.document, s.renderVersion, fromIndex, toIndex);
-    if (result) set(result);
+    if (!result) return;
+    s.pushHistory('Reorder Layer');
+    set(result);
   },
 
   updateLayerPosition: (id, x, y) => {
@@ -583,11 +586,6 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (w === 0 || h === 0) return;
 
     s.pushHistory('Rasterize Layer');
-
-    // Convert the text layer to raster. The GPU texture already has the
-    // rendered text pixels — no re-upload needed. Just update the Zustand
-    // state so the compositor and all pipeline code treat this as a raster
-    // layer going forward.
     set({
       document: {
         ...s.document,
@@ -625,9 +623,10 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   addLayerMask: (id) => {
     const s = get();
-    s.pushHistory('Add Mask');
     const result = computeAddLayerMask(s.document, s.renderVersion, id);
-    if (result) set(result);
+    if (!result) return;
+    s.pushHistory('Add Mask');
+    set(result);
   },
 
   removeLayerMask: (id) => {
@@ -652,17 +651,16 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   cropCanvas: (rect) => {
     const s = get();
-    s.pushHistory('Crop Canvas');
     const result = computeCropCanvas(
       s.document,
       resolveAllPixelData(s.document.layerOrder, s.document.layers),
       s.renderVersion, rect,
     );
-    if (result) {
-      applyActionResult(set, result);
-      if (result.layerPixelData && result.document) {
-        syncPixelDataToGpu(result.layerPixelData, result.document.layers);
-      }
+    if (!result) return;
+    s.pushHistory('Crop Canvas');
+    applyActionResult(set, result);
+    if (result.layerPixelData && result.document) {
+      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
   },
 
