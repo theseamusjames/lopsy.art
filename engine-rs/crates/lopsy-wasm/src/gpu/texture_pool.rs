@@ -415,6 +415,7 @@ impl TexturePool {
         let count = (w * h * 4) as usize;
 
         if self.use_float {
+            // Read GPU → JS Float32Array (lives on the JS heap, not WASM).
             let f32_buf = js_sys::Float32Array::new_with_length(count as u32);
             gl.read_pixels_with_opt_array_buffer_view(
                 x, y,
@@ -423,12 +424,22 @@ impl TexturePool {
                 WebGl2RenderingContext::FLOAT,
                 Some(&f32_buf),
             ).map_err(|e| format!("readPixels float failed: {:?}", e))?;
-            let mut f32_data = vec![0f32; count];
-            f32_buf.copy_to(&mut f32_data);
-            let pixels: Vec<u16> = f32_data
-                .iter()
-                .map(|&v| (v.clamp(0.0, 1.0) * 65535.0 + 0.5) as u16)
-                .collect();
+            // Convert f32→u16 in chunks to avoid a full-size f32 copy in WASM.
+            // This keeps peak WASM allocation at Vec<u16> (2 bytes/sample)
+            // instead of Vec<f32> + Vec<u16> (6 bytes/sample).
+            let mut pixels = vec![0u16; count];
+            const CHUNK: usize = 65536;
+            let mut f32_chunk = vec![0f32; CHUNK];
+            let mut offset = 0;
+            while offset < count {
+                let len = CHUNK.min(count - offset);
+                let view = f32_buf.subarray(offset as u32, (offset + len) as u32);
+                view.copy_to(&mut f32_chunk[..len]);
+                for i in 0..len {
+                    pixels[offset + i] = (f32_chunk[i].clamp(0.0, 1.0) * 65535.0 + 0.5) as u16;
+                }
+                offset += len;
+            }
             Ok(pixels)
         } else {
             let mut u8_pixels = vec![0u8; count];
