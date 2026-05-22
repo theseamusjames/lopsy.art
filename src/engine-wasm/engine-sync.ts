@@ -57,6 +57,7 @@ import {
   setGroupCurvesLut,
   setGroupLevelsLut,
   clearGroupAdjustments,
+  removeGroupAdjustment,
   setGroupInvert,
   setGroupHueSaturation,
   setGroupColorBalance,
@@ -364,16 +365,82 @@ export function flattenGroupDescendants(
   return result;
 }
 
-export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): void {
-  clearGroupAdjustments(engine);
-  for (const layer of layers) {
-    if (layer.type !== 'group') continue;
-    const group = layer as import('../types').GroupLayer;
-    const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
-    const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
-    const hasCurves = adj?.curves != null && !isIdentityCurves(adj.curves);
-    const hasLevels = adj?.levels != null && !isIdentityLevels(adj.levels);
-    const hasAdjustments = adj != null && (
+function pushGroupToEngine(
+  engine: Engine,
+  group: import('../types').GroupLayer,
+  layers: readonly Layer[],
+): void {
+  const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
+  const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
+  const hasCurves = adj?.curves != null && !isIdentityCurves(adj.curves);
+  const hasLevels = adj?.levels != null && !isIdentityLevels(adj.levels);
+
+  setGroupAdjustments(
+    engine,
+    group.id,
+    JSON.stringify(flattenGroupDescendants(layers, group.id)),
+    adj?.exposure ?? 0,
+    adj?.contrast ?? 0,
+    adj?.highlights ?? 0,
+    adj?.shadows ?? 0,
+    adj?.whites ?? 0,
+    adj?.blacks ?? 0,
+    adj?.saturation ?? 0,
+    adj?.vibrance ?? 0,
+    adj?.vignette ?? 0,
+  );
+  if (hasCurves && adj?.curves) {
+    const lut = buildCurvesLutRgba(adj.curves);
+    setGroupCurvesLut(engine, group.id, lut);
+  }
+  if (hasLevels && adj?.levels) {
+    const lut = buildLevelsLutRgba(adj.levels);
+    setGroupLevelsLut(engine, group.id, lut);
+  }
+  if (adj?.invert) setGroupInvert(engine, group.id, true);
+  const hh = adj?.hueSatHue ?? 0, hs2 = adj?.hueSatSaturation ?? 0, hl = adj?.hueSatLightness ?? 0;
+  if (Math.abs(hh) > 1e-6 || Math.abs(hs2) > 1e-6 || Math.abs(hl) > 1e-6) {
+    setGroupHueSaturation(engine, group.id, hh, hs2, hl);
+  }
+  const cbS = adj?.colorBalanceShadows    ?? [0, 0, 0];
+  const cbM = adj?.colorBalanceMidtones   ?? [0, 0, 0];
+  const cbH = adj?.colorBalanceHighlights ?? [0, 0, 0];
+  if ([...cbS, ...cbM, ...cbH].some(v => Math.abs(v) > 1e-6)) {
+    setGroupColorBalance(engine, group.id, cbS[0], cbS[1], cbS[2], cbM[0], cbM[1], cbM[2], cbH[0], cbH[1], cbH[2]);
+  }
+  const pfDensity = adj?.photoFilterDensity ?? 0;
+  if (pfDensity > 1e-6) {
+    const pfc = adj?.photoFilterColor ?? { r: 255, g: 160, b: 0 };
+    setGroupPhotoFilter(engine, group.id, pfc.r / 255, pfc.g / 255, pfc.b / 255, pfDensity, adj?.photoFilterPreserveLuminosity !== false);
+  }
+  if (adj?.bwEnabled) {
+    setGroupBlackWhite(engine, group.id,
+      adj.bwReds ?? 40, adj.bwYellows ?? 60, adj.bwGreens ?? 40,
+      adj.bwCyans ?? 60, adj.bwBlues ?? 20, adj.bwMagentas ?? 80,
+    );
+  }
+  if (adj?.channelMixerEnabled) {
+    const cmR = adj.channelMixerR ?? [100, 0, 0, 0];
+    const cmG = adj.channelMixerG ?? [0, 100, 0, 0];
+    const cmB = adj.channelMixerB ?? [0, 0, 100, 0];
+    setGroupChannelMixer(engine, group.id,
+      cmR[0], cmR[1], cmR[2], cmR[3],
+      cmG[0], cmG[1], cmG[2], cmG[3],
+      cmB[0], cmB[1], cmB[2], cmB[3],
+    );
+  }
+  const gStops = adj?.gradientMapStops;
+  if (gStops && gStops.length >= 2) {
+    const lut = buildGradientMapLut(gStops);
+    setGroupGradientMapLut(engine, group.id, lut);
+  }
+}
+
+function groupNeedsRouting(group: import('../types').GroupLayer): boolean {
+  const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
+  if (hasAdj) {
+    const adj = nodesToLegacyAdjustments(group.adjustments);
+    if (
       Math.abs(adj.exposure) > 1e-6 ||
       Math.abs(adj.contrast) > 1e-6 ||
       Math.abs(adj.highlights) > 1e-6 ||
@@ -383,7 +450,8 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       Math.abs(adj.saturation) > 1e-6 ||
       Math.abs(adj.vibrance) > 1e-6 ||
       Math.abs(adj.vignette) > 1e-6 ||
-      hasCurves || hasLevels ||
+      (adj.curves != null && !isIdentityCurves(adj.curves)) ||
+      (adj.levels != null && !isIdentityLevels(adj.levels)) ||
       !!adj.invert ||
       (adj.hueSatHue ?? 0) !== 0 || (adj.hueSatSaturation ?? 0) !== 0 || (adj.hueSatLightness ?? 0) !== 0 ||
       (adj.colorBalanceShadows ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
@@ -392,76 +460,68 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       (adj.photoFilterDensity ?? 0) > 1e-6 ||
       !!adj.bwEnabled || !!adj.channelMixerEnabled ||
       (adj.gradientMapStops?.length ?? 0) >= 2
-    );
-    const hasMask = group.mask != null && group.mask.enabled;
-    if (!hasAdjustments && !hasMask) continue;
-    // Pass-through groups register here too. Pass-through controls how the
-    // group's pre-composited result blends with what's BELOW it — it does
-    // NOT determine whether the group's own children get their adjustments
-    // applied. The Rust side stores { adjustments, child_ids } and applies
-    // them during compositing regardless of the parent group's blend mode.
-    // The default Project root group is pass-through (layer-model.ts:79),
-    // so skipping this call silently drops curves/levels/exposure on every
-    // default document. Don't.
-    setGroupAdjustments(
-      engine,
-      group.id,
-      JSON.stringify(flattenGroupDescendants(layers, group.id)),
-      adj?.exposure ?? 0,
-      adj?.contrast ?? 0,
-      adj?.highlights ?? 0,
-      adj?.shadows ?? 0,
-      adj?.whites ?? 0,
-      adj?.blacks ?? 0,
-      adj?.saturation ?? 0,
-      adj?.vibrance ?? 0,
-      adj?.vignette ?? 0,
-    );
-    if (hasCurves && adj?.curves) {
-      const lut = buildCurvesLutRgba(adj.curves);
-      setGroupCurvesLut(engine, group.id, lut);
+    ) return true;
+  }
+  return group.mask != null && group.mask.enabled;
+}
+
+export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): void {
+  const tracked = getTracked(engine);
+
+  if (tracked.groupAdjNeedsFullSync) {
+    clearGroupAdjustments(engine);
+    tracked.groupAdjTracked.clear();
+    tracked.groupAdjNeedsFullSync = false;
+
+    for (const layer of layers) {
+      if (layer.type !== 'group') continue;
+      const group = layer as import('../types').GroupLayer;
+      if (!groupNeedsRouting(group)) continue;
+      pushGroupToEngine(engine, group, layers);
+      tracked.groupAdjTracked.set(group.id, {
+        adjustments: group.adjustments,
+        adjustmentsEnabled: group.adjustmentsEnabled,
+        children: group.children,
+        maskEnabled: group.mask?.enabled ?? false,
+      });
     }
-    if (hasLevels && adj?.levels) {
-      const lut = buildLevelsLutRgba(adj.levels);
-      setGroupLevelsLut(engine, group.id, lut);
+    return;
+  }
+
+  const seenGroupIds = new Set<string>();
+  for (const layer of layers) {
+    if (layer.type !== 'group') continue;
+    const group = layer as import('../types').GroupLayer;
+    seenGroupIds.add(group.id);
+    const prev = tracked.groupAdjTracked.get(group.id);
+
+    if (
+      prev &&
+      prev.adjustments === group.adjustments &&
+      prev.adjustmentsEnabled === group.adjustmentsEnabled &&
+      prev.children === group.children &&
+      prev.maskEnabled === (group.mask?.enabled ?? false)
+    ) continue;
+
+    const needs = groupNeedsRouting(group);
+    if (needs) {
+      pushGroupToEngine(engine, group, layers);
+      tracked.groupAdjTracked.set(group.id, {
+        adjustments: group.adjustments,
+        adjustmentsEnabled: group.adjustmentsEnabled,
+        children: group.children,
+        maskEnabled: group.mask?.enabled ?? false,
+      });
+    } else if (prev) {
+      removeGroupAdjustment(engine, group.id);
+      tracked.groupAdjTracked.delete(group.id);
     }
-    // New effects for groups
-    if (adj?.invert) setGroupInvert(engine, group.id, true);
-    const hh = adj?.hueSatHue ?? 0, hs2 = adj?.hueSatSaturation ?? 0, hl = adj?.hueSatLightness ?? 0;
-    if (Math.abs(hh) > 1e-6 || Math.abs(hs2) > 1e-6 || Math.abs(hl) > 1e-6) {
-      setGroupHueSaturation(engine, group.id, hh, hs2, hl);
-    }
-    const cbS = adj?.colorBalanceShadows    ?? [0, 0, 0];
-    const cbM = adj?.colorBalanceMidtones   ?? [0, 0, 0];
-    const cbH = adj?.colorBalanceHighlights ?? [0, 0, 0];
-    if ([...cbS, ...cbM, ...cbH].some(v => Math.abs(v) > 1e-6)) {
-      setGroupColorBalance(engine, group.id, cbS[0], cbS[1], cbS[2], cbM[0], cbM[1], cbM[2], cbH[0], cbH[1], cbH[2]);
-    }
-    const pfDensity = adj?.photoFilterDensity ?? 0;
-    if (pfDensity > 1e-6) {
-      const pfc = adj?.photoFilterColor ?? { r: 255, g: 160, b: 0 };
-      setGroupPhotoFilter(engine, group.id, pfc.r / 255, pfc.g / 255, pfc.b / 255, pfDensity, adj?.photoFilterPreserveLuminosity !== false);
-    }
-    if (adj?.bwEnabled) {
-      setGroupBlackWhite(engine, group.id,
-        adj.bwReds ?? 40, adj.bwYellows ?? 60, adj.bwGreens ?? 40,
-        adj.bwCyans ?? 60, adj.bwBlues ?? 20, adj.bwMagentas ?? 80,
-      );
-    }
-    if (adj?.channelMixerEnabled) {
-      const cmR = adj.channelMixerR ?? [100, 0, 0, 0];
-      const cmG = adj.channelMixerG ?? [0, 100, 0, 0];
-      const cmB = adj.channelMixerB ?? [0, 0, 100, 0];
-      setGroupChannelMixer(engine, group.id,
-        cmR[0], cmR[1], cmR[2], cmR[3],
-        cmG[0], cmG[1], cmG[2], cmG[3],
-        cmB[0], cmB[1], cmB[2], cmB[3],
-      );
-    }
-    const gStops = adj?.gradientMapStops;
-    if (gStops && gStops.length >= 2) {
-      const lut = buildGradientMapLut(gStops);
-      setGroupGradientMapLut(engine, group.id, lut);
+  }
+
+  for (const trackedId of tracked.groupAdjTracked.keys()) {
+    if (!seenGroupIds.has(trackedId)) {
+      removeGroupAdjustment(engine, trackedId);
+      tracked.groupAdjTracked.delete(trackedId);
     }
   }
 }
