@@ -48,7 +48,7 @@ function snapshotGpuLayers(
     // layer x/y without touching dirtyLayerIds, so a position mismatch
     // means the blob's texture dimensions no longer match the current GPU
     // state and must be re-read.
-    if (!dirtyIds.has(layerId) && previous?.gpuSnapshots.has(layerId)) {
+    if (!dirtyIds.has(layerId) && previous?.kind === 'pixels' && previous.gpuSnapshots.has(layerId)) {
       const curLayer = layers.find((l) => l.id === layerId);
       const prevLayer = previous.document.layers.find((l) => l.id === layerId);
       const posMatch = curLayer && prevLayer && curLayer.x === prevLayer.x && curLayer.y === prevLayer.y;
@@ -87,7 +87,7 @@ function snapshotGpuLayers(
  * Empty sentinels clear the layer's texture to transparent.
  */
 function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
-  if (snapshot.metadataOnly) return;
+  if (snapshot.kind === 'metadata') return;
 
   const engine = getEngine();
   for (const [layerId, blob] of snapshot.gpuSnapshots) {
@@ -116,30 +116,20 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     if (!previous) return;
 
     let currentSnapshot: HistorySnapshot;
-    if (previous.metadataOnly) {
+    if (previous.kind === 'metadata') {
       currentSnapshot = {
+        kind: 'metadata',
         document: state.document,
-        gpuSnapshots: new Map(),
-        layerPixelData: new Map(),
-        layerCropInfo: new Map(),
-        sparseLayerData: new Map(),
         label: previous.label,
-        metadataOnly: true,
       };
-    } else if (lastRestoredSnapshot) {
-      // GPU state matches the last restored snapshot — reuse blobs directly
+    } else if (lastRestoredSnapshot && lastRestoredSnapshot.kind === 'pixels') {
       currentSnapshot = {
+        kind: 'pixels',
         document: state.document,
         gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
-        layerPixelData: new Map(),
-        layerCropInfo: new Map(),
-        sparseLayerData: new Map(),
         label: previous.label,
-        metadataOnly: false,
       };
     } else {
-      // First undo from user-edited state — only read dirty layers from GPU,
-      // reuse clean-layer blobs from the snapshot we're restoring to
       const gpuSnapshots = snapshotGpuLayers(
         state.document.layers,
         state.document.layerOrder,
@@ -147,13 +137,10 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         previous,
       );
       currentSnapshot = {
+        kind: 'pixels',
         document: state.document,
         gpuSnapshots,
-        layerPixelData: new Map(),
-        layerCropInfo: new Map(),
-        sparseLayerData: new Map(),
         label: previous.label,
-        metadataOnly: false,
       };
     }
 
@@ -187,25 +174,18 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     if (!next) return;
 
     let currentSnapshot: HistorySnapshot;
-    if (next.metadataOnly) {
+    if (next.kind === 'metadata') {
       currentSnapshot = {
+        kind: 'metadata',
         document: state.document,
-        gpuSnapshots: new Map(),
-        layerPixelData: new Map(),
-        layerCropInfo: new Map(),
-        sparseLayerData: new Map(),
         label: next.label,
-        metadataOnly: true,
       };
-    } else if (lastRestoredSnapshot) {
+    } else if (lastRestoredSnapshot && lastRestoredSnapshot.kind === 'pixels') {
       currentSnapshot = {
+        kind: 'pixels',
         document: state.document,
         gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
-        layerPixelData: new Map(),
-        layerCropInfo: new Map(),
-        sparseLayerData: new Map(),
         label: next.label,
-        metadataOnly: false,
       };
     } else {
       const gpuSnapshots = snapshotGpuLayers(
@@ -215,13 +195,10 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         next,
       );
       currentSnapshot = {
+        kind: 'pixels',
         document: state.document,
         gpuSnapshots,
-        layerPixelData: new Map(),
-        layerCropInfo: new Map(),
-        sparseLayerData: new Map(),
         label: next.label,
-        metadataOnly: false,
       };
     }
 
@@ -266,13 +243,10 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const gpuSnapshots = snapshotGpuLayers(state.document.layers, state.document.layerOrder, state.dirtyLayerIds, prevSnapshot);
 
     const snapshot: HistorySnapshot = {
+      kind: 'pixels',
       document: state.document,
       gpuSnapshots,
-      layerPixelData: new Map(),
-      layerCropInfo: new Map(),
-      sparseLayerData: new Map(),
       label,
-      metadataOnly: false,
     };
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],

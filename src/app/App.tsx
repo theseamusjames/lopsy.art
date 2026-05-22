@@ -17,7 +17,7 @@ import { MenuBar } from './MenuBar/MenuBar';
 import { OptionsBar } from './OptionsBar/OptionsBar';
 import { StatusBar } from './StatusBar/StatusBar';
 import { NewDocumentModal } from '../components/NewDocumentModal/NewDocumentModal';
-import { ModalHost } from '../components/ModalHost/ModalHost';
+import { ModalHost, LoadingOverlay } from '../components/ModalHost/ModalHost';
 import { GuideColorPicker } from '../components/GuideColorPicker/GuideColorPicker';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
@@ -48,26 +48,6 @@ function CanvasRenderer({ canvasRef, containerRef, overlayCanvasRef }: {
 }) {
   useCanvasRendering(canvasRef, containerRef, overlayCanvasRef);
   return null;
-}
-
-function LoadingOverlay({ message }: { message: string }) {
-  return (
-    <div style={{
-      position: 'fixed', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0, 0, 0, 0.6)', zIndex: 9999,
-    }} role="dialog" aria-label={message}>
-      <div style={{
-        background: 'var(--color-bg-secondary, #1e1e1e)',
-        borderRadius: 'var(--radius-lg, 8px)',
-        padding: '24px 32px',
-        color: 'var(--color-text-primary, #e0e0e0)',
-        fontSize: 'var(--font-size-sm, 13px)',
-      }}>
-        {message}
-      </div>
-    </div>
-  );
 }
 
 export function App() {

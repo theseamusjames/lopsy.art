@@ -35,32 +35,27 @@ export const EMPTY_SELECTION: SelectionData = {
   maskHeight: 0,
 };
 
-export interface CropInfo {
-  x: number;
-  y: number;
-  fullWidth: number;
-  fullHeight: number;
-}
-
 export interface SparseLayerEntry {
   readonly offsetX: number;
   readonly offsetY: number;
   readonly sparse: import('../../engine/canvas-ops').SparsePixelData;
 }
 
-export interface HistorySnapshot {
-  document: DocumentState;
-  /** Compressed GPU pixel snapshots per layer (RLE-encoded RGBA blobs). */
-  gpuSnapshots: Map<string, Uint8Array>;
-  /** Legacy CPU pixel data — kept for backward compat during transition. */
-  layerPixelData: Map<string, ImageData>;
-  layerCropInfo: Map<string, CropInfo>;
-  sparseLayerData: Map<string, SparseLayerEntry>;
-  label: string;
-  /** When true, only document metadata changed (effects, opacity, etc.) —
-   *  pixel data maps are empty and should not replace current pixel state. */
-  metadataOnly: boolean;
-}
+/**
+ * Discriminated union for undo/redo snapshots.
+ *
+ * - `metadata`: only document metadata changed (effects, opacity, etc.) —
+ *   no pixel data was captured. Zero Maps allocated.
+ * - `pixels`: full snapshot including compressed GPU pixel blobs.
+ */
+export type HistorySnapshot =
+  | { readonly kind: 'metadata'; document: DocumentState; label: string }
+  | {
+      readonly kind: 'pixels';
+      document: DocumentState;
+      label: string;
+      gpuSnapshots: Map<string, Uint8Array>;
+    };
 
 export interface ClipboardData {
   width: number;

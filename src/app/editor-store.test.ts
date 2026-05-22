@@ -91,6 +91,9 @@ describe('editor-store history', () => {
 
     // Without a GPU engine, both snapshots use EMPTY_LAYER_SENTINEL blobs,
     // which are the same reference for each layer (structural sharing)
+    expect(snapshot1.kind).toBe('pixels');
+    expect(snapshot2.kind).toBe('pixels');
+    if (snapshot1.kind !== 'pixels' || snapshot2.kind !== 'pixels') return;
     for (const layerId of state.document.layerOrder) {
       const blob1 = snapshot1.gpuSnapshots.get(layerId);
       const blob2 = snapshot2.gpuSnapshots.get(layerId);

@@ -2,9 +2,9 @@ import type { DocumentState } from '../../../types';
 import type { ActionResult } from '../types';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { mergeLayers, rasterizeLayerEffects, updateLayer, uploadLayerPixels } from '../../../engine-wasm/wasm-bridge';
+import { layerToDescJson } from '../../../engine-wasm/sync-layers';
 import { DEFAULT_EFFECTS, hasEnabledEffects } from '../../../layers/layer-model';
 import { removeFromParentGroup } from '../../../layers/group-utils';
-import { BLEND_MODE_TO_PASCAL } from '../../../types/blend-mode-tables';
 
 export function computeMergeDown(
   doc: DocumentState,
@@ -27,22 +27,8 @@ export function computeMergeDown(
       const rasterized = rasterizeLayerEffects(engine, activeId);
       if (rasterized && rasterized.length > 0) {
         uploadLayerPixels(engine, activeId, rasterized, doc.width, doc.height, 0, 0);
-        updateLayer(engine, JSON.stringify({
-          id: topLayer.id,
-          name: topLayer.name,
-          layer_type: topLayer.type === 'group' ? 'Group' : 'Raster',
-          visible: topLayer.visible,
-          locked: topLayer.locked,
-          opacity: topLayer.opacity,
-          blend_mode: BLEND_MODE_TO_PASCAL[topLayer.blendMode] ?? 'Normal',
-          x: 0,
-          y: 0,
-          width: doc.width,
-          height: doc.height,
-          clip_to_below: topLayer.clipToBelow,
-          effects: {},
-          mask: null,
-        }));
+        const cleared = { ...topLayer, x: 0, y: 0, width: doc.width, height: doc.height, effects: DEFAULT_EFFECTS, mask: null };
+        updateLayer(engine, layerToDescJson(cleared, topLayer.visible));
       }
     }
 
@@ -50,22 +36,8 @@ export function computeMergeDown(
       const rasterized = rasterizeLayerEffects(engine, belowId);
       if (rasterized && rasterized.length > 0) {
         uploadLayerPixels(engine, belowId, rasterized, doc.width, doc.height, 0, 0);
-        updateLayer(engine, JSON.stringify({
-          id: bottomLayer.id,
-          name: bottomLayer.name,
-          layer_type: bottomLayer.type === 'group' ? 'Group' : 'Raster',
-          visible: bottomLayer.visible,
-          locked: bottomLayer.locked,
-          opacity: bottomLayer.opacity,
-          blend_mode: BLEND_MODE_TO_PASCAL[bottomLayer.blendMode] ?? 'Normal',
-          x: 0,
-          y: 0,
-          width: doc.width,
-          height: doc.height,
-          clip_to_below: bottomLayer.clipToBelow,
-          effects: {},
-          mask: null,
-        }));
+        const cleared = { ...bottomLayer, x: 0, y: 0, width: doc.width, height: doc.height, effects: DEFAULT_EFFECTS, mask: null };
+        updateLayer(engine, layerToDescJson(cleared, bottomLayer.visible));
       }
     }
 

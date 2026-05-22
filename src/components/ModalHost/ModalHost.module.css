@@ -1,0 +1,56 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: var(--z-modal, 9999);
+}
+
+.infoDialog {
+  background: var(--color-bg-secondary, #1e1e1e);
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-lg, 8px);
+  padding: 24px 28px;
+  max-width: 420px;
+  color: var(--color-text-primary, #e0e0e0);
+  font-size: var(--font-size-sm, 13px);
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.infoDialogHeading {
+  margin: 0;
+  font-size: var(--font-size-lg, 16px);
+}
+
+.infoDialogBody {
+  margin: 0;
+  color: var(--color-text-secondary, #aaa);
+}
+
+.infoDialogActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.confirmButton {
+  background: var(--color-accent, #4a9eff);
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  padding: 6px 20px;
+  color: #fff;
+  font-size: var(--font-size-sm, 13px);
+  cursor: pointer;
+}
+
+.loadingContent {
+  background: var(--color-bg-secondary, #1e1e1e);
+  border-radius: var(--radius-lg, 8px);
+  padding: 24px 32px;
+  color: var(--color-text-primary, #e0e0e0);
+  font-size: var(--font-size-sm, 13px);
+}

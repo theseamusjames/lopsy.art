@@ -5,6 +5,7 @@ import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model
 import { createDefaultAdjustments } from '../../../filters/adjustment-node-utils';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { compositeForExport, uploadLayerPixels, addLayer } from '../../../engine-wasm/wasm-bridge';
+import { layerToDescJson } from '../../../engine-wasm/sync-layers';
 
 export function computeFlattenImage(
   doc: DocumentState,
@@ -23,23 +24,7 @@ export function computeFlattenImage(
     // Register the new layer with the engine BEFORE uploading pixels.
     // This ensures addLayer sees that no texture exists yet and creates a placeholder,
     // then uploadLayerPixels replaces it with the correct-size texture.
-    const descJson = JSON.stringify({
-      id: flatLayer.id,
-      name: flatLayer.name,
-      layer_type: 'Raster',
-      visible: true,
-      locked: false,
-      opacity: 1.0,
-      blend_mode: 'Normal',
-      x: 0,
-      y: 0,
-      width,
-      height,
-      clip_to_below: false,
-      effects: {},
-      mask: null,
-    });
-    addLayer(engine, descJson);
+    addLayer(engine, layerToDescJson(flatLayer, true));
 
     if (composited && composited.length > 0) {
       uploadLayerPixels(engine, flatLayer.id, composited, width, height, 0, 0);

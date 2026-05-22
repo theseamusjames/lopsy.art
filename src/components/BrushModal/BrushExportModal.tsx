@@ -31,7 +31,7 @@ export function BrushExportModal({ onClose }: BrushExportModalProps) {
 
   const handleExport = useCallback(() => {
     if (selected.size > 0) {
-      exportPresets(selected);
+      exportPresets(presets.filter((p) => selected.has(p.id)));
       onClose();
     }
   }, [selected, onClose]);
