@@ -6,9 +6,10 @@ import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import type { ActiveChannel, ChannelVisibility } from '../../app/ui-store';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { extractChannelPixels, getLayerTextureDimensions } from '../../engine-wasm/wasm-bridge';
 import { usePixelDataVersion } from '../../engine/usePixelDataVersion';
-import { contextOptions } from '../../engine/color-space';
-import { extractChannel } from './channel-extract';
+import { contextOptions, createImageData } from '../../engine/color-space';
 import type { ChannelId } from './channel-extract';
 import styles from './ChannelsPanel.module.css';
 
@@ -70,7 +71,26 @@ function ChannelThumbnail({ layerId, channel, pixelVersion }: ChannelThumbnailPr
       if (channel === 'rgb') {
         sourceData = imageData;
       } else {
-        sourceData = extractChannel(imageData, channel as ChannelId);
+        const engine = getEngine();
+        const channelIdx = channel === 'r' ? 0 : channel === 'g' ? 1 : channel === 'b' ? 2 : 3;
+        if (engine) {
+          const dims = getLayerTextureDimensions(engine, layerId);
+          const tw = dims[0] ?? 0;
+          const th = dims[1] ?? 0;
+          if (tw > 0 && th > 0) {
+            const pixels = extractChannelPixels(engine, layerId, channelIdx);
+            if (pixels.length === tw * th * 4) {
+              sourceData = createImageData(tw, th);
+              sourceData.data.set(new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength));
+            } else {
+              sourceData = imageData;
+            }
+          } else {
+            sourceData = imageData;
+          }
+        } else {
+          sourceData = imageData;
+        }
       }
 
       const tempCanvas = document.createElement('canvas');
