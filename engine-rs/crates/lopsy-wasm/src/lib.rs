@@ -78,7 +78,9 @@ pub fn clear_all_layers(engine: &mut Engine) {
 
 #[wasm_bindgen(js_name = "render")]
 pub fn render(engine: &mut Engine) {
-    compositor::composite(&mut engine.inner);
+    if let Err(e) = compositor::composite(&mut engine.inner) {
+        web_sys::console::error_1(&format!("compositor error: {e}").into());
+    }
 }
 
 #[wasm_bindgen(js_name = "markLayerDirty")]
