@@ -27,6 +27,7 @@ import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from '../../to
 import { handleBrushStroke } from '../../tools/brush/brush-stroke';
 import { handlePencilStroke } from '../../tools/pencil/pencil-stroke';
 import { handleEraserStroke } from '../../tools/eraser/eraser-stroke';
+import { getQuickMaskPaintMode } from './quick-mask-paint';
 
 type PaintTool = 'brush' | 'pencil' | 'eraser';
 
@@ -119,7 +120,10 @@ export function handlePaintDown(
       return state;
     }
 
-    const mode = tool === 'eraser' ? 1 : 0; // 0 = brush (add), 1 = eraser (remove)
+    // Quick mask: brush/pencil respect foreground color (black adds the
+    // overlay / shrinks selection, white removes it / grows selection);
+    // eraser always acts as paint-black.
+    const mode = getQuickMaskPaintMode(tool, toolSettings.foregroundColor);
 
     if (tool === 'brush') {
       const size = toolSettings.brushSize;
@@ -648,9 +652,11 @@ function handleMaskPaintMoveUnified(
   if (!state.lastPoint) return;
 
   const isQuickMask = target === 'quickMask';
+  const paintTool: 'brush' | 'pencil' | 'eraser' =
+    state.tool === 'eraser' ? 'eraser' : state.tool === 'pencil' ? 'pencil' : 'brush';
   const mode = isQuickMask
-    ? (state.tool === 'eraser' ? 1 : 0)
-    : (state.tool === 'eraser' ? 0 : 1);
+    ? getQuickMaskPaintMode(paintTool, toolSettings.foregroundColor)
+    : (paintTool === 'eraser' ? 0 : 1);
 
   const emitDabs = (size: number, hardness: number, opacity: number) => {
     const spacing = Math.max(1, size * 0.25);
