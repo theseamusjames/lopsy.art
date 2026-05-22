@@ -115,7 +115,7 @@ export function BrushModal() {
           try {
             const parsed = JSON.parse(reader.result as string) as { presets: unknown[] };
             if (Array.isArray(parsed.presets)) {
-              importPresetsFromFile(file);
+              importPresetsFromFile(file, (p) => useToolSettingsStore.getState().addPresets(p));
             }
           } catch { /* not valid JSON, ignore */ }
         };

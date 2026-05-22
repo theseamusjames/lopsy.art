@@ -1,5 +1,4 @@
 import type { BrushPreset, BrushTipData, SubBrush } from '../../types/brush';
-import { useToolSettingsStore } from '../../app/tool-settings-store';
 
 interface SerializedTip {
   width: number;
@@ -90,12 +89,9 @@ function subBrushFromJson(s: SerializedSubBrush): SubBrush {
 
 let nextImportId = 1;
 
-export function exportPresets(ids?: Set<string>): void {
-  const state = useToolSettingsStore.getState();
-  const customs = ids
-    ? state.presets.filter((p) => ids.has(p.id))
-    : state.presets.filter((p) => p.isCustom);
-  if (customs.length === 0) return;
+export function exportPresets(presets: readonly BrushPreset[]): void {
+  if (presets.length === 0) return;
+  const customs = presets;
 
   const serialized: SerializedPreset[] = customs.map((p) => ({
     name: p.name,
@@ -129,7 +125,10 @@ export function exportPresets(ids?: Set<string>): void {
   URL.revokeObjectURL(url);
 }
 
-export async function importPresetsFromFile(file: File): Promise<number> {
+export async function importPresetsFromFile(
+  file: File,
+  onAddPresets: (presets: BrushPreset[]) => void,
+): Promise<number> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -158,7 +157,7 @@ export async function importPresetsFromFile(file: File): Promise<number> {
           taper: s.taper,
           subBrushes: s.subBrushes?.map(subBrushFromJson),
         }));
-        useToolSettingsStore.getState().addPresets(presets);
+        onAddPresets(presets);
         resolve(presets.length);
       } catch {
         resolve(0);

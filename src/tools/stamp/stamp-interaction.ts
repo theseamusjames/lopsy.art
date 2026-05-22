@@ -1,4 +1,3 @@
-import type { MutableRefObject } from 'react';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 import type { Point } from '../../types';
@@ -65,7 +64,7 @@ export function handleStampDown(ctx: InteractionContext): InteractionState | und
 export function handleStampMove(
   state: InteractionState,
   layerLocalPos: Point,
-  stampOffsetRef: MutableRefObject<Point | null>,
+  stampOffsetRef: { current: Point | null },
 ): void {
   if (!state.lastPoint || !stampOffsetRef.current) return;
 
