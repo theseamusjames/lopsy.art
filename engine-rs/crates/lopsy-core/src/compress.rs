@@ -110,12 +110,19 @@ pub fn rle_decompress(data: &[u8], expected_len: usize) -> Vec<u8> {
 // ---------------------------------------------------------------------------
 
 pub fn lz4_compress(data: &[u8]) -> Vec<u8> {
-    lz4_flex::compress_prepend_size(data)
+    use lz4_flex::frame::FrameEncoder;
+    use std::io::Write;
+    let mut encoder = FrameEncoder::new(Vec::new());
+    encoder.write_all(data).expect("LZ4 frame encode failed");
+    encoder.finish().expect("LZ4 frame finish failed")
 }
 
 pub fn lz4_decompress(data: &[u8], expected_len: usize) -> Vec<u8> {
-    let out = lz4_flex::decompress_size_prepended(data)
-        .expect("LZ4 decompression failed");
+    use lz4_flex::frame::FrameDecoder;
+    use std::io::Read;
+    let mut decoder = FrameDecoder::new(data);
+    let mut out = Vec::with_capacity(expected_len);
+    decoder.read_to_end(&mut out).expect("LZ4 frame decode failed");
     assert_eq!(out.len(), expected_len, "LZ4 decompressed size mismatch");
     out
 }
@@ -441,7 +448,8 @@ mod tests {
         }
         let rle_size = rle_compress_u16(&data).len();
         let lz4_size = lz4_compress(&data).len();
-        assert!(lz4_size <= rle_size, "LZ4 ({lz4_size}) should be <= RLE ({rle_size}) on gradient data");
+        let overhead = 64;
+        assert!(lz4_size <= rle_size + overhead, "LZ4 ({lz4_size}) should be close to RLE ({rle_size}) on gradient data");
     }
 
     #[test]
