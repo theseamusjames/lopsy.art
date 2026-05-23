@@ -20,7 +20,7 @@ import { useToolSettingsStore } from './tool-settings-store';
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { cacheLayerSnapshot } from './store/history-slice';
-import { clearPendingStroke, setPendingStroke } from './interactions/pending-stroke';
+import { clearPendingStroke } from './interactions/pending-stroke';
 import { syncLayerAfterFullSize } from './sync-layer-after-full-size';
 import type {
   InteractionState, InteractionContext,
@@ -565,20 +565,17 @@ export function useCanvasInteraction(
       useUIStore.getState().setIsStroking(false);
     }
 
-    // Defer brush stroke finalization so shift-click can continue the same
-    // stroke texture (avoiding double-composite at the overlap point).
-    // Other paint tools finalize immediately.
+    // Finalize GPU strokes immediately at pointer-up and cache the
+    // snapshot so the next pointer-down's pushHistory is instant.
+    // Shift-click line continuation still works — it starts a new
+    // stroke segment from lastPaintPointRef (separate undo entry).
     if (PAINT_TOOLS.has(state.tool) && state.layerId && !state.maskMode) {
       const engine = getEngine();
       if (engine && state._usedGpuStroke) {
-        if (state.tool === 'brush') {
-          pendingStrokeRef.current = { layerId: state.layerId };
-          setPendingStroke(state.layerId);
-        } else {
-          endStroke(engine, state.layerId);
-          clearJsPixelData(state.layerId);
-          useEditorStore.getState().notifyRender();
-        }
+        endStroke(engine, state.layerId);
+        cacheLayerSnapshot(state.layerId);
+        clearJsPixelData(state.layerId);
+        useEditorStore.getState().notifyRender();
       } else {
         // CPU fallback
         destroyPaintingCanvas(state.layerId);
