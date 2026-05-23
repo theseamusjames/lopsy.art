@@ -13,6 +13,7 @@ import type { Layer, GroupLayer } from '../types';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { buildLayerIndex, isEffectivelyVisible, type LayerIndex } from '../layers/layer-index';
 import { BLEND_MODE_TO_PASCAL as BLEND_MODE_MAP } from '../types/blend-mode-tables';
+import { hasEnabledEffects } from '../layers/layer-model';
 import {
   addLayer,
   removeLayer,
@@ -40,7 +41,7 @@ export function layerToDescJson(
   passThroughOpacityMultiplier = 1.0,
   /** For pass-through groups: send empty children so the Rust compositor
    *  doesn't route descendants into a group scratch FBO. */
-  isPassThroughGroup = false,
+  isPassThrough = false,
 ): string {
   const effects: Record<string, unknown> = {};
 
@@ -134,10 +135,27 @@ export function layerToDescJson(
     // routes descendants into a group-scratch FBO. The children blend
     // directly onto the parent composite using their own blend modes and
     // the accumulated opacity from this group.
-    desc.children = isPassThroughGroup ? [] : (layer as GroupLayer).children;
+    desc.children = isPassThrough ? [] : (layer as GroupLayer).children;
   }
 
   return JSON.stringify(desc);
+}
+
+/**
+ * A group renders as true pass-through only when nothing about the group
+ * itself needs a composited output to operate on. Adjustments, masks, and
+ * layer effects (drop shadow, glow, stroke, color overlay) all require the
+ * group's children to be pre-composited into a scratch FBO so the effect
+ * can apply to the combined result — otherwise the effect has nothing to
+ * attach to and silently no-ops (issue #523).
+ */
+export function isPassThroughGroup(layer: Layer): boolean {
+  if (layer.type !== 'group' || layer.blendMode !== 'pass-through') return false;
+  const group = layer as GroupLayer;
+  if (group.adjustmentsEnabled && group.adjustments.length > 0) return false;
+  if (group.mask?.enabled) return false;
+  if (hasEnabledEffects(group.effects)) return false;
+  return true;
 }
 
 /**
@@ -229,9 +247,7 @@ export function syncLayers(
   // Add or update layers
   for (const layer of layers) {
     const effectiveVisible = isEffectivelyVisible(index, layer.id);
-    const isPassThrough = layer.type === 'group' && layer.blendMode === 'pass-through' &&
-      !((layer as GroupLayer).adjustmentsEnabled && (layer as GroupLayer).adjustments.length > 0) &&
-      !(layer.mask?.enabled);
+    const isPassThrough = isPassThroughGroup(layer);
     const opacityMultiplier = passThroughOpacity.get(layer.id) ?? 1.0;
 
     // Fast path: if both the layer reference and its effective visibility

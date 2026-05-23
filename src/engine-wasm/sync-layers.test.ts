@@ -14,7 +14,7 @@ vi.mock('./wasm-bridge', () => ({
   removeLayerMask: vi.fn(),
 }));
 
-const { layerToDescJson, buildPassThroughOpacityMap, syncLayers } = await import('./sync-layers');
+const { layerToDescJson, buildPassThroughOpacityMap, syncLayers, isPassThroughGroup } = await import('./sync-layers');
 const { DEFAULT_EFFECTS, createGroupLayer } = await import('../layers/layer-model');
 const { buildLayerIndex } = await import('../layers/layer-index');
 const bridge = await import('./wasm-bridge');
@@ -354,6 +354,63 @@ describe('layerToDescJson — pass-through blend mode', () => {
     const child: RasterLayer = { ...baseRasterLayer, opacity: 0.7 };
     const desc = JSON.parse(layerToDescJson(child, true, 1.0));
     expect(desc.opacity).toBeCloseTo(0.7);
+  });
+});
+
+describe('isPassThroughGroup — issue #523', () => {
+  it('reports true for a vanilla pass-through group', () => {
+    expect(isPassThroughGroup(baseGroup)).toBe(true);
+  });
+
+  it('reports false for non-group layers', () => {
+    expect(isPassThroughGroup(baseRasterLayer)).toBe(false);
+  });
+
+  it('reports false for groups with blendMode !== pass-through', () => {
+    expect(isPassThroughGroup({ ...baseGroup, blendMode: 'normal' })).toBe(false);
+    expect(isPassThroughGroup({ ...baseGroup, blendMode: 'multiply' })).toBe(false);
+  });
+
+  it('reports false when adjustments are enabled and present', () => {
+    const adjGroup: GroupLayer = {
+      ...baseGroup,
+      adjustments: [{ id: 'a', type: 'exposure', exposure: 0.5 }] as unknown as GroupLayer['adjustments'],
+      adjustmentsEnabled: true,
+    };
+    expect(isPassThroughGroup(adjGroup)).toBe(false);
+  });
+
+  it('reports true when adjustments array is empty even if adjustmentsEnabled', () => {
+    expect(isPassThroughGroup({ ...baseGroup, adjustmentsEnabled: true, adjustments: [] })).toBe(true);
+  });
+
+  it('reports false when a mask is enabled', () => {
+    const maskedGroup: GroupLayer = {
+      ...baseGroup,
+      mask: { id: 'mask-pt', data: new Uint8ClampedArray(4), width: 2, height: 2, enabled: true },
+    };
+    expect(isPassThroughGroup(maskedGroup)).toBe(false);
+  });
+
+  it('reports false when any layer effect is enabled (drop shadow)', () => {
+    const withShadow: GroupLayer = {
+      ...baseGroup,
+      effects: { ...DEFAULT_EFFECTS, dropShadow: { ...DEFAULT_EFFECTS.dropShadow, enabled: true } },
+    };
+    expect(isPassThroughGroup(withShadow)).toBe(false);
+  });
+
+  it('reports false when stroke or outer glow effect is enabled', () => {
+    const withStroke: GroupLayer = {
+      ...baseGroup,
+      effects: { ...DEFAULT_EFFECTS, stroke: { ...DEFAULT_EFFECTS.stroke, enabled: true } },
+    };
+    const withGlow: GroupLayer = {
+      ...baseGroup,
+      effects: { ...DEFAULT_EFFECTS, outerGlow: { ...DEFAULT_EFFECTS.outerGlow, enabled: true } },
+    };
+    expect(isPassThroughGroup(withStroke)).toBe(false);
+    expect(isPassThroughGroup(withGlow)).toBe(false);
   });
 });
 

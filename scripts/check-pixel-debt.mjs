@@ -45,7 +45,7 @@ const ALLOWLIST = {
   'src/app/store/actions/resize-canvas.test.ts': 1,
   'src/app/store/actions/resize-image.test.ts': 1,
   'src/engine-wasm/engine-sync.test.ts': 3,
-  'src/engine-wasm/sync-layers.test.ts': 5,
+  'src/engine-wasm/sync-layers.test.ts': 6,
   'src/engine/pixel-data-manager.test.ts': 2,
   'src/engine/pixel-data.test.ts': 1,
   'src/filters/auto-enhance.test.ts': 1,
