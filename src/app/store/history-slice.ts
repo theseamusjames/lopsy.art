@@ -1,7 +1,7 @@
 import type { HistorySnapshot, SliceCreator } from './types';
 import type { Layer } from '../../types';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { endStroke, getLayerTextureDimensions, uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
+import { endStroke, getLayerTextureDimensions, uploadLayerPixels, compressSnapshotBlob } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 import { resetTrackedState, flushLayerSync, syncLayers } from '../../engine-wasm/engine-sync';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
@@ -29,19 +29,77 @@ let lastRestoredSnapshot: HistorySnapshot | null = null;
 
 // Pre-cached GPU snapshots for layers that were just modified by a GPU-side
 // operation (brush stroke, etc.). Populated by cacheLayerSnapshot() right
-// after finalizePendingStroke so the subsequent pushHistory() can use the
+// after endStroke so the subsequent pushHistory() or undo() can use the
 // cached blob instead of blocking on a fresh GPU readback.
 const preSnapshotCache = new Map<string, Uint8Array>();
 
+// Pending layer IDs whose cache hasn't been populated yet (deferred via
+// setTimeout). flushPendingSnapshots() runs them synchronously when undo
+// or pushHistory needs the data before the timer fires.
+const pendingCacheIds = new Set<string>();
+
 export function cacheLayerSnapshot(layerId: string): void {
-  const compressed = readLayerCompressed(layerId);
-  if (compressed) {
-    preSnapshotCache.set(layerId, compressed);
+  pendingCacheIds.delete(layerId);
+  // readLayerCompressed returns a raw blob (flags=0, no compression)
+  // which is fast (~20ms GPU readback only, no CPU compression).
+  const raw = readLayerCompressed(layerId);
+  if (raw) {
+    preSnapshotCache.set(layerId, raw);
+  }
+}
+
+export function deferCacheLayerSnapshot(layerId: string): void {
+  pendingCacheIds.add(layerId);
+  setTimeout(() => {
+    if (pendingCacheIds.has(layerId)) {
+      cacheLayerSnapshot(layerId);
+    }
+  }, 0);
+}
+
+function flushPendingSnapshots(): void {
+  for (const id of pendingCacheIds) {
+    cacheLayerSnapshot(id);
   }
 }
 
 export function clearSnapshotCache(): void {
   preSnapshotCache.clear();
+  pendingCacheIds.clear();
+}
+
+// Background compression: compress raw blobs in the undo/redo stacks
+// to reduce memory. Runs one blob per idle tick to avoid blocking.
+let compressTimerId: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleBackgroundCompress(): void {
+  if (compressTimerId !== null) return;
+  compressTimerId = setTimeout(compressNextRawBlob, 100);
+}
+
+function compressNextRawBlob(): void {
+  compressTimerId = null;
+  // Find the first raw (uncompressed) blob in the undo or redo stack and compress it.
+  // Raw blobs have flags=0 at byte offset 24.
+  const state = (globalThis as unknown as { __editorStore?: { getState: () => { undoStack: HistorySnapshot[]; redoStack: HistorySnapshot[] } } }).__editorStore?.getState();
+  if (!state) return;
+
+  for (const stack of [state.undoStack, state.redoStack]) {
+    for (const entry of stack) {
+      if (entry.kind !== 'pixels') continue;
+      for (const [layerId, blob] of entry.gpuSnapshots) {
+        if (blob.length >= 32) {
+          const flags = blob[24]! | (blob[25]! << 8) | (blob[26]! << 16) | (blob[27]! << 24);
+          if (flags === 0) {
+            const compressed = compressSnapshotBlob(blob);
+            entry.gpuSnapshots.set(layerId, compressed);
+            scheduleBackgroundCompress();
+            return;
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -136,6 +194,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
 
   undo: () => {
     finalizePendingStrokeGlobal();
+    flushPendingSnapshots();
 
     const state = get();
     if (state.undoStack.length === 0) return;
@@ -195,6 +254,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   },
 
   redo: () => {
+    flushPendingSnapshots();
     const state = get();
     if (state.redoStack.length === 0) return;
     const next = state.redoStack[state.redoStack.length - 1];
@@ -249,6 +309,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   },
 
   pushHistory: (label = 'Edit') => {
+    flushPendingSnapshots();
     const state = get();
     lastRestoredSnapshot = null;
 
@@ -282,6 +343,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       isDirty: true,
       renderVersion: state.renderVersion + 1,
     });
+    scheduleBackgroundCompress();
   },
 
   pushHistoryMetadata: (label: string) => {

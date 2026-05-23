@@ -629,20 +629,16 @@ pub fn read_layer_pixels_compressed_u16(engine: &Engine, layer_id: &str) -> Vec<
         (bytes, rect)
     };
 
-    let uncompressed_size = raw_bytes.len() as u32;
-    let compressed_payload = lopsy_core::compress::lz4_compress(&raw_bytes);
-    drop(raw_bytes);
-
-    let mut result = Vec::with_capacity(32 + compressed_payload.len());
+    let mut result = Vec::with_capacity(32 + raw_bytes.len());
     result.extend_from_slice(&rect.x.to_le_bytes());
     result.extend_from_slice(&rect.y.to_le_bytes());
     result.extend_from_slice(&(rect.width as i32).to_le_bytes());
     result.extend_from_slice(&(rect.height as i32).to_le_bytes());
     result.extend_from_slice(&(w as i32).to_le_bytes());
     result.extend_from_slice(&(h as i32).to_le_bytes());
-    result.extend_from_slice(&2i32.to_le_bytes()); // flags: 2 = LZ4 compressed
-    result.extend_from_slice(&uncompressed_size.to_le_bytes());
-    result.extend_from_slice(&compressed_payload);
+    result.extend_from_slice(&0i32.to_le_bytes()); // flags: 0 = raw (no compression)
+    result.extend_from_slice(&(raw_bytes.len() as u32).to_le_bytes());
+    result.extend_from_slice(&raw_bytes);
     result
 }
 
@@ -821,5 +817,26 @@ pub fn read_composite_thumbnail(engine: &Engine, max_size: u32) -> Vec<u8> {
     result.extend_from_slice(&tw.to_le_bytes());
     result.extend_from_slice(&th.to_le_bytes());
     result.extend_from_slice(&thumb);
+    result
+}
+
+/// Compress a raw snapshot blob (flags=0) to LZ4 (flags=2) in place.
+/// Returns the original blob unchanged if it's already compressed or too short.
+#[wasm_bindgen(js_name = "compressSnapshotBlob")]
+pub fn compress_snapshot_blob(raw: &[u8]) -> Vec<u8> {
+    if raw.len() < 32 {
+        return raw.to_vec();
+    }
+    let flags = i32::from_le_bytes([raw[24], raw[25], raw[26], raw[27]]);
+    if flags != 0 {
+        return raw.to_vec();
+    }
+    let pixel_data = &raw[32..];
+    let compressed = lopsy_core::compress::lz4_compress(pixel_data);
+    let mut result = Vec::with_capacity(32 + compressed.len());
+    result.extend_from_slice(&raw[..24]);
+    result.extend_from_slice(&2i32.to_le_bytes());
+    result.extend_from_slice(&(pixel_data.len() as u32).to_le_bytes());
+    result.extend_from_slice(&compressed);
     result
 }

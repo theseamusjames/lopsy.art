@@ -19,8 +19,8 @@ import { useToolSettingsStore } from './tool-settings-store';
 
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
-import { cacheLayerSnapshot } from './store/history-slice';
-import { clearPendingStroke, setPendingStroke } from './interactions/pending-stroke';
+import { deferCacheLayerSnapshot } from './store/history-slice';
+import { clearPendingStroke } from './interactions/pending-stroke';
 import { syncLayerAfterFullSize } from './sync-layer-after-full-size';
 import type {
   InteractionState, InteractionContext,
@@ -78,11 +78,6 @@ function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } |
   if (!engine) return;
 
   endStroke(engine, pending.layerId);
-
-  // Cache the GPU snapshot BEFORE clearJsPixelData marks the layer dirty.
-  // This way the subsequent pushHistory() can use the cached blob instantly
-  // instead of blocking on a fresh GPU readback.
-  cacheLayerSnapshot(pending.layerId);
 
   clearJsPixelData(pending.layerId);
   useEditorStore.getState().notifyRender();
@@ -565,20 +560,19 @@ export function useCanvasInteraction(
       useUIStore.getState().setIsStroking(false);
     }
 
-    // Defer brush stroke finalization so shift-click can continue the same
-    // stroke texture (avoiding double-composite at the overlap point).
-    // Other paint tools finalize immediately.
+    // Finalize GPU strokes at pointer-up. The stroke merge (endStroke)
+    // runs synchronously so the composited result is visible immediately.
+    // The GPU readback + LZ4 compression for the undo cache is deferred
+    // to the next idle tick so it doesn't block the pointer-up frame.
+    // If the user starts a new stroke before the cache is ready,
+    // pushHistory falls through to a synchronous readback.
     if (PAINT_TOOLS.has(state.tool) && state.layerId && !state.maskMode) {
       const engine = getEngine();
       if (engine && state._usedGpuStroke) {
-        if (state.tool === 'brush') {
-          pendingStrokeRef.current = { layerId: state.layerId };
-          setPendingStroke(state.layerId);
-        } else {
-          endStroke(engine, state.layerId);
-          clearJsPixelData(state.layerId);
-          useEditorStore.getState().notifyRender();
-        }
+        endStroke(engine, state.layerId);
+        clearJsPixelData(state.layerId);
+        useEditorStore.getState().notifyRender();
+        deferCacheLayerSnapshot(state.layerId);
       } else {
         // CPU fallback
         destroyPaintingCanvas(state.layerId);
