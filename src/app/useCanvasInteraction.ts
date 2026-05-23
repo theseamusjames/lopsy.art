@@ -19,7 +19,7 @@ import { useToolSettingsStore } from './tool-settings-store';
 
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
-import { cacheLayerSnapshot } from './store/history-slice';
+import { deferCacheLayerSnapshot } from './store/history-slice';
 import { clearPendingStroke } from './interactions/pending-stroke';
 import { syncLayerAfterFullSize } from './sync-layer-after-full-size';
 import type {
@@ -78,11 +78,6 @@ function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } |
   if (!engine) return;
 
   endStroke(engine, pending.layerId);
-
-  // Cache the GPU snapshot BEFORE clearJsPixelData marks the layer dirty.
-  // This way the subsequent pushHistory() can use the cached blob instantly
-  // instead of blocking on a fresh GPU readback.
-  cacheLayerSnapshot(pending.layerId);
 
   clearJsPixelData(pending.layerId);
   useEditorStore.getState().notifyRender();
@@ -565,17 +560,19 @@ export function useCanvasInteraction(
       useUIStore.getState().setIsStroking(false);
     }
 
-    // Finalize GPU strokes immediately at pointer-up and cache the
-    // snapshot so the next pointer-down's pushHistory is instant.
-    // Shift-click line continuation still works — it starts a new
-    // stroke segment from lastPaintPointRef (separate undo entry).
+    // Finalize GPU strokes at pointer-up. The stroke merge (endStroke)
+    // runs synchronously so the composited result is visible immediately.
+    // The GPU readback + LZ4 compression for the undo cache is deferred
+    // to the next idle tick so it doesn't block the pointer-up frame.
+    // If the user starts a new stroke before the cache is ready,
+    // pushHistory falls through to a synchronous readback.
     if (PAINT_TOOLS.has(state.tool) && state.layerId && !state.maskMode) {
       const engine = getEngine();
       if (engine && state._usedGpuStroke) {
         endStroke(engine, state.layerId);
-        cacheLayerSnapshot(state.layerId);
         clearJsPixelData(state.layerId);
         useEditorStore.getState().notifyRender();
+        deferCacheLayerSnapshot(state.layerId);
       } else {
         // CPU fallback
         destroyPaintingCanvas(state.layerId);

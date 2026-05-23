@@ -29,19 +29,41 @@ let lastRestoredSnapshot: HistorySnapshot | null = null;
 
 // Pre-cached GPU snapshots for layers that were just modified by a GPU-side
 // operation (brush stroke, etc.). Populated by cacheLayerSnapshot() right
-// after finalizePendingStroke so the subsequent pushHistory() can use the
+// after endStroke so the subsequent pushHistory() or undo() can use the
 // cached blob instead of blocking on a fresh GPU readback.
 const preSnapshotCache = new Map<string, Uint8Array>();
 
+// Pending layer IDs whose cache hasn't been populated yet (deferred via
+// setTimeout). flushPendingSnapshots() runs them synchronously when undo
+// or pushHistory needs the data before the timer fires.
+const pendingCacheIds = new Set<string>();
+
 export function cacheLayerSnapshot(layerId: string): void {
+  pendingCacheIds.delete(layerId);
   const compressed = readLayerCompressed(layerId);
   if (compressed) {
     preSnapshotCache.set(layerId, compressed);
   }
 }
 
+export function deferCacheLayerSnapshot(layerId: string): void {
+  pendingCacheIds.add(layerId);
+  setTimeout(() => {
+    if (pendingCacheIds.has(layerId)) {
+      cacheLayerSnapshot(layerId);
+    }
+  }, 0);
+}
+
+function flushPendingSnapshots(): void {
+  for (const id of pendingCacheIds) {
+    cacheLayerSnapshot(id);
+  }
+}
+
 export function clearSnapshotCache(): void {
   preSnapshotCache.clear();
+  pendingCacheIds.clear();
 }
 
 /**
@@ -136,6 +158,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
 
   undo: () => {
     finalizePendingStrokeGlobal();
+    flushPendingSnapshots();
 
     const state = get();
     if (state.undoStack.length === 0) return;
@@ -195,6 +218,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   },
 
   redo: () => {
+    flushPendingSnapshots();
     const state = get();
     if (state.redoStack.length === 0) return;
     const next = state.redoStack[state.redoStack.length - 1];
@@ -249,6 +273,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   },
 
   pushHistory: (label = 'Edit') => {
+    flushPendingSnapshots();
     const state = get();
     lastRestoredSnapshot = null;
 
