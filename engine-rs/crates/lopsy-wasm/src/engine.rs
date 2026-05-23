@@ -266,6 +266,13 @@ pub struct EngineInner {
     /// Scratch FBO/texture for group-scoped adjustments. Allocated on demand.
     pub group_scratch_fbo: Option<FramebufferHandle>,
     pub group_scratch_texture: Option<TextureHandle>,
+    /// Pre-adjustment group scratch: caches the composited children so that
+    /// when only adjustment values change (not the children), the compositor
+    /// can skip re-blending all children and just re-apply the adjustment
+    /// shader to this cached texture. Invalidated when any child layer changes.
+    pub group_pre_adj_texture: Option<TextureHandle>,
+    pub group_pre_adj_id: Option<String>,
+    pub group_pre_adj_valid: bool,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -409,6 +416,9 @@ impl EngineInner {
             group_adjustments: HashMap::new(),
             group_scratch_fbo: None,
             group_scratch_texture: None,
+            group_pre_adj_texture: None,
+            group_pre_adj_id: None,
+            group_pre_adj_valid: false,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,
@@ -465,6 +475,7 @@ impl EngineInner {
     pub fn mark_layer_dirty(&mut self, layer_id: &str) {
         self.dirty_layers.insert(layer_id.to_string());
         self.needs_recomposite = true;
+        self.group_pre_adj_valid = false;
     }
 
     /// Expand a lazy 1x1 layer texture to full document size.

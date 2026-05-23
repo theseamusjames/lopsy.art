@@ -41,6 +41,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         .flat_map(|(gid, ga)| ga.child_ids.iter().map(move |cid| (cid.clone(), gid.clone())))
         .collect();
     let mut active_group_id: Option<String> = None;
+    let mut skip_group_children = false;
 
     for idx in 0..n {
         let (
@@ -100,6 +101,61 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                     // This is the group marker — finalize its children
                     let gs_fbo = engine.group_scratch_fbo.expect("group scratch FBO allocated");
                     let gs_tex = engine.group_scratch_texture.expect("group scratch texture allocated");
+
+                    // Cache the pre-adjustment composited children so subsequent
+                    // frames that only change adjustment values (not children)
+                    // can skip re-blending all children.
+                    if !engine.group_pre_adj_valid || engine.group_pre_adj_id.as_ref() != Some(&layer_id) {
+                        let cache_tex = match engine.group_pre_adj_texture {
+                            Some(t) => {
+                                let (cw, ch) = engine.texture_pool.get_size(t).unwrap_or((0, 0));
+                                if cw != doc_w || ch != doc_h {
+                                    engine.texture_pool.release(t);
+                                    let nt = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).ok();
+                                    engine.group_pre_adj_texture = nt;
+                                    nt
+                                } else { Some(t) }
+                            }
+                            None => {
+                                let nt = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).ok();
+                                engine.group_pre_adj_texture = nt;
+                                nt
+                            }
+                        };
+                        if let Some(ct) = cache_tex {
+                            if let (Some(dst), Some(src)) = (engine.texture_pool.get(ct).cloned(), engine.texture_pool.get(gs_tex).cloned()) {
+                                engine.render_to_texture(&dst, doc_w as i32, doc_h as i32, |eng| {
+                                    eng.gl.use_program(Some(&eng.shaders.blit.program));
+                                    eng.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+                                    eng.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src));
+                                    if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") {
+                                        eng.gl.uniform1i(Some(&loc), 0);
+                                    }
+                                    eng.draw_fullscreen_quad();
+                                });
+                            }
+                        }
+                        engine.group_pre_adj_id = Some(layer_id.clone());
+                        engine.group_pre_adj_valid = true;
+                    } else {
+                        // Children unchanged — restore cached pre-adjustment scratch.
+                        // We skipped child blending for this group (skip_group_children was set).
+                        if let Some(ct) = engine.group_pre_adj_texture {
+                            if let (Some(dst), Some(src)) = (engine.texture_pool.get(gs_tex).cloned(), engine.texture_pool.get(ct).cloned()) {
+                                engine.fbo_pool.attach_texture(&engine.gl, gs_fbo, &dst);
+                                engine.fbo_pool.bind(&engine.gl, gs_fbo);
+                                engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+                                engine.gl.use_program(Some(&engine.shaders.blit.program));
+                                engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+                                engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src));
+                                if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
+                                    engine.gl.uniform1i(Some(&loc), 0);
+                                }
+                                engine.draw_fullscreen_quad();
+                            }
+                        }
+                    }
+
                     if let Some(ga) = engine.group_adjustments.get(&layer_id) {
                         let adj = ga.adjustments.clone();
                         apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
@@ -142,7 +198,19 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
 
         // Check if this layer is a child of a group with adjustments.
         // If so, ensure the group scratch is set up and redirect compositing.
+        // If the pre-adjustment cache is valid, skip child blending entirely.
         let is_group_child = if let Some(gid) = child_to_group.get(&layer_id) {
+            if active_group_id.is_none() {
+                // Check if we can skip child compositing (cache valid)
+                skip_group_children = engine.group_pre_adj_valid
+                    && engine.group_pre_adj_id.as_ref() == Some(gid);
+            }
+            if skip_group_children {
+                if active_group_id.is_none() {
+                    active_group_id = Some(gid.clone());
+                }
+                continue;
+            }
             if active_group_id.is_none() {
                 // First child of this group — allocate/clear scratch
                 let gs_tex = match engine.group_scratch_texture {
