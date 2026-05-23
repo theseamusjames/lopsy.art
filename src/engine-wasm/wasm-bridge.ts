@@ -5,6 +5,7 @@
 
 import init, {
   Engine,
+  compressSnapshotBlob,
   createEngine,
   setDocumentSize,
   setViewport,
@@ -302,6 +303,7 @@ export function getWasmMemoryBytes(): number {
 
 // Re-export everything with the same names
 export {
+  compressSnapshotBlob,
   createEngine,
   setDocumentSize,
   setViewport,

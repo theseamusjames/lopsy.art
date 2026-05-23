@@ -1,7 +1,7 @@
 import type { HistorySnapshot, SliceCreator } from './types';
 import type { Layer } from '../../types';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { endStroke, getLayerTextureDimensions, uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
+import { endStroke, getLayerTextureDimensions, uploadLayerPixels, compressSnapshotBlob } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 import { resetTrackedState, flushLayerSync, syncLayers } from '../../engine-wasm/engine-sync';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
@@ -40,9 +40,11 @@ const pendingCacheIds = new Set<string>();
 
 export function cacheLayerSnapshot(layerId: string): void {
   pendingCacheIds.delete(layerId);
-  const compressed = readLayerCompressed(layerId);
-  if (compressed) {
-    preSnapshotCache.set(layerId, compressed);
+  // readLayerCompressed returns a raw blob (flags=0, no compression)
+  // which is fast (~20ms GPU readback only, no CPU compression).
+  const raw = readLayerCompressed(layerId);
+  if (raw) {
+    preSnapshotCache.set(layerId, raw);
   }
 }
 
@@ -64,6 +66,40 @@ function flushPendingSnapshots(): void {
 export function clearSnapshotCache(): void {
   preSnapshotCache.clear();
   pendingCacheIds.clear();
+}
+
+// Background compression: compress raw blobs in the undo/redo stacks
+// to reduce memory. Runs one blob per idle tick to avoid blocking.
+let compressTimerId: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleBackgroundCompress(): void {
+  if (compressTimerId !== null) return;
+  compressTimerId = setTimeout(compressNextRawBlob, 100);
+}
+
+function compressNextRawBlob(): void {
+  compressTimerId = null;
+  // Find the first raw (uncompressed) blob in the undo or redo stack and compress it.
+  // Raw blobs have flags=0 at byte offset 24.
+  const state = (globalThis as unknown as { __editorStore?: { getState: () => { undoStack: HistorySnapshot[]; redoStack: HistorySnapshot[] } } }).__editorStore?.getState();
+  if (!state) return;
+
+  for (const stack of [state.undoStack, state.redoStack]) {
+    for (const entry of stack) {
+      if (entry.kind !== 'pixels') continue;
+      for (const [layerId, blob] of entry.gpuSnapshots) {
+        if (blob.length >= 32) {
+          const flags = blob[24]! | (blob[25]! << 8) | (blob[26]! << 16) | (blob[27]! << 24);
+          if (flags === 0) {
+            const compressed = compressSnapshotBlob(blob);
+            entry.gpuSnapshots.set(layerId, compressed);
+            scheduleBackgroundCompress();
+            return;
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -307,6 +343,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       isDirty: true,
       renderVersion: state.renderVersion + 1,
     });
+    scheduleBackgroundCompress();
   },
 
   pushHistoryMetadata: (label: string) => {
