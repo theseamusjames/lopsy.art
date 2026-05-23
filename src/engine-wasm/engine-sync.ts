@@ -369,16 +369,19 @@ function pushGroupToEngine(
   engine: Engine,
   group: import('../types').GroupLayer,
   layers: readonly Layer[],
-): void {
-  const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
-  const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
+  precomputedAdj: ReturnType<typeof nodesToLegacyAdjustments> | null,
+  cachedChildrenJson: string | undefined,
+): string {
+  const adj = precomputedAdj;
   const hasCurves = adj?.curves != null && !isIdentityCurves(adj.curves);
   const hasLevels = adj?.levels != null && !isIdentityLevels(adj.levels);
+
+  const childrenJson = cachedChildrenJson ?? JSON.stringify(flattenGroupDescendants(layers, group.id));
 
   setGroupAdjustments(
     engine,
     group.id,
-    JSON.stringify(flattenGroupDescendants(layers, group.id)),
+    childrenJson,
     adj?.exposure ?? 0,
     adj?.contrast ?? 0,
     adj?.highlights ?? 0,
@@ -434,33 +437,41 @@ function pushGroupToEngine(
     const lut = buildGradientMapLut(gStops);
     setGroupGradientMapLut(engine, group.id, lut);
   }
+  return childrenJson;
 }
 
-function groupNeedsRouting(group: import('../types').GroupLayer): boolean {
+function adjIsNonTrivial(adj: ReturnType<typeof nodesToLegacyAdjustments>): boolean {
+  return (
+    Math.abs(adj.exposure) > 1e-6 ||
+    Math.abs(adj.contrast) > 1e-6 ||
+    Math.abs(adj.highlights) > 1e-6 ||
+    Math.abs(adj.shadows) > 1e-6 ||
+    Math.abs(adj.whites) > 1e-6 ||
+    Math.abs(adj.blacks) > 1e-6 ||
+    Math.abs(adj.saturation) > 1e-6 ||
+    Math.abs(adj.vibrance) > 1e-6 ||
+    Math.abs(adj.vignette) > 1e-6 ||
+    (adj.curves != null && !isIdentityCurves(adj.curves)) ||
+    (adj.levels != null && !isIdentityLevels(adj.levels)) ||
+    !!adj.invert ||
+    (adj.hueSatHue ?? 0) !== 0 || (adj.hueSatSaturation ?? 0) !== 0 || (adj.hueSatLightness ?? 0) !== 0 ||
+    (adj.colorBalanceShadows ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
+    (adj.colorBalanceMidtones ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
+    (adj.colorBalanceHighlights ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
+    (adj.photoFilterDensity ?? 0) > 1e-6 ||
+    !!adj.bwEnabled || !!adj.channelMixerEnabled ||
+    (adj.gradientMapStops?.length ?? 0) >= 2
+  );
+}
+
+function groupNeedsRouting(
+  group: import('../types').GroupLayer,
+  precomputedAdj?: ReturnType<typeof nodesToLegacyAdjustments> | null,
+): boolean {
   const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
   if (hasAdj) {
-    const adj = nodesToLegacyAdjustments(group.adjustments);
-    if (
-      Math.abs(adj.exposure) > 1e-6 ||
-      Math.abs(adj.contrast) > 1e-6 ||
-      Math.abs(adj.highlights) > 1e-6 ||
-      Math.abs(adj.shadows) > 1e-6 ||
-      Math.abs(adj.whites) > 1e-6 ||
-      Math.abs(adj.blacks) > 1e-6 ||
-      Math.abs(adj.saturation) > 1e-6 ||
-      Math.abs(adj.vibrance) > 1e-6 ||
-      Math.abs(adj.vignette) > 1e-6 ||
-      (adj.curves != null && !isIdentityCurves(adj.curves)) ||
-      (adj.levels != null && !isIdentityLevels(adj.levels)) ||
-      !!adj.invert ||
-      (adj.hueSatHue ?? 0) !== 0 || (adj.hueSatSaturation ?? 0) !== 0 || (adj.hueSatLightness ?? 0) !== 0 ||
-      (adj.colorBalanceShadows ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
-      (adj.colorBalanceMidtones ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
-      (adj.colorBalanceHighlights ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
-      (adj.photoFilterDensity ?? 0) > 1e-6 ||
-      !!adj.bwEnabled || !!adj.channelMixerEnabled ||
-      (adj.gradientMapStops?.length ?? 0) >= 2
-    ) return true;
+    const adj = precomputedAdj ?? nodesToLegacyAdjustments(group.adjustments);
+    if (adjIsNonTrivial(adj)) return true;
   }
   return group.mask != null && group.mask.enabled;
 }
@@ -476,13 +487,16 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     for (const layer of layers) {
       if (layer.type !== 'group') continue;
       const group = layer as import('../types').GroupLayer;
-      if (!groupNeedsRouting(group)) continue;
-      pushGroupToEngine(engine, group, layers);
+      const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
+      const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
+      if (!groupNeedsRouting(group, adj)) continue;
+      const childrenJson = pushGroupToEngine(engine, group, layers, adj, undefined);
       tracked.groupAdjTracked.set(group.id, {
         adjustments: group.adjustments,
         adjustmentsEnabled: group.adjustmentsEnabled,
         children: group.children,
         maskEnabled: group.mask?.enabled ?? false,
+        childrenJson,
       });
     }
     return;
@@ -503,14 +517,18 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       prev.maskEnabled === (group.mask?.enabled ?? false)
     ) continue;
 
-    const needs = groupNeedsRouting(group);
+    const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
+    const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
+    const needs = groupNeedsRouting(group, adj);
     if (needs) {
-      pushGroupToEngine(engine, group, layers);
+      const cachedJson = prev && prev.children === group.children ? prev.childrenJson : undefined;
+      const childrenJson = pushGroupToEngine(engine, group, layers, adj, cachedJson);
       tracked.groupAdjTracked.set(group.id, {
         adjustments: group.adjustments,
         adjustmentsEnabled: group.adjustmentsEnabled,
         children: group.children,
         maskEnabled: group.mask?.enabled ?? false,
+        childrenJson,
       });
     } else if (prev) {
       removeGroupAdjustment(engine, group.id);
