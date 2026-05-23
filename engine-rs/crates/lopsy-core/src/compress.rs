@@ -104,7 +104,25 @@ pub fn rle_decompress(data: &[u8], expected_len: usize) -> Vec<u8> {
 }
 
 // ---------------------------------------------------------------------------
+// LZ4 compression — used for u16 undo snapshots. Handles all content types
+// well (illustrations: ~10-50x, photos: ~1.5-2x) unlike RLE which gets ~1x
+// on photographic content.
+// ---------------------------------------------------------------------------
+
+pub fn lz4_compress(data: &[u8]) -> Vec<u8> {
+    lz4_flex::compress_prepend_size(data)
+}
+
+pub fn lz4_decompress(data: &[u8], expected_len: usize) -> Vec<u8> {
+    let out = lz4_flex::decompress_size_prepended(data)
+        .expect("LZ4 decompression failed");
+    assert_eq!(out.len(), expected_len, "LZ4 decompressed size mismatch");
+    out
+}
+
+// ---------------------------------------------------------------------------
 // u16 variant — same RLE scheme but each "pixel" is 4 × u16 = 8 bytes
+// Kept for backward compatibility with existing in-session snapshots.
 // ---------------------------------------------------------------------------
 
 const PIXEL_U16: usize = 8; // 4 channels × 2 bytes
@@ -383,6 +401,47 @@ mod tests {
         let compressed = rle_compress_u16(&data);
         let decompressed = rle_decompress_u16(&compressed, data.len());
         assert_eq!(decompressed, data);
+    }
+
+    #[test]
+    fn lz4_roundtrip_empty() {
+        let data: Vec<u8> = Vec::new();
+        let compressed = lz4_compress(&data);
+        let decompressed = lz4_decompress(&compressed, 0);
+        assert!(decompressed.is_empty());
+    }
+
+    #[test]
+    fn lz4_roundtrip_all_transparent_u16() {
+        let data = vec![0u8; 1000 * 8];
+        let compressed = lz4_compress(&data);
+        assert!(compressed.len() < data.len() / 10);
+        let decompressed = lz4_decompress(&compressed, data.len());
+        assert_eq!(decompressed, data);
+    }
+
+    #[test]
+    fn lz4_roundtrip_photo_like() {
+        let mut data = Vec::with_capacity(1000 * 8);
+        for i in 0..1000u32 {
+            let p = make_u16_pixel((i * 60 % 65536) as u16, (i * 37 % 65536) as u16, (i * 91 % 65536) as u16, 65535);
+            data.extend_from_slice(&p);
+        }
+        let compressed = lz4_compress(&data);
+        let decompressed = lz4_decompress(&compressed, data.len());
+        assert_eq!(decompressed, data);
+    }
+
+    #[test]
+    fn lz4_better_than_rle_on_gradient() {
+        let mut data = Vec::with_capacity(1000 * 8);
+        for i in 0..1000u16 {
+            let p = make_u16_pixel(i * 65, i * 65, i * 65, 65535);
+            data.extend_from_slice(&p);
+        }
+        let rle_size = rle_compress_u16(&data).len();
+        let lz4_size = lz4_compress(&data).len();
+        assert!(lz4_size <= rle_size, "LZ4 ({lz4_size}) should be <= RLE ({rle_size}) on gradient data");
     }
 
     #[test]

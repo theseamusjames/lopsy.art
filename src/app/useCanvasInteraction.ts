@@ -19,6 +19,7 @@ import { useToolSettingsStore } from './tool-settings-store';
 
 import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
+import { cacheLayerSnapshot } from './store/history-slice';
 import { clearPendingStroke, setPendingStroke } from './interactions/pending-stroke';
 import { syncLayerAfterFullSize } from './sync-layer-after-full-size';
 import type {
@@ -77,6 +78,11 @@ function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } |
   if (!engine) return;
 
   endStroke(engine, pending.layerId);
+
+  // Cache the GPU snapshot BEFORE clearJsPixelData marks the layer dirty.
+  // This way the subsequent pushHistory() can use the cached blob instantly
+  // instead of blocking on a fresh GPU readback.
+  cacheLayerSnapshot(pending.layerId);
 
   clearJsPixelData(pending.layerId);
   useEditorStore.getState().notifyRender();

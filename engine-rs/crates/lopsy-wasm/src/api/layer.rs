@@ -630,19 +630,19 @@ pub fn read_layer_pixels_compressed_u16(engine: &Engine, layer_id: &str) -> Vec<
     };
 
     let uncompressed_size = raw_bytes.len() as u32;
-    let rle = lopsy_core::compress::rle_compress_u16(&raw_bytes);
+    let compressed_payload = lopsy_core::compress::lz4_compress(&raw_bytes);
     drop(raw_bytes);
 
-    let mut result = Vec::with_capacity(32 + rle.len());
+    let mut result = Vec::with_capacity(32 + compressed_payload.len());
     result.extend_from_slice(&rect.x.to_le_bytes());
     result.extend_from_slice(&rect.y.to_le_bytes());
     result.extend_from_slice(&(rect.width as i32).to_le_bytes());
     result.extend_from_slice(&(rect.height as i32).to_le_bytes());
     result.extend_from_slice(&(w as i32).to_le_bytes());
     result.extend_from_slice(&(h as i32).to_le_bytes());
-    result.extend_from_slice(&1i32.to_le_bytes()); // flags: 1 = RLE compressed
+    result.extend_from_slice(&2i32.to_le_bytes()); // flags: 2 = LZ4 compressed
     result.extend_from_slice(&uncompressed_size.to_le_bytes());
-    result.extend_from_slice(&rle);
+    result.extend_from_slice(&compressed_payload);
     result
 }
 
@@ -674,11 +674,12 @@ pub fn upload_layer_pixels_compressed_u16(engine: &mut Engine, layer_id: &str, c
         compressed[24..24 + expected_raw_len].to_vec()
     } else if compressed.len() >= 32 {
         let flags = i32::from_le_bytes([compressed[24], compressed[25], compressed[26], compressed[27]]);
-        if flags == 1 {
-            let uncompressed_size = u32::from_le_bytes([compressed[28], compressed[29], compressed[30], compressed[31]]) as usize;
+        let uncompressed_size = u32::from_le_bytes([compressed[28], compressed[29], compressed[30], compressed[31]]) as usize;
+        if flags == 2 {
+            lopsy_core::compress::lz4_decompress(&compressed[32..], uncompressed_size)
+        } else if flags == 1 {
             lopsy_core::compress::rle_decompress_u16(&compressed[32..], uncompressed_size)
         } else {
-            // flags == 0 means raw, data starts at offset 32
             compressed[32..].to_vec()
         }
     } else {

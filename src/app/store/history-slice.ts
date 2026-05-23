@@ -27,6 +27,23 @@ const EMPTY_LAYER_SENTINEL = new Uint8Array(0);
 // instead of re-reading from GPU.
 let lastRestoredSnapshot: HistorySnapshot | null = null;
 
+// Pre-cached GPU snapshots for layers that were just modified by a GPU-side
+// operation (brush stroke, etc.). Populated by cacheLayerSnapshot() right
+// after finalizePendingStroke so the subsequent pushHistory() can use the
+// cached blob instead of blocking on a fresh GPU readback.
+const preSnapshotCache = new Map<string, Uint8Array>();
+
+export function cacheLayerSnapshot(layerId: string): void {
+  const compressed = readLayerCompressed(layerId);
+  if (compressed) {
+    preSnapshotCache.set(layerId, compressed);
+  }
+}
+
+export function clearSnapshotCache(): void {
+  preSnapshotCache.clear();
+}
+
 /**
  * Snapshot GPU textures as cropped blobs.
  * GPU is the single source of truth for pixel data.
@@ -59,6 +76,15 @@ function snapshotGpuLayers(
         gpuSnapshots.set(layerId, previous.gpuSnapshots.get(layerId)!);
         continue;
       }
+    }
+
+    // Use pre-cached snapshot from finalizePendingStroke if available.
+    // This avoids a blocking GPU readback at stroke start.
+    const cached = preSnapshotCache.get(layerId);
+    if (cached) {
+      gpuSnapshots.set(layerId, cached);
+      preSnapshotCache.delete(layerId);
+      continue;
     }
 
     if (!engine) {

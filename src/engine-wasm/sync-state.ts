@@ -84,6 +84,7 @@ export interface GroupAdjTrackedEntry {
   adjustmentsEnabled: boolean;
   children: readonly string[];
   maskEnabled: boolean;
+  childrenJson?: string;
 }
 
 function createTrackedState(): TrackedState {
