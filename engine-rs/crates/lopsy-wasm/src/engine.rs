@@ -273,6 +273,16 @@ pub struct EngineInner {
     pub mlasso: MagneticLassoState,
     // Text rendering
     pub text_renderer: Option<crate::text_gpu::TextRendererState>,
+    // Undo snapshot texture store — GPU-side texture copies for instant
+    // snapshots via blit (~1ms) instead of readback+compress (~100ms).
+    pub snapshot_textures: Vec<Option<SnapshotTexture>>,
+    pub snapshot_free_list: Vec<u32>,
+}
+
+pub struct SnapshotTexture {
+    pub handle: TextureHandle,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl EngineInner {
@@ -402,6 +412,8 @@ impl EngineInner {
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,
+            snapshot_textures: Vec::new(),
+            snapshot_free_list: Vec::new(),
         })
     }
 

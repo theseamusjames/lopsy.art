@@ -46,7 +46,8 @@ export interface SparseLayerEntry {
  *
  * - `metadata`: only document metadata changed (effects, opacity, etc.) —
  *   no pixel data was captured. Zero Maps allocated.
- * - `pixels`: full snapshot including compressed GPU pixel blobs.
+ * - `pixels`: full snapshot with GPU texture handles. Actual textures
+ *   live on the GPU — snapshots are just blits (~1ms), no readback.
  */
 export type HistorySnapshot =
   | { readonly kind: 'metadata'; document: DocumentState; label: string }
@@ -54,7 +55,7 @@ export type HistorySnapshot =
       readonly kind: 'pixels';
       document: DocumentState;
       label: string;
-      gpuSnapshots: Map<string, Uint8Array>;
+      gpuSnapshots: Map<string, number>;
     };
 
 export interface ClipboardData {
