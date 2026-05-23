@@ -820,23 +820,120 @@ pub fn read_composite_thumbnail(engine: &Engine, max_size: u32) -> Vec<u8> {
     result
 }
 
-/// Compress a raw snapshot blob (flags=0) to LZ4 (flags=2) in place.
-/// Returns the original blob unchanged if it's already compressed or too short.
-#[wasm_bindgen(js_name = "compressSnapshotBlob")]
-pub fn compress_snapshot_blob(raw: &[u8]) -> Vec<u8> {
-    if raw.len() < 32 {
-        return raw.to_vec();
+// ============================================================
+// GPU Texture Snapshots — instant blit, no readback
+// ============================================================
+
+/// Snapshot a layer's GPU texture by blitting to a new texture (~1ms).
+/// Returns an opaque u32 handle. No pixel readback, no compression.
+#[wasm_bindgen(js_name = "snapshotLayerGpu")]
+pub fn snapshot_layer_gpu(engine: &mut Engine, layer_id: &str) -> u32 {
+    let src_handle = match engine.inner.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return u32::MAX,
+    };
+    let (w, h) = engine.inner.texture_pool.get_size(src_handle).unwrap_or((0, 0));
+    if w == 0 || h == 0 {
+        return u32::MAX;
     }
-    let flags = i32::from_le_bytes([raw[24], raw[25], raw[26], raw[27]]);
-    if flags != 0 {
-        return raw.to_vec();
+
+    let dst_handle = match engine.inner.texture_pool.acquire(&engine.inner.gl, w, h) {
+        Ok(h) => h,
+        Err(_) => return u32::MAX,
+    };
+
+    let dst_tex = engine.inner.texture_pool.get(dst_handle).cloned().unwrap();
+    let src_tex = engine.inner.texture_pool.get(src_handle).cloned().unwrap();
+
+    engine.inner.render_to_texture(&dst_tex, w as i32, h as i32, |eng| {
+        eng.gl.use_program(Some(&eng.shaders.blit.program));
+        eng.gl.active_texture(web_sys::WebGl2RenderingContext::TEXTURE0);
+        eng.gl.bind_texture(web_sys::WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+        if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") {
+            eng.gl.uniform1i(Some(&loc), 0);
+        }
+        eng.draw_fullscreen_quad();
+    });
+
+    let snap = crate::engine::SnapshotTexture { handle: dst_handle, width: w, height: h };
+    let id = if let Some(free_id) = engine.inner.snapshot_free_list.pop() {
+        engine.inner.snapshot_textures[free_id as usize] = Some(snap);
+        free_id
+    } else {
+        let id = engine.inner.snapshot_textures.len() as u32;
+        engine.inner.snapshot_textures.push(Some(snap));
+        id
+    };
+    id
+}
+
+/// Restore a layer's GPU texture from a snapshot (GPU blit, ~1ms).
+#[wasm_bindgen(js_name = "restoreFromGpuSnapshot")]
+pub fn restore_from_gpu_snapshot(engine: &mut Engine, layer_id: &str, snap_id: u32) -> Result<(), JsError> {
+    let snap = engine.inner.snapshot_textures.get(snap_id as usize)
+        .and_then(|s| s.as_ref())
+        .ok_or_else(|| JsError::new("Invalid snapshot handle"))?;
+
+    let sw = snap.width;
+    let sh = snap.height;
+    let snap_handle = snap.handle;
+
+    let dst_handle = if let Some(&existing) = engine.inner.layer_textures.get(layer_id) {
+        let (dw, dh) = engine.inner.texture_pool.get_size(existing).unwrap_or((0, 0));
+        if dw != sw || dh != sh {
+            engine.inner.texture_pool.release(existing);
+            let new_h = engine.inner.texture_pool.acquire(&engine.inner.gl, sw, sh)
+                .map_err(|e| JsError::new(&e))?;
+            engine.inner.layer_textures.insert(layer_id.to_string(), new_h);
+            new_h
+        } else {
+            existing
+        }
+    } else {
+        let new_h = engine.inner.texture_pool.acquire(&engine.inner.gl, sw, sh)
+            .map_err(|e| JsError::new(&e))?;
+        engine.inner.layer_textures.insert(layer_id.to_string(), new_h);
+        new_h
+    };
+
+    let dst_tex = engine.inner.texture_pool.get(dst_handle).cloned()
+        .ok_or_else(|| JsError::new("Dst texture not found"))?;
+    let src_tex = engine.inner.texture_pool.get(snap_handle).cloned()
+        .ok_or_else(|| JsError::new("Snapshot texture not found"))?;
+
+    engine.inner.render_to_texture(&dst_tex, sw as i32, sh as i32, |eng| {
+        eng.gl.use_program(Some(&eng.shaders.blit.program));
+        eng.gl.active_texture(web_sys::WebGl2RenderingContext::TEXTURE0);
+        eng.gl.bind_texture(web_sys::WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+        if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") {
+            eng.gl.uniform1i(Some(&loc), 0);
+        }
+        eng.draw_fullscreen_quad();
+    });
+
+    engine.inner.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
+/// Release a snapshot texture, freeing GPU memory.
+#[wasm_bindgen(js_name = "releaseGpuSnapshot")]
+pub fn release_gpu_snapshot(engine: &mut Engine, snap_id: u32) {
+    if let Some(slot) = engine.inner.snapshot_textures.get_mut(snap_id as usize) {
+        if let Some(snap) = slot.take() {
+            engine.inner.texture_pool.release(snap.handle);
+            engine.inner.snapshot_free_list.push(snap_id);
+        }
     }
-    let pixel_data = &raw[32..];
-    let compressed = lopsy_core::compress::lz4_compress(pixel_data);
-    let mut result = Vec::with_capacity(32 + compressed.len());
-    result.extend_from_slice(&raw[..24]);
-    result.extend_from_slice(&2i32.to_le_bytes());
-    result.extend_from_slice(&(pixel_data.len() as u32).to_le_bytes());
-    result.extend_from_slice(&compressed);
-    result
+}
+
+/// Clear all snapshot textures (e.g. on new document).
+#[wasm_bindgen(js_name = "clearGpuSnapshots")]
+pub fn clear_gpu_snapshots(engine: &mut Engine) {
+    for slot in &mut engine.inner.snapshot_textures {
+        if let Some(snap) = slot.take() {
+            engine.inner.texture_pool.release(snap.handle);
+        }
+    }
+    engine.inner.snapshot_textures.clear();
+    engine.inner.snapshot_free_list.clear();
 }

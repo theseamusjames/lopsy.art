@@ -1,8 +1,10 @@
 import type { HistorySnapshot, SliceCreator } from './types';
 import type { Layer } from '../../types';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { endStroke, getLayerTextureDimensions, uploadLayerPixels, compressSnapshotBlob } from '../../engine-wasm/wasm-bridge';
-import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
+import {
+  endStroke, getLayerTextureDimensions, uploadLayerPixels,
+  snapshotLayerGpu, restoreFromGpuSnapshot, releaseGpuSnapshot,
+} from '../../engine-wasm/wasm-bridge';
 import { resetTrackedState, flushLayerSync, syncLayers } from '../../engine-wasm/engine-sync';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
@@ -18,33 +20,21 @@ export interface HistorySlice {
   markClean: () => void;
 }
 
-// Sentinel value for layers that had no GPU texture at snapshot time.
-// On restore, these layers get their texture cleared to transparent.
-const EMPTY_LAYER_SENTINEL = new Uint8Array(0);
+const EMPTY_HANDLE = 0xFFFFFFFF;
 
-// After a restore (undo/redo), the GPU pixels are identical to the restored
-// snapshot's blobs. Track this so sequential undo/redo can reuse blobs
-// instead of re-reading from GPU.
 let lastRestoredSnapshot: HistorySnapshot | null = null;
 
-// Pre-cached GPU snapshots for layers that were just modified by a GPU-side
-// operation (brush stroke, etc.). Populated by cacheLayerSnapshot() right
-// after endStroke so the subsequent pushHistory() or undo() can use the
-// cached blob instead of blocking on a fresh GPU readback.
-const preSnapshotCache = new Map<string, Uint8Array>();
-
-// Pending layer IDs whose cache hasn't been populated yet (deferred via
-// setTimeout). flushPendingSnapshots() runs them synchronously when undo
-// or pushHistory needs the data before the timer fires.
+// Pre-cached GPU snapshot handles for layers modified at pointer-up.
+const preSnapshotCache = new Map<string, number>();
 const pendingCacheIds = new Set<string>();
 
 export function cacheLayerSnapshot(layerId: string): void {
   pendingCacheIds.delete(layerId);
-  // readLayerCompressed returns a raw blob (flags=0, no compression)
-  // which is fast (~20ms GPU readback only, no CPU compression).
-  const raw = readLayerCompressed(layerId);
-  if (raw) {
-    preSnapshotCache.set(layerId, raw);
+  const engine = getEngine();
+  if (!engine) return;
+  const handle = snapshotLayerGpu(engine, layerId);
+  if (handle !== EMPTY_HANDLE) {
+    preSnapshotCache.set(layerId, handle);
   }
 }
 
@@ -64,66 +54,31 @@ function flushPendingSnapshots(): void {
 }
 
 export function clearSnapshotCache(): void {
+  const engine = getEngine();
+  if (engine) {
+    for (const handle of preSnapshotCache.values()) {
+      releaseGpuSnapshot(engine, handle);
+    }
+  }
   preSnapshotCache.clear();
   pendingCacheIds.clear();
 }
 
-// Background compression: compress raw blobs in the undo/redo stacks
-// to reduce memory. Runs one blob per idle tick to avoid blocking.
-let compressTimerId: ReturnType<typeof setTimeout> | null = null;
-
-function scheduleBackgroundCompress(): void {
-  if (compressTimerId !== null) return;
-  compressTimerId = setTimeout(compressNextRawBlob, 100);
-}
-
-function compressNextRawBlob(): void {
-  compressTimerId = null;
-  // Find the first raw (uncompressed) blob in the undo or redo stack and compress it.
-  // Raw blobs have flags=0 at byte offset 24.
-  const state = (globalThis as unknown as { __editorStore?: { getState: () => { undoStack: HistorySnapshot[]; redoStack: HistorySnapshot[] } } }).__editorStore?.getState();
-  if (!state) return;
-
-  for (const stack of [state.undoStack, state.redoStack]) {
-    for (const entry of stack) {
-      if (entry.kind !== 'pixels') continue;
-      for (const [layerId, blob] of entry.gpuSnapshots) {
-        if (blob.length >= 32) {
-          const flags = blob[24]! | (blob[25]! << 8) | (blob[26]! << 16) | (blob[27]! << 24);
-          if (flags === 0) {
-            const compressed = compressSnapshotBlob(blob);
-            entry.gpuSnapshots.set(layerId, compressed);
-            scheduleBackgroundCompress();
-            return;
-          }
-        }
-      }
-    }
-  }
-}
-
 /**
- * Snapshot GPU textures as cropped blobs.
- * GPU is the single source of truth for pixel data.
- * Caller MUST flush pending JS data to the GPU before calling this
- * (via flushLayerSync) to ensure the GPU has current data.
+ * Snapshot GPU textures via GPU blit (~1ms per layer).
+ * No readback, no compression — just duplicate the texture on the GPU.
  */
 function snapshotGpuLayers(
   layers: readonly Layer[],
   layerOrder: readonly string[],
   dirtyIds: Set<string>,
   previous: HistorySnapshot | undefined,
-): Map<string, Uint8Array> {
+): Map<string, number> {
   const engine = getEngine();
-  const gpuSnapshots = new Map<string, Uint8Array>();
+  const gpuSnapshots = new Map<string, number>();
 
   for (const layerId of layerOrder) {
-    // Reuse previous snapshot blob only when the layer's pixels haven't
-    // changed AND its document-space position is the same. GPU-side
-    // crop/expand (active-layer transitions) changes the texture size and
-    // layer x/y without touching dirtyLayerIds, so a position mismatch
-    // means the blob's texture dimensions no longer match the current GPU
-    // state and must be re-read.
+    // Reuse previous handle when the layer hasn't changed.
     if (!dirtyIds.has(layerId) && previous?.kind === 'pixels' && previous.gpuSnapshots.has(layerId)) {
       const curLayer = layers.find((l) => l.id === layerId);
       const prevLayer = previous.document.layers.find((l) => l.id === layerId);
@@ -136,53 +91,43 @@ function snapshotGpuLayers(
       }
     }
 
-    // Use pre-cached snapshot from finalizePendingStroke if available.
-    // This avoids a blocking GPU readback at stroke start.
+    // Use pre-cached handle from pointer-up if available.
     const cached = preSnapshotCache.get(layerId);
-    if (cached) {
+    if (cached !== undefined) {
       gpuSnapshots.set(layerId, cached);
       preSnapshotCache.delete(layerId);
       continue;
     }
 
     if (!engine) {
-      gpuSnapshots.set(layerId, EMPTY_LAYER_SENTINEL);
+      gpuSnapshots.set(layerId, EMPTY_HANDLE);
       continue;
     }
 
     const dims = getLayerTextureDimensions(engine, layerId);
     if (!dims || dims[0] === 0 || dims[1] === 0) {
-      gpuSnapshots.set(layerId, EMPTY_LAYER_SENTINEL);
+      gpuSnapshots.set(layerId, EMPTY_HANDLE);
       continue;
     }
 
-    const compressed = readLayerCompressed(layerId);
-    if (compressed) {
-      gpuSnapshots.set(layerId, compressed);
-    } else {
-      gpuSnapshots.set(layerId, EMPTY_LAYER_SENTINEL);
-    }
+    const handle = snapshotLayerGpu(engine, layerId);
+    gpuSnapshots.set(layerId, handle);
   }
 
   return gpuSnapshots;
 }
 
-/**
- * Restore GPU textures from a snapshot's compressed blobs.
- * Empty sentinels clear the layer's texture to transparent.
- */
 function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
   if (snapshot.kind === 'metadata') return;
 
   const engine = getEngine();
-  for (const [layerId, blob] of snapshot.gpuSnapshots) {
-    if (blob.length === 0) {
-      // Empty sentinel — clear GPU texture to transparent 1x1
-      if (engine) {
-        uploadLayerPixels(engine, layerId, new Uint8Array(4), 1, 1, 0, 0);
-      }
+  if (!engine) return;
+
+  for (const [layerId, handle] of snapshot.gpuSnapshots) {
+    if (handle === EMPTY_HANDLE) {
+      uploadLayerPixels(engine, layerId, new Uint8Array(4), 1, 1, 0, 0);
     } else {
-      uploadCompressed(layerId, blob);
+      restoreFromGpuSnapshot(engine, layerId, handle);
     }
   }
 }
@@ -243,10 +188,6 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       dirtyLayerIds: new Set(previous.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
-    // Sync layer descriptors to the engine immediately so the
-    // render-frame crop/expand transition reads correct positions.
-    // Without this, cropLayerToContent uses stale engine x/y from
-    // the pre-undo state and corrupts the restored layer position.
     if (eng) {
       const restored = get();
       syncLayers(eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds);
@@ -313,18 +254,11 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const state = get();
     lastRestoredSnapshot = null;
 
-    // Finalize any in-progress GPU stroke so the layer texture includes
-    // it before the snapshot. Without this, a stroke still in the stroke
-    // texture would be invisible to the snapshot and to any subsequent
-    // clipboardCut / clear operation.
     const engine = getEngine();
     if (engine && state.document.activeLayerId) {
       endStroke(engine, state.document.activeLayerId);
     }
 
-    // Flush any pending JS pixel data to the GPU before snapshotting.
-    // The GPU is the single source of truth — if JS has data that hasn't
-    // been synced yet, the GPU snapshot would capture stale textures.
     flushLayerSync(state);
 
     const prevSnapshot = state.undoStack[state.undoStack.length - 1];
@@ -343,7 +277,6 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       isDirty: true,
       renderVersion: state.renderVersion + 1,
     });
-    scheduleBackgroundCompress();
   },
 
   pushHistoryMetadata: (label: string) => {

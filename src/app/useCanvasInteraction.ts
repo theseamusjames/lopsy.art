@@ -10,9 +10,9 @@ import {
   uploadLayerPixels,
   setSelectionMask,
   readMaskTexture,
+  restoreFromGpuSnapshot,
 } from '../engine-wasm/wasm-bridge';
 import { flushLayerSync, resetTrackedState, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
-import { uploadCompressed } from '../engine-wasm/gpu-pixel-access';
 import { smoothStroke, HOLD_TIMEOUT_MS } from '../tools/smooth-line/smooth-line';
 import { mirrorBatchPoints } from '../tools/symmetry';
 import { useToolSettingsStore } from './tool-settings-store';
@@ -446,9 +446,9 @@ export function useCanvasInteraction(
           const undoStack = useEditorStore.getState().undoStack;
           const preStrokeEntry = undoStack[undoStack.length - 2];
           if (!preStrokeEntry || preStrokeEntry.kind !== 'pixels') return;
-          const preStrokeBlob = preStrokeEntry.gpuSnapshots.get(layerId);
-          if (preStrokeBlob && preStrokeBlob.length > 0) {
-            uploadCompressed(layerId, preStrokeBlob);
+          const preStrokeHandle = preStrokeEntry.gpuSnapshots.get(layerId);
+          if (preStrokeHandle !== undefined && preStrokeHandle !== 0xFFFFFFFF) {
+            restoreFromGpuSnapshot(engine, layerId, preStrokeHandle);
           } else {
             // Empty sentinel — layer was blank before the stroke.
             // Clear it to transparent so the smooth stroke doesn't

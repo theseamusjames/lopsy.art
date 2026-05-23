@@ -5,7 +5,10 @@
 
 import init, {
   Engine,
-  compressSnapshotBlob,
+  snapshotLayerGpu,
+  restoreFromGpuSnapshot,
+  releaseGpuSnapshot,
+  clearGpuSnapshots,
   createEngine,
   setDocumentSize,
   setViewport,
@@ -303,7 +306,10 @@ export function getWasmMemoryBytes(): number {
 
 // Re-export everything with the same names
 export {
-  compressSnapshotBlob,
+  snapshotLayerGpu,
+  restoreFromGpuSnapshot,
+  releaseGpuSnapshot,
+  clearGpuSnapshots,
   createEngine,
   setDocumentSize,
   setViewport,
