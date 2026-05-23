@@ -273,6 +273,53 @@ pub struct EngineInner {
     pub mlasso: MagneticLassoState,
     // Text rendering
     pub text_renderer: Option<crate::text_gpu::TextRendererState>,
+    // Undo snapshot blob store — compressed blobs live here so they never
+    // cross the WASM/JS boundary. JS stores opaque u32 handles.
+    pub snapshot_store: SnapshotStore,
+}
+
+pub struct SnapshotStore {
+    blobs: Vec<Option<Vec<u8>>>,
+    free_list: Vec<u32>,
+}
+
+impl Default for SnapshotStore {
+    fn default() -> Self {
+        Self { blobs: Vec::new(), free_list: Vec::new() }
+    }
+}
+
+impl SnapshotStore {
+    pub fn store(&mut self, data: Vec<u8>) -> u32 {
+        if let Some(id) = self.free_list.pop() {
+            self.blobs[id as usize] = Some(data);
+            id
+        } else {
+            let id = self.blobs.len() as u32;
+            self.blobs.push(Some(data));
+            id
+        }
+    }
+
+    pub fn get(&self, id: u32) -> Option<&[u8]> {
+        self.blobs.get(id as usize).and_then(|b| b.as_deref())
+    }
+
+    pub fn remove(&mut self, id: u32) {
+        if let Some(slot) = self.blobs.get_mut(id as usize) {
+            *slot = None;
+            self.free_list.push(id);
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.blobs.clear();
+        self.free_list.clear();
+    }
+
+    pub fn total_bytes(&self) -> usize {
+        self.blobs.iter().filter_map(|b| b.as_ref()).map(|b| b.len()).sum()
+    }
 }
 
 impl EngineInner {
@@ -402,6 +449,7 @@ impl EngineInner {
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,
+            snapshot_store: SnapshotStore::default(),
         })
     }
 

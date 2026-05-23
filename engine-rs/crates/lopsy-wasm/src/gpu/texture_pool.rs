@@ -424,11 +424,10 @@ impl TexturePool {
                 WebGl2RenderingContext::FLOAT,
                 Some(&f32_buf),
             ).map_err(|e| format!("readPixels float failed: {:?}", e))?;
-            // Convert f32→u16 in chunks to avoid a full-size f32 copy in WASM.
-            // This keeps peak WASM allocation at Vec<u16> (2 bytes/sample)
-            // instead of Vec<f32> + Vec<u16> (6 bytes/sample).
+            // Convert f32→u16 in chunks to keep peak WASM allocation at
+            // Vec<u16> (2 bytes/sample) instead of Vec<f32> + Vec<u16>.
             let mut pixels = vec![0u16; count];
-            const CHUNK: usize = 65536;
+            const CHUNK: usize = 1_048_576; // 1M values = 4MB per copy
             let mut f32_chunk = vec![0f32; CHUNK];
             let mut offset = 0;
             while offset < count {

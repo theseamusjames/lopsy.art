@@ -629,16 +629,20 @@ pub fn read_layer_pixels_compressed_u16(engine: &Engine, layer_id: &str) -> Vec<
         (bytes, rect)
     };
 
-    let mut result = Vec::with_capacity(32 + raw_bytes.len());
+    let uncompressed_size = raw_bytes.len() as u32;
+    let compressed_payload = lopsy_core::compress::lz4_compress(&raw_bytes);
+    drop(raw_bytes);
+
+    let mut result = Vec::with_capacity(32 + compressed_payload.len());
     result.extend_from_slice(&rect.x.to_le_bytes());
     result.extend_from_slice(&rect.y.to_le_bytes());
     result.extend_from_slice(&(rect.width as i32).to_le_bytes());
     result.extend_from_slice(&(rect.height as i32).to_le_bytes());
     result.extend_from_slice(&(w as i32).to_le_bytes());
     result.extend_from_slice(&(h as i32).to_le_bytes());
-    result.extend_from_slice(&0i32.to_le_bytes()); // flags: 0 = raw (no compression)
-    result.extend_from_slice(&(raw_bytes.len() as u32).to_le_bytes());
-    result.extend_from_slice(&raw_bytes);
+    result.extend_from_slice(&2i32.to_le_bytes()); // flags: 2 = LZ4 compressed
+    result.extend_from_slice(&uncompressed_size.to_le_bytes());
+    result.extend_from_slice(&compressed_payload);
     result
 }
 
@@ -818,6 +822,48 @@ pub fn read_composite_thumbnail(engine: &Engine, max_size: u32) -> Vec<u8> {
     result.extend_from_slice(&th.to_le_bytes());
     result.extend_from_slice(&thumb);
     result
+}
+
+// ============================================================
+// Snapshot Store — blobs live in WASM memory, JS holds handles
+// ============================================================
+
+/// Snapshot a layer's GPU texture into the WASM-side blob store.
+/// Returns an opaque handle (u32). No data crosses the WASM/JS boundary.
+#[wasm_bindgen(js_name = "snapshotLayer")]
+pub fn snapshot_layer(engine: &mut Engine, layer_id: &str) -> u32 {
+    let blob = read_layer_pixels_compressed_u16(engine, layer_id);
+    if blob.is_empty() {
+        return u32::MAX;
+    }
+    engine.inner.snapshot_store.store(blob)
+}
+
+/// Restore a layer's GPU texture from a stored snapshot.
+#[wasm_bindgen(js_name = "restoreLayerFromSnapshot")]
+pub fn restore_layer_from_snapshot(engine: &mut Engine, layer_id: &str, handle: u32) -> Result<(), JsError> {
+    let blob = engine.inner.snapshot_store.get(handle)
+        .ok_or_else(|| JsError::new("Invalid snapshot handle"))?;
+    let blob_copy = blob.to_vec();
+    upload_layer_pixels_compressed_u16(engine, layer_id, &blob_copy)
+}
+
+/// Release a snapshot blob, freeing WASM memory.
+#[wasm_bindgen(js_name = "releaseSnapshot")]
+pub fn release_snapshot(engine: &mut Engine, handle: u32) {
+    engine.inner.snapshot_store.remove(handle);
+}
+
+/// Clear all snapshots (e.g. on new document).
+#[wasm_bindgen(js_name = "clearSnapshotStore")]
+pub fn clear_snapshot_store(engine: &mut Engine) {
+    engine.inner.snapshot_store.clear();
+}
+
+/// Total bytes stored in the snapshot store.
+#[wasm_bindgen(js_name = "snapshotStoreBytes")]
+pub fn snapshot_store_bytes(engine: &Engine) -> u32 {
+    engine.inner.snapshot_store.total_bytes() as u32
 }
 
 /// Compress a raw snapshot blob (flags=0) to LZ4 (flags=2) in place.
