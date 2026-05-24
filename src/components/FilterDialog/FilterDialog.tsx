@@ -15,6 +15,8 @@ interface FilterParam {
   defaultValue: number;
   /** When 'doc', max scales to 1.5x max(docW, docH) capped at 5000, with `max` as the floor. */
   dynamicMax?: 'doc';
+  /** When provided, renders a segmented toggle instead of a slider. */
+  options?: { value: number; label: string }[];
 }
 
 interface FilterDialogProps {
@@ -126,6 +128,26 @@ export function FilterDialog({ title, params, showRegenerate, onApply, onCancel,
         </div>
         <div className={styles.body}>
           {params.map((param) => {
+            if (param.options) {
+              const current = values[param.key] ?? param.defaultValue;
+              return (
+                <div key={param.key} className={styles.paramRow}>
+                  <span className={styles.paramLabel}>{param.label}</span>
+                  <div className={styles.toggleGroup}>
+                    {param.options.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        className={`${styles.toggleOption}${current === opt.value ? ` ${styles.toggleOptionActive}` : ''}`}
+                        onClick={() => handleChange(param.key, opt.value)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
             const max = param.dynamicMax === 'doc'
               ? docScaledMax(docWidth, docHeight, param.max)
               : param.max;
