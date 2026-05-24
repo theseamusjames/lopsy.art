@@ -233,6 +233,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
     useUIStore.getState().clearGuides();
+    get().fitToView();
   },
 
   openImageAsDocument: (imageData, name) => {
