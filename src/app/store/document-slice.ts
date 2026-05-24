@@ -9,7 +9,7 @@ import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
-import { uploadLayerPixels, getLayerTextureDimensions, removeTextLayerState } from '../../engine-wasm/wasm-bridge';
+import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState } from '../../engine-wasm/wasm-bridge';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import type { ActionResult, SliceCreator, SparseLayerEntry } from './types';
@@ -27,6 +27,7 @@ import { computeDuplicateLayer } from './actions/duplicate-layer';
 import { computeMergeDown } from './actions/merge-down';
 import { computeFlattenImage } from './actions/flatten-image';
 import { computeRasterizeStyle } from './actions/rasterize-style';
+import { resolveRasterTextBounds } from './actions/resolve-raster-text-bounds';
 import { computeCropCanvas } from './actions/crop-canvas';
 import { computeResizeCanvas } from './actions/resize-canvas';
 import { computeResizeImage } from './actions/resize-image';
@@ -581,9 +582,15 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (!engine) return;
 
     const dims = getLayerTextureDimensions(engine, activeId);
-    const w = dims[0] ?? 0;
-    const h = dims[1] ?? 0;
-    if (w === 0 || h === 0) return;
+    const engineBounds = getLayerEngineBounds(engine, activeId);
+    const bounds = resolveRasterTextBounds(
+      engineBounds,
+      layer.x,
+      layer.y,
+      dims[0] ?? 0,
+      dims[1] ?? 0,
+    );
+    if (!bounds) return;
 
     s.pushHistory('Rasterize Layer');
     set({
@@ -599,13 +606,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
                 locked: l.locked,
                 opacity: l.opacity,
                 blendMode: l.blendMode,
-                x: l.x,
-                y: l.y,
+                x: bounds.x,
+                y: bounds.y,
                 clipToBelow: l.clipToBelow,
                 effects: l.effects,
                 mask: l.mask,
-                width: w,
-                height: h,
+                width: bounds.width,
+                height: bounds.height,
               }
             : l,
         ),
