@@ -328,17 +328,10 @@ function useDragHandle(
     const rect = track.getBoundingClientRect();
     const project = (clientX: number) => clamp((clientX - rect.left) / rect.width, 0, 1);
 
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const handleMove = (ev: PointerEvent) => {
-      const v = project(ev.clientX);
-      if (debounceTimer !== null) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => { debounceTimer = null; onMoveRef.current(v); }, 50);
+      onMoveRef.current(project(ev.clientX));
     };
     const handleUp = () => {
-      if (debounceTimer !== null) {
-        clearTimeout(debounceTimer);
-        debounceTimer = null;
-      }
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
       window.removeEventListener('pointercancel', handleUp);
