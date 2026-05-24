@@ -7,7 +7,7 @@ export const emboss: FilterDefinition = {
   params: [
     { key: 'angle', label: 'Angle', min: 0, max: 360, step: 1, defaultValue: 135 },
     { key: 'strength', label: 'Strength', min: 1, max: 100, step: 1, defaultValue: 50 },
-    { key: 'type', label: 'Type', min: 0, max: 1, step: 1, defaultValue: 0 },
+    { key: 'type', label: 'Type', min: 0, max: 1, step: 1, defaultValue: 0, options: [{ value: 0, label: 'Emboss' }, { value: 1, label: 'Pillow Emboss' }] },
   ],
   applyGpu: (engine, layerId, values) =>
     filterEmboss(
