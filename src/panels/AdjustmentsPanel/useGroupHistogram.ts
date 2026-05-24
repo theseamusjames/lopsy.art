@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useEditorStore } from '../../app/editor-store';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
@@ -17,7 +17,15 @@ export function useGroupHistogram(skip: boolean): Histogram {
     const root = layers.find((l) => l.id === s.document.rootGroupId);
     return root?.type === 'group' ? root.children : [];
   });
-  const layersMap = useEditorStore((s) => s.document.layers);
+
+  // Use a ref for the layers array so adjustment-only changes (which create
+  // a new layers array without changing pixel content) don't trigger a
+  // histogram recomputation. The histogram shows SOURCE pixel distribution,
+  // which only changes when pixelVersion or group children change.
+  const layersRef = useRef(useEditorStore.getState().document.layers);
+  useEffect(() => {
+    return useEditorStore.subscribe((s) => { layersRef.current = s.document.layers; });
+  }, []);
 
   const [histogram, setHistogram] = useState<Histogram>(EMPTY_HISTOGRAM);
 
@@ -31,8 +39,9 @@ export function useGroupHistogram(skip: boolean): Histogram {
     const tryRead = () => {
       if (cancelled) return;
       const images: ImageData[] = [];
+      const layers = layersRef.current;
       for (const id of activeGroupChildren) {
-        const layer = layersMap.find((l) => l.id === id);
+        const layer = layers.find((l) => l.id === id);
         if (!layer || !layer.visible) continue;
         if (layer.type === 'group') continue;
         const img = readLayerAsImageData(id);
@@ -55,7 +64,7 @@ export function useGroupHistogram(skip: boolean): Histogram {
       cancelled = true;
       cancelAnimationFrame(rafId);
     };
-  }, [skip, childKey, pixelVersion, activeGroupChildren, layersMap]);
+  }, [skip, childKey, pixelVersion, activeGroupChildren]);
 
   return histogram;
 }
