@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { translateSelectionMask } from './quick-mask-move';
+import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
 
 const DOC_W = 8;
 const DOC_H = 8;
@@ -96,5 +96,89 @@ describe('translateSelectionMask', () => {
     expect(mask[6 * DOC_W + 6]).toBe(255);
     expect(mask[1 * DOC_W + 1]).toBe(0);
     expect(bounds).toEqual({ x: 5, y: 5, width: 2, height: 2 });
+  });
+});
+
+function makeMaskU8(filled: Array<[number, number, number]>): Uint8Array {
+  const mask = new Uint8Array(DOC_W * DOC_H);
+  for (const [x, y, v] of filled) {
+    mask[y * DOC_W + x] = v;
+  }
+  return mask;
+}
+
+describe('translateQuickMaskContent', () => {
+  it('moves painted content inside the marquee by (dx, dy)', () => {
+    const orig = makeMaskU8([[2, 2, 200], [3, 2, 200], [2, 3, 200], [3, 3, 200]]);
+    const marquee = makeMask([[2, 2], [3, 2], [2, 3], [3, 3]]);
+    const out = translateQuickMaskContent(orig, marquee, 2, 1, DOC_W, DOC_H);
+    expect(out[2 * DOC_W + 2]).toBe(0);
+    expect(out[2 * DOC_W + 3]).toBe(0);
+    expect(out[3 * DOC_W + 2]).toBe(0);
+    expect(out[3 * DOC_W + 3]).toBe(0);
+    expect(out[3 * DOC_W + 4]).toBe(200);
+    expect(out[3 * DOC_W + 5]).toBe(200);
+    expect(out[4 * DOC_W + 4]).toBe(200);
+    expect(out[4 * DOC_W + 5]).toBe(200);
+  });
+
+  it('leaves pixels outside the marquee untouched', () => {
+    const orig = makeMaskU8([[0, 0, 128], [7, 7, 255], [3, 3, 200]]);
+    const marquee = makeMask([[3, 3]]);
+    const out = translateQuickMaskContent(orig, marquee, 1, 0, DOC_W, DOC_H);
+    expect(out[0]).toBe(128);
+    expect(out[7 * DOC_W + 7]).toBe(255);
+    expect(out[3 * DOC_W + 3]).toBe(0);
+    expect(out[3 * DOC_W + 4]).toBe(200);
+  });
+
+  it('clips content moved outside the document', () => {
+    const orig = makeMaskU8([[7, 4, 255]]);
+    const marquee = makeMask([[7, 4]]);
+    const out = translateQuickMaskContent(orig, marquee, 2, 0, DOC_W, DOC_H);
+    expect(out.some((v) => v > 0)).toBe(false);
+  });
+
+  it('returns the original pixels for dx=dy=0', () => {
+    const orig = makeMaskU8([[2, 2, 200], [3, 3, 100]]);
+    const marquee = makeMask([[2, 2], [3, 3]]);
+    const out = translateQuickMaskContent(orig, marquee, 0, 0, DOC_W, DOC_H);
+    expect(Array.from(out)).toEqual(Array.from(orig));
+  });
+
+  it('does not mutate the input pixels', () => {
+    const orig = makeMaskU8([[2, 2, 200]]);
+    const marquee = makeMask([[2, 2]]);
+    const before = new Uint8Array(orig);
+    translateQuickMaskContent(orig, marquee, 1, 1, DOC_W, DOC_H);
+    expect(Array.from(orig)).toEqual(Array.from(before));
+  });
+
+  it('max-blends moved content onto existing painted content outside the marquee', () => {
+    // Painted content under marquee (value 200) and a fixed painted blob
+    // outside the marquee (value 50) at the destination.
+    const orig = makeMaskU8([[2, 2, 200], [3, 2, 50]]);
+    const marquee = makeMask([[2, 2]]);
+    const out = translateQuickMaskContent(orig, marquee, 1, 0, DOC_W, DOC_H);
+    // Source pixel cleared
+    expect(out[2 * DOC_W + 2]).toBe(0);
+    // Destination is the max of existing (50) and moved (200)
+    expect(out[2 * DOC_W + 3]).toBe(200);
+  });
+
+  it('returns a buffer sized to the document', () => {
+    const orig = makeMaskU8([[2, 2, 200]]);
+    const marquee = makeMask([[2, 2]]);
+    const out = translateQuickMaskContent(orig, marquee, 1, 1, DOC_W, DOC_H);
+    expect(out.length).toBe(DOC_W * DOC_H);
+  });
+
+  it('clears pixels under the original marquee even when destination is off-canvas', () => {
+    const orig = makeMaskU8([[2, 2, 255], [3, 3, 255]]);
+    const marquee = makeMask([[2, 2], [3, 3]]);
+    const out = translateQuickMaskContent(orig, marquee, 100, 100, DOC_W, DOC_H);
+    expect(out[2 * DOC_W + 2]).toBe(0);
+    expect(out[3 * DOC_W + 3]).toBe(0);
+    expect(out.some((v) => v > 0)).toBe(false);
   });
 });

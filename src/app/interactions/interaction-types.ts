@@ -48,6 +48,13 @@ export interface InteractionState {
   hardnessJitterDistTraveled?: number;
   moveOriginalMask: Uint8ClampedArray | null;
   moveOriginalBounds: Rect | null;
+  /** Quick-mask pixels captured at drag-start so we can translate the
+   *  painted mask content with the marquee (#315). docW * docH bytes,
+   *  single-channel (0..255). Only set when moving inside quick-mask mode
+   *  with an active marquee. */
+  quickMaskOriginalPixels?: Uint8Array | null;
+  quickMaskOriginalWidth?: number;
+  quickMaskOriginalHeight?: number;
   selectionOnlyTransform?: boolean;
   /** Set when a mesh warp handle drag is in progress. */
   meshWarpDragging?: boolean;

@@ -184,3 +184,33 @@ pub fn render_quick_mask_radial_gradient(
     );
 }
 
+/// Read the quick-mask texture as single-channel grayscale pixels.
+///
+/// Returns an empty buffer when no quick-mask texture exists. Otherwise the
+/// layout is `[width_i32_le, height_i32_le, ...mask_bytes]` (8-byte header +
+/// `width * height` grayscale bytes). Used by the move tool to snapshot the
+/// quick mask at drag-start so subsequent move events can translate the
+/// painted content with the marquee (#315).
+#[wasm_bindgen(js_name = "readQuickMaskPixels")]
+pub fn read_quick_mask_pixels(engine: &Engine) -> Vec<u8> {
+    let (w, h, mask) = quick_mask_gpu::read_quick_mask_pixels(&engine.inner);
+    if mask.is_empty() { return Vec::new(); }
+    let mut result = Vec::with_capacity(8 + mask.len());
+    result.extend_from_slice(&(w as i32).to_le_bytes());
+    result.extend_from_slice(&(h as i32).to_le_bytes());
+    result.extend_from_slice(&mask);
+    result
+}
+
+/// Upload single-channel grayscale pixels back into the quick-mask texture.
+/// No-op when no quick-mask texture exists or when dimensions don't match.
+#[wasm_bindgen(js_name = "uploadQuickMaskPixels")]
+pub fn upload_quick_mask_pixels(
+    engine: &mut Engine,
+    data: &[u8],
+    width: u32,
+    height: u32,
+) {
+    quick_mask_gpu::upload_quick_mask_pixels(&mut engine.inner, data, width, height);
+}
+
