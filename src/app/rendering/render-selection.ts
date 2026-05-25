@@ -9,6 +9,9 @@ export interface SelectionData {
   maskHeight: number;
 }
 
+let cachedMaskRef: Uint8ClampedArray | null = null;
+let cachedContours: number[][] = [];
+
 export function renderSelectionAnts(
   ctx: CanvasRenderingContext2D,
   selection: SelectionData,
@@ -17,6 +20,13 @@ export function renderSelectionAnts(
   transform?: TransformState | null,
 ): void {
   if (!selection.active || !selection.mask) return;
+
+  if (selection.mask !== cachedMaskRef) {
+    cachedContours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight);
+    cachedMaskRef = selection.mask;
+  }
+
+  if (cachedContours.length === 0) return;
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;
@@ -34,14 +44,11 @@ export function renderSelectionAnts(
   const lw = 1.5 / zoom;
   ctx.lineWidth = lw;
   const dashLen = 8 / zoom;
-  ctx.setLineDash([dashLen, dashLen]);
 
   const offset = (antPhase % 120) / 120 * dashLen * 2;
 
-  const contours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight);
-
   const drawContours = () => {
-    for (const pts of contours) {
+    for (const pts of cachedContours) {
       ctx.beginPath();
       ctx.moveTo(pts[0]!, pts[1]!);
       for (let i = 2; i < pts.length; i += 2) {
@@ -51,12 +58,10 @@ export function renderSelectionAnts(
     }
   };
 
-  // Black base — fully visible everywhere
   ctx.setLineDash([]);
   ctx.strokeStyle = '#000000';
   drawContours();
 
-  // White dashes march on top
   ctx.setLineDash([dashLen, dashLen]);
   ctx.lineDashOffset = -offset;
   ctx.strokeStyle = '#ffffff';

@@ -717,59 +717,89 @@ pub fn upload_layer_pixels_compressed_u16(engine: &mut Engine, layer_id: &str, c
 
 #[wasm_bindgen(js_name = "readLayerThumbnail")]
 pub fn read_layer_thumbnail(engine: &Engine, layer_id: &str, max_size: u32) -> Vec<u8> {
-    let pixels = match layer_manager::read_pixels(&engine.inner, layer_id) {
-        Ok(p) => p,
-        Err(_) => return Vec::new(),
-    };
-    let tex = match engine.inner.layer_textures.get(layer_id) {
+    use web_sys::WebGl2RenderingContext;
+
+    let tex_handle = match engine.inner.layer_textures.get(layer_id) {
         Some(&t) => t,
         None => return Vec::new(),
     };
-    let (w, h) = engine.inner.texture_pool.get_size(tex).unwrap_or((0, 0));
+    let src_tex = match engine.inner.texture_pool.get(tex_handle).cloned() {
+        Some(t) => t,
+        None => return Vec::new(),
+    };
+    let (w, h) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
     if w == 0 || h == 0 {
         return Vec::new();
     }
 
-    if w <= max_size && h <= max_size {
-        return pixels;
+    let (tw, th) = if w <= max_size && h <= max_size {
+        (w, h)
+    } else {
+        let scale = (max_size as f64) / (w.max(h) as f64);
+        (((w as f64 * scale).round() as u32).max(1),
+         ((h as f64 * scale).round() as u32).max(1))
+    };
+
+    let gl = &engine.inner.gl;
+
+    // Create a small RGBA8 texture for the thumbnail
+    let thumb_tex = match gl.create_texture() {
+        Some(t) => t,
+        None => return Vec::new(),
+    };
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&thumb_tex));
+    let _ = gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+        WebGl2RenderingContext::TEXTURE_2D, 0,
+        WebGl2RenderingContext::RGBA8 as i32,
+        tw as i32, th as i32, 0,
+        WebGl2RenderingContext::RGBA,
+        WebGl2RenderingContext::UNSIGNED_BYTE,
+        None,
+    );
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+        WebGl2RenderingContext::LINEAR as i32);
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+        WebGl2RenderingContext::LINEAR as i32);
+
+    // Blit the full layer texture into the tiny thumbnail via the blit shader
+    let fbo = match gl.create_framebuffer() {
+        Some(f) => f,
+        None => { gl.delete_texture(Some(&thumb_tex)); return Vec::new(); }
+    };
+    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+    gl.framebuffer_texture_2d(
+        WebGl2RenderingContext::FRAMEBUFFER,
+        WebGl2RenderingContext::COLOR_ATTACHMENT0,
+        WebGl2RenderingContext::TEXTURE_2D,
+        Some(&thumb_tex), 0,
+    );
+    gl.viewport(0, 0, tw as i32, th as i32);
+
+    gl.use_program(Some(&engine.inner.shaders.blit.program));
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+    if let Some(loc) = engine.inner.shaders.blit.location(gl, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
     }
+    engine.inner.draw_fullscreen_quad();
 
-    // Compute thumbnail dimensions maintaining aspect ratio
-    let scale = (max_size as f64) / (w.max(h) as f64);
-    let tw = ((w as f64 * scale).round() as u32).max(1);
-    let th = ((h as f64 * scale).round() as u32).max(1);
+    // Read back only the tiny thumbnail (tw*th*4 bytes)
+    let count = (tw * th * 4) as usize;
+    let mut thumb = vec![0u8; count];
+    let _ = gl.read_pixels_with_opt_u8_array(
+        0, 0, tw as i32, th as i32,
+        WebGl2RenderingContext::RGBA,
+        WebGl2RenderingContext::UNSIGNED_BYTE,
+        Some(&mut thumb),
+    );
 
-    // Bilinear downscale
-    let mut thumb = vec![0u8; (tw * th * 4) as usize];
-    for ty in 0..th {
-        for tx in 0..tw {
-            let sx = (tx as f64 + 0.5) * (w as f64) / (tw as f64) - 0.5;
-            let sy = (ty as f64 + 0.5) * (h as f64) / (th as f64) - 0.5;
+    // Cleanup
+    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+    gl.delete_framebuffer(Some(&fbo));
+    gl.delete_texture(Some(&thumb_tex));
 
-            let x0 = (sx.floor() as i32).max(0) as u32;
-            let y0 = (sy.floor() as i32).max(0) as u32;
-            let x1 = (x0 + 1).min(w - 1);
-            let y1 = (y0 + 1).min(h - 1);
-
-            let fx = sx - sx.floor();
-            let fy = sy - sy.floor();
-
-            let dst = (ty * tw + tx) as usize * 4;
-            for c in 0..4 {
-                let c00 = pixels[(y0 * w + x0) as usize * 4 + c] as f64;
-                let c10 = pixels[(y0 * w + x1) as usize * 4 + c] as f64;
-                let c01 = pixels[(y1 * w + x0) as usize * 4 + c] as f64;
-                let c11 = pixels[(y1 * w + x1) as usize * 4 + c] as f64;
-                let val = c00 * (1.0 - fx) * (1.0 - fy)
-                    + c10 * fx * (1.0 - fy)
-                    + c01 * (1.0 - fx) * fy
-                    + c11 * fx * fy;
-                thumb[dst + c] = val.round().min(255.0).max(0.0) as u8;
-            }
-        }
-    }
-
-    // Prepend 8-byte header with thumbnail dimensions so JS knows the size
     let mut result = Vec::with_capacity(8 + thumb.len());
     result.extend_from_slice(&tw.to_le_bytes());
     result.extend_from_slice(&th.to_le_bytes());

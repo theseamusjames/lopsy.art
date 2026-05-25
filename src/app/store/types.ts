@@ -141,6 +141,7 @@ export interface EditorState {
 
   // Selection
   setSelection: (bounds: Rect, mask: Uint8ClampedArray, maskWidth: number, maskHeight: number) => void;
+  setSelectionBounds: (bounds: Rect) => void;
   clearSelection: () => void;
 
   // Clipboard
@@ -174,6 +175,7 @@ export interface EditorState {
   undo: () => void;
   redo: () => void;
   pushHistory: (label?: string) => void;
+  pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => void;
   pushHistoryMetadata: (label: string) => void;
   markClean: () => void;
 }

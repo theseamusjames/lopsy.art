@@ -37,6 +37,7 @@ import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
 import { expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDimensions, getGlyphPositions } from '../engine-wasm/wasm-bridge';
+import { PAINT_TOOLS } from '../tools/tool-registry';
 
 
 
@@ -301,7 +302,7 @@ function renderFrameGpu(
       }
     }
 
-    if (toolState.symmetryRadialSegments >= 2 || toolState.symmetryHorizontal || toolState.symmetryVertical) {
+    if (PAINT_TOOLS.has(activeTool) && (toolState.symmetryRadialSegments >= 2 || toolState.symmetryHorizontal || toolState.symmetryVertical)) {
       const symCenter = toolState.symmetryCenter ?? { x: doc.width / 2, y: doc.height / 2 };
       renderSymmetryCenter(overlayCtx, symCenter, viewport.zoom, guideColor);
     }

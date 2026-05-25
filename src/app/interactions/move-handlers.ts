@@ -24,6 +24,7 @@ import type {
 } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
+import { consumePrefloat, cancelPrefloat } from './prefloat';
 
 interface QuickMaskSnapshot {
   pixels: Uint8Array;
@@ -47,7 +48,6 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
   const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
-  editorState.pushHistory(ctx.altKey && !(sel.active && sel.mask) ? 'Duplicate Layer' : 'Move');
   const {
     canvasPos,
     altKey,
@@ -56,6 +56,17 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     persistentTransformRef,
   } = ctx;
   let { activeLayerId } = ctx;
+
+  // Check for pre-built snapshot from prefloat before falling back to pushHistory.
+  const prebuilt = !altKey && sel.active && sel.mask
+    ? consumePrefloat(activeLayerId, sel.mask)
+    : null;
+  if (prebuilt) {
+    editorState.pushPrebuiltSnapshot(prebuilt.snapshot);
+  } else {
+    cancelPrefloat();
+    editorState.pushHistory(altKey && !(sel.active && sel.mask) ? 'Duplicate Layer' : 'Move');
+  }
 
   // Quick-mask mode + active marquee: snapshot the painted quick-mask
   // pixels so subsequent move events can translate the content with the
@@ -122,16 +133,22 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
 
     if (floatingSelectionRef.current) {
       // Reuse existing float — GPU already has the textures
+    } else if (prebuilt) {
+      // Prefloat already set up the GPU float
+      floatingSelectionRef.current = {
+        offsetX: 0,
+        offsetY: 0,
+        originalMask: new Uint8ClampedArray(prebuilt.mask),
+        originalBounds: { ...prebuilt.bounds },
+        gpuResident: true,
+      };
     } else if (engine && selNow.active && selNow.mask) {
-      // Ensure selection mask is on the GPU before floating
       const maskBytes = new Uint8Array(selNow.mask.buffer, selNow.mask.byteOffset, selNow.mask.byteLength);
       setSelectionMask(engine, maskBytes, selNow.maskWidth, selNow.maskHeight);
 
-      // First move: float the selection on the GPU
       const floatBoundsMove = floatSelection(engine, activeLayerId);
       compositeFloat(engine, 0, 0);
 
-      // Sync expanded position to Zustand (text layers expand to diagonal size).
       if (floatBoundsMove.length >= 4) {
         const newX = floatBoundsMove[0]!;
         const newY = floatBoundsMove[1]!;
@@ -141,8 +158,6 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
         }
       }
 
-      // Option+drag: restore the float base so selected pixels remain in
-      // place — floatSelection cuts them, but option means "copy, don't cut".
       if (altKey) {
         restoreFloatBase(engine, activeLayerId);
       }
@@ -267,28 +282,18 @@ export function handleMoveMove(
     compositeFloat(engine, dx, dy);
     useEditorStore.getState().notifyRender();
 
-    // Shift selection bounds and mask to follow the moved content
-    if (state.moveOriginalMask && state.moveOriginalBounds) {
-      const edState = useEditorStore.getState();
-      const { width: docW, height: docH } = edState.document;
-      const origMask = state.moveOriginalMask;
-      const newMask = new Uint8ClampedArray(docW * docH);
-      for (let y = 0; y < docH; y++) {
-        for (let x = 0; x < docW; x++) {
-          const srcX = x - dx;
-          const srcY = y - dy;
-          if (srcX >= 0 && srcX < docW && srcY >= 0 && srcY < docH) {
-            newMask[y * docW + x] = origMask[srcY * docW + srcX] ?? 0;
-          }
-        }
-      }
+    // Update bounds and transform only — skip expensive mask translation
+    // during the drag. The marching ants renderer already applies the
+    // transform offset via ctx.translate(). The mask is materialized
+    // once in handleMoveUp.
+    if (state.moveOriginalBounds) {
       const newBounds = {
         x: state.moveOriginalBounds.x + dx,
         y: state.moveOriginalBounds.y + dy,
         width: state.moveOriginalBounds.width,
         height: state.moveOriginalBounds.height,
       };
-      edState.setSelection(newBounds, newMask, docW, docH);
+      useEditorStore.getState().setSelectionBounds(newBounds);
       useUIStore.getState().setTransform(createTransformState(newBounds));
     }
   } else {
@@ -350,7 +355,33 @@ export function handleMoveUp(
   floatingSelectionRef.current.offsetX += dragDx;
   floatingSelectionRef.current.offsetY += dragDy;
 
-  // Rebuild transform state for potential subsequent rotation
+  // Materialize the translated selection mask now that the drag is done.
+  // During the drag we only updated bounds to avoid per-move mask copies.
+  if (state.moveOriginalMask && state.moveOriginalBounds) {
+    const edState = useEditorStore.getState();
+    const { width: docW, height: docH } = edState.document;
+    const dx = floatingSelectionRef.current.offsetX;
+    const dy = floatingSelectionRef.current.offsetY;
+    const origMask = state.moveOriginalMask;
+    const newMask = new Uint8ClampedArray(docW * docH);
+    for (let y = 0; y < docH; y++) {
+      for (let x = 0; x < docW; x++) {
+        const srcX = x - dx;
+        const srcY = y - dy;
+        if (srcX >= 0 && srcX < docW && srcY >= 0 && srcY < docH) {
+          newMask[y * docW + x] = origMask[srcY * docW + srcX] ?? 0;
+        }
+      }
+    }
+    const newBounds = {
+      x: state.moveOriginalBounds.x + dx,
+      y: state.moveOriginalBounds.y + dy,
+      width: state.moveOriginalBounds.width,
+      height: state.moveOriginalBounds.height,
+    };
+    edState.setSelection(newBounds, newMask, docW, docH);
+  }
+
   const sel = useEditorStore.getState().selection;
   if (sel.active && sel.bounds) {
     useUIStore.getState().setTransform(createTransformState(sel.bounds));
