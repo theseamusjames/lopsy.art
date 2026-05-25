@@ -6,7 +6,7 @@ Read SPEC.md for the full product specification.
 - `AGENTS.md` — contributor workflow for AI-assisted PRs (process,
   commit style, what's wanted).
 - `e2e/GUIDE.md` — read this before writing any e2e tests.
-- `MEMORY.md` — small facts about the codebase worth remembering.
+- `MEMORY.md` — small facts about the codebase worth remembering. Consider adding to this when you discover a helpful technique or fact about the codebase.
 - `docs/pixel-data-debt.md` — authoritative tracker for places where
   pixel buffers still live on the JS side, with the migration plan
   for each.
@@ -293,3 +293,9 @@ npm run wasm:build
 - Rendering hot paths (brush strokes, pan/zoom) must not allocate objects in tight loops — pre-allocate and reuse.
 - Lazy-load features that aren't needed on startup (filters, adjustment dialogs, font browser).
 - Target: 60fps for pan, zoom, and brush strokes on a 4000x4000 canvas with 20 layers.
+- **Diagnosing perf issues**: write a benchmark e2e test that reproduces
+  the scenario on a large canvas (4K+), profile with CDP
+  (`Profiler.start/stop`), collect per-event timestamps, and analyze
+  self-time per function. Fix one bottleneck at a time and re-run the
+  same test to verify. See `MEMORY.md` for the full workflow and
+  `e2e/brush-perf-6k.spec.ts` for an example.

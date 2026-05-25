@@ -5,6 +5,7 @@ import { selectionBounds } from '../../selection/selection';
 import { createTransformState } from '../../tools/transform/transform';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
+import { schedulePrefloat } from '../../app/interactions/prefloat';
 
 export function selectLayerAlpha(layerId: string): void {
   // Commit any active GPU float so the layer texture has the final pixels
@@ -38,6 +39,7 @@ export function selectLayerAlpha(layerId: string): void {
   if (bounds) {
     editorState.setSelection(bounds, selMask, docW, docH);
     useUIStore.getState().setTransform(createTransformState(bounds));
+    schedulePrefloat(layerId, selMask, bounds);
   }
 }
 

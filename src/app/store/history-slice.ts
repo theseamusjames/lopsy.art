@@ -16,6 +16,7 @@ export interface HistorySlice {
   undo: () => void;
   redo: () => void;
   pushHistory: (label?: string) => void;
+  pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => void;
   pushHistoryMetadata: (label: string) => void;
   markClean: () => void;
 }
@@ -270,6 +271,18 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       gpuSnapshots,
       label,
     };
+    set({
+      undoStack: [...state.undoStack.slice(-49), snapshot],
+      redoStack: [],
+      dirtyLayerIds: new Set(),
+      isDirty: true,
+      renderVersion: state.renderVersion + 1,
+    });
+  },
+
+  pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => {
+    const state = get();
+    lastRestoredSnapshot = null;
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],
       redoStack: [],
