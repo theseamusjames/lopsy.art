@@ -4,6 +4,10 @@
 
 Keep everything in this single file. No separate memory files in .claude or elsewhere.
 
+## Performance optimization workflow
+
+When diagnosing perf issues, write a benchmark e2e test that reproduces the exact user scenario on a large canvas (4K+). Profile with CDP (`Profiler.start/stop` via `page.context().newCDPSession`), collect per-event timestamps (unsorted, to preserve temporal patterns), and compute self-time per function from the profile's nodes/samples/timeDeltas. Fix one bottleneck at a time and re-run the same test to verify. Temporarily disabling suspect code paths (early return) to confirm they're the bottleneck before writing a real fix is very effective. See `e2e/brush-perf-6k.spec.ts` for a working example that profiles brush strokes, marching ants, and move-tool drag.
+
 ## All pixel manipulation must happen in Rust/WASM engine, never JS Canvas 2D
 
 ## Undo snapshots use normalized u16, not raw FP16 bits
