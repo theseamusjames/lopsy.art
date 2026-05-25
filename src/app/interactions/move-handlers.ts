@@ -138,7 +138,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       floatingSelectionRef.current = {
         offsetX: 0,
         offsetY: 0,
-        originalMask: new Uint8ClampedArray(prebuilt.mask),
+        originalMask: prebuilt.mask,
         originalBounds: { ...prebuilt.bounds },
         gpuResident: true,
       };
