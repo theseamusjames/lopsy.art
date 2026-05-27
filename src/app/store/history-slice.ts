@@ -54,6 +54,16 @@ function flushPendingSnapshots(): void {
   }
 }
 
+export function invalidateCachedSnapshot(layerId: string): void {
+  pendingCacheIds.delete(layerId);
+  const handle = preSnapshotCache.get(layerId);
+  if (handle !== undefined) {
+    const engine = getEngine();
+    if (engine) releaseGpuSnapshot(engine, handle);
+    preSnapshotCache.delete(layerId);
+  }
+}
+
 export function clearSnapshotCache(): void {
   const engine = getEngine();
   if (engine) {
