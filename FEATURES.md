@@ -208,6 +208,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - Exiting Quick Mask reads the painted mask back from the GPU and replaces the selection (with feather applied if a feather radius is set on the marquee)
 - Works regardless of the active layer — painting only affects the selection mask, not pixels
 - **Fill (paint bucket) and Gradient tools route into the quick mask** instead of the active layer while quick mask is on, so smooth selection falloffs (linear or radial gradients) and bucket fills of the selection mask are first-class operations. Quick mask mode takes precedence over layer-mask edit mode if both are somehow active.
+- **Move marquee carries painted content**: dragging or arrow-key-nudging the marquee while Quick Mask is active translates the painted red overlay along with the marquee outline, so the visible selection mask and its outline stay in sync. Content that lands off-canvas is clipped; content overlapping existing paint blends with max compositing.
 
 ---
 
@@ -569,15 +570,6 @@ In addition to per-tool toolbox shortcuts (`B`, `E`, `J`, `Y`, `R`, `S`, `H`, `O
 - **`Escape`** — cancels in-progress state: clears unstroked Path-tool anchors first, otherwise clears the active selection and any pending transform; ends text editing with the prior layer state restored.
 - **`Enter`** — when the Path tool is active and ≥ 2 anchors are placed, strokes the in-progress path to pixels.
 - **`Cmd/Ctrl + E`** — merge the active layer down into the layer below.
-
-### Keyboard Shortcut Customization
-Every tool shortcut (`B`, `E`, `J`, …) and the non-tool single-key actions (`X` swap colors, `D` reset colors, `Q` toggle quick mask) are user-rebindable through the **Keyboard Shortcuts modal**.
-
-- Each row shows the action label and its current key. Clicking a key enters **listening mode** — the next key the user presses becomes the new binding (lower-cased, single-character bindings only).
-- **Conflict detection**: if the chosen key is already bound to another action, the modal flags the conflict inline; the user can confirm the swap or pick a different key.
-- **Reset**: a per-row reset button reverts that one binding to its default; a "Reset All" button at the bottom of the modal clears every override at once.
-- **Persistence**: custom bindings live in `localStorage` (Zustand `persist` middleware), so they survive reloads and follow the user across sessions on the same browser.
-- The same store is the single source of truth for keyboard handling everywhere in the app — shortcuts dispatched from menus, the toolbox, and global key handlers all read through `useShortcutStore.getKey(actionId)` so a rebind takes effect immediately without a reload.
 
 ### Keyboard Shortcut Customization
 Every tool shortcut (`B`, `E`, `J`, …) and the non-tool single-key actions (`X` swap colors, `D` reset colors, `Q` toggle quick mask) are user-rebindable through the **Keyboard Shortcuts modal**.
