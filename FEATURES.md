@@ -294,6 +294,9 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 ### Color Overlay
 - **Color**: RGBA
 
+### Effects on Groups
+Layer effects can be attached to **group** layers, not just leaf layers. When a group is in **Pass Through** mode (the default), the compositor still allocates an intermediate buffer so the effects (drop shadow, glow, stroke, color overlay) have a composited surface to attach to — effects render around the group as a whole rather than around each child individually.
+
 ---
 
 ## Image Adjustments (Non-Destructive)
@@ -451,10 +454,13 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Color tag**: optional swatch (red, orange, yellow, green, blue, purple, gray, or none) shown as a vertical bar on the left edge of the layer row. Set via the layer row's right-click context menu; useful for visually grouping/organizing layers in a deep stack.
 
 ### Layer Operations
-- Add, remove, duplicate
-- Merge down
-- Flatten image
-- Rasterize layer style (bake effects)
+- **New Layer** (`⇧⌘N`): appends a blank raster layer above the active one
+- **Duplicate Layer** (`⌘J`): clones the active layer in place
+- **Group Layers** (`⌘G`): wraps the currently-selected layers in a new group
+- **Merge Down** (`⌘E`): composites the active layer into the layer below
+- **Flatten Image**: composites every visible layer into a single raster layer
+- **Rasterize Layer**: for non-raster layers (text, shape, group with effects), bakes the current visual into pixels in place. For text layers, reads the engine's current x/y/w/h so the rasterized result lands at the visible position even after GPU texture expansion from upstream paint ops.
+- **Rasterize Layer Style**: bakes a layer's effects (drop shadow, glow, stroke, color overlay) into the layer's pixels and clears the effect descriptors
 - Reorder (drag)
 - Move to group (reparent)
 - Rename
@@ -478,17 +484,24 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - Selected layers can be grouped or reordered together; the active layer remains the target for tool operations
 
 ### Clipboard
-- Copy, cut, paste (respects selection)
-- **Cmd+Shift+C**: copy merged (composites all visible layers within the selection bounds before copying, so the clipboard contains a flattened RGBA snapshot rather than just the active layer)
-- Paste external image data
+- **Cut** (`⌘X`) / **Copy** (`⌘C`) / **Paste** (`⌘V`): standard clipboard actions; copy/cut respect the active marquee selection
+- **Copy Merged** (`⇧⌘C`): composites all visible layers within the selection bounds before copying, so the clipboard contains a flattened RGBA snapshot rather than just the active layer
+- Paste external image data (PNG/JPEG/WebP from the system clipboard) creates a new raster layer with the bitmap
+
+### Fill from Menu
+- **Fill…** (Edit menu, `⇧F5`): opens a small modal that fills the current selection (or the entire layer if no selection) on the active layer with foreground color, background color, black, white, 50% gray, or a chosen pattern. Honors the selection mask and layer opacity.
+- **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern (used by Fill… and the Pattern Fill filter)
+- **Define Brush…** / **Define Color Brush…** (Edit menu): captures the marquee selection as a new alpha or color brush tip (see Brush → Brush from Selection)
 
 ---
 
 ## Canvas Operations
 
 - **Crop canvas**: by rectangle
-- **Resize canvas**: new width/height with anchor point
-- **Resize image**: new width/height (resamples all layers)
+- **Canvas Size…** (Image menu): new width/height with anchor point (extends or trims the document without resampling layer pixels)
+- **Image Size…** (Image menu): new width/height that resamples all layers
+- **Rotate Image 90° CW / 90° CCW** (Image menu): rotates the entire document (every layer, every mask, the selection, and the canvas size) about the document center
+- **Flip Horizontal / Vertical** (Image menu): mirrors the active layer along the chosen axis (operates per-layer, not document-wide, so partial-image flips are possible)
 
 ---
 
@@ -515,7 +528,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Cmd/Ctrl + `=`** / **Cmd/Ctrl + `-`**: zoom in / out by 1.5× (clamped to the 0.01× – 64× range)
 - **Cmd/Ctrl + `0`**: fit document to view (90% of the smaller canvas-to-document ratio, pan reset to origin)
 - **Cmd/Ctrl + `1`**: jump to 100% (1×) zoom and recenter
-- **Pixel grid**: automatically rendered as a 1-CSS-px translucent gray lattice when the viewport zoom exceeds 800% (8×), so individual document pixels are visible while pixel-accurate editing
+- **Pixel grid**: a 1-CSS-px translucent gray lattice rendered when the viewport zoom exceeds 800% (8×), so individual document pixels are visible during pixel-accurate editing. View → "Show Pixel Grid" toggles whether the lattice is drawn at all (default on).
 
 ### Grid
 - **Show grid**: on/off
@@ -525,6 +538,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 
 ### Rulers
 - **Show rulers**: on/off (default on)
+- **Cmd/Ctrl + `R`**: toggle ruler visibility from anywhere in the app
 
 ### Guides
 - **Show guides**: on/off
@@ -532,6 +546,15 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Orientation**: horizontal or vertical
 - Drag from ruler to create
 - **Cmd/Ctrl + `;`**: toggle guides visibility from anywhere in the app
+- **Clear Guides** (Edit menu): removes every guide currently placed on the canvas in a single action
+
+### Snapping
+- **Snap to Grid** (View menu): aligns drags to the nearest grid cell; auto-enabled whenever the grid is visible. Move-tool arrow-key nudges become one-cell hops under this mode.
+- **Snap to Layers** (View menu): while dragging with the Move tool, the layer's edges and X/Y centers attract to matching edges and centers of other visible layers within a 5 px threshold. Magenta alignment guides appear during the snap and clear on mouse-up.
+
+### Seamless Pattern Preview
+- **Show Seamless Pattern** (View menu): tiles the document outside the canvas bounds so tileable textures and patterns can be previewed in context. The center tile is the actual document; surrounding tiles are repeats of the same pixels with edge wrapping (`fract(uv)`) so seams are visible immediately.
+- **Dim outside tiles**: a per-tool options-bar checkbox (visible whenever Show Seamless Pattern is on) dims the surrounding repeats so the center document stays the focal point while still showing how it tiles. Default on.
 
 ### UI
 - **Foreground / background color**: with swap and reset
@@ -684,10 +707,10 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 ## File I/O & Export
 
 ### Open / Save
-- **New** (`⌘N`): blank document with width/height/background prompt
+- **New** (`⌘N`): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
 - **Open…** (`⌘O`): open a PNG/JPEG/WebP/BMP/PSD/DNG/.lopsy from disk (the picker auto-routes by extension)
 - **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust)
-- **Save PSD**: serialises the current document via the PSD writer
+- **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant)
 
 ### Native Project Format (.lopsy)
 - **Save Project** (`⌘S`): writes the full editor state to a `.lopsy` file and triggers a browser download. Round-trips every layer (raster pixels, text, shape, group), masks, blend modes, opacity, position, clip-to-below, layer effects, color tags, group adjustment node stacks, the active layer, and the document's name / size / background.
