@@ -37,6 +37,7 @@ import { contextOptions } from '../engine/color-space';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
 import { expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDimensions, getGlyphPositions } from '../engine-wasm/wasm-bridge';
+import { invalidateCachedSnapshot } from './store/history-slice';
 import { PAINT_TOOLS } from '../tools/tool-registry';
 
 
@@ -76,6 +77,7 @@ function renderFrameGpu(
     if (oldId) {
       const oldLayer = doc.layers.find((l) => l.id === oldId);
       if (oldLayer?.type === 'raster') {
+        invalidateCachedSnapshot(oldId);
         const result = cropLayerToContent(engine, oldId);
         if (result.length === 4 && (result[2] ?? 0) > 0) {
           useEditorStore.setState((s) => ({
