@@ -39,6 +39,16 @@ describe('createGroupLayer', () => {
     expect(g.type).toBe('group');
     expect(g.children).toEqual([]);
   });
+
+  // Issue #523: pass-through groups attenuate each child's opacity individually
+  // when the group's opacity is lowered, so an opaque top child no longer hides
+  // the layer below it within the group. New groups default to normal (isolated)
+  // compositing so group opacity behaves intuitively. Pass-through remains a
+  // user-selectable blend mode for layouts that need it.
+  it('defaults to normal (isolated) blend mode', () => {
+    const g = createGroupLayer({ name: 'Group 1' });
+    expect(g.blendMode).toBe('normal');
+  });
 });
 
 describe('reorderLayers', () => {

@@ -2,8 +2,11 @@
  * Regression tests for the photo filter group adjustment.
  *
  * Covers two bugs that caused the effect to be invisible or incorrect:
- * 1. Groups default to pass-through blend mode, which silently bypasses all
- *    group adjustments. Adding an adjustment now auto-switches to "normal".
+ * 1. Pass-through groups silently bypass all group adjustments. Adding an
+ *    adjustment auto-switches such a group to "normal" so the adjustment
+ *    actually composites. (Per issue #523, new groups default to normal
+ *    these days, so the auto-switch only matters for groups the user has
+ *    explicitly set to pass-through.)
  * 2. Preserve Luminosity was using an HSL L-channel swap that caused
  *    unexpected hue shifts on neutral colors (gray → greenish tones).
  *    Fixed to use luminance-proportional scaling instead.
@@ -64,7 +67,22 @@ test.describe('Photo filter group adjustment', () => {
   test('adding photo filter to pass-through group auto-switches blend mode', async ({ page }) => {
     const rootGroupId = await getRootGroupId(page);
 
-    // Verify the root group starts in pass-through mode
+    // Explicitly put the group into pass-through (issue #523 changed the
+    // default to normal, but this regression is about a user-selected
+    // pass-through group silently swallowing its adjustment).
+    await page.evaluate((gid) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          pushHistory: (label: string) => void;
+          updateLayerBlendMode: (id: string, mode: string) => void;
+        };
+      };
+      const s = store.getState();
+      s.pushHistory('Change Blend Mode');
+      s.updateLayerBlendMode(gid, 'pass-through');
+    }, rootGroupId);
+    await page.waitForTimeout(100);
+
     const blendModeBefore = await page.evaluate((gid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => { document: { layers: Array<{ id: string; blendMode: string }> } };
