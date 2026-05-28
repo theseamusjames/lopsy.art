@@ -1,3 +1,5 @@
+import { existsSync } from 'fs';
+import { resolve } from 'path';
 import { test, expect, type Page } from './fixtures';
 import {
   waitForStore,
@@ -8,6 +10,8 @@ import {
   getRootGroupId,
   docToScreen,
 } from './helpers';
+
+const samplePath = resolve(import.meta.dirname, '..', 'sample.jpg');
 
 /**
  * Memory profiling test — simulates a photo retouching session on a large
@@ -228,6 +232,7 @@ async function memorySnapshot(page: Page, label: string): Promise<SnapshotResult
 test.describe('Memory: retouching session', () => {
   test('memory stays bounded during a realistic photo retouching workflow', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'CDP heap profiling requires Chromium');
+    test.skip(!existsSync(samplePath), 'sample.jpg not present');
     test.setTimeout(300_000);
 
     await page.goto('/');
