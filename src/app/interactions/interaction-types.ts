@@ -12,11 +12,22 @@ import type { PixelBuffer, MaskedPixelBuffer } from '../../engine/pixel-data';
  */
 export type CanvasGesture =
   | { kind: 'idle' }
-  | { kind: 'tool' }
+  | { kind: 'tool'; usedGpuStroke: boolean }
   | { kind: 'liquify' }
   | { kind: 'tiltShift' }
   | { kind: 'meshWarp' }
   | { kind: 'transform' };
+
+/**
+ * True when the active tool gesture is a paint stroke that started on
+ * the GPU path (brush/pencil/eraser with engine available, outside
+ * mask/quick-mask modes). Replaces the legacy `_usedGpuStroke?` flag
+ * on InteractionState. Lives on the gesture variant so it can't be
+ * set unless we're actually inside a `tool` gesture.
+ */
+export function gestureUsedGpuStroke(gesture: CanvasGesture): boolean {
+  return gesture.kind === 'tool' && gesture.usedGpuStroke;
+}
 
 export const GESTURE_IDLE: CanvasGesture = { kind: 'idle' };
 
@@ -39,7 +50,6 @@ export interface InteractionState {
   originalSelectionMask: Uint8ClampedArray | null;
   originalSelectionMaskWidth: number;
   originalSelectionMaskHeight: number;
-  _usedGpuStroke?: boolean;
   strokeDistance?: number;
   spacingRemainder?: number;
   symmetryCenter?: Point;
