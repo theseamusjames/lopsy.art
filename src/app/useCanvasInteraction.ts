@@ -26,6 +26,7 @@ import type {
   InteractionState, InteractionContext,
   FloatingSelection, PersistentTransform, LastPaintPoint,
 } from './interactions/interaction-types';
+import { gestureUsedGpuStroke } from './interactions/interaction-types';
 import { handleTransformDown } from './interactions/transform-handlers';
 import {
   handleMeshWarpDown,
@@ -330,8 +331,7 @@ export function useCanvasInteraction(
       const handler = toolHandlers[activeTool];
       const newState = handler?.down?.(ctx);
       if (newState) {
-        newState.gesture = { kind: 'tool' };
-        newState._usedGpuStroke = !!useGpuStroke;
+        newState.gesture = { kind: 'tool', usedGpuStroke: !!useGpuStroke };
         stateRef.current = newState;
       }
     },
@@ -396,7 +396,7 @@ export function useCanvasInteraction(
       // If the cursor stays still (no new mousemove) for HOLD_TIMEOUT_MS, smooth.
       if (
         state.tool === 'brush'
-        && state._usedGpuStroke
+        && gestureUsedGpuStroke(state.gesture)
         && state.strokePoints
         && state.strokePoints.length >= 3
         && state.layerId
@@ -564,7 +564,7 @@ export function useCanvasInteraction(
     // pushHistory falls through to a synchronous readback.
     if (PAINT_TOOLS.has(state.tool) && state.layerId && !state.maskMode) {
       const engine = getEngine();
-      if (engine && state._usedGpuStroke) {
+      if (engine && gestureUsedGpuStroke(state.gesture)) {
         endStroke(engine, state.layerId);
         clearJsPixelData(state.layerId);
         useEditorStore.getState().notifyRender();
