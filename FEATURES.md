@@ -262,6 +262,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Modes**: Normal (rectangular) or Perspective (4-point quadrilateral correction). The mode dropdown lives in the options bar; switching to Perspective shows Apply / Cancel buttons next to the dropdown.
 - **Normal mode**: interactive drag to define crop rectangle.
 - **Perspective mode**: on first activation a quadrilateral is seeded over the full document. Dragging any of the four corner handles repositions that corner; on Apply, every raster layer is warped by the inverse homography (8×8 DLT solver, bilinear inverse-warp) and the document is resized to the inferred output dimensions (edge-length heuristic). Lets you rectify perspective-distorted photographs of paintings, documents, signs, etc.
+- **Edit → Crop**: when a marquee selection is active, the Edit menu's **Crop** item crops the canvas to the selection bounds in one click (equivalent to dragging out the same rectangle with the Crop tool). Disabled when nothing is selected.
 
 ---
 
@@ -602,15 +603,6 @@ Every tool shortcut (`B`, `E`, `J`, …) and the non-tool single-key actions (`X
 - **Persistence**: custom bindings live in `localStorage` (Zustand `persist` middleware), so they survive reloads and follow the user across sessions on the same browser.
 - The same store is the single source of truth for keyboard handling everywhere in the app — shortcuts dispatched from menus, the toolbox, and global key handlers all read through `useShortcutStore.getKey(actionId)` so a rebind takes effect immediately without a reload.
 
-### Keyboard Shortcut Customization
-Every tool shortcut (`B`, `E`, `J`, …) and the non-tool single-key actions (`X` swap colors, `D` reset colors, `Q` toggle quick mask) are user-rebindable through the **Keyboard Shortcuts modal**.
-
-- Each row shows the action label and its current key. Clicking a key enters **listening mode** — the next key the user presses becomes the new binding (lower-cased, single-character bindings only).
-- **Conflict detection**: if the chosen key is already bound to another action, the modal flags the conflict inline; the user can confirm the swap or pick a different key.
-- **Reset**: a per-row reset button reverts that one binding to its default; a "Reset All" button at the bottom of the modal clears every override at once.
-- **Persistence**: custom bindings live in `localStorage` (Zustand `persist` middleware), so they survive reloads and follow the user across sessions on the same browser.
-- The same store is the single source of truth for keyboard handling everywhere in the app — shortcuts dispatched from menus, the toolbox, and global key handlers all read through `useShortcutStore.getKey(actionId)` so a rebind takes effect immediately without a reload.
-
 ---
 
 ## Reference Image Drawer
@@ -690,8 +682,9 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 ## History
 
 - Unlimited undo/redo with labeled snapshots
-- RLE-compressed GPU texture snapshots
-- Metadata-only snapshots for lightweight operations
+- **Undo** (`⌘Z`) / **Redo** (`⇧⌘Z`) from the Edit menu or keyboard
+- History panel lists every snapshot with its label; clicking a row jumps the document to that state
+- RLE-compressed GPU texture snapshots; metadata-only snapshots for lightweight operations (visibility toggles, blend-mode changes, etc.) so the history list stays cheap even after long sessions
 
 ---
 
