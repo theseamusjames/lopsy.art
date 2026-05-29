@@ -56,32 +56,33 @@ async function snapshot(page: Page, label: string) {
     };
     const state = store.getState();
 
-    // Estimate undo stack memory — includes compressed GPU snapshots
-    const undoStack = (state as unknown as { undoStack: Array<{ layerPixelData?: Map<string, ImageData>; gpuSnapshots?: Map<string, Uint8Array>; sparseLayerData?: Map<string, unknown>; metadataOnly?: boolean; label?: string }> }).undoStack ?? [];
-    const redoStack = (state as unknown as { redoStack: Array<{ gpuSnapshots?: Map<string, Uint8Array>; metadataOnly?: boolean }> }).redoStack ?? [];
+    // Estimate undo stack memory — gpuSnapshots now stores opaque GPU
+    // handles (numbers), not Uint8Arrays, so we count snapshots × layer
+    // texture size as an estimate.
+    const undoStack = (state as unknown as { undoStack: Array<{ kind?: string; gpuSnapshots?: Map<string, unknown>; label?: string }> }).undoStack ?? [];
+    const redoStack = (state as unknown as { redoStack: Array<{ kind?: string; gpuSnapshots?: Map<string, unknown> }> }).redoStack ?? [];
     let undoBytes = 0;
     const undoDetails: Array<{ label: string; metadataOnly: boolean; gpuBytes: number; denseBytes: number }> = [];
     for (const entry of undoStack) {
+      const isMetadata = entry.kind === 'metadata';
       let gpuBytes = 0;
-      let denseBytes = 0;
       if (entry.gpuSnapshots) {
-        for (const blob of entry.gpuSnapshots.values()) {
-          gpuBytes += blob.byteLength;
+        for (const handle of entry.gpuSnapshots.values()) {
+          if (typeof handle === 'number' && handle !== 0xFFFFFFFF) {
+            gpuBytes += 1;
+          }
         }
       }
-      if (entry.layerPixelData) {
-        for (const data of entry.layerPixelData.values()) {
-          denseBytes += data.data.byteLength;
-        }
-      }
-      undoBytes += gpuBytes + denseBytes;
-      undoDetails.push({ label: entry.label ?? '?', metadataOnly: !!entry.metadataOnly, gpuBytes, denseBytes });
+      undoBytes += gpuBytes;
+      undoDetails.push({ label: entry.label ?? '?', metadataOnly: isMetadata, gpuBytes, denseBytes: 0 });
     }
     let redoBytes = 0;
     for (const entry of redoStack) {
       if (entry.gpuSnapshots) {
-        for (const blob of entry.gpuSnapshots.values()) {
-          redoBytes += blob.byteLength;
+        for (const handle of entry.gpuSnapshots.values()) {
+          if (typeof handle === 'number' && handle !== 0xFFFFFFFF) {
+            redoBytes += 1;
+          }
         }
       }
     }
@@ -307,9 +308,10 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName 
   // which are outside our control (~60MB overhead for a WebGL 2 engine).
   const cdpGrowth = s4.heapUsed - s1.heapUsed;
   console.log(`\nCDP heap growth: ${formatMB(cdpGrowth)} (should be < 5 MB)`);
-  console.log(`Undo stack total: ${formatMB(s4.storeInfo.undoBytes)} (compressed GPU snapshots)`);
+  console.log(`Undo stack total: ${s4.storeInfo.undoBytes} GPU snapshot handles`);
   expect(cdpGrowth).toBeLessThan(5 * 1024 * 1024);
-  // Undo stack stores compressed GPU snapshots; size depends on undo format,
-  // layer count, and the baseline snapshot pushed after first render.
-  expect(s4.storeInfo.undoBytes).toBeLessThan(300 * 1024 * 1024);
+  // Undo stack stores opaque GPU handles; verify the count is reasonable
+  // (not growing unbounded). With a few operations across ~3 layers,
+  // expect at most a few dozen handles.
+  expect(s4.storeInfo.undoBytes).toBeLessThan(200);
 });

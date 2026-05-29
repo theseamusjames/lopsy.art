@@ -198,20 +198,45 @@ test.describe('Healing Brush Tool', () => {
   test('healing brush paints onto the layer when source and destination are set', async ({ page }) => {
     test.setTimeout(120_000);
 
-    // Paint a fully blue rectangle covering most of the canvas
-    await paintDocRect(page, 0, 0, 400, 300, { r: 0, g: 0, b: 200 });
-
-    // Paint a red patch in the center as the "blemish"
-    await paintDocRect(page, 150, 100, 100, 100, { r: 200, g: 0, b: 0 });
-
-    // Push history to finalize
+    // Paint a blue background with a red "blemish" patch in a single ImageData
+    // so both regions coexist on the same layer texture.
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { pushHistory: () => void };
+        getState: () => {
+          document: { activeLayerId: string; width: number; height: number };
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          pushHistory: () => void;
+        };
       };
-      store.getState().pushHistory();
+      const state = store.getState();
+      const id = state.document.activeLayerId;
+      const dw = state.document.width;
+      const dh = state.document.height;
+      const data = new ImageData(dw, dh);
+      // Fill entire canvas blue
+      for (let py = 0; py < dh; py++) {
+        for (let px = 0; px < dw; px++) {
+          const idx = (py * dw + px) * 4;
+          data.data[idx] = 0;
+          data.data[idx + 1] = 0;
+          data.data[idx + 2] = 200;
+          data.data[idx + 3] = 255;
+        }
+      }
+      // Overwrite center with red blemish (150,100)–(250,200)
+      for (let py = 100; py < 200; py++) {
+        for (let px = 150; px < 250; px++) {
+          const idx = (py * dw + px) * 4;
+          data.data[idx] = 200;
+          data.data[idx + 1] = 0;
+          data.data[idx + 2] = 0;
+          data.data[idx + 3] = 255;
+        }
+      }
+      state.pushHistory();
+      state.updateLayerPixelData(id, data);
     });
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(300);
 
     // Activate the healing brush
     await page.keyboard.press('h');
@@ -237,13 +262,22 @@ test.describe('Healing Brush Tool', () => {
 
     const before = await readLayer(page, activeLayerId);
 
-    // Now heal the center of the red area at doc (200, 150)
-    const healScreen = await docToScreen(page, 200, 150);
-    await page.mouse.move(healScreen.x, healScreen.y);
+    // Now heal the center of the red area at doc (200, 150) with a short stroke
+    const healStart = await docToScreen(page, 190, 140);
+    const healEnd = await docToScreen(page, 210, 160);
+    await page.mouse.move(healStart.x, healStart.y);
     await page.mouse.down();
     await page.waitForTimeout(50);
+    for (let i = 1; i <= 5; i++) {
+      const t = i / 5;
+      await page.mouse.move(
+        healStart.x + (healEnd.x - healStart.x) * t,
+        healStart.y + (healEnd.y - healStart.y) * t,
+      );
+      await page.waitForTimeout(30);
+    }
     await page.mouse.up();
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
 
     // Push history to merge pending GPU/JS writes
     await page.evaluate(() => {

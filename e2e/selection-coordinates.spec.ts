@@ -182,8 +182,40 @@ test.describe('Selection coordinates with layer offset', () => {
     // 100×100 transparent doc.
     await createDocument(page, 100, 100, true);
 
-    // Paint a 40×40 red square at doc (30, 30).
-    await drawRect(page, 30, 30, 40, 40, { r: 255, g: 0, b: 0 });
+    // Paint a white background with a 40×40 red square at doc (30,30).
+    // Filling every pixel with white prevents updateLayerPixelData's
+    // auto-crop from shrinking the layer to just the red square.
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { activeLayerId: string; width: number; height: number };
+          updateLayerPixelData: (id: string, data: ImageData) => void;
+          pushHistory: () => void;
+        };
+      };
+      const s = store.getState();
+      const dw = s.document.width;
+      const dh = s.document.height;
+      const data = new ImageData(dw, dh);
+      for (let i = 0; i < data.data.length; i += 4) {
+        data.data[i] = 255;
+        data.data[i + 1] = 255;
+        data.data[i + 2] = 255;
+        data.data[i + 3] = 255;
+      }
+      for (let py = 30; py < 70; py++) {
+        for (let px = 30; px < 70; px++) {
+          const idx = (py * dw + px) * 4;
+          data.data[idx] = 255;
+          data.data[idx + 1] = 0;
+          data.data[idx + 2] = 0;
+          data.data[idx + 3] = 255;
+        }
+      }
+      s.pushHistory();
+      s.updateLayerPixelData(s.document.activeLayerId, data);
+    });
+    await page.waitForTimeout(200);
 
     const s0 = await getEditorState(page);
     const bgId = s0.document.layers[0]!.id;
@@ -195,9 +227,8 @@ test.describe('Selection coordinates with layer offset', () => {
     const fillLayerId = s1.document.activeLayerId;
     expect(fillLayerId).not.toBe(bgId);
 
-    // Use the wand to select all the empty area on the background layer.
-    // First switch back to the bg layer, then click outside the red square
-    // to wand-select the transparent region.
+    // Use the wand to select the white area on the background layer.
+    // Click outside the red square to wand-select the white region.
     await page.locator(`[data-layer-id="${bgId}"]`).click();
     await page.waitForTimeout(50);
 

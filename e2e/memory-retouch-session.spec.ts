@@ -87,11 +87,13 @@ async function memorySnapshot(page: Page, label: string): Promise<SnapshotResult
         };
         undoStack: Array<{
           label?: string;
-          gpuSnapshots?: Map<string, Uint8Array>;
+          kind?: string;
+          gpuSnapshots?: Map<string, unknown>;
           layerPixelData?: Map<string, ImageData>;
         }>;
         redoStack: Array<{
-          gpuSnapshots?: Map<string, Uint8Array>;
+          kind?: string;
+          gpuSnapshots?: Map<string, unknown>;
         }>;
       };
     };
@@ -100,10 +102,11 @@ async function memorySnapshot(page: Page, label: string): Promise<SnapshotResult
     };
     const state = store.getState();
 
-    // Track unique blobs across all undo/redo entries by identity
-    const seenBlobs = new Set<Uint8Array>();
-    let totalUndoBytes = 0;
-    let uniqueUndoBytes = 0;
+    // GPU snapshots now store opaque handles (numbers), not Uint8Arrays.
+    // Count handles as a proxy for memory pressure.
+    const seenHandles = new Set<number>();
+    let totalUndoHandles = 0;
+    let uniqueUndoHandles = 0;
 
     const undoBreakdown: Array<{
       entryIndex: number;
@@ -121,25 +124,27 @@ async function memorySnapshot(page: Page, label: string): Promise<SnapshotResult
 
     for (const { entry, index, stack } of allStacks) {
       if (!entry.gpuSnapshots) continue;
-      let entryBytes = 0;
+      let entryCount = 0;
       let entryUniqueCount = 0;
       const blobSizes: number[] = [];
-      for (const blob of entry.gpuSnapshots.values()) {
-        entryBytes += blob.byteLength;
-        blobSizes.push(blob.byteLength);
-        if (!seenBlobs.has(blob)) {
-          seenBlobs.add(blob);
-          uniqueUndoBytes += blob.byteLength;
+      for (const handle of entry.gpuSnapshots.values()) {
+        const h = handle as number;
+        if (h === 0xFFFFFFFF) continue;
+        entryCount++;
+        blobSizes.push(1);
+        if (!seenHandles.has(h)) {
+          seenHandles.add(h);
+          uniqueUndoHandles++;
           entryUniqueCount++;
         }
       }
-      totalUndoBytes += entryBytes;
+      totalUndoHandles += entryCount;
       if (stack === 'undo') {
         undoBreakdown.push({
           entryIndex: index,
           label: entry.label ?? '?',
           layerCount: entry.gpuSnapshots.size,
-          totalBytes: entryBytes,
+          totalBytes: entryCount,
           uniqueBlobs: entryUniqueCount,
           blobSizes,
         });
@@ -167,8 +172,8 @@ async function memorySnapshot(page: Page, label: string): Promise<SnapshotResult
       layerCount: state.document.layers.length,
       undoEntries: state.undoStack.length,
       redoEntries: state.redoStack.length,
-      totalUndoBytes,
-      uniqueUndoBytes,
+      totalUndoBytes: totalUndoHandles,
+      uniqueUndoBytes: uniqueUndoHandles,
       undoBreakdown,
       gpuTextureBytes: gpuLayerBytes + systemTexBytes,
       layerDetails,
@@ -232,8 +237,17 @@ test.describe('Memory: retouching session', () => {
     // PHASE 0: Open the large photo (4000×6000)
     // ------------------------------------------------------------------
     await page.evaluate(async () => {
-      const response = await fetch('/sample.jpg');
-      const blob = await response.blob();
+      const canvas = document.createElement('canvas');
+      canvas.width = 4000;
+      canvas.height = 6000;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#4488aa';
+      ctx.fillRect(0, 0, 4000, 6000);
+      ctx.fillStyle = '#cc6633';
+      ctx.fillRect(500, 500, 3000, 5000);
+      const blob: Blob = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b!), 'image/png'),
+      );
       const mod = await import('/src/app/paste-or-open.ts');
       await mod.pasteOrOpenBlob(blob, 'sample', true);
     });
@@ -487,12 +501,11 @@ test.describe('Memory: retouching session', () => {
     // ASSERTIONS
     // ------------------------------------------------------------------
 
-    // Undo unique bytes (actual memory) should stay under 1.5 GB.
-    // With 3 raster layers × ~183 MB u16 = 549 MB for one full snapshot,
-    // plus a few incremental entries, 1.5 GB is generous but catches
-    // the 6 GB balloon.
+    // GPU snapshots are now opaque handles — undoUniqueBytes counts unique
+    // handles, not bytes. With ~50 max undo entries × 3 layers, expect
+    // at most ~150 unique handles.
     const peakUndoUnique = peak('undoUniqueBytes');
-    expect(peakUndoUnique).toBeLessThan(1.5 * 1024 * 1024 * 1024);
+    expect(peakUndoUnique).toBeLessThan(500);
 
     // JS heap should stay under 2 GB total
     expect(peak('perfUsed')).toBeLessThan(2 * 1024 * 1024 * 1024);

@@ -24,9 +24,10 @@ async function fitToView(page: Page) {
 async function getUIState(page: Page) {
   return page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { isQuickMaskMode: boolean };
+      getState: () => { maskMode: string };
     };
-    return store.getState();
+    const state = store.getState();
+    return { isQuickMaskMode: state.maskMode === 'quickMask' };
   });
 }
 
