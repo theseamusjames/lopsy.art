@@ -6,9 +6,11 @@ import type { PixelBuffer, MaskedPixelBuffer } from '../../engine/pixel-data';
 /**
  * Discriminated union describing which canvas gesture is active.
  * Replaces the previous bag-of-flags pattern where mutually-exclusive
- * states like `tiltShiftDragging` and `meshWarpDragging` could both
- * be true. The `kind` discriminant lets `switch` dispatch in the
- * move/up handlers with compile-time exhaustiveness checking.
+ * states like `tiltShiftDragging` and `meshWarpDragging` could be set
+ * independently (and could conceptually both be true at once). The
+ * `kind` discriminant is the single source of truth for which gesture
+ * is active and lets `switch` dispatch in the move/up handlers with
+ * compile-time exhaustiveness checking.
  */
 export type CanvasGesture =
   | { kind: 'idle' }
@@ -79,8 +81,6 @@ export interface InteractionState {
   quickMaskOriginalWidth?: number;
   quickMaskOriginalHeight?: number;
   selectionOnlyTransform?: boolean;
-  meshWarpDragging?: boolean;
-  tiltShiftDragging?: boolean;
 }
 
 export const DEFAULT_TRANSFORM_FIELDS = {

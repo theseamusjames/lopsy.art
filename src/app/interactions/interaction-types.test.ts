@@ -3,6 +3,7 @@ import {
   gestureUsedGpuStroke,
   GESTURE_IDLE,
   type CanvasGesture,
+  type InteractionState,
 } from './interaction-types';
 
 describe('gestureUsedGpuStroke', () => {
@@ -31,5 +32,18 @@ describe('gestureUsedGpuStroke', () => {
     for (const g of gestures) {
       expect(gestureUsedGpuStroke(g)).toBe(false);
     }
+  });
+});
+
+describe('InteractionState shape', () => {
+  // Locks in the invariant that the gesture discriminant — not a parallel
+  // set of bag-of-flags booleans — is the single source of truth for which
+  // gesture is active. A regression here means we're re-growing the
+  // bag-of-flags pattern the #444 audit is unwinding.
+  it('does not carry redundant per-gesture boolean flags', () => {
+    type ForbiddenKeys = 'tiltShiftDragging' | 'meshWarpDragging';
+    type Asserts = Exclude<ForbiddenKeys, keyof InteractionState>;
+    const exhaustive: Asserts = 'tiltShiftDragging' as const;
+    expect(exhaustive).toBe('tiltShiftDragging');
   });
 });
