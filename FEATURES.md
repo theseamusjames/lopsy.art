@@ -10,7 +10,8 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Size**: 1 - 2000 px (auto-scaled by document size)
 - **Opacity**: 1 - 100%
 - **Hardness**: 0 - 100%
-- **Fade**: 0 - 2000 px (fade-out distance)
+- **Fade**: 0 - 2000 px (opacity fade-out distance, exposed on the options bar)
+- **Taper**: 0 - 2000 px (size taper-out distance, exposed in the modal's Shape tab — brush dabs shrink toward zero over this many pixels of stroke length, independent of the Fade opacity rolloff)
 - **Spacing**: 1 - 200% of brush size
 - **Scatter**: 0 - 100%
 - **Angle**: 0 - 360 degrees (set via the modal's angle dial)
@@ -18,21 +19,23 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 
 **Dynamics** (Brushes modal → Dynamics section). Per-dab randomization is performed GPU-side, seeded by each dab's center position so strokes are deterministic for a given path.
 - **Size Jitter**: 0 - 100% — per-dab size randomization
+- **Hardness Jitter**: 0 - 100% — per-dab hardness randomization (varies the softness of each dab's falloff)
 - **Angle Jitter**: 0 - 100% — per-dab rotation randomization (most visible with non-circular tips)
 - **Opacity Jitter**: 0 - 100% — per-dab transparency randomization
-- **Speed Size**: 0 - 100% — stroke velocity reduces brush size (faster strokes → thinner lines; at 100%, max-speed strokes shrink toward 1 px). Velocity is exponentially smoothed (α=0.3) so the size doesn't twitch from noisy pointer deltas.
+- **Speed Size**: stroke velocity modulates brush size. A `Faster is` toggle picks the direction (`Thinner`: faster strokes shrink toward 1 px, range 0 – 100%; `Wider`: faster strokes grow up to 3× the base size, range 0 – 300%). A `Sensitivity` toggle (Low / Med / High) tunes how aggressively the velocity-to-size mapping responds to small velocity changes. Velocity is exponentially smoothed (α=0.3) so the size doesn't twitch from noisy pointer deltas.
 
 **Texture** (Brushes modal → Texture section)
 - **Built-in textures**: Noise, Canvas, Grain (128×128 grayscale tiles generated procedurally) — `No Texture` disables texturing
+- **Import custom texture**: load any grayscale image (PNG/JPG/WebP) as a brush texture; imported textures show up in the dropdown next to the built-ins and can be deleted again from the same row
 - **Texture blend mode**: Multiply, Subtract, or Overlay (against the brush color)
-- **Scale**: 10 - 200% (tile size relative to the source tile)
+- **Scale**: 10 - 300% (tile size relative to the source tile)
 - Texture tiles in document space so adjacent strokes line up across the same pattern grid
 
-**Sub-brushes** (Brushes modal → Sub-brushes section). Each sub-brush emits an additional dab co-located with every primary dab, so a single stroke can layer multiple textures, sizes, and rotations at once. A tip can carry any number of sub-brushes.
-- **Size Ratio**: 0 - 200% (sub-brush size relative to the primary brush)
+**Sub-brushes** (Brushes modal → Sub-brushes section). Each sub-brush emits an additional dab co-located with every primary dab, so a single stroke can layer multiple textures, sizes, and rotations at once. A tip can carry any number of sub-brushes; each sub-brush picks its own tip from the same preset grid as the primary brush.
+- **Size Ratio**: 10 - 200% (sub-brush size relative to the primary brush)
 - **Hardness**: 0 - 100% (independent hardness for the sub-brush)
-- **Opacity Ratio**: 0 - 100% of the primary brush opacity
-- **Angle Offset**: -180° to +180° relative to the primary brush angle
+- **Opacity Ratio**: 1 - 100% of the primary brush opacity
+- **Angle Offset**: 0 - 360° relative to the primary brush angle
 - **Size / Angle / Opacity Jitter**: 0 - 100% per-dab randomization, independent from the primary brush's dynamics
 
 **Tips & presets** (Brushes modal — left panel)
