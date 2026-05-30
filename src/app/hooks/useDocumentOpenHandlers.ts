@@ -4,7 +4,20 @@ import { useUIStore } from '../ui-store';
 import { pasteOrOpenBlob } from '../paste-or-open';
 import { importPsdFile } from '../../io/psd';
 import { importDngFile } from '../../io/dng';
+import { loadProject } from '../../io/project-load';
 import { describeError, notifyError } from '../notifications-store';
+
+/** What to do with a user-supplied file based on its name. Pure: no IO.
+ *  Drives both the file-picker handlers below and the drag-and-drop path. */
+export type OpenFileKind = 'lopsy' | 'psd' | 'dng' | 'image' | 'unsupported';
+
+export function classifyOpenFile(file: File): OpenFileKind {
+  if (/\.lopsy$/i.test(file.name)) return 'lopsy';
+  if (/\.psd$/i.test(file.name)) return 'psd';
+  if (/\.dng$/i.test(file.name)) return 'dng';
+  if (file.type.startsWith('image/')) return 'image';
+  return 'unsupported';
+}
 
 export interface DocumentOpenHandlers {
   handleDragOver: (e: React.DragEvent) => void;
@@ -29,20 +42,34 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
     if (!file) return;
 
     const name = file.name.replace(/\.[^.]+$/, '');
+    const close = () => closeModalOfKind('newDocument');
 
-    if (/\.dng$/i.test(file.name)) {
-      file
-        .arrayBuffer()
-        .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(() => closeModalOfKind('newDocument')))
-        .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
-      return;
+    switch (classifyOpenFile(file)) {
+      case 'lopsy':
+        loadProject(file)
+          .then(close)
+          .catch((err) => notifyError(`Failed to open project: ${describeError(err)}`));
+        return;
+      case 'psd':
+        file
+          .arrayBuffer()
+          .then((buffer) => importPsdFile(new Uint8Array(buffer), name).then(close))
+          .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
+        return;
+      case 'dng':
+        file
+          .arrayBuffer()
+          .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(close))
+          .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
+        return;
+      case 'image':
+        pasteOrOpenBlob(file, name)
+          .then(close)
+          .catch((err) => notifyError(`Failed to open file: ${describeError(err)}`));
+        return;
+      case 'unsupported':
+        return;
     }
-
-    if (!file.type.startsWith('image/')) return;
-
-    pasteOrOpenBlob(file, name)
-      .then(() => closeModalOfKind('newDocument'))
-      .catch((err) => notifyError(`Failed to open file: ${describeError(err)}`));
   }, [closeModalOfKind]);
 
   const handlePreDocCreate = useCallback(
@@ -55,24 +82,36 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
 
   const handlePreDocOpenFile = useCallback((file: File) => {
     const name = file.name.replace(/\.[^.]+$/, '');
-    if (/\.psd$/i.test(file.name)) {
-      file
-        .arrayBuffer()
-        .then((buffer) => importPsdFile(new Uint8Array(buffer), name))
-        .then(() => closeModal())
-        .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
-      return;
+    const close = () => closeModal();
+
+    switch (classifyOpenFile(file)) {
+      case 'lopsy':
+        loadProject(file)
+          .then(close)
+          .catch((err) => notifyError(`Failed to open project: ${describeError(err)}`));
+        return;
+      case 'psd':
+        file
+          .arrayBuffer()
+          .then((buffer) => importPsdFile(new Uint8Array(buffer), name))
+          .then(close)
+          .catch((err) => notifyError(`Failed to import PSD: ${describeError(err)}`));
+        return;
+      case 'dng':
+        file
+          .arrayBuffer()
+          .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(close))
+          .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
+        return;
+      case 'image':
+      case 'unsupported':
+        // Fall through to pasteOrOpenBlob, which raises a friendly error for
+        // genuinely unsupported types.
+        pasteOrOpenBlob(file, name)
+          .then(close)
+          .catch((err) => notifyError(`Failed to open file: ${describeError(err)}`));
+        return;
     }
-    if (/\.dng$/i.test(file.name)) {
-      file
-        .arrayBuffer()
-        .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(() => closeModal()))
-        .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
-      return;
-    }
-    pasteOrOpenBlob(file, name)
-      .then(() => closeModal())
-      .catch((err) => notifyError(`Failed to open file: ${describeError(err)}`));
   }, [closeModal]);
 
   const handlePreDocPasteClipboard = useCallback(

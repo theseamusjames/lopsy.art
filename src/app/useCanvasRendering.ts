@@ -39,6 +39,7 @@ import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 import { expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDimensions, getGlyphPositions } from '../engine-wasm/wasm-bridge';
 import { invalidateCachedSnapshot } from './store/history-slice';
 import { PAINT_TOOLS } from '../tools/tool-registry';
+import { clearJsPixelData } from './store/clear-js-pixel-data';
 
 
 
@@ -91,6 +92,12 @@ function renderFrameGpu(
             },
             renderVersion: s.renderVersion + 1,
           }));
+          // The GPU texture was cropped to content. Any cached JS pixel data
+          // for this layer now has the wrong dimensions; if syncLayers ran
+          // with it, the upload would re-expand the GPU texture to the stale
+          // size (#543: repeated option-drag duplicate caused the previously-
+          // active layer's content to visually shift).
+          clearJsPixelData(oldId);
         }
       }
     }
@@ -111,6 +118,10 @@ function renderFrameGpu(
             },
             renderVersion: s.renderVersion + 1,
           }));
+          // GPU texture was expanded. Drop cached JS pixel data so the next
+          // syncLayers doesn't overwrite the expanded texture with the
+          // smaller pre-expand snapshot.
+          clearJsPixelData(newId);
         }
       }
     }
