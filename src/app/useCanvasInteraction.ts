@@ -192,7 +192,6 @@ export function useCanvasInteraction(
           drawing: true,
           gesture: { kind: 'tiltShift' },
           layerId: activeLayerId,
-          tiltShiftDragging: true,
         };
         return;
       }
@@ -203,7 +202,6 @@ export function useCanvasInteraction(
           drawing: true,
           gesture: { kind: 'meshWarp' },
           layerId: activeLayerId,
-          meshWarpDragging: true,
         };
         return;
       }
