@@ -5,6 +5,15 @@ import {
   type CanvasGesture,
   type InteractionState,
 } from './interaction-types';
+import { createTransformState } from '../../tools/transform/transform';
+
+const makeTransformGesture = (): Extract<CanvasGesture, { kind: 'transform' }> => ({
+  kind: 'transform',
+  handle: 'top-left',
+  startState: createTransformState({ x: 0, y: 0, width: 100, height: 100 }),
+  startAngle: 0,
+  selectionOnly: false,
+});
 
 describe('gestureUsedGpuStroke', () => {
   it('returns false for idle gesture', () => {
@@ -27,7 +36,7 @@ describe('gestureUsedGpuStroke', () => {
       { kind: 'liquify' },
       { kind: 'tiltShift' },
       { kind: 'meshWarp' },
-      { kind: 'transform' },
+      makeTransformGesture(),
     ];
     for (const g of gestures) {
       expect(gestureUsedGpuStroke(g)).toBe(false);
@@ -36,14 +45,45 @@ describe('gestureUsedGpuStroke', () => {
 });
 
 describe('InteractionState shape', () => {
-  // Locks in the invariant that the gesture discriminant — not a parallel
-  // set of bag-of-flags booleans — is the single source of truth for which
-  // gesture is active. A regression here means we're re-growing the
-  // bag-of-flags pattern the #444 audit is unwinding.
   it('does not carry redundant per-gesture boolean flags', () => {
     type ForbiddenKeys = 'tiltShiftDragging' | 'meshWarpDragging';
     type Asserts = Exclude<ForbiddenKeys, keyof InteractionState>;
     const exhaustive: Asserts = 'tiltShiftDragging' as const;
     expect(exhaustive).toBe('tiltShiftDragging');
+  });
+});
+
+describe('CanvasGesture transform variant ownership', () => {
+  type ForbiddenKeys =
+    | 'transformHandle'
+    | 'transformStartState'
+    | 'transformStartAngle'
+    | 'selectionOnlyTransform';
+
+  type Leaked = Extract<keyof InteractionState, ForbiddenKeys>;
+
+  const _check: Leaked extends never ? true : false = true;
+
+  it('keeps transform metadata off the shared InteractionState', () => {
+    expect(_check).toBe(true);
+  });
+
+  it('carries handle/startState/startAngle/selectionOnly on the variant', () => {
+    const gesture = makeTransformGesture();
+    expect(gesture.handle).toBe('top-left');
+    expect(gesture.startState.scaleX).toBe(1);
+    expect(gesture.startAngle).toBe(0);
+    expect(gesture.selectionOnly).toBe(false);
+  });
+
+  it('narrows variant data via the discriminant without non-null assertions', () => {
+    const gesture: CanvasGesture = makeTransformGesture();
+    if (gesture.kind !== 'transform') {
+      throw new Error('expected transform gesture');
+    }
+    const handle: string = gesture.handle;
+    const startAngle: number = gesture.startAngle;
+    expect(handle).toBe('top-left');
+    expect(startAngle).toBe(0);
   });
 });

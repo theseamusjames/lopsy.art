@@ -27,7 +27,7 @@ import {
   dropFloat,
 } from '../../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
-import type { InteractionState, InteractionContext } from './interaction-types';
+import type { InteractionState, InteractionContext, CanvasGesture } from './interaction-types';
 import type { Point } from '../../types';
 import {
   createRectSelection,
@@ -153,7 +153,13 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
 
   const newState: InteractionState = {
     drawing: true,
-    gesture: { kind: 'transform' },
+    gesture: {
+      kind: 'transform',
+      handle: hit,
+      startState: { ...currentTransform },
+      startAngle,
+      selectionOnly: false,
+    },
     lastPoint: canvasPos,
     pixelBuffer: null,
     originalPixelBuffer: null,
@@ -163,9 +169,6 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     layerStartX: 0,
     layerStartY: 0,
     maskMode: false,
-    transformHandle: hit,
-    transformStartState: { ...currentTransform },
-    transformStartAngle: startAngle,
     originalSelectionMask: persistent?.originalMask ?? null,
     originalSelectionMaskWidth: persistent?.maskWidth ?? 0,
     originalSelectionMaskHeight: persistent?.maskHeight ?? 0,
@@ -203,7 +206,13 @@ function handleSelectionTransformDown(
 
   const newState: InteractionState = {
     drawing: true,
-    gesture: { kind: 'transform' },
+    gesture: {
+      kind: 'transform',
+      handle: hit,
+      startState: { ...currentTransform },
+      startAngle: 0,
+      selectionOnly: true,
+    },
     lastPoint: canvasPos,
     pixelBuffer: null,
     originalPixelBuffer: null,
@@ -213,15 +222,11 @@ function handleSelectionTransformDown(
     layerStartX: 0,
     layerStartY: 0,
     maskMode: false,
-    transformHandle: hit,
-    transformStartState: { ...currentTransform },
-    transformStartAngle: 0,
     originalSelectionMask: null,
     originalSelectionMaskWidth: 0,
     originalSelectionMaskHeight: 0,
     moveOriginalMask: null,
     moveOriginalBounds: null,
-    selectionOnlyTransform: true,
   };
 
   uiState.setActiveTransformHandle(hit);
@@ -238,17 +243,17 @@ export function handleTransformMove(
   canvasPos: Point,
   metaKey: boolean,
 ): void {
-  if (!state.transformHandle || !state.transformStartState || !state.startPoint) {
+  if (state.gesture.kind !== 'transform' || !state.startPoint) {
     return;
   }
 
-  if (state.selectionOnlyTransform) {
-    handleSelectionTransformMove(state, canvasPos, metaKey);
+  if (state.gesture.selectionOnly) {
+    handleSelectionTransformMove(state, state.gesture, canvasPos, metaKey);
     return;
   }
 
-  const handle = state.transformHandle;
-  const startState = state.transformStartState;
+  const handle = state.gesture.handle;
+  const startState = state.gesture.startState;
 
   let newTransform: TransformState;
 
@@ -289,7 +294,7 @@ export function handleTransformMove(
     };
   } else {
     const currentAngle = computeRotation(canvasPos, startState);
-    const newRotation = currentAngle - state.transformStartAngle;
+    const newRotation = currentAngle - state.gesture.startAngle;
     const uiState = useUIStore.getState();
     const shouldSnap = metaKey || (uiState.showGrid && uiState.snapToGrid);
     const snappedRotation = shouldSnap
@@ -335,11 +340,12 @@ export function handleTransformMove(
 
 function handleSelectionTransformMove(
   state: InteractionState,
+  gesture: Extract<CanvasGesture, { kind: 'transform' }>,
   canvasPos: Point,
   metaKey: boolean,
 ): void {
-  const handle = state.transformHandle!;
-  const startState = state.transformStartState!;
+  const handle = gesture.handle;
+  const startState = gesture.startState;
 
   const uiSnap = useUIStore.getState();
   const snapEnabled = uiSnap.showGrid && uiSnap.snapToGrid;
