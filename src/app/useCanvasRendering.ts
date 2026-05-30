@@ -38,9 +38,9 @@ import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
 import { expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDimensions, getGlyphPositions } from '../engine-wasm/wasm-bridge';
 import { invalidateCachedSnapshot } from './store/history-slice';
+import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { PAINT_TOOLS } from '../tools/tool-registry';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
-
 
 
 /**
@@ -51,6 +51,7 @@ function renderFrameGpu(
   container: HTMLDivElement,
   antPhaseRef: { current: number },
   prevActiveLayerRef: { current: string | null },
+  croppedLayerIds: Set<string>,
 ): void {
   const engine = getEngine();
   if (!engine) return;
@@ -81,6 +82,7 @@ function renderFrameGpu(
         invalidateCachedSnapshot(oldId);
         const result = cropLayerToContent(engine, oldId);
         if (result.length === 4 && (result[2] ?? 0) > 0) {
+          croppedLayerIds.add(oldId);
           useEditorStore.setState((s) => ({
             document: {
               ...s.document,
@@ -102,11 +104,17 @@ function renderFrameGpu(
       }
     }
 
-    if (newId) {
+    if (newId && croppedLayerIds.has(newId)) {
       const newLayer = doc.layers.find((l) => l.id === newId);
       if (newLayer?.type === 'raster') {
         const result = expandLayerToDocSize(engine, newId);
         if (result.length === 4) {
+          const actuallyExpanded =
+            result[0] !== newLayer.x || result[1] !== newLayer.y ||
+            result[2] !== (newLayer.width ?? 0) || result[3] !== (newLayer.height ?? 0);
+          if (actuallyExpanded) {
+            clearJsPixelData(newId);
+          }
           useEditorStore.setState((s) => ({
             document: {
               ...s.document,
@@ -344,9 +352,10 @@ function renderFrame(
   container: HTMLDivElement,
   antPhaseRef: { current: number },
   prevActiveLayerRef: { current: string | null },
+  croppedLayerIds: Set<string>,
 ): void {
   clearFrameCache();
-  renderFrameGpu(overlayCanvas, container, antPhaseRef, prevActiveLayerRef);
+  renderFrameGpu(overlayCanvas, container, antPhaseRef, prevActiveLayerRef, croppedLayerIds);
 }
 
 export function useCanvasRendering(
@@ -358,6 +367,7 @@ export function useCanvasRendering(
   const engineReadyRef = useRef(false);
   const antPhaseRef = useRef(0);
   const prevActiveLayerRef = useRef<string | null>(null);
+  const croppedLayerIdsRef = useRef(new Set<string>());
 
   // Initialize WASM engine on mount
   useEffect(() => {
@@ -463,7 +473,7 @@ export function useCanvasRendering(
         const container = containerRef.current;
         if (overlay && container) {
           try {
-            renderFrame(overlay, container, antPhaseRef, prevActiveLayerRef);
+            renderFrame(overlay, container, antPhaseRef, prevActiveLayerRef, croppedLayerIdsRef.current);
           } catch (e) {
             console.error('[Lopsy] Render error (recovering):', e);
           }

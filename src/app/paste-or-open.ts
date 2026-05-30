@@ -11,6 +11,7 @@ import { useEditorStore } from './editor-store';
 import { seedBitmapFromBlob } from '../engine/bitmap-cache';
 import { decodeImageBlob } from './decode-image';
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
+import { flushLayerSync } from '../engine-wasm/engine-sync';
 
 export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNewDocument = false): Promise<void> {
   const store = useEditorStore.getState();
@@ -26,6 +27,7 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
     const result = await decodeImageBlob(blob, layerId);
     if (result.gpuUploaded) {
       store.pasteGpuLayer(layerId, result.width, result.height);
+      flushLayerSync(useEditorStore.getState());
     } else if (result.imageData) {
       store.pasteImageData(result.imageData);
     }
@@ -42,6 +44,7 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
     const result = await decodeImageBlob(blob, layerId);
     if (result.gpuUploaded) {
       store.pasteGpuLayer(layerId, result.width, result.height);
+      flushLayerSync(useEditorStore.getState());
     } else if (result.imageData) {
       store.pasteImageData(result.imageData);
     }
@@ -61,6 +64,7 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
       const bgLayerId = useEditorStore.getState().document.layerOrder[0];
       if (bgLayerId) store.removeLayer(bgLayerId);
       store.pasteGpuLayer(layerId, result.width, result.height);
+      flushLayerSync(useEditorStore.getState());
       const doc = useEditorStore.getState().document;
       useEditorStore.setState({
         undoStack: [],
