@@ -59,7 +59,7 @@ async function getUIState(page: Page) {
     const state = store.getState();
     return {
       showEffectsDrawer: state.showEffectsDrawer as boolean,
-      maskEditMode: state.maskEditMode as boolean,
+      maskEditMode: (state.maskMode as string) === 'layerMask',
     };
   });
 }

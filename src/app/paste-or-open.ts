@@ -47,8 +47,12 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
     }
     // Issue #347: select the pasted content so the user can immediately
     // transform it (resize, fit, etc.) via the move/transform tools.
+    // Defer to the next frame so engine-sync registers the new layer
+    // descriptor before selectLayerAlpha tries to float it.
     const pastedId = useEditorStore.getState().document.activeLayerId;
-    if (pastedId) selectLayerAlpha(pastedId);
+    if (pastedId) {
+      requestAnimationFrame(() => selectLayerAlpha(pastedId));
+    }
   } else {
     const layerId = crypto.randomUUID();
     const result = await decodeImageBlob(blob, layerId);

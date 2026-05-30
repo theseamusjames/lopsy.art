@@ -331,9 +331,9 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
 
     const maskEditActive = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__uiStore as {
-        getState: () => { maskEditMode: boolean };
+        getState: () => { maskMode: string };
       };
-      return store.getState().maskEditMode;
+      return store.getState().maskMode === 'layerMask';
     });
     expect(maskEditActive).toBe(true);
 
