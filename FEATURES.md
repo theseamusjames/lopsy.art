@@ -494,6 +494,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 
 ### Fill from Menu
 - **Fill…** (Edit menu, `⇧F5`): opens a small modal that fills the current selection (or the entire layer if no selection) on the active layer with foreground color, background color, black, white, 50% gray, or a chosen pattern. Honors the selection mask and layer opacity.
+- **Fill with Pattern…** (Edit menu): opens the Pattern Fill dialog directly (same dialog as the Filter-menu entry — see Filters → Render → Pattern Fill for scale / offset / selection-mask behavior).
 - **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern (used by Fill… and the Pattern Fill filter)
 - **Define Brush…** / **Define Color Brush…** (Edit menu): captures the marquee selection as a new alpha or color brush tip (see Brush → Brush from Selection)
 
