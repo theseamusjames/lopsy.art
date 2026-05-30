@@ -89,8 +89,9 @@ test.describe('Dynamic adjustment node list on groups', () => {
     await waitForStore(page);
     await createDocument(page, 200, 200, false);
 
-    // Switch root group from pass-through to normal so group adjustments
-    // are composited (pass-through bypasses the scratch FBO).
+    // Ensure root group is in normal mode so group adjustments are composited
+    // (pass-through bypasses the scratch FBO). As of issue #523 this is the
+    // default — kept explicit to make the precondition obvious.
     const rootGroupId = await getRootGroupId(page);
     await setGroupBlendMode(page, rootGroupId, 'normal');
 

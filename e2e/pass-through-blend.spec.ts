@@ -121,10 +121,14 @@ test.describe('Pass-through blend mode', () => {
     await page.waitForTimeout(300);
   });
 
-  test('new groups default to pass-through blend mode', async ({ page }) => {
+  // Issue #523: new groups default to normal (isolated) compositing so group
+  // opacity behaves intuitively — lowering it attenuates the composited group
+  // result, not each child individually. Pass-through remains a user-selectable
+  // blend mode.
+  test('new groups default to normal blend mode (issue #523)', async ({ page }) => {
     const groupId = await addGroup(page, 'TestGroup');
     const mode = await getLayerBlendMode(page, groupId);
-    expect(mode).toBe('pass-through');
+    expect(mode).toBe('normal');
   });
 
   test('pass-through group: 50% opacity group with black child over white yields mid-grey', async ({ page }) => {
@@ -141,13 +145,17 @@ test.describe('Pass-through blend mode', () => {
 
     const groupId = await addGroup(page, 'OpacityGroup');
 
+    // Switch the group to pass-through explicitly — since issue #523 new groups
+    // default to normal, but this test exercises the pass-through opacity path.
+    await setLayerBlendMode(page, groupId, 'pass-through');
+
     // Add black layer inside group
     await page.locator('[aria-label="Add Layer"]').click();
     await page.waitForTimeout(200);
     await drawRect(page, 0, 0, 100, 100, { r: 0, g: 0, b: 0 });
     await page.waitForTimeout(200);
 
-    // Set group opacity to 50% — group is pass-through by default
+    // Set group opacity to 50% — group is now pass-through
     await page.evaluate(({ gid }) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
@@ -225,9 +233,9 @@ test.describe('Pass-through blend mode', () => {
     const addBtn = page.locator('[aria-label="Add Adjustment"]');
     await expect(addBtn).toBeVisible();
 
-    // Verify the group defaults to pass-through via the store
+    // Verify the group defaults to normal via the store (issue #523).
     const mode = await getLayerBlendMode(page, groupId);
-    expect(mode).toBe('pass-through');
+    expect(mode).toBe('normal');
 
     // Take screenshot showing the adjustments panel for the group
     await page.screenshot({ path: 'e2e/screenshots/pass-through-dropdown.png' });
