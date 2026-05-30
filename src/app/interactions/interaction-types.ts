@@ -6,11 +6,14 @@ import type { PixelBuffer, MaskedPixelBuffer } from '../../engine/pixel-data';
 /**
  * Discriminated union describing which canvas gesture is active.
  * Replaces the previous bag-of-flags pattern where mutually-exclusive
- * states like `tiltShiftDragging` and `meshWarpDragging` could be set
- * independently (and could conceptually both be true at once). The
- * `kind` discriminant is the single source of truth for which gesture
- * is active and lets `switch` dispatch in the move/up handlers with
- * compile-time exhaustiveness checking.
+ * states like `tiltShiftDragging` and `meshWarpDragging` could both
+ * be true. The `kind` discriminant lets `switch` dispatch in the
+ * move/up handlers with compile-time exhaustiveness checking.
+ *
+ * Per-gesture data lives on its variant so the type system guarantees
+ * the data is present whenever the discriminant says so — handlers can
+ * narrow on `kind` and drop the `!` non-null assertions that the old
+ * bag-of-flags shape forced (see transform-handlers.ts).
  */
 export type CanvasGesture =
   | { kind: 'idle' }
@@ -18,7 +21,13 @@ export type CanvasGesture =
   | { kind: 'liquify' }
   | { kind: 'tiltShift' }
   | { kind: 'meshWarp' }
-  | { kind: 'transform' };
+  | {
+      kind: 'transform';
+      handle: TransformHandle;
+      startState: TransformState;
+      startAngle: number;
+      selectionOnly: boolean;
+    };
 
 /**
  * True when the active tool gesture is a paint stroke that started on
@@ -46,9 +55,6 @@ export interface InteractionState {
   layerStartY: number;
   maskMode: boolean;
   quickMaskMode?: boolean;
-  transformHandle: TransformHandle | null;
-  transformStartState: TransformState | null;
-  transformStartAngle: number;
   originalSelectionMask: Uint8ClampedArray | null;
   originalSelectionMaskWidth: number;
   originalSelectionMaskHeight: number;
@@ -80,15 +86,11 @@ export interface InteractionState {
   quickMaskOriginalPixels?: Uint8Array | null;
   quickMaskOriginalWidth?: number;
   quickMaskOriginalHeight?: number;
-  selectionOnlyTransform?: boolean;
 }
 
 export const DEFAULT_TRANSFORM_FIELDS = {
   gesture: GESTURE_IDLE as CanvasGesture,
   maskMode: false,
-  transformHandle: null as TransformHandle | null,
-  transformStartState: null as TransformState | null,
-  transformStartAngle: 0,
   originalSelectionMask: null as Uint8ClampedArray | null,
   originalSelectionMaskWidth: 0,
   originalSelectionMaskHeight: 0,

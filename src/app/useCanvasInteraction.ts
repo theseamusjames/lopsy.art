@@ -102,9 +102,6 @@ const INITIAL_STATE: InteractionState = {
   layerStartX: 0,
   layerStartY: 0,
   maskMode: false,
-  transformHandle: null,
-  transformStartState: null,
-  transformStartAngle: 0,
   originalSelectionMask: null,
   originalSelectionMaskWidth: 0,
   originalSelectionMaskHeight: 0,
@@ -303,10 +300,12 @@ export function useCanvasInteraction(
         ctx.isStrokeContinuation = true;
       }
 
-      // Transform handle interaction (pre-tool dispatch)
+      // Transform handle interaction (pre-tool dispatch). The handler
+      // already populates `gesture` with the transform variant's required
+      // data (handle, startState, startAngle, selectionOnly), so no
+      // post-assignment mutation is needed here.
       const transformResult = handleTransformDown(ctx);
       if (transformResult) {
-        transformResult.gesture = { kind: 'transform' };
         stateRef.current = transformResult;
         return;
       }
@@ -586,7 +585,7 @@ export function useCanvasInteraction(
     // Finalize transform handle drag: keep the GPU float alive so subsequent
     // grabs can re-transform from the original pixels without degradation.
     // The float is only dropped when the user commits (clearPersistentTransform).
-    if (state.transformHandle) {
+    if (state.gesture.kind === 'transform') {
       useUIStore.getState().setActiveTransformHandle(null);
     }
 
