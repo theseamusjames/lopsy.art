@@ -573,7 +573,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 ### Global UI Conventions
 - **Slider double-click → reset**: every numeric slider in the UI (brush size, opacity, hardness, adjustment sliders, filter sliders, etc.) snaps back to its default value on double-click. The numeric text input inside the slider is exempt so double-clicks there select the value for editing instead.
 - **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the status bar resets the viewport zoom to 100% (1×).
-- **Color swatch double-click**: double-clicking the foreground or background swatch in the Color panel both selects that swatch and auto-expands the Color panel (useful when the panel is collapsed). Recent-color swatches behave the same way.
+- **Color swatch double-click**: double-clicking the foreground or background swatch in the Color panel both selects that swatch and auto-expands the Color panel (useful when the panel is collapsed). Recent-color swatches behave the same way. The Shape tool's options-bar Fill and Stroke swatches share this behavior — double-click either to copy that color into the foreground swatch and expand the Color panel without opening the popover.
 - **Layer name double-click → rename**: double-clicking a layer row's name turns it into an inline text input; Enter commits, Escape cancels.
 
 ### Canvas Right-Click Context Menu
