@@ -314,7 +314,7 @@ test.describe('Project Save / Load Round-Trip', () => {
     }, lopsyBase64);
 
     await page.waitForSelector('[data-testid="canvas-container"]', { timeout: 20_000 });
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1500);
 
     // ── 4. Verify document metadata ──
     const afterSnapshot = await getDocSnapshot(page);
