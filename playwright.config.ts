@@ -37,6 +37,7 @@ export default defineConfig({
       testMatch: /mobile.*\.spec\.ts/,
       use: {
         ...devices['iPhone 14'],
+        browserName: 'chromium',
         launchOptions: {
           args: [
             '--use-gl=angle',
