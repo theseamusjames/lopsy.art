@@ -12,6 +12,7 @@ import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { useUIStore } from '../../app/ui-store';
 import { getEngine } from '../../engine-wasm/engine-state';
+import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { readLayerPixelsForFill } from '../../engine-wasm/wasm-bridge';
 import { selectionBounds } from '../../selection/selection';
 import { createTransformState } from '../transform/transform';
@@ -37,6 +38,7 @@ export function handleQuickSelectDown(ctx: InteractionContext): InteractionState
 
   const { canvasPos, activeLayerId } = ctx;
   const editorState = useEditorStore.getState();
+  flushLayerSync(editorState);
   const { width: docW, height: docH } = editorState.document;
 
   // Read layer pixels from GPU (same path the wand tool uses)

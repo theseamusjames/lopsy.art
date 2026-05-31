@@ -3,6 +3,7 @@ import type { SelectionToolStrategy, SelectionToolId } from '../../app/interacti
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { getEngine } from '../../engine-wasm/engine-state';
+import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import {
   floodFill as wasmFloodFill,
   floodFillGraduated as wasmFloodFillGraduated,
@@ -19,6 +20,7 @@ export const wandStrategy: SelectionToolStrategy = {
     const wandContiguous = toolSettings.wandContiguous;
     const wandGraduated = toolSettings.wandGraduated;
     const editorState = useEditorStore.getState();
+    flushLayerSync(editorState);
     const { width: docW, height: docH } = editorState.document;
     const pixelData = wasmReadLayerPixelsForFill(engine, ctx.activeLayerId);
     const cx = Math.round(ctx.canvasPos.x);

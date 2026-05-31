@@ -56,17 +56,32 @@ async function snapshot(page: Page, label: string) {
     };
     const state = store.getState();
 
-    // Estimate undo stack memory — includes compressed GPU snapshots
-    const undoStack = (state as unknown as { undoStack: Array<{ layerPixelData?: Map<string, ImageData>; gpuSnapshots?: Map<string, Uint8Array>; sparseLayerData?: Map<string, unknown>; metadataOnly?: boolean; label?: string }> }).undoStack ?? [];
-    const redoStack = (state as unknown as { redoStack: Array<{ gpuSnapshots?: Map<string, Uint8Array>; metadataOnly?: boolean }> }).redoStack ?? [];
+    // Estimate undo stack memory — GPU snapshots are now texture handles (numbers),
+    // not Uint8Array blobs. We estimate GPU memory from texture dimensions.
+    type HistoryEntry = {
+      gpuSnapshots?: Map<string, number | Uint8Array>;
+      layerPixelData?: Map<string, ImageData>;
+      document?: { layers: Array<{ id: string; width?: number; height?: number }> };
+      metadataOnly?: boolean;
+      label?: string;
+    };
+    const undoStack = (state as unknown as { undoStack: HistoryEntry[] }).undoStack ?? [];
+    const redoStack = (state as unknown as { redoStack: HistoryEntry[] }).redoStack ?? [];
     let undoBytes = 0;
     const undoDetails: Array<{ label: string; metadataOnly: boolean; gpuBytes: number; denseBytes: number }> = [];
     for (const entry of undoStack) {
       let gpuBytes = 0;
       let denseBytes = 0;
       if (entry.gpuSnapshots) {
-        for (const blob of entry.gpuSnapshots.values()) {
-          gpuBytes += blob.byteLength;
+        for (const val of entry.gpuSnapshots.values()) {
+          if (typeof val === 'number') {
+            // GPU texture handle — estimate from layer dimensions in snapshot doc
+            const docLayers = entry.document?.layers ?? state.document.layers;
+            const avgLayerBytes = docLayers.reduce((sum, l) => sum + (l.width ?? 0) * (l.height ?? 0) * 4, 0) / Math.max(docLayers.length, 1);
+            gpuBytes += avgLayerBytes;
+          } else if (val && typeof val === 'object' && 'byteLength' in val) {
+            gpuBytes += (val as Uint8Array).byteLength;
+          }
         }
       }
       if (entry.layerPixelData) {
@@ -80,8 +95,14 @@ async function snapshot(page: Page, label: string) {
     let redoBytes = 0;
     for (const entry of redoStack) {
       if (entry.gpuSnapshots) {
-        for (const blob of entry.gpuSnapshots.values()) {
-          redoBytes += blob.byteLength;
+        for (const val of entry.gpuSnapshots.values()) {
+          if (typeof val === 'number') {
+            const docLayers = entry.document?.layers ?? state.document.layers;
+            const avgLayerBytes = docLayers.reduce((sum, l) => sum + (l.width ?? 0) * (l.height ?? 0) * 4, 0) / Math.max(docLayers.length, 1);
+            redoBytes += avgLayerBytes;
+          } else if (val && typeof val === 'object' && 'byteLength' in val) {
+            redoBytes += (val as Uint8Array).byteLength;
+          }
         }
       }
     }

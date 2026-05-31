@@ -87,11 +87,13 @@ async function memorySnapshot(page: Page, label: string): Promise<SnapshotResult
         };
         undoStack: Array<{
           label?: string;
-          gpuSnapshots?: Map<string, Uint8Array>;
+          gpuSnapshots?: Map<string, number | Uint8Array>;
+          document?: { layers: Array<{ id: string; width?: number; height?: number }> };
           layerPixelData?: Map<string, ImageData>;
         }>;
         redoStack: Array<{
-          gpuSnapshots?: Map<string, Uint8Array>;
+          gpuSnapshots?: Map<string, number | Uint8Array>;
+          document?: { layers: Array<{ id: string; width?: number; height?: number }> };
         }>;
       };
     };
@@ -100,8 +102,9 @@ async function memorySnapshot(page: Page, label: string): Promise<SnapshotResult
     };
     const state = store.getState();
 
-    // Track unique blobs across all undo/redo entries by identity
-    const seenBlobs = new Set<Uint8Array>();
+    // Track unique blobs across all undo/redo entries by identity.
+    // GPU snapshots are now texture handles (numbers) — estimate size from layer dims.
+    const seenHandles = new Set<number>();
     let totalUndoBytes = 0;
     let uniqueUndoBytes = 0;
 
@@ -124,14 +127,25 @@ async function memorySnapshot(page: Page, label: string): Promise<SnapshotResult
       let entryBytes = 0;
       let entryUniqueCount = 0;
       const blobSizes: number[] = [];
-      for (const blob of entry.gpuSnapshots.values()) {
-        entryBytes += blob.byteLength;
-        blobSizes.push(blob.byteLength);
-        if (!seenBlobs.has(blob)) {
-          seenBlobs.add(blob);
-          uniqueUndoBytes += blob.byteLength;
+      const docLayers = entry.document?.layers ?? state.document.layers;
+      for (const val of entry.gpuSnapshots.values()) {
+        let bytes: number;
+        if (typeof val === 'number') {
+          const avgBytes = docLayers.reduce((sum, l) => sum + (l.width ?? 0) * (l.height ?? 0) * 4, 0)
+            / Math.max(docLayers.length, 1);
+          bytes = avgBytes;
+          if (!seenHandles.has(val)) {
+            seenHandles.add(val);
+            uniqueUndoBytes += bytes;
+            entryUniqueCount++;
+          }
+        } else {
+          bytes = (val as Uint8Array).byteLength;
+          uniqueUndoBytes += bytes;
           entryUniqueCount++;
         }
+        entryBytes += bytes;
+        blobSizes.push(bytes);
       }
       totalUndoBytes += entryBytes;
       if (stack === 'undo') {
@@ -229,11 +243,23 @@ test.describe('Memory: retouching session', () => {
     await waitForStore(page);
 
     // ------------------------------------------------------------------
-    // PHASE 0: Open the large photo (4000×6000)
+    // PHASE 0: Create a large document (4000×6000) to simulate a photo
     // ------------------------------------------------------------------
     await page.evaluate(async () => {
-      const response = await fetch('/sample.jpg');
-      const blob = await response.blob();
+      const canvas = document.createElement('canvas');
+      canvas.width = 4000;
+      canvas.height = 6000;
+      const ctx = canvas.getContext('2d')!;
+      // Fill with a gradient to simulate real photo content
+      const grad = ctx.createLinearGradient(0, 0, 4000, 6000);
+      grad.addColorStop(0, '#2a4858');
+      grad.addColorStop(0.5, '#8fbc8f');
+      grad.addColorStop(1, '#daa520');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 4000, 6000);
+      const blob = await new Promise<Blob>((resolve) =>
+        canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.9),
+      );
       const mod = await import('/src/app/paste-or-open.ts');
       await mod.pasteOrOpenBlob(blob, 'sample', true);
     });

@@ -4,6 +4,7 @@ import { useUIStore } from '../../app/ui-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
+import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import {
   floodFill as wasmFloodFill,
   applyFillToLayer as wasmApplyFillToLayer,
@@ -79,6 +80,7 @@ export function handleFillDown(ctx: InteractionContext): void {
   const engine = getEngine();
   if (!engine) return;
 
+  flushLayerSync(editorState);
   const { width: docW, height: docH } = editorState.document;
   const layer = editorState.document.layers.find((l) => l.id === activeLayerId);
   const canvasX = Math.round(layerPos.x + (layer?.x ?? 0));

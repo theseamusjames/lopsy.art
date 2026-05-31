@@ -54,12 +54,12 @@ async function getEditorState(page: Page) {
 async function getUIState(page: Page) {
   return page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => Record<string, unknown>;
+      getState: () => { showEffectsDrawer: boolean; maskMode: string };
     };
     const state = store.getState();
     return {
-      showEffectsDrawer: state.showEffectsDrawer as boolean,
-      maskEditMode: state.maskEditMode as boolean,
+      showEffectsDrawer: state.showEffectsDrawer,
+      maskEditMode: state.maskMode === 'layerMask',
     };
   });
 }

@@ -189,9 +189,9 @@ test.describe('Align layer content', () => {
     // ±1px tolerance: shape tool mouse events introduce rounding in screen-to-doc conversion.
     expect(Math.abs(pos.x - 0)).toBeLessThanOrEqual(1);
 
-    // Content center is at approximately doc (10, 20) after align left.
+    // Content center in layer-local coords is (10, 10).
     // Read a pixel well inside the content to verify it moved.
-    const pixel = await getPixelAt(page, 10, 20);
+    const pixel = await getPixelAt(page, 10, 10);
     expect(pixel.r).toBeGreaterThan(200);
     expect(pixel.a).toBeGreaterThan(200);
   });

@@ -38,6 +38,7 @@ import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
 import { expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDimensions, getGlyphPositions } from '../engine-wasm/wasm-bridge';
 import { invalidateCachedSnapshot } from './store/history-slice';
+import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { PAINT_TOOLS } from '../tools/tool-registry';
 
 
@@ -100,6 +101,9 @@ function renderFrameGpu(
       if (newLayer?.type === 'raster') {
         const result = expandLayerToDocSize(engine, newId);
         if (result.length === 4) {
+          // GPU texture is now doc-sized; clear stale JS pixel data so
+          // syncLayers doesn't re-upload the old cropped buffer.
+          clearJsPixelData(newId);
           useEditorStore.setState((s) => ({
             document: {
               ...s.document,
