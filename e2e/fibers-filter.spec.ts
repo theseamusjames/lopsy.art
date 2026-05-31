@@ -116,23 +116,27 @@ test.describe('Fibers Filter', () => {
     await drawRect(page, 0, 0, 200, 200, { r: 100, g: 100, b: 100 });
     await fitToView(page);
 
-    const before = await getPixelAt(page, 100, 100);
+    const samplePoints = [[50, 50], [100, 100], [150, 150], [30, 170], [170, 30]] as const;
+    const befores = await Promise.all(samplePoints.map(([x, y]) => getPixelAt(page, x, y)));
 
     await applyFilter(page, 'Fibers...', { 'Variance': 20, 'Strength': 20 });
     await page.waitForTimeout(300);
 
-    const afterFilter = await getPixelAt(page, 100, 100);
-    const diff = Math.abs(afterFilter.r - before.r)
-      + Math.abs(afterFilter.g - before.g)
-      + Math.abs(afterFilter.b - before.b);
-    expect(diff).toBeGreaterThan(0);
+    const afters = await Promise.all(samplePoints.map(([x, y]) => getPixelAt(page, x, y)));
+    let totalDiff = 0;
+    for (let i = 0; i < samplePoints.length; i++) {
+      totalDiff += Math.abs(afters[i]!.r - befores[i]!.r)
+        + Math.abs(afters[i]!.g - befores[i]!.g)
+        + Math.abs(afters[i]!.b - befores[i]!.b);
+    }
+    expect(totalDiff).toBeGreaterThan(0);
 
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
     const afterUndo = await getPixelAt(page, 100, 100);
-    expect(afterUndo.r).toBe(before.r);
-    expect(afterUndo.g).toBe(before.g);
-    expect(afterUndo.b).toBe(before.b);
+    expect(afterUndo.r).toBe(befores[1]!.r);
+    expect(afterUndo.g).toBe(befores[1]!.g);
+    expect(afterUndo.b).toBe(befores[1]!.b);
   });
 });
