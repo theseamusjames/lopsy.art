@@ -321,7 +321,9 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName 
   expect(layer1?.sparsePixels).toBeLessThanOrEqual(2);
   expect(layer1?.sparseBytes).toBeLessThan(100);
   expect(addedLayer?.hasDense).toBe(false);
-  expect(bg?.hasDense).toBe(true);
+  // Background's JS pixel data is cleared after expandLayerToDocSize;
+  // the GPU texture is the authoritative source.
+  expect(bg?.hasDense).toBe(false);
 
   // CDP heap (actual JS objects, post-GC) should grow < 5 MB.
   // The performance.memory API includes WASM linear memory + GPU backing stores
