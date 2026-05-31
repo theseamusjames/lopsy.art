@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { drawRect } from './helpers';
+import { drawRect, getPixelAt } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,30 +46,6 @@ async function getLayerPosition(page: Page, layerId?: string) {
   );
 }
 
-async function getPixelAt(page: Page, x: number, y: number, layerId?: string) {
-  return page.evaluate(
-    ({ x, y, lid }) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { activeLayerId: string } };
-      };
-      const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
-        get: (id: string) => ImageData | undefined;
-      };
-      const state = store.getState();
-      const id = lid ?? state.document.activeLayerId;
-      const data = pixelData.get(id);
-      if (!data) return { r: 0, g: 0, b: 0, a: 0 };
-      const idx = (y * data.width + x) * 4;
-      return {
-        r: data.data[idx] ?? 0,
-        g: data.data[idx + 1] ?? 0,
-        b: data.data[idx + 2] ?? 0,
-        a: data.data[idx + 3] ?? 0,
-      };
-    },
-    { x, y, lid: layerId ?? null },
-  );
-}
 
 async function clickAlignButton(page: Page, label: string) {
   await page.click(`button[aria-label="${label}"]`);
@@ -200,15 +176,16 @@ test.describe('Align layer content', () => {
     // Paint 40x40 green block at (30,30) — auto-crop shrinks to 40x40 at (30,30)
     await drawRect(page, 30, 30, 40, 40, { r: 0, g: 255, b: 0 });
 
-    // After crop, pixel data is 40x40. Check pixel at local (20,20) — within the green block.
-    const beforePixel = await getPixelAt(page, 20, 20);
+    // Check pixel at doc (50, 50) — center of the green block.
+    const beforePixel = await getPixelAt(page, 50, 50);
     expect(beforePixel.g).toBe(255);
     expect(beforePixel.a).toBe(255);
 
     await clickAlignButton(page, 'Align right');
 
-    // Pixel data in layer-local coords should be unchanged after align
-    const afterPixel = await getPixelAt(page, 20, 20);
+    // After align right on 200px doc, 40px layer moves to x=160.
+    // Center of green block is now at doc (180, 50).
+    const afterPixel = await getPixelAt(page, 180, 50);
     expect(afterPixel.g).toBe(255);
     expect(afterPixel.a).toBe(255);
   });
