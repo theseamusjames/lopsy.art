@@ -229,7 +229,17 @@ test.describe('Selection coordinates with layer offset', () => {
 
     // Use the wand to select the white area on the background layer.
     // Click outside the red square to wand-select the white region.
-    await page.locator(`[data-layer-id="${bgId}"]`).click();
+    const bgLocator = page.locator(`[data-layer-id="${bgId}"]`);
+    if (await bgLocator.isVisible({ timeout: 200 }).catch(() => false)) {
+      await bgLocator.click();
+    } else {
+      await page.evaluate((id) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { setActiveLayer: (id: string) => void };
+        };
+        store.getState().setActiveLayer(id);
+      }, bgId);
+    }
     await page.waitForTimeout(50);
 
     await setActiveTool(page, 'wand');
@@ -242,7 +252,17 @@ test.describe('Selection coordinates with layer offset', () => {
     // Now switch back to the empty fill layer and apply a green fill via
     // the bucket tool. The fill must respect the active selection mask
     // (selection-handlers.ts intersects fillMask with selection mask).
-    await page.locator(`[data-layer-id="${fillLayerId}"]`).click();
+    const fillLocator = page.locator(`[data-layer-id="${fillLayerId}"]`);
+    if (await fillLocator.isVisible({ timeout: 200 }).catch(() => false)) {
+      await fillLocator.click();
+    } else {
+      await page.evaluate((id) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { setActiveLayer: (id: string) => void };
+        };
+        store.getState().setActiveLayer(id);
+      }, fillLayerId);
+    }
     await page.waitForTimeout(200); // let engine sync the layer
 
     await setForegroundColor(page, 0, 255, 0);

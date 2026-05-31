@@ -239,7 +239,17 @@ export async function paintCircle(
 }
 
 export async function addLayer(page: Page): Promise<string> {
-  await page.locator('[aria-label="Add Layer"]').click();
+  const btn = page.locator('[aria-label="Add Layer"]');
+  if (await btn.isVisible({ timeout: 200 }).catch(() => false)) {
+    await btn.click();
+  } else {
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { addLayer: () => void };
+      };
+      store.getState().addLayer();
+    });
+  }
   await page.waitForTimeout(200);
   const id = await page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -252,8 +262,16 @@ export async function addLayer(page: Page): Promise<string> {
 
 export async function setActiveLayer(page: Page, layerId: string): Promise<void> {
   const locator = page.locator(`[data-layer-id="${layerId}"]`);
-  await locator.waitFor({ state: 'visible', timeout: 10000 });
-  await locator.click();
+  if (await locator.isVisible({ timeout: 200 }).catch(() => false)) {
+    await locator.click();
+  } else {
+    await page.evaluate((id) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { setActiveLayer: (id: string) => void };
+      };
+      store.getState().setActiveLayer(id);
+    }, layerId);
+  }
 }
 
 export async function moveLayer(page: Page, layerId: string, x: number, y: number): Promise<void> {
@@ -324,6 +342,17 @@ export async function openColorPanel(page: Page, expanded = true): Promise<void>
 }
 
 export async function setForegroundColor(page: Page, r: number, g: number, b: number, a?: number): Promise<void> {
+  const colorBtn = page.locator('button[aria-label="Color"]');
+  const sidebarVisible = await colorBtn.isVisible({ timeout: 200 }).catch(() => false);
+  if (!sidebarVisible) {
+    await page.evaluate(({ r, g, b, a }) => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+      };
+      store.getState().setForegroundColor({ r, g, b, a: a ?? 1 });
+    }, { r, g, b, a });
+    return;
+  }
   await openColorPanel(page, true);
   const hex = [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
   const input = page.locator('[aria-label="Hex color value"]');

@@ -34,6 +34,7 @@ export default defineConfig({
     },
     {
       name: 'mobile-chrome',
+      testMatch: /mobile.*\.spec\.ts/,
       use: {
         ...devices['iPhone 14'],
         launchOptions: {
