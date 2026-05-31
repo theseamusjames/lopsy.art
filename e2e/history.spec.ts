@@ -153,15 +153,18 @@ test.describe('History - Multi-Step Operations', () => {
     expect(empty.document.layers).toHaveLength(2);
     expect(empty.redoStackLength).toBe(3);
 
-    // Redo everything
+    // Redo everything — wait for GPU texture re-upload after each restore
     await redo(page); // redo paint bg
+    await page.waitForTimeout(200);
     const bgPixel = await getPixelAt(page, 10, 10, bgId);
     expect(bgPixel.r).toBe(255);
 
     await redo(page); // redo add layer
+    await page.waitForTimeout(200);
     expect((await getEditorState(page)).document.layers).toHaveLength(3);
 
     await redo(page); // redo paint top
+    await page.waitForTimeout(200);
     const topPixel = await getPixelAt(page, 60, 60, topId);
     expect(topPixel.g).toBe(255);
   });

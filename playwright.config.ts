@@ -13,6 +13,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: /mobile.*\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: {
@@ -28,6 +29,7 @@ export default defineConfig({
     },
     {
       name: 'firefox',
+      testIgnore: /mobile.*\.spec\.ts/,
       use: {
         ...devices['Desktop Firefox'],
       },
