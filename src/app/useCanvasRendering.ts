@@ -40,7 +40,6 @@ import { expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDime
 import { invalidateCachedSnapshot } from './store/history-slice';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { PAINT_TOOLS } from '../tools/tool-registry';
-import { clearJsPixelData } from './store/clear-js-pixel-data';
 
 
 /**
