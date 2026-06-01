@@ -25,8 +25,9 @@ import { syncLayerAfterFullSize } from './sync-layer-after-full-size';
 import type {
   InteractionState, InteractionContext,
   FloatingSelection, PersistentTransform, LastPaintPoint,
+  PreToolDownGuard,
 } from './interactions/interaction-types';
-import { gestureUsedGpuStroke } from './interactions/interaction-types';
+import { gestureUsedGpuStroke, INITIAL_INTERACTION_STATE } from './interactions/interaction-types';
 import { handleTransformDown } from './interactions/transform-handlers';
 import {
   handleMeshWarpDown,
@@ -39,7 +40,6 @@ import {
   handleTiltShiftUp,
 } from './interactions/tilt-shift-handlers';
 import {
-  isLiquifyActive,
   handleLiquifyDown,
   handleLiquifyMove,
   handleLiquifyUp,
@@ -90,30 +90,27 @@ function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } |
 // TODO: drop these fields from InteractionContext entirely — nothing reads them.
 const PLACEHOLDER_PIXEL_BUFFER = PixelBuffer.wrapImageData(new ImageData(1, 1));
 
-const INITIAL_STATE: InteractionState = {
-  drawing: false,
-  gesture: { kind: 'idle' },
-  lastPoint: null,
-  pixelBuffer: null,
-  originalPixelBuffer: null,
-  layerId: null,
-  tool: null,
-  startPoint: null,
-  layerStartX: 0,
-  layerStartY: 0,
-  maskMode: false,
-  originalSelectionMask: null,
-  originalSelectionMaskWidth: 0,
-  originalSelectionMaskHeight: 0,
-  moveOriginalMask: null,
-  moveOriginalBounds: null,
-};
+/**
+ * Pre-tool down guards run in priority order on mousedown — the first
+ * one to return a non-null state claims the gesture and the dispatcher
+ * skips regular tool routing. Adding a new pre-tool gesture is now a
+ * one-line registry change (#444).
+ *
+ * Liquify is first because an active liquify session takes the entire
+ * canvas (no hit-test); the other two only claim the gesture when their
+ * overlay handles are actually hit.
+ */
+const PRE_TOOL_DOWN_GUARDS: readonly PreToolDownGuard[] = [
+  handleLiquifyDown,
+  handleTiltShiftDown,
+  handleMeshWarpDown,
+];
 
 export function useCanvasInteraction(
   screenToCanvas: (screenX: number, screenY: number) => Point,
   containerRef: React.RefObject<HTMLDivElement | null>,
 ) {
-  const stateRef = useRef<InteractionState>({ ...INITIAL_STATE });
+  const stateRef = useRef<InteractionState>({ ...INITIAL_INTERACTION_STATE });
   const persistentTransformRef = useRef<PersistentTransform | null>(null);
   const floatingSelectionRef = useRef<FloatingSelection | null>(null);
   const stampSourceRef = useRef<Point | null>(null);
@@ -173,34 +170,12 @@ export function useCanvasInteraction(
         }
       }
 
-      if (isLiquifyActive()) {
-        const layerPos = (() => {
-          const layer = editorState.document.layers.find((l) => l.id === activeLayerId);
-          return layer ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y } : canvasPos;
-        })();
-        handleLiquifyDown(layerPos);
-        stateRef.current = { ...INITIAL_STATE, drawing: true, gesture: { kind: 'liquify' }, layerId: activeLayerId };
-        return;
-      }
-
-      if (handleTiltShiftDown(canvasPos)) {
-        stateRef.current = {
-          ...INITIAL_STATE,
-          drawing: true,
-          gesture: { kind: 'tiltShift' },
-          layerId: activeLayerId,
-        };
-        return;
-      }
-
-      if (handleMeshWarpDown(canvasPos)) {
-        stateRef.current = {
-          ...INITIAL_STATE,
-          drawing: true,
-          gesture: { kind: 'meshWarp' },
-          layerId: activeLayerId,
-        };
-        return;
+      for (const guard of PRE_TOOL_DOWN_GUARDS) {
+        const next = guard(canvasPos, activeLayerId);
+        if (next) {
+          stateRef.current = next;
+          return;
+        }
       }
 
       const engine = getEngine();
@@ -488,7 +463,7 @@ export function useCanvasInteraction(
           useEditorStore.getState().notifyRender();
 
           // Mark the stroke as done so mouseup becomes a no-op
-          stateRef.current = { ...INITIAL_STATE };
+          stateRef.current = { ...INITIAL_INTERACTION_STATE };
         }, HOLD_TIMEOUT_MS);
       }
     },
@@ -504,15 +479,15 @@ export function useCanvasInteraction(
     switch (state.gesture.kind) {
       case 'tiltShift':
         handleTiltShiftUp();
-        stateRef.current = { ...INITIAL_STATE };
+        stateRef.current = { ...INITIAL_INTERACTION_STATE };
         return;
       case 'liquify':
         handleLiquifyUp();
-        stateRef.current = { ...INITIAL_STATE };
+        stateRef.current = { ...INITIAL_INTERACTION_STATE };
         return;
       case 'meshWarp':
         handleMeshWarpUp();
-        stateRef.current = { ...INITIAL_STATE };
+        stateRef.current = { ...INITIAL_INTERACTION_STATE };
         return;
       case 'idle':
       case 'transform':
@@ -521,7 +496,7 @@ export function useCanvasInteraction(
     }
 
     if (!state.tool) {
-      stateRef.current = { ...INITIAL_STATE };
+      stateRef.current = { ...INITIAL_INTERACTION_STATE };
       return;
     }
 
@@ -611,7 +586,7 @@ export function useCanvasInteraction(
       }
     }
 
-    stateRef.current = { ...INITIAL_STATE };
+    stateRef.current = { ...INITIAL_INTERACTION_STATE };
   }, [screenToCanvas, containerRef, cancelHoldTimer]);
 
   const clearPersistentTransform = useCallback(() => {

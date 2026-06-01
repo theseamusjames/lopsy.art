@@ -7,9 +7,11 @@
  */
 
 import { useUIStore } from '../ui-store';
+import { useEditorStore } from '../editor-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { liquifyApplyDabGpu, liquifyRender } from '../../engine-wasm/wasm-bridge';
 import type { Point } from '../../types';
+import { INITIAL_INTERACTION_STATE, type InteractionState } from './interaction-types';
 
 const LIQUIFY_MODE_MAP: Record<string, number> = {
   push: 0,
@@ -21,16 +23,33 @@ const LIQUIFY_MODE_MAP: Record<string, number> = {
 
 let stroke: { lastPoint: Point } | null = null;
 
-export function isLiquifyActive(): boolean {
-  return useUIStore.getState().liquify !== null;
-}
-
-export function handleLiquifyDown(layerPos: Point): boolean {
+/**
+ * Pre-tool down guard for the liquify gesture. When a liquify session
+ * is active, all pointer-downs are claimed by liquify regardless of
+ * position (the entire canvas is the liquify surface). Returns a fully-
+ * populated InteractionState with the `liquify` gesture variant, or
+ * null if no session is active so the dispatcher falls through to the
+ * next guard.
+ */
+export function handleLiquifyDown(
+  canvasPos: Point,
+  activeLayerId: string,
+): InteractionState | null {
   const session = useUIStore.getState().liquify;
-  if (!session) return false;
+  if (!session) return null;
 
+  const layer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId);
+  const layerPos = layer
+    ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y }
+    : canvasPos;
   stroke = { lastPoint: layerPos };
-  return true;
+
+  return {
+    ...INITIAL_INTERACTION_STATE,
+    drawing: true,
+    gesture: { kind: 'liquify' },
+    layerId: activeLayerId,
+  };
 }
 
 export function handleLiquifyMove(layerPos: Point): boolean {
