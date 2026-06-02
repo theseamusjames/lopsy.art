@@ -54,7 +54,11 @@ export function openFileFromDisk(): void {
   if (!confirmIfDirty()) return;
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/*,.psd,.dng,.raf,.lopsy';
+  // Mixing `image/*` with bare extensions causes Chrome on macOS to
+  // restrict the picker to a single filter (often the last extension
+  // listed), so users see only `.raf` files. List explicit extensions
+  // for every supported type to keep all files visible.
+  input.accept = '.jpg,.jpeg,.png,.gif,.bmp,.tif,.tiff,.webp,.heic,.psd,.dng,.raf,.lopsy';
   input.onchange = () => {
     const file = input.files?.[0];
     if (!file) return;

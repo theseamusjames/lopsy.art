@@ -50,14 +50,13 @@ const B: u8 = 2;
 pub fn demosaic_xtrans(raw: &[f32], width: u32, height: u32, pattern: &[u8; 36]) -> Vec<f32> {
     let w = width as usize;
     let h = height as usize;
-    // Simple 5×5 same-color averaging is bias-free across the 6×6 CFA
-    // grid, so no post-blur is needed and uniform regions (sky, walls)
-    // stay clean. Trade-off: small high-saturation features (the red
-    // shield over the door, etc.) get color-averaged with adjacent
-    // larger color regions. The Markesteijn implementation below
-    // preserves more edge detail but introduces per-CFA-position bias
-    // visible as a faint pattern in uniform areas.
-    simple_demosaic(raw, w, h, pattern)
+    // The 5×5 same-color averaging is mostly bias-free but the window
+    // doesn't cleanly cover the 6×6 CFA period, so uniform areas (sky,
+    // walls) show a faint 6-pixel-period grid that the saturating color
+    // matrix amplifies. A small separable box blur (radius 2 → 5×5)
+    // suppresses it without visibly softening edges at normal zoom.
+    let rgb = simple_demosaic(raw, w, h, pattern);
+    box_blur_separable_rgb(&rgb, w, h, 2)
 }
 
 /// Markesteijn 3-pass demosaicer. Sharper edge reconstruction than
