@@ -34,7 +34,8 @@ async function getLayerPixelAt(
 }
 
 test.describe('filter bounds (#235)', () => {
-  test('Gaussian Blur on a small ellipse layer preserves the ellipse content', async ({ page }) => {
+  test('Gaussian Blur on a small ellipse layer preserves the ellipse content', async ({ page, browserName }) => {
+    test.skip(browserName === 'firefox', 'Firefox lacks SwiftShader; GPU pixel readback is unreliable');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600, false);

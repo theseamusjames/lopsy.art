@@ -86,7 +86,13 @@ function formatProfile(
 
 test.use({
   launchOptions: {
-    args: ['--enable-webgl', '--enable-webgl2-compute-context', '--ignore-gpu-blocklist'],
+    args: [
+      '--use-gl=angle',
+      '--use-angle=swiftshader',
+      '--enable-webgl',
+      '--enable-webgl2-compute-context',
+      '--ignore-gpu-blocklist',
+    ],
   },
 });
 
@@ -100,7 +106,7 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
 
   test('rapid cross-hatch strokes on 6000x4000', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'CDP profiler requires Chromium');
-    test.setTimeout(300_000);
+    test.setTimeout(480_000);
 
     const outDir = path.join(process.cwd(), 'tests', 'screenshots');
     fs.mkdirSync(outDir, { recursive: true });
@@ -112,6 +118,7 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
       };
       store.getState().createDocument(6000, 4000, false);
     });
+    await page.locator('[data-testid="canvas-container"]').waitFor({ state: 'visible', timeout: 120_000 });
 
     // --- brush tool, small brush for hatching ---
     await page.keyboard.press('b');

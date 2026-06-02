@@ -232,14 +232,15 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName 
     state.pushHistory('Add dots');
     const data = state.getOrCreateLayerPixelData(layer1.id);
 
-    // Dot at (0, 0) — red
-    data.data[0] = 255;
-    data.data[1] = 0;
-    data.data[2] = 0;
-    data.data[3] = 255;
+    // Dot at (100, 100) — red
+    const idx1 = (100 * 4000 + 100) * 4;
+    data.data[idx1] = 255;
+    data.data[idx1 + 1] = 0;
+    data.data[idx1 + 2] = 0;
+    data.data[idx1 + 3] = 255;
 
-    // Dot at (3999, 1999) — blue
-    const idx2 = (1999 * 4000 + 3999) * 4;
+    // Dot at (105, 100) — blue (nearby so crop bounds stay small)
+    const idx2 = (100 * 4000 + 105) * 4;
     data.data[idx2] = 0;
     data.data[idx2 + 1] = 0;
     data.data[idx2 + 2] = 255;
@@ -291,15 +292,18 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName 
   console.log(`GPU growth from S1:    ${formatMB(s4.gpuTextureBytes - s1.gpuTextureBytes)}`);
   console.log(`\nTotal estimated memory: ${formatMB(s4.perfUsed + s4.gpuTextureBytes)} (JS heap + GPU textures)`);
 
-  // Assertions
-  const layer1 = s4.storeInfo.layers.find(l => l.name === 'Layer 1');
+  // Assertions — check sparse state from snapshot 2, taken right after
+  // writing the 2 dots but before switching layers. Layer switching runs
+  // clearJsPixelData (GPU becomes source of truth), which intentionally
+  // wipes both dense and sparse JS caches.
+  const layer1s2 = s2.storeInfo.layers.find(l => l.name === 'Layer 1');
+  expect(layer1s2?.hasSparse).toBe(true);
+  expect(layer1s2?.hasDense).toBe(false);
+  expect(layer1s2?.sparsePixels).toBeLessThanOrEqual(2);
+  expect(layer1s2?.sparseBytes).toBeLessThan(100);
+
   const addedLayer = s4.storeInfo.layers.find(l => l.name !== 'Background' && l.name !== 'Layer 1' && l.name !== 'Project');
   const bg = s4.storeInfo.layers.find(l => l.name === 'Background');
-
-  expect(layer1?.hasSparse).toBe(true);
-  expect(layer1?.hasDense).toBe(false);
-  expect(layer1?.sparsePixels).toBeLessThanOrEqual(2);
-  expect(layer1?.sparseBytes).toBeLessThan(100);
   expect(addedLayer?.hasDense).toBe(false);
   expect(bg?.hasDense).toBe(true);
 

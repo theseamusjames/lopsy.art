@@ -28,14 +28,17 @@ export default defineConfig({
     },
     {
       name: 'firefox',
+      testIgnore: 'mobile-canvas.spec.ts',
       use: {
         ...devices['Desktop Firefox'],
       },
     },
     {
       name: 'mobile-chrome',
+      testMatch: 'mobile-canvas.spec.ts',
       use: {
         ...devices['iPhone 14'],
+        defaultBrowserType: 'chromium',
         launchOptions: {
           args: [
             '--use-gl=angle',

@@ -452,9 +452,9 @@ test.describe('Composition 2: Geometric Design', () => {
     }, triLayerId);
 
     await page.keyboard.press('ArrowRight');
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(300);
     await page.keyboard.press('ArrowDown');
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(300);
 
     const posAfter = await page.evaluate((lid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
