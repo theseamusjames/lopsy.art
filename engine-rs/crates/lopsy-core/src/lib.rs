@@ -13,5 +13,6 @@ pub mod magnetic_lasso;
 pub mod compress;
 pub mod decode;
 pub mod dng;
+pub mod raf;
 pub mod psd;
 pub mod text_types;

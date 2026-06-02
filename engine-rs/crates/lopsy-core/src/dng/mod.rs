@@ -51,10 +51,10 @@
 //! - Support additional compression formats (lossy JPEG, JPEG XL).
 //! - Test with non-Apple DNG files (Adobe DNG Converter output, other cameras).
 
-mod tiff;
+pub mod tiff;
 mod ljpeg;
-mod demosaic;
-mod color;
+pub mod demosaic;
+pub mod color;
 
 use tiff::{TiffReader, IfdEntry, TagId};
 

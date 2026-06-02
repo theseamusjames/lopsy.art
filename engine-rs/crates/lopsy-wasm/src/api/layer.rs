@@ -158,6 +158,45 @@ pub fn decode_and_upload_dng(
         .map_err(|e| JsError::new(&format!("JSON serialize: {e}")))
 }
 
+/// Decode a RAF (Fujifilm RAW) file and upload to a layer texture as f32 RGBA.
+/// Returns JSON: `{ width, height }`
+#[wasm_bindgen(js_name = "decodeAndUploadRaf")]
+pub fn decode_and_upload_raf(
+    engine: &mut Engine,
+    layer_id: &str,
+    data: &[u8],
+) -> Result<String, JsError> {
+    let raf = lopsy_core::raf::read_raf(data)
+        .map_err(|e| JsError::new(&format!("RAF decode failed: {e}")))?;
+
+    layer_manager::upload_pixels_f32(
+        &mut engine.inner,
+        layer_id,
+        &raf.pixels,
+        raf.width,
+        raf.height,
+    ).map_err(|e| JsError::new(&e))?;
+
+    for line in &raf.debug_log {
+        web_sys::console::log_1(&line.into());
+    }
+
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct RafMeta {
+        width: u32,
+        height: u32,
+    }
+
+    let meta = RafMeta {
+        width: raf.width,
+        height: raf.height,
+    };
+
+    serde_json::to_string(&meta)
+        .map_err(|e| JsError::new(&format!("JSON serialize: {e}")))
+}
+
 #[wasm_bindgen(js_name = "uploadLayerSparsePixels")]
 pub fn upload_layer_sparse_pixels(
     engine: &mut Engine,

@@ -138,7 +138,7 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
   const handleOpenFile = useCallback(() => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/*,.psd,.dng,.lopsy';
+    input.accept = 'image/*,.psd,.dng,.raf,.lopsy';
     input.onchange = () => {
       const file = input.files?.[0];
       if (file) onOpenFile(file);
