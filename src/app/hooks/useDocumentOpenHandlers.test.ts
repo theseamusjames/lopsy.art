@@ -20,6 +20,11 @@ describe('classifyOpenFile', () => {
     expect(classifyOpenFile(makeFile('raw.dng'))).toBe('dng');
   });
 
+  it('routes .raf files to the RAF importer', () => {
+    expect(classifyOpenFile(makeFile('DSCF1234.RAF'))).toBe('raf');
+    expect(classifyOpenFile(makeFile('photo.raf'))).toBe('raf');
+  });
+
   it('routes generic image MIME types to the bitmap loader', () => {
     expect(classifyOpenFile(makeFile('photo.jpg', 'image/jpeg'))).toBe('image');
     expect(classifyOpenFile(makeFile('photo.png', 'image/png'))).toBe('image');

@@ -4,17 +4,19 @@ import { useUIStore } from '../ui-store';
 import { pasteOrOpenBlob } from '../paste-or-open';
 import { importPsdFile } from '../../io/psd';
 import { importDngFile } from '../../io/dng';
+import { importRafFile } from '../../io/raf';
 import { loadProject } from '../../io/project-load';
 import { describeError, notifyError } from '../notifications-store';
 
 /** What to do with a user-supplied file based on its name. Pure: no IO.
  *  Drives both the file-picker handlers below and the drag-and-drop path. */
-export type OpenFileKind = 'lopsy' | 'psd' | 'dng' | 'image' | 'unsupported';
+export type OpenFileKind = 'lopsy' | 'psd' | 'dng' | 'raf' | 'image' | 'unsupported';
 
 export function classifyOpenFile(file: File): OpenFileKind {
   if (/\.lopsy$/i.test(file.name)) return 'lopsy';
   if (/\.psd$/i.test(file.name)) return 'psd';
   if (/\.dng$/i.test(file.name)) return 'dng';
+  if (/\.raf$/i.test(file.name)) return 'raf';
   if (file.type.startsWith('image/')) return 'image';
   return 'unsupported';
 }
@@ -62,6 +64,12 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
           .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(close))
           .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
         return;
+      case 'raf':
+        file
+          .arrayBuffer()
+          .then((buffer) => importRafFile(new Uint8Array(buffer), name).then(close))
+          .catch((err) => notifyError(`Failed to import RAF: ${describeError(err)}`));
+        return;
       case 'image':
         pasteOrOpenBlob(file, name)
           .then(close)
@@ -102,6 +110,12 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
           .arrayBuffer()
           .then((buffer) => importDngFile(new Uint8Array(buffer), name).then(close))
           .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
+        return;
+      case 'raf':
+        file
+          .arrayBuffer()
+          .then((buffer) => importRafFile(new Uint8Array(buffer), name).then(close))
+          .catch((err) => notifyError(`Failed to import RAF: ${describeError(err)}`));
         return;
       case 'image':
       case 'unsupported':

@@ -15,3 +15,10 @@ engine-rs/test-output/
 tests/screenshots/
 
 .claude/worktrees
+
+# Local-only test samples (large RAF, kept out of the repo)
+/samples
+/samples/
+public/test-sample.raf
+e2e/screenshots/raf-import-error.png
+e2e/screenshots/raf-import.png

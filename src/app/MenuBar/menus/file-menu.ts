@@ -20,6 +20,7 @@ import { flushLayerSync } from '../../../engine-wasm/engine-sync';
 export { importPsdFile, exportPsdFile };
 
 import { importDngFile } from '../../../io/dng';
+import { importRafFile } from '../../../io/raf';
 import { saveProject } from '../../../io/project-save';
 import { loadProject } from '../../../io/project-load';
 
@@ -53,7 +54,7 @@ export function openFileFromDisk(): void {
   if (!confirmIfDirty()) return;
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/*,.psd,.dng,.lopsy';
+  input.accept = 'image/*,.psd,.dng,.raf,.lopsy';
   input.onchange = () => {
     const file = input.files?.[0];
     if (!file) return;
@@ -79,6 +80,15 @@ export function openFileFromDisk(): void {
         .arrayBuffer()
         .then((buffer) => importDngFile(new Uint8Array(buffer), file.name.replace(/\.dng$/i, '')))
         .catch((err) => notifyError(`Failed to import DNG: ${describeError(err)}`));
+      return;
+    }
+
+    // Route RAF (Fujifilm raw) files to the WASM RAF decoder
+    if (/\.raf$/i.test(file.name)) {
+      file
+        .arrayBuffer()
+        .then((buffer) => importRafFile(new Uint8Array(buffer), file.name.replace(/\.raf$/i, '')))
+        .catch((err) => notifyError(`Failed to import RAF: ${describeError(err)}`));
       return;
     }
 
