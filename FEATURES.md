@@ -299,7 +299,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Color**: RGBA
 
 ### Effects on Groups
-Layer effects can be attached to **group** layers, not just leaf layers. When a group is in **Pass Through** mode (the default), the compositor still allocates an intermediate buffer so the effects (drop shadow, glow, stroke, color overlay) have a composited surface to attach to — effects render around the group as a whole rather than around each child individually.
+Layer effects can be attached to **group** layers, not just leaf layers. New groups default to **Normal** (isolated) compositing, so the children pre-composite into a group buffer and the effects (drop shadow, glow, stroke, color overlay) attach to that combined surface — effects render around the group as a whole rather than around each child individually. When a group is switched to **Pass Through** the compositor still allocates an intermediate buffer for the same reason, so effects work in either mode.
 
 ---
 
@@ -428,10 +428,10 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 | HSL | Hue, Saturation, Color, Luminosity |
 | Group-only | Pass Through |
 
-### Pass Through (group default)
+### Pass Through (group blend mode)
 
-- Available exclusively on **group** layers, where it is the default blend mode (matching Photoshop).
-- Children blend directly onto the surface beneath the group, so adjustment layers and effects inside the group affect underlying layers outside the group as well.
+- Available exclusively on **group** layers. New groups default to **Normal** (isolated) compositing — children pre-composite into a group buffer first, then the group's opacity/effects apply to the combined result, so lowering a group's opacity scales the composited result rather than attenuating each child individually (this diverges from Photoshop, which defaults groups to Pass Through). Pass Through stays as an explicit, user-selectable mode for layouts that genuinely need it.
+- In **Pass Through**, children blend directly onto the surface beneath the group, so adjustment layers and effects inside the group affect underlying layers outside the group as well.
 - Implemented entirely in the JS sync layer: `engine-sync` flattens pass-through groups before the WASM compositor sees them. The WASM engine itself never receives a "pass through" mode (it has no PSD index or Rust discriminant — exporting a pass-through group to PSD writes 'normal' as a safe fallback).
 
 ---
@@ -448,7 +448,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 
 ### Layer Properties
 - **Opacity**: 0 - 1
-- **Blend mode**: any of 16 modes (plus "Pass Through" on group layers)
+- **Blend mode**: any of 16 modes (plus "Pass Through" on group layers; new groups default to Normal)
 - **Visible**: on/off
 - **Locked**: on/off
 - **Position**: x, y
@@ -705,7 +705,7 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 
 ### Open / Save
 - **New** (`⌘N`): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
-- **Open…** (`⌘O`): open a PNG/JPEG/WebP/BMP/PSD/DNG/.lopsy from disk (the picker auto-routes by extension)
+- **Open…** (`⌘O`): open a PNG/JPEG/GIF/BMP/TIFF/WebP/HEIC/PSD/DNG/RAF/.lopsy from disk (the picker auto-routes by extension via a shared `classifyOpenFile` helper). The same routing backs the pre-document flow — the New Document modal's "Open file" button and drag-and-drop onto a fresh app accept the same formats, including `.lopsy` project files.
 - **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust)
 - **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant)
 
@@ -729,4 +729,7 @@ A modal dialog with a live thumbnail preview (debounced ~200 ms) and inline opti
 One-shot PNG export through the GPU compositor — no dialog, no preview, uses the document name as the filename and quality 92.
 
 ### DNG / RAW Import
-Camera RAW (DNG) files are decoded entirely in Rust (demosaic, LJPEG, TIFF) before being uploaded to a GPU layer.
+Camera RAW files are decoded entirely in Rust before being uploaded to a GPU layer — JS never touches the raw sensor data.
+
+- **DNG**: demosaic, LJPEG, TIFF parsing in Rust.
+- **Fujifilm RAF**: decodes uncompressed X-Trans and Bayer sensor files and renders them with camera-JPEG-style color. Pipeline: parse the RAF container → CFA TIFF (Fuji tags) → decode 16-bit sensor data → honor EXIF orientation (portrait shots auto-rotate) → gray-world auto white balance → same-color demosaic → saturation matrix → exposure + film base curve (Provia / Velvia / Astia / Classic Chrome / DR400 curves are compiled in, Velvia is the default) → sRGB gamma. White-balance presets for 49 Fuji bodies ship compiled in. (Lossless-compressed RAF and DCP camera profiles are decoded internally but not yet wired to UI.)
