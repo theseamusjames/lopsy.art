@@ -102,3 +102,36 @@ describe('opacity setters — issue #250 (percent vs normalised footgun)', () =>
     expect(messages.some((m: string) => m.includes('setSprayOpacity'))).toBe(true);
   });
 });
+
+describe('per-tool slice: wand (#453)', () => {
+  it('exposes wand settings under settings.wand with the legacy defaults', () => {
+    const { wand } = useToolSettingsStore.getState().settings;
+    expect(wand).toEqual({ tolerance: 32, contiguous: true, graduated: false });
+  });
+
+  it('setWandSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.wand;
+    useToolSettingsStore.getState().setWandSetting('tolerance', 60);
+    const after = useToolSettingsStore.getState().settings.wand;
+    expect(after.tolerance).toBe(60);
+    expect(after.contiguous).toBe(before.contiguous);
+    expect(after.graduated).toBe(before.graduated);
+  });
+
+  it('setWandSetting clamps tolerance into [0, 255]', () => {
+    useToolSettingsStore.getState().setWandSetting('tolerance', -10);
+    expect(useToolSettingsStore.getState().settings.wand.tolerance).toBe(0);
+    useToolSettingsStore.getState().setWandSetting('tolerance', 9999);
+    expect(useToolSettingsStore.getState().settings.wand.tolerance).toBe(255);
+  });
+
+  it('setWandSetting preserves referential identity outside the wand slice', () => {
+    // The settings.wand object must be replaced (so React/Zustand
+    // selectors that subscribe to it re-render) but the surrounding
+    // ToolSettings shape should not churn unrelated fields.
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setWandSetting('contiguous', false);
+    expect(useToolSettingsStore.getState().settings.wand.contiguous).toBe(false);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});

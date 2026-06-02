@@ -14,10 +14,8 @@ export const wandStrategy: SelectionToolStrategy = {
   onDown(ctx: InteractionContext, _tool: SelectionToolId): InteractionState | undefined {
     const engine = getEngine();
     if (!engine) return undefined;
-    const toolSettings = useToolSettingsStore.getState();
-    const wandTolerance = toolSettings.wandTolerance;
-    const wandContiguous = toolSettings.wandContiguous;
-    const wandGraduated = toolSettings.wandGraduated;
+    const { tolerance: wandTolerance, contiguous: wandContiguous, graduated: wandGraduated }
+      = useToolSettingsStore.getState().settings.wand;
     const editorState = useEditorStore.getState();
     const { width: docW, height: docH } = editorState.document;
     const pixelData = wasmReadLayerPixelsForFill(engine, ctx.activeLayerId);

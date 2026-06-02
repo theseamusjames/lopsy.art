@@ -3,6 +3,8 @@ import type { BrushPreset } from '../types/brush';
 import type { ToolSettings } from './tool-settings-types';
 import { BUILTIN_PRESETS, BUILTIN_TEXTURES, createPresetId } from '../tools/brush/builtin-presets';
 import { colorEquals } from '../utils/color';
+import { DEFAULT_TOOL_SETTINGS_SLICES } from './tool-settings-slices';
+import { clampWandSetting } from '../tools/wand/wand-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -27,6 +29,7 @@ function warnIfNormalisedOpacity(setter: string, value: number): void {
 }
 
 export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
+  settings: DEFAULT_TOOL_SETTINGS_SLICES,
   brushSize: 10,
   brushOpacity: 100,
   brushHardness: 80,
@@ -64,9 +67,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   spongeSize: 30,
   smudgeSize: 30,
   smudgeStrength: 50,
-  wandTolerance: 32,
-  wandContiguous: true,
-  wandGraduated: false,
   quickSelectSize: 20,
   quickSelectTolerance: 32,
   quickSelectEdgeStrength: 50,
@@ -251,10 +251,13 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setSpongeSize: (size) => set({ spongeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeSize: (size) => set({ smudgeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeStrength: (strength) => set({ smudgeStrength: Math.max(0, Math.min(100, strength)) }),
-  setWandTolerance: (tolerance) => set({ wandTolerance: Math.max(0, Math.min(255, tolerance)) }),
-  setWandContiguous: (contiguous) => set({ wandContiguous: contiguous }),
-  setWandGraduated: (graduated) => set({ wandGraduated: graduated }),
   setMarqueeFeather: (feather) => set({ marqueeFeather: Math.max(0, Math.min(250, Math.round(feather))) }),
+  setWandSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      wand: { ...s.settings.wand, [key]: clampWandSetting(key, value) },
+    },
+  })),
   setQuickSelectSize: (size) => set({ quickSelectSize: Math.max(1, Math.min(100, Math.round(size))) }),
   setQuickSelectTolerance: (tolerance) => set({ quickSelectTolerance: Math.max(0, Math.min(255, Math.round(tolerance))) }),
   setQuickSelectEdgeStrength: (strength) => set({ quickSelectEdgeStrength: Math.max(0, Math.min(100, Math.round(strength))) }),

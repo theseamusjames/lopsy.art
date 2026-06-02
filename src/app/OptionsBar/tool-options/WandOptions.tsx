@@ -3,29 +3,31 @@ import { Slider } from '../../../components/Slider/Slider';
 import styles from '../OptionsBar.module.css';
 
 export function WandOptions() {
-  const wandTolerance = useToolSettingsStore((s) => s.wandTolerance);
-  const wandContiguous = useToolSettingsStore((s) => s.wandContiguous);
-  const wandGraduated = useToolSettingsStore((s) => s.wandGraduated);
-  const setWandTolerance = useToolSettingsStore((s) => s.setWandTolerance);
-  const setWandContiguous = useToolSettingsStore((s) => s.setWandContiguous);
-  const setWandGraduated = useToolSettingsStore((s) => s.setWandGraduated);
+  const wand = useToolSettingsStore((s) => s.settings.wand);
+  const setWandSetting = useToolSettingsStore((s) => s.setWandSetting);
 
   return (
     <>
-      <Slider label="Tolerance" value={wandTolerance} min={0} max={255} onChange={setWandTolerance} />
+      <Slider
+        label="Tolerance"
+        value={wand.tolerance}
+        min={0}
+        max={255}
+        onChange={(v) => setWandSetting('tolerance', v)}
+      />
       <label className={styles.checkbox}>
         <input
           type="checkbox"
-          checked={wandContiguous}
-          onChange={(e) => setWandContiguous(e.target.checked)}
+          checked={wand.contiguous}
+          onChange={(e) => setWandSetting('contiguous', e.target.checked)}
         />
         Contiguous
       </label>
       <label className={styles.checkbox}>
         <input
           type="checkbox"
-          checked={wandGraduated}
-          onChange={(e) => setWandGraduated(e.target.checked)}
+          checked={wand.graduated}
+          onChange={(e) => setWandSetting('graduated', e.target.checked)}
         />
         Graduated
       </label>

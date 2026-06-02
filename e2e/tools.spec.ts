@@ -245,6 +245,16 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   );
 }
 
+/** Write to a per-tool settings slice (wand, …); see #453. */
+async function setWandSetting(page: Page, key: 'tolerance' | 'contiguous' | 'graduated', value: number | boolean) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setWandSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setWandSetting(key, value);
+  }, { key, value });
+}
+
 async function setUIState(page: Page, setter: string, value: unknown) {
   await page.evaluate(
     ({ setter, value }) => {
@@ -823,7 +833,7 @@ test.describe('Magic Wand', () => {
     });
 
     await page.keyboard.press('w');
-    await setToolSetting(page, 'setWandTolerance', 10);
+    await setWandSetting(page, 'tolerance', 10);
     await clickAtDoc(page, 50, 150);
 
     const state = await getEditorState(page);

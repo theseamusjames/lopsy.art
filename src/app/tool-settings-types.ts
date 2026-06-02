@@ -4,8 +4,20 @@ import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { DodgeMode } from '../tools/dodge/dodge';
 import type { SpongeMode } from '../tools/sponge/sponge';
 import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
+import type { WandSettings } from '../tools/wand/wand-settings';
+import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
+  /**
+   * Per-tool settings, keyed by tool. Each tool's slice is the
+   * authoritative source of its settings — read via
+   * `settings.<tool>.<field>` and write via `setWandSetting`-style
+   * typed setters. Replaces the legacy flat-bag `<tool><Field>`
+   * naming (see #453). Tools migrate one at a time; while the rollout
+   * is in progress, untouched tools still expose their fields flat
+   * on this interface.
+   */
+  settings: ToolSettingsSlices;
   brushSize: number;
   brushOpacity: number;
   brushHardness: number;
@@ -40,9 +52,6 @@ export interface ToolSettings {
   spongeSize: number;
   smudgeSize: number;
   smudgeStrength: number;
-  wandTolerance: number;
-  wandContiguous: boolean;
-  wandGraduated: boolean;
   quickSelectSize: number;
   quickSelectTolerance: number;
   quickSelectEdgeStrength: number;
@@ -124,10 +133,8 @@ export interface ToolSettings {
   setSpongeSize: (size: number) => void;
   setSmudgeSize: (size: number) => void;
   setSmudgeStrength: (strength: number) => void;
-  setWandTolerance: (tolerance: number) => void;
-  setWandContiguous: (contiguous: boolean) => void;
-  setWandGraduated: (graduated: boolean) => void;
   setMarqueeFeather: (feather: number) => void;
+  setWandSetting: <K extends keyof WandSettings>(key: K, value: WandSettings[K]) => void;
   setQuickSelectSize: (size: number) => void;
   setQuickSelectTolerance: (tolerance: number) => void;
   setQuickSelectEdgeStrength: (strength: number) => void;

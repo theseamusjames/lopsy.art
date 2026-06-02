@@ -103,6 +103,16 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   }, { setter, value });
 }
 
+/** Write to a per-tool settings slice (wand, …); see #453. */
+async function setWandSetting(page: Page, key: 'tolerance' | 'contiguous' | 'graduated', value: number | boolean) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setWandSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setWandSetting(key, value);
+  }, { key, value });
+}
+
 const toolKeyMap: Record<string, string> = {
   move: 'v',
   brush: 'b',
@@ -684,7 +694,7 @@ test.describe('Composition 2: Geometric Design', () => {
     await page.keyboard.press('w');
     expect(await getActiveTool(page)).toBe('wand');
 
-    await setToolSetting(page, 'setWandTolerance', 60);
+    await setWandSetting(page, 'tolerance', 60);
 
     await clickAtDoc(page, 250, 250);
     await page.waitForTimeout(300);
