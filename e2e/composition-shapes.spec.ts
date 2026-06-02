@@ -441,6 +441,7 @@ test.describe('Composition 2: Geometric Design', () => {
     // PHASE 5: MOVE TOOL — Nudge with arrow keys
     // =====================================================================
     await page.locator(`[data-layer-id="${triLayerId}"]`).click();
+    await page.waitForTimeout(500);
 
     const posBefore = await page.evaluate((lid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -452,9 +453,22 @@ test.describe('Composition 2: Geometric Design', () => {
     }, triLayerId);
 
     await page.keyboard.press('ArrowRight');
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
     await page.keyboard.press('ArrowDown');
-    await page.waitForTimeout(300);
+
+    await page.waitForFunction(
+      ({ lid, prevY }) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => {
+            document: { layers: Array<{ id: string; y: number }> };
+          };
+        };
+        const l = store.getState().document.layers.find((la) => la.id === lid);
+        return l && l.y > prevY;
+      },
+      { lid: triLayerId, prevY: posBefore!.y },
+      { timeout: 5000 },
+    );
 
     const posAfter = await page.evaluate((lid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
