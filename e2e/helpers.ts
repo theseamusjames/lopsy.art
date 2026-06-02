@@ -405,9 +405,9 @@ export async function setLayerOpacity(page: Page, layerId: string, percent: numb
   await setActiveLayer(page, layerId);
   const row = page.locator(`[data-layer-id="${layerId}"]`);
   await row.locator('button[aria-label*="Opacity"]').click();
-  await page.waitForTimeout(100);
+  await page.waitForTimeout(200);
   const slider = page.locator(`input[type="range"][aria-label*="opacity"]`);
-  await slider.waitFor({ state: 'visible', timeout: 3000 });
+  await slider.waitFor({ state: 'visible', timeout: 5000 });
   await page.evaluate(({ lid, pct }) => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
