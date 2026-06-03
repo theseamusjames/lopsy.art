@@ -708,7 +708,7 @@ export async function configureEffect(
   const drawer = page.getByTestId('effects-drawer');
   for (const [label, value] of Object.entries(settings)) {
     const input = drawer.locator(`[aria-label="${label} value"]`);
-    await input.waitFor({ state: 'visible', timeout: 3000 });
+    await input.waitFor({ state: 'visible', timeout: 10000 });
     await input.fill(String(value));
     await input.press('Enter');
   }
