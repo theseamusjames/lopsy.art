@@ -38,30 +38,24 @@ const R: u8 = 0;
 const G: u8 = 1;
 const B: u8 = 2;
 
-/// Public entrypoint. Uses simple same-color averaging in a 5×5 window
-/// — each output channel = average of CFA cells of that color in the
-/// window. Bias-free across CFA positions and preserves local color
-/// separation.
+/// Public entrypoint. Edge-directed Markesteijn-style demosaic: green is
+/// reconstructed by blending four directional candidates weighted by local
+/// homogeneity, then R/B are filled via the smooth color-difference planes.
 ///
-/// A tiny 3×3 RGB blur is applied at the end to suppress the residual
-/// 6-pixel-period grid that uniform areas (sky, walls) expose at full
-/// pixel zoom. The blur is small enough that real image detail
-/// (window edges, the tree, etc.) is not perceptibly softened.
+/// This replaces the previous 5×5 same-color box average. That average could
+/// not tile the 6×6 X-Trans period cleanly, so flat areas (sky, walls) picked
+/// up a 6-pixel-period bias which the color matrix then amplified into a
+/// visible grid. The previous code papered over it with a box blur, which
+/// also smeared real detail. The edge-directed path reconstructs flat fields
+/// exactly at every crop offset (see `flat_gray_has_no_grid_at_any_crop_offset`),
+/// so no compensating blur is needed.
 pub fn demosaic_xtrans(raw: &[f32], width: u32, height: u32, pattern: &[u8; 36]) -> Vec<f32> {
-    let w = width as usize;
-    let h = height as usize;
-    // The 5×5 same-color averaging is mostly bias-free but the window
-    // doesn't cleanly cover the 6×6 CFA period, so uniform areas (sky,
-    // walls) show a faint 6-pixel-period grid that the saturating color
-    // matrix amplifies. A small separable box blur (radius 2 → 5×5)
-    // suppresses it without visibly softening edges at normal zoom.
-    let rgb = simple_demosaic(raw, w, h, pattern);
-    box_blur_separable_rgb(&rgb, w, h, 2)
+    demosaic_xtrans_passes(raw, width, height, pattern, 3)
 }
 
-/// Markesteijn 3-pass demosaicer. Sharper edge reconstruction than
-/// `demosaic_xtrans` but with per-CFA-position bias artifacts. Kept for
-/// reference / future tuning.
+/// Markesteijn 3-pass demosaicer — the full-quality path used by
+/// `demosaic_xtrans`. Kept as a named alias for callers that want to be
+/// explicit about the algorithm.
 pub fn demosaic_xtrans_markesteijn(raw: &[f32], width: u32, height: u32, pattern: &[u8; 36]) -> Vec<f32> {
     demosaic_xtrans_passes(raw, width, height, pattern, 3)
 }
@@ -136,20 +130,21 @@ pub fn demosaic_xtrans_passes(
         }
     }
 
-    // Final 7×7 RGB box blur (slightly more than 1 CFA period in each
-    // dimension) to suppress residual per-CFA-position bias. The X-Trans
-    // 6×6 pattern produces 36 distinct per-cell reconstruction biases
-    // that appear as diagonal banding at full pixel zoom; a blur kernel
-    // larger than the CFA period averages this out cleanly.
-    //
-    // Using a separable two-pass implementation (horizontal then vertical)
-    // makes this O(N) per dimension instead of O(N²), so 7×7 is still fast.
-    box_blur_separable_rgb(&rgb, w, h, 3)
+    // The edge-directed reconstruction is bias-free on flat fields at every
+    // crop offset (see flat_gray_has_no_grid_at_any_crop_offset), so no
+    // trailing box blur is needed — earlier versions blurred here to hide a
+    // grid that the box-average demosaic + saturating matrix produced, at the
+    // cost of softening real detail.
+    rgb
 }
 
 /// Separable box blur on planar RGB-interleaved data. `radius` is the
 /// kernel half-width (so a radius of 3 gives a 7×7 effective kernel).
 /// Two passes (H then V) with O(1)-per-pixel running-sum updates.
+///
+/// Retained behind `#[allow(dead_code)]`: the demosaic no longer blurs, but
+/// this is kept as a quick regression lever if a model needs mild smoothing.
+#[allow(dead_code)]
 fn box_blur_separable_rgb(src: &[f32], w: usize, h: usize, radius: usize) -> Vec<f32> {
     let mut tmp = vec![0.0f32; src.len()];
     let mut dst = vec![0.0f32; src.len()];
@@ -776,6 +771,105 @@ mod tests {
         assert_eq!(rgb.len(), w * h * 3);
         for v in &rgb {
             assert!((*v - 0.3).abs() < 1e-3);
+        }
+    }
+
+    /// Shift a base 6×6 pattern by a crop offset, mirroring how `read_raf`
+    /// aligns the CFA to cropped output pixels via `shift_cfa`.
+    fn shifted_pattern(base: &[u8; 36], row_off: usize, col_off: usize) -> [u8; 36] {
+        let mut out = [0u8; 36];
+        for r in 0..6 {
+            for c in 0..6 {
+                out[r * 6 + c] = base[((r + row_off) % 6) * 6 + ((c + col_off) % 6)];
+            }
+        }
+        out
+    }
+
+    /// A flat-gray X-Trans mosaic must reconstruct to a uniform RGB field with
+    /// NO 6px-periodic variance — at every crop offset. This is the stronger
+    /// version of `solid_gray_reconstructs_to_gray`: it runs the real
+    /// entrypoint (no separate blur to hide a grid) across all 36 crop phases
+    /// and asserts there is no per-CFA-position variation in the interior.
+    #[test]
+    fn flat_gray_has_no_grid_at_any_crop_offset() {
+        let w = 60;
+        let h = 60;
+        let gray = 0.5f32;
+        let raw = vec![gray; w * h];
+
+        for ro in 0..6 {
+            for co in 0..6 {
+                let pat = shifted_pattern(&TEST_PATTERN, ro, co);
+                let rgb = demosaic_xtrans(&raw, w as u32, h as u32, &pat);
+
+                // (a) every interior pixel reconstructs to the input gray.
+                let mut max_dev = 0.0f32;
+                for row in 4..h - 4 {
+                    for col in 4..w - 4 {
+                        let o = (row * w + col) * 3;
+                        for ch in 0..3 {
+                            max_dev = max_dev.max((rgb[o + ch] - gray).abs());
+                        }
+                    }
+                }
+                assert!(
+                    max_dev < 1e-4,
+                    "flat-gray deviation {:.6} at crop offset ({},{})",
+                    max_dev, ro, co
+                );
+
+                // (b) no 6px-periodic structure: the mean value of each of the
+                // 36 CFA cell positions must be identical (the signature of a
+                // grid is per-cell means that differ).
+                let mut cell_sum = [0.0f64; 36];
+                let mut cell_cnt = [0u32; 36];
+                for row in 4..h - 4 {
+                    for col in 4..w - 4 {
+                        let o = (row * w + col) * 3;
+                        let cell = (row % 6) * 6 + (col % 6);
+                        cell_sum[cell] += ((rgb[o] + rgb[o + 1] + rgb[o + 2]) / 3.0) as f64;
+                        cell_cnt[cell] += 1;
+                    }
+                }
+                let means: Vec<f64> = (0..36)
+                    .map(|i| cell_sum[i] / cell_cnt[i].max(1) as f64)
+                    .collect();
+                let lo = means.iter().cloned().fold(f64::MAX, f64::min);
+                let hi = means.iter().cloned().fold(f64::MIN, f64::max);
+                assert!(
+                    hi - lo < 1e-4,
+                    "6px grid detected: per-cell mean spread {:.6} at offset ({},{})",
+                    hi - lo, ro, co
+                );
+            }
+        }
+    }
+
+    /// A flat-gray field must also stay color-neutral: R, G and B reconstruct
+    /// to the same value (no false chroma grid) at every crop offset.
+    #[test]
+    fn flat_gray_stays_neutral_at_any_crop_offset() {
+        let w = 60;
+        let h = 60;
+        let raw = vec![0.5f32; w * h];
+        for ro in 0..6 {
+            for co in 0..6 {
+                let pat = shifted_pattern(&TEST_PATTERN, ro, co);
+                let rgb = demosaic_xtrans(&raw, w as u32, h as u32, &pat);
+                for row in 4..h - 4 {
+                    for col in 4..w - 4 {
+                        let o = (row * w + col) * 3;
+                        let chroma =
+                            (rgb[o] - rgb[o + 1]).abs().max((rgb[o + 1] - rgb[o + 2]).abs());
+                        assert!(
+                            chroma < 1e-4,
+                            "false chroma {:.6} at {},{} offset ({},{})",
+                            chroma, row, col, ro, co
+                        );
+                    }
+                }
+            }
         }
     }
 

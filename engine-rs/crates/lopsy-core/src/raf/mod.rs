@@ -262,9 +262,19 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
     };
 
     // ── Color matrix ────────────────────────────────────────────
-
-    let _ = color_matrix_for_model(&camera_model);
-    color::apply_matrix(&mut rgb_f32, &SIMPLE_CAM_TO_SRGB);
+    // Real per-camera camera→sRGB matrix derived from the DNG ColorMatrix1
+    // values in `color_matrix_for_model`. Row-normalized so that a neutral
+    // input (R=G=B, as produced by the gray-world WB above) maps to a
+    // neutral output — this is what keeps grays neutral instead of the
+    // magenta cast the old hand-tuned saturation matrix was working around.
+    let cam_to_srgb = normalize_matrix_rows(color_matrix_for_model(&camera_model));
+    raf_log!(
+        "[RAF] cam→sRGB (row-normalized): [{:.3} {:.3} {:.3}; {:.3} {:.3} {:.3}; {:.3} {:.3} {:.3}]",
+        cam_to_srgb[0], cam_to_srgb[1], cam_to_srgb[2],
+        cam_to_srgb[3], cam_to_srgb[4], cam_to_srgb[5],
+        cam_to_srgb[6], cam_to_srgb[7], cam_to_srgb[8]
+    );
+    color::apply_matrix(&mut rgb_f32, &cam_to_srgb);
 
     // ── Exposure boost ─────────────────────────────────────────
     // Raw sensor data uses ~30% of the 14-bit range (cameras expose for
@@ -289,6 +299,13 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
     // ── sRGB gamma ──────────────────────────────────────────────
 
     color::apply_srgb_gamma(&mut rgb_f32);
+
+    // ── Capture sharpening ──────────────────────────────────────
+    // A mild luma unsharp mask in display (gamma-encoded) space, to match
+    // the crispness of the camera-rendered JPEG / Preview. Kept modest
+    // (small radius, low amount) so it sharpens real edges without ringing
+    // and is off the demosaic critical path.
+    unsharp_mask_luma(&mut rgb_f32, w, h, CAPTURE_SHARPEN_AMOUNT);
 
     // ── Convert RGB → RGBA ──────────────────────────────────────
 
@@ -423,29 +440,99 @@ fn shift_cfa(pat: &[u8; 36], row_offset: usize, col_offset: usize) -> [u8; 36] {
     out
 }
 
-/// Gray-preserving saturation-boost matrix. Rows sum to 1.0 so a neutral
-/// input (after gray-world WB) maps to a neutral output.
+/// Legacy hand-tuned saturation matrix. Superseded by the real per-camera
+/// matrix (`color_matrix_for_model` + `normalize_matrix_rows`); retained
+/// behind `#[allow(dead_code)]` as a one-line revert in case the per-camera
+/// matrix regresses on some model.
 ///
-/// We tried dcraw's per-camera camera→sRGB matrices (which give better
-/// color accuracy per channel), but they're calibrated for a specific
-/// WB convention (RAW camera response, not WB-balanced input). When
-/// composed with our gray-world WB, they produce magenta cast. A proper
-/// fix needs DCP-style profiles with matched WB + matrix pairs.
-///
-/// Strong enough for punchy color, paired with the 7×7 post-demosaic
-/// blur to suppress per-CFA-position residual amplification.
-// Asymmetric matrix tuned empirically against the camera-rendered JPG
-// reference. R row pulls more from B (for warmer yellows). B row pulls
-// more from R (for cleaner blues). Rows sum to 1 so gray is preserved.
-// Asymmetric saturation matrix (rows sum to 1, gray-preserving) tuned
-// against the camera-JPEG reference. R/G use 3×/-1× to make warm tones
-// pop; B uses 4×/-1.5× to compensate for the gray-world WB's slight
-// blue cast and produce vivid skies.
+/// The big +/- coefficients made warm tones pop but amplified any per-pixel
+/// mosaic residual into a visible grid, which the post-demosaic blur then had
+/// to hide. Rows sum to 1.0 so gray stayed neutral.
+#[allow(dead_code)]
 const SIMPLE_CAM_TO_SRGB: [f32; 9] = [
      3.0, -1.0, -1.0,
     -1.0,  3.0, -1.0,
     -2.0, -1.5,  4.5,
 ];
+
+/// Capture-sharpening strength (fraction of the high-pass detail added
+/// back). Modest by design — enough to match the camera JPEG's crispness
+/// without visible ringing.
+const CAPTURE_SHARPEN_AMOUNT: f32 = 0.45;
+
+/// Mild luma unsharp mask on interleaved RGB. Sharpens the luminance high-
+/// frequency detail only (chroma is left untouched), which avoids the color
+/// fringing a per-channel unsharp mask produces at edges.
+///
+/// The low-pass is a separable 3×3 tent kernel (`[1,2,1]/4` each axis), so
+/// this is O(N) and cheap. `amount` scales the recovered high-pass detail.
+fn unsharp_mask_luma(rgb: &mut [f32], w: usize, h: usize, amount: f32) {
+    if amount <= 0.0 || w < 3 || h < 3 {
+        return;
+    }
+    let n = w * h;
+
+    // Luma plane (Rec.709) of the current (gamma-encoded) RGB.
+    let mut luma = vec![0.0f32; n];
+    for i in 0..n {
+        let o = i * 3;
+        luma[i] = 0.2126 * rgb[o] + 0.7152 * rgb[o + 1] + 0.0722 * rgb[o + 2];
+    }
+
+    // Separable [1,2,1]/4 blur of the luma plane (reflect at edges).
+    let mut tmp = vec![0.0f32; n];
+    for row in 0..h {
+        for col in 0..w {
+            let l = luma[row * w + col.saturating_sub(1)];
+            let c = luma[row * w + col];
+            let r = luma[row * w + (col + 1).min(w - 1)];
+            tmp[row * w + col] = (l + 2.0 * c + r) * 0.25;
+        }
+    }
+    let mut blur = vec![0.0f32; n];
+    for col in 0..w {
+        for row in 0..h {
+            let u = tmp[row.saturating_sub(1) * w + col];
+            let c = tmp[row * w + col];
+            let d = tmp[(row + 1).min(h - 1) * w + col];
+            blur[row * w + col] = (u + 2.0 * c + d) * 0.25;
+        }
+    }
+
+    // Add the high-pass detail back, scaling RGB by the luma ratio so hue
+    // and saturation are preserved.
+    for i in 0..n {
+        let detail = luma[i] - blur[i];
+        let target = luma[i] + amount * detail;
+        if luma[i] > 1e-4 {
+            let scale = (target / luma[i]).max(0.0);
+            let o = i * 3;
+            rgb[o] *= scale;
+            rgb[o + 1] *= scale;
+            rgb[o + 2] *= scale;
+        }
+    }
+}
+
+/// Normalize each row of a 3×3 cam→sRGB matrix to sum to 1.0.
+///
+/// A neutral input (R=G=B, as produced by the gray-world WB) is then mapped
+/// to a neutral output, because each output channel becomes a convex-ish
+/// combination of equal inputs. This is dcraw's gray-preservation step and
+/// is what lets us use a real per-camera color matrix without the magenta
+/// cast that comes from composing an un-normalized matrix with our WB.
+fn normalize_matrix_rows(m: [f32; 9]) -> [f32; 9] {
+    let mut out = m;
+    for r in 0..3 {
+        let sum = m[r * 3] + m[r * 3 + 1] + m[r * 3 + 2];
+        if sum.abs() > 1e-6 {
+            out[r * 3] /= sum;
+            out[r * 3 + 1] /= sum;
+            out[r * 3 + 2] /= sum;
+        }
+    }
+    out
+}
 
 /// Stub — kept for future use when WB-compatible per-camera matrices
 /// are wired up. Currently unused (we use `auto_wb_gray_world`).
@@ -648,4 +735,87 @@ fn color_matrix_for_model(model: &str) -> [f32; 9] {
     ];
 
     color::color_matrix_to_srgb(&cm_normalized)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn row_normalized_matrix_keeps_gray_neutral() {
+        // The row-normalized per-camera matrix must map a neutral input
+        // (R=G=B) to a neutral output — no magenta/green cast.
+        for model in ["X-T5", "X-T4", "X-T3", "X-T2", "GFX100", "X100VI", "unknown"] {
+            let m = normalize_matrix_rows(color_matrix_for_model(model));
+            for r in 0..3 {
+                let sum = m[r * 3] + m[r * 3 + 1] + m[r * 3 + 2];
+                assert!((sum - 1.0).abs() < 1e-5, "{model} row {r} sums to {sum}");
+            }
+            let mut rgb = [0.5f32, 0.5, 0.5];
+            color::apply_matrix(&mut rgb, &m);
+            assert!(
+                (rgb[0] - 0.5).abs() < 1e-5
+                    && (rgb[1] - 0.5).abs() < 1e-5
+                    && (rgb[2] - 0.5).abs() < 1e-5,
+                "{model} gray → {:?}",
+                rgb
+            );
+        }
+    }
+
+    #[test]
+    fn unsharp_mask_leaves_flat_field_untouched() {
+        // A flat field has no high-frequency detail, so sharpening is a no-op.
+        let w = 8;
+        let h = 8;
+        let mut rgb = vec![0.5f32; w * h * 3];
+        unsharp_mask_luma(&mut rgb, w, h, CAPTURE_SHARPEN_AMOUNT);
+        for v in &rgb {
+            assert!((v - 0.5).abs() < 1e-5, "flat field changed: {v}");
+        }
+    }
+
+    #[test]
+    fn unsharp_mask_increases_edge_contrast_without_color_shift() {
+        // A vertical gray step edge should get crisper (the dark side darker,
+        // the light side lighter near the edge) while staying neutral gray.
+        let w = 9;
+        let h = 3;
+        let mut rgb = vec![0.0f32; w * h * 3];
+        for row in 0..h {
+            for col in 0..w {
+                let v = if col < w / 2 { 0.3 } else { 0.7 };
+                let o = (row * w + col) * 3;
+                rgb[o] = v;
+                rgb[o + 1] = v;
+                rgb[o + 2] = v;
+            }
+        }
+        let before = rgb.clone();
+        unsharp_mask_luma(&mut rgb, w, h, CAPTURE_SHARPEN_AMOUNT);
+
+        // Pixel just left of the edge gets darker; just right gets lighter.
+        let mid = h / 2;
+        let left = (mid * w + (w / 2 - 1)) * 3;
+        let right = (mid * w + (w / 2)) * 3;
+        assert!(rgb[left] < before[left], "left of edge should darken");
+        assert!(rgb[right] > before[right], "right of edge should brighten");
+        // Output stays neutral gray (R==G==B) everywhere.
+        for i in 0..w * h {
+            let o = i * 3;
+            assert!((rgb[o] - rgb[o + 1]).abs() < 1e-5 && (rgb[o + 1] - rgb[o + 2]).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn color_matrix_is_finite_and_sane() {
+        // Diagonal-dominant, finite coefficients — a real cam→sRGB matrix,
+        // not the degenerate identity returned on inversion failure.
+        let m = color_matrix_for_model("X-T5");
+        for v in m {
+            assert!(v.is_finite());
+        }
+        assert!(m[0] > 0.0 && m[4] > 0.0 && m[8] > 0.0, "diagonal must be positive: {m:?}");
+        assert_ne!(m, [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], "matrix inversion failed");
+    }
 }
