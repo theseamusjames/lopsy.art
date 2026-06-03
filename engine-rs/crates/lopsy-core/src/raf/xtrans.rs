@@ -779,6 +779,105 @@ mod tests {
         }
     }
 
+    /// Shift a base 6×6 pattern by a crop offset, mirroring how `read_raf`
+    /// aligns the CFA to cropped output pixels via `shift_cfa`.
+    fn shifted_pattern(base: &[u8; 36], row_off: usize, col_off: usize) -> [u8; 36] {
+        let mut out = [0u8; 36];
+        for r in 0..6 {
+            for c in 0..6 {
+                out[r * 6 + c] = base[((r + row_off) % 6) * 6 + ((c + col_off) % 6)];
+            }
+        }
+        out
+    }
+
+    /// A flat-gray X-Trans mosaic must reconstruct to a uniform RGB field with
+    /// NO 6px-periodic variance — at every crop offset. This is the stronger
+    /// version of `solid_gray_reconstructs_to_gray`: it runs the real
+    /// entrypoint (no separate blur to hide a grid) across all 36 crop phases
+    /// and asserts there is no per-CFA-position variation in the interior.
+    #[test]
+    fn flat_gray_has_no_grid_at_any_crop_offset() {
+        let w = 60;
+        let h = 60;
+        let gray = 0.5f32;
+        let raw = vec![gray; w * h];
+
+        for ro in 0..6 {
+            for co in 0..6 {
+                let pat = shifted_pattern(&TEST_PATTERN, ro, co);
+                let rgb = demosaic_xtrans(&raw, w as u32, h as u32, &pat);
+
+                // (a) every interior pixel reconstructs to the input gray.
+                let mut max_dev = 0.0f32;
+                for row in 4..h - 4 {
+                    for col in 4..w - 4 {
+                        let o = (row * w + col) * 3;
+                        for ch in 0..3 {
+                            max_dev = max_dev.max((rgb[o + ch] - gray).abs());
+                        }
+                    }
+                }
+                assert!(
+                    max_dev < 1e-4,
+                    "flat-gray deviation {:.6} at crop offset ({},{})",
+                    max_dev, ro, co
+                );
+
+                // (b) no 6px-periodic structure: the mean value of each of the
+                // 36 CFA cell positions must be identical (the signature of a
+                // grid is per-cell means that differ).
+                let mut cell_sum = [0.0f64; 36];
+                let mut cell_cnt = [0u32; 36];
+                for row in 4..h - 4 {
+                    for col in 4..w - 4 {
+                        let o = (row * w + col) * 3;
+                        let cell = (row % 6) * 6 + (col % 6);
+                        cell_sum[cell] += ((rgb[o] + rgb[o + 1] + rgb[o + 2]) / 3.0) as f64;
+                        cell_cnt[cell] += 1;
+                    }
+                }
+                let means: Vec<f64> = (0..36)
+                    .map(|i| cell_sum[i] / cell_cnt[i].max(1) as f64)
+                    .collect();
+                let lo = means.iter().cloned().fold(f64::MAX, f64::min);
+                let hi = means.iter().cloned().fold(f64::MIN, f64::max);
+                assert!(
+                    hi - lo < 1e-4,
+                    "6px grid detected: per-cell mean spread {:.6} at offset ({},{})",
+                    hi - lo, ro, co
+                );
+            }
+        }
+    }
+
+    /// A flat-gray field must also stay color-neutral: R, G and B reconstruct
+    /// to the same value (no false chroma grid) at every crop offset.
+    #[test]
+    fn flat_gray_stays_neutral_at_any_crop_offset() {
+        let w = 60;
+        let h = 60;
+        let raw = vec![0.5f32; w * h];
+        for ro in 0..6 {
+            for co in 0..6 {
+                let pat = shifted_pattern(&TEST_PATTERN, ro, co);
+                let rgb = demosaic_xtrans(&raw, w as u32, h as u32, &pat);
+                for row in 4..h - 4 {
+                    for col in 4..w - 4 {
+                        let o = (row * w + col) * 3;
+                        let chroma =
+                            (rgb[o] - rgb[o + 1]).abs().max((rgb[o + 1] - rgb[o + 2]).abs());
+                        assert!(
+                            chroma < 1e-4,
+                            "false chroma {:.6} at {},{} offset ({},{})",
+                            chroma, row, col, ro, co
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn neighbor_table_has_greens_for_all_dirs() {
         let nb = build_neighbor_table(&TEST_PATTERN);
