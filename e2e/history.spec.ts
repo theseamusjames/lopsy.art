@@ -162,6 +162,8 @@ test.describe('History - Multi-Step Operations', () => {
     expect((await getEditorState(page)).document.layers).toHaveLength(3);
 
     await redo(page); // redo paint top
+    await page.waitForTimeout(500);
+    await page.evaluate(() => new Promise(requestAnimationFrame));
     const topPixel = await getPixelAt(page, 60, 60, topId);
     expect(topPixel.g).toBe(255);
   });
