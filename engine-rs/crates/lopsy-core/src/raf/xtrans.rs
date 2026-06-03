@@ -99,43 +99,80 @@ pub fn demosaic_xtrans_passes(
     }
 
     // Final R/B interpolation via color-difference plane.
-    let (chroma_r, chroma_b) = interpolate_chroma(raw, &green, w, h, pattern);
+    let (mut chroma_r, mut chroma_b) = interpolate_chroma(raw, &green, w, h, pattern);
 
-    // Compose RGB output. For known channels use the raw value directly to
-    // preserve detail; for the others use chroma + green.
-    let mut rgb = vec![0.0f32; w * h * 3];
-    for row in 0..h {
-        for col in 0..w {
-            let i = row * w + col;
-            let out = i * 3;
-            let c = cfa_color(pattern, row, col);
-            let g = green[i];
-            let r = chroma_r[i] + g;
-            let b = chroma_b[i] + g;
-            rgb[out] = match c {
-                R => raw[i],
-                _ => r,
-            }
-            .max(0.0);
-            rgb[out + 1] = match c {
-                G => raw[i],
-                _ => g,
-            }
-            .max(0.0);
-            rgb[out + 2] = match c {
-                B => raw[i],
-                _ => b,
-            }
-            .max(0.0);
-        }
+    // Median-filter the color-difference (R-G, B-G) planes to remove the
+    // CFA-locked false colour that edge-directed X-Trans demosaicing leaves
+    // on fine texture — the regular magenta/green speckle visible at pixel
+    // zoom on detailed areas (marble, foliage). These errors are impulse-like
+    // and tied to individual CFA positions, so a small median removes them
+    // cleanly. Real chroma is low-frequency, and luma detail is carried by the
+    // green plane, so this does not soften edges the way a luma blur would.
+    // This is the standard final step of the Markesteijn pipeline (dcraw runs
+    // three such passes); we had omitted it.
+    for _ in 0..CHROMA_MEDIAN_PASSES {
+        chroma_r = median_filter_3x3(&chroma_r, w, h);
+        chroma_b = median_filter_3x3(&chroma_b, w, h);
     }
 
-    // The edge-directed reconstruction is bias-free on flat fields at every
-    // crop offset (see flat_gray_has_no_grid_at_any_crop_offset), so no
-    // trailing box blur is needed — earlier versions blurred here to hide a
-    // grid that the box-average demosaic + saturating matrix produced, at the
-    // cost of softening real detail.
+    // Compose RGB from the green plane (which holds the raw value at green
+    // sites) plus the cleaned chroma. R/B are reconstructed everywhere from
+    // green + chroma rather than forcing the raw single-pixel value at known
+    // sites: doing the latter re-injected exactly the per-CFA-position spikes
+    // the median just removed.
+    let mut rgb = vec![0.0f32; w * h * 3];
+    for i in 0..w * h {
+        let out = i * 3;
+        let g = green[i];
+        rgb[out] = (g + chroma_r[i]).max(0.0);
+        rgb[out + 1] = g.max(0.0);
+        rgb[out + 2] = (g + chroma_b[i]).max(0.0);
+    }
+
     rgb
+}
+
+/// Number of 3×3 median passes applied to each color-difference plane to
+/// suppress CFA-locked false colour. Three matches dcraw's Markesteijn.
+const CHROMA_MEDIAN_PASSES: usize = 3;
+
+/// 3×3 median filter on a single-channel plane, edge-clamped. Returns a new
+/// buffer. Used on the chroma (color-difference) planes for false-colour
+/// suppression; it preserves edges far better than a linear blur.
+fn median_filter_3x3(plane: &[f32], w: usize, h: usize) -> Vec<f32> {
+    let mut out = vec![0.0f32; w * h];
+    for row in 0..h {
+        for col in 0..w {
+            let mut win = [0.0f32; 9];
+            let mut k = 0;
+            for dy in -1i32..=1 {
+                let r = (row as i32 + dy).clamp(0, h as i32 - 1) as usize;
+                for dx in -1i32..=1 {
+                    let c = (col as i32 + dx).clamp(0, w as i32 - 1) as usize;
+                    win[k] = plane[r * w + c];
+                    k += 1;
+                }
+            }
+            out[row * w + col] = median9(win);
+        }
+    }
+    out
+}
+
+/// Median of 9 values via partial selection (find the 5th-smallest). ~35
+/// comparisons, allocation-free.
+#[inline]
+fn median9(mut v: [f32; 9]) -> f32 {
+    for i in 0..5 {
+        let mut m = i;
+        for j in (i + 1)..9 {
+            if v[j] < v[m] {
+                m = j;
+            }
+        }
+        v.swap(i, m);
+    }
+    v[4]
 }
 
 /// Separable box blur on planar RGB-interleaved data. `radius` is the
@@ -740,6 +777,62 @@ mod tests {
                 assert!((rgb[o + 2] - 0.5).abs() < 1e-3, "B at {},{} = {}", row, col, rgb[o + 2]);
             }
         }
+    }
+
+    #[test]
+    fn median9_finds_the_middle_value() {
+        assert_eq!(median9([9.0, 1.0, 5.0, 3.0, 7.0, 2.0, 8.0, 4.0, 6.0]), 5.0);
+        assert_eq!(median9([0.5; 9]), 0.5);
+    }
+
+    #[test]
+    fn median_filter_removes_isolated_impulse() {
+        // A flat plane with a single spike: the 3×3 median erases the spike
+        // (only 1 of 9 samples differ) while leaving the flat field alone.
+        let (w, h) = (9, 9);
+        let mut plane = vec![0.2f32; w * h];
+        plane[4 * w + 4] = 0.9;
+        let out = median_filter_3x3(&plane, w, h);
+        assert!((out[4 * w + 4] - 0.2).abs() < 1e-6, "spike not removed: {}", out[4 * w + 4]);
+        for v in &out {
+            assert!((v - 0.2).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn chroma_median_suppresses_false_color_on_texture() {
+        // A GRAY but textured scene (R=G=B at every pixel) must reconstruct to
+        // near-neutral. Any chroma is demosaic false colour. The chroma median
+        // keeps it small: without it this scene reaches mean≈0.036 / max≈0.15;
+        // with it, mean≈0.012 / max≈0.043. The thresholds below sit between
+        // those, so the test fails if the median is ever removed.
+        let (w, h) = (120usize, 120usize);
+        let mut raw = vec![0.0f32; w * h];
+        for row in 0..h {
+            for col in 0..w {
+                let t = 0.2 * ((col as f32 * 0.9).sin() * (row as f32 * 0.7).cos());
+                raw[row * w + col] = (0.5 + t).clamp(0.02, 0.98);
+            }
+        }
+        let rgb = demosaic_xtrans(&raw, w as u32, h as u32, &TEST_PATTERN);
+        let mut mean = 0.0f64;
+        let mut max = 0.0f32;
+        let mut n = 0u64;
+        for row in 6..h - 6 {
+            for col in 6..w - 6 {
+                let o = (row * w + col) * 3;
+                let chroma = (rgb[o] - rgb[o + 1])
+                    .abs()
+                    .max((rgb[o + 1] - rgb[o + 2]).abs())
+                    .max((rgb[o] - rgb[o + 2]).abs());
+                mean += chroma as f64;
+                max = max.max(chroma);
+                n += 1;
+            }
+        }
+        let mean = mean / n as f64;
+        assert!(mean < 0.02, "mean false-colour too high: {mean}");
+        assert!(max < 0.08, "false-colour spike too high: {max}");
     }
 
     #[test]
