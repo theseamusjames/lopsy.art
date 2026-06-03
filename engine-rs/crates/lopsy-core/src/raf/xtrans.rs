@@ -38,30 +38,24 @@ const R: u8 = 0;
 const G: u8 = 1;
 const B: u8 = 2;
 
-/// Public entrypoint. Uses simple same-color averaging in a 5×5 window
-/// — each output channel = average of CFA cells of that color in the
-/// window. Bias-free across CFA positions and preserves local color
-/// separation.
+/// Public entrypoint. Edge-directed Markesteijn-style demosaic: green is
+/// reconstructed by blending four directional candidates weighted by local
+/// homogeneity, then R/B are filled via the smooth color-difference planes.
 ///
-/// A tiny 3×3 RGB blur is applied at the end to suppress the residual
-/// 6-pixel-period grid that uniform areas (sky, walls) expose at full
-/// pixel zoom. The blur is small enough that real image detail
-/// (window edges, the tree, etc.) is not perceptibly softened.
+/// This replaces the previous 5×5 same-color box average. That average could
+/// not tile the 6×6 X-Trans period cleanly, so flat areas (sky, walls) picked
+/// up a 6-pixel-period bias which the color matrix then amplified into a
+/// visible grid. The previous code papered over it with a box blur, which
+/// also smeared real detail. The edge-directed path reconstructs flat fields
+/// exactly at every crop offset (see `flat_gray_has_no_grid_at_any_crop_offset`),
+/// so no compensating blur is needed.
 pub fn demosaic_xtrans(raw: &[f32], width: u32, height: u32, pattern: &[u8; 36]) -> Vec<f32> {
-    let w = width as usize;
-    let h = height as usize;
-    // The 5×5 same-color averaging is mostly bias-free but the window
-    // doesn't cleanly cover the 6×6 CFA period, so uniform areas (sky,
-    // walls) show a faint 6-pixel-period grid that the saturating color
-    // matrix amplifies. A small separable box blur (radius 2 → 5×5)
-    // suppresses it without visibly softening edges at normal zoom.
-    let rgb = simple_demosaic(raw, w, h, pattern);
-    box_blur_separable_rgb(&rgb, w, h, 2)
+    demosaic_xtrans_passes(raw, width, height, pattern, 3)
 }
 
-/// Markesteijn 3-pass demosaicer. Sharper edge reconstruction than
-/// `demosaic_xtrans` but with per-CFA-position bias artifacts. Kept for
-/// reference / future tuning.
+/// Markesteijn 3-pass demosaicer — the full-quality path used by
+/// `demosaic_xtrans`. Kept as a named alias for callers that want to be
+/// explicit about the algorithm.
 pub fn demosaic_xtrans_markesteijn(raw: &[f32], width: u32, height: u32, pattern: &[u8; 36]) -> Vec<f32> {
     demosaic_xtrans_passes(raw, width, height, pattern, 3)
 }
