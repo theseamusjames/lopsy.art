@@ -130,20 +130,21 @@ pub fn demosaic_xtrans_passes(
         }
     }
 
-    // Final 7×7 RGB box blur (slightly more than 1 CFA period in each
-    // dimension) to suppress residual per-CFA-position bias. The X-Trans
-    // 6×6 pattern produces 36 distinct per-cell reconstruction biases
-    // that appear as diagonal banding at full pixel zoom; a blur kernel
-    // larger than the CFA period averages this out cleanly.
-    //
-    // Using a separable two-pass implementation (horizontal then vertical)
-    // makes this O(N) per dimension instead of O(N²), so 7×7 is still fast.
-    box_blur_separable_rgb(&rgb, w, h, 3)
+    // The edge-directed reconstruction is bias-free on flat fields at every
+    // crop offset (see flat_gray_has_no_grid_at_any_crop_offset), so no
+    // trailing box blur is needed — earlier versions blurred here to hide a
+    // grid that the box-average demosaic + saturating matrix produced, at the
+    // cost of softening real detail.
+    rgb
 }
 
 /// Separable box blur on planar RGB-interleaved data. `radius` is the
 /// kernel half-width (so a radius of 3 gives a 7×7 effective kernel).
 /// Two passes (H then V) with O(1)-per-pixel running-sum updates.
+///
+/// Retained behind `#[allow(dead_code)]`: the demosaic no longer blurs, but
+/// this is kept as a quick regression lever if a model needs mild smoothing.
+#[allow(dead_code)]
 fn box_blur_separable_rgb(src: &[f32], w: usize, h: usize, radius: usize) -> Vec<f32> {
     let mut tmp = vec![0.0f32; src.len()];
     let mut dst = vec![0.0f32; src.len()];
