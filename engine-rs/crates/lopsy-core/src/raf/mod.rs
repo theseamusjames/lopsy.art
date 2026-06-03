@@ -262,9 +262,19 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
     };
 
     // ── Color matrix ────────────────────────────────────────────
-
-    let _ = color_matrix_for_model(&camera_model);
-    color::apply_matrix(&mut rgb_f32, &SIMPLE_CAM_TO_SRGB);
+    // Real per-camera camera→sRGB matrix derived from the DNG ColorMatrix1
+    // values in `color_matrix_for_model`. Row-normalized so that a neutral
+    // input (R=G=B, as produced by the gray-world WB above) maps to a
+    // neutral output — this is what keeps grays neutral instead of the
+    // magenta cast the old hand-tuned saturation matrix was working around.
+    let cam_to_srgb = normalize_matrix_rows(color_matrix_for_model(&camera_model));
+    raf_log!(
+        "[RAF] cam→sRGB (row-normalized): [{:.3} {:.3} {:.3}; {:.3} {:.3} {:.3}; {:.3} {:.3} {:.3}]",
+        cam_to_srgb[0], cam_to_srgb[1], cam_to_srgb[2],
+        cam_to_srgb[3], cam_to_srgb[4], cam_to_srgb[5],
+        cam_to_srgb[6], cam_to_srgb[7], cam_to_srgb[8]
+    );
+    color::apply_matrix(&mut rgb_f32, &cam_to_srgb);
 
     // ── Exposure boost ─────────────────────────────────────────
     // Raw sensor data uses ~30% of the 14-bit range (cameras expose for
@@ -423,29 +433,40 @@ fn shift_cfa(pat: &[u8; 36], row_offset: usize, col_offset: usize) -> [u8; 36] {
     out
 }
 
-/// Gray-preserving saturation-boost matrix. Rows sum to 1.0 so a neutral
-/// input (after gray-world WB) maps to a neutral output.
+/// Legacy hand-tuned saturation matrix. Superseded by the real per-camera
+/// matrix (`color_matrix_for_model` + `normalize_matrix_rows`); retained
+/// behind `#[allow(dead_code)]` as a one-line revert in case the per-camera
+/// matrix regresses on some model.
 ///
-/// We tried dcraw's per-camera camera→sRGB matrices (which give better
-/// color accuracy per channel), but they're calibrated for a specific
-/// WB convention (RAW camera response, not WB-balanced input). When
-/// composed with our gray-world WB, they produce magenta cast. A proper
-/// fix needs DCP-style profiles with matched WB + matrix pairs.
-///
-/// Strong enough for punchy color, paired with the 7×7 post-demosaic
-/// blur to suppress per-CFA-position residual amplification.
-// Asymmetric matrix tuned empirically against the camera-rendered JPG
-// reference. R row pulls more from B (for warmer yellows). B row pulls
-// more from R (for cleaner blues). Rows sum to 1 so gray is preserved.
-// Asymmetric saturation matrix (rows sum to 1, gray-preserving) tuned
-// against the camera-JPEG reference. R/G use 3×/-1× to make warm tones
-// pop; B uses 4×/-1.5× to compensate for the gray-world WB's slight
-// blue cast and produce vivid skies.
+/// The big +/- coefficients made warm tones pop but amplified any per-pixel
+/// mosaic residual into a visible grid, which the post-demosaic blur then had
+/// to hide. Rows sum to 1.0 so gray stayed neutral.
+#[allow(dead_code)]
 const SIMPLE_CAM_TO_SRGB: [f32; 9] = [
      3.0, -1.0, -1.0,
     -1.0,  3.0, -1.0,
     -2.0, -1.5,  4.5,
 ];
+
+/// Normalize each row of a 3×3 cam→sRGB matrix to sum to 1.0.
+///
+/// A neutral input (R=G=B, as produced by the gray-world WB) is then mapped
+/// to a neutral output, because each output channel becomes a convex-ish
+/// combination of equal inputs. This is dcraw's gray-preservation step and
+/// is what lets us use a real per-camera color matrix without the magenta
+/// cast that comes from composing an un-normalized matrix with our WB.
+fn normalize_matrix_rows(m: [f32; 9]) -> [f32; 9] {
+    let mut out = m;
+    for r in 0..3 {
+        let sum = m[r * 3] + m[r * 3 + 1] + m[r * 3 + 2];
+        if sum.abs() > 1e-6 {
+            out[r * 3] /= sum;
+            out[r * 3 + 1] /= sum;
+            out[r * 3 + 2] /= sum;
+        }
+    }
+    out
+}
 
 /// Stub — kept for future use when WB-compatible per-camera matrices
 /// are wired up. Currently unused (we use `auto_wb_gray_world`).
@@ -648,4 +669,43 @@ fn color_matrix_for_model(model: &str) -> [f32; 9] {
     ];
 
     color::color_matrix_to_srgb(&cm_normalized)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn row_normalized_matrix_keeps_gray_neutral() {
+        // The row-normalized per-camera matrix must map a neutral input
+        // (R=G=B) to a neutral output — no magenta/green cast.
+        for model in ["X-T5", "X-T4", "X-T3", "X-T2", "GFX100", "X100VI", "unknown"] {
+            let m = normalize_matrix_rows(color_matrix_for_model(model));
+            for r in 0..3 {
+                let sum = m[r * 3] + m[r * 3 + 1] + m[r * 3 + 2];
+                assert!((sum - 1.0).abs() < 1e-5, "{model} row {r} sums to {sum}");
+            }
+            let mut rgb = [0.5f32, 0.5, 0.5];
+            color::apply_matrix(&mut rgb, &m);
+            assert!(
+                (rgb[0] - 0.5).abs() < 1e-5
+                    && (rgb[1] - 0.5).abs() < 1e-5
+                    && (rgb[2] - 0.5).abs() < 1e-5,
+                "{model} gray → {:?}",
+                rgb
+            );
+        }
+    }
+
+    #[test]
+    fn color_matrix_is_finite_and_sane() {
+        // Diagonal-dominant, finite coefficients — a real cam→sRGB matrix,
+        // not the degenerate identity returned on inversion failure.
+        let m = color_matrix_for_model("X-T5");
+        for v in m {
+            assert!(v.is_finite());
+        }
+        assert!(m[0] > 0.0 && m[4] > 0.0 && m[8] > 0.0, "diagonal must be positive: {m:?}");
+        assert_ne!(m, [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], "matrix inversion failed");
+    }
 }
