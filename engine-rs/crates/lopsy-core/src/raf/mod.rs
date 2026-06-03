@@ -300,6 +300,13 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
 
     color::apply_srgb_gamma(&mut rgb_f32);
 
+    // ── Capture sharpening ──────────────────────────────────────
+    // A mild luma unsharp mask in display (gamma-encoded) space, to match
+    // the crispness of the camera-rendered JPEG / Preview. Kept modest
+    // (small radius, low amount) so it sharpens real edges without ringing
+    // and is off the demosaic critical path.
+    unsharp_mask_luma(&mut rgb_f32, w, h, CAPTURE_SHARPEN_AMOUNT);
+
     // ── Convert RGB → RGBA ──────────────────────────────────────
 
     let mut rgba = Vec::with_capacity(pixel_count * 4);
@@ -447,6 +454,65 @@ const SIMPLE_CAM_TO_SRGB: [f32; 9] = [
     -1.0,  3.0, -1.0,
     -2.0, -1.5,  4.5,
 ];
+
+/// Capture-sharpening strength (fraction of the high-pass detail added
+/// back). Modest by design — enough to match the camera JPEG's crispness
+/// without visible ringing.
+const CAPTURE_SHARPEN_AMOUNT: f32 = 0.45;
+
+/// Mild luma unsharp mask on interleaved RGB. Sharpens the luminance high-
+/// frequency detail only (chroma is left untouched), which avoids the color
+/// fringing a per-channel unsharp mask produces at edges.
+///
+/// The low-pass is a separable 3×3 tent kernel (`[1,2,1]/4` each axis), so
+/// this is O(N) and cheap. `amount` scales the recovered high-pass detail.
+fn unsharp_mask_luma(rgb: &mut [f32], w: usize, h: usize, amount: f32) {
+    if amount <= 0.0 || w < 3 || h < 3 {
+        return;
+    }
+    let n = w * h;
+
+    // Luma plane (Rec.709) of the current (gamma-encoded) RGB.
+    let mut luma = vec![0.0f32; n];
+    for i in 0..n {
+        let o = i * 3;
+        luma[i] = 0.2126 * rgb[o] + 0.7152 * rgb[o + 1] + 0.0722 * rgb[o + 2];
+    }
+
+    // Separable [1,2,1]/4 blur of the luma plane (reflect at edges).
+    let mut tmp = vec![0.0f32; n];
+    for row in 0..h {
+        for col in 0..w {
+            let l = luma[row * w + col.saturating_sub(1)];
+            let c = luma[row * w + col];
+            let r = luma[row * w + (col + 1).min(w - 1)];
+            tmp[row * w + col] = (l + 2.0 * c + r) * 0.25;
+        }
+    }
+    let mut blur = vec![0.0f32; n];
+    for col in 0..w {
+        for row in 0..h {
+            let u = tmp[row.saturating_sub(1) * w + col];
+            let c = tmp[row * w + col];
+            let d = tmp[(row + 1).min(h - 1) * w + col];
+            blur[row * w + col] = (u + 2.0 * c + d) * 0.25;
+        }
+    }
+
+    // Add the high-pass detail back, scaling RGB by the luma ratio so hue
+    // and saturation are preserved.
+    for i in 0..n {
+        let detail = luma[i] - blur[i];
+        let target = luma[i] + amount * detail;
+        if luma[i] > 1e-4 {
+            let scale = (target / luma[i]).max(0.0);
+            let o = i * 3;
+            rgb[o] *= scale;
+            rgb[o + 1] *= scale;
+            rgb[o + 2] *= scale;
+        }
+    }
+}
 
 /// Normalize each row of a 3×3 cam→sRGB matrix to sum to 1.0.
 ///
@@ -694,6 +760,50 @@ mod tests {
                 "{model} gray → {:?}",
                 rgb
             );
+        }
+    }
+
+    #[test]
+    fn unsharp_mask_leaves_flat_field_untouched() {
+        // A flat field has no high-frequency detail, so sharpening is a no-op.
+        let w = 8;
+        let h = 8;
+        let mut rgb = vec![0.5f32; w * h * 3];
+        unsharp_mask_luma(&mut rgb, w, h, CAPTURE_SHARPEN_AMOUNT);
+        for v in &rgb {
+            assert!((v - 0.5).abs() < 1e-5, "flat field changed: {v}");
+        }
+    }
+
+    #[test]
+    fn unsharp_mask_increases_edge_contrast_without_color_shift() {
+        // A vertical gray step edge should get crisper (the dark side darker,
+        // the light side lighter near the edge) while staying neutral gray.
+        let w = 9;
+        let h = 3;
+        let mut rgb = vec![0.0f32; w * h * 3];
+        for row in 0..h {
+            for col in 0..w {
+                let v = if col < w / 2 { 0.3 } else { 0.7 };
+                let o = (row * w + col) * 3;
+                rgb[o] = v;
+                rgb[o + 1] = v;
+                rgb[o + 2] = v;
+            }
+        }
+        let before = rgb.clone();
+        unsharp_mask_luma(&mut rgb, w, h, CAPTURE_SHARPEN_AMOUNT);
+
+        // Pixel just left of the edge gets darker; just right gets lighter.
+        let mid = h / 2;
+        let left = (mid * w + (w / 2 - 1)) * 3;
+        let right = (mid * w + (w / 2)) * 3;
+        assert!(rgb[left] < before[left], "left of edge should darken");
+        assert!(rgb[right] > before[right], "right of edge should brighten");
+        // Output stays neutral gray (R==G==B) everywhere.
+        for i in 0..w * h {
+            let o = i * 3;
+            assert!((rgb[o] - rgb[o + 1]).abs() < 1e-5 && (rgb[o + 1] - rgb[o + 2]).abs() < 1e-5);
         }
     }
 
