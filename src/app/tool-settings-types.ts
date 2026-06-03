@@ -5,6 +5,7 @@ import type { DodgeMode } from '../tools/dodge/dodge';
 import type { SpongeMode } from '../tools/sponge/sponge';
 import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
 import type { WandSettings } from '../tools/wand/wand-settings';
+import type { FillSettings } from '../tools/fill/fill-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -24,8 +25,6 @@ export interface ToolSettings {
   pencilSize: number;
   eraserSize: number;
   eraserOpacity: number;
-  fillTolerance: number;
-  fillContiguous: boolean;
   shapeMode: ShapeMode;
   shapeOutput: ShapeOutput;
   shapeFillColor: Color | null;
@@ -155,8 +154,7 @@ export interface ToolSettings {
   setPencilSize: (size: number) => void;
   setEraserSize: (size: number) => void;
   setEraserOpacity: (opacity: number) => void;
-  setFillTolerance: (tolerance: number) => void;
-  setFillContiguous: (contiguous: boolean) => void;
+  setFillSetting: <K extends keyof FillSettings>(key: K, value: FillSettings[K]) => void;
   setShapeMode: (mode: ShapeMode) => void;
   setShapeOutput: (output: ShapeOutput) => void;
   setShapeFillColor: (color: Color | null) => void;

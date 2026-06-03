@@ -25,8 +25,7 @@ export function handleFillDown(ctx: InteractionContext): void {
   if (isQuickMaskMode) {
     editorState.pushHistory('Quick Mask Fill');
     const toolSettings = useToolSettingsStore.getState();
-    const tolerance = toolSettings.fillTolerance;
-    const contiguous = toolSettings.fillContiguous;
+    const { tolerance, contiguous } = toolSettings.settings.fill;
 
     const engine = getEngine();
     if (!engine) return;
@@ -45,8 +44,7 @@ export function handleFillDown(ctx: InteractionContext): void {
   if (maskEditMode && maskLayer?.mask) {
     editorState.pushHistory('Mask Fill');
     const toolSettings = useToolSettingsStore.getState();
-    const tolerance = toolSettings.fillTolerance;
-    const contiguous = toolSettings.fillContiguous;
+    const { tolerance, contiguous } = toolSettings.settings.fill;
 
     const engine = getEngine();
     if (!engine) return;
@@ -73,8 +71,7 @@ export function handleFillDown(ctx: InteractionContext): void {
   const toolSettings = useToolSettingsStore.getState();
   const color = toolSettings.foregroundColor;
   toolSettings.addRecentColor(color);
-  const tolerance = toolSettings.fillTolerance;
-  const contiguous = toolSettings.fillContiguous;
+  const { tolerance, contiguous } = toolSettings.settings.fill;
 
   const engine = getEngine();
   if (!engine) return;
