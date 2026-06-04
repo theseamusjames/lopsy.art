@@ -2,6 +2,8 @@ import { test, expect } from './fixtures';
 import { waitForStore, createDocument, getEditorState } from './helpers';
 
 test.describe('Mobile canvas', () => {
+  test.skip(({ browserName }) => browserName === 'firefox', 'isMobile is not supported in Firefox');
+
   test.use({
     ...({ isMobile: true } as Record<string, unknown>),
     viewport: { width: 390, height: 844 },

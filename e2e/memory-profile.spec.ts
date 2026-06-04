@@ -291,15 +291,15 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName 
   console.log(`GPU growth from S1:    ${formatMB(s4.gpuTextureBytes - s1.gpuTextureBytes)}`);
   console.log(`\nTotal estimated memory: ${formatMB(s4.perfUsed + s4.gpuTextureBytes)} (JS heap + GPU textures)`);
 
-  // Assertions
-  const layer1 = s4.storeInfo.layers.find(l => l.name === 'Layer 1');
+  // Assertions — check sparse state at S2 (right after dots, before addLayer clears CPU data)
+  const layer1AtS2 = s2.storeInfo.layers.find(l => l.name === 'Layer 1');
+  expect(layer1AtS2?.hasSparse).toBe(true);
+  expect(layer1AtS2?.hasDense).toBe(false);
+  expect(layer1AtS2?.sparsePixels).toBeLessThanOrEqual(2);
+  expect(layer1AtS2?.sparseBytes).toBeLessThan(100);
+
   const addedLayer = s4.storeInfo.layers.find(l => l.name !== 'Background' && l.name !== 'Layer 1' && l.name !== 'Project');
   const bg = s4.storeInfo.layers.find(l => l.name === 'Background');
-
-  expect(layer1?.hasSparse).toBe(true);
-  expect(layer1?.hasDense).toBe(false);
-  expect(layer1?.sparsePixels).toBeLessThanOrEqual(2);
-  expect(layer1?.sparseBytes).toBeLessThan(100);
   expect(addedLayer?.hasDense).toBe(false);
   expect(bg?.hasDense).toBe(true);
 

@@ -576,7 +576,19 @@ export async function drawEllipse(
   const prevTool = await saveTool(page);
   await setForegroundColor(page, color.r, color.g, color.b, color.a);
   await selectTool(page, 'shape');
-  await page.locator('[aria-labelledby="shape-mode-label"]').selectOption('ellipse');
+  await page.evaluate(({ r, g, b, a }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => {
+        setShapeMode: (v: string) => void;
+        setShapeFillColor: (v: { r: number; g: number; b: number; a: number }) => void;
+        setShapeStrokeWidth: (v: number) => void;
+      };
+    };
+    const s = store.getState();
+    s.setShapeMode('ellipse');
+    s.setShapeFillColor({ r, g, b, a: a ?? 1 });
+    s.setShapeStrokeWidth(0);
+  }, { r: color.r, g: color.g, b: color.b, a: color.a });
   const start = await docToScreen(page, cx - rx, cy - ry);
   const end = await docToScreen(page, cx + rx, cy + ry);
   await page.mouse.move(start.x, start.y);
