@@ -6,6 +6,7 @@ import { colorEquals } from '../utils/color';
 import { DEFAULT_TOOL_SETTINGS_SLICES } from './tool-settings-slices';
 import { clampWandSetting } from '../tools/wand/wand-settings';
 import { clampFillSetting } from '../tools/fill/fill-settings';
+import { clampMarqueeSetting } from '../tools/marquee/marquee-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -47,7 +48,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   aspectRatioW: 1,
   aspectRatioH: 1,
   aspectRatioLocked: false,
-  marqueeFeather: 0,
   cropMode: 'normal' as const,
   gradientType: 'linear',
   gradientStops: [
@@ -254,7 +254,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setSpongeSize: (size) => set({ spongeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeSize: (size) => set({ smudgeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeStrength: (strength) => set({ smudgeStrength: Math.max(0, Math.min(100, strength)) }),
-  setMarqueeFeather: (feather) => set({ marqueeFeather: Math.max(0, Math.min(250, Math.round(feather))) }),
+  setMarqueeSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      marquee: { ...s.settings.marquee, [key]: clampMarqueeSetting(key, value) },
+    },
+  })),
   setWandSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,
