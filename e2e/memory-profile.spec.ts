@@ -252,6 +252,11 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName 
   // === SNAPSHOT 2: After two dots ===
   const s2 = await snapshot(page, 'SNAPSHOT 2: After two dots on Layer 1');
 
+  // Verify sparsification happened immediately after the edit
+  const s2Layer1 = s2.storeInfo.layers.find(l => l.name === 'Layer 1');
+  expect(s2Layer1?.hasSparse).toBe(true);
+  expect(s2Layer1?.sparsePixels).toBeLessThanOrEqual(2);
+
   // === Add a new empty layer ===
   await page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
@@ -296,10 +301,14 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName 
   const addedLayer = s4.storeInfo.layers.find(l => l.name !== 'Background' && l.name !== 'Layer 1' && l.name !== 'Project');
   const bg = s4.storeInfo.layers.find(l => l.name === 'Background');
 
-  expect(layer1?.hasSparse).toBe(true);
+  // Layer 1 had sparse data after the dots were placed (snapshot 2), but
+  // switching active layers correctly evicts JS-side data (GPU is the
+  // source of truth). So by snapshot 4, Layer 1 has no JS-side pixel data.
   expect(layer1?.hasDense).toBe(false);
-  expect(layer1?.sparsePixels).toBeLessThanOrEqual(2);
-  expect(layer1?.sparseBytes).toBeLessThan(100);
+  if (layer1?.hasSparse) {
+    expect(layer1.sparsePixels).toBeLessThanOrEqual(2);
+    expect(layer1.sparseBytes).toBeLessThan(100);
+  }
   expect(addedLayer?.hasDense).toBe(false);
   expect(bg?.hasDense).toBe(true);
 

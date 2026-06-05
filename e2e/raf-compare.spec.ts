@@ -22,7 +22,9 @@ test('RAF decode → export JPG for comparison', async ({ page }) => {
   const sampleAvailable = await page.evaluate(async () => {
     try {
       const head = await fetch('/test-sample.raf', { method: 'HEAD' });
-      return head.ok;
+      if (!head.ok) return false;
+      const ct = head.headers.get('content-type') ?? '';
+      return !ct.includes('text/html');
     } catch { return false; }
   });
   test.skip(!sampleAvailable, 'samples/sample.RAF not present (local dev only)');

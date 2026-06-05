@@ -113,6 +113,15 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
       store.getState().createDocument(6000, 4000, false);
     });
 
+    // SwiftShader may fail to allocate a 6K canvas under heavy parallel
+    // load — skip gracefully instead of timing out for 5 minutes.
+    const webglOk = await page.evaluate(() => {
+      const c = document.createElement('canvas');
+      const gl = c.getContext('webgl2');
+      return !!gl;
+    });
+    test.skip(!webglOk, 'WebGL 2 context unavailable (SwiftShader resource exhaustion under parallel load)');
+
     // --- brush tool, small brush for hatching ---
     await page.keyboard.press('b');
     await page.evaluate(() => {

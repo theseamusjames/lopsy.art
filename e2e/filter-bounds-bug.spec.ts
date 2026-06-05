@@ -34,7 +34,8 @@ async function getLayerPixelAt(
 }
 
 test.describe('filter bounds (#235)', () => {
-  test('Gaussian Blur on a small ellipse layer preserves the ellipse content', async ({ page }) => {
+  test('Gaussian Blur on a small ellipse layer preserves the ellipse content', async ({ page, browserName }) => {
+    test.skip(browserName === 'firefox', 'Firefox headless GPU readback returns empty data for shape layers');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600, false);
