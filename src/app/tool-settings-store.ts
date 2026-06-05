@@ -7,6 +7,7 @@ import { DEFAULT_TOOL_SETTINGS_SLICES } from './tool-settings-slices';
 import { clampWandSetting } from '../tools/wand/wand-settings';
 import { clampFillSetting } from '../tools/fill/fill-settings';
 import { clampMarqueeSetting } from '../tools/marquee/marquee-settings';
+import { clampDodgeSetting } from '../tools/dodge/dodge-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -59,8 +60,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   healingSize: 20,
   healingOpacity: 100,
   pathStrokeWidth: 2,
-  dodgeExposure: 50,
-  dodgeMode: 'dodge',
   spongeMode: 'desaturate',
   spongeStrength: 50,
   spongeSize: 30,
@@ -247,8 +246,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     set({ healingOpacity: Math.max(1, Math.min(100, opacity)) });
   },
   setPathStrokeWidth: (width) => set({ pathStrokeWidth: Math.max(1, Math.min(50, width)) }),
-  setDodgeExposure: (exposure) => set({ dodgeExposure: Math.max(1, Math.min(100, exposure)) }),
-  setDodgeMode: (mode) => set({ dodgeMode: mode }),
+  setDodgeSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      dodge: { ...s.settings.dodge, [key]: clampDodgeSetting(key, value) },
+    },
+  })),
   setSpongeMode: (mode) => set({ spongeMode: mode }),
   setSpongeStrength: (strength) => set({ spongeStrength: Math.max(1, Math.min(100, strength)) }),
   setSpongeSize: (size) => set({ spongeSize: Math.max(1, Math.min(5000, size)) }),

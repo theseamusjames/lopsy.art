@@ -91,14 +91,14 @@ async function drawStroke(
   await page.waitForTimeout(200);
 }
 
-/** Thin wrapper: delegates to UI helpers where possible, falls back to store. */
-async function setToolSetting(page: Page, setter: string, value: unknown) {
-  await page.evaluate(({ setter, value }) => {
+/** Per-tool slice setter for dodge (#453). */
+async function setDodgeSetting(page: Page, key: 'mode' | 'exposure', value: string | number) {
+  await page.evaluate(({ key, value }) => {
     const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => Record<string, (v: unknown) => void>;
+      getState: () => { setDodgeSetting: (k: string, v: unknown) => void };
     };
-    store.getState()[setter]!(value);
-  }, { setter, value });
+    store.getState().setDodgeSetting(key, value);
+  }, { key, value });
 }
 
 const toolKeyMap: Record<string, string> = {
@@ -443,7 +443,7 @@ test.describe('Composition 1: Painted Landscape', () => {
     // Dodge (lighten) the left side of mountains
     await setToolOption(page, 'Size', 50);
     await setToolOption(page, 'Exposure', 60);
-    await setToolSetting(page, 'setDodgeMode', 'dodge');
+    await setDodgeSetting(page, 'mode', 'dodge');
 
     const beforeDodge = await snapshot(page);
     await drawStroke(page, { x: 160, y: 180 }, { x: 200, y: 240 }, 8);
@@ -452,7 +452,7 @@ test.describe('Composition 1: Painted Landscape', () => {
     expect(pixelDiff(beforeDodge, afterDodge)).toBeGreaterThan(20);
 
     // Burn (darken) the right side
-    await setToolSetting(page, 'setDodgeMode', 'burn');
+    await setDodgeSetting(page, 'mode', 'burn');
     const beforeBurn = await snapshot(page);
     await drawStroke(page, { x: 370, y: 160 }, { x: 420, y: 220 }, 8);
     const afterBurn = await snapshot(page);

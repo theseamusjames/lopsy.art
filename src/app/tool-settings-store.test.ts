@@ -210,3 +210,55 @@ describe('per-tool slice: marquee (#453)', () => {
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
+
+describe('per-tool slice: dodge (#453)', () => {
+  it('exposes dodge settings under settings.dodge with the legacy defaults', () => {
+    // Reset to the legacy default — prior tests in this file may
+    // have mutated the slice through setDodgeSetting.
+    useToolSettingsStore.getState().setDodgeSetting('exposure', 50);
+    useToolSettingsStore.getState().setDodgeSetting('mode', 'dodge');
+    const { dodge } = useToolSettingsStore.getState().settings;
+    expect(dodge).toEqual({ exposure: 50, mode: 'dodge' });
+  });
+
+  it('setDodgeSetting updates one field without disturbing the other', () => {
+    useToolSettingsStore.getState().setDodgeSetting('exposure', 50);
+    useToolSettingsStore.getState().setDodgeSetting('mode', 'dodge');
+    const before = useToolSettingsStore.getState().settings.dodge;
+    useToolSettingsStore.getState().setDodgeSetting('exposure', 75);
+    const after = useToolSettingsStore.getState().settings.dodge;
+    expect(after.exposure).toBe(75);
+    expect(after.mode).toBe(before.mode);
+  });
+
+  it('setDodgeSetting clamps exposure into [1, 100]', () => {
+    useToolSettingsStore.getState().setDodgeSetting('exposure', -10);
+    expect(useToolSettingsStore.getState().settings.dodge.exposure).toBe(1);
+    useToolSettingsStore.getState().setDodgeSetting('exposure', 9999);
+    expect(useToolSettingsStore.getState().settings.dodge.exposure).toBe(100);
+  });
+
+  it('setDodgeSetting switches between dodge and burn modes', () => {
+    useToolSettingsStore.getState().setDodgeSetting('mode', 'burn');
+    expect(useToolSettingsStore.getState().settings.dodge.mode).toBe('burn');
+    useToolSettingsStore.getState().setDodgeSetting('mode', 'dodge');
+    expect(useToolSettingsStore.getState().settings.dodge.mode).toBe('dodge');
+  });
+
+  it('setDodgeSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setDodgeSetting('exposure', 30);
+    expect(useToolSettingsStore.getState().settings.dodge.exposure).toBe(30);
+    // Sibling slice references preserved — selectors subscribed to
+    // settings.wand / settings.fill / settings.marquee should not
+    // re-render when dodge changes. This is the invariant that
+    // justifies slicing.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
