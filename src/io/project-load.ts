@@ -273,8 +273,11 @@ export async function loadProject(file: File): Promise<void> {
         if (!blob) continue;
 
         const decompressed = await decompressBytes(blob);
-        const w = s.width ?? 0;
-        const h = s.height ?? 0;
+        // Prefer the recorded blob dimensions; fall back to the layer's logical
+        // size for older files. Text/shape layers must use the blob dimensions
+        // because their logical width/height don't describe the bitmap.
+        const w = s.pixelWidth ?? s.width ?? 0;
+        const h = s.pixelHeight ?? s.height ?? 0;
         if (w > 0 && h > 0) {
           uploadLayerPixels(engine, s.id, decompressed, w, h, s.x, s.y);
         }
