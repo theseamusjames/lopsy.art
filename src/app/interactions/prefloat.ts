@@ -51,6 +51,7 @@ function executePrefloat(layerId: string, mask: Uint8ClampedArray, bounds: Rect)
   const snapshot: HistorySnapshot = {
     kind: 'pixels',
     document: state.document,
+    selection: state.selection,
     gpuSnapshots,
     label: 'Move',
   };

@@ -162,12 +162,14 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       currentSnapshot = {
         kind: 'metadata',
         document: state.document,
+        selection: state.selection,
         label: previous.label,
       };
     } else if (lastRestoredSnapshot && lastRestoredSnapshot.kind === 'pixels') {
       currentSnapshot = {
         kind: 'pixels',
         document: state.document,
+        selection: state.selection,
         gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
         label: previous.label,
       };
@@ -181,6 +183,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       currentSnapshot = {
         kind: 'pixels',
         document: state.document,
+        selection: state.selection,
         gpuSnapshots,
         label: previous.label,
       };
@@ -196,6 +199,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       undoStack: state.undoStack.slice(0, -1),
       redoStack: [...state.redoStack, currentSnapshot],
       document: previous.document,
+      selection: previous.selection,
       dirtyLayerIds: new Set(previous.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
@@ -217,12 +221,14 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       currentSnapshot = {
         kind: 'metadata',
         document: state.document,
+        selection: state.selection,
         label: next.label,
       };
     } else if (lastRestoredSnapshot && lastRestoredSnapshot.kind === 'pixels') {
       currentSnapshot = {
         kind: 'pixels',
         document: state.document,
+        selection: state.selection,
         gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
         label: next.label,
       };
@@ -236,6 +242,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       currentSnapshot = {
         kind: 'pixels',
         document: state.document,
+        selection: state.selection,
         gpuSnapshots,
         label: next.label,
       };
@@ -251,6 +258,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       redoStack: state.redoStack.slice(0, -1),
       undoStack: [...state.undoStack, currentSnapshot],
       document: next.document,
+      selection: next.selection,
       dirtyLayerIds: new Set(next.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
@@ -278,6 +286,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const snapshot: HistorySnapshot = {
       kind: 'pixels',
       document: state.document,
+      selection: state.selection,
       gpuSnapshots,
       label,
     };
@@ -309,6 +318,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const snapshot: HistorySnapshot = {
       kind: 'metadata',
       document: state.document,
+      selection: state.selection,
       label,
     };
     set({

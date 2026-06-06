@@ -84,9 +84,19 @@ export interface SerializedLayer {
   readonly pixelDataIndex: number;
   /** Index into the mask data blobs list (-1 = no mask data) */
   readonly maskDataIndex: number;
+  /** True dimensions of the pixel blob (the rendered bitmap), independent of
+   * the layer's logical width/height. Absent in pre-fix v1 files. */
+  readonly pixelWidth?: number;
+  readonly pixelHeight?: number;
 }
 
-function serializeLayer(layer: Layer, pixelDataIndex: number, maskDataIndex: number): SerializedLayer {
+function serializeLayer(
+  layer: Layer,
+  pixelDataIndex: number,
+  maskDataIndex: number,
+  pixelWidth: number,
+  pixelHeight: number,
+): SerializedLayer {
   const base = {
     id: layer.id,
     name: layer.name,
@@ -101,6 +111,8 @@ function serializeLayer(layer: Layer, pixelDataIndex: number, maskDataIndex: num
     effects: layer.effects,
     pixelDataIndex,
     maskDataIndex,
+    pixelWidth,
+    pixelHeight,
     maskEnabled: layer.mask?.enabled,
     maskWidth: layer.mask?.width,
     maskHeight: layer.mask?.height,
@@ -203,6 +215,8 @@ export async function saveProject(): Promise<void> {
     for (const layer of doc.layers) {
       let pixelDataIndex = -1;
       let maskDataIndex = -1;
+      let pixelWidth = 0;
+      let pixelHeight = 0;
 
       // Read pixel data for raster layers (not groups — they have no texture)
       if (layer.type !== 'group') {
@@ -212,6 +226,12 @@ export async function saveProject(): Promise<void> {
           const compressed = await compressBytes(raw);
           pixelDataIndex = pixelBlobs.length;
           pixelBlobs.push(compressed);
+          // Record the blob's true dimensions. For text/shape layers these
+          // differ from the layer's logical width/height (e.g. text width is
+          // the box width, not the rendered bitmap), so the load path can't
+          // infer them and must read them back from here.
+          pixelWidth = imageData.width;
+          pixelHeight = imageData.height;
         }
       }
 
@@ -222,7 +242,7 @@ export async function saveProject(): Promise<void> {
         maskBlobs.push(maskBytes);
       }
 
-      serializedLayers.push(serializeLayer(layer, pixelDataIndex, maskDataIndex));
+      serializedLayers.push(serializeLayer(layer, pixelDataIndex, maskDataIndex, pixelWidth, pixelHeight));
     }
 
     const manifest: LopsyManifest = {

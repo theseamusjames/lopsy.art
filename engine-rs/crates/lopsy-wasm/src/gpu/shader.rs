@@ -82,6 +82,7 @@ const BRUSH_DAB_CIRCLE_BODY: &str = include_str!("shaders/brush/brush_dab_circle
 const BRUSH_DAB_ALPHA_BODY: &str = include_str!("shaders/brush/brush_dab_alpha.glsl");
 const BRUSH_DAB_COLOR_BODY: &str = include_str!("shaders/brush/brush_dab_color.glsl");
 pub const ERASER_DAB_FRAG: &str = include_str!("shaders/brush/eraser_dab.glsl");
+pub const PENCIL_DAB_FRAG: &str = include_str!("shaders/brush/pencil_dab.glsl");
 pub const QUICK_MASK_DAB_FRAG: &str = include_str!("shaders/brush/quick_mask_dab.glsl");
 pub const DODGE_BURN_FRAG: &str = include_str!("shaders/brush/dodge_burn.glsl");
 pub const DODGE_BURN_DAB_FRAG: &str = include_str!("shaders/brush/dodge_burn_dab.glsl");
@@ -251,6 +252,7 @@ pub struct ShaderPrograms {
     pub brush_dab_alpha: ShaderProgram,
     pub brush_dab_color: ShaderProgram,
     pub eraser_dab: ShaderProgram,
+    pub pencil_dab: ShaderProgram,
     pub quick_mask_dab: ShaderProgram,
     pub dodge_burn: ShaderProgram,
     pub dodge_burn_dab: ShaderProgram,
@@ -344,6 +346,7 @@ impl ShaderPrograms {
             brush_dab_alpha: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_ALPHA_BODY}{BRUSH_DAB_FOOTER}"))?,
             brush_dab_color: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_COLOR_BODY}{BRUSH_DAB_FOOTER}"))?,
             eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,
+            pencil_dab: compile_program(gl, v, PENCIL_DAB_FRAG)?,
             quick_mask_dab: compile_program(gl, v, QUICK_MASK_DAB_FRAG)?,
             dodge_burn: compile_program(gl, v, DODGE_BURN_FRAG)?,
             dodge_burn_dab: compile_program(gl, v, DODGE_BURN_DAB_FRAG)?,
