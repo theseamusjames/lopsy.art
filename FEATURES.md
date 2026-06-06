@@ -184,6 +184,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Contiguous**: on/off
 - **Graduated**: on/off — when enabled, the wand uses a gradient-aware flood fill that produces partial-coverage selection edges across smooth color transitions, instead of a hard threshold cut
 - **Feather**: 0 - 250 px (shared marquee feather slider; applied after the wand fill)
+- **Shift+click**: adds the new region to the existing selection; **Alt/Option+click**: subtracts it (both combine against the current selection mask via `combineSelections`). Clicking with no modifier replaces the selection, and an Alt-subtract that empties the selection clears it.
 
 ### Quick Selection
 - **Size**: 1 - 100 px (brush radius for the paint stroke; default 20)
@@ -468,7 +469,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - Reorder (drag)
 - Move to group (reparent)
 - Rename
-- Align (left, center-h, right, top, center-v, bottom)
+- Align (left, center-h, right, top, center-v, bottom) — works on **group** layers too: a group has no pixels of its own, so it aligns by the combined content bounds of its descendants and shifts the group plus every child together (matching how dragging a group with the Move tool behaves)
 - Add/remove/toggle mask — works on raster, text, shape, and **group** layers; group masks are sampled at composite time so the entire group is masked as a single unit (with the group's own opacity and blend mode applied on top)
 - **Cmd/Ctrl+click a layer thumbnail**: loads that layer's alpha as a marquee selection (non-transparent pixels become the selection)
 - **Click a layer's mask thumbnail**: always enters mask edit mode (focus switches to the mask reliably; no toggle behavior).
