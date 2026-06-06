@@ -113,6 +113,16 @@ async function setWandSetting(page: Page, key: 'tolerance' | 'contiguous' | 'gra
   }, { key, value });
 }
 
+/** Write to the fill per-tool settings slice; see #453. */
+async function setFillSetting(page: Page, key: 'tolerance' | 'contiguous', value: number | boolean) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setFillSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setFillSetting(key, value);
+  }, { key, value });
+}
+
 const toolKeyMap: Record<string, string> = {
   move: 'v',
   brush: 'b',
@@ -632,7 +642,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(await getActiveTool(page)).toBe('fill');
 
     await setForegroundColorUI(page, 128, 0, 255);
-    await setToolSetting(page, 'setFillTolerance', 200);
+    await setFillSetting(page, 'tolerance', 200);
 
     await clickAtDoc(page, 120, 400);
     await page.waitForTimeout(300);
