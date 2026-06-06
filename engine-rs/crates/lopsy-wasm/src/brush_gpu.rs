@@ -376,6 +376,141 @@ pub fn apply_dab_batch(
     engine.mark_layer_dirty(layer_id);
 }
 
+/// Render a pencil line as hard, aliased square dabs entirely on the GPU.
+///
+/// The previous implementation read the full selection mask back to the CPU on
+/// every call and built/uploaded a pixel buffer per interpolated point, which
+/// made strokes on large canvases unusably slow. This mirrors `apply_dab_batch`:
+/// the dabs are drawn with a dedicated shader (scissored to each block) and the
+/// selection mask is sampled on the GPU, so nothing leaves the GPU.
+pub fn draw_pencil_line(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    x0: f64, y0: f64, x1: f64, y1: f64,
+    r: f32, g: f32, b: f32, a: f32, size: f32,
+) {
+    if size <= 0.0 { return; }
+
+    if !engine.stroke_textures.contains_key(layer_id) {
+        if begin_stroke(engine, layer_id).is_err() { return; }
+    }
+    // Pencil strokes never use the brush texture during compositing.
+    engine.stroke_use_brush_texture.insert(layer_id.to_string(), false);
+
+    let Some(&stroke_tex) = engine.stroke_textures.get(layer_id) else { return };
+    let (w, h) = engine.texture_pool.get_size(stroke_tex).unwrap_or((1, 1));
+
+    let points = lopsy_core::brush::interpolate_points(x0, y0, x1, y1, 1.0);
+    if points.len() < 2 { return; }
+
+    let gl = &engine.gl;
+
+    // Bind FBO targeting the stroke texture.
+    if let Some(fbo) = engine.stroke_fbo {
+        if let Some(tex) = engine.texture_pool.get(stroke_tex) {
+            engine.fbo_pool.attach_texture(gl, fbo, tex);
+            engine.fbo_pool.bind(gl, fbo);
+        }
+    } else {
+        let fbo = gl.create_framebuffer();
+        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, fbo.as_ref());
+        if let Some(tex) = engine.texture_pool.get(stroke_tex) {
+            gl.framebuffer_texture_2d(
+                WebGl2RenderingContext::FRAMEBUFFER,
+                WebGl2RenderingContext::COLOR_ATTACHMENT0,
+                WebGl2RenderingContext::TEXTURE_2D,
+                Some(tex),
+                0,
+            );
+        }
+    }
+    gl.viewport(0, 0, w as i32, h as i32);
+
+    // Break any accidental feedback loop (see apply_dab_batch).
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+
+    // MAX blending so overlapping dabs along the stroke don't compound alpha.
+    gl.enable(WebGl2RenderingContext::BLEND);
+    gl.blend_equation(WebGl2RenderingContext::MAX);
+
+    let shader = &engine.shaders.pencil_dab;
+    gl.use_program(Some(&shader.program));
+
+    if let Some(loc) = shader.location(gl, "u_color") {
+        gl.uniform4f(Some(&loc), r, g, b, a);
+    }
+    if let Some(loc) = shader.location(gl, "u_size") {
+        gl.uniform1f(Some(&loc), size);
+    }
+    if let Some(loc) = shader.location(gl, "u_texSize") {
+        gl.uniform2f(Some(&loc), w as f32, h as f32);
+    }
+
+    let has_selection = engine.selection_mask_texture.is_some();
+    if has_selection {
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(mask_handle) = engine.selection_mask_texture {
+            if let Some(mask_tex) = engine.texture_pool.get(mask_handle) {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
+            }
+        }
+        if let Some(loc) = shader.location(gl, "u_selectionMask") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+    }
+    if let Some(loc) = shader.location(gl, "u_hasSelection") {
+        gl.uniform1i(Some(&loc), if has_selection { 1 } else { 0 });
+    }
+    if let Some(loc) = shader.location(gl, "u_docSize") {
+        gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
+    }
+    let (layer_ox, layer_oy) = engine.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| (l.x as f32, l.y as f32))
+        .unwrap_or((0.0, 0.0));
+    if let Some(loc) = shader.location(gl, "u_layerOffset") {
+        gl.uniform2f(Some(&loc), layer_ox, layer_oy);
+    }
+
+    // Scissor each dab to its block so the fragment shader only runs over the
+    // pixels it writes, not the whole stroke texture.
+    let tex_w_i = w as i32;
+    let tex_h_i = h as i32;
+    let half = (size / 2.0).floor() as i32;
+    let block = size.ceil() as i32;
+    gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
+
+    let u_center_loc = shader.location(gl, "u_center");
+    for chunk in points.chunks(2) {
+        if chunk.len() < 2 { break; }
+        let cx = chunk[0] as f32;
+        let cy = chunk[1] as f32;
+
+        let lo_x = (cx.floor() as i32 - half).max(0);
+        let lo_y = (cy.floor() as i32 - half).max(0);
+        let hi_x = (cx.floor() as i32 - half + block).min(tex_w_i);
+        let hi_y = (cy.floor() as i32 - half + block).min(tex_h_i);
+        if hi_x <= lo_x || hi_y <= lo_y { continue; }
+        gl.scissor(lo_x, lo_y, hi_x - lo_x, hi_y - lo_y);
+
+        if let Some(loc) = &u_center_loc {
+            gl.uniform2f(Some(loc), cx, cy);
+        }
+        engine.draw_fullscreen_quad();
+    }
+
+    gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
+    gl.disable(WebGl2RenderingContext::BLEND);
+    gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
+    gl.blend_func(WebGl2RenderingContext::ONE, WebGl2RenderingContext::ZERO);
+
+    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+
+    engine.mark_layer_dirty(layer_id);
+    engine.needs_recomposite = true;
+}
+
 pub fn apply_eraser_dab(
     engine: &mut EngineInner,
     layer_id: &str,
