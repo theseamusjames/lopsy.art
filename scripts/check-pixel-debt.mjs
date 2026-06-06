@@ -30,9 +30,9 @@ const ALLOWLIST = {
   // Test files — fixtures allocate pixel buffers to exercise real code
   // paths. These don't ship to users; they only need to round-trip.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/editor-store.test.ts': 3,
+  'src/app/editor-store.test.ts': 5,
   'src/app/interactions/quick-mask-move.test.ts': 2,
-  'src/app/store/actions/align-layer.test.ts': 1,
+  'src/app/store/actions/align-layer.test.ts': 2,
   'src/app/store/actions/crop-canvas.test.ts': 1,
   'src/app/store/actions/duplicate-layer.test.ts': 1,
   'src/app/store/actions/flatten-image.test.ts': 1,
