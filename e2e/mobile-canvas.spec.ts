@@ -1,15 +1,16 @@
 import { test, expect } from './fixtures';
 import { waitForStore, createDocument, getEditorState } from './helpers';
 
-test.describe('Mobile canvas', () => {
+// isMobile is only supported by Chromium — Firefox throws at context creation.
+test.describe('Mobile canvas @chromium', () => {
+  test.skip(({ browserName }) => browserName !== 'chromium', 'isMobile requires Chromium');
+
   test.use({
     ...({ isMobile: true } as Record<string, unknown>),
     viewport: { width: 390, height: 844 },
   });
 
   test('canvas container is visible on mobile', async ({ page }) => {
-    // This test needs real mobile device emulation from the mobile-chrome project.
-    // Desktop chromium with isMobile:true doesn't properly enable touch/mobile layout.
     const hasTouch = await page.evaluate(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0);
     test.skip(!hasTouch, 'requires mobile-chrome project with touch emulation');
 
@@ -26,7 +27,6 @@ test.describe('Mobile canvas', () => {
   });
 
   test('two-finger pinch-to-zoom changes the zoom level', async ({ page }) => {
-
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);
@@ -86,7 +86,6 @@ test.describe('Mobile canvas', () => {
   });
 
   test('single-finger touch draws instead of panning', async ({ page }) => {
-
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);
@@ -145,7 +144,6 @@ test.describe('Mobile canvas', () => {
   });
 
   test('two-finger gesture pans the canvas', async ({ page }) => {
-
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600);

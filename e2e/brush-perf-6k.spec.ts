@@ -102,6 +102,13 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
     test.skip(browserName !== 'chromium', 'CDP profiler requires Chromium');
     test.setTimeout(300_000);
 
+    const hasWebGL2 = await page.evaluate(() => {
+      const c = document.createElement('canvas');
+      const gl = c.getContext('webgl2');
+      return !!gl;
+    });
+    test.skip(!hasWebGL2, 'WebGL2 not available (SwiftShader may not support 6K textures)');
+
     const outDir = path.join(process.cwd(), 'tests', 'screenshots');
     fs.mkdirSync(outDir, { recursive: true });
 

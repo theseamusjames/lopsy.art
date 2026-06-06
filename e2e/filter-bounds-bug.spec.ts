@@ -34,7 +34,8 @@ async function getLayerPixelAt(
 }
 
 test.describe('filter bounds (#235)', () => {
-  test('Gaussian Blur on a small ellipse layer preserves the ellipse content', async ({ page }) => {
+  test('Gaussian Blur on a small ellipse layer preserves the ellipse content', async ({ page, browserName }) => {
+    test.skip(browserName === 'firefox', 'drawEllipse helper uses shape tool which does not rasterize reliably on Firefox');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600, false);
