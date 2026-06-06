@@ -245,6 +245,26 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   );
 }
 
+/** Write to a per-tool settings slice (wand, …); see #453. */
+async function setWandSetting(page: Page, key: 'tolerance' | 'contiguous' | 'graduated', value: number | boolean) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setWandSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setWandSetting(key, value);
+  }, { key, value });
+}
+
+/** Write to the fill per-tool settings slice; see #453. */
+async function setFillSetting(page: Page, key: 'tolerance' | 'contiguous', value: number | boolean) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setFillSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setFillSetting(key, value);
+  }, { key, value });
+}
+
 async function setUIState(page: Page, setter: string, value: unknown) {
   await page.evaluate(
     ({ setter, value }) => {
@@ -537,8 +557,8 @@ test.describe('Fill Tool', () => {
     await setFgColor(page, 0, 0, 255);
 
     // Low tolerance: should only fill the left half
-    await setToolSetting(page, 'setFillTolerance', 10);
-    await setToolSetting(page, 'setFillContiguous', true);
+    await setFillSetting(page, 'tolerance', 10);
+    await setFillSetting(page, 'contiguous', true);
     await clickAtDoc(page, 50, 150);
 
     const pixelLeft = await getPixelAt(page, 50, 150);
@@ -582,8 +602,8 @@ test.describe('Fill Tool', () => {
 
     await page.keyboard.press('g');
     await setFgColor(page, 0, 0, 255);
-    await setToolSetting(page, 'setFillTolerance', 10);
-    await setToolSetting(page, 'setFillContiguous', false);
+    await setFillSetting(page, 'tolerance', 10);
+    await setFillSetting(page, 'contiguous', false);
     await clickAtDoc(page, 100, 150);
 
     // Both red regions should now be blue
@@ -823,7 +843,7 @@ test.describe('Magic Wand', () => {
     });
 
     await page.keyboard.press('w');
-    await setToolSetting(page, 'setWandTolerance', 10);
+    await setWandSetting(page, 'tolerance', 10);
     await clickAtDoc(page, 50, 150);
 
     const state = await getEditorState(page);

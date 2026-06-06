@@ -103,6 +103,26 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   }, { setter, value });
 }
 
+/** Write to a per-tool settings slice (wand, …); see #453. */
+async function setWandSetting(page: Page, key: 'tolerance' | 'contiguous' | 'graduated', value: number | boolean) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setWandSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setWandSetting(key, value);
+  }, { key, value });
+}
+
+/** Write to the fill per-tool settings slice; see #453. */
+async function setFillSetting(page: Page, key: 'tolerance' | 'contiguous', value: number | boolean) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setFillSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setFillSetting(key, value);
+  }, { key, value });
+}
+
 const toolKeyMap: Record<string, string> = {
   move: 'v',
   brush: 'b',
@@ -622,7 +642,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(await getActiveTool(page)).toBe('fill');
 
     await setForegroundColorUI(page, 128, 0, 255);
-    await setToolSetting(page, 'setFillTolerance', 200);
+    await setFillSetting(page, 'tolerance', 200);
 
     await clickAtDoc(page, 120, 400);
     await page.waitForTimeout(300);
@@ -684,7 +704,7 @@ test.describe('Composition 2: Geometric Design', () => {
     await page.keyboard.press('w');
     expect(await getActiveTool(page)).toBe('wand');
 
-    await setToolSetting(page, 'setWandTolerance', 60);
+    await setWandSetting(page, 'tolerance', 60);
 
     await clickAtDoc(page, 250, 250);
     await page.waitForTimeout(300);

@@ -68,7 +68,7 @@ export function commitFeatheredSelection(
   docW: number,
   docH: number,
 ): void {
-  const featherRadius = useToolSettingsStore.getState().marqueeFeather;
+  const featherRadius = useToolSettingsStore.getState().settings.marquee.feather;
   const editorState = useEditorStore.getState();
   if (featherRadius > 0) {
     const engine = getEngine();

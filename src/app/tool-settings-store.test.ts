@@ -102,3 +102,111 @@ describe('opacity setters — issue #250 (percent vs normalised footgun)', () =>
     expect(messages.some((m: string) => m.includes('setSprayOpacity'))).toBe(true);
   });
 });
+
+describe('per-tool slice: wand (#453)', () => {
+  it('exposes wand settings under settings.wand with the legacy defaults', () => {
+    const { wand } = useToolSettingsStore.getState().settings;
+    expect(wand).toEqual({ tolerance: 32, contiguous: true, graduated: false });
+  });
+
+  it('setWandSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.wand;
+    useToolSettingsStore.getState().setWandSetting('tolerance', 60);
+    const after = useToolSettingsStore.getState().settings.wand;
+    expect(after.tolerance).toBe(60);
+    expect(after.contiguous).toBe(before.contiguous);
+    expect(after.graduated).toBe(before.graduated);
+  });
+
+  it('setWandSetting clamps tolerance into [0, 255]', () => {
+    useToolSettingsStore.getState().setWandSetting('tolerance', -10);
+    expect(useToolSettingsStore.getState().settings.wand.tolerance).toBe(0);
+    useToolSettingsStore.getState().setWandSetting('tolerance', 9999);
+    expect(useToolSettingsStore.getState().settings.wand.tolerance).toBe(255);
+  });
+
+  it('setWandSetting preserves referential identity outside the wand slice', () => {
+    // The settings.wand object must be replaced (so React/Zustand
+    // selectors that subscribe to it re-render) but the surrounding
+    // ToolSettings shape should not churn unrelated fields.
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setWandSetting('contiguous', false);
+    expect(useToolSettingsStore.getState().settings.wand.contiguous).toBe(false);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: fill (#453)', () => {
+  it('exposes fill settings under settings.fill with the legacy defaults', () => {
+    const { fill } = useToolSettingsStore.getState().settings;
+    expect(fill).toEqual({ tolerance: 32, contiguous: true });
+  });
+
+  it('setFillSetting updates one field without disturbing the other', () => {
+    const before = useToolSettingsStore.getState().settings.fill;
+    useToolSettingsStore.getState().setFillSetting('tolerance', 60);
+    const after = useToolSettingsStore.getState().settings.fill;
+    expect(after.tolerance).toBe(60);
+    expect(after.contiguous).toBe(before.contiguous);
+  });
+
+  it('setFillSetting clamps tolerance into [0, 255]', () => {
+    useToolSettingsStore.getState().setFillSetting('tolerance', -10);
+    expect(useToolSettingsStore.getState().settings.fill.tolerance).toBe(0);
+    useToolSettingsStore.getState().setFillSetting('tolerance', 9999);
+    expect(useToolSettingsStore.getState().settings.fill.tolerance).toBe(255);
+  });
+
+  it('setFillSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setFillSetting('contiguous', false);
+    expect(useToolSettingsStore.getState().settings.fill.contiguous).toBe(false);
+    // Sibling slice reference preserved — selectors subscribed to
+    // settings.wand should not re-render when fill changes.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: marquee (#453)', () => {
+  it('exposes marquee settings under settings.marquee with the legacy default', () => {
+    // Reset to the legacy default — prior tests in this file may
+    // have mutated the slice through setMarqueeSetting.
+    useToolSettingsStore.getState().setMarqueeSetting('feather', 0);
+    const { marquee } = useToolSettingsStore.getState().settings;
+    expect(marquee).toEqual({ feather: 0 });
+  });
+
+  it('setMarqueeSetting updates feather and clamps it into [0, 250]', () => {
+    useToolSettingsStore.getState().setMarqueeSetting('feather', 25);
+    expect(useToolSettingsStore.getState().settings.marquee.feather).toBe(25);
+    useToolSettingsStore.getState().setMarqueeSetting('feather', -10);
+    expect(useToolSettingsStore.getState().settings.marquee.feather).toBe(0);
+    useToolSettingsStore.getState().setMarqueeSetting('feather', 9999);
+    expect(useToolSettingsStore.getState().settings.marquee.feather).toBe(250);
+  });
+
+  it('setMarqueeSetting rounds feather to an integer', () => {
+    // Legacy setMarqueeFeather rounded — preserve that so feather
+    // values stay integer-valued for downstream Gaussian-blur passes.
+    useToolSettingsStore.getState().setMarqueeSetting('feather', 10.4);
+    expect(useToolSettingsStore.getState().settings.marquee.feather).toBe(10);
+    useToolSettingsStore.getState().setMarqueeSetting('feather', 10.6);
+    expect(useToolSettingsStore.getState().settings.marquee.feather).toBe(11);
+  });
+
+  it('setMarqueeSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setMarqueeSetting('feather', 50);
+    expect(useToolSettingsStore.getState().settings.marquee.feather).toBe(50);
+    // Sibling slice references preserved — selectors subscribed to
+    // settings.wand / settings.fill should not re-render when marquee
+    // changes. This is the invariant that justifies slicing.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});

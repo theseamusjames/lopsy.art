@@ -3,6 +3,10 @@ import type { BrushPreset } from '../types/brush';
 import type { ToolSettings } from './tool-settings-types';
 import { BUILTIN_PRESETS, BUILTIN_TEXTURES, createPresetId } from '../tools/brush/builtin-presets';
 import { colorEquals } from '../utils/color';
+import { DEFAULT_TOOL_SETTINGS_SLICES } from './tool-settings-slices';
+import { clampWandSetting } from '../tools/wand/wand-settings';
+import { clampFillSetting } from '../tools/fill/fill-settings';
+import { clampMarqueeSetting } from '../tools/marquee/marquee-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -27,14 +31,13 @@ function warnIfNormalisedOpacity(setter: string, value: number): void {
 }
 
 export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
+  settings: DEFAULT_TOOL_SETTINGS_SLICES,
   brushSize: 10,
   brushOpacity: 100,
   brushHardness: 80,
   pencilSize: 1,
   eraserSize: 10,
   eraserOpacity: 100,
-  fillTolerance: 32,
-  fillContiguous: true,
   shapeMode: 'ellipse',
   shapeOutput: 'pixels' as const,
   shapeFillColor: { r: 255, g: 255, b: 255, a: 1 },
@@ -45,7 +48,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   aspectRatioW: 1,
   aspectRatioH: 1,
   aspectRatioLocked: false,
-  marqueeFeather: 0,
   cropMode: 'normal' as const,
   gradientType: 'linear',
   gradientStops: [
@@ -64,9 +66,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   spongeSize: 30,
   smudgeSize: 30,
   smudgeStrength: 50,
-  wandTolerance: 32,
-  wandContiguous: true,
-  wandGraduated: false,
   quickSelectSize: 20,
   quickSelectTolerance: 32,
   quickSelectEdgeStrength: 50,
@@ -183,8 +182,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     warnIfNormalisedOpacity('setEraserOpacity', opacity);
     set({ eraserOpacity: Math.max(1, Math.min(100, opacity)) });
   },
-  setFillTolerance: (tolerance) => set({ fillTolerance: Math.max(0, Math.min(255, tolerance)) }),
-  setFillContiguous: (contiguous) => set({ fillContiguous: contiguous }),
+  setFillSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      fill: { ...s.settings.fill, [key]: clampFillSetting(key, value) },
+    },
+  })),
   setShapeMode: (mode) => {
     // Guard against invalid values (e.g. 'rectangle', 'line') sneaking in
     // via store bypass. The shader treats anything-not-ellipse as polygon
@@ -251,10 +254,18 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setSpongeSize: (size) => set({ spongeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeSize: (size) => set({ smudgeSize: Math.max(1, Math.min(5000, size)) }),
   setSmudgeStrength: (strength) => set({ smudgeStrength: Math.max(0, Math.min(100, strength)) }),
-  setWandTolerance: (tolerance) => set({ wandTolerance: Math.max(0, Math.min(255, tolerance)) }),
-  setWandContiguous: (contiguous) => set({ wandContiguous: contiguous }),
-  setWandGraduated: (graduated) => set({ wandGraduated: graduated }),
-  setMarqueeFeather: (feather) => set({ marqueeFeather: Math.max(0, Math.min(250, Math.round(feather))) }),
+  setMarqueeSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      marquee: { ...s.settings.marquee, [key]: clampMarqueeSetting(key, value) },
+    },
+  })),
+  setWandSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      wand: { ...s.settings.wand, [key]: clampWandSetting(key, value) },
+    },
+  })),
   setQuickSelectSize: (size) => set({ quickSelectSize: Math.max(1, Math.min(100, Math.round(size))) }),
   setQuickSelectTolerance: (tolerance) => set({ quickSelectTolerance: Math.max(0, Math.min(255, Math.round(tolerance))) }),
   setQuickSelectEdgeStrength: (strength) => set({ quickSelectEdgeStrength: Math.max(0, Math.min(100, Math.round(strength))) }),

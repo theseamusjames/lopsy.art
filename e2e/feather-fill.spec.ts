@@ -23,9 +23,9 @@ test.describe('Feathered selection fill', () => {
     await page.waitForTimeout(100);
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setMarqueeFeather: (v: number) => void };
+        getState: () => { setMarqueeSetting: (key: 'feather', value: number) => void };
       };
-      store.getState().setMarqueeFeather(10);
+      store.getState().setMarqueeSetting('feather', 10);
     });
 
     // Draw a 40x40 selection at (30,30)–(70,70)
