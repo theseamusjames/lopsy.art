@@ -7,6 +7,7 @@ import { DEFAULT_TOOL_SETTINGS_SLICES } from './tool-settings-slices';
 import { clampWandSetting } from '../tools/wand/wand-settings';
 import { clampFillSetting } from '../tools/fill/fill-settings';
 import { clampMarqueeSetting } from '../tools/marquee/marquee-settings';
+import { clampSmudgeSetting } from '../tools/smudge/smudge-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -64,8 +65,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   spongeMode: 'desaturate',
   spongeStrength: 50,
   spongeSize: 30,
-  smudgeSize: 30,
-  smudgeStrength: 50,
   quickSelectSize: 20,
   quickSelectTolerance: 32,
   quickSelectEdgeStrength: 50,
@@ -252,8 +251,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setSpongeMode: (mode) => set({ spongeMode: mode }),
   setSpongeStrength: (strength) => set({ spongeStrength: Math.max(1, Math.min(100, strength)) }),
   setSpongeSize: (size) => set({ spongeSize: Math.max(1, Math.min(5000, size)) }),
-  setSmudgeSize: (size) => set({ smudgeSize: Math.max(1, Math.min(5000, size)) }),
-  setSmudgeStrength: (strength) => set({ smudgeStrength: Math.max(0, Math.min(100, strength)) }),
+  setSmudgeSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      smudge: { ...s.settings.smudge, [key]: clampSmudgeSetting(key, value) },
+    },
+  })),
   setMarqueeSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,

@@ -49,7 +49,7 @@ export function handleSizeShortcut(e: KeyboardEvent): boolean {
   if (tool === 'brush' || tool === 'dodge') {
     ts.setBrushSize(ts.brushSize + delta);
   } else if (tool === 'smudge') {
-    ts.setSmudgeSize(ts.smudgeSize + delta);
+    ts.setSmudgeSetting('size', ts.settings.smudge.size + delta);
   } else if (tool === 'pencil') {
     ts.setPencilSize(ts.pencilSize + delta);
   } else if (tool === 'eraser') {

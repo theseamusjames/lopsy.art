@@ -210,3 +210,53 @@ describe('per-tool slice: marquee (#453)', () => {
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
+
+describe('per-tool slice: smudge (#453)', () => {
+  it('exposes smudge settings under settings.smudge with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setSmudgeSetting.
+    useToolSettingsStore.getState().setSmudgeSetting('size', 30);
+    useToolSettingsStore.getState().setSmudgeSetting('strength', 50);
+    const { smudge } = useToolSettingsStore.getState().settings;
+    expect(smudge).toEqual({ size: 30, strength: 50 });
+  });
+
+  it('setSmudgeSetting updates one field without disturbing the other', () => {
+    const before = useToolSettingsStore.getState().settings.smudge;
+    useToolSettingsStore.getState().setSmudgeSetting('size', 80);
+    const after = useToolSettingsStore.getState().settings.smudge;
+    expect(after.size).toBe(80);
+    expect(after.strength).toBe(before.strength);
+  });
+
+  it('setSmudgeSetting clamps size into [1, 5000]', () => {
+    useToolSettingsStore.getState().setSmudgeSetting('size', 0);
+    expect(useToolSettingsStore.getState().settings.smudge.size).toBe(1);
+    useToolSettingsStore.getState().setSmudgeSetting('size', 99999);
+    expect(useToolSettingsStore.getState().settings.smudge.size).toBe(5000);
+  });
+
+  it('setSmudgeSetting clamps strength into [0, 100]', () => {
+    useToolSettingsStore.getState().setSmudgeSetting('strength', -10);
+    expect(useToolSettingsStore.getState().settings.smudge.strength).toBe(0);
+    useToolSettingsStore.getState().setSmudgeSetting('strength', 200);
+    expect(useToolSettingsStore.getState().settings.smudge.strength).toBe(100);
+  });
+
+  it('setSmudgeSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setSmudgeSetting('size', 42);
+    expect(useToolSettingsStore.getState().settings.smudge.size).toBe(42);
+    // Sibling slice references preserved — selectors subscribed to the
+    // other slices should not re-render when smudge changes. This is
+    // the invariant that justifies slicing instead of fattening the
+    // flat bag further.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});

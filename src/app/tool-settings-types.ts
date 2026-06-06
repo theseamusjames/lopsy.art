@@ -7,6 +7,7 @@ import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode
 import type { WandSettings } from '../tools/wand/wand-settings';
 import type { FillSettings } from '../tools/fill/fill-settings';
 import type { MarqueeSettings } from '../tools/marquee/marquee-settings';
+import type { SmudgeSettings } from '../tools/smudge/smudge-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -49,8 +50,6 @@ export interface ToolSettings {
   spongeMode: SpongeMode;
   spongeStrength: number;
   spongeSize: number;
-  smudgeSize: number;
-  smudgeStrength: number;
   quickSelectSize: number;
   quickSelectTolerance: number;
   quickSelectEdgeStrength: number;
@@ -130,8 +129,7 @@ export interface ToolSettings {
   setSpongeMode: (mode: SpongeMode) => void;
   setSpongeStrength: (strength: number) => void;
   setSpongeSize: (size: number) => void;
-  setSmudgeSize: (size: number) => void;
-  setSmudgeStrength: (strength: number) => void;
+  setSmudgeSetting: <K extends keyof SmudgeSettings>(key: K, value: SmudgeSettings[K]) => void;
   setMarqueeSetting: <K extends keyof MarqueeSettings>(key: K, value: MarqueeSettings[K]) => void;
   setWandSetting: <K extends keyof WandSettings>(key: K, value: WandSettings[K]) => void;
   setQuickSelectSize: (size: number) => void;
