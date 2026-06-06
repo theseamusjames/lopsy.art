@@ -255,17 +255,19 @@ function handleDeleteKey(): void {
     // mask from actual pixel alpha before clearing.
     if (hasFloat(engine)) {
       selectLayerAlpha(activeId);
-      // Force-sync mask to GPU
-      const selAfter = useEditorStore.getState().selection;
-      if (selAfter.active && selAfter.mask) {
-        const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
-        setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
-      }
     }
 
     // Re-read selection after potential mask rebuild
     const selNow = useEditorStore.getState().selection;
     if (!selNow.active || !selNow.mask) return;
+
+    // Force-sync the current selection mask to the GPU before clearing.
+    // The GPU mask is otherwise only updated on the next render frame, so a
+    // selection that was just nudged with the arrow keys (or floated) would
+    // clear using a stale mask — clearing the original area instead of the
+    // moved one.
+    const maskBytes = new Uint8Array(selNow.mask.buffer, selNow.mask.byteOffset, selNow.mask.byteLength);
+    setSelectionMask(engine, maskBytes, selNow.maskWidth, selNow.maskHeight);
 
     editor.pushHistory('Clear Selection');
     const bx = selNow.bounds ? Math.round(selNow.bounds.x) : 0;
