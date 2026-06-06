@@ -50,10 +50,11 @@ export interface SparseLayerEntry {
  *   live on the GPU — snapshots are just blits (~1ms), no readback.
  */
 export type HistorySnapshot =
-  | { readonly kind: 'metadata'; document: DocumentState; label: string }
+  | { readonly kind: 'metadata'; document: DocumentState; selection: SelectionData; label: string }
   | {
       readonly kind: 'pixels';
       document: DocumentState;
+      selection: SelectionData;
       label: string;
       gpuSnapshots: Map<string, number>;
     };

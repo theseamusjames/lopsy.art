@@ -50,6 +50,31 @@ describe('editor-store history', () => {
     expect(restored.data[0]).toBe(originalFirstPixel);
   });
 
+  it('undo restores the selection to its pre-edit position', () => {
+    const state = useEditorStore.getState();
+
+    // Active selection at the original position (mirrors selecting content
+    // before a move).
+    const maskA = new Uint8ClampedArray(10 * 10);
+    maskA[0] = 255;
+    state.setSelection({ x: 0, y: 0, width: 1, height: 1 }, maskA, 10, 10);
+
+    // Snapshot, then move the selection (as the move tool does on mouse-up).
+    state.pushHistory('Move');
+    const maskB = new Uint8ClampedArray(10 * 10);
+    maskB[5 * 10 + 5] = 255;
+    useEditorStore.getState().setSelection({ x: 5, y: 5, width: 1, height: 1 }, maskB, 10, 10);
+    expect(useEditorStore.getState().selection.bounds).toEqual({ x: 5, y: 5, width: 1, height: 1 });
+
+    // Undo must move the marquee back to where it started.
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().selection.bounds).toEqual({ x: 0, y: 0, width: 1, height: 1 });
+
+    // Redo restores the moved selection.
+    useEditorStore.getState().redo();
+    expect(useEditorStore.getState().selection.bounds).toEqual({ x: 5, y: 5, width: 1, height: 1 });
+  });
+
   it('redo restores document state', () => {
     const state = useEditorStore.getState();
     const layerId = state.document.activeLayerId!;
