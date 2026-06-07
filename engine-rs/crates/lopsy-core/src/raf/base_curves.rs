@@ -99,7 +99,47 @@ pub const FUJI_DR400: BaseCurve = BaseCurve {
 /// (the camera's "standard" rendering) when no model-specific override
 /// is known.
 pub fn default_curve_for_model(_camera_model: &str) -> &'static BaseCurve {
-    &FUJI_VELVIA
+    &FUJI_PROVIA
+}
+
+/// Select the base curve matching the Fujifilm FilmMode makernote tag (0x1401).
+/// Falls back to Provia (the camera's "Standard" rendering) when the mode is
+/// unknown or absent.
+///
+/// Tag values follow the exiftool FujiFilm FilmMode convention:
+///   0x000              → Standard / Provia
+///   0x100/0x120/0x130  → Astia / portrait family variants
+///   0x200              → Velvia (Fujichrome, vivid)
+///   0x300              → Astia family
+///   0x400              → Velvia (another Velvia variant)
+///   0x500/0x501        → Pro Neg Std / Pro Neg Hi — no dedicated curve, use Provia
+///   0x600              → Classic Chrome
+pub fn curve_for_film_mode(film_mode: Option<u16>) -> &'static BaseCurve {
+    match film_mode {
+        Some(0x000) => &FUJI_PROVIA,
+        Some(0x100) | Some(0x120) | Some(0x130) => &FUJI_ASTIA,
+        Some(0x200) => &FUJI_VELVIA,
+        Some(0x300) => &FUJI_ASTIA,
+        Some(0x400) => &FUJI_VELVIA,
+        Some(0x500) | Some(0x501) => &FUJI_PROVIA,
+        Some(0x600) => &FUJI_CLASSIC_CHROME,
+        _ => &FUJI_PROVIA,
+    }
+}
+
+/// Linear-space chroma multiplier approximating each film simulation's
+/// saturation, applied before the tone curve and sRGB gamma. These are
+/// stronger than equivalent display-space factors because gamma compresses
+/// the chroma boost. Values are look approximations, not measured LUTs.
+pub fn saturation_for_film_mode(film_mode: Option<u16>) -> f32 {
+    match film_mode {
+        Some(0x200) | Some(0x400) => 3.4,                          // Velvia (vivid)
+        Some(0x000) => 3.0,                                         // Provia (standard)
+        Some(0x100) | Some(0x120) | Some(0x130) | Some(0x300) => 2.4, // Astia/portrait (soft)
+        Some(0x600) => 2.4,                                         // Classic Chrome (muted)
+        Some(0x500) | Some(0x501) => 2.2,                          // Pro Neg
+        _ => 3.0,                                                    // default ~Provia
+    }
 }
 
 // ── Apply ────────────────────────────────────────────────────────────
@@ -117,7 +157,14 @@ pub fn apply_base_curve(rgb: &mut [f32], curve: &BaseCurve) {
 /// 4096 entries: enough resolution that linear interpolation between
 /// adjacent samples adds less error than the curve's own quantization
 /// after sRGB gamma.
-const LUT_SIZE: usize = 4096;
+pub const LUT_SIZE: usize = 4096;
+
+/// Build and return the precomputed LUT for a curve. Callers that want
+/// luminance-preserving application (via `color::apply_lut`) use this
+/// instead of `apply_base_curve`, which applies the curve per-channel.
+pub fn curve_lut(curve: &BaseCurve) -> [f32; LUT_SIZE] {
+    build_lut(curve)
+}
 
 fn sample_lut(lut: &[f32; LUT_SIZE], x: f32) -> f32 {
     let xc = x.clamp(0.0, 1.0);

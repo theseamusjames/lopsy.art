@@ -483,7 +483,11 @@ fn interpolate_green(
 
             // Inverse-gradient blending. Squaring sharpens the direction
             // preference: a 2× lower gradient → 4× higher weight.
-            let eps = 1e-5f32;
+            // Noise-floor epsilon: large enough that noise-level gradients do
+            // not dominate the directional weighting (which produced diagonal
+            // "worm" artifacts in flat/shadow areas on real sensor data), while
+            // real edges still have gradients well above it and snap correctly.
+            let eps = 1e-3f32;
             let mut g_final = 0.0f32;
             let mut weight_sum = 0.0f32;
             for d in 0..4 {
@@ -577,7 +581,11 @@ fn refine_green(
                 gradients[d] = grad_green + grad_chroma;
             }
 
-            let eps = 1e-5f32;
+            // Noise-floor epsilon: large enough that noise-level gradients do
+            // not dominate the directional weighting (which produced diagonal
+            // "worm" artifacts in flat/shadow areas on real sensor data), while
+            // real edges still have gradients well above it and snap correctly.
+            let eps = 1e-3f32;
             let mut g_final = 0.0f32;
             let mut weight_sum = 0.0f32;
             for d in 0..4 {

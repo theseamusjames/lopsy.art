@@ -26,10 +26,24 @@ use crate::dng::color;
 use crate::dng::tiff::TiffReader;
 use crate::dng::demosaic;
 
+/// EXIF and Fujifilm makernote metadata extracted from the embedded JPEG preview.
+#[derive(Debug, Clone, Default)]
+pub struct RafExifInfo {
+    /// EXIF orientation tag (0x0112). Defaults to 1 (no rotation) when absent.
+    pub orientation: u16,
+    /// Fujifilm FilmMode makernote tag (0x1401). None when absent or unreadable.
+    pub film_mode: Option<u16>,
+    /// Fujifilm WhiteBalance makernote tag (0x1002). None when absent or unreadable.
+    pub white_balance: Option<u16>,
+    /// Fujifilm DynamicRange makernote tag (0x1400). None when absent or unreadable.
+    pub dynamic_range: Option<u16>,
+}
+
 pub struct RafImage {
     pub width: u32,
     pub height: u32,
     pub pixels: Vec<f32>,
+    pub exif_info: RafExifInfo,
     pub debug_log: Vec<String>,
 }
 
@@ -49,17 +63,19 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
     let camera_model = parse_camera_model(&data[28..60]);
     raf_log!("[RAF] camera model: {}", camera_model);
 
-    // EXIF orientation lives in the JPEG preview block. Read it so we
-    // can rotate the decoded image to the camera-intended orientation
-    // (portrait shots are stored landscape in the sensor's native frame).
+    // EXIF orientation and Fujifilm makernote tags live in the JPEG preview
+    // block. Parse them together so we avoid walking the APP1 structure twice.
     let jpeg_offset = read_be_u32(data, 84) as usize;
     let jpeg_length = read_be_u32(data, 88) as usize;
-    let exif_orientation = if jpeg_offset > 0 && jpeg_offset + jpeg_length <= data.len() {
-        parse_exif_orientation(&data[jpeg_offset..jpeg_offset + jpeg_length]).unwrap_or(1)
+    let exif_info = if jpeg_offset > 0 && jpeg_offset + jpeg_length <= data.len() {
+        parse_raf_exif(&data[jpeg_offset..jpeg_offset + jpeg_length])
     } else {
-        1
+        RafExifInfo { orientation: 1, ..Default::default() }
     };
+    let exif_orientation = if exif_info.orientation == 0 { 1 } else { exif_info.orientation };
     raf_log!("[RAF] EXIF orientation: {}", exif_orientation);
+    raf_log!("[RAF] film_mode: {:?}, white_balance: {:?}, dynamic_range: {:?}",
+        exif_info.film_mode, exif_info.white_balance, exif_info.dynamic_range);
 
     let cfa_header_offset = read_be_u32(data, 92) as usize;
     let cfa_header_length = read_be_u32(data, 96) as usize;
@@ -222,10 +238,13 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
         .collect();
 
     // ── Per-pixel white balance (raw CFA-aware) ─────────────────
-    // For X-Trans cameras, raw R and B channels need a significant boost
-    // (~1.9×) so a gray scene produces neutral camera RGB. After this,
-    // the camera→sRGB matrix maps gray to gray. Without this step, gray
-    // areas become magenta because the matrix expects WB-corrected input.
+    // These sensors' raw R≈G≈B for provably-neutral subjects (measured
+    // R/G≈0.95, B/G≈0.94), so the as-shot levels from tag 0xF00D
+    // (~[1.745, 1, 1.805]) are wrong as direct multipliers — they
+    // over-boost R and B and produce a magenta cast. Gray-world
+    // auto-WB approximates the correct near-unity multipliers well.
+    //
+    // The as-shot value is preserved in CfaMeta.as_shot_wb for reference.
 
     let is_xtrans = camera_model_is_xtrans(&camera_model);
     let base_pat = cfa_pattern.as_ref().copied().unwrap_or(DEFAULT_XTRANS_CFA);
@@ -238,8 +257,11 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
     };
     let cfa_period = if is_xtrans { 6 } else { 2 };
 
+    if let Some(as_shot) = cfa_meta.as_shot_wb {
+        raf_log!("[RAF] as-shot WB (tag 0xF00D, not used): [{:.4}, {:.4}, {:.4}]", as_shot[0], as_shot[1], as_shot[2]);
+    }
     let wb = auto_wb_gray_world(&normalized, w, h, &cfa, cfa_period);
-    raf_log!("[RAF] WB multipliers (R,G,B) [gray-world]: [{:.4}, {:.4}, {:.4}]", wb[0], wb[1], wb[2]);
+    raf_log!("[RAF] WB (gray-world): [{:.4}, {:.4}, {:.4}]", wb[0], wb[1], wb[2]);
     for row in 0..h {
         for col in 0..w {
             let cfa_idx = (row % cfa_period) * cfa_period + (col % cfa_period);
@@ -247,8 +269,6 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
             normalized[row * w + col] *= wb[color];
         }
     }
-    let _ = wb_presets::default_daylight_wb(&camera_model);
-    let _ = matrix_compatible_wb(&camera_model);
 
     // ── Demosaic ────────────────────────────────────────────────
 
@@ -263,38 +283,84 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
 
     // ── Color matrix ────────────────────────────────────────────
     // Real per-camera camera→sRGB matrix derived from the DNG ColorMatrix1
-    // values in `color_matrix_for_model`. Row-normalized so that a neutral
-    // input (R=G=B, as produced by the gray-world WB above) maps to a
-    // neutral output — this is what keeps grays neutral instead of the
-    // magenta cast the old hand-tuned saturation matrix was working around.
-    let cam_to_srgb = normalize_matrix_rows(color_matrix_for_model(&camera_model));
+    // values in `color_matrix_for_model`. Column-scaled (neutralized) so
+    // that a neutral input (R=G=B, as produced by the as-shot WB) maps to
+    // a neutral output — this preserves off-diagonal saturation structure
+    // unlike per-row normalization, which scales each row independently and
+    // crushes saturation by up to ~5%.
+
+    let cam_to_srgb = color::neutralize_matrix(&color_matrix_for_model(&camera_model));
     raf_log!(
-        "[RAF] cam→sRGB (row-normalized): [{:.3} {:.3} {:.3}; {:.3} {:.3} {:.3}; {:.3} {:.3} {:.3}]",
+        "[RAF] cam→sRGB (neutralized): [{:.3} {:.3} {:.3}; {:.3} {:.3} {:.3}; {:.3} {:.3} {:.3}]",
         cam_to_srgb[0], cam_to_srgb[1], cam_to_srgb[2],
         cam_to_srgb[3], cam_to_srgb[4], cam_to_srgb[5],
         cam_to_srgb[6], cam_to_srgb[7], cam_to_srgb[8]
     );
+
     color::apply_matrix(&mut rgb_f32, &cam_to_srgb);
+
+    // ── Chroma denoise ─────────────────────────────────────────
+    // Remove the magenta/green speckle that X-Trans demosaicing leaves on
+    // real sensor data by median-filtering the color-difference planes.
+    // A median erases isolated false-color pixels while preserving edges
+    // and real color regions — unlike a box blur it cannot desaturate.
+    raf_log!("[RAF] chroma denoise (separable median, radius 3 — spans 6px CFA period)");
+    denoise_chroma(&mut rgb_f32, w, h);
+
+    // ── Luma denoise (bilateral, linear space) ──────────────────
+    // Sensor grain and residual demosaic texture appear as luma variation in
+    // flat areas. Filtering before saturation and the tone curve means the
+    // smoothed signal is never amplified. range_sigma ~0.04 in linear space
+    // is conservative: the raw sits in the lower ~30% of [0,1], so 0.04
+    // bridges same-level noise while real edges (≥several×0.04) are unaffected.
+    // Radius 3 (7-px window) is chosen so the filter spans the full 6×6 CFA
+    // period: the X-Trans green sub-lattice sits on different sites than R/B,
+    // and the small residual green-vs-R/B level difference shows up as a fine
+    // diagonal luminance weave at the mosaic period. A window narrower than the
+    // period cannot average that weave out; a 7-px window does, while the range
+    // term keeps real edges intact.
+    raf_log!("[RAF] luma denoise bilateral (radius=3, range_sigma=0.05)");
+    denoise_luma_bilateral(&mut rgb_f32, w, h, 3, 0.05);
+
+    // ── Film-sim saturation (linear space) ─────────────────────
+    // Fuji film sims are much more saturated than a plain colorimetric
+    // matrix render. Applied here in linear light — before the tone curve
+    // and gamma — where the luma-preserving boost is strongest. Linear
+    // saturation can push the minimum channel slightly negative; that is
+    // intentional (later RGBA conversion clamps to [0,1]).
+    let sat = base_curves::saturation_for_film_mode(exif_info.film_mode);
+    raf_log!("[RAF] film-sim saturation (linear): {sat}");
+    apply_saturation(&mut rgb_f32, sat);
 
     // ── Exposure boost ─────────────────────────────────────────
     // Raw sensor data uses ~30% of the 14-bit range (cameras expose for
-    // highlights to preserve headroom). With the base curve also lifting
-    // midtones, ~1.5× (≈ +0.6 EV) is enough to land daylight scenes at
-    // natural brightness without clipping. Done in linear space so the
-    // boost is multiplicative on light intensity.
+    // highlights to preserve headroom). Gray-world WB produces near-unity
+    // multipliers (no ~1.8× as-shot boost), so a larger scale is needed
+    // here to restore perceived brightness. Done in linear space.
     const EXPOSURE_SCALE: f32 = 1.8;
     for v in rgb_f32.iter_mut() {
         *v *= EXPOSURE_SCALE;
     }
+
+    // ── Highlight desaturation ──────────────────────────────────
+    // Bright areas can clip unevenly across R/G/B channels, which renders
+    // blown highlights as a colour cast rather than white. Blend pixels
+    // smoothly toward a neutral luminance-gray as they exceed 1.0 so that
+    // clipped regions go white instead of tinted.
+    desaturate_highlights(&mut rgb_f32);
 
     // ── Base curve (per-camera tone mapping) ───────────────────
     // Approximates the camera JPEG's tone rendering. The curve provides
     // its own highlight rolloff, replacing the previous Reinhard-style
     // compression, and shapes shadows/midtones to match the in-camera
     // look. Applied in linear light, before sRGB gamma.
-    let curve = base_curves::default_curve_for_model(&camera_model);
-    raf_log!("[RAF] applying base curve: {}", curve.name);
-    base_curves::apply_base_curve(&mut rgb_f32, curve);
+    //
+    // Prefer the film simulation recorded in the makernote when available;
+    // fall back to the generic Provia default.
+    let curve = base_curves::curve_for_film_mode(exif_info.film_mode);
+    raf_log!("[RAF] film_mode={:?} → base curve: {} (luminance-preserving)", exif_info.film_mode, curve.name);
+    let curve_lut = base_curves::curve_lut(curve);
+    color::apply_lut(&mut rgb_f32, &curve_lut);
 
     // ── sRGB gamma ──────────────────────────────────────────────
 
@@ -324,7 +390,7 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
     let (final_w, final_h, final_pixels) =
         apply_exif_orientation(width, height, &rgba, exif_orientation);
 
-    Ok(RafImage { width: final_w, height: final_h, pixels: final_pixels, debug_log })
+    Ok(RafImage { width: final_w, height: final_h, pixels: final_pixels, exif_info, debug_log })
 }
 
 /// Apply EXIF orientation tag to a RGBA f32 buffer. Returns new (w, h, pixels).
@@ -368,43 +434,153 @@ fn apply_exif_orientation(w: u32, h: u32, src: &[f32], orientation: u16) -> (u32
     (out_w, out_h, dst)
 }
 
-/// Parse the EXIF Orientation tag (0x0112) from a JPEG block.
-/// Returns the value (1..=8) or `None` if not found.
-fn parse_exif_orientation(jpeg: &[u8]) -> Option<u16> {
-    // Find APP1 with "Exif\0\0" payload
+/// Extract the embedded JPEG preview from a RAF file.
+///
+/// The preview offset (big-endian u32 at byte 84) and length (byte 88) are
+/// the same fields used by `read_raf` when parsing EXIF orientation.
+pub fn extract_jpeg_preview(data: &[u8]) -> Result<Vec<u8>, String> {
+    if data.len() < 92 {
+        return Err("File too small for RAF header".into());
+    }
+    if &data[0..16] != b"FUJIFILMCCD-RAW " {
+        return Err("Not a Fujifilm RAF file (bad magic)".into());
+    }
+    let offset = read_be_u32(data, 84) as usize;
+    let length = read_be_u32(data, 88) as usize;
+    if offset == 0 || length == 0 {
+        return Err("RAF has no JPEG preview (offset/length are zero)".into());
+    }
+    if offset + length > data.len() {
+        return Err(format!(
+            "JPEG preview extends past end of file (offset={offset}, length={length}, file_len={})",
+            data.len()
+        ));
+    }
+    Ok(data[offset..offset + length].to_vec())
+}
+
+/// Parse orientation and Fujifilm makernote tags from the JPEG preview bytes.
+///
+/// Walks APP1 → TIFF IFD0 → EXIF sub-IFD → Fujifilm makernote IFD.
+/// Every step is defensive: on any bounds error or missing tag, the function
+/// returns what it has so far rather than panicking.
+pub fn parse_raf_exif(jpeg: &[u8]) -> RafExifInfo {
+    let mut result = RafExifInfo { orientation: 1, ..Default::default() };
+
+    let Some(tiff) = find_exif_tiff(jpeg) else { return result; };
+    if tiff.len() < 8 { return result; }
+
+    let le = tiff[0] == b'I' && tiff[1] == b'I';
+
+    let ru16 = |data: &[u8], o: usize| -> Option<u16> {
+        let b = data.get(o..o + 2)?;
+        Some(if le { u16::from_le_bytes([b[0], b[1]]) } else { u16::from_be_bytes([b[0], b[1]]) })
+    };
+    let ru32 = |data: &[u8], o: usize| -> Option<u32> {
+        let b = data.get(o..o + 4)?;
+        Some(if le { u32::from_le_bytes([b[0], b[1], b[2], b[3]]) } else { u32::from_be_bytes([b[0], b[1], b[2], b[3]]) })
+    };
+
+    let ifd0_off = match ru32(tiff, 4) {
+        Some(v) => v as usize,
+        None => return result,
+    };
+
+    // Walk IFD0: collect orientation and the EXIF sub-IFD pointer.
+    let Some(ifd0_count) = ru16(tiff, ifd0_off) else { return result; };
+    let mut exif_ifd_off: Option<usize> = None;
+
+    for j in 0..ifd0_count as usize {
+        let e = ifd0_off + 2 + j * 12;
+        let Some(tag) = ru16(tiff, e) else { break; };
+        match tag {
+            0x0112 => {
+                if let Some(v) = ru16(tiff, e + 8) {
+                    result.orientation = v;
+                }
+            }
+            0x8769 => {
+                if let Some(v) = ru32(tiff, e + 8) {
+                    exif_ifd_off = Some(v as usize);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let exif_off = match exif_ifd_off {
+        Some(o) => o,
+        None => return result,
+    };
+
+    // Walk the EXIF sub-IFD to find the MakerNote (tag 0x927C).
+    let Some(exif_count) = ru16(tiff, exif_off) else { return result; };
+    let mut makernote_off: Option<usize> = None;
+
+    for j in 0..exif_count as usize {
+        let e = exif_off + 2 + j * 12;
+        let Some(tag) = ru16(tiff, e) else { break; };
+        if tag == 0x927C {
+            // UNDEFINED type: value offset points into tiff data.
+            if let Some(off) = ru32(tiff, e + 8) {
+                makernote_off = Some(off as usize);
+            }
+            break;
+        }
+    }
+
+    let mn_start = match makernote_off {
+        Some(o) => o,
+        None => return result,
+    };
+
+    // Fujifilm makernote: "FUJIFILM" (8 bytes) + u32 LE IFD offset relative
+    // to the start of the makernote blob. The internal IFD is always LE.
+    let Some(mn_blob) = tiff.get(mn_start..) else { return result; };
+    if mn_blob.len() < 12 { return result; }
+    if &mn_blob[..8] != b"FUJIFILM" { return result; }
+
+    let mn_ifd_rel = u32::from_le_bytes([mn_blob[8], mn_blob[9], mn_blob[10], mn_blob[11]]) as usize;
+    let Some(mn_ifd_blob) = mn_blob.get(mn_ifd_rel..) else { return result; };
+    if mn_ifd_blob.len() < 2 { return result; }
+
+    // Makernote IFD is always little-endian regardless of outer TIFF endianness.
+    let mn_u16 = |data: &[u8], o: usize| -> Option<u16> {
+        let b = data.get(o..o + 2)?;
+        Some(u16::from_le_bytes([b[0], b[1]]))
+    };
+
+    let mn_count = u16::from_le_bytes([mn_ifd_blob[0], mn_ifd_blob[1]]) as usize;
+    for j in 0..mn_count {
+        let e = 2 + j * 12;
+        let Some(tag) = mn_u16(mn_ifd_blob, e) else { break; };
+        match tag {
+            0x1002 => { result.white_balance = mn_u16(mn_ifd_blob, e + 8); }
+            0x1400 => { result.dynamic_range = mn_u16(mn_ifd_blob, e + 8); }
+            0x1401 => { result.film_mode = mn_u16(mn_ifd_blob, e + 8); }
+            _ => {}
+        }
+    }
+
+    result
+}
+
+/// Find the TIFF block inside a JPEG's APP1 "Exif\0\0" segment.
+/// Returns a slice starting at the TIFF header ("II" or "MM").
+fn find_exif_tiff(jpeg: &[u8]) -> Option<&[u8]> {
     let mut i = 2usize;
     while i + 4 < jpeg.len() {
         if jpeg[i] == 0xFF && jpeg[i + 1] == 0xE1 {
-            let payload = &jpeg[i + 4..];
-            if payload.len() < 6 || &payload[..4] != b"Exif" { return None; }
-            let tiff = &payload[6..];
-            if tiff.len() < 8 { return None; }
-            let le = tiff[0] == b'I' && tiff[1] == b'I';
-            let read_u16 = |o: usize| -> u16 {
-                if le { u16::from_le_bytes([tiff[o], tiff[o+1]]) }
-                else { u16::from_be_bytes([tiff[o], tiff[o+1]]) }
-            };
-            let read_u32 = |o: usize| -> u32 {
-                if le { u32::from_le_bytes([tiff[o], tiff[o+1], tiff[o+2], tiff[o+3]]) }
-                else { u32::from_be_bytes([tiff[o], tiff[o+1], tiff[o+2], tiff[o+3]]) }
-            };
-            let ifd0 = read_u32(4) as usize;
-            if ifd0 + 2 > tiff.len() { return None; }
-            let count = read_u16(ifd0) as usize;
-            for j in 0..count {
-                let off = ifd0 + 2 + j * 12;
-                if off + 12 > tiff.len() { break; }
-                let tag = read_u16(off);
-                if tag == 0x0112 {
-                    return Some(read_u16(off + 8));
-                }
-            }
-            return None;
+            let payload = jpeg.get(i + 4..)?;
+            if payload.len() < 6 { return None; }
+            if &payload[..4] != b"Exif" { return None; }
+            return payload.get(6..);
         }
         i += 1;
     }
     None
 }
+
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -456,9 +632,8 @@ const SIMPLE_CAM_TO_SRGB: [f32; 9] = [
 ];
 
 /// Capture-sharpening strength (fraction of the high-pass detail added
-/// back). Modest by design — enough to match the camera JPEG's crispness
-/// without visible ringing.
-const CAPTURE_SHARPEN_AMOUNT: f32 = 0.45;
+/// back). Kept mild so it does not amplify chroma speckle from demosaicing.
+const CAPTURE_SHARPEN_AMOUNT: f32 = 0.10;
 
 /// Mild luma unsharp mask on interleaved RGB. Sharpens the luminance high-
 /// frequency detail only (chroma is left untouched), which avoids the color
@@ -521,6 +696,7 @@ fn unsharp_mask_luma(rgb: &mut [f32], w: usize, h: usize, amount: f32) {
 /// combination of equal inputs. This is dcraw's gray-preservation step and
 /// is what lets us use a real per-camera color matrix without the magenta
 /// cast that comes from composing an un-normalized matrix with our WB.
+#[allow(dead_code)]
 fn normalize_matrix_rows(m: [f32; 9]) -> [f32; 9] {
     let mut out = m;
     for r in 0..3 {
@@ -534,10 +710,276 @@ fn normalize_matrix_rows(m: [f32; 9]) -> [f32; 9] {
     out
 }
 
-/// Stub — kept for future use when WB-compatible per-camera matrices
-/// are wired up. Currently unused (we use `auto_wb_gray_world`).
-fn matrix_compatible_wb(_model: &str) -> [f32; 3] {
-    [2.163, 1.0, 1.364]
+/// Boost chroma to approximate the Fujifilm film-simulation look, which is
+/// more saturated than a plain colorimetric matrix render. Luma-preserving
+/// (Rec.709): each channel is pushed away from the pixel's luma by `factor`,
+/// so grays stay neutral and only colored pixels gain saturation.
+fn apply_saturation(rgb: &mut [f32], factor: f32) {
+    if (factor - 1.0).abs() < 1e-4 { return; }
+    let n = rgb.len() / 3;
+    for i in 0..n {
+        let o = i * 3;
+        let luma = 0.2126 * rgb[o] + 0.7152 * rgb[o + 1] + 0.0722 * rgb[o + 2];
+        rgb[o]     = luma + factor * (rgb[o]     - luma);
+        rgb[o + 1] = luma + factor * (rgb[o + 1] - luma);
+        rgb[o + 2] = luma + factor * (rgb[o + 2] - luma);
+    }
+    // (final RGBA conversion already clamps to [0,1])
+}
+
+/// Suppress chroma noise (the colored speckle X-Trans demosaicing leaves on
+/// real, noisy sensor data) by median-filtering the color-difference planes.
+/// Luma carries the detail and is left untouched. A 3×3 median removes
+/// isolated false-color speckle while preserving edges and the chroma of
+/// uniform colored regions — it does not average neighbors, so it cannot
+/// desaturate a real color region the way a box blur would.
+fn denoise_chroma(rgb: &mut [f32], w: usize, h: usize) {
+    if w == 0 || h == 0 {
+        return;
+    }
+    let n = w * h;
+
+    // Extract per-pixel luma and three chroma-difference planes (R−luma, G−luma, B−luma).
+    let mut luma = vec![0.0f32; n];
+    let mut cr = vec![0.0f32; n];
+    let mut cg = vec![0.0f32; n];
+    let mut cb = vec![0.0f32; n];
+    for i in 0..n {
+        let o = i * 3;
+        let l = 0.2126 * rgb[o] + 0.7152 * rgb[o + 1] + 0.0722 * rgb[o + 2];
+        luma[i] = l;
+        cr[i] = rgb[o]     - l;
+        cg[i] = rgb[o + 1] - l;
+        cb[i] = rgb[o + 2] - l;
+    }
+
+    // The X-Trans demosaic leaves a CFA-locked false-colour lattice whose
+    // period is the 6×6 mosaic. A 3×3 median only spans half that period, so
+    // the lattice survives and — once the saturation boost amplifies it and the
+    // canvas resamples it at non-integer zoom — aliases into a coarse coloured
+    // checkerboard (moiré). A separable median whose window (2·3+1 = 7) exceeds
+    // the 6-px period erases the lattice while still preserving real colour
+    // edges (a median does not average across them, unlike a box blur).
+    const CHROMA_MEDIAN_RADIUS: i32 = 3;
+    cr = median_filter_separable(&cr, w, h, CHROMA_MEDIAN_RADIUS);
+    cg = median_filter_separable(&cg, w, h, CHROMA_MEDIAN_RADIUS);
+    cb = median_filter_separable(&cb, w, h, CHROMA_MEDIAN_RADIUS);
+
+    // Recombine: exact luma plus median-filtered chroma.
+    for i in 0..n {
+        let o = i * 3;
+        rgb[o]     = luma[i] + cr[i];
+        rgb[o + 1] = luma[i] + cg[i];
+        rgb[o + 2] = luma[i] + cb[i];
+    }
+}
+
+/// Edge-preserving luma noise reduction. Smooths luminance in flat regions
+/// (sensor grain, residual demosaic texture) while leaving edges and fine
+/// detail intact, by bilaterally weighting neighbours by both spatial distance
+/// and luma similarity. Chroma is preserved exactly: only the luma is filtered
+/// and RGB is rescaled by the luma ratio.
+fn denoise_luma_bilateral(rgb: &mut [f32], w: usize, h: usize, radius: i32, range_sigma: f32) {
+    if w == 0 || h == 0 || radius <= 0 {
+        return;
+    }
+    let n = w * h;
+
+    // Luma plane (Rec.709) for every pixel in the current linear-light RGB.
+    let mut luma = vec![0.0f32; n];
+    for i in 0..n {
+        let o = i * 3;
+        luma[i] = 0.2126 * rgb[o] + 0.7152 * rgb[o + 1] + 0.0722 * rgb[o + 2];
+    }
+
+    // Precompute spatial Gaussian weights for the (2r+1)×(2r+1) window.
+    // Spatial sigma ≈ radius/2 keeps most weight near the centre, so real
+    // detail is only marginally affected even when range_sigma is generous.
+    let r = radius as usize;
+    let side = 2 * r + 1;
+    let spatial_sigma = radius as f32 * 0.5;
+    let two_ss = 2.0 * spatial_sigma * spatial_sigma;
+    let mut spatial_w = vec![0.0f32; side * side];
+    for dy in 0..side {
+        for dx in 0..side {
+            let ddx = dx as f32 - r as f32;
+            let ddy = dy as f32 - r as f32;
+            spatial_w[dy * side + dx] = (-(ddx * ddx + ddy * ddy) / two_ss).exp();
+        }
+    }
+
+    let two_rs = 2.0 * range_sigma * range_sigma;
+
+    // Precompute the range weight exp(-dl²/2σ²) into a LUT keyed by |dl|. The
+    // weight is negligible beyond ~4σ, so tabulating |dl| over [0, 4σ] and
+    // treating anything past it as zero replaces a per-sample exp() (the hot-
+    // path cost across a 40 MP image) with an index + load.
+    const RANGE_LUT_N: usize = 1024;
+    let range_max = (4.0 * range_sigma).max(1e-6);
+    let inv_step = (RANGE_LUT_N as f32 - 1.0) / range_max;
+    let mut range_lut = vec![0.0f32; RANGE_LUT_N];
+    for k in 0..RANGE_LUT_N {
+        let d = k as f32 / inv_step;
+        range_lut[k] = (-(d * d) / two_rs).exp();
+    }
+
+    let mut luma_smooth = vec![0.0f32; n];
+
+    for row in 0..h {
+        for col in 0..w {
+            let l_center = luma[row * w + col];
+            let mut sum_w = 0.0f32;
+            let mut sum_wl = 0.0f32;
+
+            for dy in 0..side {
+                let nr = (row as i32 + dy as i32 - r as i32).clamp(0, h as i32 - 1) as usize;
+                let row_off = nr * w;
+                let sw_off = dy * side;
+                for dx in 0..side {
+                    let nc = (col as i32 + dx as i32 - r as i32).clamp(0, w as i32 - 1) as usize;
+                    let l_nb = luma[row_off + nc];
+                    // Range weight via LUT: only same-level (noisy) neighbours
+                    // contribute; across a real edge the weight collapses to 0.
+                    let idx = ((l_center - l_nb).abs() * inv_step) as usize;
+                    let range_w = if idx < RANGE_LUT_N { range_lut[idx] } else { 0.0 };
+                    let w_ij = spatial_w[sw_off + dx] * range_w;
+                    sum_w += w_ij;
+                    sum_wl += w_ij * l_nb;
+                }
+            }
+
+            luma_smooth[row * w + col] = if sum_w > 1e-8 { sum_wl / sum_w } else { l_center };
+        }
+    }
+
+    // Rescale RGB by the smoothed/original luma ratio to update only luminance;
+    // chroma ratios are kept exactly — same pattern as unsharp_mask_luma.
+    for i in 0..n {
+        let l_orig = luma[i];
+        if l_orig > 1e-4 {
+            let scale = luma_smooth[i] / l_orig;
+            let o = i * 3;
+            rgb[o]     *= scale;
+            rgb[o + 1] *= scale;
+            rgb[o + 2] *= scale;
+        }
+    }
+}
+
+/// 3×3 median filter on a single-channel plane, edge-clamped. Returns a new
+/// buffer. Preserves edges far better than a box blur; removes isolated
+/// false-color speckle without desaturating adjacent real-color pixels.
+#[allow(dead_code)]
+fn median_filter_3x3_plane(plane: &[f32], w: usize, h: usize) -> Vec<f32> {
+    let mut out = vec![0.0f32; w * h];
+    for row in 0..h {
+        for col in 0..w {
+            let mut win = [0.0f32; 9];
+            let mut k = 0;
+            for dy in -1i32..=1 {
+                let r = (row as i32 + dy).clamp(0, h as i32 - 1) as usize;
+                for dx in -1i32..=1 {
+                    let c = (col as i32 + dx).clamp(0, w as i32 - 1) as usize;
+                    win[k] = plane[r * w + c];
+                    k += 1;
+                }
+            }
+            out[row * w + col] = median9(win);
+        }
+    }
+    out
+}
+
+/// Median of 9 values via partial selection (find the 5th-smallest).
+#[inline]
+#[allow(dead_code)]
+fn median9(mut v: [f32; 9]) -> f32 {
+    for i in 0..5 {
+        let mut m = i;
+        for j in (i + 1)..9 {
+            if v[j] < v[m] {
+                m = j;
+            }
+        }
+        v.swap(i, m);
+    }
+    v[4]
+}
+
+/// Median of an odd-length window (`len` ≤ 33) via partial selection up to the
+/// middle index. Allocation-free.
+#[inline]
+fn median_window(vals: &[f32]) -> f32 {
+    let n = vals.len();
+    let mid = n / 2;
+    let mut v = [0.0f32; 33];
+    v[..n].copy_from_slice(vals);
+    for i in 0..=mid {
+        let mut m = i;
+        for j in (i + 1)..n {
+            if v[j] < v[m] {
+                m = j;
+            }
+        }
+        v.swap(i, m);
+    }
+    v[mid]
+}
+
+/// Separable median filter (horizontal pass then vertical pass) of half-width
+/// `radius`, edge-clamped. A separable approximation to a full (2r+1)² median:
+/// far cheaper, while still erasing periodic structure up to the window width.
+/// Used on the chroma planes to remove the CFA-period (6 px) false-colour
+/// lattice, which a 3×3 median's reach cannot cover.
+fn median_filter_separable(plane: &[f32], w: usize, h: usize, radius: i32) -> Vec<f32> {
+    let width = (2 * radius + 1) as usize;
+    let mut buf = vec![0.0f32; width];
+
+    let mut tmp = vec![0.0f32; w * h];
+    for row in 0..h {
+        let base = row * w;
+        for col in 0..w {
+            for k in -radius..=radius {
+                let c = (col as i32 + k).clamp(0, w as i32 - 1) as usize;
+                buf[(k + radius) as usize] = plane[base + c];
+            }
+            tmp[base + col] = median_window(&buf);
+        }
+    }
+
+    let mut out = vec![0.0f32; w * h];
+    for col in 0..w {
+        for row in 0..h {
+            for k in -radius..=radius {
+                let r = (row as i32 + k).clamp(0, h as i32 - 1) as usize;
+                buf[(k + radius) as usize] = tmp[r * w + col];
+            }
+            out[row * w + col] = median_window(&buf);
+        }
+    }
+    out
+}
+
+
+/// Blend over-exposed pixels toward neutral gray so that blown highlights
+/// render white instead of pink. The as-shot WB boost makes R and B clip
+/// before G; without this step, areas just above 1.0 show a pink fringe
+/// because R/B are at 1.0 while G still has headroom. Values remain
+/// unclamped here — the final RGBA conversion clamps to [0,1].
+fn desaturate_highlights(rgb: &mut [f32]) {
+    let n = rgb.len() / 3;
+    for i in 0..n {
+        let r = rgb[i * 3];
+        let g = rgb[i * 3 + 1];
+        let b = rgb[i * 3 + 2];
+        let m = r.max(g).max(b);
+        if m > 1.0 {
+            let t = ((m - 1.0) / 0.5).min(1.0);
+            rgb[i * 3]     = r + t * (m - r);
+            rgb[i * 3 + 1] = g + t * (m - g);
+            rgb[i * 3 + 2] = b + t * (m - b);
+        }
+    }
 }
 
 /// Gray-world auto white balance: scale each CFA channel so all three
@@ -648,6 +1090,7 @@ struct CfaMeta {
     strip_byte_count: u32,
     is_compressed: bool,
     black_level: Option<f64>,
+    as_shot_wb: Option<[f32; 3]>,
 }
 
 fn parse_cfa_tiff(cfa_section: &[u8]) -> Result<CfaMeta, String> {
@@ -685,7 +1128,23 @@ fn parse_cfa_tiff(cfa_section: &[u8]) -> Result<CfaMeta, String> {
             Some(vals.iter().map(|&v| v as f64).sum::<f64>() / vals.len() as f64)
         });
 
-    Ok(CfaMeta { width, height, bits_per_sample: bits, strip_offset, strip_byte_count, is_compressed, black_level })
+    // Tag 0xF00D: Fujifilm as-shot white balance, LONG[3] in [G, R, B] order.
+    // Green is the reference channel (typically 302); R and B are larger when
+    // the scene is warm/cool. Normalising to G gives the per-channel multipliers
+    // the demosaicker needs to make a neutral gray render as neutral.
+    let as_shot_wb = sub_ifd.iter()
+        .find(|e| e.tag == 0xF00D)
+        .and_then(|e| {
+            let vals = e.as_u32_vec()?;
+            if vals.len() < 3 { return None; }
+            let g = vals[0] as f32;
+            let r = vals[1] as f32;
+            let b = vals[2] as f32;
+            if g < 1.0 { return None; }
+            Some([r / g, 1.0f32, b / g])
+        });
+
+    Ok(CfaMeta { width, height, bits_per_sample: bits, strip_offset, strip_byte_count, is_compressed, black_level, as_shot_wb })
 }
 
 // ── X-Trans detection ───────────────────────────────────────────
@@ -804,6 +1263,181 @@ mod tests {
         for i in 0..w * h {
             let o = i * 3;
             assert!((rgb[o] - rgb[o + 1]).abs() < 1e-5 && (rgb[o + 1] - rgb[o + 2]).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn apply_saturation_neutral_gray_unchanged() {
+        // A neutral gray pixel (R==G==B) has zero chroma, so boosting
+        // saturation must leave it unchanged.
+        let mut rgb = vec![0.5f32, 0.5, 0.5];
+        apply_saturation(&mut rgb, 1.35);
+        assert!((rgb[0] - 0.5).abs() < 1e-5 && (rgb[1] - 0.5).abs() < 1e-5 && (rgb[2] - 0.5).abs() < 1e-5,
+            "gray should be unchanged: {:?}", rgb);
+    }
+
+    #[test]
+    fn apply_saturation_colored_pixel_gains_chroma() {
+        // A colored pixel should have a wider channel spread after saturation boost.
+        let mut rgb = vec![0.8f32, 0.4, 0.3];
+        let before_spread = rgb[0] - rgb[2];
+        apply_saturation(&mut rgb, 1.35);
+        let after_spread = rgb[0] - rgb[2];
+        assert!(after_spread > before_spread,
+            "channel spread should increase: before={before_spread} after={after_spread}");
+    }
+
+    #[test]
+    fn denoise_chroma_leaves_neutral_gray_unchanged() {
+        // A uniform gray image has zero chroma on every pixel; median-filtering
+        // zero planes and adding them back must yield exactly the original values.
+        let w = 8;
+        let h = 8;
+        let gray = 0.4f32;
+        let mut rgb: Vec<f32> = (0..w * h).flat_map(|_| [gray, gray, gray]).collect();
+        denoise_chroma(&mut rgb, w, h);
+        for (i, &v) in rgb.iter().enumerate() {
+            assert!(
+                (v - gray).abs() < 1e-5,
+                "neutral gray changed at index {i}: expected {gray}, got {v}"
+            );
+        }
+    }
+
+    #[test]
+    fn denoise_chroma_reduces_single_off_color_pixel() {
+        // A single magenta-ish pixel on an otherwise neutral gray field.
+        // A 3×3 median on the chroma planes replaces the isolated outlier
+        // with the surrounding gray's zero-chroma, so the center pixel
+        // becomes neutral. Mean luma is unaffected.
+        let w = 9;
+        let h = 9;
+        let gray = 0.5f32;
+        let mut rgb: Vec<f32> = (0..w * h).flat_map(|_| [gray, gray, gray]).collect();
+
+        // Place a single noisy (magenta-ish) pixel at the center.
+        let cx = 4;
+        let cy = 4;
+        let o = (cy * w + cx) * 3;
+        rgb[o]     = 0.8;   // R high
+        rgb[o + 1] = 0.3;   // G low
+        rgb[o + 2] = 0.8;   // B high
+
+        // Record mean luma before.
+        let mean_luma_before: f32 = (0..w * h)
+            .map(|i| 0.2126 * rgb[i * 3] + 0.7152 * rgb[i * 3 + 1] + 0.0722 * rgb[i * 3 + 2])
+            .sum::<f32>() / (w * h) as f32;
+
+        denoise_chroma(&mut rgb, w, h);
+
+        let mean_luma_after: f32 = (0..w * h)
+            .map(|i| 0.2126 * rgb[i * 3] + 0.7152 * rgb[i * 3 + 1] + 0.0722 * rgb[i * 3 + 2])
+            .sum::<f32>() / (w * h) as f32;
+
+        // Luma is preserved globally (median on zero-sum chroma planes is a no-op for luma).
+        assert!(
+            (mean_luma_before - mean_luma_after).abs() < 1e-4,
+            "mean luma shifted: before={mean_luma_before} after={mean_luma_after}"
+        );
+
+        // The center pixel's chroma spread is eliminated: median picks the
+        // surrounding gray's zero chroma, so the pixel becomes neutral.
+        let center_r = rgb[o];
+        let center_g = rgb[o + 1];
+        let center_b = rgb[o + 2];
+        let spread_after = (center_r - center_g).abs().max((center_b - center_g).abs());
+        let spread_before = (0.8f32 - 0.3f32).abs().max((0.8f32 - 0.3f32).abs());
+        assert!(
+            spread_after < spread_before * 0.5,
+            "off-color pixel chroma not sufficiently reduced: before={spread_before:.3} after={spread_after:.3}"
+        );
+    }
+
+    #[test]
+    fn denoise_luma_bilateral_smooths_flat_noise() {
+        // A flat gray field with alternating ±0.02 luma jitter (fixed, deterministic)
+        // should come out smoother (lower variance) while preserving the mean
+        // and keeping the output exactly neutral (R==G==B).
+        let w = 16;
+        let h = 16;
+        let base = 0.15f32; // in linear space, near the raw's ~30% range
+        let mut rgb: Vec<f32> = (0..w * h)
+            .flat_map(|i| {
+                let v = base + if i % 2 == 0 { 0.02 } else { -0.02 };
+                [v, v, v]
+            })
+            .collect();
+
+        let variance_before = {
+            let mean = rgb.iter().step_by(3).map(|&v| v as f64).sum::<f64>() / (w * h) as f64;
+            rgb.iter().step_by(3).map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / (w * h) as f64
+        };
+        let mean_before = rgb.iter().step_by(3).map(|&v| v as f64).sum::<f64>() / (w * h) as f64;
+
+        denoise_luma_bilateral(&mut rgb, w, h, 2, 0.04);
+
+        let variance_after = {
+            let mean = rgb.iter().step_by(3).map(|&v| v as f64).sum::<f64>() / (w * h) as f64;
+            rgb.iter().step_by(3).map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / (w * h) as f64
+        };
+        let mean_after = rgb.iter().step_by(3).map(|&v| v as f64).sum::<f64>() / (w * h) as f64;
+
+        assert!(
+            variance_after < variance_before,
+            "bilateral filter did not reduce variance: before={variance_before:.6} after={variance_after:.6}"
+        );
+        assert!(
+            (mean_after - mean_before).abs() < 1e-3,
+            "mean luma shifted: before={mean_before:.5} after={mean_after:.5}"
+        );
+        // Chroma must stay neutral (R==G==B) throughout.
+        for i in 0..w * h {
+            let o = i * 3;
+            assert!(
+                (rgb[o] - rgb[o + 1]).abs() < 1e-5 && (rgb[o + 1] - rgb[o + 2]).abs() < 1e-5,
+                "chroma shifted at pixel {i}: R={} G={} B={}", rgb[o], rgb[o+1], rgb[o+2]
+            );
+        }
+    }
+
+    #[test]
+    fn denoise_luma_bilateral_preserves_edge() {
+        // A sharp luma step edge (left half 0.2, right half 0.6) should be
+        // preserved: range_sigma=0.04 << 0.4 step so bilateral weights across
+        // the edge collapse to near zero.
+        let w = 20;
+        let h = 5;
+        let dark = 0.2f32;
+        let bright = 0.6f32;
+        let mut rgb: Vec<f32> = (0..w * h)
+            .flat_map(|i| {
+                let col = i % w;
+                let v = if col < w / 2 { dark } else { bright };
+                [v, v, v]
+            })
+            .collect();
+
+        denoise_luma_bilateral(&mut rgb, w, h, 2, 0.04);
+
+        // Pixels well away from the border (≥radius pixels) must keep their values.
+        let r = 2usize;
+        for row in 0..h {
+            // Dark side, columns far from edge
+            for col in 0..w / 2 - r {
+                let v = rgb[(row * w + col) * 3];
+                assert!(
+                    (v - dark).abs() < 0.01,
+                    "dark side blurred at ({row},{col}): got {v:.4} expected ≈{dark}"
+                );
+            }
+            // Bright side, columns far from edge
+            for col in w / 2 + r..w {
+                let v = rgb[(row * w + col) * 3];
+                assert!(
+                    (v - bright).abs() < 0.01,
+                    "bright side blurred at ({row},{col}): got {v:.4} expected ≈{bright}"
+                );
+            }
         }
     }
 
