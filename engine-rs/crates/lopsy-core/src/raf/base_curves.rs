@@ -131,14 +131,17 @@ pub fn curve_for_film_mode(film_mode: Option<u16>) -> &'static BaseCurve {
 /// saturation, applied before the tone curve and sRGB gamma. These are
 /// stronger than equivalent display-space factors because gamma compresses
 /// the chroma boost. Values are look approximations, not measured LUTs.
+///
+/// Values reduced from their previous (3.x) crutch levels now that the
+/// CFA phase is correctly aligned and real sensor chroma is preserved.
 pub fn saturation_for_film_mode(film_mode: Option<u16>) -> f32 {
     match film_mode {
-        Some(0x200) | Some(0x400) => 3.4,                          // Velvia (vivid)
-        Some(0x000) => 3.0,                                         // Provia (standard)
-        Some(0x100) | Some(0x120) | Some(0x130) | Some(0x300) => 2.4, // Astia/portrait (soft)
-        Some(0x600) => 2.4,                                         // Classic Chrome (muted)
-        Some(0x500) | Some(0x501) => 2.2,                          // Pro Neg
-        _ => 3.0,                                                    // default ~Provia
+        Some(0x200) | Some(0x400) => 1.40,                              // Velvia (vivid)
+        Some(0x000) => 1.20,                                             // Provia (standard)
+        Some(0x100) | Some(0x120) | Some(0x130) | Some(0x300) => 1.12, // Astia/portrait (soft)
+        Some(0x600) => 1.15,                                             // Classic Chrome (muted)
+        Some(0x500) | Some(0x501) => 1.10,                              // Pro Neg
+        _ => 1.20,                                                        // default ~Provia
     }
 }
 

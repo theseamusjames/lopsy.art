@@ -26,6 +26,30 @@ use crate::dng::color;
 use crate::dng::tiff::TiffReader;
 use crate::dng::demosaic;
 
+/// Which demosaic algorithm `read_raf_opts` uses for X-Trans sensors.
+#[derive(Clone, Copy, PartialEq)]
+pub enum DemosaicMode {
+    /// Full Markesteijn multi-pass (production quality).
+    Markesteijn,
+    /// Nearest-same-colour lookup, phase-faithful but deliberately dumb.
+    /// Used only for the demosaic-localisation experiment.
+    Nearest,
+}
+
+/// Decode options for `read_raf_opts`.
+#[derive(Clone, Copy)]
+pub struct RafDecodeOpts {
+    pub demosaic: DemosaicMode,
+    /// Whether to apply post-demosaic chroma + luma denoise.
+    pub denoise: bool,
+}
+
+impl Default for RafDecodeOpts {
+    fn default() -> Self {
+        Self { demosaic: DemosaicMode::Markesteijn, denoise: true }
+    }
+}
+
 /// EXIF and Fujifilm makernote metadata extracted from the embedded JPEG preview.
 #[derive(Debug, Clone, Default)]
 pub struct RafExifInfo {
@@ -47,7 +71,19 @@ pub struct RafImage {
     pub debug_log: Vec<String>,
 }
 
+/// Decode a Fujifilm RAF file with production defaults (Markesteijn demosaic,
+/// denoise on). This is the stable public interface called by the WASM bridge;
+/// its behaviour is identical to the pre-opts code.
 pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
+    read_raf_opts(data, RafDecodeOpts::default())
+}
+
+/// Decode a Fujifilm RAF file with caller-supplied options.
+///
+/// `opts.demosaic` selects the X-Trans demosaic algorithm (Bayer path is
+/// always bilinear regardless). `opts.denoise` gates the chroma-median
+/// and luma-bilateral post-demosaic passes.
+pub fn read_raf_opts(data: &[u8], opts: RafDecodeOpts) -> Result<RafImage, String> {
     let mut debug_log: Vec<String> = Vec::new();
     macro_rules! raf_log {
         ($($arg:tt)*) => { debug_log.push(format!($($arg)*)); };
@@ -249,7 +285,9 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
     let is_xtrans = camera_model_is_xtrans(&camera_model);
     let base_pat = cfa_pattern.as_ref().copied().unwrap_or(DEFAULT_XTRANS_CFA);
     let cfa = if is_xtrans {
-        shift_cfa(&base_pat, crop_top as usize, crop_left as usize)
+        let (rs, cs) = detect_cfa_shift(&normalized, w, h, &base_pat, crop_top as usize, crop_left as usize);
+        raf_log!("[RAF] CFA phase auto-detected: row_shift={}, col_shift={}", rs, cs);
+        shift_cfa(&base_pat, rs, cs)
     } else {
         [0u8, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
          0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
@@ -257,11 +295,21 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
     };
     let cfa_period = if is_xtrans { 6 } else { 2 };
 
-    if let Some(as_shot) = cfa_meta.as_shot_wb {
-        raf_log!("[RAF] as-shot WB (tag 0xF00D, not used): [{:.4}, {:.4}, {:.4}]", as_shot[0], as_shot[1], as_shot[2]);
-    }
-    let wb = auto_wb_gray_world(&normalized, w, h, &cfa, cfa_period);
-    raf_log!("[RAF] WB (gray-world): [{:.4}, {:.4}, {:.4}]", wb[0], wb[1], wb[2]);
+    // Use the camera's as-shot WB from tag 0xF00D when present; it is expressed
+    // as [r/g, 1, b/g] multipliers. Fall back to gray-world only when absent
+    // (e.g. some third-party RAF writers omit the tag). The as-shot values can
+    // clip R/B highlights before G, but desaturate_highlights (applied later)
+    // handles that by blending towards neutral luma.
+    let wb = if let Some(as_shot) = cfa_meta.as_shot_wb {
+        raf_log!("[RAF] WB source: as-shot (tag 0xF00D): [{:.4}, {:.4}, {:.4}]",
+            as_shot[0], as_shot[1], as_shot[2]);
+        as_shot
+    } else {
+        let gw = auto_wb_gray_world(&normalized, w, h, &cfa, cfa_period);
+        raf_log!("[RAF] WB source: gray-world fallback: [{:.4}, {:.4}, {:.4}]",
+            gw[0], gw[1], gw[2]);
+        gw
+    };
     for row in 0..h {
         for col in 0..w {
             let cfa_idx = (row % cfa_period) * cfa_period + (col % cfa_period);
@@ -273,9 +321,16 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
     // ── Demosaic ────────────────────────────────────────────────
 
     let mut rgb_f32 = if is_xtrans {
-        raf_log!("[RAF] X-Trans demosaic (CFA shifted by row={}, col={})",
-            crop_top % 6, crop_left % 6);
-        xtrans::demosaic_xtrans(&normalized, width, height, &cfa)
+        match opts.demosaic {
+            DemosaicMode::Markesteijn => {
+                raf_log!("[RAF] X-Trans demosaic Markesteijn");
+                xtrans::demosaic_xtrans(&normalized, width, height, &cfa)
+            }
+            DemosaicMode::Nearest => {
+                raf_log!("[RAF] X-Trans demosaic nearest-neighbour (diagnostic)");
+                xtrans::demosaic_nearest(&normalized, width, height, &cfa)
+            }
+        }
     } else {
         raf_log!("[RAF] Bayer demosaic");
         demosaic::bilinear(&normalized, width, height, &cfa[..4])
@@ -304,23 +359,25 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
     // real sensor data by median-filtering the color-difference planes.
     // A median erases isolated false-color pixels while preserving edges
     // and real color regions — unlike a box blur it cannot desaturate.
-    raf_log!("[RAF] chroma denoise (separable median, radius 3 — spans 6px CFA period)");
-    denoise_chroma(&mut rgb_f32, w, h);
+    if opts.denoise {
+        // The green-sublattice phase misalignment is now fixed at the source,
+        // so this is a mild residual chroma noise pass — not a grid-eraser.
+        // Radius 1 (3-wide separable median) removes isolated false-color speckle
+        // while leaving real color edges and fine detail intact.
+        raf_log!("[RAF] chroma denoise (separable median, radius 1)");
+        denoise_chroma(&mut rgb_f32, w, h);
 
-    // ── Luma denoise (bilateral, linear space) ──────────────────
-    // Sensor grain and residual demosaic texture appear as luma variation in
-    // flat areas. Filtering before saturation and the tone curve means the
-    // smoothed signal is never amplified. range_sigma ~0.04 in linear space
-    // is conservative: the raw sits in the lower ~30% of [0,1], so 0.04
-    // bridges same-level noise while real edges (≥several×0.04) are unaffected.
-    // Radius 3 (7-px window) is chosen so the filter spans the full 6×6 CFA
-    // period: the X-Trans green sub-lattice sits on different sites than R/B,
-    // and the small residual green-vs-R/B level difference shows up as a fine
-    // diagonal luminance weave at the mosaic period. A window narrower than the
-    // period cannot average that weave out; a 7-px window does, while the range
-    // term keeps real edges intact.
-    raf_log!("[RAF] luma denoise bilateral (radius=3, range_sigma=0.05)");
-    denoise_luma_bilateral(&mut rgb_f32, w, h, 3, 0.05);
+        // ── Luma denoise (bilateral, linear space) ──────────────────
+        // Mild grain reduction on real sensor noise. The green-sublattice weave
+        // that previously required a radius-3 bilateral to span the full 6×6 CFA
+        // period is now eliminated at the demosaic phase, so a lighter pass
+        // suffices. range_sigma ~0.03 bridges only same-level sensor grain;
+        // real edges (much larger step) are unaffected.
+        raf_log!("[RAF] luma denoise bilateral (radius=2, range_sigma=0.03)");
+        denoise_luma_bilateral(&mut rgb_f32, w, h, 2, 0.03);
+    } else {
+        raf_log!("[RAF] denoise skipped (opts.denoise=false)");
+    }
 
     // ── Film-sim saturation (linear space) ─────────────────────
     // Fuji film sims are much more saturated than a plain colorimetric
@@ -334,10 +391,10 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
 
     // ── Exposure boost ─────────────────────────────────────────
     // Raw sensor data uses ~30% of the 14-bit range (cameras expose for
-    // highlights to preserve headroom). Gray-world WB produces near-unity
-    // multipliers (no ~1.8× as-shot boost), so a larger scale is needed
-    // here to restore perceived brightness. Done in linear space.
-    const EXPOSURE_SCALE: f32 = 1.8;
+    // highlights to preserve headroom). The as-shot WB already boosts R/B
+    // ~1.8×, so a smaller scale is needed than with gray-world. Done in
+    // linear space.
+    const EXPOSURE_SCALE: f32 = 1.3;
     for v in rgb_f32.iter_mut() {
         *v *= EXPOSURE_SCALE;
     }
@@ -391,6 +448,242 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
         apply_exif_orientation(width, height, &rgba, exif_orientation);
 
     Ok(RafImage { width: final_w, height: final_h, pixels: final_pixels, exif_info, debug_log })
+}
+
+/// Diagnostic accessor: run the decode up to and including per-CFA-channel
+/// white balance, returning the cropped WB-applied mosaic plane plus dims and
+/// the shifted CFA pattern. Used only by the demosaic-localisation experiment.
+pub fn debug_wb_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36]), String> {
+    if data.len() < 120 {
+        return Err("File too small for RAF header".into());
+    }
+    if &data[0..16] != b"FUJIFILMCCD-RAW " {
+        return Err("Not a Fujifilm RAF file (bad magic)".into());
+    }
+
+    let camera_model = parse_camera_model(&data[28..60]);
+
+    let cfa_header_offset = read_be_u32(data, 92) as usize;
+    let cfa_header_length = read_be_u32(data, 96) as usize;
+    let cfa_data_offset   = read_be_u32(data, 100) as usize;
+    let cfa_data_length   = read_be_u32(data, 104) as usize;
+
+    if cfa_data_offset + cfa_data_length > data.len() {
+        return Err("CFA data extends past end of file".into());
+    }
+
+    let cfa_header_info = if cfa_header_offset > 0
+        && cfa_header_offset + cfa_header_length <= data.len()
+        && cfa_header_length >= 4
+    {
+        parse_cfa_header(&data[cfa_header_offset..cfa_header_offset + cfa_header_length])
+    } else {
+        None
+    };
+
+    let cfa_pattern  = cfa_header_info.as_ref().and_then(|h| h.cfa_pattern);
+    let crop_top     = cfa_header_info.as_ref().map(|h| h.crop_top).unwrap_or(0);
+    let crop_left    = cfa_header_info.as_ref().map(|h| h.crop_left).unwrap_or(0);
+    let out_w        = cfa_header_info.as_ref().and_then(|h| h.output_width);
+    let out_h        = cfa_header_info.as_ref().and_then(|h| h.output_height);
+
+    let cfa_section = &data[cfa_data_offset..cfa_data_offset + cfa_data_length];
+    let cfa_meta    = parse_cfa_tiff(cfa_section)?;
+
+    let raw_w  = cfa_meta.width as usize;
+    let raw_h  = cfa_meta.height as usize;
+    let bits   = cfa_meta.bits_per_sample;
+    let pixel_offset = cfa_meta.strip_offset as usize;
+    let pixel_bytes  = cfa_meta.strip_byte_count as usize;
+
+    if pixel_offset + pixel_bytes > cfa_section.len() {
+        return Err("Pixel data extends past CFA section".into());
+    }
+    let pixel_data = &cfa_section[pixel_offset..pixel_offset + pixel_bytes];
+
+    let white_level: u16 = if bits > 0 && bits <= 16 {
+        ((1u32 << bits) - 1) as u16
+    } else {
+        u16::MAX
+    };
+
+    let base_pat_for_decompress = cfa_pattern.as_ref().copied().unwrap_or(DEFAULT_XTRANS_CFA);
+    let structured_compressed = compression::is_compressed_strip(pixel_data, raw_w as u32, raw_h as u32);
+    let is_compressed = cfa_meta.is_compressed || structured_compressed;
+
+    let raw_plane: Vec<u16> = if is_compressed {
+        compression::decompress_fuji_strip(pixel_data, raw_w as u32, raw_h as u32, &base_pat_for_decompress)
+            .map_err(|e| format!("Compressed RAF decode failed: {e}"))?
+    } else {
+        let expected_bytes = raw_w * raw_h * 2;
+        if pixel_bytes < expected_bytes {
+            return Err(format!("Pixel data too small: expected {expected_bytes}, got {pixel_bytes}"));
+        }
+        let mut buf = Vec::with_capacity(raw_w * raw_h);
+        for i in 0..(raw_w * raw_h) {
+            let off = i * 2;
+            if off + 1 < pixel_data.len() {
+                buf.push(u16::from_le_bytes([pixel_data[off], pixel_data[off + 1]]));
+            } else {
+                buf.push(0);
+            }
+        }
+        buf
+    };
+
+    let width  = out_w.unwrap_or(raw_w as u32).min(raw_w as u32 - crop_left as u32);
+    let height = out_h.unwrap_or(raw_h as u32).min(raw_h as u32 - crop_top as u32);
+    let w = width as usize;
+    let h = height as usize;
+
+    let black   = cfa_meta.black_level.unwrap_or(0.0);
+    let max_val = white_level as f64;
+    let range   = max_val - black;
+
+    let mut normalized: Vec<f32> = Vec::with_capacity(w * h);
+    for row in 0..h {
+        let src_row = row + crop_top as usize;
+        for col in 0..w {
+            let src_col = col + crop_left as usize;
+            let idx = src_row * raw_w + src_col;
+            let v = raw_plane.get(idx).copied().unwrap_or(0).min(white_level);
+            normalized.push(((v as f64 - black) / range).clamp(0.0, 1.0) as f32);
+        }
+    }
+
+    let is_xtrans = camera_model_is_xtrans(&camera_model);
+    let base_pat = cfa_pattern.as_ref().copied().unwrap_or(DEFAULT_XTRANS_CFA);
+    let cfa = if is_xtrans {
+        let (rs, cs) = detect_cfa_shift(&normalized, w, h, &base_pat, crop_top as usize, crop_left as usize);
+        shift_cfa(&base_pat, rs, cs)
+    } else {
+        [0u8, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
+         0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2, 0, 1, 1, 2,
+         0, 1, 1, 2]
+    };
+    let cfa_period = if is_xtrans { 6 } else { 2 };
+
+    let wb = if let Some(as_shot) = cfa_meta.as_shot_wb {
+        as_shot
+    } else {
+        auto_wb_gray_world(&normalized, w, h, &cfa, cfa_period)
+    };
+    for row in 0..h {
+        for col in 0..w {
+            let cfa_idx = (row % cfa_period) * cfa_period + (col % cfa_period);
+            let color = cfa[cfa_idx] as usize;
+            normalized[row * w + col] *= wb[color];
+        }
+    }
+
+    Ok((normalized, w, h, cfa))
+}
+
+/// Diagnostic accessor: decode up to the cropped, normalised raw mosaic
+/// (black-subtracted, [0,1]) BEFORE white balance, returning it with dims, the
+/// raw 6×6 CFA pattern as read from the file (tag 0x0131, Fuji indices, NOT
+/// shifted/remapped), and the crop offsets. Used by the CFA phase-alignment sweep.
+///
+/// Returns `(normalized, w, h, base_pattern_from_file, crop_top, crop_left)`.
+/// For compressed RAF files this returns an error — convert to uncompressed first.
+pub fn debug_raw_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36], u32, u32), String> {
+    if data.len() < 120 {
+        return Err("File too small for RAF header".into());
+    }
+    if &data[0..16] != b"FUJIFILMCCD-RAW " {
+        return Err("Not a Fujifilm RAF file (bad magic)".into());
+    }
+
+    let cfa_header_offset = read_be_u32(data, 92) as usize;
+    let cfa_header_length = read_be_u32(data, 96) as usize;
+    let cfa_data_offset   = read_be_u32(data, 100) as usize;
+    let cfa_data_length   = read_be_u32(data, 104) as usize;
+
+    if cfa_data_offset + cfa_data_length > data.len() {
+        return Err("CFA data extends past end of file".into());
+    }
+
+    let cfa_header_info = if cfa_header_offset > 0
+        && cfa_header_offset + cfa_header_length <= data.len()
+        && cfa_header_length >= 4
+    {
+        parse_cfa_header(&data[cfa_header_offset..cfa_header_offset + cfa_header_length])
+    } else {
+        None
+    };
+
+    let cfa_pattern  = cfa_header_info.as_ref().and_then(|h| h.cfa_pattern);
+    let crop_top     = cfa_header_info.as_ref().map(|h| h.crop_top).unwrap_or(0);
+    let crop_left    = cfa_header_info.as_ref().map(|h| h.crop_left).unwrap_or(0);
+    let out_w        = cfa_header_info.as_ref().and_then(|h| h.output_width);
+    let out_h        = cfa_header_info.as_ref().and_then(|h| h.output_height);
+
+    // The base pattern from file (Fuji indices: 0=B, 1=G, 2=R) — NOT shifted/remapped.
+    let base_pat = cfa_pattern.unwrap_or(DEFAULT_XTRANS_CFA);
+
+    let cfa_section = &data[cfa_data_offset..cfa_data_offset + cfa_data_length];
+    let cfa_meta    = parse_cfa_tiff(cfa_section)?;
+
+    let raw_w  = cfa_meta.width as usize;
+    let raw_h  = cfa_meta.height as usize;
+    let bits   = cfa_meta.bits_per_sample;
+    let pixel_offset = cfa_meta.strip_offset as usize;
+    let pixel_bytes  = cfa_meta.strip_byte_count as usize;
+
+    if pixel_offset + pixel_bytes > cfa_section.len() {
+        return Err("Pixel data extends past CFA section".into());
+    }
+    let pixel_data = &cfa_section[pixel_offset..pixel_offset + pixel_bytes];
+
+    let white_level: u16 = if bits > 0 && bits <= 16 {
+        ((1u32 << bits) - 1) as u16
+    } else {
+        u16::MAX
+    };
+
+    let structured_compressed = compression::is_compressed_strip(pixel_data, raw_w as u32, raw_h as u32);
+    let is_compressed = cfa_meta.is_compressed || structured_compressed;
+
+    if is_compressed {
+        return Err("debug_raw_mosaic: compressed RAF not supported — convert to uncompressed first".into());
+    }
+
+    let expected_bytes = raw_w * raw_h * 2;
+    if pixel_bytes < expected_bytes {
+        return Err(format!("Pixel data too small: expected {expected_bytes}, got {pixel_bytes}"));
+    }
+    let mut raw_plane = Vec::with_capacity(raw_w * raw_h);
+    for i in 0..(raw_w * raw_h) {
+        let off = i * 2;
+        if off + 1 < pixel_data.len() {
+            raw_plane.push(u16::from_le_bytes([pixel_data[off], pixel_data[off + 1]]));
+        } else {
+            raw_plane.push(0);
+        }
+    }
+
+    let width  = out_w.unwrap_or(raw_w as u32).min(raw_w as u32 - crop_left as u32);
+    let height = out_h.unwrap_or(raw_h as u32).min(raw_h as u32 - crop_top as u32);
+    let w = width as usize;
+    let h = height as usize;
+
+    let black   = cfa_meta.black_level.unwrap_or(0.0);
+    let max_val = white_level as f64;
+    let range   = (max_val - black).max(1.0);
+
+    let mut normalized = Vec::with_capacity(w * h);
+    for row in 0..h {
+        let src_row = row + crop_top as usize;
+        for col in 0..w {
+            let src_col = col + crop_left as usize;
+            let idx = src_row * raw_w + src_col;
+            let v = raw_plane.get(idx).copied().unwrap_or(0).min(white_level);
+            normalized.push(((v as f64 - black) / range).clamp(0.0, 1.0) as f32);
+        }
+    }
+
+    // Return the base pattern as read from file (Fuji indices, NOT shifted/remapped).
+    Ok((normalized, w, h, base_pat, crop_top, crop_left))
 }
 
 /// Apply EXIF orientation tag to a RGBA f32 buffer. Returns new (w, h, pixels).
@@ -597,6 +890,99 @@ fn parse_camera_model(bytes: &[u8]) -> String {
     String::from_utf8_lossy(&bytes[..end]).trim().to_string()
 }
 
+/// Auto-detect the X-Trans CFA phase shift (row_shift, col_shift) to apply to
+/// the file's base pattern. The green sublattice is physically ~1.8× brighter
+/// than R/B sites, so the correct alignment is the (row_shift, col_shift) whose
+/// green-labelled positions cluster tightest in per-position raw brightness.
+/// Among the (R/B-ambiguous) best-scoring ties, prefer the shift implied by the
+/// crop offset (sensor readout constant +4,+1 from crop%6) to resolve R vs B.
+fn detect_cfa_shift(
+    normalized: &[f32],
+    w: usize,
+    h: usize,
+    base_pat: &[u8; 36],
+    crop_top: usize,
+    crop_left: usize,
+) -> (usize, usize) {
+    // Accumulate per-6×6-position mean brightness over the interior of the image.
+    // Exclude the outer 1/8 border (overscan / sensor edge effects) and very dark
+    // values (< 0.01) that are black pixels or below the black level.
+    let row_start = h / 8;
+    let row_end   = (7 * h) / 8;
+    let col_start = w / 8;
+    let col_end   = (7 * w) / 8;
+
+    let mut pos_sum   = [0.0f64; 36];
+    let mut pos_count = [0u64; 36];
+
+    for row in row_start..row_end {
+        for col in col_start..col_end {
+            let v = normalized[row * w + col];
+            if v < 0.01 {
+                continue;
+            }
+            let pos = (row % 6) * 6 + (col % 6);
+            pos_sum[pos]   += v as f64;
+            pos_count[pos] += 1;
+        }
+    }
+
+    let pos_mean: [f64; 36] = std::array::from_fn(|i| {
+        if pos_count[i] > 0 { pos_sum[i] / pos_count[i] as f64 } else { 0.0 }
+    });
+
+    // Score each shift by how tightly its green positions cluster in brightness.
+    // Lower spread (max−min for green + max−min for non-green) = better alignment.
+    let mut best_score = f64::MAX;
+    let mut best_shifts: Vec<(usize, usize)> = Vec::new();
+
+    for rs in 0..6 {
+        for cs in 0..6 {
+            let mut g_min = f64::MAX;
+            let mut g_max = f64::MIN;
+            let mut non_g_min = f64::MAX;
+            let mut non_g_max = f64::MIN;
+
+            for r in 0..6 {
+                for c in 0..6 {
+                    let pat_idx = ((r + rs) % 6) * 6 + ((c + cs) % 6);
+                    let mean = pos_mean[r * 6 + c];
+                    if base_pat[pat_idx] == 1 {
+                        // Fujifilm index 1 = green
+                        if mean < g_min { g_min = mean; }
+                        if mean > g_max { g_max = mean; }
+                    } else {
+                        if mean < non_g_min { non_g_min = mean; }
+                        if mean > non_g_max { non_g_max = mean; }
+                    }
+                }
+            }
+
+            let g_spread    = if g_max > g_min { g_max - g_min } else { 0.0 };
+            let non_g_spread = if non_g_max > non_g_min { non_g_max - non_g_min } else { 0.0 };
+            let score = g_spread + non_g_spread;
+
+            if score < best_score - 1e-6 {
+                best_score = score;
+                best_shifts.clear();
+                best_shifts.push((rs, cs));
+            } else if score < best_score + 1e-6 {
+                best_shifts.push((rs, cs));
+            }
+        }
+    }
+
+    // Tie-break: the sensor readout places crop%6 at a constant (+4,+1) offset
+    // from the physically-correct phase. Use that formula to resolve R/B when
+    // multiple shifts score equally well.
+    let formula = ((crop_top % 6 + 4) % 6, (crop_left % 6 + 1) % 6);
+    if best_shifts.contains(&formula) {
+        return formula;
+    }
+
+    best_shifts.into_iter().next().unwrap_or((1, 1))
+}
+
 /// Shift the CFA pattern by the crop offset so it aligns with the
 /// cropped output pixels, and remap Fujifilm's color indices
 /// (0=B, 1=G, 2=R in RAF files) to the standard convention
@@ -753,14 +1139,11 @@ fn denoise_chroma(rgb: &mut [f32], w: usize, h: usize) {
         cb[i] = rgb[o + 2] - l;
     }
 
-    // The X-Trans demosaic leaves a CFA-locked false-colour lattice whose
-    // period is the 6×6 mosaic. A 3×3 median only spans half that period, so
-    // the lattice survives and — once the saturation boost amplifies it and the
-    // canvas resamples it at non-integer zoom — aliases into a coarse coloured
-    // checkerboard (moiré). A separable median whose window (2·3+1 = 7) exceeds
-    // the 6-px period erases the lattice while still preserving real colour
-    // edges (a median does not average across them, unlike a box blur).
-    const CHROMA_MEDIAN_RADIUS: i32 = 3;
+    // Residual chroma speckle from demosaicing (isolated false-color pixels).
+    // The CFA phase is now correctly aligned at the source, so there is no
+    // period-6 false-colour lattice to erase — a 3-wide median (radius 1)
+    // is sufficient to clean up isolated outlier pixels without over-smoothing.
+    const CHROMA_MEDIAN_RADIUS: i32 = 1;
     cr = median_filter_separable(&cr, w, h, CHROMA_MEDIAN_RADIUS);
     cg = median_filter_separable(&cg, w, h, CHROMA_MEDIAN_RADIUS);
     cb = median_filter_separable(&cb, w, h, CHROMA_MEDIAN_RADIUS);
@@ -1199,6 +1582,39 @@ fn color_matrix_for_model(model: &str) -> [f32; 9] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detect_cfa_shift_finds_correct_phase() {
+        // Build a synthetic mosaic where green positions (per a (1,1)-shifted pattern)
+        // are 1.8× brighter than R/B sites. Use crop_top=3, crop_left=0 so that the
+        // formula tie-breaker resolves to exactly (1,1):
+        //   formula_rs = (3 % 6 + 4) % 6 = 1
+        //   formula_cs = (0 % 6 + 1) % 6 = 1
+        let target_rs = 1usize;
+        let target_cs = 1usize;
+
+        // Build the "true" CFA for the output crop: base_pat shifted by (1,1).
+        let base_pat = DEFAULT_XTRANS_CFA;
+        let true_cfa = shift_cfa(&base_pat, target_rs, target_cs);
+
+        let w = 48usize;
+        let h = 48usize;
+        let mut mosaic = vec![0.0f32; w * h];
+        for row in 0..h {
+            for col in 0..w {
+                let cfa_idx = (row % 6) * 6 + (col % 6);
+                // Fuji green (index 1 in base_pat) is ~1.8× brighter than R/B.
+                // After shift_cfa remapping, green = standard index 1.
+                mosaic[row * w + col] = if true_cfa[cfa_idx] == 1 { 0.18 } else { 0.10 };
+            }
+        }
+
+        // crop_top=3, crop_left=0 → formula=(1,1); it is among the best-scoring
+        // ties, so the detector returns it.
+        let (rs, cs) = detect_cfa_shift(&mosaic, w, h, &base_pat, 3, 0);
+        assert_eq!((rs, cs), (target_rs, target_cs),
+            "detector returned ({rs},{cs}), expected ({target_rs},{target_cs})");
+    }
 
     #[test]
     fn row_normalized_matrix_keeps_gray_neutral() {

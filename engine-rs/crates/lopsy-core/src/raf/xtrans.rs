@@ -136,6 +136,62 @@ pub fn demosaic_xtrans_passes(
 /// suppress CFA-locked false colour. Three matches dcraw's Markesteijn.
 const CHROMA_MEDIAN_PASSES: usize = 3;
 
+/// Deliberately dumb, phase-faithful demosaic for diagnostics: each output
+/// channel is the value of the NEAREST same-colour sample (the pixel itself if
+/// it already carries that colour). No directional or homogeneity logic, no
+/// cross-channel mixing — so any CFA-period structure it produces comes purely
+/// from the CFA phase map and the channel levels, not from clever interpolation.
+pub fn demosaic_nearest(raw: &[f32], width: u32, height: u32, pattern: &[u8; 36]) -> Vec<f32> {
+    let w = width as usize;
+    let h = height as usize;
+    let mut rgb = vec![0.0f32; w * h * 3];
+
+    for row in 0..h {
+        for col in 0..w {
+            let out = (row * w + col) * 3;
+            let own_color = cfa_color(pattern, row, col);
+
+            for target in 0u8..3 {
+                if own_color == target {
+                    rgb[out + target as usize] = raw[row * w + col];
+                } else {
+                    // Search growing Chebyshev rings until at least one sample
+                    // of the target colour is found, then average all such
+                    // samples in that ring. Cap at radius 6 to bound cost.
+                    let mut found_sum = 0.0f32;
+                    let mut found_count = 0u32;
+                    'rings: for radius in 1i32..=6 {
+                        for dy in -radius..=radius {
+                            for dx in -radius..=radius {
+                                // Only the outermost shell of the Chebyshev ring.
+                                if dy.abs() != radius && dx.abs() != radius {
+                                    continue;
+                                }
+                                let nr = (row as i32 + dy).clamp(0, h as i32 - 1) as usize;
+                                let nc = (col as i32 + dx).clamp(0, w as i32 - 1) as usize;
+                                if cfa_color(pattern, nr, nc) == target {
+                                    found_sum += raw[nr * w + nc];
+                                    found_count += 1;
+                                }
+                            }
+                        }
+                        if found_count > 0 {
+                            break 'rings;
+                        }
+                    }
+                    rgb[out + target as usize] = if found_count > 0 {
+                        found_sum / found_count as f32
+                    } else {
+                        raw[row * w + col]
+                    };
+                }
+            }
+        }
+    }
+
+    rgb
+}
+
 /// 3×3 median filter on a single-channel plane, edge-clamped. Returns a new
 /// buffer. Used on the chroma (color-difference) planes for false-colour
 /// suppression; it preserves edges far better than a linear blur.
@@ -971,6 +1027,33 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn demosaic_nearest_uniform_gray_is_exact() {
+        // A uniform mosaic (all samples = 0.5) must reconstruct to 0.5 in
+        // every channel at every pixel: no tiling or phase error, because the
+        // nearest same-colour sample always has the same value.
+        let w = 36usize;
+        let h = 36usize;
+        let raw = vec![0.5f32; w * h];
+        let rgb = demosaic_nearest(&raw, w as u32, h as u32, &TEST_PATTERN);
+        assert_eq!(rgb.len(), w * h * 3, "output length mismatch");
+        for i in 0..w * h {
+            let o = i * 3;
+            assert!(
+                (rgb[o]     - 0.5).abs() < 1e-6,
+                "R wrong at pixel {i}: {}",  rgb[o]
+            );
+            assert!(
+                (rgb[o + 1] - 0.5).abs() < 1e-6,
+                "G wrong at pixel {i}: {}", rgb[o + 1]
+            );
+            assert!(
+                (rgb[o + 2] - 0.5).abs() < 1e-6,
+                "B wrong at pixel {i}: {}", rgb[o + 2]
+            );
         }
     }
 
