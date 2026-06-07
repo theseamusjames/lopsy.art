@@ -14,9 +14,8 @@ export function handleSmudgeDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer, shiftKey } = ctx;
   const editorState = useEditorStore.getState();
   editorState.pushHistory('Smudge');
-  const toolSettings = useToolSettingsStore.getState();
-  const size = toolSettings.smudgeSize;
-  const strength = toolSettings.smudgeStrength / 100;
+  const { size, strength: strengthPercent } = useToolSettingsStore.getState().settings.smudge;
+  const strength = strengthPercent / 100;
 
   const engine = getEngine();
   if (engine) {
@@ -58,9 +57,8 @@ export function handleSmudgeDown(ctx: InteractionContext): InteractionState {
 
 export function handleSmudgeMove(state: InteractionState, layerLocalPos: Point): void {
   if (!state.lastPoint) return;
-  const toolSettings = useToolSettingsStore.getState();
-  const size = toolSettings.smudgeSize;
-  const strength = toolSettings.smudgeStrength / 100;
+  const { size, strength: strengthPercent } = useToolSettingsStore.getState().settings.smudge;
+  const strength = strengthPercent / 100;
   const spacing = Math.max(1, size * 0.25);
 
   const engine = getEngine();
