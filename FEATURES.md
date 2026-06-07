@@ -300,7 +300,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Color**: RGBA
 
 ### Effects on Groups
-Layer effects can be attached to **group** layers, not just leaf layers. When a group is in **Pass Through** mode (the default), the compositor still allocates an intermediate buffer so the effects (drop shadow, glow, stroke, color overlay) have a composited surface to attach to — effects render around the group as a whole rather than around each child individually.
+Layer effects can be attached to **group** layers, not just leaf layers. New groups default to **Normal** (isolated) compositing, so the children pre-composite into a group buffer and the effects (drop shadow, glow, stroke, color overlay) attach to that combined surface — effects render around the group as a whole rather than around each child individually. When a group is switched to **Pass Through** the compositor still allocates an intermediate buffer for the same reason, so effects work in either mode.
 
 ---
 
@@ -371,8 +371,10 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Threshold**: level 0 - 255
 
 ### Noise
-- **Add Noise**: amount 0 - 255, monochrome on/off
-- **Fill with Noise**: monochrome on/off
+- **Add Noise**: amount 1 - 100 (default 25), monochromatic on/off
+- **Fill with Noise**: monochromatic on/off
+
+Both noise filters open a dedicated dialog (separate from the generic filter dialog) with Cancel / Apply only — no live preview. Each press of Apply draws a fresh random seed, so re-running the filter produces a different pattern (see the Regenerate note under Render).
 
 ### Pixelate
 - **Pixelate / Mosaic**: block size 2 - 64 px
@@ -406,11 +408,11 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Clouds**: scale, seed
 - **Smoke**: scale, seed, turbulence
 - **Fibers**: variance 1 - 64 (color variation between strands), strength 1 - 64 (vertical coherence — higher values produce straighter fibers, lower values produce more wavy/tangled fibers), seed. Generates random vertical fiber textures resembling paper, cloth, or hair using multi-octave 1D noise with 2D wander perturbation. GPU-accelerated GLSL shader.
-- **Regenerate** button: randomized filters (Clouds, Smoke, Fibers, and the Add Noise variants) show a circular-arrow button next to the Preview checkbox in the filter dialog. Clicking it picks a new random seed and refreshes the preview, so users can spin through variations without re-opening the dialog. Confirming the dialog with Preview active commits the exact previewed pixels (the seed is captured at preview time and the GPU result is snapshotted, so what you see is what you get). The Add Noise filter now also re-seeds on every dialog open so opening the dialog twice produces different noise patterns.
+- **Regenerate** button: the randomized **render** filters (Clouds, Smoke, Fibers) show a circular-arrow button next to the Preview checkbox in the generic filter dialog. Clicking it picks a new random seed and refreshes the preview, so users can spin through variations without re-opening the dialog. Confirming the dialog with Preview active commits the exact previewed pixels (the seed is captured at preview time and the GPU result is snapshotted, so what you see is what you get). The **Add Noise** / **Fill with Noise** filters live in their own simpler dialog without a preview or regenerate button; they instead draw a fresh random seed on every Apply, so re-running the filter yields a different noise pattern each time.
 - **Pattern Fill**: tiles a user-defined pattern across the active layer
   - **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern
   - **Scale**: 10 - 1000% (tile size relative to original pattern dimensions)
-  - **Offset X / Y**: 0 - 100% (shifts the tiling origin)
+  - **Column / Row Offset**: 0 - 100% (shifts the tiling origin along X / Y)
   - Pattern selector grid with thumbnails
   - Live preview support
   - Selection mask support (fills only the selected area)
@@ -429,10 +431,10 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 | HSL | Hue, Saturation, Color, Luminosity |
 | Group-only | Pass Through |
 
-### Pass Through (group default)
+### Pass Through (group blend mode)
 
-- Available exclusively on **group** layers, where it is the default blend mode (matching Photoshop).
-- Children blend directly onto the surface beneath the group, so adjustment layers and effects inside the group affect underlying layers outside the group as well.
+- Available exclusively on **group** layers. New groups default to **Normal** (isolated) compositing — children pre-composite into a group buffer first, then the group's opacity/effects apply to the combined result, so lowering a group's opacity scales the composited result rather than attenuating each child individually (this diverges from Photoshop, which defaults groups to Pass Through). Pass Through stays as an explicit, user-selectable mode for layouts that genuinely need it.
+- In **Pass Through**, children blend directly onto the surface beneath the group, so adjustment layers and effects inside the group affect underlying layers outside the group as well.
 - Implemented entirely in the JS sync layer: `engine-sync` flattens pass-through groups before the WASM compositor sees them. The WASM engine itself never receives a "pass through" mode (it has no PSD index or Rust discriminant — exporting a pass-through group to PSD writes 'normal' as a safe fallback).
 
 ---
@@ -449,7 +451,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 
 ### Layer Properties
 - **Opacity**: 0 - 1
-- **Blend mode**: any of 16 modes (plus "Pass Through" on group layers)
+- **Blend mode**: any of 16 modes (plus "Pass Through" on group layers; new groups default to Normal)
 - **Visible**: on/off
 - **Locked**: on/off
 - **Position**: x, y
@@ -560,7 +562,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 
 ### Seamless Pattern Preview
 - **Show Seamless Pattern** (View menu): tiles the document outside the canvas bounds so tileable textures and patterns can be previewed in context. The center tile is the actual document; surrounding tiles are repeats of the same pixels with edge wrapping (`fract(uv)`) so seams are visible immediately.
-- **Dim outside tiles**: a per-tool options-bar checkbox (visible whenever Show Seamless Pattern is on) dims the surrounding repeats so the center document stays the focal point while still showing how it tiles. Default on.
+- **Dim pattern**: a per-tool options-bar checkbox (visible whenever Show Seamless Pattern is on) dims the surrounding repeat tiles so the center document stays the focal point while still showing how it tiles. Default on.
 
 ### UI
 - **Foreground / background color**: with swap and reset
@@ -706,7 +708,7 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 
 ### Open / Save
 - **New** (`⌘N`): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
-- **Open…** (`⌘O`): open a PNG/JPEG/WebP/BMP/PSD/DNG/.lopsy from disk (the picker auto-routes by extension)
+- **Open…** (`⌘O`): open a PNG/JPEG/GIF/BMP/TIFF/WebP/HEIC/PSD/DNG/RAF/.lopsy from disk (the picker auto-routes by extension via a shared `classifyOpenFile` helper). The same routing backs the pre-document flow — the New Document modal's "Open file" button and drag-and-drop onto a fresh app accept the same formats, including `.lopsy` project files.
 - **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust)
 - **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant)
 
@@ -730,4 +732,7 @@ A modal dialog with a live thumbnail preview (debounced ~200 ms) and inline opti
 One-shot PNG export through the GPU compositor — no dialog, no preview, uses the document name as the filename and quality 92.
 
 ### DNG / RAW Import
-Camera RAW (DNG) files are decoded entirely in Rust (demosaic, LJPEG, TIFF) before being uploaded to a GPU layer.
+Camera RAW files are decoded entirely in Rust before being uploaded to a GPU layer — JS never touches the raw sensor data.
+
+- **DNG**: demosaic, LJPEG, TIFF parsing in Rust.
+- **Fujifilm RAF**: decodes uncompressed X-Trans and Bayer sensor files and renders them with camera-JPEG-style color. Pipeline: parse the RAF container → CFA TIFF (Fuji tags) → decode 16-bit sensor data → gray-world auto white balance → demosaic (X-Trans uses an edge-directed Markesteijn-style 3-pass demosaic that reconstructs green from four directional candidates weighted by local homogeneity, then fills R/B from the smooth color-difference planes; Bayer uses bilinear) → per-camera camera→sRGB color matrix (row-normalized from the DNG ColorMatrix values, so neutral input stays neutral) → exposure boost → film base curve (Provia / Velvia / Astia / Classic Chrome / DR400 curves are compiled in, Velvia is the default) → sRGB gamma → EXIF orientation applied to the final image (portrait shots auto-rotate). White-balance presets for 49 Fuji bodies ship compiled in. (Lossless-compressed RAF and DCP camera profiles are decoded internally but not yet wired to UI.)
