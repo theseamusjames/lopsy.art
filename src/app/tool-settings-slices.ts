@@ -4,6 +4,8 @@ import type { FillSettings } from '../tools/fill/fill-settings';
 import { DEFAULT_FILL_SETTINGS } from '../tools/fill/fill-settings';
 import type { MarqueeSettings } from '../tools/marquee/marquee-settings';
 import { DEFAULT_MARQUEE_SETTINGS } from '../tools/marquee/marquee-settings';
+import type { DodgeSettings } from '../tools/dodge/dodge-settings';
+import { DEFAULT_DODGE_SETTINGS } from '../tools/dodge/dodge-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -18,10 +20,12 @@ export interface ToolSettingsSlices {
   wand: WandSettings;
   fill: FillSettings;
   marquee: MarqueeSettings;
+  dodge: DodgeSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   wand: DEFAULT_WAND_SETTINGS,
   fill: DEFAULT_FILL_SETTINGS,
   marquee: DEFAULT_MARQUEE_SETTINGS,
+  dodge: DEFAULT_DODGE_SETTINGS,
 };
