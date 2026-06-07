@@ -82,6 +82,9 @@ function renderFrameGpu(
         const result = cropLayerToContent(engine, oldId);
         if (result.length === 4 && (result[2] ?? 0) > 0) {
           croppedLayerIds.add(oldId);
+          const boundsChanged =
+            result[0] !== oldLayer.x || result[1] !== oldLayer.y ||
+            result[2] !== (oldLayer.width ?? 0) || result[3] !== (oldLayer.height ?? 0);
           useEditorStore.setState((s) => ({
             document: {
               ...s.document,
@@ -93,12 +96,14 @@ function renderFrameGpu(
             },
             renderVersion: s.renderVersion + 1,
           }));
-          // The GPU texture was cropped to content. Any cached JS pixel data
-          // for this layer now has the wrong dimensions; if syncLayers ran
-          // with it, the upload would re-expand the GPU texture to the stale
-          // size (#543: repeated option-drag duplicate caused the previously-
-          // active layer's content to visually shift).
-          clearJsPixelData(oldId);
+          // The GPU texture was cropped to content. If the bounds actually
+          // changed, cached JS pixel data has wrong dimensions; clear it so
+          // syncLayers doesn't re-expand the GPU texture to the stale size
+          // (#543). If bounds didn't change (JS-side crop already ran), the
+          // cached data (including sparse entries) is still valid.
+          if (boundsChanged) {
+            clearJsPixelData(oldId);
+          }
         }
       }
     }

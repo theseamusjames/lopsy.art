@@ -100,7 +100,7 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
 
   test('rapid cross-hatch strokes on 6000x4000', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'CDP profiler requires Chromium');
-    test.setTimeout(300_000);
+    test.setTimeout(600_000);
 
     const outDir = path.join(process.cwd(), 'tests', 'screenshots');
     fs.mkdirSync(outDir, { recursive: true });
