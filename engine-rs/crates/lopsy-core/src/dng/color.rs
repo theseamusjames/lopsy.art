@@ -162,6 +162,36 @@ fn mul_3x3(a: &[f64; 9], b: &[f64; 9]) -> [f32; 9] {
     out
 }
 
+/// Rebalance a camera→sRGB matrix so that a neutral input (R=G=B) maps to a
+/// neutral output, by absorbing the matrix's own white point (pre_mul) into
+/// its columns. Unlike per-row normalization this preserves the matrix's
+/// off-diagonal (saturation) structure. dcraw's approach: pre_mul = M⁻¹·[1,1,1].
+pub fn neutralize_matrix(m: &[f32; 9]) -> [f32; 9] {
+    let m64: [f64; 9] = [
+        m[0] as f64, m[1] as f64, m[2] as f64,
+        m[3] as f64, m[4] as f64, m[5] as f64,
+        m[6] as f64, m[7] as f64, m[8] as f64,
+    ];
+    let inv = match invert_3x3(&m64) {
+        Some(i) => i,
+        None => return *m,
+    };
+    // pre_mul = M⁻¹ · [1,1,1]ᵀ  — the c-th element is the sum of row c of M⁻¹
+    let pre_mul = [
+        inv[0] + inv[1] + inv[2],
+        inv[3] + inv[4] + inv[5],
+        inv[6] + inv[7] + inv[8],
+    ];
+    // Scale each column c by pre_mul[c] so M_final · [1,1,1]ᵀ = [1,1,1]ᵀ
+    let mut out = [0.0f32; 9];
+    for r in 0..3 {
+        for c in 0..3 {
+            out[r * 3 + c] = (m64[r * 3 + c] * pre_mul[c]) as f32;
+        }
+    }
+    out
+}
+
 fn invert_3x3(m: &[f64; 9]) -> Option<[f64; 9]> {
     let det = m[0] * (m[4] * m[8] - m[5] * m[7])
             - m[1] * (m[3] * m[8] - m[5] * m[6])
@@ -181,4 +211,41 @@ fn invert_3x3(m: &[f64; 9]) -> Option<[f64; 9]> {
         (m[1] * m[6] - m[0] * m[7]) * inv_det,
         (m[0] * m[4] - m[1] * m[3]) * inv_det,
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn neutralize_matrix_keeps_gray_neutral_and_preserves_saturation() {
+        // Real per-camera matrix (X-T5/X100VI) derived from DNG ColorMatrix1
+        // [12662,-5961,-1025,-4129,12025,2399,-752,1455,6531]/10000.
+        let cm_raw: [f64; 9] = [
+            1.2662, -0.5961, -0.1025,
+            -0.4129, 1.2025, 0.2399,
+            -0.0752, 0.1455, 0.6531,
+        ];
+        let cam_to_srgb = color_matrix_to_srgb(&cm_raw);
+        let m = neutralize_matrix(&cam_to_srgb);
+
+        // A neutral input must produce a neutral output (within 1e-4).
+        let v = 0.5f32;
+        let r_out = m[0] * v + m[1] * v + m[2] * v;
+        let g_out = m[3] * v + m[4] * v + m[5] * v;
+        let b_out = m[6] * v + m[7] * v + m[8] * v;
+        assert!(
+            (r_out - g_out).abs() < 1e-4 && (g_out - b_out).abs() < 1e-4,
+            "neutral in → non-neutral out: r={r_out:.6} g={g_out:.6} b={b_out:.6}"
+        );
+
+        // A saturated input (red-heavy) must stay saturated after neutralization.
+        let saturated_in = [0.8f32, 0.2, 0.1];
+        let r_s = m[0] * saturated_in[0] + m[1] * saturated_in[1] + m[2] * saturated_in[2];
+        let g_s = m[3] * saturated_in[0] + m[4] * saturated_in[1] + m[5] * saturated_in[2];
+        let b_s = m[6] * saturated_in[0] + m[7] * saturated_in[1] + m[8] * saturated_in[2];
+        // The output must not be nearly gray (max - min must be substantial).
+        let spread = (r_s - g_s).abs().max((g_s - b_s).abs()).max((r_s - b_s).abs());
+        assert!(spread > 0.1, "saturated input was crushed to near-gray: r={r_s:.4} g={g_s:.4} b={b_s:.4}");
+    }
 }
