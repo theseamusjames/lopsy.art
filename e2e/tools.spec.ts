@@ -265,6 +265,16 @@ async function setFillSetting(page: Page, key: 'tolerance' | 'contiguous', value
   }, { key, value });
 }
 
+/** Write to the pencil per-tool settings slice; see #453. */
+async function setPencilSetting(page: Page, key: 'size', value: number) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setPencilSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setPencilSetting(key, value);
+  }, { key, value });
+}
+
 async function setUIState(page: Page, setter: string, value: unknown) {
   await page.evaluate(
     ({ setter, value }) => {
@@ -415,7 +425,7 @@ test.describe('Pencil Tool', () => {
 
   test('drawing with pencil creates hard-edged pixels', async ({ page }) => {
     await page.keyboard.press('n');
-    await setToolSetting(page, 'setPencilSize', 3);
+    await setPencilSetting(page, 'size', 3);
     await drawStroke(page, { x: 100, y: 100 }, { x: 200, y: 100 }, 20);
 
     // Pencil produces fully opaque pixels (hard edges)
@@ -427,7 +437,7 @@ test.describe('Pencil Tool', () => {
     await page.keyboard.press('n');
 
     const baseline = await readComposited(page);
-    await setToolSetting(page, 'setPencilSize', 1);
+    await setPencilSetting(page, 'size', 1);
     await drawStroke(page, { x: 50, y: 50 }, { x: 350, y: 50 }, 20);
     const smallDiff = pixelDiff(baseline, await readComposited(page));
 
@@ -435,7 +445,7 @@ test.describe('Pencil Tool', () => {
 
     const baseline2 = await readComposited(page);
     await page.keyboard.press('n');
-    await setToolSetting(page, 'setPencilSize', 10);
+    await setPencilSetting(page, 'size', 10);
     await drawStroke(page, { x: 50, y: 50 }, { x: 350, y: 50 }, 20);
     const largeDiff = pixelDiff(baseline2, await readComposited(page));
 

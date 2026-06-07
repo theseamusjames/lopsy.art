@@ -301,7 +301,7 @@ function renderFrameGpu(
     const brushCursorInfo = getBrushCursorInfo(activeTool);
     if (brushCursorInfo !== null && cursorOnCanvas) {
       const size = activeTool === 'brush' ? toolState.brushSize
-        : activeTool === 'pencil' ? toolState.pencilSize
+        : activeTool === 'pencil' ? toolState.settings.pencil.size
         : activeTool === 'eraser' ? toolState.eraserSize
         : activeTool === 'stamp' ? toolState.stampSize
         : activeTool === 'sponge' ? toolState.spongeSize

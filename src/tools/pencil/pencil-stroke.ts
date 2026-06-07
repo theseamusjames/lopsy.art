@@ -16,7 +16,7 @@ export function handlePencilStroke(
 
   const toolSettings = useToolSettingsStore.getState();
   const color = state.strokeColor ?? toolSettings.foregroundColor;
-  const size = toolSettings.pencilSize;
+  const size = toolSettings.settings.pencil.size;
   gpuDrawPencilLine(engine, state.layerId,
     state.lastPoint.x, state.lastPoint.y, layerLocalPos.x, layerLocalPos.y,
     color.r / 255, color.g / 255, color.b / 255, color.a, size);
