@@ -112,6 +112,11 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
       };
       store.getState().createDocument(6000, 4000, false);
     });
+    await page.waitForSelector('[data-testid="canvas-container"]', { timeout: 60000 });
+    await page.waitForFunction(() => {
+      const el = document.querySelector('[data-testid="canvas-container"]');
+      return el && el.getBoundingClientRect().width > 0;
+    }, { timeout: 60000 });
 
     // --- brush tool, small brush for hatching ---
     await page.keyboard.press('b');
@@ -127,7 +132,6 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
     });
 
     const container = page.locator('[data-testid="canvas-container"]');
-    await container.waitFor({ state: 'visible', timeout: 30000 });
     const box = await container.boundingBox();
     expect(box).not.toBeNull();
 
