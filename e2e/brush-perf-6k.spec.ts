@@ -127,6 +127,7 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
     });
 
     const container = page.locator('[data-testid="canvas-container"]');
+    await container.waitFor({ state: 'visible', timeout: 30000 });
     const box = await container.boundingBox();
     expect(box).not.toBeNull();
 
