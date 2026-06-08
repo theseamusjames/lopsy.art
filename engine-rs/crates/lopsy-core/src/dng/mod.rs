@@ -14,26 +14,42 @@
 //!
 //! ## Processing pipeline
 //!
-//! For Apple ProRAW (Linear DNG, AsShotNeutral=[1,1,1]):
-//!   normalize → ProfileGainTableMap → BaselineExposure → ProfileToneCurve → sRGB gamma
+//! For both Linear DNG (Apple ProRAW) and standard CFA DNG:
+//!   normalize → WB(AsShotNeutral) → neutralized cam→sRGB matrix →
+//!   BaselineExposure → ProfileToneCurve → sRGB gamma → EXIF orientation
 //!
-//! For standard CFA DNG:
-//!   normalize → demosaic → white balance → ColorMatrix2 → BaselineExposure → toneCurve → gamma
+//! (The gain map is disabled by default — see ProfileGainTableMap note below.)
+//!
+//! The TIFF Orientation tag (0x0112) is applied last so portrait shots
+//! (orientation 6/8) load upright; see `crate::orientation`.
 //!
 //! ## Key discoveries
+//!
+//! - Apple ProRAW (Linear DNG) carries camera-native linear data that DOES need
+//!   the color matrix. Despite AsShotNeutral≈[1,1,1], the pixels are NOT in sRGB
+//!   — they are in camera native space and require the WB + matrix pass for
+//!   correct color (green foliage, neutral whites). Skipping the matrix leaves
+//!   a desaturated gray-green cast.
+//!
+//! - The raw inverse-ColorMatrix (camera→XYZ→sRGB) does not preserve neutral:
+//!   its row sums are far from 1 (~3 / 0.6 / 1.9 for Apple), so a neutral gray
+//!   maps to magenta. `color::neutralize_matrix` column-scales the matrix to
+//!   force neutral→neutral while keeping the off-diagonal saturation structure.
+//!   Always applied to the ColorMatrix path; the ForwardMatrix path is already
+//!   neutral-preserving by construction and is NOT neutralized.
 //!
 //! - Apple ProRAW sets WhiteLevel=65535 even for 10-bit data. We detect this by
 //!   comparing the measured data max against WhiteLevel and using the measured
 //!   max when WhiteLevel is clearly wrong (measured < 25% of WhiteLevel).
 //!
-//! - Apple ProRAW is a "Linear DNG" where the ISP has already applied white
-//!   balance and color processing. AsShotNeutral=[1,1,1] signals this.
-//!   Applying the ColorMatrix to pre-processed data produces a severe red cast
-//!   because the matrix describes raw sensor→XYZ, not the processing space.
+//! - ProfileGainTableMap (tag 52525, DNG 1.6) is Apple's proprietary
+//!   local-tone map. Correct application requires an underdocumented
+//!   overrange/diffuse-white normalization; without it the image washes out.
+//!   Disabled by default (set `DNG_ENABLE_GAINMAP=1` to opt in). The parse and
+//!   apply code is kept intact so it can be enabled for experimentation.
 //!
-//! - ProfileGainTableMap (tag 52525, DNG 1.6) stores its data in big-endian
-//!   byte order regardless of the TIFF file's byte order. This is because the
-//!   DNG SDK's stream serialization always uses BE.
+//! - ProfileGainTableMap data is stored in big-endian byte order regardless of
+//!   the TIFF file's byte order (DNG SDK stream serialization always uses BE).
 //!
 //! - The ProfileToneCurve in Apple ProRAW is intentionally near-linear (barely
 //!   an S-curve). Apple wants maximum editing latitude. The "look" that camera
@@ -57,6 +73,13 @@ pub mod demosaic;
 pub mod color;
 
 use tiff::{TiffReader, IfdEntry, TagId};
+
+/// Luminance-percentile clip fractions for the default ProRAW auto-levels
+/// stretch. Conservative values keep shadow and highlight detail while still
+/// pulling the histogram out to true black/white. White is clipped less than
+/// black to protect bright highlight detail (e.g. petal texture).
+const AUTO_LEVELS_BLACK_CLIP: f64 = 0.002;
+const AUTO_LEVELS_WHITE_CLIP: f64 = 0.001;
 
 pub struct DngImage {
     pub width: u32,
@@ -248,21 +271,13 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
             color_matrix[6],color_matrix[7],color_matrix[8]);
     }
 
-    // For Linear DNG with AsShotNeutral=[1,1,1], the data has WB and color
-    // processing already applied by the camera's ISP (Apple ProRAW).
-    // ColorMatrix describes the raw sensor→XYZ mapping, NOT the processing
-    // space→XYZ mapping. Applying it to pre-processed data produces wrong colors.
+    // Apply white balance and color matrix unconditionally.
     //
-    // For standard CFA DNG, apply the full pipeline: WB → ColorMatrix → sRGB.
-    let is_preprocessed = is_linear
-        && as_shot_neutral.len() >= 3
-        && (as_shot_neutral[0] - 1.0).abs() < 0.01
-        && (as_shot_neutral[1] - 1.0).abs() < 0.01
-        && (as_shot_neutral[2] - 1.0).abs() < 0.01;
-
-    if is_preprocessed {
-        dng_log!("[DNG step] Linear DNG with AsShotNeutral≈[1,1,1] — skipping WB and color matrix (data is pre-processed)");
-    } else {
+    // Linear DNG (Apple ProRAW) carries camera-native linear data even when
+    // AsShotNeutral≈[1,1,1]. The WB + matrix pass is required for correct
+    // color — omitting it leaves the image in camera native space (gray-green
+    // cast). See module-level docs for the full rationale.
+    {
         // Apply white balance
         if as_shot_neutral.len() >= 3 {
             let wb = color::white_balance_multipliers(&as_shot_neutral);
@@ -273,14 +288,21 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
 
         // Apply color matrix (camera RGB → XYZ → sRGB)
         if !forward_matrix.is_empty() && forward_matrix.len() >= 9 {
+            // ForwardMatrix maps AsShotNeutral→D50 white by construction;
+            // it is neutral-preserving and must NOT be column-scaled.
             let mat = color::forward_matrix_to_srgb(&forward_matrix);
             dng_log!("[DNG step] fwd→sRGB matrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
                 mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
             color::apply_matrix(&mut rgb_f32, &mat);
             dbg_center!("after matrix", rgb_f32);
         } else if !color_matrix.is_empty() && color_matrix.len() >= 9 {
-            let mat = color::color_matrix_to_srgb(&color_matrix);
-            dng_log!("[DNG step] cm→sRGB matrix: [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
+            let mut mat = color::color_matrix_to_srgb(&color_matrix);
+            // The inverse-ColorMatrix camera→sRGB does not preserve neutral
+            // (its row sums are far from 1), so a neutral gray maps to magenta.
+            // Column-scaling (neutralize) forces neutral→neutral while keeping
+            // the off-diagonal saturation structure — same fix as the RAF path.
+            mat = color::neutralize_matrix(&mat);
+            dng_log!("[DNG step] cm→sRGB matrix (neutralized): [{:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}; {:.4},{:.4},{:.4}]",
                 mat[0],mat[1],mat[2],mat[3],mat[4],mat[5],mat[6],mat[7],mat[8]);
             color::apply_matrix(&mut rgb_f32, &mat);
             dbg_center!("after matrix", rgb_f32);
@@ -290,54 +312,24 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     }
 
     // ProfileGainTableMap — DNG 1.6 per-pixel local tone mapping.
-    // Applied before tone curve, with BaselineExposure as weight scale.
-    let exposure_gain = baseline_exposure.map(|ev| 2.0f64.powf(ev) as f32).unwrap_or(1.0);
+    //
+    // Disabled by default. Apple's gain map is proprietary local-tone mapping
+    // that requires an underdocumented overrange/diffuse-white normalization;
+    // without it the image washes out. Set DNG_ENABLE_GAINMAP=1 to opt in.
+    // BaselineExposure always runs unconditionally, whether or not the gain
+    // map is active, so that the downstream tone curve sees correctly-exposed
+    // linear values in both cases.
+    //
+    // When the gain map IS enabled, pipeline order is:
+    //   1. BaselineExposure (lifts exposure into linear space)
+    //   2. Optional DNG_GAINMAP_SCALE multiplier (tunable overrange lift for highlight crush)
+    //   3. Gain map LUT (maps weight → gain scalar)
+    //   4. ProfileToneCurve → sRGB gamma (downstream, unchanged)
+    //
+    // BaselineExposure is NOT used in the gain-map weight formula (DNG spec).
 
-    let gain_map_entry = main_ifd.iter().find(|e| e.tag == TagId::ProfileGainTableMap as u16);
-    if let Some(entry) = gain_map_entry {
-        dng_log!("[DNG step] found ProfileGainTableMap tag: {} raw bytes", entry.raw_bytes.len());
-        match parse_gain_table_map(&entry.raw_bytes) {
-        Ok(gtm) => {
-            dng_log!("[DNG step] ProfileGainTableMap: {}x{} grid, {} table pts, weights=[{:.2},{:.2},{:.2},{:.2},{:.2}]",
-                gtm.points_v, gtm.points_h, gtm.num_table_points,
-                gtm.weights[0], gtm.weights[1], gtm.weights[2], gtm.weights[3], gtm.weights[4]);
-            // Log LUT at center grid point to see contrast range
-            let center_row = gtm.points_v as usize / 2;
-            let center_col = gtm.points_h as usize / 2;
-            let tp = gtm.num_table_points as usize;
-            let rs = gtm.points_h as usize * tp;
-            let base = center_row * rs + center_col * tp;
-            if base + tp <= gtm.data.len() {
-                let g0 = gtm.data[base];
-                let g64 = gtm.data[base + tp / 4];
-                let g128 = gtm.data[base + tp / 2];
-                let g192 = gtm.data[base + 3 * tp / 4];
-                let g256 = gtm.data[base + tp - 1];
-                dng_log!("[DNG step] center grid LUT: [0]={:.3} [1/4]={:.3} [1/2]={:.3} [3/4]={:.3} [end]={:.3}",
-                    g0, g64, g128, g192, g256);
-            }
-            apply_gain_table_map(&mut rgb_f32, width, height, &gtm, exposure_gain);
-            dbg_center!("after gainTableMap", rgb_f32);
-        }
-        Err(e) => {
-            dng_log!("[DNG step] ProfileGainTableMap parse FAILED: {}", e);
-        }
-        }
-    } else {
-        // Fall back: check IFD0
-        let gain_map_entry_ifd0 = ifd0.iter().find(|e| e.tag == TagId::ProfileGainTableMap as u16);
-        if let Some(entry) = gain_map_entry_ifd0 {
-            if let Ok(gtm) = parse_gain_table_map(&entry.raw_bytes) {
-                dng_log!("[DNG step] ProfileGainTableMap (IFD0): {}x{} grid, {} table pts",
-                    gtm.points_v, gtm.points_h, gtm.num_table_points);
-                apply_gain_table_map(&mut rgb_f32, width, height, &gtm, exposure_gain);
-                dbg_center!("after gainTableMap", rgb_f32);
-            }
-        }
-    }
-
-    // Apply BaselineExposure — always applied, even after gain table map.
-    // The gain map uses exposure only for LUT weight indexing, not brightness.
+    // Apply BaselineExposure unconditionally so it runs exactly once regardless
+    // of whether the gain map is active.
     if let Some(ev) = baseline_exposure {
         if ev.abs() > 0.001 {
             let scale = (2.0f64).powf(ev) as f32;
@@ -345,6 +337,82 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
                 *v *= scale;
             }
             dbg_center!("after baselineExposure", rgb_f32);
+        }
+    }
+
+    let gain_map_entry = main_ifd.iter().find(|e| e.tag == TagId::ProfileGainTableMap as u16);
+    let has_gain_map = gain_map_entry.is_some()
+        || ifd0.iter().any(|e| e.tag == TagId::ProfileGainTableMap as u16);
+
+    // Gain map is opt-in: only apply when DNG_ENABLE_GAINMAP is set.
+    let gainmap_enabled = std::env::var("DNG_ENABLE_GAINMAP").is_ok();
+
+    if has_gain_map {
+        if !gainmap_enabled {
+            dng_log!("[DNG step] ProfileGainTableMap found but SKIPPED by default — set DNG_ENABLE_GAINMAP=1 to enable");
+        } else {
+            // Tunable diffuse-white input scale: multiply pixels before the gain map
+            // so bright regions exceed 1.0 and reach the highlight-crush region of the LUT.
+            let gainmap_scale: f32 = std::env::var("DNG_GAINMAP_SCALE")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1.0);
+            if gainmap_scale != 1.0 {
+                dng_log!("[DNG step] DNG_GAINMAP_SCALE={:.3} — scaling pixels before gain map", gainmap_scale);
+                for v in &mut rgb_f32 {
+                    *v *= gainmap_scale;
+                }
+            }
+            dbg_center!("after gainmap-scale", rgb_f32);
+
+            let apply_gtm = |rgb: &mut Vec<f32>, gtm: &GainTableMap, label: &str, debug_log: &mut Vec<String>| {
+                debug_log.push(format!("[DNG step] ProfileGainTableMap ({}): {}x{} grid, {} table pts, weights=[{:.2},{:.2},{:.2},{:.2},{:.2}]",
+                    label, gtm.points_v, gtm.points_h, gtm.num_table_points,
+                    gtm.weights[0], gtm.weights[1], gtm.weights[2], gtm.weights[3], gtm.weights[4]));
+                // Log LUT at center grid point to see contrast range
+                let center_row = gtm.points_v as usize / 2;
+                let center_col = gtm.points_h as usize / 2;
+                let tp = gtm.num_table_points as usize;
+                let rs = gtm.points_h as usize * tp;
+                let base = center_row * rs + center_col * tp;
+                if base + tp <= gtm.data.len() {
+                    let g0 = gtm.data[base];
+                    let g64 = gtm.data[base + tp / 4];
+                    let g128 = gtm.data[base + tp / 2];
+                    let g192 = gtm.data[base + 3 * tp / 4];
+                    let g256 = gtm.data[base + tp - 1];
+                    debug_log.push(format!("[DNG step] center grid LUT: [0]={:.3} [1/4]={:.3} [1/2]={:.3} [3/4]={:.3} [end]={:.3}",
+                        g0, g64, g128, g192, g256));
+                }
+                apply_gain_table_map(rgb, width, height, gtm);
+            };
+
+            if let Some(entry) = gain_map_entry {
+                dng_log!("[DNG step] found ProfileGainTableMap tag: {} raw bytes", entry.raw_bytes.len());
+                match parse_gain_table_map(&entry.raw_bytes) {
+                    Ok(gtm) => {
+                        apply_gtm(&mut rgb_f32, &gtm, "SubIFD", &mut debug_log);
+                        dbg_center!("after gainmap", rgb_f32);
+                    }
+                    Err(e) => {
+                        dng_log!("[DNG step] ProfileGainTableMap parse FAILED: {}", e);
+                    }
+                }
+            } else {
+                // Fall back: check IFD0
+                let gain_map_entry_ifd0 = ifd0.iter().find(|e| e.tag == TagId::ProfileGainTableMap as u16);
+                if let Some(entry) = gain_map_entry_ifd0 {
+                    match parse_gain_table_map(&entry.raw_bytes) {
+                        Ok(gtm) => {
+                            apply_gtm(&mut rgb_f32, &gtm, "IFD0", &mut debug_log);
+                            dbg_center!("after gainmap", rgb_f32);
+                        }
+                        Err(e) => {
+                            dng_log!("[DNG step] ProfileGainTableMap (IFD0) parse FAILED: {}", e);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -370,6 +438,24 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     color::apply_srgb_gamma(&mut rgb_f32);
     dbg_center!("after sRGB gamma (final)", rgb_f32);
 
+    // Spread the tonal range to fill [0,1]. Apple ships a near-linear
+    // ProfileToneCurve, expecting its own gain-map/HDR pass (which we disable —
+    // it mis-applies) to add contrast. Without it the render is flat: the
+    // histogram bunches in the middle with no true black/white. Derive a
+    // black/white point from luminance percentiles and stretch all channels by
+    // the same amount (preserving white balance, like a composite-RGB Levels
+    // move). This is adaptive normalization, not a fixed creative curve.
+    let (bp, wp) = auto_levels_points(&rgb_f32, AUTO_LEVELS_BLACK_CLIP, AUTO_LEVELS_WHITE_CLIP);
+    dng_log!("[DNG step] auto-levels: black={:.4} white={:.4} (clip {:.2}%/{:.2}%)",
+        bp, wp, AUTO_LEVELS_BLACK_CLIP * 100.0, AUTO_LEVELS_WHITE_CLIP * 100.0);
+    if wp - bp > 0.05 {
+        let scale = 1.0 / (wp - bp);
+        for v in &mut rgb_f32 {
+            *v = (((*v as f64 - bp) * scale).clamp(0.0, 1.0)) as f32;
+        }
+        dbg_center!("after auto-levels", rgb_f32);
+    }
+
     // Convert RGB → RGBA f32
     let pixel_count = (width * height) as usize;
     let mut rgba = Vec::with_capacity(pixel_count * 4);
@@ -380,14 +466,78 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         rgba.push(1.0);
     }
 
+    // Apply the TIFF Orientation tag (0x0112) so the image loads upright.
+    // The sensor scans landscape; the camera records the intended rotation
+    // here (commonly 6 = 90° CW or 8 = 90° CCW for portrait shots). For
+    // orientations 5..=8 the width and height swap. Orientation lives in IFD0.
+    let orientation = get_tag_u16(&ifd0, TagId::Orientation)
+        .or_else(|_| get_tag_u16(&main_ifd, TagId::Orientation))
+        .unwrap_or(1);
+    let (out_w, out_h, rgba) =
+        crate::orientation::apply_exif_orientation(width, height, &rgba, orientation);
+    dng_log!("[DNG step] EXIF orientation: {} → output {}x{}", orientation, out_w, out_h);
+
     Ok(DngImage {
-        width,
-        height,
+        width: out_w,
+        height: out_h,
         pixels: rgba,
         baseline_exposure: baseline_exposure.unwrap_or(0.0),
         tone_curve,
         debug_log,
     })
+}
+
+/// Find black and white points for an auto-levels stretch from a luminance
+/// histogram of display-referred RGB (interleaved, 3 channels, in [0,1]).
+///
+/// Returns `(black, white)` as the luminance values where the cumulative
+/// histogram crosses `black_clip` from the bottom and `white_clip` from the
+/// top. Using luminance (not per-channel) keeps the stretch neutral so it
+/// expands contrast without shifting color balance.
+fn auto_levels_points(rgb: &[f32], black_clip: f64, white_clip: f64) -> (f64, f64) {
+    const BINS: usize = 1024;
+    let n = rgb.len() / 3;
+    if n == 0 {
+        return (0.0, 1.0);
+    }
+    let mut hist = [0u64; BINS];
+    for px in rgb.chunks_exact(3) {
+        let l = 0.2126 * px[0] as f64 + 0.7152 * px[1] as f64 + 0.0722 * px[2] as f64;
+        let bin = ((l.clamp(0.0, 1.0) * (BINS as f64 - 1.0)).round() as usize).min(BINS - 1);
+        hist[bin] += 1;
+    }
+
+    let total = n as f64;
+    let black_target = total * black_clip;
+    let white_target = total * white_clip;
+
+    let bin_to_val = |bin: usize| bin as f64 / (BINS as f64 - 1.0);
+
+    // Black point: first bin where the cumulative count from the bottom
+    // exceeds the clip fraction.
+    let mut cum = 0.0;
+    let mut black = 0.0;
+    for (i, &c) in hist.iter().enumerate() {
+        cum += c as f64;
+        if cum >= black_target {
+            black = bin_to_val(i);
+            break;
+        }
+    }
+
+    // White point: first bin (scanning from the top) where the cumulative
+    // count from the top exceeds the clip fraction.
+    cum = 0.0;
+    let mut white = 1.0;
+    for i in (0..BINS).rev() {
+        cum += hist[i] as f64;
+        if cum >= white_target {
+            white = bin_to_val(i);
+            break;
+        }
+    }
+
+    (black, white)
 }
 
 struct GainTableMap {
@@ -453,33 +603,29 @@ fn parse_gain_table_map(raw: &[u8]) -> Result<GainTableMap, String> {
     Ok(GainTableMap { points_v, points_h, spacing_v, spacing_h, origin_v, origin_h, num_table_points, weights, data })
 }
 
-fn apply_gain_table_map(rgb: &mut [f32], width: u32, height: u32, gtm: &GainTableMap, exposure_gain: f32) {
+fn apply_gain_table_map(rgb: &mut [f32], width: u32, height: u32, gtm: &GainTableMap) {
     let w = width as usize;
     let h = height as usize;
-    let map_pv = gtm.points_v as f32;
-    let map_ph = gtm.points_h as f32;
+    let points_h = gtm.points_h as usize;
+    let points_v = gtm.points_v as usize;
     let origin_v = gtm.origin_v as f32;
     let origin_h = gtm.origin_h as f32;
     let spacing_v = (gtm.spacing_v as f32).max(1e-10);
     let spacing_h = (gtm.spacing_h as f32).max(1e-10);
-    let rel_size_v = spacing_v * (map_pv - 1.0);
-    let rel_size_h = spacing_h * (map_ph - 1.0);
     let table_pts = gtm.num_table_points as usize;
-    let table_size = (table_pts - 1) as f32;
     let col_step = table_pts;
-    let row_step = gtm.points_h as usize * table_pts;
-    let x_limit = (gtm.points_h as i32 - 2).max(0);
-    let y_limit = (gtm.points_v as i32 - 2).max(0);
+    let row_step = points_h * table_pts;
 
     let [miw0, miw1, miw2, miw3, miw4] = gtm.weights;
 
     for row in 0..h {
+        // Spatial grid coord: half-pixel image coordinate normalised to [0,1],
+        // then mapped into grid space using raw spacing (not spacing*(points-1)).
         let v_image = (row as f32 + 0.5) / h as f32;
-        let v_map = (v_image - origin_v) / rel_size_v;
-        let y_map = (v_map * (map_pv - 1.0) - 0.5).clamp(0.0, y_limit as f32);
-        let y0 = (y_map as i32).min(y_limit) as usize;
-        let y1 = (y0 + 1).min(gtm.points_v as usize - 1);
-        let yf = y_map - y0 as f32;
+        let gv = ((v_image - origin_v) / spacing_v).clamp(0.0, (points_v - 1) as f32);
+        let y0 = (gv.floor() as usize).min(points_v - 1);
+        let y1 = (y0 + 1).min(points_v - 1);
+        let yf = gv - y0 as f32;
 
         for col in 0..w {
             let idx = (row * w + col) * 3;
@@ -489,23 +635,25 @@ fn apply_gain_table_map(rgb: &mut [f32], width: u32, height: u32, gtm: &GainTabl
 
             let min_v = r.min(g.min(b));
             let max_v = r.max(g.max(b));
-            let weight = (miw0 * r + miw1 * g + miw2 * b + miw3 * min_v + miw4 * max_v) * exposure_gain;
-            let weight = weight.clamp(0.0, 1.0);
+            // DNG spec: weight = clamp(R*w0 + G*w1 + B*w2 + min*w3 + max*w4, 0, 1)
+            // No BaselineExposure factor in the weight computation.
+            let weight = (miw0 * r + miw1 * g + miw2 * b + miw3 * min_v + miw4 * max_v).clamp(0.0, 1.0);
 
             let u_image = (col as f32 + 0.5) / w as f32;
-            let u_map = (u_image - origin_h) / rel_size_h;
-            let x_map = (u_map * (map_ph - 1.0) - 0.5).clamp(0.0, x_limit as f32);
-            let x0 = (x_map as i32).min(x_limit) as usize;
-            let x1 = (x0 + 1).min(gtm.points_h as usize - 1);
-            let xf = x_map - x0 as f32;
+            let gx = ((u_image - origin_h) / spacing_h).clamp(0.0, (points_h - 1) as f32);
+            let x0 = (gx.floor() as usize).min(points_h - 1);
+            let x1 = (x0 + 1).min(points_h - 1);
+            let xf = gx - x0 as f32;
 
-            let ws = weight * table_size;
-            let w0 = (ws as usize).min(table_pts - 1);
+            // Index into LUT: weight * num_table_points (×257 for a 257-entry table),
+            // clamped to [0, table_pts-1] for safe interpolation.
+            let fi = weight * (table_pts as f32);
+            let w0 = (fi.floor() as usize).min(table_pts - 1);
             let w1 = (w0 + 1).min(table_pts - 1);
-            let wf = ws - w0 as f32;
+            let wf = (fi - w0 as f32).clamp(0.0, 1.0);
 
-            let entry = |r: usize, c: usize, t: usize| -> f32 {
-                let idx = r * row_step + c * col_step + t;
+            let entry = |rv: usize, c: usize, t: usize| -> f32 {
+                let idx = rv * row_step + c * col_step + t;
                 if idx < gtm.data.len() { gtm.data[idx] } else { 1.0 }
             };
 
@@ -524,9 +672,11 @@ fn apply_gain_table_map(rgb: &mut [f32], width: u32, height: u32, gtm: &GainTabl
 
             let gain = g0 + (g1 - g0) * yf;
 
-            rgb[idx]     = (r * gain).clamp(0.0, 1.0);
-            rgb[idx + 1] = (g * gain).clamp(0.0, 1.0);
-            rgb[idx + 2] = (b * gain).clamp(0.0, 1.0);
+            // Do NOT clamp here — preserve overrange so the downstream tone curve
+            // can crush highlights. The final RGBA conversion clamps to [0,1].
+            rgb[idx]     = r * gain;
+            rgb[idx + 1] = g * gain;
+            rgb[idx + 2] = b * gain;
         }
     }
 }
@@ -718,4 +868,54 @@ fn get_rational(entries: &[IfdEntry], tag: TagId) -> Option<f64> {
             let v = e.as_rational_vec();
             if v.is_empty() { None } else { Some(v[0]) }
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a gray ramp of `n` pixels with luminance i/(n-1) (R=G=B).
+    fn gray_ramp(n: usize) -> Vec<f32> {
+        let mut v = Vec::with_capacity(n * 3);
+        for i in 0..n {
+            let l = i as f32 / (n - 1) as f32;
+            v.extend_from_slice(&[l, l, l]);
+        }
+        v
+    }
+
+    #[test]
+    fn auto_levels_finds_clip_percentiles() {
+        // Uniform ramp: a 10% clip from each end lands near 0.1 / 0.9.
+        let ramp = gray_ramp(1000);
+        let (black, white) = auto_levels_points(&ramp, 0.10, 0.10);
+        assert!((black - 0.10).abs() < 0.02, "black={black}");
+        assert!((white - 0.90).abs() < 0.02, "white={white}");
+        assert!(black < white);
+    }
+
+    #[test]
+    fn auto_levels_tiny_clip_spans_full_range() {
+        // With a negligible clip the points sit at the data extremes.
+        let ramp = gray_ramp(1000);
+        let (black, white) = auto_levels_points(&ramp, 0.0001, 0.0001);
+        assert!(black < 0.01, "black={black}");
+        assert!(white > 0.99, "white={white}");
+    }
+
+    #[test]
+    fn auto_levels_empty_is_identity_range() {
+        let (black, white) = auto_levels_points(&[], 0.01, 0.01);
+        assert_eq!((black, white), (0.0, 1.0));
+    }
+
+    #[test]
+    fn auto_levels_uses_luminance_not_max_channel() {
+        // A blue-only image: luminance is low (0.0722) even though B=1.0.
+        // The black/white points must reflect luminance, not the blue channel.
+        let pixels = vec![0.0f32, 0.0, 1.0]; // single pixel, R=0 G=0 B=1
+        let (black, white) = auto_levels_points(&pixels, 0.0001, 0.0001);
+        // Luminance ≈ 0.0722 → both points collapse near that value.
+        assert!(black < 0.1 && white < 0.1, "black={black} white={white}");
+    }
 }

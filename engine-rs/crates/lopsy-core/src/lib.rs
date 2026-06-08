@@ -1,4 +1,5 @@
 pub mod color;
+pub mod orientation;
 pub mod blend;
 pub mod geometry;
 pub mod layer;

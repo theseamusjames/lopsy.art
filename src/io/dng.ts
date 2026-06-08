@@ -7,33 +7,21 @@
  * 1. Parse TIFF IFD structure, find the full-resolution SubIFD
  * 2. Decompress pixel data (lossless JPEG for ProRAW, also supports deflate)
  * 3. Normalize to [0, 1] using WhiteLevel (or measured data max as fallback —
- *    Apple ProRAW sets WhiteLevel=65535 even for 10-bit data)
- * 4. For standard CFA DNG: demosaic (bilinear) + white balance + color matrix
- *    For Linear DNG with AsShotNeutral≈[1,1,1] (Apple ProRAW): skip WB and
- *    color matrix — the ISP already applied them
- * 5. ProfileGainTableMap (DNG 1.6, tag 52525): per-pixel local tone mapping.
- *    36×46 spatial grid, 257-entry LUT per grid point. Gain is trilinearly
- *    interpolated across space and brightness. Shadows get ~2.8× boost,
- *    highlights stay at 1×. Data is big-endian regardless of TIFF byte order.
- * 6. BaselineExposure (typically tiny, ~0.07 EV for ProRAW)
- * 7. ProfileToneCurve (257 points, nearly linear for ProRAW)
- * 8. sRGB gamma encoding
- * 9. Upload as f32 RGBA to RGBA16F GPU texture via upload_pixels_f32
+ *    Apple ProRAW sets WhiteLevel=65535 even for 10-bit data) minus BlackLevel
+ * 4. White balance (AsShotNeutral) and color matrix (ForwardMatrix, or the
+ *    neutralized inverse ColorMatrix) → sRGB. Always applied: ProRAW carries
+ *    camera-native linear data even when AsShotNeutral≈[1,1,1].
+ * 5. BaselineExposure, then ProfileToneCurve (257 points, near-linear), then
+ *    sRGB gamma. ProfileGainTableMap is disabled — it mis-applies and washes
+ *    the image out; see the decoder's module docs.
+ * 6. Auto black/white-point stretch from luminance percentiles, filling [0, 1]
+ *    so the load isn't flat (Apple's near-linear tone curve assumes its own
+ *    HDR pass adds the contrast).
+ * 7. Apply the EXIF/TIFF Orientation tag so portrait shots load upright.
+ * 8. Upload as f32 RGBA to RGBA16F GPU texture via upload_pixels_f32.
  *
- * ## What's missing vs Apple Preview / Camera Raw
- *
- * After applying everything the DNG standard provides (gain table map, tone
- * curve, baseline exposure), the result is still noticeably flat compared to
- * Apple Preview or Adobe Camera Raw. This is because:
- *
- * - Apple's ProRAW ProfileToneCurve is intentionally near-linear to preserve
- *   editing latitude. The "punch" comes from the rendering engine, not the file.
- * - Apple Preview likely applies proprietary rendering beyond DNG metadata.
- * - Camera Raw applies its own "Adobe Standard" profile with contrast/saturation.
- *
- * To compensate, we set default group adjustments (exposure, contrast, blacks,
- * levels, curves, vibrance) that approximate a camera-like rendering. These
- * are fully visible and editable in the Project group adjustments panel.
+ * The decoder produces a finished, correctly-ranged image on its own, so we do
+ * NOT attach any default group adjustments on import — the document opens clean.
  *
  * ## Future improvements
  *
@@ -41,10 +29,6 @@
  *   adjustments. Not present in our test ProRAW files but used by some cameras.
  * - ProfileLookTable (tag 50981/50982): 3D color LUT for the profile "look".
  *   Would allow matching specific camera profiles more closely.
- * - Smarter default adjustments based on scene analysis (auto-exposure,
- *   auto-contrast from histogram).
- * - Move the gain table map processing to a Web Worker — it's the slowest
- *   step (~2-3 seconds for 24MP on the main thread).
  * - Support for non-Apple DNG files from other cameras (tested with iPhone
  *   ProRAW only so far).
  */
@@ -56,10 +40,6 @@ import { decodeAndUploadDng, initWasm } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../engine-wasm/engine-sync';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { notifyError } from '../app/notifications-store';
-import { DEFAULT_ADJUSTMENTS, type ImageAdjustments } from '../filters/image-adjustments';
-import { IDENTITY_CURVES } from '../filters/curves';
-import { IDENTITY_LEVELS, type Levels } from '../filters/levels';
-import { migrateFromLegacy } from '../filters/adjustment-node-utils';
 
 interface DngMeta {
   width: number;
@@ -124,23 +104,6 @@ async function importDngFileInner(data: Uint8Array, name: string): Promise<void>
     };
   });
 
-  // Apply default adjustments to compensate for the flat rendering that the
-  // DNG standard metadata alone produces. See module doc comment for why.
-  const rootGroupId = useEditorStore.getState().document.rootGroupId;
-  if (rootGroupId) {
-    const nodes = migrateFromLegacy(RAW_DEFAULT_ADJUSTMENTS);
-    useEditorStore.setState((s) => ({
-      document: {
-        ...s.document,
-        layers: s.document.layers.map((l) =>
-          l.id === rootGroupId && l.type === 'group'
-            ? { ...l, adjustments: nodes, adjustmentsEnabled: true }
-            : l,
-        ),
-      },
-    }));
-  }
-
   // The DNG decoder uploaded pixels directly to the GPU texture. Clear the
   // stale 1x1 placeholder from the JS pixel data store so that
   // resetTrackedState doesn't cause engine-sync to overwrite the GPU texture.
@@ -158,37 +121,3 @@ async function waitForEngine(maxFrames = 60): Promise<ReturnType<typeof getEngin
   }
   return getEngine();
 }
-
-// Default adjustments for raw import. These approximate the contrast and
-// saturation that camera apps add on top of the flat DNG rendering.
-// Tuned against Apple ProRAW from iPhone 16 Pro Max — may need refinement
-// for other cameras. All values are editable in the Project group panel.
-const RAW_DEFAULT_LEVELS: Levels = {
-  ...IDENTITY_LEVELS,
-  rgb: {
-    inputBlack: 15 / 255,
-    inputWhite: 200 / 255,
-    gamma: 0.65,
-    outputBlack: 0,
-    outputWhite: 240 / 255,
-  },
-};
-
-const RAW_DEFAULT_ADJUSTMENTS: ImageAdjustments = {
-  ...DEFAULT_ADJUSTMENTS,
-  exposure: -0.5,
-  contrast: 40,
-  blacks: -25,
-  vibrance: 15,
-  curves: {
-    ...IDENTITY_CURVES,
-    rgb: [
-      { x: 0, y: 0 },
-      { x: 0.25, y: 0.18 },
-      { x: 0.50, y: 0.50 },
-      { x: 0.75, y: 0.85 },
-      { x: 1, y: 1 },
-    ],
-  },
-  levels: RAW_DEFAULT_LEVELS,
-};

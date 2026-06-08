@@ -445,7 +445,7 @@ pub fn read_raf_opts(data: &[u8], opts: RafDecodeOpts) -> Result<RafImage, Strin
     // 90° CCW), 3 (rotate 180°). For 5/6/7/8 the output dimensions
     // are swapped.
     let (final_w, final_h, final_pixels) =
-        apply_exif_orientation(width, height, &rgba, exif_orientation);
+        crate::orientation::apply_exif_orientation(width, height, &rgba, exif_orientation);
 
     Ok(RafImage { width: final_w, height: final_h, pixels: final_pixels, exif_info, debug_log })
 }
@@ -684,47 +684,6 @@ pub fn debug_raw_mosaic(data: &[u8]) -> Result<(Vec<f32>, usize, usize, [u8; 36]
 
     // Return the base pattern as read from file (Fuji indices, NOT shifted/remapped).
     Ok((normalized, w, h, base_pat, crop_top, crop_left))
-}
-
-/// Apply EXIF orientation tag to a RGBA f32 buffer. Returns new (w, h, pixels).
-fn apply_exif_orientation(w: u32, h: u32, src: &[f32], orientation: u16) -> (u32, u32, Vec<f32>) {
-    let wu = w as usize;
-    let hu = h as usize;
-    if orientation == 1 || orientation == 0 {
-        return (w, h, src.to_vec());
-    }
-
-    // For 5..=8 the dimensions swap.
-    let (out_w, out_h) = match orientation {
-        5 | 6 | 7 | 8 => (h, w),
-        _ => (w, h),
-    };
-    let owu = out_w as usize;
-    let ohu = out_h as usize;
-    let mut dst = vec![0.0f32; owu * ohu * 4];
-
-    for y in 0..hu {
-        for x in 0..wu {
-            let s = (y * wu + x) * 4;
-            // (out_x, out_y) given (x, y) for each orientation
-            let (ox, oy) = match orientation {
-                2 => (wu - 1 - x, y),              // flip horizontal
-                3 => (wu - 1 - x, hu - 1 - y),     // rotate 180
-                4 => (x, hu - 1 - y),              // flip vertical
-                5 => (y, x),                        // transpose
-                6 => (hu - 1 - y, x),              // rotate 90 CW
-                7 => (hu - 1 - y, wu - 1 - x),     // transverse
-                8 => (y, wu - 1 - x),              // rotate 90 CCW
-                _ => (x, y),
-            };
-            let d = (oy * owu + ox) * 4;
-            dst[d] = src[s];
-            dst[d + 1] = src[s + 1];
-            dst[d + 2] = src[s + 2];
-            dst[d + 3] = src[s + 3];
-        }
-    }
-    (out_w, out_h, dst)
 }
 
 /// Extract the embedded JPEG preview from a RAF file.
