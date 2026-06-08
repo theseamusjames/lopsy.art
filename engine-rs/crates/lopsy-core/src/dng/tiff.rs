@@ -10,6 +10,7 @@ pub enum TagId {
     Compression = 259,
     PhotometricInterpretation = 262,
     StripOffsets = 273,
+    Orientation = 274,
     SamplesPerPixel = 277,
     RowsPerStrip = 278,
     StripByteCounts = 279,

@@ -16,9 +16,12 @@
 //!
 //! For both Linear DNG (Apple ProRAW) and standard CFA DNG:
 //!   normalize → WB(AsShotNeutral) → neutralized cam→sRGB matrix →
-//!   BaselineExposure → ProfileToneCurve → sRGB gamma
+//!   BaselineExposure → ProfileToneCurve → sRGB gamma → EXIF orientation
 //!
 //! (The gain map is disabled by default — see ProfileGainTableMap note below.)
+//!
+//! The TIFF Orientation tag (0x0112) is applied last so portrait shots
+//! (orientation 6/8) load upright; see `crate::orientation`.
 //!
 //! ## Key discoveries
 //!
@@ -438,9 +441,20 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         rgba.push(1.0);
     }
 
+    // Apply the TIFF Orientation tag (0x0112) so the image loads upright.
+    // The sensor scans landscape; the camera records the intended rotation
+    // here (commonly 6 = 90° CW or 8 = 90° CCW for portrait shots). For
+    // orientations 5..=8 the width and height swap. Orientation lives in IFD0.
+    let orientation = get_tag_u16(&ifd0, TagId::Orientation)
+        .or_else(|_| get_tag_u16(&main_ifd, TagId::Orientation))
+        .unwrap_or(1);
+    let (out_w, out_h, rgba) =
+        crate::orientation::apply_exif_orientation(width, height, &rgba, orientation);
+    dng_log!("[DNG step] EXIF orientation: {} → output {}x{}", orientation, out_w, out_h);
+
     Ok(DngImage {
-        width,
-        height,
+        width: out_w,
+        height: out_h,
         pixels: rgba,
         baseline_exposure: baseline_exposure.unwrap_or(0.0),
         tone_curve,

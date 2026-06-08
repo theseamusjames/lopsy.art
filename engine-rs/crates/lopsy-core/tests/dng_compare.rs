@@ -28,6 +28,14 @@ fn decode_and_report_dng() {
 
     println!("\n=== DNG decode: sample_dng_00.dng ===");
     println!("  dims: {}x{}", img.width, img.height);
+
+    // sample_dng_00 is an iPhone portrait shot (TIFF Orientation 6). The sensor
+    // scans landscape, so a correct decode must rotate it upright — height > width.
+    assert!(
+        img.height > img.width,
+        "expected portrait output after orientation (got {}x{}) — Orientation tag not applied?",
+        img.width, img.height
+    );
     println!("  baseline_exposure: {}", img.baseline_exposure);
     println!("  tone_curve points: {}", img.tone_curve.len());
     if !img.tone_curve.is_empty() {
