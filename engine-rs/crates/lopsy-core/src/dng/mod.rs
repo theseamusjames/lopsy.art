@@ -74,6 +74,13 @@ pub mod color;
 
 use tiff::{TiffReader, IfdEntry, TagId};
 
+/// Luminance-percentile clip fractions for the default ProRAW auto-levels
+/// stretch. Conservative values keep shadow and highlight detail while still
+/// pulling the histogram out to true black/white. White is clipped less than
+/// black to protect bright highlight detail (e.g. petal texture).
+const AUTO_LEVELS_BLACK_CLIP: f64 = 0.002;
+const AUTO_LEVELS_WHITE_CLIP: f64 = 0.001;
+
 pub struct DngImage {
     pub width: u32,
     pub height: u32,
@@ -431,6 +438,24 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     color::apply_srgb_gamma(&mut rgb_f32);
     dbg_center!("after sRGB gamma (final)", rgb_f32);
 
+    // Spread the tonal range to fill [0,1]. Apple ships a near-linear
+    // ProfileToneCurve, expecting its own gain-map/HDR pass (which we disable —
+    // it mis-applies) to add contrast. Without it the render is flat: the
+    // histogram bunches in the middle with no true black/white. Derive a
+    // black/white point from luminance percentiles and stretch all channels by
+    // the same amount (preserving white balance, like a composite-RGB Levels
+    // move). This is adaptive normalization, not a fixed creative curve.
+    let (bp, wp) = auto_levels_points(&rgb_f32, AUTO_LEVELS_BLACK_CLIP, AUTO_LEVELS_WHITE_CLIP);
+    dng_log!("[DNG step] auto-levels: black={:.4} white={:.4} (clip {:.2}%/{:.2}%)",
+        bp, wp, AUTO_LEVELS_BLACK_CLIP * 100.0, AUTO_LEVELS_WHITE_CLIP * 100.0);
+    if wp - bp > 0.05 {
+        let scale = 1.0 / (wp - bp);
+        for v in &mut rgb_f32 {
+            *v = (((*v as f64 - bp) * scale).clamp(0.0, 1.0)) as f32;
+        }
+        dbg_center!("after auto-levels", rgb_f32);
+    }
+
     // Convert RGB → RGBA f32
     let pixel_count = (width * height) as usize;
     let mut rgba = Vec::with_capacity(pixel_count * 4);
@@ -460,6 +485,59 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         tone_curve,
         debug_log,
     })
+}
+
+/// Find black and white points for an auto-levels stretch from a luminance
+/// histogram of display-referred RGB (interleaved, 3 channels, in [0,1]).
+///
+/// Returns `(black, white)` as the luminance values where the cumulative
+/// histogram crosses `black_clip` from the bottom and `white_clip` from the
+/// top. Using luminance (not per-channel) keeps the stretch neutral so it
+/// expands contrast without shifting color balance.
+fn auto_levels_points(rgb: &[f32], black_clip: f64, white_clip: f64) -> (f64, f64) {
+    const BINS: usize = 1024;
+    let n = rgb.len() / 3;
+    if n == 0 {
+        return (0.0, 1.0);
+    }
+    let mut hist = [0u64; BINS];
+    for px in rgb.chunks_exact(3) {
+        let l = 0.2126 * px[0] as f64 + 0.7152 * px[1] as f64 + 0.0722 * px[2] as f64;
+        let bin = ((l.clamp(0.0, 1.0) * (BINS as f64 - 1.0)).round() as usize).min(BINS - 1);
+        hist[bin] += 1;
+    }
+
+    let total = n as f64;
+    let black_target = total * black_clip;
+    let white_target = total * white_clip;
+
+    let bin_to_val = |bin: usize| bin as f64 / (BINS as f64 - 1.0);
+
+    // Black point: first bin where the cumulative count from the bottom
+    // exceeds the clip fraction.
+    let mut cum = 0.0;
+    let mut black = 0.0;
+    for (i, &c) in hist.iter().enumerate() {
+        cum += c as f64;
+        if cum >= black_target {
+            black = bin_to_val(i);
+            break;
+        }
+    }
+
+    // White point: first bin (scanning from the top) where the cumulative
+    // count from the top exceeds the clip fraction.
+    cum = 0.0;
+    let mut white = 1.0;
+    for i in (0..BINS).rev() {
+        cum += hist[i] as f64;
+        if cum >= white_target {
+            white = bin_to_val(i);
+            break;
+        }
+    }
+
+    (black, white)
 }
 
 struct GainTableMap {
@@ -790,4 +868,54 @@ fn get_rational(entries: &[IfdEntry], tag: TagId) -> Option<f64> {
             let v = e.as_rational_vec();
             if v.is_empty() { None } else { Some(v[0]) }
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a gray ramp of `n` pixels with luminance i/(n-1) (R=G=B).
+    fn gray_ramp(n: usize) -> Vec<f32> {
+        let mut v = Vec::with_capacity(n * 3);
+        for i in 0..n {
+            let l = i as f32 / (n - 1) as f32;
+            v.extend_from_slice(&[l, l, l]);
+        }
+        v
+    }
+
+    #[test]
+    fn auto_levels_finds_clip_percentiles() {
+        // Uniform ramp: a 10% clip from each end lands near 0.1 / 0.9.
+        let ramp = gray_ramp(1000);
+        let (black, white) = auto_levels_points(&ramp, 0.10, 0.10);
+        assert!((black - 0.10).abs() < 0.02, "black={black}");
+        assert!((white - 0.90).abs() < 0.02, "white={white}");
+        assert!(black < white);
+    }
+
+    #[test]
+    fn auto_levels_tiny_clip_spans_full_range() {
+        // With a negligible clip the points sit at the data extremes.
+        let ramp = gray_ramp(1000);
+        let (black, white) = auto_levels_points(&ramp, 0.0001, 0.0001);
+        assert!(black < 0.01, "black={black}");
+        assert!(white > 0.99, "white={white}");
+    }
+
+    #[test]
+    fn auto_levels_empty_is_identity_range() {
+        let (black, white) = auto_levels_points(&[], 0.01, 0.01);
+        assert_eq!((black, white), (0.0, 1.0));
+    }
+
+    #[test]
+    fn auto_levels_uses_luminance_not_max_channel() {
+        // A blue-only image: luminance is low (0.0722) even though B=1.0.
+        // The black/white points must reflect luminance, not the blue channel.
+        let pixels = vec![0.0f32, 0.0, 1.0]; // single pixel, R=0 G=0 B=1
+        let (black, white) = auto_levels_points(&pixels, 0.0001, 0.0001);
+        // Luminance ≈ 0.0722 → both points collapse near that value.
+        assert!(black < 0.1 && white < 0.1, "black={black} white={white}");
+    }
 }
