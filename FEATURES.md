@@ -379,7 +379,7 @@ Both noise filters open a dedicated dialog (separate from the generic filter dia
 - **Pixelate / Mosaic**: block size 2 - 64 px
 
 ### Halftone
-- **Halftone**: dot size 2 - 32 px, angle 0 - 180 degrees, softness 0 - 4
+- **Halftone**: dot size 2 - 32 px, density 0.25 - 3 (default 1.0 — scales dot coverage/frequency relative to the cell grid), angle 0 - 180 degrees, softness 0 - 4
 
 ### Stylize
 - **Find Edges**: Sobel edge detection, no parameters
@@ -574,6 +574,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 
 ### Global UI Conventions
 - **Slider double-click → reset**: every numeric slider in the UI (brush size, opacity, hardness, adjustment sliders, filter sliders, etc.) snaps back to its default value on double-click. The numeric text input inside the slider is exempt so double-clicks there select the value for editing instead.
+- **Slider arrow-key step**: with a slider's numeric input focused, **↑ / ↓** increment / decrement the value by one step (log-scaled sliders like Levels gamma step proportionally), clamped to the slider's min / max. Enter blurs the input to commit.
 - **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the status bar resets the viewport zoom to 100% (1×).
 - **Color swatch double-click**: double-clicking the foreground or background swatch in the Color panel both selects that swatch and auto-expands the Color panel (useful when the panel is collapsed). Recent-color swatches behave the same way.
 - **Layer name double-click → rename**: double-clicking a layer row's name turns it into an inline text input; Enter commits, Escape cancels.
