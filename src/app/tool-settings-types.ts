@@ -8,6 +8,7 @@ import type { WandSettings } from '../tools/wand/wand-settings';
 import type { FillSettings } from '../tools/fill/fill-settings';
 import type { MarqueeSettings } from '../tools/marquee/marquee-settings';
 import type { SmudgeSettings } from '../tools/smudge/smudge-settings';
+import type { PencilSettings } from '../tools/pencil/pencil-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -24,7 +25,6 @@ export interface ToolSettings {
   brushSize: number;
   brushOpacity: number;
   brushHardness: number;
-  pencilSize: number;
   eraserSize: number;
   eraserOpacity: number;
   shapeMode: ShapeMode;
@@ -149,7 +149,7 @@ export interface ToolSettings {
   setTextStrikethrough: (strikethrough: boolean) => void;
   setBrushOpacity: (opacity: number) => void;
   setBrushHardness: (hardness: number) => void;
-  setPencilSize: (size: number) => void;
+  setPencilSetting: <K extends keyof PencilSettings>(key: K, value: PencilSettings[K]) => void;
   setEraserSize: (size: number) => void;
   setEraserOpacity: (opacity: number) => void;
   setFillSetting: <K extends keyof FillSettings>(key: K, value: FillSettings[K]) => void;

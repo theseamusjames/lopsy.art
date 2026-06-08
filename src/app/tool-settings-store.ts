@@ -8,6 +8,7 @@ import { clampWandSetting } from '../tools/wand/wand-settings';
 import { clampFillSetting } from '../tools/fill/fill-settings';
 import { clampMarqueeSetting } from '../tools/marquee/marquee-settings';
 import { clampSmudgeSetting } from '../tools/smudge/smudge-settings';
+import { clampPencilSetting } from '../tools/pencil/pencil-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -36,7 +37,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushSize: 10,
   brushOpacity: 100,
   brushHardness: 80,
-  pencilSize: 1,
   eraserSize: 10,
   eraserOpacity: 100,
   shapeMode: 'ellipse',
@@ -175,7 +175,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     set({ brushOpacity: Math.max(1, Math.min(100, opacity)) });
   },
   setBrushHardness: (hardness) => set({ brushHardness: Math.max(0, Math.min(100, hardness)) }),
-  setPencilSize: (size) => set({ pencilSize: Math.max(1, Math.min(5000, size)) }),
+  setPencilSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      pencil: { ...s.settings.pencil, [key]: clampPencilSetting(key, value) },
+    },
+  })),
   setEraserSize: (size) => set({ eraserSize: Math.max(1, Math.min(5000, size)) }),
   setEraserOpacity: (opacity) => {
     warnIfNormalisedOpacity('setEraserOpacity', opacity);

@@ -51,7 +51,7 @@ export function handleSizeShortcut(e: KeyboardEvent): boolean {
   } else if (tool === 'smudge') {
     ts.setSmudgeSetting('size', ts.settings.smudge.size + delta);
   } else if (tool === 'pencil') {
-    ts.setPencilSize(ts.pencilSize + delta);
+    ts.setPencilSetting('size', ts.settings.pencil.size + delta);
   } else if (tool === 'eraser') {
     ts.setEraserSize(ts.eraserSize + delta);
   } else if (tool === 'stamp') {

@@ -142,7 +142,7 @@ export function handlePaintDown(
         gpuQuickMaskDab(engine, canvasPos.x, canvasPos.y, size, hardness, opacity, mode);
       }
     } else if (tool === 'pencil') {
-      const size = toolSettings.pencilSize;
+      const size = toolSettings.settings.pencil.size;
       const color = { r: 255, g: 255, b: 255, a: 1 };
       gpuQuickMaskPencil(
         engine,
@@ -221,7 +221,7 @@ export function handlePaintDown(
         gpuMaskDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, opacity, mode);
       }
     } else if (tool === 'pencil') {
-      const size = toolSettings.pencilSize;
+      const size = toolSettings.settings.pencil.size;
       gpuMaskPencilLine(
         engine, activeLayerId,
         lineFrom.x, lineFrom.y, layerPos.x, layerPos.y,
@@ -387,7 +387,7 @@ export function handlePaintDown(
   } else if (tool === 'pencil') {
     const color = strokeColor;
     useToolSettingsStore.getState().addRecentColor(color);
-    const size = toolSettings.pencilSize;
+    const size = toolSettings.settings.pencil.size;
     gpuDrawPencilLine(engine, activeLayerId,
       lineFrom.x, lineFrom.y, layerPos.x, layerPos.y,
       color.r / 255, color.g / 255, color.b / 255, color.a, size);
@@ -678,7 +678,7 @@ function handleMaskPaintMoveUnified(
       emitDabs(toolSettings.brushSize, toolSettings.brushHardness / 100, toolSettings.brushOpacity / 100);
       break;
     case 'pencil': {
-      const size = toolSettings.pencilSize;
+      const size = toolSettings.settings.pencil.size;
       if (isQuickMask) {
         gpuQuickMaskPencil(engine, state.lastPoint.x, state.lastPoint.y, pos.x, pos.y, 1, 1, 1, 1, size, mode);
       } else {

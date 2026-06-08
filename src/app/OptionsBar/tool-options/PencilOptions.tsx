@@ -6,8 +6,8 @@ import { IconButton } from '../../../components/IconButton/IconButton';
 import { docScaledMax } from '../../../utils/slider-ranges';
 
 export function PencilOptions() {
-  const pencilSize = useToolSettingsStore((s) => s.pencilSize);
-  const setPencilSize = useToolSettingsStore((s) => s.setPencilSize);
+  const pencilSize = useToolSettingsStore((s) => s.settings.pencil.size);
+  const setPencilSetting = useToolSettingsStore((s) => s.setPencilSetting);
   const symmetryH = useToolSettingsStore((s) => s.symmetryHorizontal);
   const symmetryV = useToolSettingsStore((s) => s.symmetryVertical);
   const setSymH = useToolSettingsStore((s) => s.setSymmetryHorizontal);
@@ -18,7 +18,7 @@ export function PencilOptions() {
 
   return (
     <>
-      <Slider label="Size" value={pencilSize} min={1} max={sizeMax} onChange={setPencilSize} />
+      <Slider label="Size" value={pencilSize} min={1} max={sizeMax} onChange={(size) => setPencilSetting('size', size)} />
       <IconButton
         icon={<FlipVertical2 size={16} />}
         label="Symmetry Horizontal"
