@@ -152,9 +152,9 @@ export function handlePaintDown(
         mode,
       );
     } else {
-      const size = toolSettings.eraserSize;
+      const size = toolSettings.settings.eraser.size;
       const hardness = 0.8;
-      const opacity = toolSettings.eraserOpacity / 100;
+      const opacity = toolSettings.settings.eraser.opacity / 100;
       if (shiftLine) {
         const spacing = Math.max(1, size * 0.25);
         const pts = interpolatePoints(qmShiftFrom, canvasPos, spacing);
@@ -228,9 +228,9 @@ export function handlePaintDown(
         1.0, size, mode,
       );
     } else {
-      const size = toolSettings.eraserSize;
+      const size = toolSettings.settings.eraser.size;
       const hardness = 0.8;
-      const opacity = toolSettings.eraserOpacity / 100;
+      const opacity = toolSettings.settings.eraser.opacity / 100;
       if (shiftLine) {
         const spacing = Math.max(1, size * 0.25);
         const pts = interpolatePoints(lineFrom, layerPos, spacing);
@@ -401,9 +401,9 @@ export function handlePaintDown(
       }
     }
   } else {
-    const size = toolSettings.eraserSize;
+    const size = toolSettings.settings.eraser.size;
     const hardness = 0.8;
-    const opacity = toolSettings.eraserOpacity / 100;
+    const opacity = toolSettings.settings.eraser.opacity / 100;
 
     if (shiftLine) {
       const spacing = Math.max(1, size * 0.25);
@@ -687,7 +687,7 @@ function handleMaskPaintMoveUnified(
       break;
     }
     case 'eraser':
-      emitDabs(toolSettings.eraserSize, 0.8, toolSettings.eraserOpacity / 100);
+      emitDabs(toolSettings.settings.eraser.size, 0.8, toolSettings.settings.eraser.opacity / 100);
       break;
     default:
       break;

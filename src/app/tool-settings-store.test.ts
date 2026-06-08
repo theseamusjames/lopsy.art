@@ -92,13 +92,13 @@ describe('opacity setters — issue #250 (percent vs normalised footgun)', () =>
     expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('also warns from setEraserOpacity and setSprayOpacity (same footgun)', async () => {
+  it('also warns from setEraserSetting(opacity) and setSprayOpacity (same footgun)', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
-    store.getState().setEraserOpacity(0.5);
+    store.getState().setEraserSetting('opacity', 0.5);
     store.getState().setSprayOpacity(0.3);
     expect(warnSpy).toHaveBeenCalledTimes(2);
     const messages = warnSpy.mock.calls.map((c: unknown[]) => String(c[0] ?? ''));
-    expect(messages.some((m: string) => m.includes('setEraserOpacity'))).toBe(true);
+    expect(messages.some((m: string) => m.includes('setEraserSetting(opacity)'))).toBe(true);
     expect(messages.some((m: string) => m.includes('setSprayOpacity'))).toBe(true);
   });
 });
@@ -346,6 +346,7 @@ describe('per-tool slice: sponge (#453)', () => {
     const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
     const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
     const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
     const beforeBrushSize = useToolSettingsStore.getState().brushSize;
     useToolSettingsStore.getState().setSpongeSetting('size', 42);
     expect(useToolSettingsStore.getState().settings.sponge.size).toBe(42);
@@ -358,6 +359,67 @@ describe('per-tool slice: sponge (#453)', () => {
     expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
     expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
     expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: eraser (#453)', () => {
+  it('exposes eraser settings under settings.eraser with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setEraserSetting.
+    useToolSettingsStore.getState().setEraserSetting('size', 10);
+    useToolSettingsStore.getState().setEraserSetting('opacity', 100);
+    const { eraser } = useToolSettingsStore.getState().settings;
+    expect(eraser).toEqual({ size: 10, opacity: 100 });
+  });
+
+  it('setEraserSetting updates one field without disturbing the other', () => {
+    const before = useToolSettingsStore.getState().settings.eraser;
+    useToolSettingsStore.getState().setEraserSetting('size', 75);
+    const after = useToolSettingsStore.getState().settings.eraser;
+    expect(after.size).toBe(75);
+    expect(after.opacity).toBe(before.opacity);
+  });
+
+  it('setEraserSetting clamps size into [1, 5000]', () => {
+    useToolSettingsStore.getState().setEraserSetting('size', 0);
+    expect(useToolSettingsStore.getState().settings.eraser.size).toBe(1);
+    useToolSettingsStore.getState().setEraserSetting('size', 99999);
+    expect(useToolSettingsStore.getState().settings.eraser.size).toBe(5000);
+  });
+
+  it('setEraserSetting clamps opacity into [1, 100]', () => {
+    // The legacy setEraserOpacity clamped to [1, 100], not [0, 100] —
+    // a 0 here would silently produce a no-op eraser stroke, which is
+    // the same percent-vs-normalised footgun guarded by the warn-once
+    // dedupe. Preserve that range under the slice.
+    useToolSettingsStore.getState().setEraserSetting('opacity', -10);
+    expect(useToolSettingsStore.getState().settings.eraser.opacity).toBe(1);
+    useToolSettingsStore.getState().setEraserSetting('opacity', 200);
+    expect(useToolSettingsStore.getState().settings.eraser.opacity).toBe(100);
+  });
+
+  it('setEraserSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setEraserSetting('size', 42);
+    expect(useToolSettingsStore.getState().settings.eraser.size).toBe(42);
+    // Sibling slice references preserved — selectors subscribed to the
+    // other slices should not re-render when eraser changes. This is
+    // the invariant that justifies slicing instead of fattening the
+    // flat bag further.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
