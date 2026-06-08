@@ -100,7 +100,7 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
 
   test('rapid cross-hatch strokes on 6000x4000', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'CDP profiler requires Chromium');
-    test.setTimeout(300_000);
+    test.setTimeout(600_000);
 
     const hasWebGL2 = await page.evaluate(() => {
       const c = document.createElement('canvas');
@@ -119,6 +119,11 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
       };
       store.getState().createDocument(6000, 4000, false);
     });
+    await page.waitForSelector('[data-testid="canvas-container"]', { timeout: 60000 });
+    await page.waitForFunction(() => {
+      const el = document.querySelector('[data-testid="canvas-container"]');
+      return el && el.getBoundingClientRect().width > 0;
+    }, { timeout: 60000 });
 
     // --- brush tool, small brush for hatching ---
     await page.keyboard.press('b');

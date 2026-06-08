@@ -18,7 +18,9 @@ test('RAF decode → export JPG for comparison', async ({ page }) => {
   await page.goto('/');
   await waitForStore(page);
 
-  // Skip if local-only sample isn't present.
+  // Skip if local-only sample isn't present. Check content-type to avoid
+  // false positives from Vite's SPA fallback (serves index.html for
+  // unknown routes with text/html content-type).
   const sampleAvailable = await page.evaluate(async () => {
     try {
       const head = await fetch('/test-sample.raf', { method: 'HEAD' });

@@ -43,6 +43,7 @@ test.describe('Brush perf — 1080x1080 profile', () => {
     });
 
     const container = page.locator('[data-testid="canvas-container"]');
+    await container.waitFor({ state: 'visible', timeout: 30000 });
     const box = await container.boundingBox();
     expect(box).not.toBeNull();
     const cx = box!.x + box!.width / 2;

@@ -16,7 +16,9 @@ test('RAF import renders a recognizable image', async ({ page }) => {
   await waitForStore(page);
 
   // The sample RAF is 83 MB and lives outside the repo. Skip the test
-  // if the dev server can't serve it (most CI envs).
+  // if the dev server can't serve it (most CI envs). Check content-type
+  // to avoid false positives from Vite's SPA fallback (serves index.html
+  // for unknown routes with text/html content-type).
   const sampleAvailable = await page.evaluate(async () => {
     try {
       const head = await fetch('/test-sample.raf', { method: 'HEAD' });
