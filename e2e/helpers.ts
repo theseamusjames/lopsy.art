@@ -324,6 +324,22 @@ export async function openColorPanel(page: Page, expanded = true): Promise<void>
 }
 
 export async function setForegroundColor(page: Page, r: number, g: number, b: number, a?: number): Promise<void> {
+  const panelToolbar = page.locator('button[aria-label="Color"]');
+  const canUsePanel = await panelToolbar.isVisible({ timeout: 200 }).catch(() => false);
+
+  if (!canUsePanel) {
+    await page.evaluate(
+      ({ r, g, b, a }) => {
+        const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+          getState: () => { setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void };
+        };
+        store.getState().setForegroundColor({ r, g, b, a: a ?? 1 });
+      },
+      { r, g, b, a },
+    );
+    return;
+  }
+
   await openColorPanel(page, true);
   const hex = [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
   const input = page.locator('[aria-label="Hex color value"]');
