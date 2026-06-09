@@ -309,7 +309,7 @@ function renderFrameGpu(
         : activeTool === 'pencil' ? toolState.settings.pencil.size
         : activeTool === 'eraser' ? toolState.eraserSize
         : activeTool === 'stamp' ? toolState.stampSize
-        : activeTool === 'sponge' ? toolState.spongeSize
+        : activeTool === 'sponge' ? toolState.settings.sponge.size
         : brushCursorInfo.size;
       renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip, brushCursorInfo.angle);
     }

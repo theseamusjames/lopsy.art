@@ -9,6 +9,7 @@ import { clampFillSetting } from '../tools/fill/fill-settings';
 import { clampMarqueeSetting } from '../tools/marquee/marquee-settings';
 import { clampSmudgeSetting } from '../tools/smudge/smudge-settings';
 import { clampPencilSetting } from '../tools/pencil/pencil-settings';
+import { clampSpongeSetting } from '../tools/sponge/sponge-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -62,9 +63,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   pathStrokeWidth: 2,
   dodgeExposure: 50,
   dodgeMode: 'dodge',
-  spongeMode: 'desaturate',
-  spongeStrength: 50,
-  spongeSize: 30,
   quickSelectSize: 20,
   quickSelectTolerance: 32,
   quickSelectEdgeStrength: 50,
@@ -253,9 +251,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setPathStrokeWidth: (width) => set({ pathStrokeWidth: Math.max(1, Math.min(50, width)) }),
   setDodgeExposure: (exposure) => set({ dodgeExposure: Math.max(1, Math.min(100, exposure)) }),
   setDodgeMode: (mode) => set({ dodgeMode: mode }),
-  setSpongeMode: (mode) => set({ spongeMode: mode }),
-  setSpongeStrength: (strength) => set({ spongeStrength: Math.max(1, Math.min(100, strength)) }),
-  setSpongeSize: (size) => set({ spongeSize: Math.max(1, Math.min(5000, size)) }),
+  setSpongeSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      sponge: { ...s.settings.sponge, [key]: clampSpongeSetting(key, value) },
+    },
+  })),
   setSmudgeSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,

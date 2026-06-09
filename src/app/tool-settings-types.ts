@@ -2,13 +2,13 @@ import type { Color, FontStyle, TextAlign } from '../types';
 import type { GradientStop, GradientType } from '../tools/gradient/gradient';
 import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { DodgeMode } from '../tools/dodge/dodge';
-import type { SpongeMode } from '../tools/sponge/sponge';
 import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
 import type { WandSettings } from '../tools/wand/wand-settings';
 import type { FillSettings } from '../tools/fill/fill-settings';
 import type { MarqueeSettings } from '../tools/marquee/marquee-settings';
 import type { SmudgeSettings } from '../tools/smudge/smudge-settings';
 import type { PencilSettings } from '../tools/pencil/pencil-settings';
+import type { SpongeSettings } from '../tools/sponge/sponge-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -47,9 +47,6 @@ export interface ToolSettings {
   pathStrokeWidth: number;
   dodgeExposure: number;
   dodgeMode: DodgeMode;
-  spongeMode: SpongeMode;
-  spongeStrength: number;
-  spongeSize: number;
   quickSelectSize: number;
   quickSelectTolerance: number;
   quickSelectEdgeStrength: number;
@@ -126,9 +123,7 @@ export interface ToolSettings {
   setPathStrokeWidth: (width: number) => void;
   setDodgeExposure: (exposure: number) => void;
   setDodgeMode: (mode: DodgeMode) => void;
-  setSpongeMode: (mode: SpongeMode) => void;
-  setSpongeStrength: (strength: number) => void;
-  setSpongeSize: (size: number) => void;
+  setSpongeSetting: <K extends keyof SpongeSettings>(key: K, value: SpongeSettings[K]) => void;
   setSmudgeSetting: <K extends keyof SmudgeSettings>(key: K, value: SmudgeSettings[K]) => void;
   setMarqueeSetting: <K extends keyof MarqueeSettings>(key: K, value: MarqueeSettings[K]) => void;
   setWandSetting: <K extends keyof WandSettings>(key: K, value: WandSettings[K]) => void;

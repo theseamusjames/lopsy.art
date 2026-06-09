@@ -32,10 +32,9 @@ export function handleSpongeDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer, shiftKey } = ctx;
   const editorState = useEditorStore.getState();
   const toolSettings = useToolSettingsStore.getState();
-  const mode = toolSettings.spongeMode;
+  const { mode, strength: rawStrength, size } = toolSettings.settings.sponge;
   editorState.pushHistory(mode === 'saturate' ? 'Saturate' : 'Desaturate');
-  const strength = scaleSpongeStrength(toolSettings.spongeStrength / 100);
-  const size = toolSettings.spongeSize;
+  const strength = scaleSpongeStrength(rawStrength / 100);
   const shiftLine = shiftKey
     && ctx.lastPaintPointRef.current
     && ctx.lastPaintPointRef.current.layerId === activeLayerId;
@@ -71,9 +70,8 @@ export function handleSpongeDown(ctx: InteractionContext): InteractionState {
 
 export function handleSpongeMove(state: InteractionState, layerLocalPos: Point): void {
   if (!state.lastPoint) return;
-  const toolSettings = useToolSettingsStore.getState();
-  const strength = scaleSpongeStrength(toolSettings.spongeStrength / 100);
-  const size = toolSettings.spongeSize;
+  const { strength: rawStrength, size } = useToolSettingsStore.getState().settings.sponge;
+  const strength = scaleSpongeStrength(rawStrength / 100);
   const spacing = Math.max(1, size * SPONGE_SPACING_RATIO);
 
   const engine = getEngine();

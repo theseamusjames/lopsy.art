@@ -8,6 +8,8 @@ import type { SmudgeSettings } from '../tools/smudge/smudge-settings';
 import { DEFAULT_SMUDGE_SETTINGS } from '../tools/smudge/smudge-settings';
 import type { PencilSettings } from '../tools/pencil/pencil-settings';
 import { DEFAULT_PENCIL_SETTINGS } from '../tools/pencil/pencil-settings';
+import type { SpongeSettings } from '../tools/sponge/sponge-settings';
+import { DEFAULT_SPONGE_SETTINGS } from '../tools/sponge/sponge-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -24,6 +26,7 @@ export interface ToolSettingsSlices {
   marquee: MarqueeSettings;
   smudge: SmudgeSettings;
   pencil: PencilSettings;
+  sponge: SpongeSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -32,4 +35,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   marquee: DEFAULT_MARQUEE_SETTINGS,
   smudge: DEFAULT_SMUDGE_SETTINGS,
   pencil: DEFAULT_PENCIL_SETTINGS,
+  sponge: DEFAULT_SPONGE_SETTINGS,
 };
