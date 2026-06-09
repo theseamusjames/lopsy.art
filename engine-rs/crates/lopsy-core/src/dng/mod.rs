@@ -15,8 +15,9 @@
 //! ## Processing pipeline
 //!
 //! For both Linear DNG (Apple ProRAW) and standard CFA DNG:
-//!   normalize → WB(AsShotNeutral) → neutralized cam→sRGB matrix →
-//!   BaselineExposure → ProfileToneCurve → sRGB gamma → EXIF orientation
+//!   LinearizationTable → normalize → WB(AsShotNeutral) → neutralized cam→sRGB
+//!   matrix → BaselineExposure → ProfileToneCurve → sRGB gamma → auto-levels →
+//!   EXIF orientation
 //!
 //! (The gain map is disabled by default — see ProfileGainTableMap note below.)
 //!
@@ -24,6 +25,14 @@
 //! (orientation 6/8) load upright; see `crate::orientation`.
 //!
 //! ## Key discoveries
+//!
+//! - Apple ProRAW stores 10-bit sensor data with a non-linear LinearizationTable
+//!   (tag 50712) that maps raw ADC codes to linearized 16-bit values. The table
+//!   is roughly cubic — raw code 100 maps to ~160 (out of 65535), not ~6400.
+//!   Without applying the table, shadow values are ~40x too bright and the tonal
+//!   response is completely wrong, producing blown-out images with extreme
+//!   contrast scenes (e.g., concert with stage lighting). Always apply the table
+//!   before normalization when present.
 //!
 //! - Apple ProRAW (Linear DNG) carries camera-native linear data that DOES need
 //!   the color matrix. Despite AsShotNeutral≈[1,1,1], the pixels are NOT in sRGB
@@ -38,9 +47,9 @@
 //!   Always applied to the ColorMatrix path; the ForwardMatrix path is already
 //!   neutral-preserving by construction and is NOT neutralized.
 //!
-//! - Apple ProRAW sets WhiteLevel=65535 even for 10-bit data. We detect this by
-//!   comparing the measured data max against WhiteLevel and using the measured
-//!   max when WhiteLevel is clearly wrong (measured < 25% of WhiteLevel).
+//! - After LinearizationTable is applied, WhiteLevel (65535) is authoritative for
+//!   normalization. The measured-max heuristic (for detecting Apple's wrong
+//!   WhiteLevel on un-linearized data) is skipped when a table is present.
 //!
 //! - ProfileGainTableMap (tag 52525, DNG 1.6) is Apple's proprietary
 //!   local-tone map. Correct application requires an underdocumented
@@ -154,7 +163,7 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         raw_bytes.extend_from_slice(&data[start..end]);
     }
 
-    let pixel_data: Vec<u16> = match compression {
+    let mut pixel_data: Vec<u16> = match compression {
         1 => decode_uncompressed(&raw_bytes, bits)?,
         7 => {
             if let (Some(tw), Some(th)) = (tile_width, tile_height) {
@@ -193,19 +202,48 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let baseline_exposure = get_rational(&ifd0, TagId::BaselineExposure)
         .or_else(|| get_rational(&main_ifd, TagId::BaselineExposure));
 
+    // LinearizationTable (tag 50712): maps raw ADC codes to linearized values.
+    // Apple ProRAW uses a non-linear 10-bit→16-bit table (roughly cubic) so the
+    // 10-bit codes encode a compressed dynamic range. Without applying this table,
+    // shadow values end up dramatically too bright and the tonal response is wrong.
+    let linearization_table = get_tag_u16_vec(&main_ifd, TagId::LinearizationTable)
+        .or_else(|_| get_tag_u16_vec(&ifd0, TagId::LinearizationTable))
+        .ok();
+
+    if let Some(ref lut) = linearization_table {
+        dng_log!("[DNG meta] linearizationTable: {} entries, range [{}, {}]",
+            lut.len(), lut.first().copied().unwrap_or(0), lut.last().copied().unwrap_or(0));
+        let max_idx = lut.len() - 1;
+        for v in pixel_data[..expected_pixels].iter_mut() {
+            *v = lut[(*v as usize).min(max_idx)];
+        }
+    }
+
     // WhiteLevel: check SubIFD first (per-image), then IFD0, then compute from data.
     let white_level = get_tag_u32(&main_ifd, TagId::WhiteLevel)
         .or_else(|_| get_tag_u32(&ifd0, TagId::WhiteLevel))
         .ok();
 
-    let black_level = get_rational_array_either(&ifd0, &main_ifd, TagId::BlackLevel);
-    let black = if !black_level.is_empty() { black_level[0] } else { 0.0 };
+    // BlackLevel: may be RATIONAL (type 5) or SHORT (type 3). Handle both.
+    let black_level_rational = get_rational_array_either(&ifd0, &main_ifd, TagId::BlackLevel);
+    let black = if !black_level_rational.is_empty() {
+        black_level_rational[0]
+    } else {
+        let bl_short = get_tag_u16_vec(&main_ifd, TagId::BlackLevel)
+            .or_else(|_| get_tag_u16_vec(&ifd0, TagId::BlackLevel))
+            .ok();
+        bl_short.and_then(|v| v.first().map(|&x| x as f64)).unwrap_or(0.0)
+    };
 
-    // Determine normalization range. WhiteLevel may be 65535 even for 10/12/14-bit
-    // data (Apple ProRAW does this). If the actual data max is far below
-    // WhiteLevel, use the measured max so values span full [0, 1].
+    // Determine normalization range. After the LinearizationTable (if present),
+    // pixel values are in the table's output range and WhiteLevel is authoritative.
+    // Without a table, WhiteLevel may be 65535 even for 10/12/14-bit data (Apple
+    // ProRAW does this), so fall back to measured max when WhiteLevel is clearly wrong.
     let measured_max = pixel_data[..expected_pixels].iter().copied().max().unwrap_or(1) as f64;
-    let max_val = if let Some(wl) = white_level {
+    let max_val = if linearization_table.is_some() {
+        // Table was applied; WhiteLevel matches the table's output range.
+        white_level.map(|wl| wl as f64).unwrap_or(measured_max.max(1.0))
+    } else if let Some(wl) = white_level {
         let wl_f = wl as f64;
         if measured_max > 0.0 && measured_max < wl_f * 0.25 {
             measured_max
