@@ -20,6 +20,7 @@ pub enum TagId {
     TileOffsets = 324,
     TileByteCounts = 325,
     CfaPattern = 33422,
+    LinearizationTable = 50712,
     ColorMatrix1 = 50721,
     ColorMatrix2 = 50722,
     AsShotNeutral = 50728,

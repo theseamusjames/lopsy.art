@@ -1,6 +1,6 @@
-//! DNG decode + compare harness. Decodes sample_dng_00.dng through the engine,
+//! DNG decode + compare harness. Decodes sample DNG files through the engine,
 //! dumps the decoder's per-stage debug log and level statistics, and writes
-//! sample_dng_00_export.jpg next to the provided sample_dng_00.jpg reference.
+//! export JPGs next to the provided reference images.
 //!
 //! Run: cargo test -p lopsy-core --test dng_compare -- --nocapture
 
@@ -12,12 +12,11 @@ fn samples_dir() -> PathBuf {
         .join("samples")
 }
 
-#[test]
-fn decode_and_report_dng() {
+fn decode_and_report(filename: &str, expect_portrait: bool) {
     let samples = samples_dir();
-    let dng_path = samples.join("sample_dng_00.dng");
+    let dng_path = samples.join(filename);
     if !dng_path.exists() {
-        println!("sample_dng_00.dng not found — skipping");
+        println!("{filename} not found — skipping");
         return;
     }
     let data = std::fs::read(&dng_path).expect("read dng");
@@ -26,16 +25,17 @@ fn decode_and_report_dng() {
         Err(e) => { println!("DNG decode error: {e}"); return; }
     };
 
-    println!("\n=== DNG decode: sample_dng_00.dng ===");
+    let stem = filename.trim_end_matches(".dng");
+    println!("\n=== DNG decode: {filename} ===");
     println!("  dims: {}x{}", img.width, img.height);
 
-    // sample_dng_00 is an iPhone portrait shot (TIFF Orientation 6). The sensor
-    // scans landscape, so a correct decode must rotate it upright — height > width.
-    assert!(
-        img.height > img.width,
-        "expected portrait output after orientation (got {}x{}) — Orientation tag not applied?",
-        img.width, img.height
-    );
+    if expect_portrait {
+        assert!(
+            img.height > img.width,
+            "expected portrait output after orientation (got {}x{}) — Orientation tag not applied?",
+            img.width, img.height
+        );
+    }
     println!("  baseline_exposure: {}", img.baseline_exposure);
     println!("  tone_curve points: {}", img.tone_curve.len());
     if !img.tone_curve.is_empty() {
@@ -46,15 +46,12 @@ fn decode_and_report_dng() {
     println!("  --- decoder debug log ---");
     for l in &img.debug_log { println!("  {l}"); }
 
-    // Pixel stride: RGBA (4) per the struct doc; guard for RGB (3) just in case.
     let n = (img.width * img.height) as usize;
     let stride = if img.pixels.len() == n * 4 { 4 } else { 3 };
 
-    // Level statistics across the whole image.
     let mut sum = [0f64; 3];
     let mut mx = [0f32; 3];
     let mut mn = [1f32; 3];
-    // crude per-channel histogram (10 bins) to see where tones sit.
     let mut hist = [[0u64; 10]; 3];
     for i in 0..n {
         for c in 0..3 {
@@ -75,15 +72,24 @@ fn decode_and_report_dng() {
         println!("  {name} hist(0..1 in 10 bins): [{}]", row.join(" "));
     }
 
-    // Write export JPG.
     let mut rgb = vec![0u8; n * 3];
     for i in 0..n {
         for c in 0..3 {
             rgb[i * 3 + c] = (img.pixels[i * stride + c] * 255.0).round().clamp(0.0, 255.0) as u8;
         }
     }
-    let out = samples.join("sample_dng_00_export.jpg");
+    let out = samples.join(format!("{stem}_export.jpg"));
     let enc = jpeg_encoder::Encoder::new_file(&out, 92).expect("create jpg");
     enc.encode(&rgb, img.width as u16, img.height as u16, jpeg_encoder::ColorType::Rgb).expect("encode jpg");
     println!("\n  wrote {} ({} bytes)", out.display(), std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0));
+}
+
+#[test]
+fn decode_and_report_dng_00() {
+    decode_and_report("sample_dng_00.dng", true);
+}
+
+#[test]
+fn decode_and_report_dng_01() {
+    decode_and_report("sample_dng_01.dng", false);
 }
