@@ -40,6 +40,18 @@ export function gestureUsedGpuStroke(gesture: CanvasGesture): boolean {
   return gesture.kind === 'tool' && gesture.usedGpuStroke;
 }
 
+/**
+ * Construct a tool-gesture InteractionState from a down-handler's
+ * freshly-returned state, without mutating the input. The dispatcher
+ * used to write `newState.gesture = { kind: 'tool', … }` directly on
+ * the returned object — the audit issue (#444) calls out post-return
+ * mutation as the bag-of-flags smell. Returning a new object instead
+ * keeps the no-mutation invariant.
+ */
+export function withToolGesture(state: InteractionState, usedGpuStroke: boolean): InteractionState {
+  return { ...state, gesture: { kind: 'tool', usedGpuStroke } };
+}
+
 export const GESTURE_IDLE: CanvasGesture = { kind: 'idle' };
 
 /**

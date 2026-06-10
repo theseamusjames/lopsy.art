@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   gestureUsedGpuStroke,
+  withToolGesture,
   GESTURE_IDLE,
   INITIAL_INTERACTION_STATE,
   type CanvasGesture,
@@ -118,5 +119,59 @@ describe('PreToolDownGuard signature', () => {
     expect(claimed).not.toBeNull();
     expect(claimed?.layerId).toBe('layer-1');
     expect(claimed?.gesture.kind).toBe('liquify');
+  });
+});
+
+const makeBaseState = (overrides: Partial<InteractionState> = {}): InteractionState => ({
+  drawing: true,
+  gesture: GESTURE_IDLE,
+  lastPoint: null,
+  pixelBuffer: null,
+  originalPixelBuffer: null,
+  layerId: 'layer-1',
+  tool: 'brush',
+  startPoint: null,
+  layerStartX: 0,
+  layerStartY: 0,
+  maskMode: false,
+  originalSelectionMask: null,
+  originalSelectionMaskWidth: 0,
+  originalSelectionMaskHeight: 0,
+  moveOriginalMask: null,
+  moveOriginalBounds: null,
+  ...overrides,
+});
+
+describe('withToolGesture', () => {
+  it('returns a tool gesture with the given usedGpuStroke flag', () => {
+    const input = makeBaseState();
+    const output = withToolGesture(input, true);
+    expect(output.gesture).toEqual({ kind: 'tool', usedGpuStroke: true });
+  });
+
+  it('preserves non-gesture fields from the input', () => {
+    const input = makeBaseState({ layerId: 'abc', tool: 'pencil', drawing: true });
+    const output = withToolGesture(input, false);
+    expect(output.layerId).toBe('abc');
+    expect(output.tool).toBe('pencil');
+    expect(output.drawing).toBe(true);
+    expect(output.gesture).toEqual({ kind: 'tool', usedGpuStroke: false });
+  });
+
+  it('does not mutate the input state (no-mutation invariant from #444)', () => {
+    const input = Object.freeze(makeBaseState({ gesture: GESTURE_IDLE }));
+    const output = withToolGesture(input, true);
+    expect(input.gesture).toBe(GESTURE_IDLE);
+    expect(output).not.toBe(input);
+    expect(output.gesture).not.toBe(input.gesture);
+  });
+
+  it('does not mutate a previously-set tool gesture object', () => {
+    const priorGesture: CanvasGesture = { kind: 'tool', usedGpuStroke: false };
+    const input = makeBaseState({ gesture: priorGesture });
+    const output = withToolGesture(input, true);
+    expect(priorGesture).toEqual({ kind: 'tool', usedGpuStroke: false });
+    expect(output.gesture).not.toBe(priorGesture);
+    expect(output.gesture).toEqual({ kind: 'tool', usedGpuStroke: true });
   });
 });
