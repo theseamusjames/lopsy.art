@@ -10,6 +10,7 @@ import { clampMarqueeSetting } from '../tools/marquee/marquee-settings';
 import { clampSmudgeSetting } from '../tools/smudge/smudge-settings';
 import { clampPencilSetting } from '../tools/pencil/pencil-settings';
 import { clampSpongeSetting } from '../tools/sponge/sponge-settings';
+import { clampEraserSetting } from '../tools/eraser/eraser-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -38,8 +39,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushSize: 10,
   brushOpacity: 100,
   brushHardness: 80,
-  eraserSize: 10,
-  eraserOpacity: 100,
   shapeMode: 'ellipse',
   shapeOutput: 'pixels' as const,
   shapeFillColor: { r: 255, g: 255, b: 255, a: 1 },
@@ -179,10 +178,14 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       pencil: { ...s.settings.pencil, [key]: clampPencilSetting(key, value) },
     },
   })),
-  setEraserSize: (size) => set({ eraserSize: Math.max(1, Math.min(5000, size)) }),
-  setEraserOpacity: (opacity) => {
-    warnIfNormalisedOpacity('setEraserOpacity', opacity);
-    set({ eraserOpacity: Math.max(1, Math.min(100, opacity)) });
+  setEraserSetting: (key, value) => {
+    if (key === 'opacity') warnIfNormalisedOpacity('setEraserSetting(opacity)', value as number);
+    set((s) => ({
+      settings: {
+        ...s.settings,
+        eraser: { ...s.settings.eraser, [key]: clampEraserSetting(key, value) },
+      },
+    }));
   },
   setFillSetting: (key, value) => set((s) => ({
     settings: {

@@ -10,6 +10,8 @@ import type { PencilSettings } from '../tools/pencil/pencil-settings';
 import { DEFAULT_PENCIL_SETTINGS } from '../tools/pencil/pencil-settings';
 import type { SpongeSettings } from '../tools/sponge/sponge-settings';
 import { DEFAULT_SPONGE_SETTINGS } from '../tools/sponge/sponge-settings';
+import type { EraserSettings } from '../tools/eraser/eraser-settings';
+import { DEFAULT_ERASER_SETTINGS } from '../tools/eraser/eraser-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -27,6 +29,7 @@ export interface ToolSettingsSlices {
   smudge: SmudgeSettings;
   pencil: PencilSettings;
   sponge: SpongeSettings;
+  eraser: EraserSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -36,4 +39,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   smudge: DEFAULT_SMUDGE_SETTINGS,
   pencil: DEFAULT_PENCIL_SETTINGS,
   sponge: DEFAULT_SPONGE_SETTINGS,
+  eraser: DEFAULT_ERASER_SETTINGS,
 };

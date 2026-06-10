@@ -53,7 +53,7 @@ export function handleSizeShortcut(e: KeyboardEvent): boolean {
   } else if (tool === 'pencil') {
     ts.setPencilSetting('size', ts.settings.pencil.size + delta);
   } else if (tool === 'eraser') {
-    ts.setEraserSize(ts.eraserSize + delta);
+    ts.setEraserSetting('size', ts.settings.eraser.size + delta);
   } else if (tool === 'stamp') {
     ts.setStampSize(ts.stampSize + delta);
   } else if (tool === 'healing') {

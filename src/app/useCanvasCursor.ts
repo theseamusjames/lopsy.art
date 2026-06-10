@@ -40,7 +40,7 @@ function getToolSize(tool: BrushTool, settings: ReturnType<typeof useToolSetting
     case 'pencil':
       return settings.settings.pencil.size;
     case 'eraser':
-      return settings.eraserSize;
+      return settings.settings.eraser.size;
     case 'stamp':
       return settings.stampSize;
   }

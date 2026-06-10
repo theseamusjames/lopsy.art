@@ -16,9 +16,9 @@ export function handleEraserStroke(
   if (!state.lastPoint || !state.layerId) return;
 
   const toolSettings = useToolSettingsStore.getState();
-  const size = toolSettings.eraserSize;
+  const size = toolSettings.settings.eraser.size;
   const hardness = 0.8;
-  const opacity = toolSettings.eraserOpacity / 100;
+  const opacity = toolSettings.settings.eraser.opacity / 100;
   const spacing = Math.max(1, size * 0.25);
   const { points: pts, remainder: spacingRem } = interpolateWithSpacing(state.lastPoint, layerLocalPos, spacing, state.spacingRemainder ?? 0);
   state.spacingRemainder = spacingRem;
