@@ -298,3 +298,66 @@ describe('per-tool slice: pencil (#453)', () => {
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
+
+describe('per-tool slice: sponge (#453)', () => {
+  it('exposes sponge settings under settings.sponge with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setSpongeSetting.
+    useToolSettingsStore.getState().setSpongeSetting('mode', 'desaturate');
+    useToolSettingsStore.getState().setSpongeSetting('strength', 50);
+    useToolSettingsStore.getState().setSpongeSetting('size', 30);
+    const { sponge } = useToolSettingsStore.getState().settings;
+    expect(sponge).toEqual({ mode: 'desaturate', strength: 50, size: 30 });
+  });
+
+  it('setSpongeSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.sponge;
+    useToolSettingsStore.getState().setSpongeSetting('strength', 80);
+    const after = useToolSettingsStore.getState().settings.sponge;
+    expect(after.strength).toBe(80);
+    expect(after.mode).toBe(before.mode);
+    expect(after.size).toBe(before.size);
+  });
+
+  it('setSpongeSetting toggles mode between saturate and desaturate', () => {
+    useToolSettingsStore.getState().setSpongeSetting('mode', 'saturate');
+    expect(useToolSettingsStore.getState().settings.sponge.mode).toBe('saturate');
+    useToolSettingsStore.getState().setSpongeSetting('mode', 'desaturate');
+    expect(useToolSettingsStore.getState().settings.sponge.mode).toBe('desaturate');
+  });
+
+  it('setSpongeSetting clamps strength into [1, 100]', () => {
+    useToolSettingsStore.getState().setSpongeSetting('strength', 0);
+    expect(useToolSettingsStore.getState().settings.sponge.strength).toBe(1);
+    useToolSettingsStore.getState().setSpongeSetting('strength', 9999);
+    expect(useToolSettingsStore.getState().settings.sponge.strength).toBe(100);
+  });
+
+  it('setSpongeSetting clamps size into [1, 5000]', () => {
+    useToolSettingsStore.getState().setSpongeSetting('size', 0);
+    expect(useToolSettingsStore.getState().settings.sponge.size).toBe(1);
+    useToolSettingsStore.getState().setSpongeSetting('size', 99999);
+    expect(useToolSettingsStore.getState().settings.sponge.size).toBe(5000);
+  });
+
+  it('setSpongeSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setSpongeSetting('size', 42);
+    expect(useToolSettingsStore.getState().settings.sponge.size).toBe(42);
+    // Sibling slice references preserved — selectors subscribed to the
+    // other slices should not re-render when sponge changes. This is
+    // the invariant that justifies slicing instead of fattening the
+    // flat bag further.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
