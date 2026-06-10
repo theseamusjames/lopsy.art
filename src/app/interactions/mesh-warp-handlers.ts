@@ -4,23 +4,34 @@ import { hitTestMeshHandle } from '../rendering/render-mesh-warp';
 import { previewMeshWarp } from '../MenuBar/mesh-warp-actions';
 import type { Point } from '../../types';
 import type { MeshWarpGrid } from '../../filters/mesh-warp';
+import { INITIAL_INTERACTION_STATE, type InteractionState } from './interaction-types';
 
 /**
- * Pre-tool dispatch — runs on mousedown when an inline mesh warp session
- * is active. Returns true if a handle was hit (so the regular tool dispatch
- * is skipped). Otherwise returns false and tool routing continues normally.
+ * Pre-tool down guard for the mesh-warp gesture. Hit-tests the mesh
+ * warp handles and, if one is hit, claims the gesture with the
+ * `meshWarp` variant. Returns null otherwise so the dispatcher falls
+ * through to the next guard.
  */
-export function handleMeshWarpDown(canvasPos: Point): boolean {
+export function handleMeshWarpDown(
+  canvasPos: Point,
+  activeLayerId: string,
+): InteractionState | null {
   const ui = useUIStore.getState();
   const session = ui.meshWarp;
-  if (!session) return false;
+  if (!session) return null;
 
   const zoom = useEditorStore.getState().viewport.zoom;
   const idx = hitTestMeshHandle(canvasPos.x, canvasPos.y, session, zoom);
-  if (idx === null) return false;
+  if (idx === null) return null;
 
   ui.setMeshWarpDragging(idx);
-  return true;
+
+  return {
+    ...INITIAL_INTERACTION_STATE,
+    drawing: true,
+    gesture: { kind: 'meshWarp' },
+    layerId: activeLayerId,
+  };
 }
 
 /**

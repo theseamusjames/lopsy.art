@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   gestureUsedGpuStroke,
   GESTURE_IDLE,
+  INITIAL_INTERACTION_STATE,
   type CanvasGesture,
   type InteractionState,
+  type PreToolDownGuard,
 } from './interaction-types';
 import { createTransformState } from '../../tools/transform/transform';
 
@@ -85,5 +87,36 @@ describe('CanvasGesture transform variant ownership', () => {
     const startAngle: number = gesture.startAngle;
     expect(handle).toBe('top-left');
     expect(startAngle).toBe(0);
+  });
+});
+
+describe('INITIAL_INTERACTION_STATE', () => {
+  it('starts idle with no drawing', () => {
+    expect(INITIAL_INTERACTION_STATE.drawing).toBe(false);
+    expect(INITIAL_INTERACTION_STATE.gesture.kind).toBe('idle');
+    expect(INITIAL_INTERACTION_STATE.layerId).toBeNull();
+    expect(INITIAL_INTERACTION_STATE.tool).toBeNull();
+  });
+});
+
+describe('PreToolDownGuard signature', () => {
+  it('accepts (canvasPos, activeLayerId) and returns InteractionState | null', () => {
+    const guard: PreToolDownGuard = (canvasPos, activeLayerId) => {
+      if (!activeLayerId) return null;
+      return {
+        ...INITIAL_INTERACTION_STATE,
+        drawing: true,
+        gesture: { kind: 'liquify' },
+        layerId: activeLayerId,
+        startPoint: canvasPos,
+      };
+    };
+
+    expect(guard({ x: 0, y: 0 }, '')).toBeNull();
+
+    const claimed = guard({ x: 5, y: 5 }, 'layer-1');
+    expect(claimed).not.toBeNull();
+    expect(claimed?.layerId).toBe('layer-1');
+    expect(claimed?.gesture.kind).toBe('liquify');
   });
 });

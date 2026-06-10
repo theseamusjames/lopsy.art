@@ -3,6 +3,7 @@ import { useEditorStore } from '../editor-store';
 import { hitTestTiltShift } from '../rendering/render-tilt-shift-overlay';
 import { previewTiltShift } from '../MenuBar/tilt-shift-actions';
 import type { Point } from '../../types';
+import { INITIAL_INTERACTION_STATE, type InteractionState } from './interaction-types';
 
 function getProjected(x: number, y: number, docW: number, docH: number, angleDeg: number): number {
   const angleRad = (angleDeg * Math.PI) / 180;
@@ -13,15 +14,24 @@ function getProjected(x: number, y: number, docW: number, docH: number, angleDeg
   return (u - 0.5) * (-sinA) + (v - 0.5) * cosA + 0.5;
 }
 
-export function handleTiltShiftDown(canvasPos: Point): boolean {
+/**
+ * Pre-tool down guard for the tilt-shift gesture. Hit-tests the
+ * tilt-shift overlay handles and, if one is hit, claims the gesture
+ * with the `tiltShift` variant. Returns null otherwise so the
+ * dispatcher falls through to the next guard.
+ */
+export function handleTiltShiftDown(
+  canvasPos: Point,
+  activeLayerId: string,
+): InteractionState | null {
   const ui = useUIStore.getState();
   const session = ui.tiltShift;
-  if (!session) return false;
+  if (!session) return null;
 
   const doc = useEditorStore.getState().document;
   const zoom = useEditorStore.getState().viewport.zoom;
   const target = hitTestTiltShift(canvasPos.x, canvasPos.y, session, doc.width, doc.height, zoom);
-  if (!target) return false;
+  if (!target) return null;
 
   let anchor = 0;
   if (target === 'line1') {
@@ -31,7 +41,13 @@ export function handleTiltShiftDown(canvasPos: Point): boolean {
   }
 
   ui.setTiltShiftDragging(target, anchor);
-  return true;
+
+  return {
+    ...INITIAL_INTERACTION_STATE,
+    drawing: true,
+    gesture: { kind: 'tiltShift' },
+    layerId: activeLayerId,
+  };
 }
 
 export function handleTiltShiftMove(canvasPos: Point, metaKey: boolean): void {

@@ -42,6 +42,45 @@ export function gestureUsedGpuStroke(gesture: CanvasGesture): boolean {
 
 export const GESTURE_IDLE: CanvasGesture = { kind: 'idle' };
 
+/**
+ * Baseline InteractionState used both for stateRef initialization and as
+ * a template for handlers that need to return a fresh state with a single
+ * gesture variant slotted in. Exported so pre-tool down handlers can
+ * construct their own state — see PRE_TOOL_DOWN_GUARDS in
+ * useCanvasInteraction.ts.
+ */
+export const INITIAL_INTERACTION_STATE: InteractionState = {
+  drawing: false,
+  gesture: GESTURE_IDLE,
+  lastPoint: null,
+  pixelBuffer: null,
+  originalPixelBuffer: null,
+  layerId: null,
+  tool: null,
+  startPoint: null,
+  layerStartX: 0,
+  layerStartY: 0,
+  maskMode: false,
+  originalSelectionMask: null,
+  originalSelectionMaskWidth: 0,
+  originalSelectionMaskHeight: 0,
+  moveOriginalMask: null,
+  moveOriginalBounds: null,
+};
+
+/**
+ * Signature shared by all pre-tool down guards (liquify, tilt-shift,
+ * mesh-warp). Each guard inspects ambient session state, decides whether
+ * to claim the gesture, and either returns a fully-populated
+ * InteractionState (its variant constructed inline) or `null` to fall
+ * through to the next guard. Replaces the priority-encoded if-ladder
+ * that previously lived in useCanvasInteraction.ts (#444).
+ */
+export type PreToolDownGuard = (
+  canvasPos: Point,
+  activeLayerId: string,
+) => InteractionState | null;
+
 export interface InteractionState {
   drawing: boolean;
   gesture: CanvasGesture;
