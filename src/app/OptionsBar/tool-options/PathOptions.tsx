@@ -8,8 +8,8 @@ import optStyles from '../OptionsBar.module.css';
 import styles from './PathOptions.module.css';
 
 export function PathOptions() {
-  const pathStrokeWidth = useToolSettingsStore((s) => s.pathStrokeWidth);
-  const setPathStrokeWidth = useToolSettingsStore((s) => s.setPathStrokeWidth);
+  const pathStrokeWidth = useToolSettingsStore((s) => s.settings.path.strokeWidth);
+  const setPathSetting = useToolSettingsStore((s) => s.setPathSetting);
   const paths = useEditorStore((s) => s.paths);
   const selectedPathId = useEditorStore((s) => s.selectedPathId);
 
@@ -20,9 +20,13 @@ export function PathOptions() {
     applyBooleanOp(op);
   }, []);
 
+  const handleStrokeChange = useCallback((width: number) => {
+    setPathSetting('strokeWidth', width);
+  }, [setPathSetting]);
+
   return (
     <>
-      <Slider label="Stroke" value={pathStrokeWidth} min={1} max={50} onChange={setPathStrokeWidth} />
+      <Slider label="Stroke" value={pathStrokeWidth} min={1} max={50} onChange={handleStrokeChange} />
 
       <div className={styles.separator} />
 

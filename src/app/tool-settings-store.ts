@@ -11,6 +11,7 @@ import { clampSmudgeSetting } from '../tools/smudge/smudge-settings';
 import { clampPencilSetting } from '../tools/pencil/pencil-settings';
 import { clampSpongeSetting } from '../tools/sponge/sponge-settings';
 import { clampEraserSetting } from '../tools/eraser/eraser-settings';
+import { clampPathSetting } from '../tools/path/path-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -59,7 +60,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   stampSize: 20,
   healingSize: 20,
   healingOpacity: 100,
-  pathStrokeWidth: 2,
   dodgeExposure: 50,
   dodgeMode: 'dodge',
   quickSelectSize: 20,
@@ -251,7 +251,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     warnIfNormalisedOpacity('setHealingOpacity', opacity);
     set({ healingOpacity: Math.max(1, Math.min(100, opacity)) });
   },
-  setPathStrokeWidth: (width) => set({ pathStrokeWidth: Math.max(1, Math.min(50, width)) }),
+  setPathSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      path: { ...s.settings.path, [key]: clampPathSetting(key, value) },
+    },
+  })),
   setDodgeExposure: (exposure) => set({ dodgeExposure: Math.max(1, Math.min(100, exposure)) }),
   setDodgeMode: (mode) => set({ dodgeMode: mode }),
   setSpongeSetting: (key, value) => set((s) => ({

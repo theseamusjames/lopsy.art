@@ -59,7 +59,7 @@ export function handleSizeShortcut(e: KeyboardEvent): boolean {
   } else if (tool === 'healing') {
     ts.setHealingSize(ts.healingSize + delta);
   } else if (tool === 'path') {
-    ts.setPathStrokeWidth(ts.pathStrokeWidth + delta);
+    ts.setPathSetting('strokeWidth', ts.settings.path.strokeWidth + delta);
   } else if (tool === 'shape') {
     ts.setShapeStrokeWidth(ts.shapeStrokeWidth + delta);
   }

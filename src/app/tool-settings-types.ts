@@ -10,6 +10,7 @@ import type { SmudgeSettings } from '../tools/smudge/smudge-settings';
 import type { PencilSettings } from '../tools/pencil/pencil-settings';
 import type { SpongeSettings } from '../tools/sponge/sponge-settings';
 import type { EraserSettings } from '../tools/eraser/eraser-settings';
+import type { PathSettings } from '../tools/path/path-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -43,7 +44,6 @@ export interface ToolSettings {
   stampSize: number;
   healingSize: number;
   healingOpacity: number;
-  pathStrokeWidth: number;
   dodgeExposure: number;
   dodgeMode: DodgeMode;
   quickSelectSize: number;
@@ -119,7 +119,6 @@ export interface ToolSettings {
   setStampSize: (size: number) => void;
   setHealingSize: (size: number) => void;
   setHealingOpacity: (opacity: number) => void;
-  setPathStrokeWidth: (width: number) => void;
   setDodgeExposure: (exposure: number) => void;
   setDodgeMode: (mode: DodgeMode) => void;
   setSpongeSetting: <K extends keyof SpongeSettings>(key: K, value: SpongeSettings[K]) => void;
@@ -145,6 +144,7 @@ export interface ToolSettings {
   setBrushHardness: (hardness: number) => void;
   setPencilSetting: <K extends keyof PencilSettings>(key: K, value: PencilSettings[K]) => void;
   setEraserSetting: <K extends keyof EraserSettings>(key: K, value: EraserSettings[K]) => void;
+  setPathSetting: <K extends keyof PathSettings>(key: K, value: PathSettings[K]) => void;
   setFillSetting: <K extends keyof FillSettings>(key: K, value: FillSettings[K]) => void;
   setShapeMode: (mode: ShapeMode) => void;
   setShapeOutput: (output: ShapeOutput) => void;
