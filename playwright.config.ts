@@ -37,7 +37,7 @@ export default defineConfig({
     {
       name: 'mobile-chrome',
       use: {
-        ...devices['iPhone 14'],
+        ...devices['Pixel 5'],
         launchOptions: {
           args: [
             '--use-gl=angle',
