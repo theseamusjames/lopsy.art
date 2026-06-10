@@ -370,14 +370,16 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Threshold**: level 0 - 255
 
 ### Noise
-- **Add Noise**: amount 0 - 255, monochrome on/off
-- **Fill with Noise**: monochrome on/off
+- **Add Noise**: amount 1 - 100 (default 25), monochromatic on/off
+- **Fill with Noise**: monochromatic on/off
+
+Both noise filters open a dedicated dialog (separate from the generic filter dialog) with Cancel / Apply only — no live preview. Each press of Apply draws a fresh random seed, so re-running the filter produces a different pattern (see the Regenerate note under Render).
 
 ### Pixelate
 - **Pixelate / Mosaic**: block size 2 - 64 px
 
 ### Halftone
-- **Halftone**: dot size 2 - 32 px, angle 0 - 180 degrees, softness 0 - 4
+- **Halftone**: dot size 2 - 32 px, density 0.25 - 3 (default 1.0 — scales dot coverage/frequency relative to the cell grid), angle 0 - 180 degrees, softness 0 - 4
 
 ### Stylize
 - **Find Edges**: Sobel edge detection, no parameters
@@ -405,11 +407,11 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Clouds**: scale, seed
 - **Smoke**: scale, seed, turbulence
 - **Fibers**: variance 1 - 64 (color variation between strands), strength 1 - 64 (vertical coherence — higher values produce straighter fibers, lower values produce more wavy/tangled fibers), seed. Generates random vertical fiber textures resembling paper, cloth, or hair using multi-octave 1D noise with 2D wander perturbation. GPU-accelerated GLSL shader.
-- **Regenerate** button: randomized filters (Clouds, Smoke, Fibers, and the Add Noise variants) show a circular-arrow button next to the Preview checkbox in the filter dialog. Clicking it picks a new random seed and refreshes the preview, so users can spin through variations without re-opening the dialog. Confirming the dialog with Preview active commits the exact previewed pixels (the seed is captured at preview time and the GPU result is snapshotted, so what you see is what you get). The Add Noise filter now also re-seeds on every dialog open so opening the dialog twice produces different noise patterns.
+- **Regenerate** button: the randomized **render** filters (Clouds, Smoke, Fibers) show a circular-arrow button next to the Preview checkbox in the generic filter dialog. Clicking it picks a new random seed and refreshes the preview, so users can spin through variations without re-opening the dialog. Confirming the dialog with Preview active commits the exact previewed pixels (the seed is captured at preview time and the GPU result is snapshotted, so what you see is what you get). The **Add Noise** / **Fill with Noise** filters live in their own simpler dialog without a preview or regenerate button; they instead draw a fresh random seed on every Apply, so re-running the filter yields a different noise pattern each time.
 - **Pattern Fill**: tiles a user-defined pattern across the active layer
   - **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern
   - **Scale**: 10 - 1000% (tile size relative to original pattern dimensions)
-  - **Offset X / Y**: 0 - 100% (shifts the tiling origin)
+  - **Column / Row Offset**: 0 - 100% (shifts the tiling origin along X / Y)
   - Pattern selector grid with thumbnails
   - Live preview support
   - Selection mask support (fills only the selected area)
@@ -559,7 +561,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 
 ### Seamless Pattern Preview
 - **Show Seamless Pattern** (View menu): tiles the document outside the canvas bounds so tileable textures and patterns can be previewed in context. The center tile is the actual document; surrounding tiles are repeats of the same pixels with edge wrapping (`fract(uv)`) so seams are visible immediately.
-- **Dim outside tiles**: a per-tool options-bar checkbox (visible whenever Show Seamless Pattern is on) dims the surrounding repeats so the center document stays the focal point while still showing how it tiles. Default on.
+- **Dim pattern**: a per-tool options-bar checkbox (visible whenever Show Seamless Pattern is on) dims the surrounding repeat tiles so the center document stays the focal point while still showing how it tiles. Default on.
 
 ### UI
 - **Foreground / background color**: with swap and reset
@@ -572,6 +574,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 
 ### Global UI Conventions
 - **Slider double-click → reset**: every numeric slider in the UI (brush size, opacity, hardness, adjustment sliders, filter sliders, etc.) snaps back to its default value on double-click. The numeric text input inside the slider is exempt so double-clicks there select the value for editing instead.
+- **Slider arrow-key step**: with a slider's numeric input focused, **↑ / ↓** increment / decrement the value by one step (log-scaled sliders like Levels gamma step proportionally), clamped to the slider's min / max. Enter blurs the input to commit.
 - **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the status bar resets the viewport zoom to 100% (1×).
 - **Color swatch double-click**: double-clicking the foreground or background swatch in the Color panel both selects that swatch and auto-expands the Color panel (useful when the panel is collapsed). Recent-color swatches behave the same way.
 - **Layer name double-click → rename**: double-clicking a layer row's name turns it into an inline text input; Enter commits, Escape cancels.
@@ -732,4 +735,4 @@ One-shot PNG export through the GPU compositor — no dialog, no preview, uses t
 Camera RAW files are decoded entirely in Rust before being uploaded to a GPU layer — JS never touches the raw sensor data.
 
 - **DNG**: demosaic, LJPEG, TIFF parsing in Rust.
-- **Fujifilm RAF**: decodes uncompressed X-Trans and Bayer sensor files and renders them with camera-JPEG-style color. Pipeline: parse the RAF container → CFA TIFF (Fuji tags) → decode 16-bit sensor data → honor EXIF orientation (portrait shots auto-rotate) → gray-world auto white balance → same-color demosaic → saturation matrix → exposure + film base curve (Provia / Velvia / Astia / Classic Chrome / DR400 curves are compiled in, Velvia is the default) → sRGB gamma. White-balance presets for 49 Fuji bodies ship compiled in. (Lossless-compressed RAF and DCP camera profiles are decoded internally but not yet wired to UI.)
+- **Fujifilm RAF**: decodes uncompressed X-Trans and Bayer sensor files and renders them with camera-JPEG-style color. Pipeline: parse the RAF container → CFA TIFF (Fuji tags) → decode 16-bit sensor data → gray-world auto white balance → demosaic (X-Trans uses an edge-directed Markesteijn-style 3-pass demosaic that reconstructs green from four directional candidates weighted by local homogeneity, then fills R/B from the smooth color-difference planes; Bayer uses bilinear) → per-camera camera→sRGB color matrix (row-normalized from the DNG ColorMatrix values, so neutral input stays neutral) → exposure boost → film base curve (Provia / Velvia / Astia / Classic Chrome / DR400 curves are compiled in, Velvia is the default) → sRGB gamma → EXIF orientation applied to the final image (portrait shots auto-rotate). White-balance presets for 49 Fuji bodies ship compiled in. (Lossless-compressed RAF and DCP camera profiles are decoded internally but not yet wired to UI.)
