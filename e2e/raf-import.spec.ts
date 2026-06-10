@@ -24,7 +24,8 @@ test('RAF import renders a recognizable image', async ({ page }) => {
       const head = await fetch('/test-sample.raf', { method: 'HEAD' });
       if (!head.ok) return false;
       const ct = head.headers.get('content-type') ?? '';
-      return !ct.includes('text/html');
+      if (ct.includes('text/html')) return false;
+      return true;
     } catch { return false; }
   });
   test.skip(!sampleAvailable, 'samples/sample.RAF not present (local dev only)');

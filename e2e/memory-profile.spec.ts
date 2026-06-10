@@ -302,6 +302,14 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName 
 
   const addedLayer = s4.storeInfo.layers.find(l => l.name !== 'Background' && l.name !== 'Layer 1' && l.name !== 'Project');
   const bg = s4.storeInfo.layers.find(l => l.name === 'Background');
+
+  // Layer 1 must NOT hold dense pixel data in JS — it's either sparse
+  // or fully offloaded to GPU (both are correct).
+  expect(layer1?.hasDense).toBe(false);
+  if (layer1?.hasSparse) {
+    expect(layer1.sparsePixels).toBeLessThanOrEqual(2);
+    expect(layer1.sparseBytes).toBeLessThan(100);
+  }
   expect(addedLayer?.hasDense).toBe(false);
   expect(bg?.hasDense).toBe(true);
 
