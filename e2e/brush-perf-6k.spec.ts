@@ -109,6 +109,11 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
     });
     test.skip(!hasWebGL2, 'WebGL2 not available (SwiftShader may not support 6K textures)');
 
+    // This test intentionally drops SwiftShader to profile on real GPU.
+    // Skip if the canvas never renders (headless env without GPU).
+    const canvasVisible = await page.locator('[data-testid="canvas-container"]').isVisible({ timeout: 15_000 }).catch(() => false);
+    test.skip(!canvasVisible, 'canvas not visible — no GPU available (headless without SwiftShader)');
+
     const outDir = path.join(process.cwd(), 'tests', 'screenshots');
     fs.mkdirSync(outDir, { recursive: true });
 
