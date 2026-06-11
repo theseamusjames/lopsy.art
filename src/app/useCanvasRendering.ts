@@ -308,7 +308,7 @@ function renderFrameGpu(
       const size = activeTool === 'brush' ? toolState.brushSize
         : activeTool === 'pencil' ? toolState.settings.pencil.size
         : activeTool === 'eraser' ? toolState.settings.eraser.size
-        : activeTool === 'stamp' ? toolState.stampSize
+        : activeTool === 'stamp' ? toolState.settings.stamp.size
         : activeTool === 'sponge' ? toolState.settings.sponge.size
         : brushCursorInfo.size;
       renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip, brushCursorInfo.angle);
