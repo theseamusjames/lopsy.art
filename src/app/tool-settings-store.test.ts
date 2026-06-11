@@ -364,6 +364,48 @@ describe('per-tool slice: sponge (#453)', () => {
   });
 });
 
+describe('per-tool slice: path (#453)', () => {
+  it('exposes path settings under settings.path with the legacy default', () => {
+    // Reset to the legacy default — prior tests in this file may have
+    // mutated the slice through setPathSetting.
+    useToolSettingsStore.getState().setPathSetting('strokeWidth', 2);
+    const { path } = useToolSettingsStore.getState().settings;
+    expect(path).toEqual({ strokeWidth: 2 });
+  });
+
+  it('setPathSetting updates strokeWidth and clamps it into [1, 50]', () => {
+    useToolSettingsStore.getState().setPathSetting('strokeWidth', 25);
+    expect(useToolSettingsStore.getState().settings.path.strokeWidth).toBe(25);
+    useToolSettingsStore.getState().setPathSetting('strokeWidth', 0);
+    expect(useToolSettingsStore.getState().settings.path.strokeWidth).toBe(1);
+    useToolSettingsStore.getState().setPathSetting('strokeWidth', 9999);
+    expect(useToolSettingsStore.getState().settings.path.strokeWidth).toBe(50);
+  });
+
+  it('setPathSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setPathSetting('strokeWidth', 7);
+    expect(useToolSettingsStore.getState().settings.path.strokeWidth).toBe(7);
+    // Sibling slice references preserved — selectors subscribed to the
+    // other slices should not re-render when path changes. This is the
+    // invariant that justifies slicing instead of fattening the flat
+    // bag further.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
+
 describe('per-tool slice: eraser (#453)', () => {
   it('exposes eraser settings under settings.eraser with the legacy defaults', () => {
     // Reset to the legacy defaults — prior tests in this file may have
