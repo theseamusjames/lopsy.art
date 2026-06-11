@@ -12,6 +12,7 @@ import { clampPencilSetting } from '../tools/pencil/pencil-settings';
 import { clampSpongeSetting } from '../tools/sponge/sponge-settings';
 import { clampEraserSetting } from '../tools/eraser/eraser-settings';
 import { clampPathSetting } from '../tools/path/path-settings';
+import { clampStampSetting } from '../tools/stamp/stamp-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -57,7 +58,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
   ],
   gradientReverse: false,
-  stampSize: 20,
   healingSize: 20,
   healingOpacity: 100,
   dodgeExposure: 50,
@@ -245,7 +245,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setSymmetryVertical: (enabled) => set({ symmetryVertical: enabled }),
   setSymmetryRadialSegments: (segments) => set({ symmetryRadialSegments: Math.max(0, Math.min(32, Math.round(segments))) }),
   setSymmetryCenter: (center) => set({ symmetryCenter: center }),
-  setStampSize: (size) => set({ stampSize: Math.max(1, Math.min(5000, size)) }),
+  setStampSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      stamp: { ...s.settings.stamp, [key]: clampStampSetting(key, value) },
+    },
+  })),
   setHealingSize: (size) => set({ healingSize: Math.max(1, Math.min(5000, size)) }),
   setHealingOpacity: (opacity) => {
     warnIfNormalisedOpacity('setHealingOpacity', opacity);

@@ -38,11 +38,11 @@ export function handleStampDown(ctx: InteractionContext): InteractionState | und
       && ctx.lastPaintPointRef.current
       && ctx.lastPaintPointRef.current.layerId === activeLayerId;
     if (stampShiftLine) {
-      const spacing = Math.max(1, toolSettings.stampSize * 0.25);
+      const spacing = Math.max(1, toolSettings.settings.stamp.size * 0.25);
       const pts = interpolateFlat(ctx.lastPaintPointRef.current!.point, layerPos, spacing);
-      gpuStampDabBatch(engine, activeLayerId, pts, ctx.stampOffsetRef.current.x, ctx.stampOffsetRef.current.y, toolSettings.stampSize);
+      gpuStampDabBatch(engine, activeLayerId, pts, ctx.stampOffsetRef.current.x, ctx.stampOffsetRef.current.y, toolSettings.settings.stamp.size);
     } else {
-      gpuStampDab(engine, activeLayerId, layerPos.x, layerPos.y, ctx.stampOffsetRef.current.x, ctx.stampOffsetRef.current.y, toolSettings.stampSize);
+      gpuStampDab(engine, activeLayerId, layerPos.x, layerPos.y, ctx.stampOffsetRef.current.x, ctx.stampOffsetRef.current.y, toolSettings.settings.stamp.size);
     }
     editorState.notifyRender();
   }
@@ -69,12 +69,12 @@ export function handleStampMove(
   if (!state.lastPoint || !stampOffsetRef.current) return;
 
   const toolSettings = useToolSettingsStore.getState();
-  const stampSpacing = Math.max(1, toolSettings.stampSize * 0.25);
+  const stampSpacing = Math.max(1, toolSettings.settings.stamp.size * 0.25);
 
   const engine = getEngine();
   if (engine && state.layerId) {
     const pts = interpolateFlat(state.lastPoint, layerLocalPos, stampSpacing);
-    gpuStampDabBatch(engine, state.layerId, pts, stampOffsetRef.current.x, stampOffsetRef.current.y, toolSettings.stampSize);
+    gpuStampDabBatch(engine, state.layerId, pts, stampOffsetRef.current.x, stampOffsetRef.current.y, toolSettings.settings.stamp.size);
   }
   state.lastPoint = layerLocalPos;
   useEditorStore.getState().notifyRender();

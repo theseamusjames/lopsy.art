@@ -11,6 +11,7 @@ import type { PencilSettings } from '../tools/pencil/pencil-settings';
 import type { SpongeSettings } from '../tools/sponge/sponge-settings';
 import type { EraserSettings } from '../tools/eraser/eraser-settings';
 import type { PathSettings } from '../tools/path/path-settings';
+import type { StampSettings } from '../tools/stamp/stamp-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -41,7 +42,6 @@ export interface ToolSettings {
   gradientType: GradientType;
   gradientStops: readonly GradientStop[];
   gradientReverse: boolean;
-  stampSize: number;
   healingSize: number;
   healingOpacity: number;
   dodgeExposure: number;
@@ -116,7 +116,7 @@ export interface ToolSettings {
   setBrushScatter: (scatter: number) => void;
   setBrushAngle: (angle: number) => void;
   setActiveBrushTip: (tip: BrushTipData | null) => void;
-  setStampSize: (size: number) => void;
+  setStampSetting: <K extends keyof StampSettings>(key: K, value: StampSettings[K]) => void;
   setHealingSize: (size: number) => void;
   setHealingOpacity: (opacity: number) => void;
   setDodgeExposure: (exposure: number) => void;
