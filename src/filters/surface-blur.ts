@@ -5,7 +5,7 @@ export const surfaceBlur: FilterDefinition = {
   id: 'surface-blur',
   title: 'Surface Blur',
   params: [
-    { key: 'radius', label: 'Radius', min: 1, max: 50, step: 1, defaultValue: 5, dynamicMax: 'doc' },
+    { key: 'radius', label: 'Radius', min: 1, max: 50, step: 1, defaultValue: 5 },
     { key: 'threshold', label: 'Threshold', min: 1, max: 255, step: 1, defaultValue: 15 },
   ],
   applyGpu: (engine, layerId, values) =>

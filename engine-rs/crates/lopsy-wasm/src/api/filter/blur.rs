@@ -234,9 +234,17 @@ pub fn filter_tilt_shift_blur(
     );
 }
 
+// Surface blur is a non-separable bilateral filter: the shader samples a
+// (2r+1)^2 neighborhood per pixel, so cost grows with the square of the
+// radius. A large radius would run a single draw call long enough to trip
+// the GPU watchdog and drop the WebGL context, so the radius is capped here
+// regardless of what the caller requests.
+const SURFACE_BLUR_MAX_RADIUS: u32 = 50;
+
 #[wasm_bindgen(js_name = "filterSurfaceBlur")]
 pub fn filter_surface_blur(engine: &mut Engine, layer_id: &str, radius: u32, threshold: f32) {
     if radius == 0 { return; }
+    let radius = radius.min(SURFACE_BLUR_MAX_RADIUS);
     let threshold = threshold.clamp(1.0, 255.0) / 255.0;
     filter_gpu::apply_filter(
         &mut engine.inner,
