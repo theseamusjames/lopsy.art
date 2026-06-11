@@ -11,11 +11,11 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Opacity**: 1 - 100%
 - **Hardness**: 0 - 100%
 - **Fade**: 0 - 2000 px (opacity fade-out distance, exposed on the options bar)
-- **Taper**: 0 - 2000 px (size taper-out distance, exposed in the modal's Shape tab — brush dabs shrink toward zero over this many pixels of stroke length, independent of the Fade opacity rolloff)
+- **Taper**: 0 - 2000 px base range, auto-scaled by document size like Size (the modal's Shape-tab slider max is `1.5 × longest-document-side`, capped at 5000 px) — size taper-out distance: brush dabs shrink toward zero over this many pixels of stroke length, independent of the Fade opacity rolloff
 - **Spacing**: 1 - 200% of brush size
 - **Scatter**: 0 - 100%
 - **Angle**: 0 - 360 degrees (set via the modal's angle dial)
-- **Symmetry**: horizontal, vertical, or both (4-way)
+- **Symmetry**: horizontal, vertical, both (4-way), or radial (2 - 32 segments). The horizontal/vertical toggles and the **Radial Symmetry** control (with its segment-count slider) all live in the Brush options bar; see the Symmetry section for full behavior.
 
 **Dynamics** (Brushes modal → Dynamics section). Per-dab randomization is performed GPU-side, seeded by each dab's center position so strokes are deterministic for a given path.
 - **Size Jitter**: 0 - 100% — per-dab size randomization
@@ -674,9 +674,9 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 
 ## Symmetry
 
-- **Axes**: horizontal, vertical, or both (4-way)
+- **Axes**: horizontal, vertical, both (4-way), or radial. Radial symmetry mirrors each dab into **2 - 32 evenly-rotated copies** around the center (kaleidoscope-style) and takes precedence over the horizontal/vertical mirrors when its segment count is ≥ 2.
 - **Center**: configurable (defaults to canvas center)
-- Available on brush, pencil, and eraser
+- Available on brush, pencil, and eraser. The symmetry config (axes, center, radial segment count) is global, so it applies to whichever of these tools is active. Only the Brush options bar exposes the **Radial Symmetry** toggle and segment slider; the Pencil options bar exposes just the horizontal/vertical toggles (radial set from the Brush still applies to pencil/eraser strokes), and the Eraser inherits the active config without its own toggles.
 - **Cmd/Meta+click** on the canvas while any symmetry mode (horizontal, vertical, or radial with 2+ segments) is active moves the symmetry center to the click point without painting a dab. Lets the user reposition the mirror axis directly from the canvas without opening a settings panel.
 
 ---
