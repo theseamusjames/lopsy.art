@@ -170,6 +170,7 @@ modal), not on every frame. Mark as "OK" unless they grow further.
 |--------------------------------------------------------|-------------|
 | Engine readback for undo snapshot (`gpu-pixel-access`) | OK          |
 | Engine readback for PNG/JPEG export                    | OK          |
+| BMP export P3→sRGB conversion (Rust `convertP3ToSrgb`) | OK          |
 | PSD import (Rust → GPU, no ImageData detour)           | OK          |
 | Filter computed on CPU and then uploaded               | **Debt**    |
 | Brush/eraser touching a JS pixel buffer                | **Debt**    |

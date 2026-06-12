@@ -249,4 +249,23 @@ pub fn get_composite_size(engine: &Engine) -> Vec<u32> {
     vec![engine.inner.doc_width, engine.inner.doc_height]
 }
 
+/// Build an ICC profile for the given color space (0 = sRGB, 1 = Display P3).
+/// Used by the JS export path to tag files when the browser encoder did not.
+#[wasm_bindgen(js_name = "buildIccProfile")]
+pub fn build_icc_profile(color_space: u8) -> Vec<u8> {
+    let cs = match color_space {
+        1 => lopsy_core::color::ColorSpace::DisplayP3,
+        _ => lopsy_core::color::ColorSpace::Srgb,
+    };
+    lopsy_core::export::build_icc_profile(cs)
+}
+
+/// Convert an RGBA8 pixel buffer from Display P3 to sRGB.
+/// Used for export formats that cannot carry an ICC profile (BMP).
+#[wasm_bindgen(js_name = "convertP3ToSrgb")]
+pub fn convert_p3_to_srgb(mut pixels: Vec<u8>) -> Vec<u8> {
+    lopsy_core::color::p3_to_srgb_pixels(&mut pixels);
+    pixels
+}
+
 
