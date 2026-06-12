@@ -20,8 +20,6 @@ export function handleCropDown(ctx: InteractionContext): InteractionState {
   return {
     drawing: true,
     lastPoint: canvasPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'crop',
     startPoint: canvasPos,

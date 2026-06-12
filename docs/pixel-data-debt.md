@@ -93,7 +93,7 @@ data to preserve a snapshot during a drag.
 - `src/app/interactions/move-handlers.ts` — drag-clones of `selection.mask`.
 - `src/app/interactions/quick-mask-move.ts` — full-size mask alloc on commit.
 - `src/app/store/actions/add-layer-mask.ts` — initial mask allocation.
-- `src/app/useCanvasInteraction.ts` — placeholder `PixelBuffer` singleton + nudge/mask copies.
+- `src/app/useCanvasInteraction.ts` — nudge/mask copies.
 - `src/engine/mask-utils.ts` — mask surface ↔ RGBA helpers.
 - `src/tools/fill/fill-interaction.ts` — bucket fill writes mask data when active.
 

@@ -89,8 +89,6 @@ export function handleShapeDown(ctx: InteractionContext): InteractionState {
   return {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'shape',
     startPoint: layerPos,

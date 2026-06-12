@@ -76,8 +76,6 @@ export const magneticLassoStrategy: SelectionToolStrategy = {
     return {
       drawing: true,
       lastPoint: ctx.canvasPos,
-      pixelBuffer: null,
-      originalPixelBuffer: null,
       layerId: ctx.activeLayerId,
       tool: 'lasso-magnetic',
       startPoint: ctx.canvasPos,

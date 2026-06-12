@@ -52,8 +52,6 @@ export function handleDodgeDown(ctx: InteractionContext): InteractionState {
   return {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'dodge',
     startPoint: null,

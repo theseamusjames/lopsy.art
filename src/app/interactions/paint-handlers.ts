@@ -104,8 +104,6 @@ export function handlePaintDown(
     const state: InteractionState = {
       drawing: true,
       lastPoint: canvasPos,
-      pixelBuffer: null,
-      originalPixelBuffer: null,
       layerId: activeLayerId,
       tool,
       startPoint: null,
@@ -181,8 +179,6 @@ export function handlePaintDown(
     const state: InteractionState = {
       drawing: true,
       lastPoint: layerPos,
-      pixelBuffer: null,
-      originalPixelBuffer: null,
       layerId: activeLayerId,
       tool,
       startPoint: null,
@@ -269,8 +265,6 @@ export function handlePaintDown(
   const state: InteractionState = {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool,
     startPoint: null,

@@ -12,8 +12,6 @@ export const lassoStrategy: SelectionToolStrategy = {
     return {
       drawing: true,
       lastPoint: ctx.canvasPos,
-      pixelBuffer: null,
-      originalPixelBuffer: null,
       layerId: ctx.activeLayerId,
       tool: 'lasso',
       startPoint: ctx.canvasPos,

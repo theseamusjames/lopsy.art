@@ -126,8 +126,6 @@ const makeBaseState = (overrides: Partial<InteractionState> = {}): InteractionSt
   drawing: true,
   gesture: GESTURE_IDLE,
   lastPoint: null,
-  pixelBuffer: null,
-  originalPixelBuffer: null,
   layerId: 'layer-1',
   tool: 'brush',
   startPoint: null,

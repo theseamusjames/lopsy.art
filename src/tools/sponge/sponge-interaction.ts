@@ -57,8 +57,6 @@ export function handleSpongeDown(ctx: InteractionContext): InteractionState {
   return {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'sponge',
     startPoint: null,

@@ -1,7 +1,6 @@
 import type { MutableRefObject } from 'react';
 import type { Point, ToolId, Layer, Rect } from '../../types';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
-import type { PixelBuffer, MaskedPixelBuffer } from '../../engine/pixel-data';
 
 /**
  * Discriminated union describing which canvas gesture is active.
@@ -65,8 +64,6 @@ export const INITIAL_INTERACTION_STATE: InteractionState = {
   drawing: false,
   gesture: GESTURE_IDLE,
   lastPoint: null,
-  pixelBuffer: null,
-  originalPixelBuffer: null,
   layerId: null,
   tool: null,
   startPoint: null,
@@ -97,8 +94,6 @@ export interface InteractionState {
   drawing: boolean;
   gesture: CanvasGesture;
   lastPoint: Point | null;
-  pixelBuffer: PixelBuffer | null;
-  originalPixelBuffer: PixelBuffer | null;
   layerId: string | null;
   tool: ToolId | null;
   startPoint: Point | null;
@@ -176,8 +171,6 @@ export interface InteractionContext {
   metaKey: boolean;
   activeLayerId: string;
   activeLayer: Layer;
-  pixelBuffer: PixelBuffer;
-  paintSurface: PixelBuffer | MaskedPixelBuffer;
   clientX: number;
   clientY: number;
   screenToCanvas?: (sx: number, sy: number) => Point;

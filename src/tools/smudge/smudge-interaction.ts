@@ -44,8 +44,6 @@ export function handleSmudgeDown(ctx: InteractionContext): InteractionState {
   return {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'smudge',
     startPoint: null,

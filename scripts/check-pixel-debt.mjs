@@ -82,7 +82,7 @@ const ALLOWLIST = {
   'src/app/interactions/move-handlers.ts': 5,
   'src/app/interactions/quick-mask-move.ts': 1,
   'src/app/store/actions/add-layer-mask.ts': 1,
-  'src/app/useCanvasInteraction.ts': 3,                      // mask-buffer copies + 1×1 placeholder singleton
+  'src/app/useCanvasInteraction.ts': 2,                      // mask-buffer copies (nudge path)
   'src/tools/fill/fill-interaction.ts': 1,                   // bucket fill writes mask data
 
   // ──────────────────────────────────────────────────────────────────────

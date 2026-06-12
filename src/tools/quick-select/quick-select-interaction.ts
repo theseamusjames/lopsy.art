@@ -92,8 +92,6 @@ export function handleQuickSelectDown(ctx: InteractionContext): InteractionState
   return {
     drawing: true,
     lastPoint: canvasPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'quick-select',
     startPoint: canvasPos,
