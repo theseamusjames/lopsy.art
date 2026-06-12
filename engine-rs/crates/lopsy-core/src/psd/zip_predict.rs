@@ -76,6 +76,38 @@ pub fn zip_predict_decode_16(data: &[u8], width: u32, height: u32) -> Result<Vec
     Ok(result)
 }
 
+/// Decode an 8-bit plane from ZIP with prediction data (byte-level delta
+/// per row). `row_size` is bytes per row, `rows` the number of rows —
+/// callers stacking multiple channels in one stream pass `h * channels`.
+///
+/// Validates the inflated length before un-delta'ing, mirroring the 16-bit
+/// path — without the check a truncated/corrupt stream inflates short and
+/// the row indexing panics, which under panic=abort kills the whole WASM
+/// instance from user-supplied file data.
+pub fn zip_predict_decode_8(data: &[u8], row_size: usize, rows: usize) -> Result<Vec<u8>, String> {
+    let expected = row_size * rows;
+
+    let mut decoder = ZlibDecoder::new(data);
+    let mut delta_buf = Vec::with_capacity(expected);
+    decoder.read_to_end(&mut delta_buf).map_err(|e| format!("zlib decode: {e}"))?;
+
+    if delta_buf.len() != expected {
+        return Err(format!(
+            "decompressed size mismatch: got {} expected {expected}",
+            delta_buf.len()
+        ));
+    }
+
+    for y in 0..rows {
+        let start = y * row_size;
+        for x in 1..row_size {
+            delta_buf[start + x] = delta_buf[start + x].wrapping_add(delta_buf[start + x - 1]);
+        }
+    }
+
+    Ok(delta_buf)
+}
+
 /// Plain ZIP encode (compression type 2) for 8-bit mask data or other buffers.
 pub fn zip_encode(data: &[u8]) -> Vec<u8> {
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
@@ -168,5 +200,51 @@ mod tests {
         let encoded = zip_encode(&data);
         let decoded = zip_decode(&encoded, data.len()).unwrap();
         assert_eq!(decoded, data);
+    }
+
+    /// Byte-level delta encode matching the 8-bit ZIP-with-prediction wire
+    /// format: first byte per row unchanged, rest = current - previous.
+    fn delta_encode_8(plane: &[u8], row_size: usize) -> Vec<u8> {
+        let mut out = Vec::with_capacity(plane.len());
+        for row in plane.chunks(row_size) {
+            let mut prev = 0u8;
+            for (x, &b) in row.iter().enumerate() {
+                out.push(if x == 0 { b } else { b.wrapping_sub(prev) });
+                prev = b;
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn decode_8_roundtrip() {
+        let row_size = 7;
+        let rows = 5;
+        let plane: Vec<u8> = (0..row_size * rows).map(|i| (i * 13 % 256) as u8).collect();
+        let encoded = zip_encode(&delta_encode_8(&plane, row_size));
+        let decoded = zip_predict_decode_8(&encoded, row_size, rows).unwrap();
+        assert_eq!(decoded, plane);
+    }
+
+    #[test]
+    fn decode_8_rejects_short_inflated_data() {
+        // Deflated stream inflates to fewer bytes than row_size * rows —
+        // before the length check this panicked in the un-delta loop.
+        let short = zip_encode(&[1u8, 2, 3, 4]);
+        let err = zip_predict_decode_8(&short, 4, 4).unwrap_err();
+        assert!(err.contains("size mismatch"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn decode_8_rejects_oversized_inflated_data() {
+        let long = zip_encode(&[0u8; 100]);
+        let err = zip_predict_decode_8(&long, 4, 4).unwrap_err();
+        assert!(err.contains("size mismatch"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn decode_8_rejects_corrupt_zlib_stream() {
+        let err = zip_predict_decode_8(&[0xDE, 0xAD, 0xBE, 0xEF], 4, 4).unwrap_err();
+        assert!(err.contains("zlib decode"), "unexpected error: {err}");
     }
 }
