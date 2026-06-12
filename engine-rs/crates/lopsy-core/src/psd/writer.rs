@@ -591,7 +591,7 @@ fn backpatch_u32_even(out: &mut Cursor<Vec<u8>>, start: u64) {
 mod tests {
     use super::*;
     use crate::color::BlendMode;
-    use super::super::types::{PsdDocument, PsdLayer, PsdRect, PsdDepth, PsdMask, GroupKind};
+    use super::super::types::{PsdDocument, PsdLayer, PsdRect, PsdDepth, PsdMask, GroupKind, PsdSourceKind};
 
     fn make_red_layer(w: u32, h: u32) -> PsdLayer {
         let pixel_count = (w * h) as usize;
@@ -600,6 +600,7 @@ mod tests {
             data.extend_from_slice(&[255, 0, 0, 255]);
         }
         PsdLayer {
+            source_kind: PsdSourceKind::Raster,
             name: "Red".to_string(),
             visible: true,
             opacity: 255,
@@ -673,6 +674,7 @@ mod tests {
     #[test]
     fn write_psd_with_group() {
         let group_end = PsdLayer {
+            source_kind: PsdSourceKind::Raster,
             name: "".to_string(),
             visible: true,
             opacity: 255,
@@ -686,6 +688,7 @@ mod tests {
         };
         let child = make_red_layer(4, 4);
         let group_open = PsdLayer {
+            source_kind: PsdSourceKind::Raster,
             name: "My Group".to_string(),
             visible: true,
             opacity: 255,

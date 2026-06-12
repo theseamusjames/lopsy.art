@@ -180,7 +180,7 @@ fn linear_to_srgb_f32(c: f32) -> f32 {
 mod tests {
     use super::*;
     use crate::color::BlendMode;
-    use super::super::types::{PsdDocument, PsdLayer, PsdRect, PsdDepth, GroupKind};
+    use super::super::types::{PsdDocument, PsdLayer, PsdRect, PsdDepth, GroupKind, PsdSourceKind};
 
     fn solid_layer_8bit(x: i32, y: i32, w: u32, h: u32, r: u8, g: u8, b: u8, a: u8, mode: BlendMode) -> PsdLayer {
         let pixel_count = (w * h) as usize;
@@ -189,6 +189,7 @@ mod tests {
             data.extend_from_slice(&[r, g, b, a]);
         }
         PsdLayer {
+            source_kind: PsdSourceKind::Raster,
             name: "test".to_string(),
             visible: true,
             opacity: 255,

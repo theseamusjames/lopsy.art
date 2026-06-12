@@ -79,6 +79,7 @@ fn roundtrip_with_mask() {
     }
 
     let layer = PsdLayer {
+        source_kind: PsdSourceKind::Raster,
         name: "Masked Layer".to_string(),
         visible: true,
         opacity: 255,
@@ -173,6 +174,7 @@ fn roundtrip_16bit_gradient() {
         height: h,
         depth: PsdDepth::Sixteen,
         layers: vec![PsdLayer {
+            source_kind: PsdSourceKind::Raster,
             name: "Gradient".to_string(),
             visible: true,
             opacity: 255,
@@ -204,6 +206,7 @@ fn build_test_doc_8bit() -> PsdDocument {
     let green = solid_layer_8bit("Green Multiply", 20, 20, 40, 40, 0, 255, 0, 255, BlendMode::Multiply, 255);
 
     let group_end = PsdLayer {
+        source_kind: PsdSourceKind::Raster,
         name: "".to_string(),
         visible: true,
         opacity: 255,
@@ -219,6 +222,7 @@ fn build_test_doc_8bit() -> PsdDocument {
     let gradient = gradient_layer_8bit("Gradient", 0, 0, w, h);
 
     let group_open = PsdLayer {
+        source_kind: PsdSourceKind::Raster,
         name: "Test Group".to_string(),
         visible: true,
         opacity: 255,
@@ -267,6 +271,7 @@ fn solid_layer_8bit(
         data.extend_from_slice(&[r, g, b, a]);
     }
     PsdLayer {
+        source_kind: PsdSourceKind::Raster,
         name: name.to_string(),
         visible: true,
         opacity,
@@ -294,6 +299,7 @@ fn solid_layer_16bit(
         data.extend_from_slice(&a.to_be_bytes());
     }
     PsdLayer {
+        source_kind: PsdSourceKind::Raster,
         name: name.to_string(),
         visible: true,
         opacity,
@@ -319,6 +325,7 @@ fn gradient_layer_8bit(name: &str, x: i32, y: i32, w: u32, h: u32) -> PsdLayer {
         }
     }
     PsdLayer {
+        source_kind: PsdSourceKind::Raster,
         name: name.to_string(),
         visible: true,
         opacity: 255,
