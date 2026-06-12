@@ -10,7 +10,7 @@ import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState } from '../../engine-wasm/wasm-bridge';
-import { invalidateBitmapCache } from '../../engine/bitmap-cache';
+import { invalidateBitmapCache, clearBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import type { ActionResult, SliceCreator, SparseLayerEntry } from './types';
 import { useUIStore } from '../ui-store';
@@ -225,6 +225,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   createDocument: (width, height, transparentBg) => {
     cancelLiquify();
+    clearBitmapCache();
     clearEngine();
     const result = computeCreateDocument(width, height, transparentBg);
     applyActionResult(set, result);
@@ -238,6 +239,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   openImageAsDocument: (imageData, name) => {
     cancelLiquify();
+    clearBitmapCache();
     clearEngine();
     const result = computeOpenImage(imageData, name);
     applyActionResult(set, result);
