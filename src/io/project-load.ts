@@ -188,6 +188,11 @@ export async function loadProject(file: File): Promise<void> {
     const blobTableStart = manifestStart + manifestByteLen;
     const blobTableView = new DataView(arrayBuffer, blobTableStart);
     const blobCount = blobTableView.getUint32(0, true);
+    // The table itself must fit in the file — rejects corrupt/malicious
+    // counts before the read loop walks off the end of the buffer.
+    if (4 + blobCount * 4 > blobTableView.byteLength) {
+      throw new Error(`Corrupt .lopsy file: blob table claims ${blobCount} entries but the file is too small`);
+    }
     const blobSizes: number[] = [];
     for (let i = 0; i < blobCount; i++) {
       blobSizes.push(blobTableView.getUint32(4 + i * 4, true));
