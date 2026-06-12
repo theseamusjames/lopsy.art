@@ -40,7 +40,6 @@ import {
 import {
   handleLiquifyDown,
   handleLiquifyMove,
-  handleLiquifyUp,
 } from './interactions/liquify-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
@@ -313,7 +312,7 @@ export function useCanvasInteraction(
           const editorState = useEditorStore.getState();
           const layer = editorState.document.layers.find((l) => l.id === state.layerId);
           const layerPos = layer ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y } : canvasPos;
-          handleLiquifyMove(layerPos);
+          stateRef.current = handleLiquifyMove(state, layerPos);
           return;
         }
         case 'meshWarp':
@@ -461,7 +460,6 @@ export function useCanvasInteraction(
         stateRef.current = { ...INITIAL_INTERACTION_STATE };
         return;
       case 'liquify':
-        handleLiquifyUp();
         stateRef.current = { ...INITIAL_INTERACTION_STATE };
         return;
       case 'meshWarp':

@@ -17,7 +17,7 @@ import type { TransformHandle, TransformState } from '../../tools/transform/tran
 export type CanvasGesture =
   | { kind: 'idle' }
   | { kind: 'tool'; usedGpuStroke: boolean }
-  | { kind: 'liquify' }
+  | { kind: 'liquify'; lastPoint: Point }
   | { kind: 'tiltShift' }
   | { kind: 'meshWarp' }
   | {
