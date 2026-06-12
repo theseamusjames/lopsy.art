@@ -186,12 +186,46 @@ fn preprocess_frag(src: &str) -> String {
     src.replace("//#include hsl", HSL_COMMON)
 }
 
+/// Injects `#define NAME VALUE` lines into a GLSL source. The `#version`
+/// directive must stay on the first line, so the defines are spliced in
+/// immediately after it (or prepended when there is no `#version`).
+fn inject_defines(src: &str, defines: &[(&str, &str)]) -> String {
+    if defines.is_empty() {
+        return src.to_string();
+    }
+    let mut block = String::new();
+    for (name, value) in defines {
+        block.push_str("#define ");
+        block.push_str(name);
+        block.push(' ');
+        block.push_str(value);
+        block.push('\n');
+    }
+    match src.find('\n') {
+        Some(pos) if src.starts_with("#version") => {
+            format!("{}\n{}{}", &src[..pos], block, &src[pos + 1..])
+        }
+        _ => format!("{block}{src}"),
+    }
+}
+
 pub fn compile_program(
     gl: &WebGl2RenderingContext,
     vert_src: &str,
     frag_src: &str,
 ) -> Result<ShaderProgram, String> {
-    let frag_src = preprocess_frag(frag_src);
+    compile_program_with_defines(gl, vert_src, frag_src, &[])
+}
+
+/// Compiles a program with compile-time `#define`s injected into the
+/// fragment source, for building specialized variants of one GLSL file.
+pub fn compile_program_with_defines(
+    gl: &WebGl2RenderingContext,
+    vert_src: &str,
+    frag_src: &str,
+    defines: &[(&str, &str)],
+) -> Result<ShaderProgram, String> {
+    let frag_src = inject_defines(&preprocess_frag(frag_src), defines);
     let vert = compile_shader(gl, vert_src, WebGl2RenderingContext::VERTEX_SHADER)?;
     let frag = compile_shader(gl, &frag_src, WebGl2RenderingContext::FRAGMENT_SHADER)?;
     let program = link_program(gl, &vert, &frag)?;
@@ -383,5 +417,40 @@ impl ShaderPrograms {
             // Text
             text_glyph: compile_program(gl, v, TEXT_GLYPH_FRAG)?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::inject_defines;
+
+    #[test]
+    fn injects_defines_after_version_directive() {
+        let src = "#version 300 es\nprecision highp float;\nvoid main() {}\n";
+        let out = inject_defines(src, &[("BLEND_MODE", "7")]);
+        assert_eq!(
+            out,
+            "#version 300 es\n#define BLEND_MODE 7\nprecision highp float;\nvoid main() {}\n"
+        );
+    }
+
+    #[test]
+    fn injects_multiple_defines_in_order() {
+        let src = "#version 300 es\nvoid main() {}\n";
+        let out = inject_defines(src, &[("A", "1"), ("B", "2")]);
+        assert_eq!(out, "#version 300 es\n#define A 1\n#define B 2\nvoid main() {}\n");
+    }
+
+    #[test]
+    fn prepends_defines_when_no_version_directive() {
+        let src = "precision highp float;\nvoid main() {}\n";
+        let out = inject_defines(src, &[("BLEND_MODE", "3")]);
+        assert_eq!(out, "#define BLEND_MODE 3\nprecision highp float;\nvoid main() {}\n");
+    }
+
+    #[test]
+    fn empty_defines_returns_source_unchanged() {
+        let src = "#version 300 es\nvoid main() {}\n";
+        assert_eq!(inject_defines(src, &[]), src);
     }
 }
