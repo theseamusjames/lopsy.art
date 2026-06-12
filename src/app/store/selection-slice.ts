@@ -1,4 +1,5 @@
 import type { Rect } from '../../types';
+import { cancelPrefloat } from '../interactions/prefloat';
 import { EMPTY_SELECTION, type SelectionData, type SliceCreator } from './types';
 
 export interface SelectionSlice {
@@ -28,6 +29,9 @@ export const createSelectionSlice: SliceCreator<SelectionSlice> = (set, get) => 
   },
 
   clearSelection: () => {
+    // A pending prefloat holds GPU snapshots of every layer for the
+    // selection that is being discarded — release them.
+    cancelPrefloat();
     set({ selection: EMPTY_SELECTION, renderVersion: get().renderVersion + 1 });
   },
 });
