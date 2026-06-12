@@ -6,32 +6,30 @@ use std::io::{Read, Write};
 /// Encode a 16-bit channel plane using ZIP with prediction (PSD compression type 3).
 ///
 /// Process per scanline:
-/// 1. Convert each u16 to two big-endian bytes.
-/// 2. Apply byte-level horizontal differencing (delta): first byte unchanged,
-///    subsequent bytes = current - previous (wrapping).
+/// 1. Apply horizontal differencing on the 16-bit values (wrapping u16):
+///    first value unchanged, subsequent values = current - previous.
+/// 2. Convert each delta to two big-endian bytes.
 /// 3. Deflate the entire delta buffer.
+///
+/// Note the delta operates on 16-bit values, NOT on the byte stream —
+/// byte-level differencing round-trips against itself but produces noise
+/// in spec-conforming readers (Photoshop, GIMP, psd-tools).
 pub fn zip_predict_encode_16(channel: &[u16], width: u32, height: u32) -> Vec<u8> {
     let w = width as usize;
     let h = height as usize;
     assert_eq!(channel.len(), w * h, "channel size mismatch");
 
-    // Each row: w pixels * 2 bytes per pixel
     let row_bytes = w * 2;
     let mut delta_buf = Vec::with_capacity(row_bytes * h);
 
     for y in 0..h {
         let row = &channel[y * w..(y + 1) * w];
 
-        // Convert to big-endian bytes
-        let mut be_bytes = Vec::with_capacity(row_bytes);
-        for &val in row {
-            be_bytes.extend_from_slice(&val.to_be_bytes());
-        }
-
-        // Apply delta encoding
-        delta_buf.push(be_bytes[0]);
-        for i in 1..be_bytes.len() {
-            delta_buf.push(be_bytes[i].wrapping_sub(be_bytes[i - 1]));
+        let mut prev = 0u16;
+        for (x, &val) in row.iter().enumerate() {
+            let delta = if x == 0 { val } else { val.wrapping_sub(prev) };
+            prev = val;
+            delta_buf.extend_from_slice(&delta.to_be_bytes());
         }
     }
 
@@ -60,23 +58,18 @@ pub fn zip_predict_decode_16(data: &[u8], width: u32, height: u32) -> Result<Vec
         ));
     }
 
-    // Undo delta and reconstruct u16 values
+    // Undo the 16-bit value-level delta per row.
     let mut result = Vec::with_capacity(w * h);
 
     for y in 0..h {
         let row_start = y * row_bytes;
-        let row = &mut delta_buf[row_start..row_start + row_bytes];
+        let row = &delta_buf[row_start..row_start + row_bytes];
 
-        // Undo delta: accumulate
-        for i in 1..row.len() {
-            row[i] = row[i].wrapping_add(row[i - 1]);
-        }
-
-        // Reconstruct u16 from big-endian pairs
+        let mut acc = 0u16;
         for x in 0..w {
-            let hi = row[x * 2] as u16;
-            let lo = row[x * 2 + 1] as u16;
-            result.push((hi << 8) | lo);
+            let delta = u16::from_be_bytes([row[x * 2], row[x * 2 + 1]]);
+            acc = if x == 0 { delta } else { acc.wrapping_add(delta) };
+            result.push(acc);
         }
     }
 
@@ -147,6 +140,26 @@ mod tests {
         let encoded = zip_predict_encode_16(&channel, width, height);
         let decoded = zip_predict_decode_16(&encoded, width, height).unwrap();
         assert_eq!(decoded, channel);
+    }
+
+    /// Pins the wire format against the spec (validated with psd-tools):
+    /// deltas are 16-bit value-level per row, stored big-endian. A
+    /// round-trip test alone cannot catch a symmetric encode/decode bug —
+    /// this one decodes the actual inflated bytes.
+    #[test]
+    fn wire_format_matches_spec() {
+        use flate2::read::ZlibDecoder;
+        use std::io::Read;
+
+        let channel: Vec<u16> = vec![0, 100, 65535, 32768, 500, 400, 300, 200];
+        let encoded = zip_predict_encode_16(&channel, 4, 2);
+
+        let mut inflated = Vec::new();
+        ZlibDecoder::new(&encoded[..]).read_to_end(&mut inflated).unwrap();
+        assert_eq!(inflated, vec![
+            0, 0, 0, 100, 255, 155, 128, 1,
+            1, 244, 255, 156, 255, 156, 255, 156,
+        ]);
     }
 
     #[test]
