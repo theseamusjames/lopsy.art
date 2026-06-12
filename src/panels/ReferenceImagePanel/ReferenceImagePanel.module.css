@@ -192,3 +192,10 @@
   border-right: 2px solid var(--color-text-disabled);
   border-bottom: 2px solid var(--color-text-disabled);
 }
+
+.previewImage {
+  transform: var(--image-transform);
+  width: var(--image-width);
+  height: var(--image-height);
+  opacity: var(--image-opacity);
+}

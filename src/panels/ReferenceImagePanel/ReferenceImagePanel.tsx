@@ -283,11 +283,11 @@ export function ReferenceImagePanel() {
                 alt={activeImage.name}
                 className={styles.previewImage}
                 style={{
-                  transform: imageTransform,
-                  width: activeImage.width,
-                  height: activeImage.height,
-                  opacity: activeView.opacity / 100,
-                }}
+                  '--image-transform': imageTransform,
+                  '--image-width': `${activeImage.width}px`,
+                  '--image-height': `${activeImage.height}px`,
+                  '--image-opacity': activeView.opacity / 100,
+                } as React.CSSProperties}
                 draggable={false}
               />
             )}

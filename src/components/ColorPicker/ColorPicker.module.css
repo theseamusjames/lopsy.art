@@ -90,3 +90,14 @@
   transform: translateX(-50%);
   border-radius: 1px;
 }
+
+/* Cursor positions are fed from TSX via CSS custom properties. */
+.svCursor {
+  left: var(--cursor-x);
+  top: var(--cursor-y);
+}
+
+.hueCursor,
+.alphaCursor {
+  left: var(--cursor-x);
+}

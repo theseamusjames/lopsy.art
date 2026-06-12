@@ -38,3 +38,8 @@
 .cancelButton:hover {
   background: var(--color-bg-hover);
 }
+
+.container {
+  left: var(--buttons-x);
+  top: var(--buttons-y);
+}

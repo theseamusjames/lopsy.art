@@ -132,3 +132,7 @@
 .confirmButton:active {
   background: var(--color-accent-active);
 }
+
+.swatch {
+  background-color: var(--swatch-color);
+}

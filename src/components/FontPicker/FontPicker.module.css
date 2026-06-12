@@ -148,3 +148,20 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
+
+.dropdown {
+  top: var(--dropdown-top);
+  left: var(--dropdown-left);
+}
+
+.virtualSpacer {
+  height: var(--total-height);
+}
+
+.virtualWindow {
+  transform: translateY(var(--window-offset));
+}
+
+.systemFontPreview {
+  font-family: var(--preview-font);
+}

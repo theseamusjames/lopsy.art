@@ -28,3 +28,7 @@
   height: 16px;
   cursor: crosshair;
 }
+
+.gradientBar {
+  background: var(--gradient-css);
+}

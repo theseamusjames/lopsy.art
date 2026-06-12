@@ -60,7 +60,7 @@ export function CurvesControls({ node, onChange }: NodeControlProps<CurvesNode>)
               role="tab"
               aria-selected={channel === c}
               className={`${styles.channelTab} ${channel === c ? styles.channelTabActive : ''}`}
-              style={{ color: CHANNEL_TAB_COLORS[c] }}
+              style={{ '--channel-color': CHANNEL_TAB_COLORS[c] } as React.CSSProperties}
               onClick={() => setChannel(c)}
             >
               {CHANNEL_LABELS[c]}

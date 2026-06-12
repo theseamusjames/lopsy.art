@@ -38,7 +38,7 @@ export function PreciseAdjustmentHandle({
       tabIndex={0}
       className={`${styles.handle} ${active ? styles.handleActive : ''}`}
       data-testid={testId}
-      style={{ left, backgroundColor: swatch }}
+      style={{ '--handle-x': left, '--handle-color': swatch } as React.CSSProperties}
       onPointerDown={onPointerDown}
       onMouseDown={onMouseDown}
       onClick={onClick}

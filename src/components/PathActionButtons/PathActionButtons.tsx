@@ -63,7 +63,7 @@ export function PathActionButtons({ containerRef }: PathActionButtonsProps) {
   return (
     <div
       className={styles.container}
-      style={{ left: buttonX, top: buttonY }}
+      style={{ '--buttons-x': `${buttonX}px`, '--buttons-y': `${buttonY}px` } as React.CSSProperties}
       onPointerDown={stopPropagation}
       onMouseDown={stopPropagation}
       onMouseUp={stopPropagation}

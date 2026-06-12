@@ -77,7 +77,7 @@ export function GradientModal({ onClose }: GradientModalProps) {
               <>
                 <div
                   className={styles.stopColorPreview}
-                  style={{ backgroundColor: `rgb(${selectedStop.color.r},${selectedStop.color.g},${selectedStop.color.b})` }}
+                  style={{ '--swatch-color': `rgb(${selectedStop.color.r},${selectedStop.color.g},${selectedStop.color.b})` } as React.CSSProperties}
                 />
                 <span>Stop {selectedIndex + 1} of {sorted.length}</span>
                 <span>Position: {Math.round(selectedStop.position * 100)}%</span>

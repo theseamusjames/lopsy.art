@@ -222,3 +222,7 @@
   font-style: italic;
   padding: var(--space-2) 0;
 }
+
+.colorSwatch {
+  background-color: var(--swatch-color);
+}

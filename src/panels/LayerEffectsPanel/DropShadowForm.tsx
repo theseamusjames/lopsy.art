@@ -22,7 +22,7 @@ export function DropShadowForm({ shadow, onChange, onDragStart }: DropShadowForm
     <>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Color</span>
-        <label className={styles.colorSwatch} style={{ backgroundColor: `rgb(${shadow.color.r}, ${shadow.color.g}, ${shadow.color.b})` }}>
+        <label className={styles.colorSwatch} style={{ '--swatch-color': `rgb(${shadow.color.r}, ${shadow.color.g}, ${shadow.color.b})` } as React.CSSProperties}>
           <input
             type="color"
             className={styles.colorInput}

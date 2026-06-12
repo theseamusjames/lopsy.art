@@ -21,7 +21,7 @@ export function GlowForm({ glow, onChange, onDragStart }: GlowFormProps) {
     <>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Color</span>
-        <label className={styles.colorSwatch} style={{ backgroundColor: `rgb(${glow.color.r}, ${glow.color.g}, ${glow.color.b})` }}>
+        <label className={styles.colorSwatch} style={{ '--swatch-color': `rgb(${glow.color.r}, ${glow.color.g}, ${glow.color.b})` } as React.CSSProperties}>
           <input
             type="color"
             className={styles.colorInput}

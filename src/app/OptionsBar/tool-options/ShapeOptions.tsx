@@ -32,7 +32,7 @@ function ColorPopover({ anchorRef, popoverRef, color, onChange, onRemove, remove
   }, [anchorRef]);
 
   return createPortal(
-    <div ref={popoverRef} className={styles.colorPopover} style={{ top: pos.top, left: pos.left }}>
+    <div ref={popoverRef} className={styles.colorPopover} style={{ '--popover-top': `${pos.top}px`, '--popover-left': `${pos.left}px` } as React.CSSProperties}>
       <ColorPicker color={color} onChange={onChange} />
       <div className={styles.popoverActions}>
         <button className={styles.removeBtn} type="button" onClick={onRemove}>

@@ -472,3 +472,12 @@
   border-color: var(--color-text-secondary);
   color: var(--color-text-secondary);
 }
+
+.contextMenu {
+  left: var(--menu-x);
+  top: var(--menu-y);
+}
+
+.colorTagSwatch {
+  background: var(--swatch-color);
+}

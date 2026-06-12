@@ -94,7 +94,7 @@ export function GradientEditor({ stops, selectedIndex, onStopsChange, onSelectSt
       >
         <div
           className={styles.gradientBar}
-          style={{ background: buildGradientCss(sorted) }}
+          style={{ '--gradient-css': buildGradientCss(sorted) } as React.CSSProperties}
         />
       </div>
       <div className={styles.handlesRow} onClick={handleBarClick} data-testid="gradient-handles">
