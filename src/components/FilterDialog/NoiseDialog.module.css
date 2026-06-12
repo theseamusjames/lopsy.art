@@ -9,6 +9,7 @@
 }
 
 .modal {
+  transform: translate(var(--drag-x, 0px), var(--drag-y, 0px));
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);

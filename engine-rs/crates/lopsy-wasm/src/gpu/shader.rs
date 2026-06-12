@@ -16,6 +16,9 @@ void main() {
 // Core shaders
 pub const BLIT_FRAG: &str = include_str!("shaders/blit.glsl");
 pub const BLEND_FRAG: &str = include_str!("shaders/blend.glsl");
+/// Shared GLSL helpers spliced into fragment sources where a
+/// `//#include hsl` line appears (see `preprocess_frag`).
+pub const HSL_COMMON: &str = include_str!("shaders/hsl_common.glsl");
 pub const COMPOSITE_FRAG: &str = include_str!("shaders/composite.glsl");
 pub const FINAL_BLIT_FRAG: &str = include_str!("shaders/final_blit.glsl");
 pub const FLIP_FRAG: &str = include_str!("shaders/flip.glsl");
@@ -176,13 +179,21 @@ pub fn link_program(
     }
 }
 
+/// Minimal include preprocessor: splices shared helper blocks into a
+/// fragment source. GLSL ES has no #include; this keeps the RGB<->HSL
+/// math in one file instead of three diverging copies.
+fn preprocess_frag(src: &str) -> String {
+    src.replace("//#include hsl", HSL_COMMON)
+}
+
 pub fn compile_program(
     gl: &WebGl2RenderingContext,
     vert_src: &str,
     frag_src: &str,
 ) -> Result<ShaderProgram, String> {
+    let frag_src = preprocess_frag(frag_src);
     let vert = compile_shader(gl, vert_src, WebGl2RenderingContext::VERTEX_SHADER)?;
-    let frag = compile_shader(gl, frag_src, WebGl2RenderingContext::FRAGMENT_SHADER)?;
+    let frag = compile_shader(gl, &frag_src, WebGl2RenderingContext::FRAGMENT_SHADER)?;
     let program = link_program(gl, &vert, &frag)?;
     gl.delete_shader(Some(&vert));
     gl.delete_shader(Some(&frag));

@@ -229,7 +229,7 @@ export function App() {
               className={styles.effectsDrawer}
               ref={effectsDrawerRef}
               data-testid="effects-drawer"
-              style={{ transform: `translate(${drawerOffset.x}px, ${drawerOffset.y}px)` }}
+              style={{ '--drag-x': `${drawerOffset.x}px`, '--drag-y': `${drawerOffset.y}px` } as React.CSSProperties}
             >
               {activeLayerId && layers.find((l) => l.id === activeLayerId)?.type === 'group'
                 ? <AdjustmentsPanel showHeader dragProps={drawerDragProps} />
@@ -241,7 +241,7 @@ export function App() {
             <div
               className={styles.referenceDrawer}
               data-testid="reference-drawer"
-              style={{ transform: `translate(${refDrawerOffset.x}px, ${refDrawerOffset.y}px)` }}
+              style={{ '--drag-x': `${refDrawerOffset.x}px`, '--drag-y': `${refDrawerOffset.y}px` } as React.CSSProperties}
               {...refDrawerDragProps}
             >
               <ReferenceImagePanel />
