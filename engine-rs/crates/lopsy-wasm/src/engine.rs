@@ -739,6 +739,56 @@ impl EngineInner {
         setup_and_draw(self);
         self.fbo_pool.unbind(&self.gl);
     }
+
+    /// Read a texture back as 8-bit RGBA by first blitting it into a
+    /// temporary RGBA8 target. readPixels(FLOAT) from an RGBA16F
+    /// attachment is the driver's slow path (an 8.4s stall for a 2MP mask
+    /// on software GL); one GPU blit plus an UNSIGNED_BYTE read is fast on
+    /// every backend. Use for data that is conceptually 8-bit (masks).
+    pub fn read_texture_rgba8(&self, src_tex: &web_sys::WebGlTexture, w: u32, h: u32) -> Option<Vec<u8>> {
+        let gl = &self.gl;
+
+        let staging = gl.create_texture()?;
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&staging));
+        gl.tex_storage_2d(WebGl2RenderingContext::TEXTURE_2D, 1, WebGl2RenderingContext::RGBA8, w as i32, h as i32);
+        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MIN_FILTER, WebGl2RenderingContext::NEAREST as i32);
+        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MAG_FILTER, WebGl2RenderingContext::NEAREST as i32);
+
+        let fbo = gl.create_framebuffer()?;
+        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+        gl.framebuffer_texture_2d(
+            WebGl2RenderingContext::FRAMEBUFFER,
+            WebGl2RenderingContext::COLOR_ATTACHMENT0,
+            WebGl2RenderingContext::TEXTURE_2D,
+            Some(&staging),
+            0,
+        );
+        gl.viewport(0, 0, w as i32, h as i32);
+        gl.disable(WebGl2RenderingContext::BLEND);
+
+        let shader = &self.shaders.blit;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src_tex));
+        if let Some(loc) = shader.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        self.draw_fullscreen_quad();
+
+        let mut pixels = vec![0u8; (w * h * 4) as usize];
+        let read_ok = gl.read_pixels_with_opt_u8_array(
+            0, 0, w as i32, h as i32,
+            WebGl2RenderingContext::RGBA,
+            WebGl2RenderingContext::UNSIGNED_BYTE,
+            Some(&mut pixels),
+        ).is_ok();
+
+        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+        gl.delete_framebuffer(Some(&fbo));
+        gl.delete_texture(Some(&staging));
+
+        if read_ok { Some(pixels) } else { None }
+    }
 }
 
 impl Drop for EngineInner {

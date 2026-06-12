@@ -223,32 +223,9 @@ pub fn exit_quick_mask_mode(engine: &mut EngineInner) -> Option<Vec<u8>> {
 pub fn read_quick_mask_pixels(engine: &EngineInner) -> (u32, u32, Vec<u8>) {
     let Some(handle) = engine.quick_mask_texture else { return (0, 0, Vec::new()) };
     let Some((w, h)) = engine.texture_pool.get_size(handle) else { return (0, 0, Vec::new()) };
+    let Some(tex) = engine.texture_pool.get(handle).cloned() else { return (0, 0, Vec::new()) };
 
-    let fbo = match engine.gl.create_framebuffer() {
-        Some(f) => f,
-        None => return (0, 0, Vec::new()),
-    };
-    let tex = match engine.texture_pool.get(handle) {
-        Some(t) => t.clone(),
-        None => {
-            engine.gl.delete_framebuffer(Some(&fbo));
-            return (0, 0, Vec::new());
-        }
-    };
-
-    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
-    engine.gl.framebuffer_texture_2d(
-        WebGl2RenderingContext::FRAMEBUFFER,
-        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-        WebGl2RenderingContext::TEXTURE_2D,
-        Some(&tex),
-        0,
-    );
-    let rgba = engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h).ok();
-    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-    engine.gl.delete_framebuffer(Some(&fbo));
-
-    match rgba {
+    match engine.read_texture_rgba8(&tex, w, h) {
         Some(data) => {
             let mut single = vec![0u8; (w * h) as usize];
             for i in 0..(w * h) as usize {
@@ -393,51 +370,11 @@ pub fn draw_quick_mask_pencil_line(
     size: f32,
     mode: u32,
 ) {
-    // Pencil renders hard square pixel blocks. Interpolate at 1px spacing,
-    // write square blocks directly to the quick mask texture.
-    let points = lopsy_core::brush::interpolate_points(x0, y0, x1, y1, 1.0);
-    let half = (size / 2.0).floor() as i32;
-    let block_size = size.ceil() as i32;
-
+    // Pencil renders hard square pixel blocks — same GPU path as the
+    // layer-mask pencil (one scissored draw per point, no CPU uploads).
     let Some(tex_handle) = engine.quick_mask_texture else { return };
-    let (tex_w, tex_h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-
-    for i in (0..points.len()).step_by(2) {
-        let cx = points[i] as i32;
-        let cy = points[i + 1] as i32;
-        let bx = (cx - half).max(0);
-        let by = (cy - half).max(0);
-        let bw = block_size.min(tex_w as i32 - bx);
-        let bh = block_size.min(tex_h as i32 - by);
-        if bw <= 0 || bh <= 0 { continue; }
-
-        let count = (bw * bh) as usize;
-
-        if mode == 0 {
-            // Brush mode: paint white (select)
-            let mut rgba = vec![0u8; count * 4];
-            for j in 0..count {
-                let v = (a * 255.0) as u8;
-                rgba[j * 4] = v;
-                rgba[j * 4 + 1] = v;
-                rgba[j * 4 + 2] = v;
-                rgba[j * 4 + 3] = 255;
-            }
-            let _ = engine.texture_pool.upload_rgba(
-                &engine.gl, tex_handle, bx, by, bw as u32, bh as u32, &rgba,
-            );
-        } else {
-            // Eraser mode: paint black (deselect)
-            let mut rgba = vec![0u8; count * 4];
-            for j in 0..count {
-                rgba[j * 4 + 3] = 255;
-            }
-            let _ = engine.texture_pool.upload_rgba(
-                &engine.gl, tex_handle, bx, by, bw as u32, bh as u32, &rgba,
-            );
-        }
-    }
-
+    let value = if mode == 0 { a } else { 0.0 };
+    crate::mask_paint_gpu::draw_pencil_blocks_gpu(engine, tex_handle, x0, y0, x1, y1, size, value);
     engine.needs_recomposite = true;
 }
 
