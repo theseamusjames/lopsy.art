@@ -273,7 +273,22 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
     }
 
     if (psdLayer.groupKind === 1 || psdLayer.groupKind === 2) {
-      // GroupOpen — finalize the group.
+      // GroupOpen — finalize the group. Group masks round-trip the same
+      // way leaf-layer masks do (the writer emits them on the divider
+      // record), so read them back instead of dropping them.
+      let groupMask: GroupLayer['mask'] = null;
+      if (psdLayer.hasMask && psdLayer.maskWidth && psdLayer.maskHeight) {
+        const maskData = getPsdLayerMask(data, i);
+        if (maskData.length > 0) {
+          groupMask = {
+            id: crypto.randomUUID(),
+            enabled: true,
+            data: new Uint8ClampedArray(maskData.buffer, maskData.byteOffset, maskData.byteLength),
+            width: psdLayer.maskWidth,
+            height: psdLayer.maskHeight,
+          };
+        }
+      }
       const groupInfo = groupStack.pop();
       const groupLayer: GroupLayer = {
         id: layerId,
@@ -287,7 +302,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
         y: 0,
         clipToBelow: false,
         effects: parseEffectsJson(psdLayer.effectsJson),
-        mask: null,
+        mask: groupMask,
         children: groupInfo?.children ?? [],
         collapsed: psdLayer.groupKind === 2,
         adjustments: [],
