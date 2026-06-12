@@ -254,7 +254,10 @@ export async function loadProject(file: File): Promise<void> {
       dirtyLayerIds: new Set<string>(),
       isDirty: false,
       renderVersion: edState.renderVersion + 1,
+      paths: [...(manifest.paths ?? [])],
+      selectedPathId: null,
     });
+    useUIStore.setState({ guides: [...(manifest.guides ?? [])], selectedGuideId: null });
 
     // Wait for the engine (it may be initializing after createDocument)
     const engine = await waitForEngine();
