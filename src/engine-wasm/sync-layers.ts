@@ -24,7 +24,49 @@ import {
   uploadLayerMask,
   removeLayerMask,
 } from './wasm-bridge';
-import { getTracked } from './sync-state';
+import { getTracked, type TrackedState } from './sync-state';
+
+/**
+ * Consecutive-failure cap for a single upload payload. Failed uploads leave
+ * the tracked version stale so the next dirty frame retries (correct for
+ * transient failures), but a permanent failure would otherwise retry — and
+ * console.error — on every dirty frame, 60/s during pointer interaction.
+ * After this many consecutive failures for the same data reference we stop
+ * attempting (and stop logging) until the data changes or an upload succeeds.
+ */
+const MAX_UPLOAD_ATTEMPTS = 5;
+
+function shouldAttemptUpload(tracked: TrackedState, key: string, dataRef: unknown): boolean {
+  const entry = tracked.uploadFailures.get(key);
+  if (!entry) return true;
+  if (entry.dataRef !== dataRef) {
+    tracked.uploadFailures.delete(key);
+    return true;
+  }
+  return entry.count < MAX_UPLOAD_ATTEMPTS;
+}
+
+function recordUploadFailure(
+  tracked: TrackedState,
+  key: string,
+  dataRef: unknown,
+  label: string,
+  layerId: string,
+  error: unknown,
+): void {
+  const entry = tracked.uploadFailures.get(key);
+  const count = entry && entry.dataRef === dataRef ? entry.count + 1 : 1;
+  tracked.uploadFailures.set(key, { count, dataRef });
+  if (count < MAX_UPLOAD_ATTEMPTS) {
+    console.error(`[engine-sync] ${label} failed for layer`, layerId, error);
+  } else if (count === MAX_UPLOAD_ATTEMPTS) {
+    console.error(
+      `[engine-sync] ${label} failed ${count} times for layer ${layerId}; ` +
+      'giving up until its data changes',
+      error,
+    );
+  }
+}
 
 const LAYER_TYPE_MAP: Record<string, string> = {
   'raster': 'Raster',
@@ -237,6 +279,9 @@ export function syncLayers(
       tracked.pixelDataVersions.delete(id);
       tracked.sparseVersions.delete(id);
       tracked.pathTextKeys?.delete(id);
+      tracked.uploadFailures.delete(`${id}:pixels`);
+      tracked.uploadFailures.delete(`${id}:sparse`);
+      tracked.uploadFailures.delete(`${id}:mask`);
     }
   }
 
@@ -302,35 +347,42 @@ export function syncLayers(
 
     if (data && (pixelChanged || isDirty)) {
       // On upload failure, leave the tracked version stale so the next
-      // frame retries instead of rendering a stale texture forever.
-      try {
-        const rawBytes = new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength);
-        uploadLayerPixels(engine, layer.id, rawBytes, data.width, data.height, layer.x, layer.y);
-        tracked.pixelDataVersions.set(layer.id, data);
-        tracked.sparseVersions.set(layer.id, undefined);
-      } catch (e) {
-        console.error('[engine-sync] uploadLayerPixels failed for layer', layer.id, e);
+      // frame retries instead of rendering a stale texture forever — but
+      // stop attempting once the same payload has failed repeatedly.
+      if (shouldAttemptUpload(tracked, `${layer.id}:pixels`, data)) {
+        try {
+          const rawBytes = new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength);
+          uploadLayerPixels(engine, layer.id, rawBytes, data.width, data.height, layer.x, layer.y);
+          tracked.pixelDataVersions.set(layer.id, data);
+          tracked.sparseVersions.set(layer.id, undefined);
+          tracked.uploadFailures.delete(`${layer.id}:pixels`);
+        } catch (e) {
+          recordUploadFailure(tracked, `${layer.id}:pixels`, data, 'uploadLayerPixels', layer.id, e);
+        }
       }
     } else if (!data && sparseEntry && (sparseChanged || isDirty)) {
-      try {
-        const indices = new Uint32Array(sparseEntry.sparse.indices);
-        const rgba = new Uint8Array(sparseEntry.sparse.rgba.buffer, sparseEntry.sparse.rgba.byteOffset, sparseEntry.sparse.rgba.byteLength);
-        // Use layer.x/y as authoritative position — sparse offsets may be
-        // stale after updateLayerPosition() (move tool).
-        uploadLayerSparsePixels(
-          engine,
-          layer.id,
-          indices,
-          rgba,
-          sparseEntry.sparse.width,
-          sparseEntry.sparse.height,
-          layer.x,
-          layer.y,
-        );
-        tracked.sparseVersions.set(layer.id, sparseEntry);
-        tracked.pixelDataVersions.set(layer.id, undefined);
-      } catch (e) {
-        console.error('[engine-sync] uploadLayerSparsePixels failed for layer', layer.id, e);
+      if (shouldAttemptUpload(tracked, `${layer.id}:sparse`, sparseEntry)) {
+        try {
+          const indices = new Uint32Array(sparseEntry.sparse.indices);
+          const rgba = new Uint8Array(sparseEntry.sparse.rgba.buffer, sparseEntry.sparse.rgba.byteOffset, sparseEntry.sparse.rgba.byteLength);
+          // Use layer.x/y as authoritative position — sparse offsets may be
+          // stale after updateLayerPosition() (move tool).
+          uploadLayerSparsePixels(
+            engine,
+            layer.id,
+            indices,
+            rgba,
+            sparseEntry.sparse.width,
+            sparseEntry.sparse.height,
+            layer.x,
+            layer.y,
+          );
+          tracked.sparseVersions.set(layer.id, sparseEntry);
+          tracked.pixelDataVersions.set(layer.id, undefined);
+          tracked.uploadFailures.delete(`${layer.id}:sparse`);
+        } catch (e) {
+          recordUploadFailure(tracked, `${layer.id}:sparse`, sparseEntry, 'uploadLayerSparsePixels', layer.id, e);
+        }
       }
     } else if (!data && !sparseEntry) {
       // No JS data — GPU texture is source of truth (GPU paint or undo restore).
@@ -348,13 +400,14 @@ export function syncLayers(
     // so GPU-painted mask data isn't overwritten by a stale re-upload.
     if (layer.mask) {
       const prevMaskData = tracked.maskDataRefs.get(layer.id);
-      if (prevMaskData !== layer.mask.data) {
+      if (prevMaskData !== layer.mask.data && shouldAttemptUpload(tracked, `${layer.id}:mask`, layer.mask.data)) {
         try {
           const maskBytes = new Uint8Array(layer.mask.data.buffer, layer.mask.data.byteOffset, layer.mask.data.byteLength);
           uploadLayerMask(engine, layer.id, maskBytes, layer.mask.width, layer.mask.height);
           tracked.maskDataRefs.set(layer.id, layer.mask.data);
+          tracked.uploadFailures.delete(`${layer.id}:mask`);
         } catch (e) {
-          console.error('[engine-sync] uploadLayerMask failed for layer', layer.id, e);
+          recordUploadFailure(tracked, `${layer.id}:mask`, layer.mask.data, 'uploadLayerMask', layer.id, e);
         }
       }
       tracked.masksOnEngine.add(layer.id);

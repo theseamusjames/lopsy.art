@@ -84,12 +84,27 @@ export interface TrackedState {
    * path geometry actually changes. Maps layerId → last-rendered key string.
    */
   pathTextKeys: Map<string, string> | null;
+  /**
+   * Consecutive upload-failure bookkeeping, keyed by `${layerId}:{kind}`
+   * (kind: pixels | sparse | mask). A persistently failing upload retries on
+   * every dirty frame; once the count for an unchanged data reference reaches
+   * the cap, further attempts are skipped until the data reference changes
+   * or an upload succeeds.
+   */
+  uploadFailures: Map<string, UploadFailureEntry>;
   /** Per-group tracked refs for incremental syncGroupAdjustments.
    *  Maps groupId → the references last sent to the engine. */
   groupAdjTracked: Map<string, GroupAdjTrackedEntry>;
   /** True when the engine's group adjustments may be stale (e.g. after
    *  undo/redo reset). Forces a full clear + rebuild on next sync. */
   groupAdjNeedsFullSync: boolean;
+}
+
+export interface UploadFailureEntry {
+  /** Consecutive failures for this data reference. */
+  count: number;
+  /** The data reference that failed — a new reference resets the count. */
+  dataRef: unknown;
 }
 
 export interface GroupAdjTrackedEntry {
@@ -145,6 +160,7 @@ function createTrackedState(): TrackedState {
     levelsRef: null,
     levelsIdentity: null,
     pathTextKeys: null,
+    uploadFailures: new Map(),
     groupAdjTracked: new Map(),
     groupAdjNeedsFullSync: true,
   };
