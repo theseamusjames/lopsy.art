@@ -112,7 +112,7 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   'src/app/MenuBar/menus/file-menu.ts': 2,                   // PNG export + JPEG export
   'src/io/project-load.ts': 1,                               // .lopsy project unpack
-  'src/io/psd.ts': 1,
+  'src/io/psd.ts': 2,                                        // leaf + group mask unpack
 
   // ──────────────────────────────────────────────────────────────────────
   // Clipboard — paste-from-clipboard wraps decoded bytes into ImageData
