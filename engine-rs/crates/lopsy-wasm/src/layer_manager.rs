@@ -214,7 +214,7 @@ pub fn merge_layers(
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     {
-        let shader = &engine.shaders.blend;
+        let shader = &engine.shaders.blend_normal;
         engine.gl.use_program(Some(&shader.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&bottom_tex));
@@ -224,7 +224,6 @@ pub fn merge_layers(
         if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
         if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), bottom_desc.opacity); }
-        if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") {
             engine.gl.uniform2f(Some(&loc), bottom_desc.x as f32, bottom_desc.y as f32);
         }
@@ -245,7 +244,7 @@ pub fn merge_layers(
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     {
-        let shader = &engine.shaders.blend;
+        let shader = engine.shaders.blend_for_mode(&engine.gl, top_desc.blend_mode as i32)?;
         engine.gl.use_program(Some(&shader.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&top_tex));
@@ -255,7 +254,6 @@ pub fn merge_layers(
         if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
         if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), top_desc.opacity); }
-        if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), top_desc.blend_mode as i32); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") {
             engine.gl.uniform2f(Some(&loc), top_desc.x as f32, top_desc.y as f32);
         }
@@ -1105,7 +1103,7 @@ pub fn composite_float(
     // correctly without the UV-scale mismatch that doc-sized scratch textures cause.
     engine.gl.disable(WebGl2RenderingContext::BLEND);
     engine.render_to_texture(&layer_tex, fw as i32, fh as i32, |engine| {
-        let shader = &engine.shaders.blend;
+        let shader = &engine.shaders.blend_normal;
         engine.gl.use_program(Some(&shader.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
@@ -1115,7 +1113,6 @@ pub fn composite_float(
         if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
         if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), dx as f32, dy as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32); }
@@ -1409,7 +1406,7 @@ fn composite_float_transformed(
     // Step 2: Blend tmp (transformed float, fw×fh) onto base → layer texture.
     // Both tmp and base_tex are fw×fh, so v_uv correctly addresses them.
     engine.render_to_texture(&layer_tex, fw as i32, fh as i32, |engine| {
-        let shader = &engine.shaders.blend;
+        let shader = &engine.shaders.blend_normal;
         engine.gl.use_program(Some(&shader.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tmp_tex));
@@ -1419,7 +1416,6 @@ fn composite_float_transformed(
         if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
         if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32); }

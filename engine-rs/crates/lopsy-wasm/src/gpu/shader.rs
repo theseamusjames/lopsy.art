@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlUniformLocation};
 
 pub const FULLSCREEN_QUAD_VERT: &str = r#"#version 300 es
@@ -237,7 +238,14 @@ pub fn compile_program_with_defines(
 pub struct ShaderPrograms {
     // Core
     pub blit: ShaderProgram,
-    pub blend: ShaderProgram,
+    /// Blend program specialized for Normal mode (BLEND_MODE 0). Compiled at
+    /// startup since nearly every composite pass uses it; the other modes are
+    /// compiled lazily via `blend_for_mode`.
+    pub blend_normal: Rc<ShaderProgram>,
+    /// Lazily compiled blend program variants, keyed by blend mode. Each
+    /// variant is its own `ShaderProgram` with its own uniform-location
+    /// cache — locations must never be shared across program variants.
+    blend_variants: RefCell<HashMap<i32, Rc<ShaderProgram>>>,
     pub composite: ShaderProgram,
     pub final_blit: ShaderProgram,
     pub flip: ShaderProgram,
@@ -324,14 +332,47 @@ pub struct ShaderPrograms {
     pub text_glyph: ShaderProgram,
 }
 
+/// Compiles the blend shader specialized for a single blend mode.
+fn compile_blend_variant(gl: &WebGl2RenderingContext, mode: i32) -> Result<ShaderProgram, String> {
+    compile_program_with_defines(
+        gl,
+        FULLSCREEN_QUAD_VERT,
+        BLEND_FRAG,
+        &[("BLEND_MODE", &mode.to_string())],
+    )
+}
+
 impl ShaderPrograms {
+    /// Returns the blend program specialized for `mode`, compiling and
+    /// caching it on first use. Compiling all variants at startup would
+    /// jank initial load, and most documents only ever use a few modes.
+    /// Unknown modes fall back to Normal, matching the old uniform-driven
+    /// shader's final `return s;` fallback.
+    pub fn blend_for_mode(&self, gl: &WebGl2RenderingContext, mode: i32) -> Result<Rc<ShaderProgram>, String> {
+        let max_mode = lopsy_core::color::BlendMode::ALL.len() as i32 - 1;
+        let mode = if (0..=max_mode).contains(&mode) { mode } else { 0 };
+        if let Some(program) = self.blend_variants.borrow().get(&mode) {
+            return Ok(Rc::clone(program));
+        }
+        let program = Rc::new(compile_blend_variant(gl, mode)?);
+        self.blend_variants.borrow_mut().insert(mode, Rc::clone(&program));
+        Ok(program)
+    }
+
     pub fn compile_all(gl: &WebGl2RenderingContext) -> Result<Self, String> {
         let v = FULLSCREEN_QUAD_VERT;
+
+        // Normal mode is seeded eagerly: it was compiled at startup before
+        // specialization too, so this keeps startup cost unchanged while
+        // letting fixed Normal-mode passes grab it infallibly.
+        let blend_normal = Rc::new(compile_blend_variant(gl, 0)?);
+        let blend_variants = RefCell::new(HashMap::from([(0, Rc::clone(&blend_normal))]));
 
         Ok(Self {
             // Core
             blit: compile_program(gl, v, BLIT_FRAG)?,
-            blend: compile_program(gl, v, BLEND_FRAG)?,
+            blend_normal,
+            blend_variants,
             composite: compile_program(gl, v, COMPOSITE_FRAG)?,
             final_blit: compile_program(gl, v, FINAL_BLIT_FRAG)?,
             flip: compile_program(gl, v, FLIP_FRAG)?,

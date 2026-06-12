@@ -1,11 +1,17 @@
 #version 300 es
 precision highp float;
 
+// BLEND_MODE is injected as a compile-time #define by shader.rs
+// (compile_program_with_defines) — one program variant per blend mode,
+// so the mode is selected at compile time instead of per pixel.
+#ifndef BLEND_MODE
+#define BLEND_MODE 0
+#endif
+
 in vec2 v_uv;
 uniform sampler2D u_srcTex;
 uniform sampler2D u_dstTex;
 uniform float u_opacity;
-uniform int u_blendMode;
 uniform vec2 u_srcOffset;  // layer position in document pixels
 uniform vec2 u_srcSize;    // layer texture size in pixels
 uniform vec2 u_docSize;    // document size in pixels
@@ -42,65 +48,72 @@ vec3 setLum(vec3 c, float l) {
 float sat(vec3 c) { return max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b); }
 
 vec3 blendMode(vec3 s, vec3 d) {
-    if (u_blendMode == 0) return s; // Normal
-    if (u_blendMode == 1) return s * d; // Multiply
-    if (u_blendMode == 2) return s + d - s * d; // Screen
-    if (u_blendMode == 3) { // Overlay
-        return vec3(
-            d.r < 0.5 ? 2.0*s.r*d.r : 1.0-2.0*(1.0-s.r)*(1.0-d.r),
-            d.g < 0.5 ? 2.0*s.g*d.g : 1.0-2.0*(1.0-s.g)*(1.0-d.g),
-            d.b < 0.5 ? 2.0*s.b*d.b : 1.0-2.0*(1.0-s.b)*(1.0-d.b)
-        );
-    }
-    if (u_blendMode == 4) return min(s, d); // Darken
-    if (u_blendMode == 5) return max(s, d); // Lighten
-    if (u_blendMode == 6) { // ColorDodge
-        return vec3(
-            s.r >= 1.0 ? 1.0 : min(1.0, d.r / (1.0 - s.r)),
-            s.g >= 1.0 ? 1.0 : min(1.0, d.g / (1.0 - s.g)),
-            s.b >= 1.0 ? 1.0 : min(1.0, d.b / (1.0 - s.b))
-        );
-    }
-    if (u_blendMode == 7) { // ColorBurn
-        return vec3(
-            s.r <= 0.0 ? 0.0 : max(0.0, 1.0 - (1.0 - d.r) / s.r),
-            s.g <= 0.0 ? 0.0 : max(0.0, 1.0 - (1.0 - d.g) / s.g),
-            s.b <= 0.0 ? 0.0 : max(0.0, 1.0 - (1.0 - d.b) / s.b)
-        );
-    }
-    if (u_blendMode == 8) { // HardLight
-        return vec3(
-            s.r < 0.5 ? 2.0*s.r*d.r : 1.0-2.0*(1.0-s.r)*(1.0-d.r),
-            s.g < 0.5 ? 2.0*s.g*d.g : 1.0-2.0*(1.0-s.g)*(1.0-d.g),
-            s.b < 0.5 ? 2.0*s.b*d.b : 1.0-2.0*(1.0-s.b)*(1.0-d.b)
-        );
-    }
-    if (u_blendMode == 9) { // SoftLight (W3C)
-        vec3 dd = mix(sqrt(d), ((16.0*d - 12.0)*d + 4.0)*d, step(d, vec3(0.25)));
-        return mix(
-            d - (1.0 - 2.0*s) * d * (1.0 - d),
-            d + (2.0*s - 1.0) * (dd - d),
-            step(vec3(0.5), s)
-        );
-    }
-    if (u_blendMode == 10) return abs(s - d); // Difference
-    if (u_blendMode == 11) return s + d - 2.0*s*d; // Exclusion
-    if (u_blendMode == 12) { // Hue
-        vec3 shsl = rgb2hsl(s);
-        vec3 dhsl = rgb2hsl(d);
-        return setLum(hsl2rgb(vec3(shsl.x, dhsl.y, 0.5)), lum(d));
-    }
-    if (u_blendMode == 13) { // Saturation
-        float ss = sat(s);
-        return setLum(hsl2rgb(vec3(rgb2hsl(d).x, ss > 0.0 ? ss : rgb2hsl(d).y, 0.5)), lum(d));
-    }
-    if (u_blendMode == 14) { // Color
-        return setLum(s, lum(d));
-    }
-    if (u_blendMode == 15) { // Luminosity
-        return setLum(d, lum(s));
-    }
-    return s;
+#if BLEND_MODE == 1
+    return s * d; // Multiply
+#elif BLEND_MODE == 2
+    return s + d - s * d; // Screen
+#elif BLEND_MODE == 3
+    // Overlay
+    return vec3(
+        d.r < 0.5 ? 2.0*s.r*d.r : 1.0-2.0*(1.0-s.r)*(1.0-d.r),
+        d.g < 0.5 ? 2.0*s.g*d.g : 1.0-2.0*(1.0-s.g)*(1.0-d.g),
+        d.b < 0.5 ? 2.0*s.b*d.b : 1.0-2.0*(1.0-s.b)*(1.0-d.b)
+    );
+#elif BLEND_MODE == 4
+    return min(s, d); // Darken
+#elif BLEND_MODE == 5
+    return max(s, d); // Lighten
+#elif BLEND_MODE == 6
+    // ColorDodge
+    return vec3(
+        s.r >= 1.0 ? 1.0 : min(1.0, d.r / (1.0 - s.r)),
+        s.g >= 1.0 ? 1.0 : min(1.0, d.g / (1.0 - s.g)),
+        s.b >= 1.0 ? 1.0 : min(1.0, d.b / (1.0 - s.b))
+    );
+#elif BLEND_MODE == 7
+    // ColorBurn
+    return vec3(
+        s.r <= 0.0 ? 0.0 : max(0.0, 1.0 - (1.0 - d.r) / s.r),
+        s.g <= 0.0 ? 0.0 : max(0.0, 1.0 - (1.0 - d.g) / s.g),
+        s.b <= 0.0 ? 0.0 : max(0.0, 1.0 - (1.0 - d.b) / s.b)
+    );
+#elif BLEND_MODE == 8
+    // HardLight
+    return vec3(
+        s.r < 0.5 ? 2.0*s.r*d.r : 1.0-2.0*(1.0-s.r)*(1.0-d.r),
+        s.g < 0.5 ? 2.0*s.g*d.g : 1.0-2.0*(1.0-s.g)*(1.0-d.g),
+        s.b < 0.5 ? 2.0*s.b*d.b : 1.0-2.0*(1.0-s.b)*(1.0-d.b)
+    );
+#elif BLEND_MODE == 9
+    // SoftLight (W3C)
+    vec3 dd = mix(sqrt(d), ((16.0*d - 12.0)*d + 4.0)*d, step(d, vec3(0.25)));
+    return mix(
+        d - (1.0 - 2.0*s) * d * (1.0 - d),
+        d + (2.0*s - 1.0) * (dd - d),
+        step(vec3(0.5), s)
+    );
+#elif BLEND_MODE == 10
+    return abs(s - d); // Difference
+#elif BLEND_MODE == 11
+    return s + d - 2.0*s*d; // Exclusion
+#elif BLEND_MODE == 12
+    // Hue
+    vec3 shsl = rgb2hsl(s);
+    vec3 dhsl = rgb2hsl(d);
+    return setLum(hsl2rgb(vec3(shsl.x, dhsl.y, 0.5)), lum(d));
+#elif BLEND_MODE == 13
+    // Saturation
+    float ss = sat(s);
+    return setLum(hsl2rgb(vec3(rgb2hsl(d).x, ss > 0.0 ? ss : rgb2hsl(d).y, 0.5)), lum(d));
+#elif BLEND_MODE == 14
+    // Color
+    return setLum(s, lum(d));
+#elif BLEND_MODE == 15
+    // Luminosity
+    return setLum(d, lum(s));
+#else
+    return s; // Normal (0) — also the fallback the old uniform branch had
+#endif
 }
 
 void main() {
