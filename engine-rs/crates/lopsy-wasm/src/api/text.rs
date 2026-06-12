@@ -66,13 +66,6 @@ pub fn get_rendered_text_pixels(engine: &mut Engine, layer_id: &str) -> Vec<u8> 
     }
 }
 
-/// Measure the bounding box. Returns [x, y, width, height] as a flat f64 array.
-#[wasm_bindgen(js_name = "measureTextBounds")]
-pub fn measure_text_bounds(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
-    let tr = ensure_text_renderer(engine);
-    tr.measure_text_bounds(layer_id).to_vec()
-}
-
 /// Returns per-glyph positions as a flat f64 array of [x, y, w, h, cluster]... tuples.
 #[wasm_bindgen(js_name = "getGlyphPositions")]
 pub fn get_glyph_positions(engine: &mut Engine, layer_id: &str) -> Vec<f64> {

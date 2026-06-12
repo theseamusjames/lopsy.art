@@ -479,15 +479,6 @@ pub fn set_group_black_white(engine: &mut Engine, group_id: &str, reds: f32, yel
     Ok(())
 }
 
-#[wasm_bindgen(js_name = "clearGroupBlackWhite")]
-pub fn clear_group_black_white(engine: &mut Engine, group_id: &str) -> Result<(), JsError> {
-    let ga = engine.inner.group_adjustments.get_mut(group_id)
-        .ok_or_else(|| JsError::new("Group not found"))?;
-    ga.adjustments.bw_enabled = false;
-    engine.inner.needs_recomposite = true;
-    Ok(())
-}
-
 #[wasm_bindgen(js_name = "setGroupChannelMixer")]
 pub fn set_group_channel_mixer(
     engine: &mut Engine, group_id: &str,
@@ -501,15 +492,6 @@ pub fn set_group_channel_mixer(
     ga.adjustments.cm_g = [gr, gg, gb, gc];
     ga.adjustments.cm_b = [br, bg, bb, bc];
     ga.adjustments.cm_enabled = true;
-    engine.inner.needs_recomposite = true;
-    Ok(())
-}
-
-#[wasm_bindgen(js_name = "clearGroupChannelMixer")]
-pub fn clear_group_channel_mixer(engine: &mut Engine, group_id: &str) -> Result<(), JsError> {
-    let ga = engine.inner.group_adjustments.get_mut(group_id)
-        .ok_or_else(|| JsError::new("Group not found"))?;
-    ga.adjustments.cm_enabled = false;
     engine.inner.needs_recomposite = true;
     Ok(())
 }
@@ -536,18 +518,6 @@ pub fn set_group_gradient_map_lut(engine: &mut Engine, group_id: &str, lut: &[u8
         .map_err(|e| JsError::new(&e))?;
     if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.has_gradient_map = true; }
     engine.inner.needs_recomposite = true;
-    Ok(())
-}
-
-#[wasm_bindgen(js_name = "clearGroupGradientMap")]
-pub fn clear_group_gradient_map(engine: &mut Engine, group_id: &str) -> Result<(), JsError> {
-    if let Some(ga) = engine.inner.group_adjustments.get_mut(group_id) {
-        if let Some(tex) = ga.adjustments.gradient_map_texture.take() {
-            engine.inner.texture_pool.release(tex);
-        }
-        ga.adjustments.has_gradient_map = false;
-        engine.inner.needs_recomposite = true;
-    }
     Ok(())
 }
 
