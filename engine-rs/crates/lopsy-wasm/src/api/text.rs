@@ -5,10 +5,7 @@ use crate::Engine;
 use crate::text_gpu::TextRendererState;
 
 fn ensure_text_renderer(engine: &mut Engine) -> &mut TextRendererState {
-    if engine.inner.text_renderer.is_none() {
-        engine.inner.text_renderer = Some(TextRendererState::new());
-    }
-    engine.inner.text_renderer.as_mut().unwrap()
+    engine.inner.text_renderer.get_or_insert_with(TextRendererState::new)
 }
 
 /// Load raw font bytes into the engine's fontdb.

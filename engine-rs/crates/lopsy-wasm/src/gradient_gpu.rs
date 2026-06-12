@@ -86,9 +86,8 @@ fn restore_layer_from_preview(engine: &mut EngineInner, layer_id: &str) -> bool 
         Some(t) => t.clone(),
         None => return false,
     };
-    let preview_tex = engine.texture_pool.get(
-        engine.gradient_preview_texture.unwrap()
-    ).cloned();
+    let preview_tex = engine.gradient_preview_texture
+        .and_then(|h| engine.texture_pool.get(h).cloned());
     let ptex = match preview_tex { Some(t) => t, None => return false };
 
     engine.gl.disable(WebGl2RenderingContext::BLEND);

@@ -353,19 +353,19 @@ pub fn set_group_curves_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> 
     if !engine.inner.group_adjustments.contains_key(group_id) {
         return Err(JsError::new("Group not found — call setGroupAdjustments first"));
     }
-    let existing = engine.inner.group_adjustments.get(group_id).unwrap().adjustments.curves_texture;
+    let existing = engine.inner.group_adjustments.get(group_id).and_then(|g| g.adjustments.curves_texture);
     let tex = match existing {
         Some(t) => t,
         None => {
             let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
                 .map_err(|e| JsError::new(&e))?;
-            engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.curves_texture = Some(t);
+            if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.curves_texture = Some(t); }
             t
         }
     };
     engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.has_curves = true;
+    if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.has_curves = true; }
     engine.inner.needs_recomposite = true;
     Ok(())
 }
@@ -378,19 +378,19 @@ pub fn set_group_levels_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> 
     if !engine.inner.group_adjustments.contains_key(group_id) {
         return Err(JsError::new("Group not found — call setGroupAdjustments first"));
     }
-    let existing = engine.inner.group_adjustments.get(group_id).unwrap().adjustments.levels_texture;
+    let existing = engine.inner.group_adjustments.get(group_id).and_then(|g| g.adjustments.levels_texture);
     let tex = match existing {
         Some(t) => t,
         None => {
             let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
                 .map_err(|e| JsError::new(&e))?;
-            engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.levels_texture = Some(t);
+            if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.levels_texture = Some(t); }
             t
         }
     };
     engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.has_levels = true;
+    if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.has_levels = true; }
     engine.inner.needs_recomposite = true;
     Ok(())
 }
@@ -522,19 +522,19 @@ pub fn set_group_gradient_map_lut(engine: &mut Engine, group_id: &str, lut: &[u8
     if !engine.inner.group_adjustments.contains_key(group_id) {
         return Err(JsError::new("Group not found — call setGroupAdjustments first"));
     }
-    let existing = engine.inner.group_adjustments.get(group_id).unwrap().adjustments.gradient_map_texture;
+    let existing = engine.inner.group_adjustments.get(group_id).and_then(|g| g.adjustments.gradient_map_texture);
     let tex = match existing {
         Some(t) => t,
         None => {
             let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
                 .map_err(|e| JsError::new(&e))?;
-            engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.gradient_map_texture = Some(t);
+            if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.gradient_map_texture = Some(t); }
             t
         }
     };
     engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.has_gradient_map = true;
+    if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.has_gradient_map = true; }
     engine.inner.needs_recomposite = true;
     Ok(())
 }

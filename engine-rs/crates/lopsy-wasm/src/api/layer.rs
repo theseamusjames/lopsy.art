@@ -911,8 +911,13 @@ pub fn snapshot_layer_gpu(engine: &mut Engine, layer_id: &str) -> u32 {
         Err(_) => return u32::MAX,
     };
 
-    let dst_tex = engine.inner.texture_pool.get(dst_handle).cloned().unwrap();
-    let src_tex = engine.inner.texture_pool.get(src_handle).cloned().unwrap();
+    let (dst_tex, src_tex) = match (
+        engine.inner.texture_pool.get(dst_handle).cloned(),
+        engine.inner.texture_pool.get(src_handle).cloned(),
+    ) {
+        (Some(d), Some(s)) => (d, s),
+        _ => return u32::MAX,
+    };
 
     engine.inner.render_to_texture(&dst_tex, w as i32, h as i32, |eng| {
         eng.gl.use_program(Some(&eng.shaders.blit.program));

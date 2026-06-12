@@ -316,9 +316,9 @@ impl EngineInner {
         let scratch_fbo_b = fbo_pool.create(&gl)?;
         let render_fbo = fbo_pool.create(&gl)?;
 
-        fbo_pool.attach_texture(&gl, composite_fbo, texture_pool.get(composite_texture).unwrap());
-        fbo_pool.attach_texture(&gl, scratch_fbo_a, texture_pool.get(scratch_texture_a).unwrap());
-        fbo_pool.attach_texture(&gl, scratch_fbo_b, texture_pool.get(scratch_texture_b).unwrap());
+        fbo_pool.attach_texture(&gl, composite_fbo, texture_pool.get(composite_texture).ok_or("texture pool handle invalid")?);
+        fbo_pool.attach_texture(&gl, scratch_fbo_a, texture_pool.get(scratch_texture_a).ok_or("texture pool handle invalid")?);
+        fbo_pool.attach_texture(&gl, scratch_fbo_b, texture_pool.get(scratch_texture_b).ok_or("texture pool handle invalid")?);
 
         Ok(Self {
             gl,
@@ -447,15 +447,15 @@ impl EngineInner {
 
         self.fbo_pool.attach_texture(
             &self.gl, self.composite_fbo,
-            self.texture_pool.get(self.composite_texture).unwrap(),
+            self.texture_pool.get(self.composite_texture).ok_or("texture pool handle invalid")?,
         );
         self.fbo_pool.attach_texture(
             &self.gl, self.scratch_fbo_a,
-            self.texture_pool.get(self.scratch_texture_a).unwrap(),
+            self.texture_pool.get(self.scratch_texture_a).ok_or("texture pool handle invalid")?,
         );
         self.fbo_pool.attach_texture(
             &self.gl, self.scratch_fbo_b,
-            self.texture_pool.get(self.scratch_texture_b).unwrap(),
+            self.texture_pool.get(self.scratch_texture_b).ok_or("texture pool handle invalid")?,
         );
 
         self.needs_recomposite = true;
