@@ -754,7 +754,10 @@ impl EngineInner {
         gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MIN_FILTER, WebGl2RenderingContext::NEAREST as i32);
         gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MAG_FILTER, WebGl2RenderingContext::NEAREST as i32);
 
-        let fbo = gl.create_framebuffer()?;
+        let Some(fbo) = gl.create_framebuffer() else {
+            gl.delete_texture(Some(&staging));
+            return None;
+        };
         gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
         gl.framebuffer_texture_2d(
             WebGl2RenderingContext::FRAMEBUFFER,
