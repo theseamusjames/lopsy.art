@@ -732,4 +732,52 @@ mod tests {
         let psd = write_psd(&doc);
         assert!(psd.len() > 100);
     }
+
+    /// Locate image resource `id` in a written PSD and return its data.
+    fn find_image_resource(psd: &[u8], id: u16) -> Option<Vec<u8>> {
+        let sig = [b'8', b'B', b'I', b'M', (id >> 8) as u8, (id & 0xFF) as u8];
+        let pos = psd.windows(sig.len()).position(|w| w == sig)?;
+        // 8BIM + id(2) + empty pascal name (2 bytes) + size (u32) + data
+        let size_off = pos + 8;
+        let size = u32::from_be_bytes([
+            psd[size_off],
+            psd[size_off + 1],
+            psd[size_off + 2],
+            psd[size_off + 3],
+        ]) as usize;
+        Some(psd[size_off + 4..size_off + 4 + size].to_vec())
+    }
+
+    #[test]
+    fn write_psd_embeds_provided_icc_profile() {
+        let p3 = build_icc_profile(crate::color::ColorSpace::DisplayP3);
+        let doc = PsdDocument {
+            width: 4,
+            height: 4,
+            depth: PsdDepth::Eight,
+            layers: vec![make_red_layer(4, 4)],
+            icc_profile: Some(p3.clone()),
+        };
+        let psd = write_psd(&doc);
+        let embedded = find_image_resource(&psd, 1039).expect("missing ICC resource 1039");
+        assert_eq!(embedded, p3, "resource 1039 must hold the provided profile");
+    }
+
+    #[test]
+    fn write_psd_defaults_to_srgb_icc_profile() {
+        let doc = PsdDocument {
+            width: 4,
+            height: 4,
+            depth: PsdDepth::Eight,
+            layers: vec![make_red_layer(4, 4)],
+            icc_profile: None,
+        };
+        let psd = write_psd(&doc);
+        let embedded = find_image_resource(&psd, 1039).expect("missing ICC resource 1039");
+        assert_eq!(
+            embedded,
+            build_icc_profile(crate::color::ColorSpace::Srgb),
+            "sRGB documents must keep the legacy sRGB profile"
+        );
+    }
 }
