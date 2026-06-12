@@ -38,6 +38,17 @@ vi.mock('./wasm-bridge', () => ({
   setImageLevelsLut: vi.fn(),
   clearImageLevels: vi.fn(),
   clearImageAdjustments: vi.fn(),
+  setImageInvert: vi.fn(),
+  setImageHueSaturation: vi.fn(),
+  setImageColorBalance: vi.fn(),
+  setImagePhotoFilter: vi.fn(),
+  setImageBlackWhite: vi.fn(),
+  clearImageBlackWhite: vi.fn(),
+  setImageChannelMixer: vi.fn(),
+  clearImageChannelMixer: vi.fn(),
+  setImageGradientMapLut: vi.fn(),
+  clearImageGradientMap: vi.fn(),
+  setChannelMask: vi.fn(),
   setGroupAdjustments: vi.fn(),
   setGroupCurvesLut: vi.fn(),
   setGroupLevelsLut: vi.fn(),
@@ -66,6 +77,7 @@ vi.mock('./engine-state', () => ({
 const bridge = await import('./wasm-bridge');
 const sync = await import('./engine-sync');
 const { createGroupLayer, createRasterLayer } = await import('../layers/layer-model');
+const { DEFAULT_ADJUSTMENTS } = await import('../filters/image-adjustments');
 
 // A WeakMap key just needs to be an object — Engines are class instances in
 // production, but plain objects suffice here.
@@ -120,6 +132,139 @@ describe('engine-sync tracked state', () => {
     sync.syncGrid(a, true, 16);
     sync.syncGrid(b, true, 16);
     expect(setGrid).toHaveBeenCalledTimes(3); // only A re-pushed
+  });
+});
+
+describe('syncChannelVisibility — per-frame diffing (#595 follow-up)', () => {
+  // setChannelMask unconditionally sets needs_recomposite on the engine, so
+  // calling it on every frame defeats the render() frame gate. The sync must
+  // only push when the visibility actually changes.
+  it('pushes once for repeated identical visibility, again on change', () => {
+    const engine = makeFakeEngine();
+    const setMask = vi.mocked(bridge.setChannelMask);
+    setMask.mockClear();
+
+    const allOn = { r: true, g: true, b: true, a: true };
+    sync.syncChannelVisibility(engine, allOn);
+    sync.syncChannelVisibility(engine, allOn);
+    sync.syncChannelVisibility(engine, { ...allOn });
+    expect(setMask).toHaveBeenCalledTimes(1);
+    expect(setMask).toHaveBeenLastCalledWith(engine, 1.0, 1.0, 1.0, 1.0);
+
+    sync.syncChannelVisibility(engine, { r: true, g: false, b: true, a: true });
+    expect(setMask).toHaveBeenCalledTimes(2);
+    expect(setMask).toHaveBeenLastCalledWith(engine, 1.0, 0.0, 1.0, 1.0);
+  });
+
+  it('re-pushes after resetTrackedState (undo/redo full re-sync)', () => {
+    const engine = makeFakeEngine();
+    const setMask = vi.mocked(bridge.setChannelMask);
+    setMask.mockClear();
+
+    const allOn = { r: true, g: true, b: true, a: true };
+    sync.syncChannelVisibility(engine, allOn);
+    sync.resetTrackedState(engine);
+    sync.syncChannelVisibility(engine, allOn);
+    expect(setMask).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('syncMaskEditMode — per-frame diffing (#595 follow-up)', () => {
+  beforeEach(() => {
+    vi.mocked(bridge.setMaskEditLayer).mockClear();
+    vi.mocked(bridge.clearMaskEditLayer).mockClear();
+  });
+
+  it('sets the mask-edit layer once for repeated identical state', () => {
+    const engine = makeFakeEngine();
+    sync.syncMaskEditMode(engine, true, 'layer-1');
+    sync.syncMaskEditMode(engine, true, 'layer-1');
+    sync.syncMaskEditMode(engine, true, 'layer-1');
+    expect(vi.mocked(bridge.setMaskEditLayer)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(bridge.clearMaskEditLayer)).not.toHaveBeenCalled();
+  });
+
+  it('clears once when mask edit mode turns off, then stays quiet', () => {
+    const engine = makeFakeEngine();
+    sync.syncMaskEditMode(engine, true, 'layer-1');
+    sync.syncMaskEditMode(engine, false, 'layer-1');
+    sync.syncMaskEditMode(engine, false, 'layer-1');
+    sync.syncMaskEditMode(engine, false, null);
+    expect(vi.mocked(bridge.setMaskEditLayer)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(bridge.clearMaskEditLayer)).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears on the first frame (engine state unknown) and re-pushes when the active layer changes', () => {
+    const engine = makeFakeEngine();
+    sync.syncMaskEditMode(engine, false, null);
+    expect(vi.mocked(bridge.clearMaskEditLayer)).toHaveBeenCalledTimes(1);
+
+    sync.syncMaskEditMode(engine, true, 'layer-1');
+    sync.syncMaskEditMode(engine, true, 'layer-2');
+    expect(vi.mocked(bridge.setMaskEditLayer)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(bridge.setMaskEditLayer)).toHaveBeenLastCalledWith(engine, 'layer-2');
+  });
+
+  it('re-pushes after resetTrackedState even when state is unchanged', () => {
+    const engine = makeFakeEngine();
+    sync.syncMaskEditMode(engine, true, 'layer-1');
+    sync.resetTrackedState(engine);
+    sync.syncMaskEditMode(engine, true, 'layer-1');
+    expect(vi.mocked(bridge.setMaskEditLayer)).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('syncAdjustments — per-frame diffing (#595 follow-up)', () => {
+  beforeEach(() => {
+    vi.mocked(bridge.clearImageAdjustments).mockClear();
+    vi.mocked(bridge.setImageExposure).mockClear();
+    vi.mocked(bridge.setImageContrast).mockClear();
+  });
+
+  it('clears once while disabled instead of every frame', () => {
+    const engine = makeFakeEngine();
+    const adjustments = { ...DEFAULT_ADJUSTMENTS };
+    sync.syncAdjustments(engine, adjustments, false);
+    sync.syncAdjustments(engine, adjustments, false);
+    sync.syncAdjustments(engine, adjustments, false);
+    expect(vi.mocked(bridge.clearImageAdjustments)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(bridge.setImageExposure)).not.toHaveBeenCalled();
+  });
+
+  it('pushes setters once per adjustments reference, not per frame', () => {
+    const engine = makeFakeEngine();
+    const adjustments = { ...DEFAULT_ADJUSTMENTS, exposure: 0.5 };
+    sync.syncAdjustments(engine, adjustments, true);
+    sync.syncAdjustments(engine, adjustments, true);
+    sync.syncAdjustments(engine, adjustments, true);
+    expect(vi.mocked(bridge.setImageExposure)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(bridge.setImageExposure)).toHaveBeenLastCalledWith(engine, 0.5);
+
+    // The UI store replaces the object on edit — new reference, new push.
+    sync.syncAdjustments(engine, { ...adjustments, exposure: 1.0 }, true);
+    expect(vi.mocked(bridge.setImageExposure)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(bridge.setImageExposure)).toHaveBeenLastCalledWith(engine, 1.0);
+  });
+
+  it('re-applies after a disable/enable round-trip with the same reference', () => {
+    const engine = makeFakeEngine();
+    const adjustments = { ...DEFAULT_ADJUSTMENTS, contrast: 0.25 };
+    sync.syncAdjustments(engine, adjustments, true);
+    sync.syncAdjustments(engine, adjustments, false);
+    sync.syncAdjustments(engine, adjustments, true);
+    expect(vi.mocked(bridge.clearImageAdjustments)).toHaveBeenCalledTimes(1);
+    // clearImageAdjustments wiped the engine values; re-enable must re-push
+    // even though the JS object reference never changed.
+    expect(vi.mocked(bridge.setImageContrast)).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-pushes after resetTrackedState (undo/redo full re-sync)', () => {
+    const engine = makeFakeEngine();
+    const adjustments = { ...DEFAULT_ADJUSTMENTS, exposure: 0.5 };
+    sync.syncAdjustments(engine, adjustments, true);
+    sync.resetTrackedState(engine);
+    sync.syncAdjustments(engine, adjustments, true);
+    expect(vi.mocked(bridge.setImageExposure)).toHaveBeenCalledTimes(2);
   });
 });
 

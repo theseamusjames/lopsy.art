@@ -47,6 +47,19 @@ export interface TrackedState {
   showRulers: boolean;
   showSeamlessPattern: boolean;
   dimSeamlessPattern: boolean;
+  /** Last channel mask pushed to the engine as an "r,g,b,a" key.
+   *  Empty string = unknown (first frame / after reset), forces a push. */
+  channelMask: string;
+  /** Layer id the engine has in mask-edit mode; null = cleared.
+   *  undefined = unknown (first frame / after reset), forces a push. */
+  maskEditLayerId: string | null | undefined;
+  /** Reference equality on the whole ImageAdjustments object — the UI store
+   *  replaces it wholesale on every edit, so an unchanged reference means no
+   *  setter needs to run this frame. */
+  adjustmentsRef: unknown;
+  /** True when the engine is in cleared-adjustments mode, false when
+   *  adjustments are applied; null = unknown (first frame / after reset). */
+  adjustmentsCleared: boolean | null;
   brushTipData: BrushTipData | null;
   brushAngle: number;
   brushHasTip: boolean;
@@ -114,6 +127,10 @@ function createTrackedState(): TrackedState {
     showRulers: false,
     showSeamlessPattern: false,
     dimSeamlessPattern: true,
+    channelMask: '',
+    maskEditLayerId: undefined,
+    adjustmentsRef: null,
+    adjustmentsCleared: null,
     brushTipData: null,
     brushAngle: 0,
     brushHasTip: false,
