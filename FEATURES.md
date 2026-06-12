@@ -691,7 +691,7 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 
 ## History
 
-- Unlimited undo/redo with labeled snapshots
+- Undo/redo with labeled snapshots (the 50 most recent states are kept)
 - **Undo** (`⌘Z`) / **Redo** (`⇧⌘Z`) from the Edit menu or keyboard
 - History panel lists every snapshot with its label; clicking a row jumps the document to that state
 - RLE-compressed GPU texture snapshots; metadata-only snapshots for lightweight operations (visibility toggles, blend-mode changes, etc.) so the history list stays cheap even after long sessions
@@ -711,7 +711,7 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 
 ### Open / Save
 - **New** (`⌘N`): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
-- **Open…** (`⌘O`): open a PNG/JPEG/GIF/BMP/TIFF/WebP/HEIC/PSD/DNG/RAF/.lopsy from disk (the picker auto-routes by extension via a shared `classifyOpenFile` helper). The same routing backs the pre-document flow — the New Document modal's "Open file" button and drag-and-drop onto a fresh app accept the same formats, including `.lopsy` project files.
+- **Open…** (`⌘O`): open a PNG/JPEG/GIF (first frame)/BMP/WebP/PSD/DNG/RAF/.lopsy from disk (the picker auto-routes by extension via a shared `classifyOpenFile` helper). The same routing backs the pre-document flow — the New Document modal's "Open file" button and drag-and-drop onto a fresh app accept the same formats, including `.lopsy` project files.
 - **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust)
 - **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant)
 
