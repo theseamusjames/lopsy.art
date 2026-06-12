@@ -62,7 +62,7 @@ export function LevelsEditor({ levels, onChange, onReset, histogram: histOverrid
               role="tab"
               aria-selected={channel === c}
               className={`${styles.channelTab} ${channel === c ? styles.channelTabActive : ''}`}
-              style={{ color: CHANNEL_TAB_COLORS[c] }}
+              style={{ '--channel-color': CHANNEL_TAB_COLORS[c] } as React.CSSProperties}
               onClick={() => setChannel(c)}
               data-testid={`levels-channel-tab-${c}`}
             >

@@ -10,6 +10,7 @@
 
 import { useEditorStore } from '../app/editor-store';
 import { useUIStore } from '../app/ui-store';
+import { notifyInfo } from '../app/notifications-store';
 import { getEngine } from '../engine-wasm/engine-state';
 import {
   exportPsd,
@@ -237,6 +238,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
       height: number;
       clipToBelow: boolean;
       groupKind: number;
+      sourceKind: 'raster' | 'text' | 'adjustment' | 'fill' | 'smartObject';
       hasMask: boolean;
       maskX?: number;
       maskY?: number;
@@ -271,7 +273,22 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
     }
 
     if (psdLayer.groupKind === 1 || psdLayer.groupKind === 2) {
-      // GroupOpen — finalize the group.
+      // GroupOpen — finalize the group. Group masks round-trip the same
+      // way leaf-layer masks do (the writer emits them on the divider
+      // record), so read them back instead of dropping them.
+      let groupMask: GroupLayer['mask'] = null;
+      if (psdLayer.hasMask && psdLayer.maskWidth && psdLayer.maskHeight) {
+        const maskData = getPsdLayerMask(data, i);
+        if (maskData.length > 0) {
+          groupMask = {
+            id: crypto.randomUUID(),
+            enabled: true,
+            data: new Uint8ClampedArray(maskData.buffer, maskData.byteOffset, maskData.byteLength),
+            width: psdLayer.maskWidth,
+            height: psdLayer.maskHeight,
+          };
+        }
+      }
       const groupInfo = groupStack.pop();
       const groupLayer: GroupLayer = {
         id: layerId,
@@ -285,7 +302,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
         y: 0,
         clipToBelow: false,
         effects: parseEffectsJson(psdLayer.effectsJson),
-        mask: null,
+        mask: groupMask,
         children: groupInfo?.children ?? [],
         collapsed: psdLayer.groupKind === 2,
         adjustments: [],
@@ -383,6 +400,31 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
 
   store.getState().fitToView();
   useUIStore.getState().closeModalOfKind('loading');
+  notifyRasterizedLayers(manifest.layers);
+}
+
+/** Photoshop-native features Lopsy flattens to pixels on import. Tell the
+ *  user instead of silently dropping editability. */
+function notifyRasterizedLayers(layers: Array<{ sourceKind: string }>): void {
+  const counts = new Map<string, number>();
+  for (const l of layers) {
+    if (l.sourceKind && l.sourceKind !== 'raster') {
+      counts.set(l.sourceKind, (counts.get(l.sourceKind) ?? 0) + 1);
+    }
+  }
+  if (counts.size === 0) return;
+
+  const label: Record<string, [string, string]> = {
+    text: ['text layer', 'text layers'],
+    adjustment: ['adjustment layer', 'adjustment layers'],
+    fill: ['fill layer', 'fill layers'],
+    smartObject: ['smart object', 'smart objects'],
+  };
+  const parts = [...counts.entries()].map(([kind, n]) => {
+    const [one, many] = label[kind] ?? [kind, kind];
+    return `${n} ${n === 1 ? one : many}`;
+  });
+  notifyInfo(`PSD import: ${parts.join(', ')} rasterized — pixels are preserved but they are no longer editable as their original type.`);
 }
 
 async function waitForEngine(maxFrames = 60): Promise<ReturnType<typeof getEngine>> {

@@ -121,7 +121,7 @@ export function FilterDialog({ title, params, showRegenerate, onApply, onCancel,
         role="dialog"
         aria-label={title}
         onKeyDown={handleKeyDown}
-        style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+        style={{ '--drag-x': `${offset.x}px`, '--drag-y': `${offset.y}px` } as React.CSSProperties}
       >
         <div className={styles.header} {...dragProps}>
           <h2>{title}</h2>

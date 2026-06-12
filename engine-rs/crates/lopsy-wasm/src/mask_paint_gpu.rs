@@ -87,6 +87,75 @@ pub fn paint_mask_dab_batch(
     engine.needs_recomposite = true;
 }
 
+/// Render hard square pencil blocks into a mask-style RGBA texture
+/// entirely on the GPU: one scissored draw per interpolated point with
+/// the shared `pencil_dab` shader. Replaces the old CPU path that issued
+/// a texSubImage2D upload per point, which made mask pencil strokes on
+/// large documents unusably slow. `value` is the mask value to write
+/// (1.0 = reveal/select, 0.0 = hide/deselect); the pixel geometry is
+/// identical to the layer pencil (`brush_gpu::draw_pencil_line`).
+pub(crate) fn draw_pencil_blocks_gpu(
+    engine: &mut EngineInner,
+    tex_handle: crate::gpu::texture_pool::TextureHandle,
+    x0: f64, y0: f64, x1: f64, y1: f64,
+    size: f32,
+    value: f32,
+) {
+    if size <= 0.0 { return; }
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let Some(target_tex) = engine.texture_pool.get(tex_handle).cloned() else { return };
+
+    let points = lopsy_core::brush::interpolate_points(x0, y0, x1, y1, 1.0);
+    if points.len() < 2 { return; }
+
+    let half = (size / 2.0).floor() as i32;
+    let block = size.ceil() as i32;
+    let tex_w_i = w as i32;
+    let tex_h_i = h as i32;
+
+    engine.render_to_texture(&target_tex, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        gl.disable(WebGl2RenderingContext::BLEND);
+
+        let shader = &engine.shaders.pencil_dab;
+        gl.use_program(Some(&shader.program));
+        if let Some(loc) = shader.location(gl, "u_color") {
+            gl.uniform4f(Some(&loc), value, value, value, 1.0);
+        }
+        if let Some(loc) = shader.location(gl, "u_size") {
+            gl.uniform1f(Some(&loc), size);
+        }
+        if let Some(loc) = shader.location(gl, "u_texSize") {
+            gl.uniform2f(Some(&loc), w as f32, h as f32);
+        }
+        // Mask painting writes the mask itself — never clipped by selection.
+        if let Some(loc) = shader.location(gl, "u_hasSelection") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+
+        gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
+        let u_center_loc = shader.location(gl, "u_center");
+        for chunk in points.chunks(2) {
+            if chunk.len() < 2 { break; }
+            let cx = chunk[0] as f32;
+            let cy = chunk[1] as f32;
+
+            let lo_x = (cx.floor() as i32 - half).max(0);
+            let lo_y = (cy.floor() as i32 - half).max(0);
+            let hi_x = (cx.floor() as i32 - half + block).min(tex_w_i);
+            let hi_y = (cy.floor() as i32 - half + block).min(tex_h_i);
+            if hi_x <= lo_x || hi_y <= lo_y { continue; }
+            gl.scissor(lo_x, lo_y, hi_x - lo_x, hi_y - lo_y);
+
+            if let Some(loc) = &u_center_loc {
+                gl.uniform2f(Some(loc), cx, cy);
+            }
+            engine.draw_fullscreen_quad();
+        }
+        gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
+    });
+}
+
 pub fn draw_mask_pencil_line(
     engine: &mut EngineInner,
     layer_id: &str,
@@ -98,47 +167,9 @@ pub fn draw_mask_pencil_line(
     size: f32,
     mode: u32,
 ) {
-    let points = lopsy_core::brush::interpolate_points(x0, y0, x1, y1, 1.0);
-    let half = (size / 2.0).floor() as i32;
-    let block_size = size.ceil() as i32;
-
     let Some(&tex_handle) = engine.layer_masks.get(layer_id) else { return };
-    let (tex_w, tex_h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-
-    for i in (0..points.len()).step_by(2) {
-        let cx = points[i] as i32;
-        let cy = points[i + 1] as i32;
-        let bx = (cx - half).max(0);
-        let by = (cy - half).max(0);
-        let bw = block_size.min(tex_w as i32 - bx);
-        let bh = block_size.min(tex_h as i32 - by);
-        if bw <= 0 || bh <= 0 { continue; }
-
-        let count = (bw * bh) as usize;
-
-        if mode == 0 {
-            let mut rgba = vec![0u8; count * 4];
-            for j in 0..count {
-                let v = (a * 255.0) as u8;
-                rgba[j * 4] = v;
-                rgba[j * 4 + 1] = v;
-                rgba[j * 4 + 2] = v;
-                rgba[j * 4 + 3] = 255;
-            }
-            let _ = engine.texture_pool.upload_rgba(
-                &engine.gl, tex_handle, bx, by, bw as u32, bh as u32, &rgba,
-            );
-        } else {
-            let mut rgba = vec![0u8; count * 4];
-            for j in 0..count {
-                rgba[j * 4 + 3] = 255;
-            }
-            let _ = engine.texture_pool.upload_rgba(
-                &engine.gl, tex_handle, bx, by, bw as u32, bh as u32, &rgba,
-            );
-        }
-    }
-
+    let value = if mode == 0 { a } else { 0.0 };
+    draw_pencil_blocks_gpu(engine, tex_handle, x0, y0, x1, y1, size, value);
     engine.needs_recomposite = true;
 }
 
@@ -387,27 +418,12 @@ pub fn render_mask_radial_gradient(
 pub fn read_mask_texture(engine: &mut EngineInner, layer_id: &str) -> Option<Vec<u8>> {
     let &handle = engine.layer_masks.get(layer_id)?;
     let (w, h) = engine.texture_pool.get_size(handle)?;
-
-    let fbo = engine.gl.create_framebuffer()?;
     let tex = engine.texture_pool.get(handle)?.clone();
 
-    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
-    engine.gl.framebuffer_texture_2d(
-        WebGl2RenderingContext::FRAMEBUFFER,
-        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-        WebGl2RenderingContext::TEXTURE_2D,
-        Some(&tex),
-        0,
-    );
-    let rgba = engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h).ok();
-    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-    engine.gl.delete_framebuffer(Some(&fbo));
-
-    rgba.map(|data| {
-        let mut single = vec![0u8; (w * h) as usize];
-        for i in 0..(w * h) as usize {
-            single[i] = data[i * 4];
-        }
-        single
-    })
+    let rgba = engine.read_texture_rgba8(&tex, w, h)?;
+    let mut single = vec![0u8; (w * h) as usize];
+    for i in 0..(w * h) as usize {
+        single[i] = rgba[i * 4];
+    }
+    Some(single)
 }

@@ -41,7 +41,7 @@ export function GradientOptions() {
 
       <button
         className={gradientStyles.swatch}
-        style={{ background: buildGradientCss(sorted) }}
+        style={{ '--gradient-css': buildGradientCss(sorted) } as React.CSSProperties}
         onClick={handleOpenModal}
         aria-label="Edit gradient stops"
         title="Edit gradient stops"

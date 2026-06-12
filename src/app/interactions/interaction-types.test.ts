@@ -36,7 +36,7 @@ describe('gestureUsedGpuStroke', () => {
   it('returns false for non-tool gestures regardless of context', () => {
     const gestures: CanvasGesture[] = [
       { kind: 'idle' },
-      { kind: 'liquify' },
+      { kind: 'liquify', lastPoint: { x: 0, y: 0 } },
       { kind: 'tiltShift' },
       { kind: 'meshWarp' },
       makeTransformGesture(),
@@ -107,7 +107,7 @@ describe('PreToolDownGuard signature', () => {
       return {
         ...INITIAL_INTERACTION_STATE,
         drawing: true,
-        gesture: { kind: 'liquify' },
+        gesture: { kind: 'liquify', lastPoint: { x: 0, y: 0 } },
         layerId: activeLayerId,
         startPoint: canvasPos,
       };
@@ -126,8 +126,6 @@ const makeBaseState = (overrides: Partial<InteractionState> = {}): InteractionSt
   drawing: true,
   gesture: GESTURE_IDLE,
   lastPoint: null,
-  pixelBuffer: null,
-  originalPixelBuffer: null,
   layerId: 'layer-1',
   tool: 'brush',
   startPoint: null,

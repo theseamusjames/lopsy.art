@@ -391,3 +391,15 @@
   opacity: 0.3;
   cursor: not-allowed;
 }
+
+.channelTab {
+  color: var(--channel-color);
+}
+
+.stopColorPreview {
+  background-color: var(--swatch-color);
+}
+
+.addIcon {
+  margin-right: 4px;
+}

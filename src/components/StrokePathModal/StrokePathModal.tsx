@@ -50,7 +50,7 @@ export function StrokePathModal() {
 
   if (!strokeModalPathId) return null;
 
-  const swatchStyle = { backgroundColor: colorToCSS(foregroundColor) };
+  const swatchStyle = { '--swatch-color': colorToCSS(foregroundColor) } as React.CSSProperties;
 
   return (
     <div className={styles.overlay} onMouseDown={handleCancel}>

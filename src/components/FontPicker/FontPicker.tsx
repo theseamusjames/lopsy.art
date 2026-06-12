@@ -254,7 +254,7 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
           <div
             ref={dropdownRef}
             className={styles.dropdown}
-            style={{ top: dropdownPos.top, left: dropdownPos.left }}
+            style={{ '--dropdown-top': `${dropdownPos.top}px`, '--dropdown-left': `${dropdownPos.left}px` } as React.CSSProperties}
             role="listbox"
             onKeyDown={handleKeyDown}
           >
@@ -273,8 +273,8 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
               {items.length === 0 ? (
                 <div className={styles.emptyState}>No fonts found</div>
               ) : (
-                <div style={{ height: totalHeight }}>
-                  <div style={{ transform: `translateY(${offsetY}px)` }}>
+                <div className={styles.virtualSpacer} style={{ '--total-height': `${totalHeight}px` } as React.CSSProperties}>
+                  <div className={styles.virtualWindow} style={{ '--window-offset': `${offsetY}px` } as React.CSSProperties}>
                     {visibleItems}
                   </div>
                 </div>
@@ -322,7 +322,7 @@ function FontPickerItem({ entry, isSelected, isHighlighted, onClick }: FontPicke
       {showSystemPreview && (
         <span
           className={styles.systemFontPreview}
-          style={{ fontFamily: `'${entry.family}', ${entry.category}` }}
+          style={{ '--preview-font': `'${entry.family}', ${entry.category}` } as React.CSSProperties}
         >
           {entry.family}
         </span>

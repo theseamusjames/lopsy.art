@@ -162,7 +162,7 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
             aria-label="Add Adjustment"
             aria-expanded={showAddMenu}
           >
-            <Plus size={12} style={{ marginRight: 4 }} />
+            <Plus size={12} className={styles.addIcon} />
             Add Adjustment
           </button>
           {showAddMenu && (

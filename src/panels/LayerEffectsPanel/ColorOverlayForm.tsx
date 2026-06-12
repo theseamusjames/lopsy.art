@@ -11,7 +11,7 @@ export function ColorOverlayForm({ overlay, onChange }: ColorOverlayFormProps) {
   return (
     <div className={styles.row}>
       <span className={styles.fieldLabel}>Color</span>
-      <label className={styles.colorSwatch} style={{ backgroundColor: `rgb(${overlay.color.r}, ${overlay.color.g}, ${overlay.color.b})` }}>
+      <label className={styles.colorSwatch} style={{ '--swatch-color': `rgb(${overlay.color.r}, ${overlay.color.g}, ${overlay.color.b})` } as React.CSSProperties}>
         <input
           type="color"
           className={styles.colorInput}

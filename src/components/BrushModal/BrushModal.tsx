@@ -441,7 +441,7 @@ export function BrushModal() {
       className={styles.panel}
       role="dialog"
       aria-label="Brushes"
-      style={{ transform: `translate(-50%, -50%) translate(${dragOffset.x}px, ${dragOffset.y}px)` }}
+      style={{ '--drag-x': `${dragOffset.x}px`, '--drag-y': `${dragOffset.y}px` } as React.CSSProperties}
     >
       <div className={styles.titleBar} {...titleDragProps}>
         <span className={styles.titleText}>Brushes</span>

@@ -50,8 +50,6 @@ export function handleStampDown(ctx: InteractionContext): InteractionState | und
   return {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'stamp',
     startPoint: layerPos,

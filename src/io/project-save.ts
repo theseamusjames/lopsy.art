@@ -19,6 +19,8 @@ import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke'
 import { flushLayerSync } from '../engine-wasm/engine-sync';
 import { notifyError, describeError } from '../app/notifications-store';
 import type { Layer } from '../types/layers';
+import type { StoredPath } from '../types/paths';
+import { useUIStore, type Guide } from '../app/ui-store';
 
 const LOPSY_MAGIC = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]); // "LOPSY\0"
 const FORMAT_VERSION = 1;
@@ -33,6 +35,10 @@ export interface LopsyManifest {
   readonly layerOrder: readonly string[];
   readonly rootGroupId: string | null;
   readonly activeLayerId: string | null;
+  /** Stored vector paths (Paths panel). Absent in files saved before these were serialized. */
+  readonly paths?: readonly StoredPath[];
+  /** Canvas guides. Absent in files saved before these were serialized. */
+  readonly guides?: readonly Guide[];
 }
 
 // Serialized layer — all layer fields except pixel data (which is stored as blobs)
@@ -255,6 +261,8 @@ export async function saveProject(): Promise<void> {
       layerOrder: doc.layerOrder,
       rootGroupId: doc.rootGroupId ?? null,
       activeLayerId: doc.activeLayerId ?? null,
+      paths: state.paths,
+      guides: useUIStore.getState().guides,
     };
 
     const manifestJson = JSON.stringify(manifest);

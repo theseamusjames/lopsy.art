@@ -76,8 +76,6 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     return {
       drawing: true,
       lastPoint: canvasPos,
-      pixelBuffer: null,
-      originalPixelBuffer: null,
       layerId: activeLayerId,
       tool: 'move',
       startPoint: canvasPos,
@@ -179,8 +177,6 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     return {
       drawing: true,
       lastPoint: canvasPos,
-      pixelBuffer: null,
-      originalPixelBuffer: null,
       layerId: activeLayerId,
       tool: 'move',
       startPoint: canvasPos,
@@ -203,8 +199,6 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   return {
     drawing: true,
     lastPoint: canvasPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'move',
     startPoint: canvasPos,

@@ -135,11 +135,6 @@ pub fn upload_brush_tip(engine: &mut Engine, data: &[u8], width: u32, height: u3
     Ok(())
 }
 
-#[wasm_bindgen(js_name = "uploadBrushTipBlurred")]
-pub fn upload_brush_tip_blurred(engine: &mut Engine, data: &[u8], width: u32, height: u32, _blur_radius: u32) -> Result<(), JsError> {
-    upload_brush_tip(engine, data, width, height)
-}
-
 #[wasm_bindgen(js_name = "uploadBrushTipRGBA")]
 pub fn upload_brush_tip_rgba(engine: &mut Engine, data: &[u8], width: u32, height: u32) -> Result<(), JsError> {
     let pixel_count = (width * height) as usize;
@@ -393,10 +388,6 @@ pub fn interpolate_points(from_x: f64, from_y: f64, to_x: f64, to_y: f64, spacin
     lopsy_core::brush::interpolate_points(from_x, from_y, to_x, to_y, spacing)
 }
 
-#[wasm_bindgen(js_name = "computeShiftClickLine")]
-pub fn compute_shift_click_line(from_x: f64, from_y: f64, to_x: f64, to_y: f64) -> Vec<f64> {
-    lopsy_core::brush::compute_shift_click_line(from_x, from_y, to_x, to_y).to_vec()
-}
 // ============================================================
 // Dodge/Burn
 // ============================================================
@@ -407,14 +398,6 @@ pub fn begin_dodge_burn_stroke(
 ) -> Result<(), JsError> {
     dodge_burn_gpu::begin_dodge_burn_stroke(&mut engine.inner, layer_id, mode)
         .map_err(|e| JsError::new(&e))
-}
-
-#[wasm_bindgen(js_name = "applyDodgeBurnDab")]
-pub fn apply_dodge_burn_dab(
-    engine: &mut Engine, layer_id: &str,
-    cx: f64, cy: f64, size: f32, hardness: f32, exposure: f32,
-) {
-    dodge_burn_gpu::apply_dodge_burn_dab(&mut engine.inner, layer_id, cx, cy, size, hardness, exposure);
 }
 
 #[wasm_bindgen(js_name = "applyDodgeBurnDabBatch")]
@@ -440,14 +423,6 @@ pub fn begin_sponge_stroke(
 ) -> Result<(), JsError> {
     sponge_gpu::begin_sponge_stroke(&mut engine.inner, layer_id, mode)
         .map_err(|e| JsError::new(&e))
-}
-
-#[wasm_bindgen(js_name = "applySpongeDab")]
-pub fn apply_sponge_dab(
-    engine: &mut Engine, layer_id: &str,
-    cx: f64, cy: f64, size: f32, hardness: f32, strength: f32,
-) {
-    sponge_gpu::apply_sponge_dab(&mut engine.inner, layer_id, cx, cy, size, hardness, strength);
 }
 
 #[wasm_bindgen(js_name = "applySpongeDabBatch")]

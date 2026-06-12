@@ -1,7 +1,6 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
-import { PixelBuffer } from '../engine/pixel-data';
 import { invalidateBitmapCache, createPaintingCanvas, destroyPaintingCanvas } from '../engine/bitmap-cache';
 import { getEngine } from '../engine-wasm/engine-state';
 import {
@@ -17,7 +16,6 @@ import { smoothStroke, HOLD_TIMEOUT_MS } from '../tools/smooth-line/smooth-line'
 import { mirrorBatchPoints } from '../tools/symmetry';
 import { useToolSettingsStore } from './tool-settings-store';
 
-import { wrapWithSelectionMask } from './interactions/selection-mask-wrap';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { deferCacheLayerSnapshot } from './store/history-slice';
 import { clearPendingStroke } from './interactions/pending-stroke';
@@ -42,7 +40,6 @@ import {
 import {
   handleLiquifyDown,
   handleLiquifyMove,
-  handleLiquifyUp,
 } from './interactions/liquify-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
@@ -66,7 +63,6 @@ export interface ToolEvent {
   readonly metaKey: boolean;
   readonly ctrlKey: boolean;
 }
-import type { MaskedPixelBuffer } from '../engine/pixel-data';
 
 /** Finalize a deferred stroke from a previous mouseup. */
 function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } | null>): void {
@@ -83,12 +79,6 @@ function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } |
   clearJsPixelData(pending.layerId);
   useEditorStore.getState().notifyRender();
 }
-
-// Tools that don't need a pixel buffer (selection tools, eyedropper, text, etc.)
-// still receive an InteractionContext with non-null pixelBuffer/paintSurface
-// fields. Reuse one 1×1 placeholder rather than allocating per pointer-down.
-// TODO: drop these fields from InteractionContext entirely — nothing reads them.
-const PLACEHOLDER_PIXEL_BUFFER = PixelBuffer.wrapImageData(new ImageData(1, 1));
 
 /**
  * Pre-tool down guards run in priority order on mousedown — the first
@@ -130,11 +120,11 @@ export function useCanvasInteraction(
   useEffect(() => cancelHoldTimer, [cancelHoldTimer]);
 
   const buildContext = useCallback(
-    (e: ToolEvent, canvasPos: Point, layerPos: Point, activeLayerId: string, activeLayer: Layer, pixelBuffer: PixelBuffer, paintSurface: PixelBuffer | MaskedPixelBuffer): InteractionContext => ({
+    (e: ToolEvent, canvasPos: Point, layerPos: Point, activeLayerId: string, activeLayer: Layer): InteractionContext => ({
       canvasPos, layerPos,
       shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
       clientX: e.clientX, clientY: e.clientY,
-      activeLayerId, activeLayer, pixelBuffer, paintSurface,
+      activeLayerId, activeLayer,
       screenToCanvas, containerRef,
       stateRef, floatingSelectionRef, persistentTransformRef,
       stampSourceRef, stampOffsetRef, lastPaintPointRef,
@@ -194,8 +184,6 @@ export function useCanvasInteraction(
       const useGpu = engine && isGpuTool && !maskEditMode && !isQuickMaskMode;
       const useGpuStroke = useGpu && isPaintTool;
 
-      let pixelBuffer: PixelBuffer;
-      let paintSurface: PixelBuffer | MaskedPixelBuffer;
       let expandedLayer = activeLayer;
       let layerPos: Point = { x: canvasPos.x - activeLayer.x, y: canvasPos.y - activeLayer.y };
       let strokeContinuation = false;
@@ -242,8 +230,6 @@ export function useCanvasInteraction(
             }
           }
         }
-        pixelBuffer = PLACEHOLDER_PIXEL_BUFFER;
-        paintSurface = PLACEHOLDER_PIXEL_BUFFER;
       } else {
         // Finalize any pending GPU stroke so the layer texture includes it
         // before we read pixel data back for non-GPU tools (e.g. move).
@@ -261,16 +247,11 @@ export function useCanvasInteraction(
           const imageData = editorState.expandLayerForEditing(activeLayerId);
           expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
           layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
-          pixelBuffer = PixelBuffer.wrapImageData(imageData);
           invalidateBitmapCache(activeLayerId);
           createPaintingCanvas(activeLayerId, imageData);
-          paintSurface = wrapWithSelectionMask(pixelBuffer, expandedLayer.x, expandedLayer.y);
-        } else {
-          pixelBuffer = PLACEHOLDER_PIXEL_BUFFER;
-          paintSurface = PLACEHOLDER_PIXEL_BUFFER;
         }
       }
-      const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer, pixelBuffer, paintSurface);
+      const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer);
       if (useGpu) {
         ctx.isStrokeContinuation = true;
       }
@@ -331,7 +312,7 @@ export function useCanvasInteraction(
           const editorState = useEditorStore.getState();
           const layer = editorState.document.layers.find((l) => l.id === state.layerId);
           const layerPos = layer ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y } : canvasPos;
-          handleLiquifyMove(layerPos);
+          stateRef.current = handleLiquifyMove(state, layerPos);
           return;
         }
         case 'meshWarp':
@@ -354,8 +335,6 @@ export function useCanvasInteraction(
         clientX: e.clientX, clientY: e.clientY,
         activeLayerId: state.layerId,
         activeLayer: useEditorStore.getState().document.layers.find((l) => l.id === state.layerId)!,
-        pixelBuffer: state.pixelBuffer!,
-        paintSurface: state.pixelBuffer!,
         screenToCanvas, containerRef,
         stateRef, floatingSelectionRef, persistentTransformRef,
         stampSourceRef, stampOffsetRef, lastPaintPointRef,
@@ -481,7 +460,6 @@ export function useCanvasInteraction(
         stateRef.current = { ...INITIAL_INTERACTION_STATE };
         return;
       case 'liquify':
-        handleLiquifyUp();
         stateRef.current = { ...INITIAL_INTERACTION_STATE };
         return;
       case 'meshWarp':
@@ -514,8 +492,6 @@ export function useCanvasInteraction(
       clientX: e.clientX, clientY: e.clientY,
       activeLayerId: state.layerId ?? '',
       activeLayer: useEditorStore.getState().document.layers.find((l) => l.id === state.layerId)!,
-      pixelBuffer: state.pixelBuffer!,
-      paintSurface: state.pixelBuffer!,
       screenToCanvas, containerRef,
       stateRef, floatingSelectionRef, persistentTransformRef,
       stampSourceRef, stampOffsetRef, lastPaintPointRef,

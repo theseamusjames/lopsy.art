@@ -58,7 +58,7 @@ export function openFileFromDisk(): void {
   // restrict the picker to a single filter (often the last extension
   // listed), so users see only `.raf` files. List explicit extensions
   // for every supported type to keep all files visible.
-  input.accept = '.jpg,.jpeg,.png,.gif,.bmp,.tif,.tiff,.webp,.heic,.psd,.dng,.raf,.lopsy';
+  input.accept = '.jpg,.jpeg,.png,.gif,.bmp,.webp,.psd,.dng,.raf,.lopsy';
   input.onchange = () => {
     const file = input.files?.[0];
     if (!file) return;

@@ -424,20 +424,6 @@ pub fn clipboard_paste(
         .map_err(|e| JsError::new(&e))
 }
 
-#[wasm_bindgen(js_name = "clipboardGetInfo")]
-pub fn clipboard_get_info(engine: &Engine) -> Vec<i32> {
-    if engine.inner.clipboard_texture.is_some() {
-        vec![
-            engine.inner.clipboard_width as i32,
-            engine.inner.clipboard_height as i32,
-            engine.inner.clipboard_offset_x,
-            engine.inner.clipboard_offset_y,
-        ]
-    } else {
-        Vec::new()
-    }
-}
-
 #[wasm_bindgen(js_name = "readClipboardPixels")]
 pub fn read_clipboard_pixels(engine: &Engine) -> Result<Vec<u8>, JsError> {
     layer_manager::read_clipboard_pixels(&engine.inner)
@@ -490,18 +476,6 @@ pub fn has_float(engine: &Engine) -> bool {
     engine.inner.float_texture.is_some()
 }
 
-#[wasm_bindgen(js_name = "flipFloat")]
-pub fn flip_float(engine: &mut Engine, horizontal: bool) -> Result<(), JsError> {
-    layer_manager::flip_float(&mut engine.inner, horizontal)
-        .map_err(|e| JsError::new(&e))
-}
-
-#[wasm_bindgen(js_name = "rotateFloat90")]
-pub fn rotate_float_90(engine: &mut Engine, clockwise: bool) -> Result<(), JsError> {
-    layer_manager::rotate_float_90(&mut engine.inner, clockwise)
-        .map_err(|e| JsError::new(&e))
-}
-
 #[wasm_bindgen(js_name = "compositeFloatAffine")]
 pub fn composite_float_affine(
     engine: &mut Engine,
@@ -545,43 +519,6 @@ pub fn fill_with_color(
 // ============================================================
 // Compressed Layer I/O
 // ============================================================
-
-#[wasm_bindgen(js_name = "readLayerPixelsCompressed")]
-pub fn read_layer_pixels_compressed(engine: &Engine, layer_id: &str) -> Vec<u8> {
-    // Get content bounds
-    let pixels = match layer_manager::read_pixels(&engine.inner, layer_id) {
-        Ok(p) => p,
-        Err(_) => return Vec::new(),
-    };
-    let tex = match engine.inner.layer_textures.get(layer_id) {
-        Some(&t) => t,
-        None => return Vec::new(),
-    };
-    let (w, h) = engine.inner.texture_pool.get_size(tex).unwrap_or((0, 0));
-    if w == 0 || h == 0 {
-        return Vec::new();
-    }
-
-    let (cropped, rect) = lopsy_core::pixel_buffer::crop_to_content_bounds(&pixels, w, h);
-    if cropped.is_empty() {
-        return Vec::new();
-    }
-
-    // Build result: 24-byte header (6 x i32 LE) + raw cropped pixel data
-    // Header stores LOCAL crop offsets within the texture and the full texture size.
-    // On restore, we recreate the full-size texture and place the cropped content
-    // at the correct offset so that the layer position from the document state
-    // (set by syncLayers) renders everything correctly.
-    let mut result = Vec::with_capacity(24 + cropped.len());
-    result.extend_from_slice(&rect.x.to_le_bytes());        // crop_x (local to texture)
-    result.extend_from_slice(&rect.y.to_le_bytes());        // crop_y (local to texture)
-    result.extend_from_slice(&(rect.width as i32).to_le_bytes());  // crop_w
-    result.extend_from_slice(&(rect.height as i32).to_le_bytes()); // crop_h
-    result.extend_from_slice(&(w as i32).to_le_bytes());    // full texture width
-    result.extend_from_slice(&(h as i32).to_le_bytes());    // full texture height
-    result.extend_from_slice(&cropped);
-    result
-}
 
 #[wasm_bindgen(js_name = "uploadLayerPixelsCompressed")]
 pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compressed: &[u8]) -> Result<(), JsError> {
@@ -911,8 +848,13 @@ pub fn snapshot_layer_gpu(engine: &mut Engine, layer_id: &str) -> u32 {
         Err(_) => return u32::MAX,
     };
 
-    let dst_tex = engine.inner.texture_pool.get(dst_handle).cloned().unwrap();
-    let src_tex = engine.inner.texture_pool.get(src_handle).cloned().unwrap();
+    let (dst_tex, src_tex) = match (
+        engine.inner.texture_pool.get(dst_handle).cloned(),
+        engine.inner.texture_pool.get(src_handle).cloned(),
+    ) {
+        (Some(d), Some(s)) => (d, s),
+        _ => return u32::MAX,
+    };
 
     engine.inner.render_to_texture(&dst_tex, w as i32, h as i32, |eng| {
         eng.gl.use_program(Some(&eng.shaders.blit.program));

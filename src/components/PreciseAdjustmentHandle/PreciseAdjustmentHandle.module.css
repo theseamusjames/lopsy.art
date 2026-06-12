@@ -51,3 +51,8 @@
 .handle:focus-visible::before {
   border-bottom-color: var(--color-accent);
 }
+
+.handle {
+  left: var(--handle-x);
+  background-color: var(--handle-color);
+}

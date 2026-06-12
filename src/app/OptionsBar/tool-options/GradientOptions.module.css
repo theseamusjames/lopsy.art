@@ -28,3 +28,7 @@
   color: var(--color-text-primary);
   border-color: var(--color-text-secondary);
 }
+
+.swatch {
+  background: var(--gradient-css);
+}

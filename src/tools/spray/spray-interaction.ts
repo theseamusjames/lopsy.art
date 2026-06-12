@@ -70,8 +70,6 @@ export function handleSprayDown(
   const state: InteractionState = {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'spray',
     startPoint: null,

@@ -8,6 +8,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { swapBrushTip, restorePrimaryBrushTip } from '../../engine-wasm/engine-sync';
 import type { Engine } from '../../engine-wasm/wasm-bridge';
 import type { SubBrush } from '../../types/brush';
+import type { Point } from '../../types';
 import {
   applyBrushDab as gpuBrushDab,
   applyBrushDabBatch as gpuBrushDabBatch,
@@ -73,6 +74,23 @@ function getSymmetryConfig(center: { x: number; y: number }): SymmetryConfig {
   };
 }
 
+/**
+ * Flat-packed [x,y,x,y,...] dab line between two points at the standard
+ * 25%-of-size spacing, including both endpoints (interpolatePoints
+ * semantics). Shared by the quick-mask / layer-mask shift-line and
+ * move paths.
+ */
+function packDabLine(from: Point, to: Point, size: number): Float64Array {
+  const spacing = Math.max(1, size * 0.25);
+  const pts = interpolatePoints(from, to, spacing);
+  const arr = new Float64Array(pts.length * 2);
+  for (let i = 0; i < pts.length; i++) {
+    arr[i * 2] = pts[i]!.x;
+    arr[i * 2 + 1] = pts[i]!.y;
+  }
+  return arr;
+}
+
 export function handlePaintDown(
   ctx: InteractionContext,
   tool: PaintTool,
@@ -104,8 +122,6 @@ export function handlePaintDown(
     const state: InteractionState = {
       drawing: true,
       lastPoint: canvasPos,
-      pixelBuffer: null,
-      originalPixelBuffer: null,
       layerId: activeLayerId,
       tool,
       startPoint: null,
@@ -130,13 +146,7 @@ export function handlePaintDown(
       const hardness = toolSettings.brushHardness / 100;
       const opacity = toolSettings.brushOpacity / 100;
       if (shiftLine) {
-        const spacing = Math.max(1, size * 0.25);
-        const pts = interpolatePoints(qmShiftFrom, canvasPos, spacing);
-        const arr = new Float64Array(pts.length * 2);
-        for (let i = 0; i < pts.length; i++) {
-          arr[i * 2] = pts[i]!.x;
-          arr[i * 2 + 1] = pts[i]!.y;
-        }
+        const arr = packDabLine(qmShiftFrom, canvasPos, size);
         gpuQuickMaskDabBatch(engine, arr, size, hardness, opacity, mode);
       } else {
         gpuQuickMaskDab(engine, canvasPos.x, canvasPos.y, size, hardness, opacity, mode);
@@ -156,13 +166,7 @@ export function handlePaintDown(
       const hardness = 0.8;
       const opacity = toolSettings.settings.eraser.opacity / 100;
       if (shiftLine) {
-        const spacing = Math.max(1, size * 0.25);
-        const pts = interpolatePoints(qmShiftFrom, canvasPos, spacing);
-        const arr = new Float64Array(pts.length * 2);
-        for (let i = 0; i < pts.length; i++) {
-          arr[i * 2] = pts[i]!.x;
-          arr[i * 2 + 1] = pts[i]!.y;
-        }
+        const arr = packDabLine(qmShiftFrom, canvasPos, size);
         gpuQuickMaskDabBatch(engine, arr, size, hardness, opacity, mode);
       } else {
         gpuQuickMaskDab(engine, canvasPos.x, canvasPos.y, size, hardness, opacity, mode);
@@ -181,8 +185,6 @@ export function handlePaintDown(
     const state: InteractionState = {
       drawing: true,
       lastPoint: layerPos,
-      pixelBuffer: null,
-      originalPixelBuffer: null,
       layerId: activeLayerId,
       tool,
       startPoint: null,
@@ -209,13 +211,7 @@ export function handlePaintDown(
       const hardness = toolSettings.brushHardness / 100;
       const opacity = toolSettings.brushOpacity / 100;
       if (shiftLine) {
-        const spacing = Math.max(1, size * 0.25);
-        const pts = interpolatePoints(lineFrom, layerPos, spacing);
-        const arr = new Float64Array(pts.length * 2);
-        for (let i = 0; i < pts.length; i++) {
-          arr[i * 2] = pts[i]!.x;
-          arr[i * 2 + 1] = pts[i]!.y;
-        }
+        const arr = packDabLine(lineFrom, layerPos, size);
         gpuMaskDabBatch(engine, activeLayerId, arr, size, hardness, opacity, mode);
       } else {
         gpuMaskDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, opacity, mode);
@@ -232,13 +228,7 @@ export function handlePaintDown(
       const hardness = 0.8;
       const opacity = toolSettings.settings.eraser.opacity / 100;
       if (shiftLine) {
-        const spacing = Math.max(1, size * 0.25);
-        const pts = interpolatePoints(lineFrom, layerPos, spacing);
-        const arr = new Float64Array(pts.length * 2);
-        for (let i = 0; i < pts.length; i++) {
-          arr[i * 2] = pts[i]!.x;
-          arr[i * 2 + 1] = pts[i]!.y;
-        }
+        const arr = packDabLine(lineFrom, layerPos, size);
         gpuMaskDabBatch(engine, activeLayerId, arr, size, hardness, opacity, mode);
       } else {
         gpuMaskDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, opacity, mode);
@@ -269,8 +259,6 @@ export function handlePaintDown(
   const state: InteractionState = {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool,
     startPoint: null,
@@ -659,13 +647,7 @@ function handleMaskPaintMoveUnified(
     : (paintTool === 'eraser' ? 0 : 1);
 
   const emitDabs = (size: number, hardness: number, opacity: number) => {
-    const spacing = Math.max(1, size * 0.25);
-    const pts = interpolatePoints(state.lastPoint!, pos, spacing);
-    const arr = new Float64Array(pts.length * 2);
-    for (let i = 0; i < pts.length; i++) {
-      arr[i * 2] = pts[i]!.x;
-      arr[i * 2 + 1] = pts[i]!.y;
-    }
+    const arr = packDabLine(state.lastPoint!, pos, size);
     if (isQuickMask) {
       gpuQuickMaskDabBatch(engine, arr, size, hardness, opacity, mode);
     } else {

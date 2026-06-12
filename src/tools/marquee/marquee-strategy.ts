@@ -34,8 +34,6 @@ export const marqueeStrategy: SelectionToolStrategy = {
       return {
         drawing: true,
         lastPoint: canvasPos,
-        pixelBuffer: null,
-        originalPixelBuffer: null,
         layerId: activeLayerId,
         tool,
         startPoint: canvasPos,
@@ -52,8 +50,6 @@ export const marqueeStrategy: SelectionToolStrategy = {
     return {
       drawing: true,
       lastPoint: canvasPos,
-      pixelBuffer: null,
-      originalPixelBuffer: null,
       layerId: activeLayerId,
       tool,
       startPoint: canvasPos,

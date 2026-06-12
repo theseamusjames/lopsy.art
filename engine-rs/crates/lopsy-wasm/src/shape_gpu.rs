@@ -100,9 +100,8 @@ pub fn render_shape(
     let has_preview = engine.shape_preview_layer_id.as_deref() == Some(layer_id)
         && engine.shape_preview_texture.is_some();
     if has_preview {
-        let preview_tex = engine.texture_pool.get(
-            engine.shape_preview_texture.unwrap()
-        ).cloned();
+        let preview_tex = engine.shape_preview_texture
+            .and_then(|h| engine.texture_pool.get(h).cloned());
         if let Some(ptex) = preview_tex {
             engine.gl.disable(WebGl2RenderingContext::BLEND);
             engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {

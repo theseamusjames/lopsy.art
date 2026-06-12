@@ -72,7 +72,7 @@ engine-rs/          # Rust/WASM rendering engine (see below)
 ## Styling
 
 - **CSS Modules only**. Every component gets a co-located `.module.css` file.
-- No inline styles. No `style` props. No CSS-in-JS. No style objects in TypeScript. Zero styling logic in `.ts`/`.tsx` files.
+- No inline styles. No CSS-in-JS. No style objects in TypeScript. Exception: a `style` prop may set **CSS custom properties only** (e.g. `style={{ '--menu-x': `${x}px` } as React.CSSProperties}`) to feed runtime-computed values (positions, swatch colors, drag offsets) into module CSS — never direct CSS properties.
 - Use CSS custom properties from `src/styles/tokens.css` for all colors, spacing, radii, shadows, font sizes, and z-index values.
 - No CSS frameworks (no Tailwind, no Bootstrap, no styled-components).
 - Dark theme is the default. Light theme toggles via `.theme-light` on the root element.

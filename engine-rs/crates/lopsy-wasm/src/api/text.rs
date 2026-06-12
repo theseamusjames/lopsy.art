@@ -5,10 +5,7 @@ use crate::Engine;
 use crate::text_gpu::TextRendererState;
 
 fn ensure_text_renderer(engine: &mut Engine) -> &mut TextRendererState {
-    if engine.inner.text_renderer.is_none() {
-        engine.inner.text_renderer = Some(TextRendererState::new());
-    }
-    engine.inner.text_renderer.as_mut().unwrap()
+    engine.inner.text_renderer.get_or_insert_with(TextRendererState::new)
 }
 
 /// Load raw font bytes into the engine's fontdb.
@@ -67,13 +64,6 @@ pub fn get_rendered_text_pixels(engine: &mut Engine, layer_id: &str) -> Vec<u8> 
         Some(tr) => tr.get_rendered_pixels(layer_id),
         None => vec![],
     }
-}
-
-/// Measure the bounding box. Returns [x, y, width, height] as a flat f64 array.
-#[wasm_bindgen(js_name = "measureTextBounds")]
-pub fn measure_text_bounds(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
-    let tr = ensure_text_renderer(engine);
-    tr.measure_text_bounds(layer_id).to_vec()
 }
 
 /// Returns per-glyph positions as a flat f64 array of [x, y, w, h, cluster]... tuples.

@@ -51,8 +51,6 @@ export function handlePathDown(ctx: InteractionContext): InteractionState | unde
       return {
         drawing: true,
         lastPoint: canvasPos,
-        pixelBuffer: null,
-        originalPixelBuffer: null,
         layerId: activeLayerId,
         tool: 'path',
         startPoint: canvasPos,
@@ -80,8 +78,6 @@ export function handlePathDown(ctx: InteractionContext): InteractionState | unde
       return {
         drawing: true,
         lastPoint: canvasPos,
-        pixelBuffer: null,
-        originalPixelBuffer: null,
         layerId: activeLayerId,
         tool: 'path',
         startPoint: canvasPos,
@@ -124,8 +120,6 @@ export function handlePathDown(ctx: InteractionContext): InteractionState | unde
   return {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'path',
     startPoint: layerPos,

@@ -17,6 +17,7 @@ pub fn read_psd(data: &[u8]) -> Result<PsdDocument, PsdError> {
     let layers = if layers.is_empty() {
         let composite = read_merged_composite(&mut cursor, &header)?;
         vec![PsdLayer {
+            source_kind: PsdSourceKind::Raster,
             name: "Background".to_string(),
             visible: true,
             opacity: 255,
@@ -213,6 +214,7 @@ struct LayerRecord {
     group_kind: GroupKind,
     mask: Option<MaskRecord>,
     effects_json: Option<String>,
+    source_kind: PsdSourceKind,
 }
 
 struct ChannelInfo {
@@ -316,6 +318,7 @@ fn read_layer_info_body(c: &mut PsdCursor, header: &PsdHeader, end: usize) -> Re
         let (pixel_data, mask) = read_all_layer_channels(c, &record, header)?;
 
         layers.push(PsdLayer {
+            source_kind: record.source_kind,
             name: record.name,
             visible: record.visible,
             opacity: record.opacity,
@@ -408,6 +411,7 @@ fn read_layer_record(c: &mut PsdCursor) -> Result<LayerRecord, PsdError> {
     let mut unicode_name: Option<String> = None;
     let mut group_kind = GroupKind::Normal;
     let mut effects_json: Option<String> = None;
+    let mut source_kind = PsdSourceKind::Raster;
 
     while c.position() + 12 <= extra_end {
         let ali_sig = c.read_bytes(4)?;
@@ -444,6 +448,14 @@ fn read_layer_record(c: &mut PsdCursor) -> Result<LayerRecord, PsdError> {
                     effects_json = Some(s.to_string());
                 }
             }
+            // Photoshop-native layer kinds Lopsy imports as raster pixels.
+            // Recorded so the UI can warn that editability was flattened.
+            b"TySh" | b"tySh" => source_kind = PsdSourceKind::Text,
+            b"SoLd" | b"SoLE" | b"PlLd" => source_kind = PsdSourceKind::SmartObject,
+            b"SoCo" | b"GdFl" | b"PtFl" => source_kind = PsdSourceKind::Fill,
+            b"levl" | b"curv" | b"brit" | b"hue " | b"hue2" | b"blnc" | b"selc"
+            | b"grdm" | b"phfl" | b"mixr" | b"blwh" | b"vibA" | b"expA" | b"post"
+            | b"thrs" | b"nvrt" => source_kind = PsdSourceKind::Adjustment,
             _ => {}
         }
 
@@ -485,6 +497,7 @@ fn read_layer_record(c: &mut PsdCursor) -> Result<LayerRecord, PsdError> {
         group_kind,
         mask,
         effects_json,
+        source_kind,
     })
 }
 
@@ -687,11 +700,12 @@ fn decode_channel(
                 }
             }
         }
-        _ => {
-            // Unknown compression — skip
-            c.skip(data_len)?;
-            let bpc = header.depth.bytes_per_channel();
-            Ok(vec![0; w * h * bpc])
+        other => {
+            // Silently zero-filling here would import the layer as black
+            // with no indication anything went wrong — fail loudly instead.
+            Err(PsdError::InvalidLayerData(format!(
+                "unsupported channel compression type {other}"
+            )))
         }
     }
 }
@@ -830,6 +844,7 @@ mod tests {
             height: h,
             depth: PsdDepth::Eight,
             layers: vec![PsdLayer {
+                source_kind: PsdSourceKind::Raster,
                 name: "Red".to_string(),
                 visible: true,
                 opacity: 200,
@@ -860,6 +875,7 @@ mod tests {
             height: h,
             depth: PsdDepth::Sixteen,
             layers: vec![PsdLayer {
+                source_kind: PsdSourceKind::Raster,
                 name: "16bit layer".to_string(),
                 visible: true,
                 opacity: 255,
@@ -923,6 +939,7 @@ mod tests {
             depth: PsdDepth::Eight,
             layers: vec![
                 PsdLayer {
+                    source_kind: PsdSourceKind::Raster,
                     name: "BG".to_string(),
                     visible: true,
                     opacity: 255,
@@ -935,6 +952,7 @@ mod tests {
                     effects_json: None,
                 },
                 PsdLayer {
+                    source_kind: PsdSourceKind::Raster,
                     name: "".to_string(),
                     visible: true,
                     opacity: 255,
@@ -947,6 +965,7 @@ mod tests {
                     effects_json: None,
                 },
                 PsdLayer {
+                    source_kind: PsdSourceKind::Raster,
                     name: "Child".to_string(),
                     visible: true,
                     opacity: 128,
@@ -959,6 +978,7 @@ mod tests {
                     effects_json: None,
                 },
                 PsdLayer {
+                    source_kind: PsdSourceKind::Raster,
                     name: "My Group".to_string(),
                     visible: true,
                     opacity: 255,

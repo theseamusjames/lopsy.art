@@ -82,9 +82,23 @@ pub struct PsdMask {
     pub default_color: u8,
 }
 
+/// What kind of Photoshop layer the raster pixels came from. Lopsy
+/// imports everything as raster; this records what was flattened so the
+/// UI can tell the user which editable features were rasterized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PsdSourceKind {
+    #[default]
+    Raster,
+    Text,
+    Adjustment,
+    Fill,
+    SmartObject,
+}
+
 /// A single layer in a PSD document.
 #[derive(Debug, Clone)]
 pub struct PsdLayer {
+    pub source_kind: PsdSourceKind,
     pub name: String,
     pub visible: bool,
     /// 0–255

@@ -21,8 +21,6 @@ const LIQUIFY_MODE_MAP: Record<string, number> = {
   pinch: 4,
 };
 
-let stroke: { lastPoint: Point } | null = null;
-
 /**
  * Pre-tool down guard for the liquify gesture. When a liquify session
  * is active, all pointer-downs are claimed by liquify regardless of
@@ -42,26 +40,30 @@ export function handleLiquifyDown(
   const layerPos = layer
     ? { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y }
     : canvasPos;
-  stroke = { lastPoint: layerPos };
 
   return {
     ...INITIAL_INTERACTION_STATE,
     drawing: true,
-    gesture: { kind: 'liquify' },
+    gesture: { kind: 'liquify', lastPoint: layerPos },
     layerId: activeLayerId,
   };
 }
 
-export function handleLiquifyMove(layerPos: Point): boolean {
+/**
+ * Applies a liquify dab and returns the state with the gesture's
+ * lastPoint advanced. Returns the input state unchanged when no
+ * session is active or the gesture isn't liquify.
+ */
+export function handleLiquifyMove(state: InteractionState, layerPos: Point): InteractionState {
+  if (state.gesture.kind !== 'liquify') return state;
   const session = useUIStore.getState().liquify;
-  if (!session) return false;
-  if (!stroke) return true;
+  if (!session) return state;
 
   const engine = getEngine();
-  if (!engine) return true;
+  if (!engine) return state;
 
-  const dragDx = layerPos.x - stroke.lastPoint.x;
-  const dragDy = layerPos.y - stroke.lastPoint.y;
+  const dragDx = layerPos.x - state.gesture.lastPoint.x;
+  const dragDy = layerPos.y - state.gesture.lastPoint.y;
   const mode = LIQUIFY_MODE_MAP[session.settings.mode] ?? 0;
 
   liquifyApplyDabGpu(
@@ -77,14 +79,5 @@ export function handleLiquifyMove(layerPos: Point): boolean {
 
   liquifyRender(engine, session.layerId, 2048);
 
-  stroke = { lastPoint: layerPos };
-  return true;
-}
-
-export function handleLiquifyUp(): boolean {
-  const session = useUIStore.getState().liquify;
-  if (!session) return false;
-
-  stroke = null;
-  return true;
+  return { ...state, gesture: { kind: 'liquify', lastPoint: layerPos } };
 }

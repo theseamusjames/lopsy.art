@@ -99,8 +99,8 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             if let Some(ref agid) = active_group_id {
                 if *agid == layer_id {
                     // This is the group marker — finalize its children
-                    let gs_fbo = engine.group_scratch_fbo.expect("group scratch FBO allocated");
-                    let gs_tex = engine.group_scratch_texture.expect("group scratch texture allocated");
+                    let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
+                    let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
 
                     // Cache the pre-adjustment composited children so subsequent
                     // frames that only change adjustment values (not children)
@@ -313,8 +313,8 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         let (src_handle, src_w, src_h) = composite_src.unwrap_or((tex_handle, tw, th));
         if let Some(src_tex) = engine.texture_pool.get(src_handle).cloned() {
             if is_group_child {
-                let gs_tex = engine.group_scratch_texture.expect("group scratch texture allocated");
-                let gs_fbo = engine.group_scratch_fbo.expect("group scratch FBO allocated");
+                let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
+                let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
                 blend_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
             } else {
                 blend_onto_composite(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
@@ -330,8 +330,8 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                     let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
                     let combined_opacity = opacity;
                     if is_group_child {
-                        let gs_tex = engine.group_scratch_texture.expect("group scratch texture allocated");
-                        let gs_fbo = engine.group_scratch_fbo.expect("group scratch FBO allocated");
+                        let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
+                        let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
                         blend_onto_target(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
                     } else {
                         blend_onto_composite(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
@@ -395,7 +395,6 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
 
     engine.draw_fullscreen_quad();
 
-    engine.dirty_layers.clear();
     engine.needs_recomposite = false;
     Ok(())
 }
@@ -1320,8 +1319,8 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
         if *layer_type == lopsy_core::layer::LayerType::Group {
             if let Some(ref agid) = active_group_id {
                 if agid == layer_id {
-                    let gs_fbo = engine.group_scratch_fbo.expect("group scratch FBO allocated");
-                    let gs_tex = engine.group_scratch_texture.expect("group scratch texture allocated");
+                    let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
+                    let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
                     if let Some(ga) = engine.group_adjustments.get(layer_id) {
                         let adj = ga.adjustments.clone();
                         apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
@@ -1389,8 +1388,8 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
         let is_group_child = active_group_id.is_some();
         if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
             if is_group_child {
-                let gs_tex = engine.group_scratch_texture.expect("group scratch texture allocated");
-                let gs_fbo = engine.group_scratch_fbo.expect("group scratch FBO allocated");
+                let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
+                let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
                 blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
             } else {
                 blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
@@ -1447,8 +1446,8 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
         if *layer_type == lopsy_core::layer::LayerType::Group {
             if let Some(ref agid) = active_group_id {
                 if agid == layer_id {
-                    let gs_fbo = engine.group_scratch_fbo.expect("group scratch FBO allocated");
-                    let gs_tex = engine.group_scratch_texture.expect("group scratch texture allocated");
+                    let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
+                    let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
                     if let Some(ga) = engine.group_adjustments.get(layer_id) {
                         let adj = ga.adjustments.clone();
                         apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
@@ -1516,8 +1515,8 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
         let is_group_child = active_group_id.is_some();
         if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
             if is_group_child {
-                let gs_tex = engine.group_scratch_texture.expect("group scratch texture allocated");
-                let gs_fbo = engine.group_scratch_fbo.expect("group scratch FBO allocated");
+                let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
+                let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
                 blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
             } else {
                 blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));

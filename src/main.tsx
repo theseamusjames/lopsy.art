@@ -8,7 +8,7 @@ import { usePatternStore } from './app/pattern-store';
 import { useShortcutStore } from './app/store/shortcut-store';
 import { pixelDataManager } from './engine/pixel-data-manager';
 import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
-import { render as renderWasm, readLayerPixels, getLayerTextureDimensions, initWasm, isFontLoaded } from './engine-wasm/wasm-bridge';
+import { render as renderWasm, markAllDirty, readLayerPixels, getLayerTextureDimensions, initWasm, isFontLoaded } from './engine-wasm/wasm-bridge';
 import {
   syncDocumentSize,
   syncBackgroundColor,
@@ -23,6 +23,7 @@ import { loadProject } from './io/project-load';
 import { importRafFile } from './io/raf';
 import { compositeForExport, getCompositeSize } from './engine-wasm/wasm-bridge';
 import { flushLayerSync } from './engine-wasm/engine-sync';
+import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/reset.css';
 
@@ -82,6 +83,9 @@ if (import.meta.env.DEV) {
         syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds);
         syncGroupAdjustments(engine, doc.layers);
         syncSelection(engine, state.selection);
+        // render() skips clean frames; force a recomposite so readPixels
+        // sees fresh drawing-buffer content in this same task.
+        markAllDirty(engine);
         renderWasm(engine);
         const gl = canvas.getContext('webgl2');
         if (!gl) { resolve(null); return; }

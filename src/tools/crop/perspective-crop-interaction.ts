@@ -82,8 +82,6 @@ export function handlePerspectiveCropDown(ctx: InteractionContext): InteractionS
   return {
     drawing: true,
     lastPoint: canvasPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'crop',
     startPoint: canvasPos,

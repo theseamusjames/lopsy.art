@@ -33,7 +33,7 @@ export function ColorSwatch({
       type="button"
       aria-label={`Color: rgb(${color.r}, ${color.g}, ${color.b})`}
     >
-      <div className={styles.color} style={{ backgroundColor: colorToCSS(color) }} />
+      <div className={styles.color} style={{ '--swatch-color': colorToCSS(color) } as React.CSSProperties} />
     </button>
   );
 }

@@ -218,3 +218,8 @@
   text-align: right;
   flex-shrink: 0;
 }
+
+.colorPopover {
+  top: var(--popover-top);
+  left: var(--popover-left);
+}

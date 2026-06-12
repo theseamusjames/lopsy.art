@@ -11,7 +11,7 @@ export function ChannelMixerControls({ node, onChange }: NodeControlProps<Channe
           <button key={ch} type="button" role="tab"
             aria-selected={node.outputChannel === ch}
             className={`${styles.channelTab} ${node.outputChannel === ch ? styles.channelTabActive : ''}`}
-            style={{ color: ch === 'red' ? '#ff5e5e' : ch === 'green' ? '#5eff7e' : '#5e9eff' }}
+            style={{ '--channel-color': ch === 'red' ? '#ff5e5e' : ch === 'green' ? '#5eff7e' : '#5e9eff' } as React.CSSProperties}
             onClick={() => onChange({ outputChannel: ch })}
           >
             {ch.charAt(0).toUpperCase()}

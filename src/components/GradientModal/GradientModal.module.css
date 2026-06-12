@@ -124,3 +124,7 @@
 .closeButton:active {
   background: var(--color-accent-active);
 }
+
+.stopColorPreview {
+  background-color: var(--swatch-color);
+}

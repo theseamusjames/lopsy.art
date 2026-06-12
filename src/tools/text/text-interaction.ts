@@ -217,8 +217,6 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
   return {
     drawing: true,
     lastPoint: canvasPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'text',
     startPoint: canvasPos,

@@ -31,7 +31,7 @@ export function LayerContextMenu({ x, y, currentTag, onSetColorTag, onClose }: L
     <div
       ref={menuRef}
       className={styles.contextMenu}
-      style={{ left: x, top: y }}
+      style={{ '--menu-x': `${x}px`, '--menu-y': `${y}px` } as React.CSSProperties}
       onMouseDown={handleMouseDown}
       role="menu"
       aria-label="Layer options"
@@ -46,7 +46,7 @@ export function LayerContextMenu({ x, y, currentTag, onSetColorTag, onClose }: L
               styles.colorTagSwatch,
               currentTag === tag ? styles.colorTagSwatchActive : '',
             ].filter(Boolean).join(' ')}
-            style={{ background: color }}
+            style={{ '--swatch-color': color } as React.CSSProperties}
             onClick={() => onSetColorTag(tag)}
             type="button"
             aria-label={label}

@@ -25,8 +25,6 @@ export function handleEyedropperDown(ctx: InteractionContext): InteractionState 
   return {
     drawing: true,
     lastPoint: canvasPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'eyedropper',
     startPoint: null,

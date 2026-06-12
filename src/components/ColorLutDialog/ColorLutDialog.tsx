@@ -164,7 +164,7 @@ export function ColorLutDialog({ onApply, onCancel, onPreviewChange, onPreviewSt
         role="dialog"
         aria-label="Color LUT"
         onKeyDown={handleKeyDown}
-        style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+        style={{ '--drag-x': `${offset.x}px`, '--drag-y': `${offset.y}px` } as React.CSSProperties}
       >
         <div className={styles.header} {...dragProps}>
           <h2>Color LUT</h2>
@@ -197,7 +197,7 @@ export function ColorLutDialog({ onApply, onCancel, onPreviewChange, onPreviewSt
             ref={fileInputRef}
             type="file"
             accept=".cube"
-            style={{ display: 'none' }}
+            className={styles.hiddenInput}
             onChange={handleFileChange}
           />
           <Slider

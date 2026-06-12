@@ -158,6 +158,7 @@ pub fn export_psd(
         };
 
         psd_layers.push(PsdLayer {
+            source_kind: PsdSourceKind::Raster,
             name: meta.name.clone(),
             visible: meta.visible,
             opacity: meta.opacity,
@@ -206,6 +207,8 @@ pub fn parse_psd(data: &[u8]) -> Result<String, JsError> {
         height: u32,
         clip_to_below: bool,
         group_kind: u8,
+        /// 'raster' | 'text' | 'adjustment' | 'fill' | 'smartObject'
+        source_kind: &'static str,
         has_mask: bool,
         mask_x: Option<i32>,
         mask_y: Option<i32>,
@@ -231,6 +234,14 @@ pub fn parse_psd(data: &[u8]) -> Result<String, JsError> {
             lopsy_core::psd::types::GroupKind::GroupEnd => 3,
         };
 
+        let source_kind = match l.source_kind {
+            lopsy_core::psd::types::PsdSourceKind::Raster => "raster",
+            lopsy_core::psd::types::PsdSourceKind::Text => "text",
+            lopsy_core::psd::types::PsdSourceKind::Adjustment => "adjustment",
+            lopsy_core::psd::types::PsdSourceKind::Fill => "fill",
+            lopsy_core::psd::types::PsdSourceKind::SmartObject => "smartObject",
+        };
+
         LayerInfo {
             name: l.name.clone(),
             visible: l.visible,
@@ -242,6 +253,7 @@ pub fn parse_psd(data: &[u8]) -> Result<String, JsError> {
             height: l.rect.height(),
             clip_to_below: l.clip_to_below,
             group_kind,
+            source_kind,
             has_mask: l.mask.is_some(),
             mask_x: l.mask.as_ref().map(|m| m.rect.left),
             mask_y: l.mask.as_ref().map(|m| m.rect.top),

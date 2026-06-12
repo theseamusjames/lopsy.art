@@ -353,19 +353,19 @@ pub fn set_group_curves_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> 
     if !engine.inner.group_adjustments.contains_key(group_id) {
         return Err(JsError::new("Group not found — call setGroupAdjustments first"));
     }
-    let existing = engine.inner.group_adjustments.get(group_id).unwrap().adjustments.curves_texture;
+    let existing = engine.inner.group_adjustments.get(group_id).and_then(|g| g.adjustments.curves_texture);
     let tex = match existing {
         Some(t) => t,
         None => {
             let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
                 .map_err(|e| JsError::new(&e))?;
-            engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.curves_texture = Some(t);
+            if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.curves_texture = Some(t); }
             t
         }
     };
     engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.has_curves = true;
+    if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.has_curves = true; }
     engine.inner.needs_recomposite = true;
     Ok(())
 }
@@ -378,19 +378,19 @@ pub fn set_group_levels_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> 
     if !engine.inner.group_adjustments.contains_key(group_id) {
         return Err(JsError::new("Group not found — call setGroupAdjustments first"));
     }
-    let existing = engine.inner.group_adjustments.get(group_id).unwrap().adjustments.levels_texture;
+    let existing = engine.inner.group_adjustments.get(group_id).and_then(|g| g.adjustments.levels_texture);
     let tex = match existing {
         Some(t) => t,
         None => {
             let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
                 .map_err(|e| JsError::new(&e))?;
-            engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.levels_texture = Some(t);
+            if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.levels_texture = Some(t); }
             t
         }
     };
     engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.has_levels = true;
+    if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.has_levels = true; }
     engine.inner.needs_recomposite = true;
     Ok(())
 }
@@ -479,15 +479,6 @@ pub fn set_group_black_white(engine: &mut Engine, group_id: &str, reds: f32, yel
     Ok(())
 }
 
-#[wasm_bindgen(js_name = "clearGroupBlackWhite")]
-pub fn clear_group_black_white(engine: &mut Engine, group_id: &str) -> Result<(), JsError> {
-    let ga = engine.inner.group_adjustments.get_mut(group_id)
-        .ok_or_else(|| JsError::new("Group not found"))?;
-    ga.adjustments.bw_enabled = false;
-    engine.inner.needs_recomposite = true;
-    Ok(())
-}
-
 #[wasm_bindgen(js_name = "setGroupChannelMixer")]
 pub fn set_group_channel_mixer(
     engine: &mut Engine, group_id: &str,
@@ -505,15 +496,6 @@ pub fn set_group_channel_mixer(
     Ok(())
 }
 
-#[wasm_bindgen(js_name = "clearGroupChannelMixer")]
-pub fn clear_group_channel_mixer(engine: &mut Engine, group_id: &str) -> Result<(), JsError> {
-    let ga = engine.inner.group_adjustments.get_mut(group_id)
-        .ok_or_else(|| JsError::new("Group not found"))?;
-    ga.adjustments.cm_enabled = false;
-    engine.inner.needs_recomposite = true;
-    Ok(())
-}
-
 #[wasm_bindgen(js_name = "setGroupGradientMapLut")]
 pub fn set_group_gradient_map_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> Result<(), JsError> {
     if lut.len() != 256 * 4 {
@@ -522,32 +504,20 @@ pub fn set_group_gradient_map_lut(engine: &mut Engine, group_id: &str, lut: &[u8
     if !engine.inner.group_adjustments.contains_key(group_id) {
         return Err(JsError::new("Group not found — call setGroupAdjustments first"));
     }
-    let existing = engine.inner.group_adjustments.get(group_id).unwrap().adjustments.gradient_map_texture;
+    let existing = engine.inner.group_adjustments.get(group_id).and_then(|g| g.adjustments.gradient_map_texture);
     let tex = match existing {
         Some(t) => t,
         None => {
             let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
                 .map_err(|e| JsError::new(&e))?;
-            engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.gradient_map_texture = Some(t);
+            if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.gradient_map_texture = Some(t); }
             t
         }
     };
     engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.group_adjustments.get_mut(group_id).unwrap().adjustments.has_gradient_map = true;
+    if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.has_gradient_map = true; }
     engine.inner.needs_recomposite = true;
-    Ok(())
-}
-
-#[wasm_bindgen(js_name = "clearGroupGradientMap")]
-pub fn clear_group_gradient_map(engine: &mut Engine, group_id: &str) -> Result<(), JsError> {
-    if let Some(ga) = engine.inner.group_adjustments.get_mut(group_id) {
-        if let Some(tex) = ga.adjustments.gradient_map_texture.take() {
-            engine.inner.texture_pool.release(tex);
-        }
-        ga.adjustments.has_gradient_map = false;
-        engine.inner.needs_recomposite = true;
-    }
     Ok(())
 }
 

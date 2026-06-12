@@ -62,8 +62,6 @@ export function handleHealingDown(ctx: InteractionContext): InteractionState | u
   return {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'healing',
     startPoint: layerPos,

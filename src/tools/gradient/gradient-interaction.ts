@@ -49,8 +49,6 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   return {
     drawing: true,
     lastPoint: layerPos,
-    pixelBuffer: null,
-    originalPixelBuffer: null,
     layerId: activeLayerId,
     tool: 'gradient',
     startPoint: layerPos,

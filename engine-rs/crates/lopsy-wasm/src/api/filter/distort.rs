@@ -141,25 +141,6 @@ pub fn liquify_init_displacement(
     engine.inner.liquify_disp_texture = Some(handle);
 }
 
-/// Upload a dirty sub-rectangle to the persistent displacement texture.
-/// `data` is a contiguous RGBA8 block of size `rw * rh * 4`.
-#[wasm_bindgen(js_name = "liquifyUploadRegion")]
-pub fn liquify_upload_region(
-    engine: &mut Engine,
-    data: &[u8],
-    rx: i32,
-    ry: i32,
-    rw: u32,
-    rh: u32,
-) {
-    let handle = match engine.inner.liquify_disp_texture {
-        Some(h) => h,
-        None => return,
-    };
-    let gl = &engine.inner.gl;
-    let _ = engine.inner.texture_pool.upload_rgba(gl, handle, rx, ry, rw, rh, data);
-}
-
 /// Render the liquify warp: source = filter preview backup, displacement =
 /// persistent displacement texture, output = layer texture.
 #[wasm_bindgen(js_name = "liquifyRender")]

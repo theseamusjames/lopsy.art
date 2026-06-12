@@ -6,8 +6,10 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# Rust 1.87+ emits bulk-memory / sign-ext / nontrapping-fptoint by
+# default; wasm-opt must be told they are allowed.
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = false
+wasm-opt = ["-O3", "--enable-bulk-memory", "--enable-sign-ext", "--enable-nontrapping-float-to-int", "--enable-mutable-globals"]
 
 [dependencies]
 lopsy-core = { path = "../lopsy-core" }

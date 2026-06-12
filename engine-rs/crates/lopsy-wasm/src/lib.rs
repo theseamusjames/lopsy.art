@@ -78,14 +78,15 @@ pub fn clear_all_layers(engine: &mut Engine) {
 
 #[wasm_bindgen(js_name = "render")]
 pub fn render(engine: &mut Engine) {
+    // Every mutation that affects the composite sets needs_recomposite
+    // (via mark_layer_dirty or directly). Skipping clean frames keeps
+    // cursor moves and overlay-only updates from re-blending every layer.
+    if !engine.inner.needs_recomposite {
+        return;
+    }
     if let Err(e) = compositor::composite(&mut engine.inner) {
         web_sys::console::error_1(&format!("compositor error: {e}").into());
     }
-}
-
-#[wasm_bindgen(js_name = "markLayerDirty")]
-pub fn mark_layer_dirty(engine: &mut Engine, layer_id: &str) {
-    engine.inner.mark_layer_dirty(layer_id);
 }
 
 #[wasm_bindgen(js_name = "markAllDirty")]
@@ -145,31 +146,6 @@ pub fn screen_to_canvas(
     view_width: f64, view_height: f64,
 ) -> Vec<f64> {
     let (cx, cy) = geometry::screen_to_canvas(screen_x, screen_y, zoom, pan_x, pan_y, view_width, view_height);
-    vec![cx, cy]
-}
-
-#[wasm_bindgen(js_name = "canvasToScreen")]
-pub fn canvas_to_screen(
-    canvas_x: f64, canvas_y: f64,
-    zoom: f64, pan_x: f64, pan_y: f64,
-    view_width: f64, view_height: f64,
-) -> Vec<f64> {
-    let (sx, sy) = geometry::canvas_to_screen(canvas_x, canvas_y, zoom, pan_x, pan_y, view_width, view_height);
-    vec![sx, sy]
-}
-
-#[wasm_bindgen(js_name = "getVisibleRegion")]
-pub fn get_visible_region(
-    zoom: f64, pan_x: f64, pan_y: f64,
-    view_width: f64, view_height: f64,
-) -> Vec<f64> {
-    let (x, y, w, h) = geometry::get_visible_region(zoom, pan_x, pan_y, view_width, view_height);
-    vec![x, y, w, h]
-}
-
-#[wasm_bindgen(js_name = "screenDeltaToCanvas")]
-pub fn screen_delta_to_canvas(dx: f64, dy: f64, zoom: f64) -> Vec<f64> {
-    let (cx, cy) = geometry::screen_delta_to_canvas(dx, dy, zoom);
     vec![cx, cy]
 }
 

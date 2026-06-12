@@ -184,9 +184,9 @@ export function NavigatorPanel() {
               <div
                 className={styles.minimapWrapper}
                 style={{
-                  width: thumbnailSize.width,
-                  height: thumbnailSize.height,
-                }}
+                  '--minimap-width': `${thumbnailSize.width}px`,
+                  '--minimap-height': `${thumbnailSize.height}px`,
+                } as React.CSSProperties}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
@@ -204,11 +204,11 @@ export function NavigatorPanel() {
                   className={styles.viewportIndicator}
                   data-testid="navigator-viewport-indicator"
                   style={{
-                    left: vpRect.x,
-                    top: vpRect.y,
-                    width: Math.max(4, vpRect.width),
-                    height: Math.max(4, vpRect.height),
-                  }}
+                    '--indicator-x': `${vpRect.x}px`,
+                    '--indicator-y': `${vpRect.y}px`,
+                    '--indicator-width': `${Math.max(4, vpRect.width)}px`,
+                    '--indicator-height': `${Math.max(4, vpRect.height)}px`,
+                  } as React.CSSProperties}
                 />
               </div>
             )}

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use web_sys::WebGl2RenderingContext;
 
 use lopsy_core::geometry::ViewportState;
@@ -158,7 +158,6 @@ pub struct EngineInner {
     pub doc_width: u32,
     pub doc_height: u32,
     pub bg_color: [f32; 4],
-    pub dirty_layers: HashSet<String>,
     pub needs_recomposite: bool,
     // Brush state
     pub stroke_textures: HashMap<String, TextureHandle>,
@@ -316,9 +315,9 @@ impl EngineInner {
         let scratch_fbo_b = fbo_pool.create(&gl)?;
         let render_fbo = fbo_pool.create(&gl)?;
 
-        fbo_pool.attach_texture(&gl, composite_fbo, texture_pool.get(composite_texture).unwrap());
-        fbo_pool.attach_texture(&gl, scratch_fbo_a, texture_pool.get(scratch_texture_a).unwrap());
-        fbo_pool.attach_texture(&gl, scratch_fbo_b, texture_pool.get(scratch_texture_b).unwrap());
+        fbo_pool.attach_texture(&gl, composite_fbo, texture_pool.get(composite_texture).ok_or("texture pool handle invalid")?);
+        fbo_pool.attach_texture(&gl, scratch_fbo_a, texture_pool.get(scratch_texture_a).ok_or("texture pool handle invalid")?);
+        fbo_pool.attach_texture(&gl, scratch_fbo_b, texture_pool.get(scratch_texture_b).ok_or("texture pool handle invalid")?);
 
         Ok(Self {
             gl,
@@ -340,7 +339,6 @@ impl EngineInner {
             doc_width: doc_w,
             doc_height: doc_h,
             bg_color: [1.0, 1.0, 1.0, 1.0],
-            dirty_layers: HashSet::new(),
             needs_recomposite: true,
             stroke_textures: HashMap::new(),
             stroke_opacity: HashMap::new(),
@@ -447,15 +445,15 @@ impl EngineInner {
 
         self.fbo_pool.attach_texture(
             &self.gl, self.composite_fbo,
-            self.texture_pool.get(self.composite_texture).unwrap(),
+            self.texture_pool.get(self.composite_texture).ok_or("texture pool handle invalid")?,
         );
         self.fbo_pool.attach_texture(
             &self.gl, self.scratch_fbo_a,
-            self.texture_pool.get(self.scratch_texture_a).unwrap(),
+            self.texture_pool.get(self.scratch_texture_a).ok_or("texture pool handle invalid")?,
         );
         self.fbo_pool.attach_texture(
             &self.gl, self.scratch_fbo_b,
-            self.texture_pool.get(self.scratch_texture_b).unwrap(),
+            self.texture_pool.get(self.scratch_texture_b).ok_or("texture pool handle invalid")?,
         );
 
         self.needs_recomposite = true;
@@ -472,8 +470,7 @@ impl EngineInner {
         self.needs_recomposite = true;
     }
 
-    pub fn mark_layer_dirty(&mut self, layer_id: &str) {
-        self.dirty_layers.insert(layer_id.to_string());
+    pub fn mark_layer_dirty(&mut self, _layer_id: &str) {
         self.needs_recomposite = true;
         self.group_pre_adj_valid = false;
     }
@@ -662,7 +659,6 @@ impl EngineInner {
         self.float_transform_mode = 0;
         // Layer stack and overlays
         self.layer_stack.clear();
-        self.dirty_layers.clear();
         self.transform_overlay = None;
         self.gradient_guide = None;
         self.lasso_points = None;
@@ -713,10 +709,8 @@ impl EngineInner {
     }
 
     pub fn mark_all_dirty(&mut self) {
-        for layer in &self.layer_stack {
-            self.dirty_layers.insert(layer.id.clone());
-        }
         self.needs_recomposite = true;
+        self.group_pre_adj_valid = false;
     }
 
     /// Draw a fullscreen quad (3 vertices, no VBO needed)
@@ -744,6 +738,56 @@ impl EngineInner {
         self.gl.viewport(0, 0, viewport_w, viewport_h);
         setup_and_draw(self);
         self.fbo_pool.unbind(&self.gl);
+    }
+
+    /// Read a texture back as 8-bit RGBA by first blitting it into a
+    /// temporary RGBA8 target. readPixels(FLOAT) from an RGBA16F
+    /// attachment is the driver's slow path (an 8.4s stall for a 2MP mask
+    /// on software GL); one GPU blit plus an UNSIGNED_BYTE read is fast on
+    /// every backend. Use for data that is conceptually 8-bit (masks).
+    pub fn read_texture_rgba8(&self, src_tex: &web_sys::WebGlTexture, w: u32, h: u32) -> Option<Vec<u8>> {
+        let gl = &self.gl;
+
+        let staging = gl.create_texture()?;
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&staging));
+        gl.tex_storage_2d(WebGl2RenderingContext::TEXTURE_2D, 1, WebGl2RenderingContext::RGBA8, w as i32, h as i32);
+        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MIN_FILTER, WebGl2RenderingContext::NEAREST as i32);
+        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MAG_FILTER, WebGl2RenderingContext::NEAREST as i32);
+
+        let fbo = gl.create_framebuffer()?;
+        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+        gl.framebuffer_texture_2d(
+            WebGl2RenderingContext::FRAMEBUFFER,
+            WebGl2RenderingContext::COLOR_ATTACHMENT0,
+            WebGl2RenderingContext::TEXTURE_2D,
+            Some(&staging),
+            0,
+        );
+        gl.viewport(0, 0, w as i32, h as i32);
+        gl.disable(WebGl2RenderingContext::BLEND);
+
+        let shader = &self.shaders.blit;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src_tex));
+        if let Some(loc) = shader.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        self.draw_fullscreen_quad();
+
+        let mut pixels = vec![0u8; (w * h * 4) as usize];
+        let read_ok = gl.read_pixels_with_opt_u8_array(
+            0, 0, w as i32, h as i32,
+            WebGl2RenderingContext::RGBA,
+            WebGl2RenderingContext::UNSIGNED_BYTE,
+            Some(&mut pixels),
+        ).is_ok();
+
+        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+        gl.delete_framebuffer(Some(&fbo));
+        gl.delete_texture(Some(&staging));
+
+        if read_ok { Some(pixels) } else { None }
     }
 }
 

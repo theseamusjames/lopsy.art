@@ -301,27 +301,37 @@ export function syncLayers(
     const sparseChanged = tracked.sparseVersions.get(layer.id) !== sparseEntry;
 
     if (data && (pixelChanged || isDirty)) {
-      const rawBytes = new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength);
-      uploadLayerPixels(engine, layer.id, rawBytes, data.width, data.height, layer.x, layer.y);
-      tracked.pixelDataVersions.set(layer.id, data);
-      tracked.sparseVersions.set(layer.id, undefined);
+      // On upload failure, leave the tracked version stale so the next
+      // frame retries instead of rendering a stale texture forever.
+      try {
+        const rawBytes = new Uint8Array(data.data.buffer, data.data.byteOffset, data.data.byteLength);
+        uploadLayerPixels(engine, layer.id, rawBytes, data.width, data.height, layer.x, layer.y);
+        tracked.pixelDataVersions.set(layer.id, data);
+        tracked.sparseVersions.set(layer.id, undefined);
+      } catch (e) {
+        console.error('[engine-sync] uploadLayerPixels failed for layer', layer.id, e);
+      }
     } else if (!data && sparseEntry && (sparseChanged || isDirty)) {
-      const indices = new Uint32Array(sparseEntry.sparse.indices);
-      const rgba = new Uint8Array(sparseEntry.sparse.rgba.buffer, sparseEntry.sparse.rgba.byteOffset, sparseEntry.sparse.rgba.byteLength);
-      // Use layer.x/y as authoritative position — sparse offsets may be
-      // stale after updateLayerPosition() (move tool).
-      uploadLayerSparsePixels(
-        engine,
-        layer.id,
-        indices,
-        rgba,
-        sparseEntry.sparse.width,
-        sparseEntry.sparse.height,
-        layer.x,
-        layer.y,
-      );
-      tracked.sparseVersions.set(layer.id, sparseEntry);
-      tracked.pixelDataVersions.set(layer.id, undefined);
+      try {
+        const indices = new Uint32Array(sparseEntry.sparse.indices);
+        const rgba = new Uint8Array(sparseEntry.sparse.rgba.buffer, sparseEntry.sparse.rgba.byteOffset, sparseEntry.sparse.rgba.byteLength);
+        // Use layer.x/y as authoritative position — sparse offsets may be
+        // stale after updateLayerPosition() (move tool).
+        uploadLayerSparsePixels(
+          engine,
+          layer.id,
+          indices,
+          rgba,
+          sparseEntry.sparse.width,
+          sparseEntry.sparse.height,
+          layer.x,
+          layer.y,
+        );
+        tracked.sparseVersions.set(layer.id, sparseEntry);
+        tracked.pixelDataVersions.set(layer.id, undefined);
+      } catch (e) {
+        console.error('[engine-sync] uploadLayerSparsePixels failed for layer', layer.id, e);
+      }
     } else if (!data && !sparseEntry) {
       // No JS data — GPU texture is source of truth (GPU paint or undo restore).
       // Only clear the GPU texture if we previously had JS data AND the layer is dirty
@@ -339,9 +349,13 @@ export function syncLayers(
     if (layer.mask) {
       const prevMaskData = tracked.maskDataRefs.get(layer.id);
       if (prevMaskData !== layer.mask.data) {
-        const maskBytes = new Uint8Array(layer.mask.data.buffer, layer.mask.data.byteOffset, layer.mask.data.byteLength);
-        uploadLayerMask(engine, layer.id, maskBytes, layer.mask.width, layer.mask.height);
-        tracked.maskDataRefs.set(layer.id, layer.mask.data);
+        try {
+          const maskBytes = new Uint8Array(layer.mask.data.buffer, layer.mask.data.byteOffset, layer.mask.data.byteLength);
+          uploadLayerMask(engine, layer.id, maskBytes, layer.mask.width, layer.mask.height);
+          tracked.maskDataRefs.set(layer.id, layer.mask.data);
+        } catch (e) {
+          console.error('[engine-sync] uploadLayerMask failed for layer', layer.id, e);
+        }
       }
       tracked.masksOnEngine.add(layer.id);
     } else if (tracked.masksOnEngine.has(layer.id)) {

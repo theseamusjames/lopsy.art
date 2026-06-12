@@ -58,3 +58,15 @@
   text-align: right;
   user-select: none;
 }
+
+.minimapWrapper {
+  width: var(--minimap-width);
+  height: var(--minimap-height);
+}
+
+.viewportIndicator {
+  left: var(--indicator-x);
+  top: var(--indicator-y);
+  width: var(--indicator-width);
+  height: var(--indicator-height);
+}

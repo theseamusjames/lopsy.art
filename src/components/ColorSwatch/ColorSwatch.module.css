@@ -35,3 +35,7 @@
   border-color: var(--color-accent);
   box-shadow: 0 0 0 1px var(--color-accent);
 }
+
+.color {
+  background-color: var(--swatch-color);
+}

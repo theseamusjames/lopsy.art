@@ -145,7 +145,7 @@ pub fn duplicate_texture(
         engine.layer_textures.insert(dst_id.to_string(), new_tex);
     }
 
-    let dst_handle = *engine.layer_textures.get(dst_id).unwrap();
+    let dst_handle = *engine.layer_textures.get(dst_id).ok_or("dst layer texture missing")?;
 
     // Blit: bind dst as FBO target, sample src, draw fullscreen quad
     let dst_tex = engine.texture_pool.get(dst_handle).cloned()
@@ -755,7 +755,7 @@ pub fn clipboard_paste(
         engine.layer_textures.insert(dst_layer_id.to_string(), new_tex);
     }
 
-    let dst_handle = *engine.layer_textures.get(dst_layer_id).unwrap();
+    let dst_handle = *engine.layer_textures.get(dst_layer_id).ok_or("dst layer texture missing")?;
     let dst_tex = engine.texture_pool.get(dst_handle).cloned()
         .ok_or("Dst texture not found")?;
 

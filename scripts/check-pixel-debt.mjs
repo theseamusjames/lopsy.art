@@ -82,7 +82,7 @@ const ALLOWLIST = {
   'src/app/interactions/move-handlers.ts': 5,
   'src/app/interactions/quick-mask-move.ts': 1,
   'src/app/store/actions/add-layer-mask.ts': 1,
-  'src/app/useCanvasInteraction.ts': 3,                      // mask-buffer copies + 1×1 placeholder singleton
+  'src/app/useCanvasInteraction.ts': 2,                      // mask-buffer copies (nudge path)
   'src/tools/fill/fill-interaction.ts': 1,                   // bucket fill writes mask data
 
   // ──────────────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   'src/app/MenuBar/menus/file-menu.ts': 2,                   // PNG export + JPEG export
   'src/io/project-load.ts': 1,                               // .lopsy project unpack
-  'src/io/psd.ts': 1,
+  'src/io/psd.ts': 2,                                        // leaf + group mask unpack
 
   // ──────────────────────────────────────────────────────────────────────
   // Clipboard — paste-from-clipboard wraps decoded bytes into ImageData

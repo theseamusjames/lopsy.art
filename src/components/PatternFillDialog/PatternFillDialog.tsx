@@ -94,7 +94,7 @@ export function PatternFillDialog({ onApply, onCancel, onPreviewChange, onPrevie
         role="dialog"
         aria-label="Pattern Fill"
         onKeyDown={handleKeyDown}
-        style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+        style={{ '--drag-x': `${offset.x}px`, '--drag-y': `${offset.y}px` } as React.CSSProperties}
       >
         <div className={styles.header} {...dragProps}>
           <h2>Pattern Fill</h2>

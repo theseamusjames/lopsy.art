@@ -95,8 +95,6 @@ function makeCtx(): InteractionContext {
     metaKey: false,
     activeLayerId: 'layer-1',
     activeLayer: layer,
-    pixelBuffer: {} as unknown as InteractionContext['pixelBuffer'],
-    paintSurface: {} as unknown as InteractionContext['paintSurface'],
     clientX: 0,
     clientY: 0,
     stateRef: { current: {} } as unknown as InteractionContext['stateRef'],
