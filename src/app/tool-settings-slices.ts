@@ -16,6 +16,8 @@ import type { PathSettings } from '../tools/path/path-settings';
 import { DEFAULT_PATH_SETTINGS } from '../tools/path/path-settings';
 import type { StampSettings } from '../tools/stamp/stamp-settings';
 import { DEFAULT_STAMP_SETTINGS } from '../tools/stamp/stamp-settings';
+import type { HealingSettings } from '../tools/healing/healing-settings';
+import { DEFAULT_HEALING_SETTINGS } from '../tools/healing/healing-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -36,6 +38,7 @@ export interface ToolSettingsSlices {
   eraser: EraserSettings;
   path: PathSettings;
   stamp: StampSettings;
+  healing: HealingSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -48,4 +51,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   eraser: DEFAULT_ERASER_SETTINGS,
   path: DEFAULT_PATH_SETTINGS,
   stamp: DEFAULT_STAMP_SETTINGS,
+  healing: DEFAULT_HEALING_SETTINGS,
 };

@@ -101,6 +101,24 @@ describe('opacity setters — issue #250 (percent vs normalised footgun)', () =>
     expect(messages.some((m: string) => m.includes('setEraserSetting(opacity)'))).toBe(true);
     expect(messages.some((m: string) => m.includes('setSprayOpacity'))).toBe(true);
   });
+
+  it('also warns from setHealingSetting(opacity) (same footgun)', async () => {
+    const { useToolSettingsStore: store } = await import('./tool-settings-store');
+    store.getState().setHealingSetting('opacity', 0.5);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const message = String(warnSpy.mock.calls[0]?.[0] ?? '');
+    expect(message).toContain('setHealingSetting(opacity)');
+    expect(message).toContain('percent');
+    // The value still gets clamped into the percent range so callers
+    // don't get the original 1%-stroke footgun.
+    expect(store.getState().settings.healing.opacity).toBe(1);
+  });
+
+  it('does not warn from setHealingSetting(size) — only opacity guards the percent vs normalised footgun', async () => {
+    const { useToolSettingsStore: store } = await import('./tool-settings-store');
+    store.getState().setHealingSetting('size', 0.5);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe('per-tool slice: wand (#453)', () => {
@@ -508,6 +526,70 @@ describe('per-tool slice: eraser (#453)', () => {
     expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
     expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
     expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: healing (#453)', () => {
+  it('exposes healing settings under settings.healing with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setHealingSetting.
+    useToolSettingsStore.getState().setHealingSetting('size', 20);
+    useToolSettingsStore.getState().setHealingSetting('opacity', 100);
+    const { healing } = useToolSettingsStore.getState().settings;
+    expect(healing).toEqual({ size: 20, opacity: 100 });
+  });
+
+  it('setHealingSetting updates one field without disturbing the other', () => {
+    const before = useToolSettingsStore.getState().settings.healing;
+    useToolSettingsStore.getState().setHealingSetting('size', 75);
+    const after = useToolSettingsStore.getState().settings.healing;
+    expect(after.size).toBe(75);
+    expect(after.opacity).toBe(before.opacity);
+  });
+
+  it('setHealingSetting clamps size into [1, 5000]', () => {
+    useToolSettingsStore.getState().setHealingSetting('size', 0);
+    expect(useToolSettingsStore.getState().settings.healing.size).toBe(1);
+    useToolSettingsStore.getState().setHealingSetting('size', 99999);
+    expect(useToolSettingsStore.getState().settings.healing.size).toBe(5000);
+  });
+
+  it('setHealingSetting clamps opacity into [1, 100]', () => {
+    // Legacy setHealingOpacity clamped to [1, 100] — preserve that
+    // under the slice. A 0 here would silently produce a no-op stroke,
+    // which is the same percent-vs-normalised footgun guarded by the
+    // warn-once dedupe.
+    useToolSettingsStore.getState().setHealingSetting('opacity', -10);
+    expect(useToolSettingsStore.getState().settings.healing.opacity).toBe(1);
+    useToolSettingsStore.getState().setHealingSetting('opacity', 200);
+    expect(useToolSettingsStore.getState().settings.healing.opacity).toBe(100);
+  });
+
+  it('setHealingSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setHealingSetting('size', 42);
+    expect(useToolSettingsStore.getState().settings.healing.size).toBe(42);
+    // Sibling slice references preserved — selectors subscribed to the
+    // other slices should not re-render when healing changes. This is
+    // the invariant that justifies slicing instead of fattening the
+    // flat bag further.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
