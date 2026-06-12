@@ -13,6 +13,15 @@ import { canvasColorSpace } from '../engine/color-space';
 import { useToolSettingsStore } from '../app/tool-settings-store';
 
 let engine: Engine | null = null;
+
+declare global {
+  interface Window {
+    /** e2e memory profiling: query the current engine. */
+    __engineState?: { getEngine: () => Engine | null };
+    /** e2e memory profiling: bridge module (texture dimension queries). */
+    __wasmBridge?: typeof import('./wasm-bridge');
+  }
+}
 let engineCanvas: HTMLCanvasElement | null = null;
 
 // Resources held by the current engine that must be released on
@@ -42,7 +51,7 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   try {
     const gl = canvas.getContext('webgl2');
     if (gl && canvasColorSpace === 'display-p3') {
-      (gl as unknown as Record<string, string>).drawingBufferColorSpace = 'display-p3';
+      gl.drawingBufferColorSpace = 'display-p3';
     }
   } catch {
     // drawingBufferColorSpace not supported — fall back silently
@@ -71,10 +80,9 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   });
 
   // Expose for e2e testing (memory profiling needs to query GPU texture dimensions)
-  const w = window as unknown as Record<string, unknown>;
-  w.__engineState = { getEngine };
+  window.__engineState = { getEngine };
   // Dynamically import wasm-bridge to expose getLayerTextureDimensions
-  import('./wasm-bridge').then((mod) => { w.__wasmBridge = mod; }).catch(() => {});
+  import('./wasm-bridge').then((mod) => { window.__wasmBridge = mod; }).catch(() => {});
 
   return engine;
 }
