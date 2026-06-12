@@ -395,7 +395,6 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
 
     engine.draw_fullscreen_quad();
 
-    engine.dirty_layers.clear();
     engine.needs_recomposite = false;
     Ok(())
 }

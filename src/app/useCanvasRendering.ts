@@ -2,7 +2,6 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { useEditorStore } from './editor-store';
 import { useUIStore } from './ui-store';
 import { useToolSettingsStore } from './tool-settings-store';
-import { getBrushCursorInfo } from './useCanvasCursor';
 import { initEngine, getEngine, destroyEngine } from '../engine-wasm/engine-state';
 import { describeError, notifyError } from './notifications-store';
 import {
@@ -25,21 +24,12 @@ import {
   renderEngine,
   markAllLayersDirty,
 } from '../engine-wasm/engine-sync';
-import { renderGrid, renderPixelGrid, renderRulers } from './rendering/render-grid';
-import { renderSelectionAnts, renderTransformHandles } from './rendering/render-selection';
-import { renderMeshWarpOverlay } from './rendering/render-mesh-warp';
-import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor, renderSymmetryCenter, renderPerspectiveCropOverlay } from './rendering/render-overlays';
-import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './rendering/render-text-overlay';
-import { hitTestTextLayer } from '../tools/text/text-hit-test';
-import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './rendering/render-guides';
-import { renderTiltShiftOverlay } from './rendering/render-tilt-shift-overlay';
-import { contextOptions } from '../engine/color-space';
+import { renderOverlayFrame } from './rendering/render-overlay-frame';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
-import { expandLayerToDocSize, cropLayerToContent, hasFloat, getLayerTextureDimensions, getGlyphPositions } from '../engine-wasm/wasm-bridge';
+import { expandLayerToDocSize, cropLayerToContent, hasFloat } from '../engine-wasm/wasm-bridge';
 import { invalidateCachedSnapshot } from './store/history-slice';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
-import { PAINT_TOOLS } from '../tools/tool-registry';
 
 
 /**
@@ -151,29 +141,11 @@ function renderFrameGpu(
   const selection = editorState.selection;
   const dirtyLayerIds = editorState.dirtyLayerIds;
 
-  const activeTool = uiState.activeTool;
-  const cursorPosition = uiState.cursorPosition;
-  const cursorOnCanvas = uiState.cursorOnCanvas;
   const showGrid = uiState.showGrid;
-  const showPixelGrid = uiState.showPixelGrid;
   const showRulers = uiState.showRulers;
   const gridSize = uiState.gridSize;
   const adjustments = uiState.adjustments;
   const adjustmentsEnabled = uiState.adjustmentsEnabled;
-  const pathAnchors = uiState.pathDraft?.anchors ?? [];
-  const pathClosed = uiState.pathDraft?.closed ?? false;
-  const lassoPoints = uiState.lassoPoints;
-  const cropRect = uiState.cropRect;
-  const perspectiveCropQuad = uiState.perspectiveCropQuad;
-  const transform = uiState.transform;
-  const gradientPreview = uiState.gradientPreview;
-  const showGuides = uiState.showGuides;
-  const guides = uiState.guides;
-  const snapLines = uiState.snapLines;
-  const selectedGuideId = uiState.selectedGuideId;
-  const hoveredGuideId = uiState.hoveredGuideId;
-  const rulerHover = uiState.rulerHover;
-  const guideColor = uiState.guideColor;
 
   const textEditing = uiState.textEditing;
 
@@ -239,113 +211,7 @@ function renderFrameGpu(
   renderEngine(engine);
 
   // Overlay canvas: selection ants, cursors, guides, rulers
-  const overlayCtx = overlayCanvas.getContext('2d', contextOptions);
-  if (overlayCtx) {
-    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
-    overlayCtx.save();
-    overlayCtx.translate(viewport.panX + overlayCanvas.width / 2, viewport.panY + overlayCanvas.height / 2);
-    overlayCtx.scale(viewport.zoom, viewport.zoom);
-    overlayCtx.translate(-doc.width / 2, -doc.height / 2);
-
-    if (showGrid) {
-      renderGrid(overlayCtx, doc.width, doc.height, gridSize, viewport.zoom);
-    }
-
-    renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhaseRef.current, transform);
-    renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
-
-    const meshWarp = uiState.meshWarp;
-    if (meshWarp) {
-      renderMeshWarpOverlay(overlayCtx, meshWarp, viewport.zoom);
-    }
-    const tiltShift = uiState.tiltShift;
-    if (tiltShift) {
-      renderTiltShiftOverlay(overlayCtx, tiltShift, doc.width, doc.height, viewport.zoom);
-    }
-    const selectedPath = editorState.selectedPathId
-      ? editorState.paths.find((p) => p.id === editorState.selectedPathId)
-      : undefined;
-    renderPathOverlay(overlayCtx, pathAnchors, pathClosed, layers, doc.activeLayerId, viewport.zoom, selectedPath?.anchors, selectedPath?.closed);
-    renderLassoPreview(overlayCtx, lassoPoints, viewport.zoom);
-    renderCropPreview(overlayCtx, cropRect, doc.width, doc.height, viewport.zoom);
-    if (perspectiveCropQuad) {
-      renderPerspectiveCropOverlay(overlayCtx, perspectiveCropQuad, viewport.zoom);
-    }
-    renderGradientPreview(overlayCtx, gradientPreview, viewport.zoom);
-
-    // Text tool overlays
-    const textDrag = uiState.textDrag;
-    if (textDrag) {
-      renderTextDragOverlay(overlayCtx, textDrag, viewport.zoom);
-    }
-    if (activeTool === 'text' && !textEditing && !textDrag) {
-      const hoveredText = hitTestTextLayer(layers, cursorPosition);
-      if (hoveredText) {
-        const dims = getLayerTextureDimensions(engine, hoveredText.id);
-        const texW = dims?.[0] ?? hoveredText.width ?? hoveredText.text.length * hoveredText.fontSize * 0.6;
-        const texH = dims?.[1] ?? hoveredText.fontSize * hoveredText.lineHeight * (hoveredText.text.split('\n').length || 1);
-        renderTextHoverBounds(overlayCtx, hoveredText, viewport.zoom, texW, texH);
-      }
-    }
-    if (textEditing && !editingLayerIsPathText) {
-      const ts = toolState;
-      const glyphPositions = Array.from(getGlyphPositions(engine, textEditing.layerId)) as number[];
-      renderTextEditOverlay(overlayCtx, textEditing, {
-        fontSize: ts.textFontSize,
-        fontFamily: ts.textFontFamily,
-        fontWeight: ts.textFontWeight,
-        fontStyle: ts.textFontStyle,
-        color: toolState.foregroundColor,
-        lineHeight: 1.4,
-        letterSpacing: 0,
-        textAlign: ts.textAlign,
-      }, viewport.zoom, antPhaseRef.current, glyphPositions);
-    }
-
-    const brushCursorInfo = getBrushCursorInfo(activeTool);
-    if (brushCursorInfo !== null && cursorOnCanvas) {
-      const size = activeTool === 'brush' ? toolState.brushSize
-        : activeTool === 'pencil' ? toolState.settings.pencil.size
-        : activeTool === 'eraser' ? toolState.settings.eraser.size
-        : activeTool === 'stamp' ? toolState.settings.stamp.size
-        : activeTool === 'sponge' ? toolState.settings.sponge.size
-        : brushCursorInfo.size;
-      renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip, brushCursorInfo.angle);
-    }
-
-    if (uiState.liquify && cursorOnCanvas) {
-      renderBrushCursor(overlayCtx, cursorPosition, uiState.liquify.settings.brushSize, viewport.zoom, 'circle', null, 0);
-    }
-
-    renderSnapLines(overlayCtx, snapLines, doc.width, doc.height, viewport.zoom);
-
-    if (showGuides) {
-      renderGuides(overlayCtx, guides, selectedGuideId, doc.width, doc.height, viewport.zoom, guideColor);
-      if (rulerHover && !hoveredGuideId) {
-        renderGuidePreview(overlayCtx, rulerHover, doc.width, doc.height, viewport.zoom, guideColor);
-      }
-    }
-
-    if (PAINT_TOOLS.has(activeTool) && (toolState.symmetryRadialSegments >= 2 || toolState.symmetryHorizontal || toolState.symmetryVertical)) {
-      const symCenter = toolState.symmetryCenter ?? { x: doc.width / 2, y: doc.height / 2 };
-      renderSymmetryCenter(overlayCtx, symCenter, viewport.zoom, guideColor);
-    }
-
-    overlayCtx.restore();
-
-    if (showPixelGrid) {
-      renderPixelGrid(overlayCtx, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height);
-    }
-
-    if (showRulers) {
-      renderRulers(overlayCtx, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height, cursorPosition, guideColor);
-      if (showGuides) {
-        renderGuideRulerOverlays(overlayCtx, guides, selectedGuideId, hoveredGuideId, rulerHover, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height, guideColor);
-        renderGuideColorSwatch(overlayCtx, guideColor);
-      }
-    }
-  }
+  renderOverlayFrame(overlayCanvas, antPhaseRef.current);
 }
 
 /**
@@ -452,7 +318,10 @@ export function useCanvasRendering(
     const loop = () => {
       if (!running) return;
 
-      // Check if selection ants or text cursor need animating
+      // Check if selection ants or text cursor need animating. Animation
+      // only touches the 2D overlay canvas — it must not force a full GPU
+      // recomposite of every layer — so it gets its own dirty flag.
+      let overlayOnly = false;
       const sel = useEditorStore.getState().selection;
       const hasTextEditing = useUIStore.getState().textEditing !== null;
       if (sel.active && !selectionActive) {
@@ -463,7 +332,7 @@ export function useCanvasRendering(
       }
       if (selectionActive || hasTextEditing) {
         antPhaseRef.current++;
-        dirtyRef.current = true;
+        overlayOnly = true;
       }
 
       const currentDocVersion = useEditorStore.getState().documentVersion;
@@ -489,6 +358,15 @@ export function useCanvasRendering(
             if (state.undoStack.length === 0) {
               state.pushHistory('New Document');
             }
+          }
+        }
+      } else if (overlayOnly && engineReadyRef.current) {
+        const overlay = overlayCanvasRef.current;
+        if (overlay) {
+          try {
+            renderOverlayFrame(overlay, antPhaseRef.current);
+          } catch (e) {
+            console.error('[Lopsy] Overlay render error (recovering):', e);
           }
         }
       }

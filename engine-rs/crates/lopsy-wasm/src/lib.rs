@@ -78,14 +78,15 @@ pub fn clear_all_layers(engine: &mut Engine) {
 
 #[wasm_bindgen(js_name = "render")]
 pub fn render(engine: &mut Engine) {
+    // Every mutation that affects the composite sets needs_recomposite
+    // (via mark_layer_dirty or directly). Skipping clean frames keeps
+    // cursor moves and overlay-only updates from re-blending every layer.
+    if !engine.inner.needs_recomposite {
+        return;
+    }
     if let Err(e) = compositor::composite(&mut engine.inner) {
         web_sys::console::error_1(&format!("compositor error: {e}").into());
     }
-}
-
-#[wasm_bindgen(js_name = "markLayerDirty")]
-pub fn mark_layer_dirty(engine: &mut Engine, layer_id: &str) {
-    engine.inner.mark_layer_dirty(layer_id);
 }
 
 #[wasm_bindgen(js_name = "markAllDirty")]

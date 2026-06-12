@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use web_sys::WebGl2RenderingContext;
 
 use lopsy_core::geometry::ViewportState;
@@ -158,7 +158,6 @@ pub struct EngineInner {
     pub doc_width: u32,
     pub doc_height: u32,
     pub bg_color: [f32; 4],
-    pub dirty_layers: HashSet<String>,
     pub needs_recomposite: bool,
     // Brush state
     pub stroke_textures: HashMap<String, TextureHandle>,
@@ -340,7 +339,6 @@ impl EngineInner {
             doc_width: doc_w,
             doc_height: doc_h,
             bg_color: [1.0, 1.0, 1.0, 1.0],
-            dirty_layers: HashSet::new(),
             needs_recomposite: true,
             stroke_textures: HashMap::new(),
             stroke_opacity: HashMap::new(),
@@ -472,8 +470,7 @@ impl EngineInner {
         self.needs_recomposite = true;
     }
 
-    pub fn mark_layer_dirty(&mut self, layer_id: &str) {
-        self.dirty_layers.insert(layer_id.to_string());
+    pub fn mark_layer_dirty(&mut self, _layer_id: &str) {
         self.needs_recomposite = true;
         self.group_pre_adj_valid = false;
     }
@@ -662,7 +659,6 @@ impl EngineInner {
         self.float_transform_mode = 0;
         // Layer stack and overlays
         self.layer_stack.clear();
-        self.dirty_layers.clear();
         self.transform_overlay = None;
         self.gradient_guide = None;
         self.lasso_points = None;
@@ -713,10 +709,8 @@ impl EngineInner {
     }
 
     pub fn mark_all_dirty(&mut self) {
-        for layer in &self.layer_stack {
-            self.dirty_layers.insert(layer.id.clone());
-        }
         self.needs_recomposite = true;
+        self.group_pre_adj_valid = false;
     }
 
     /// Draw a fullscreen quad (3 vertices, no VBO needed)
