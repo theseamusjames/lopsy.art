@@ -1,5 +1,18 @@
 # Memory
 
+## render() skips clean frames — mutations must set needs_recomposite
+
+`render()` (lib.rs) returns early unless `engine.needs_recomposite` is
+set. Any new engine code that changes what the composite looks like
+(layer pixels, masks, overlays, adjustments, viewport) must set the
+flag — layer-texture writes should call `engine.mark_layer_dirty(id)`,
+which also invalidates the group pre-adjustment cache. If a new
+operation renders correctly in tests that read the composite texture
+but shows a stale canvas in the app, a missing dirty mark is the first
+thing to check. Marching-ants / text-cursor animation deliberately does
+NOT dirty the engine — it repaints only the 2D overlay canvas via
+`renderOverlayFrame()`.
+
 ## Memories should be inlined in MEMORY.md, not in separate files
 
 Keep everything in this single file. No separate memory files in .claude or elsewhere.
