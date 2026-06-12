@@ -23,6 +23,7 @@ import { loadProject } from './io/project-load';
 import { importRafFile } from './io/raf';
 import { compositeForExport, getCompositeSize } from './engine-wasm/wasm-bridge';
 import { flushLayerSync } from './engine-wasm/engine-sync';
+import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/reset.css';
 
