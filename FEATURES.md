@@ -15,7 +15,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Spacing**: 1 - 200% of brush size
 - **Scatter**: 0 - 100%
 - **Angle**: 0 - 360 degrees (set via the modal's angle dial)
-- **Symmetry**: horizontal, vertical, both (4-way), or radial (2 - 32 segments). The horizontal/vertical toggles and the **Radial Symmetry** control (with its segment-count slider) all live in the Brush options bar; see the Symmetry section for full behavior.
+- **Symmetry**: horizontal, vertical, both (4-way), or radial (2 - 32 segments). The horizontal/vertical toggles and the **Radial Symmetry** control (with its segment-count number input) all live in the Brush options bar; see the Symmetry section for full behavior.
 
 **Dynamics** (Brushes modal → Dynamics section). Per-dab randomization is performed GPU-side, seeded by each dab's center position so strokes are deterministic for a given path.
 - **Size Jitter**: 0 - 100% — per-dab size randomization
@@ -547,8 +547,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Cmd/Ctrl + `'`**: toggle grid visibility from anywhere in the app
 
 ### Rulers
-- **Show rulers**: on/off (default on)
-- **Cmd/Ctrl + `R`**: toggle ruler visibility from anywhere in the app
+- **Show rulers**: on/off (default on), toggled from **View → Show Rulers**. (The menu lists a `⌘R` accelerator, but unlike the grid and guide toggles it is not currently wired to a global key handler.)
 
 ### Guides
 - **Show guides**: on/off
@@ -676,7 +675,7 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 
 - **Axes**: horizontal, vertical, both (4-way), or radial. Radial symmetry mirrors each dab into **2 - 32 evenly-rotated copies** around the center (kaleidoscope-style) and takes precedence over the horizontal/vertical mirrors when its segment count is ≥ 2.
 - **Center**: configurable (defaults to canvas center)
-- Available on brush, pencil, and eraser. The symmetry config (axes, center, radial segment count) is global, so it applies to whichever of these tools is active. Only the Brush options bar exposes the **Radial Symmetry** toggle and segment slider; the Pencil options bar exposes just the horizontal/vertical toggles (radial set from the Brush still applies to pencil/eraser strokes), and the Eraser inherits the active config without its own toggles.
+- Available on brush, pencil, and eraser. The symmetry config (axes, center, radial segment count) is global, so it applies to whichever of these tools is active. Only the Brush options bar exposes the **Radial Symmetry** toggle and its segment-count number input; the Pencil options bar exposes just the horizontal/vertical toggles (radial set from the Brush still applies to pencil/eraser strokes), and the Eraser inherits the active config without its own toggles.
 - **Cmd/Meta+click** on the canvas while any symmetry mode (horizontal, vertical, or radial with 2+ segments) is active moves the symmetry center to the click point without painting a dab. Lets the user reposition the mirror axis directly from the canvas without opening a settings panel.
 
 ---
@@ -730,6 +729,8 @@ A modal dialog with a live thumbnail preview (debounced ~200 ms) and inline opti
   - **High** — 16-bit PNG via the Rust engine, preserving FP16 precision for wide-gamut workflows
 - **Filename**: editable text field; the document name is used by default and the format-appropriate extension (`.png`, `.jpg`, `.webp`, `.bmp`) is appended automatically
 - **Enter** confirms; **Escape** cancels
+
+**Color-managed output**: when the document is in a wide-gamut working space (Display P3), exports carry the correct color metadata so other apps interpret the pixels faithfully — PNG and JPEG are tagged with a colorimetrically-correct Display P3 ICC profile (Bradford-adapted colorants, true piecewise-sRGB transfer curve), PSD embeds the matching working-space profile, and BMP (which cannot carry a profile) is converted P3 → sRGB before encoding. sRGB documents keep their historical sRGB tagging unchanged. WebP is tagged by its own encoder.
 
 ### Quick Export (`⇧⌘E`)
 One-shot PNG export through the GPU compositor — no dialog, no preview, uses the document name as the filename and quality 92.
