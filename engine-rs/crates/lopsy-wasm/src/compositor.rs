@@ -184,7 +184,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                             true,
                             None,
                             group_mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)),
-                        );
+                        )?;
                     }
                     active_group_id = None;
                     // Re-bind composite FBO for subsequent layers
@@ -315,9 +315,9 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             if is_group_child {
                 let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
                 let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
-                blend_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+                blend_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo)?;
             } else {
-                blend_onto_composite(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                blend_onto_composite(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)))?;
             }
         }
 
@@ -332,9 +332,9 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                     if is_group_child {
                         let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
                         let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
-                        blend_onto_target(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+                        blend_onto_target(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo)?;
                     } else {
-                        blend_onto_composite(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                        blend_onto_composite(engine, &stroke_tex, combined_opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)))?;
                     }
                 }
             }
@@ -403,7 +403,8 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
 // Effect rendering helpers
 // ---------------------------------------------------------------------------
 
-/// Blend a source texture onto the composite using the blend shader.
+/// Blend a source texture onto the composite using the blend shader
+/// variant specialized for `blend_mode`.
 fn blend_onto_composite(
     engine: &mut EngineInner,
     src_tex: &web_sys::WebGlTexture,
@@ -416,22 +417,21 @@ fn blend_onto_composite(
     premultiplied: bool,
     overlay: Option<&ColorOverlayDesc>,
     mask_tex: Option<(&web_sys::WebGlTexture, u32, u32)>,
-) {
+) -> Result<(), String> {
     let doc_w = engine.doc_width as f32;
     let doc_h = engine.doc_height as f32;
 
-    engine.gl.use_program(Some(&engine.shaders.blend.program));
+    let shader = engine.shaders.blend_for_mode(&engine.gl, blend_mode)?;
+    engine.gl.use_program(Some(&shader.program));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src_tex));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     if let Some(comp_tex) = engine.texture_pool.get(engine.composite_texture) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(comp_tex));
     }
-    let shader = &engine.shaders.blend;
     if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
     if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), opacity); }
-    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), blend_mode); }
     if let Some(loc) = shader.location(&engine.gl, "u_hasBrushTexture") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
@@ -482,6 +482,7 @@ fn blend_onto_composite(
     }
     if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
     engine.draw_fullscreen_quad();
+    Ok(())
 }
 
 /// Same as `blend_onto_composite` but blits to an arbitrary target FBO/texture
@@ -501,22 +502,21 @@ fn blend_onto_target(
     mask_tex: Option<(&web_sys::WebGlTexture, u32, u32)>,
     dst_texture: TextureHandle,
     dst_fbo: FramebufferHandle,
-) {
+) -> Result<(), String> {
     let doc_w = engine.doc_width as f32;
     let doc_h = engine.doc_height as f32;
 
-    engine.gl.use_program(Some(&engine.shaders.blend.program));
+    let shader = engine.shaders.blend_for_mode(&engine.gl, blend_mode)?;
+    engine.gl.use_program(Some(&shader.program));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src_tex));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     if let Some(dst_tex) = engine.texture_pool.get(dst_texture) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(dst_tex));
     }
-    let shader = &engine.shaders.blend;
     if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
     if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), opacity); }
-    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), blend_mode); }
     if let Some(loc) = shader.location(&engine.gl, "u_hasBrushTexture") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
@@ -558,6 +558,7 @@ fn blend_onto_target(
     }
     if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
     engine.draw_fullscreen_quad();
+    Ok(())
 }
 
 /// Render the mask as a translucent blue overlay on top of the composite.
@@ -573,18 +574,17 @@ fn render_mask_overlay(
     let doc_w = engine.doc_width as f32;
     let doc_h = engine.doc_height as f32;
 
-    engine.gl.use_program(Some(&engine.shaders.blend.program));
+    engine.gl.use_program(Some(&engine.shaders.blend_normal.program));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     if let Some(comp_tex) = engine.texture_pool.get(engine.composite_texture) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(comp_tex));
     }
-    let shader = &engine.shaders.blend;
+    let shader = &engine.shaders.blend_normal;
     if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
     if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
@@ -625,18 +625,17 @@ fn render_quick_mask_overlay(engine: &mut EngineInner) {
     let doc_w = engine.doc_width as f32;
     let doc_h = engine.doc_height as f32;
 
-    engine.gl.use_program(Some(&engine.shaders.blend.program));
+    engine.gl.use_program(Some(&engine.shaders.blend_normal.program));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     if let Some(comp_tex) = engine.texture_pool.get(engine.composite_texture) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(comp_tex));
     }
-    let shader = &engine.shaders.blend;
+    let shader = &engine.shaders.blend_normal;
     if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
     if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), w as f32, h as f32); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
@@ -678,8 +677,8 @@ fn blend_effect_onto_composite(engine: &mut EngineInner) {
     let doc_w = engine.doc_width as f32;
     let doc_h = engine.doc_height as f32;
 
-    // Use the blend shader: src=effect, dst=composite → render into scratch_b
-    let shader = &engine.shaders.blend;
+    // Use the Normal-mode blend shader: src=effect, dst=composite → render into scratch_b
+    let shader = &engine.shaders.blend_normal;
     engine.gl.use_program(Some(&shader.program));
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&effect_tex));
@@ -688,7 +687,6 @@ fn blend_effect_onto_composite(engine: &mut EngineInner) {
     if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
     if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_blendMode") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
@@ -1326,7 +1324,7 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
                         apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
                     }
                     if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
-                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None);
+                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None)?;
                     }
                     active_group_id = None;
                     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
@@ -1390,9 +1388,9 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
             if is_group_child {
                 let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
                 let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
-                blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+                blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo)?;
             } else {
-                blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)))?;
             }
         }
 
@@ -1453,7 +1451,7 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
                         apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
                     }
                     if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
-                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None);
+                        blend_onto_composite(engine, &gs_gl, 1.0, 0, 0.0, 0.0, doc_w, doc_h, true, None, None)?;
                     }
                     active_group_id = None;
                     engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
@@ -1517,9 +1515,9 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
             if is_group_child {
                 let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
                 let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
-                blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo);
+                blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), gs_tex, gs_fbo)?;
             } else {
-                blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)));
+                blend_onto_composite(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)))?;
             }
         }
 
@@ -1564,7 +1562,7 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Resul
         // Layer content with color overlay (use Normal blend, not the layer's blend mode)
         let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
         if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
-            blend_onto_composite(engine, &src_tex, opacity, 0, layer_x, layer_y, tw, th, false, overlay_desc, None);
+            blend_onto_composite(engine, &src_tex, opacity, 0, layer_x, layer_y, tw, th, false, overlay_desc, None)?;
         }
 
         // On-top effects
