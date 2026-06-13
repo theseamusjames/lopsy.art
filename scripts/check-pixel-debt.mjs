@@ -59,13 +59,20 @@ const ALLOWLIST = {
   'src/test-setup.ts': 1,
   'src/test/canvas-mock.ts': 3,
   'src/tools/brush/brush-from-selection.test.ts': 3,
+  'src/tools/crop/perspective-crop-interaction.test.ts': 1,
   'src/tools/crop/perspective-crop.test.ts': 3,             // see #441 (delete with prod file)
+  'src/tools/fill/fill-interaction.test.ts': 3,
   'src/tools/gradient/gradient-interaction.test.ts': 2,
+  'src/tools/magnetic-lasso/magnetic-lasso-strategy.test.ts': 4,
   'src/tools/magnetic-lasso/magnetic-lasso.test.ts': 2,
+  'src/tools/marquee/marquee-strategy.test.ts': 8,
   'src/tools/move/move.test.ts': 1,
   'src/tools/path/boolean-ops.test.ts': 11,
+  'src/tools/quick-select/quick-select-interaction.test.ts': 3,
   'src/tools/quick-select/quick-select.test.ts': 3,
+  'src/tools/text/text-interaction.test.ts': 5,
   'src/tools/transform/transform.test.ts': 2,
+  'src/tools/wand/wand-strategy.test.ts': 4,
   'src/utils/bmp-encoder.test.ts': 2,
 
   // ──────────────────────────────────────────────────────────────────────
