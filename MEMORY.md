@@ -23,6 +23,22 @@ When diagnosing perf issues, write a benchmark e2e test that reproduces the exac
 
 ## All pixel manipulation must happen in Rust/WASM engine, never JS Canvas 2D
 
+## Live tool drags must not rebuild/upload a full-res mask per pointer move
+
+`setSelectionMask` (selection_gpu.rs) allocates `vec![0u8; w*h*4]` (a full
+RGBA texture — 48MB on a 12MP canvas) and uploads it every call. Calling
+`setSelection` on each pointer move (as the marquee tool used to) floods the
+WASM bridge and drops to <1fps on large canvases, with seconds of catch-up
+after a fast drag. Fix: drive the live drag from a tiny analytic preview kept
+*outside* the Zustand stores (`src/tools/marquee/marquee-preview.ts`) so
+mutating it doesn't trip the render dirty flag (no GPU recomposite), draw the
+marching ants from geometry on the 2D overlay (`renderMarqueeDraftAnts`), and
+materialize + commit the real mask once on pointer up. The rAF loop animates
+the preview via the overlay-only path (gated on `getMarqueePreview()`).
+`getSelectionEdges`/`traceSelectionContours` also take an optional `scanBounds`
+so they scan only the selection bbox, not the whole canvas — used by lasso/wand
+which still trace per frame.
+
 ## Undo snapshots use normalized u16, not raw FP16 bits
 
 Undo snapshots read GPU RGBA16F textures as normalized u16 (value * 65535) and restore by dividing back (u16 / 65535). This linear encoding can't preserve FP16's extra precision at small magnitudes. Values above ~0.03 round-trip losslessly; darker values can shift by a few FP16 ULPs (worst case ~8 ULPs near 0.001).

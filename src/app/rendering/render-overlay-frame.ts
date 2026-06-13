@@ -4,7 +4,9 @@ import { useToolSettingsStore } from '../tool-settings-store';
 import { getBrushCursorInfo } from '../useCanvasCursor';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { renderGrid, renderPixelGrid, renderRulers } from './render-grid';
-import { renderSelectionAnts, renderTransformHandles } from './render-selection';
+import { renderSelectionAnts, renderTransformHandles, renderMarqueeDraftAnts } from './render-selection';
+import { getMarqueePreview } from '../../tools/marquee/marquee-preview';
+import { createTransformState, type TransformState } from '../../tools/transform/transform';
 import { renderMeshWarpOverlay } from './render-mesh-warp';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor, renderSymmetryCenter, renderPerspectiveCropOverlay } from './render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './render-text-overlay';
@@ -76,8 +78,27 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
     renderGrid(overlayCtx, doc.width, doc.height, gridSize, viewport.zoom);
   }
 
-  renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhase, transform);
-  renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
+  // A live marquee drag renders from its analytic preview (rect/ellipse, or a
+  // translated copy of the committed selection) so it never builds or uploads
+  // a mask mid-drag. The real selection is committed on pointer up.
+  const marqueePreview = getMarqueePreview();
+  if (marqueePreview) {
+    if (marqueePreview.kind === 'move') {
+      if (selection.active) {
+        const moveTransform: TransformState = {
+          ...createTransformState(selection.bounds),
+          translateX: marqueePreview.dx,
+          translateY: marqueePreview.dy,
+        };
+        renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhase, moveTransform);
+      }
+    } else {
+      renderMarqueeDraftAnts(overlayCtx, marqueePreview.rect, marqueePreview.kind, viewport.zoom, antPhase);
+    }
+  } else {
+    renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhase, transform);
+    renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
+  }
 
   const meshWarp = uiState.meshWarp;
   if (meshWarp) {

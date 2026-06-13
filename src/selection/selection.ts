@@ -299,17 +299,29 @@ export function getSelectionEdges(
   mask: Uint8ClampedArray,
   maskWidth: number,
   maskHeight: number,
+  scanBounds?: Rect | null,
 ): { h: Float64Array; v: Float64Array } {
   const threshold = 128;
   const hSegments: number[] = [];
   const vSegments: number[] = [];
 
+  // Limit the edge scan to the selection's bounding box (expanded one pixel
+  // so border pixels still see their unselected neighbour). The mask is zero
+  // outside its content bounds, so scanning a superset region yields
+  // identical edges at a fraction of the cost — without this, a live marquee
+  // drag re-scans the entire canvas every frame and collapses to <1fps on
+  // large documents.
+  const sx0 = scanBounds ? Math.max(0, Math.floor(scanBounds.x) - 1) : 0;
+  const sy0 = scanBounds ? Math.max(0, Math.floor(scanBounds.y) - 1) : 0;
+  const sx1 = scanBounds ? Math.min(maskWidth, Math.ceil(scanBounds.x + scanBounds.width) + 1) : maskWidth;
+  const sy1 = scanBounds ? Math.min(maskHeight, Math.ceil(scanBounds.y + scanBounds.height) + 1) : maskHeight;
+
   // Horizontal edges: scan row by row, merge adjacent segments on the same Y
-  for (let y = 0; y < maskHeight; y++) {
+  for (let y = sy0; y < sy1; y++) {
     let topStart = -1;
     let botStart = -1;
-    for (let x = 0; x <= maskWidth; x++) {
-      const selected = x < maskWidth && (mask[y * maskWidth + x] ?? 0) >= threshold;
+    for (let x = sx0; x <= sx1; x++) {
+      const selected = x < sx1 && (mask[y * maskWidth + x] ?? 0) >= threshold;
       const isTopEdge = selected && (y === 0 || (mask[(y - 1) * maskWidth + x] ?? 0) < threshold);
       const isBotEdge = selected && (y === maskHeight - 1 || (mask[(y + 1) * maskWidth + x] ?? 0) < threshold);
 
@@ -333,11 +345,11 @@ export function getSelectionEdges(
   }
 
   // Vertical edges: scan column by column, merge adjacent segments on the same X
-  for (let x = 0; x < maskWidth; x++) {
+  for (let x = sx0; x < sx1; x++) {
     let leftStart = -1;
     let rightStart = -1;
-    for (let y = 0; y <= maskHeight; y++) {
-      const selected = y < maskHeight && (mask[y * maskWidth + x] ?? 0) >= threshold;
+    for (let y = sy0; y <= sy1; y++) {
+      const selected = y < sy1 && (mask[y * maskWidth + x] ?? 0) >= threshold;
       const isLeftEdge = selected && (x === 0 || (mask[y * maskWidth + x - 1] ?? 0) < threshold);
       const isRightEdge = selected && (x === maskWidth - 1 || (mask[y * maskWidth + x + 1] ?? 0) < threshold);
 
@@ -373,8 +385,9 @@ export function traceSelectionContours(
   mask: Uint8ClampedArray,
   maskWidth: number,
   maskHeight: number,
+  scanBounds?: Rect | null,
 ): number[][] {
-  const edges = getSelectionEdges(mask, maskWidth, maskHeight);
+  const edges = getSelectionEdges(mask, maskWidth, maskHeight, scanBounds);
 
   // Collect all segments
   const segs: Array<[number, number, number, number]> = [];

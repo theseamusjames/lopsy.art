@@ -181,4 +181,29 @@ describe('getSelectionEdges', () => {
     expect(edges.h.length).toBe(0);
     expect(edges.v.length).toBe(0);
   });
+
+  it('produces identical edges when scan is limited to the content bounds', () => {
+    const W = 64;
+    const H = 64;
+    const cases = [
+      createRectSelection({ x: 10, y: 12, width: 20, height: 15 }, W, H),
+      createEllipseSelection({ x: 8, y: 8, width: 40, height: 30 }, W, H),
+      // Content flush against the canvas edges (top-left corner).
+      createRectSelection({ x: 0, y: 0, width: 12, height: 9 }, W, H),
+      // Content flush against the canvas edges (bottom-right corner).
+      createRectSelection({ x: W - 12, y: H - 9, width: 12, height: 9 }, W, H),
+    ];
+    const bounds = [
+      { x: 10, y: 12, width: 20, height: 15 },
+      { x: 8, y: 8, width: 40, height: 30 },
+      { x: 0, y: 0, width: 12, height: 9 },
+      { x: W - 12, y: H - 9, width: 12, height: 9 },
+    ];
+    for (let i = 0; i < cases.length; i++) {
+      const full = getSelectionEdges(cases[i]!, W, H);
+      const limited = getSelectionEdges(cases[i]!, W, H, bounds[i]);
+      expect(Array.from(limited.h)).toEqual(Array.from(full.h));
+      expect(Array.from(limited.v)).toEqual(Array.from(full.v));
+    }
+  });
 });

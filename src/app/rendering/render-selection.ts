@@ -1,12 +1,14 @@
 import { traceSelectionContours } from '../../selection/selection';
 import { getHandlePositions } from '../../tools/transform/transform';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
+import type { Rect } from '../../types';
 
 export interface SelectionData {
   active: boolean;
   mask: Uint8ClampedArray | null;
   maskWidth: number;
   maskHeight: number;
+  bounds?: Rect | null;
 }
 
 let cachedMaskRef: Uint8ClampedArray | null = null;
@@ -22,7 +24,7 @@ export function renderSelectionAnts(
   if (!selection.active || !selection.mask) return;
 
   if (selection.mask !== cachedMaskRef) {
-    cachedContours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight);
+    cachedContours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight, selection.bounds);
     cachedMaskRef = selection.mask;
   }
 
@@ -66,6 +68,56 @@ export function renderSelectionAnts(
   ctx.lineDashOffset = -offset;
   ctx.strokeStyle = '#ffffff';
   drawContours();
+
+  ctx.restore();
+}
+
+/**
+ * Draw marching ants for an in-progress marquee drag directly from its
+ * rectangle/ellipse geometry — no mask, no contour tracing. Used by the live
+ * preview so a drag never touches a full-resolution buffer or the GPU bridge.
+ */
+export function renderMarqueeDraftAnts(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect,
+  shape: 'rect' | 'ellipse',
+  zoom: number,
+  antPhase: number,
+): void {
+  if (rect.width <= 0 || rect.height <= 0) return;
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+
+  ctx.lineWidth = 1.5 / zoom;
+  const dashLen = 8 / zoom;
+  const offset = (antPhase % 120) / 120 * dashLen * 2;
+
+  const trace = () => {
+    ctx.beginPath();
+    if (shape === 'ellipse') {
+      ctx.ellipse(
+        rect.x + rect.width / 2,
+        rect.y + rect.height / 2,
+        rect.width / 2,
+        rect.height / 2,
+        0, 0, Math.PI * 2,
+      );
+    } else {
+      ctx.rect(rect.x, rect.y, rect.width, rect.height);
+    }
+  };
+
+  ctx.setLineDash([]);
+  ctx.strokeStyle = '#000000';
+  trace();
+  ctx.stroke();
+
+  ctx.setLineDash([dashLen, dashLen]);
+  ctx.lineDashOffset = -offset;
+  ctx.strokeStyle = '#ffffff';
+  trace();
+  ctx.stroke();
 
   ctx.restore();
 }
