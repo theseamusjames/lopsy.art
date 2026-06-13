@@ -46,6 +46,27 @@ describe('computeResizeImage', () => {
     expect(layer.y).toBe(8); // 4 * 2
   });
 
+  it('scales a sub-document-sized layer by its own dimensions, not the doc size', () => {
+    // An added layer cropped to its content: a 30x20 region at (10, 6) inside
+    // a 60x60 document. Resizing the doc to 1/3 must shrink the layer too.
+    const layer = { ...createRasterLayer({ name: 'Fill', width: 30, height: 20 }), x: 10, y: 6 };
+    const doc: DocumentState = {
+      id: 'doc-1', name: 'Test', width: 60, height: 60,
+      layers: [layer],
+      layerOrder: [layer.id],
+      activeLayerId: layer.id,
+      selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    };
+    const result = computeResizeImage(doc, new Map(), 0, 20, 20);
+    const updated = result.document!.layers[0]! as RasterLayer;
+    // scaleX = scaleY = 1/3
+    expect(updated.width).toBe(10); // round(30 / 3)
+    expect(updated.height).toBe(7); // round(20 / 3)
+    expect(updated.x).toBe(3); // round(10 / 3)
+    expect(updated.y).toBe(2); // round(6 / 3)
+  });
+
   it('scales text layer position without converting to raster', () => {
     const textLayer = { ...createTextLayer({ name: 'Text', text: 'Hello' }), x: 4, y: 6 };
     const raster = createRasterLayer({ name: 'Background', width: 10, height: 10 });
