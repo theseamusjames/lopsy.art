@@ -1,4 +1,20 @@
-import { isWideGamut } from '../engine/color-space';
+/**
+ * Post-encode metadata insertion for exported PNG and JPEG blobs.
+ *
+ * Adds tEXt/COM annotations and — when the encoder did not already tag the
+ * file — a color profile. Chromium's encoders tag display-p3 canvases
+ * themselves (PNG iCCP, JPEG APP2 ICC), so the profile passed in here is a
+ * fallback for encoders that leave wide-gamut output untagged. Inserting a
+ * second profile alongside the encoder's own would be invalid (PNG allows a
+ * single iCCP chunk) and readers would pick ours over the correct one, so
+ * both inserters detect existing color metadata first.
+ */
+
+/** An ICC profile to embed when the encoder left the file untagged. */
+export interface EmbeddedIccProfile {
+  name: string;
+  data: Uint8Array;
+}
 
 const crcTable = new Uint32Array(256);
 for (let n = 0; n < 256; n++) {
@@ -17,17 +33,10 @@ function crc32(data: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function createPngTextChunk(keyword: string, text: string): Uint8Array {
+function buildPngChunk(type: string, payload: Uint8Array): Uint8Array {
   const enc = new TextEncoder();
-  const keyBytes = enc.encode(keyword);
-  const textBytes = enc.encode(text);
-  const payload = new Uint8Array(keyBytes.length + 1 + textBytes.length);
-  payload.set(keyBytes, 0);
-  payload[keyBytes.length] = 0;
-  payload.set(textBytes, keyBytes.length + 1);
-
   const typeAndPayload = new Uint8Array(4 + payload.length);
-  typeAndPayload.set(enc.encode('tEXt'), 0);
+  typeAndPayload.set(enc.encode(type), 0);
   typeAndPayload.set(payload, 4);
 
   const chunk = new Uint8Array(4 + typeAndPayload.length + 4);
@@ -38,19 +47,19 @@ function createPngTextChunk(keyword: string, text: string): Uint8Array {
   return chunk;
 }
 
-function createPngSrgbChunk(): Uint8Array {
+function createPngTextChunk(keyword: string, text: string): Uint8Array {
   const enc = new TextEncoder();
-  const typeBytes = enc.encode('sRGB');
-  const payload = new Uint8Array([0]); // rendering intent: perceptual
-  const typeAndPayload = new Uint8Array(4 + payload.length);
-  typeAndPayload.set(typeBytes, 0);
-  typeAndPayload.set(payload, 4);
-  const chunk = new Uint8Array(4 + typeAndPayload.length + 4);
-  const view = new DataView(chunk.buffer);
-  view.setUint32(0, payload.length);
-  chunk.set(typeAndPayload, 4);
-  view.setUint32(chunk.length - 4, crc32(typeAndPayload));
-  return chunk;
+  const keyBytes = enc.encode(keyword);
+  const textBytes = enc.encode(text);
+  const payload = new Uint8Array(keyBytes.length + 1 + textBytes.length);
+  payload.set(keyBytes, 0);
+  payload[keyBytes.length] = 0;
+  payload.set(textBytes, keyBytes.length + 1);
+  return buildPngChunk('tEXt', payload);
+}
+
+function createPngSrgbChunk(): Uint8Array {
+  return buildPngChunk('sRGB', new Uint8Array([0])); // rendering intent: perceptual
 }
 
 /** Create a PNG iCCP chunk embedding a compressed ICC profile. */
@@ -60,23 +69,14 @@ function createPngIccpChunk(profileName: string, iccProfile: Uint8Array): Uint8A
   // iCCP payload: profile name (null terminated) + compression method (0 = deflate) + compressed data
   // Use uncompressed deflate (stored blocks) since we don't have zlib here
   const compressed = deflateStored(iccProfile);
-  const payloadLen = nameBytes.length + 1 + 1 + compressed.length;
-
-  const typeAndPayload = new Uint8Array(4 + payloadLen);
-  typeAndPayload.set(enc.encode('iCCP'), 0);
-  let off = 4;
-  typeAndPayload.set(nameBytes, off);
+  const payload = new Uint8Array(nameBytes.length + 1 + 1 + compressed.length);
+  let off = 0;
+  payload.set(nameBytes, off);
   off += nameBytes.length;
-  typeAndPayload[off++] = 0; // null terminator
-  typeAndPayload[off++] = 0; // compression method: deflate
-  typeAndPayload.set(compressed, off);
-
-  const chunk = new Uint8Array(4 + typeAndPayload.length + 4);
-  const view = new DataView(chunk.buffer);
-  view.setUint32(0, payloadLen);
-  chunk.set(typeAndPayload, 4);
-  view.setUint32(chunk.length - 4, crc32(typeAndPayload));
-  return chunk;
+  payload[off++] = 0; // null terminator
+  payload[off++] = 0; // compression method: deflate
+  payload.set(compressed, off);
+  return buildPngChunk('iCCP', payload);
 }
 
 /** Wrap data in a valid deflate stream using stored (uncompressed) blocks. */
@@ -123,12 +123,29 @@ function deflateStored(data: Uint8Array): Uint8Array {
   return out.subarray(0, pos);
 }
 
-/** Create the PNG color profile chunk appropriate for the active color space. */
-function createPngColorChunk(): Uint8Array {
-  if (isWideGamut()) {
-    return createPngIccpChunk('Display P3', displayP3IccProfile);
+/** PNG chunk types that pin down the file's color interpretation. */
+const PNG_COLOR_CHUNK_TYPES = new Set(['iCCP', 'sRGB', 'cICP']);
+
+/**
+ * Walk the PNG chunk list and report whether a color-space chunk
+ * (iCCP, sRGB, or cICP) is already present.
+ */
+export function pngHasColorChunk(data: Uint8Array): boolean {
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let offset = 8; // skip PNG signature
+  while (offset + 8 <= data.length) {
+    const length = view.getUint32(offset);
+    const type = String.fromCharCode(
+      data[offset + 4]!,
+      data[offset + 5]!,
+      data[offset + 6]!,
+      data[offset + 7]!,
+    );
+    if (PNG_COLOR_CHUNK_TYPES.has(type)) return true;
+    if (type === 'IDAT' || type === 'IEND') return false;
+    offset += 12 + length;
   }
-  return createPngSrgbChunk();
+  return false;
 }
 
 function findIhdrEnd(): number {
@@ -136,16 +153,29 @@ function findIhdrEnd(): number {
   return 8 + 25;
 }
 
+/**
+ * Insert tEXt metadata and, when the encoder did not embed one, a color
+ * profile chunk. `icc` is embedded as an iCCP chunk for wide-gamut exports;
+ * without it an untagged file gets the 1-byte sRGB chunk (sRGB exports keep
+ * their historical shape).
+ */
 export async function addPngMetadata(
   blob: Blob,
   entries: Record<string, string>,
+  icc?: EmbeddedIccProfile,
 ): Promise<Blob> {
   const data = new Uint8Array(await blob.arrayBuffer());
 
-  const colorChunk = createPngColorChunk();
+  // Only tag untagged files — a second color chunk is invalid and would
+  // override the encoder's correct profile in most readers.
+  const colorChunk = pngHasColorChunk(data)
+    ? null
+    : icc
+      ? createPngIccpChunk(icc.name, icc.data)
+      : createPngSrgbChunk();
 
   const chunks = Object.entries(entries).map(([k, v]) => createPngTextChunk(k, v));
-  const extra = colorChunk.length + chunks.reduce((s, c) => s + c.length, 0);
+  const extra = (colorChunk?.length ?? 0) + chunks.reduce((s, c) => s + c.length, 0);
   const ihdrEnd = findIhdrEnd();
   const iend = data.length - 12;
   const result = new Uint8Array(data.length + extra);
@@ -155,8 +185,10 @@ export async function addPngMetadata(
   let offset = ihdrEnd;
 
   // Color profile chunk must come before IDAT
-  result.set(colorChunk, offset);
-  offset += colorChunk.length;
+  if (colorChunk) {
+    result.set(colorChunk, offset);
+    offset += colorChunk.length;
+  }
 
   // Copy everything between IHDR end and IEND
   result.set(data.subarray(ihdrEnd, iend), offset);
@@ -173,97 +205,32 @@ export async function addPngMetadata(
   return new Blob([result], { type: 'image/png' });
 }
 
-function buildMinimalIcc(desc: string): Uint8Array {
-  const enc = new TextEncoder();
-  const descBytes = enc.encode(desc);
+const JPEG_ICC_IDENTIFIER = 'ICC_PROFILE\0';
 
-  // Tag table: 3 tags (desc, wtpt, cprt)
-  const tagCount = 3;
-  const headerSize = 128;
-  const tagTableSize = 4 + tagCount * 12;
-
-  // desc tag data (type 'desc')
-  const descDataSize = 4 + 4 + 4 + descBytes.length + 1; // type + reserved + length + string + null
-  const descPad = (4 - (descDataSize % 4)) % 4;
-  const descTotalSize = descDataSize + descPad + 12 + 67; // + unicode + scriptcode
-
-  // wtpt tag data (type 'XYZ ')
-  const wtptDataSize = 4 + 4 + 12; // type + reserved + XYZ (D65: 0.9505, 1.0, 1.0890)
-
-  // cprt tag data (type 'text')
-  const cprtText = 'No copyright';
-  const cprtBytes = enc.encode(cprtText);
-  const cprtDataSize = 4 + 4 + cprtBytes.length; // type + reserved + text
-
-  const dataStart = headerSize + tagTableSize;
-  const totalSize = dataStart + descTotalSize + wtptDataSize + cprtDataSize;
-  const profile = new Uint8Array(totalSize);
-  const view = new DataView(profile.buffer);
-
-  // --- Header (128 bytes) ---
-  view.setUint32(0, totalSize); // profile size
-  // preferred CMM: 0
-  view.setUint32(8, 0x02100000); // version 2.1.0
-  // device class: 'mntr'
-  profile.set(enc.encode('mntr'), 12);
-  // color space: 'RGB '
-  profile.set(enc.encode('RGB '), 16);
-  // PCS: 'XYZ '
-  profile.set(enc.encode('XYZ '), 20);
-  // date: 2024-01-01
-  view.setUint16(24, 2024); // year
-  view.setUint16(26, 1); // month
-  view.setUint16(28, 1); // day
-  // signature: 'acsp'
-  profile.set(enc.encode('acsp'), 36);
-  // primary platform: 'APPL'
-  profile.set(enc.encode('APPL'), 40);
-  // rendering intent: perceptual (0)
-  view.setUint32(64, 0);
-  // PCS illuminant D50 (fixed point s15.16)
-  view.setUint32(68, 0x0000f6d6); // X = 0.9642
-  view.setUint32(72, 0x00010000); // Y = 1.0
-  view.setUint32(76, 0x0000d32d); // Z = 0.8249
-
-  // --- Tag table ---
-  const tableOffset = headerSize;
-  view.setUint32(tableOffset, tagCount);
-
-  let dataOffset = dataStart;
-
-  // desc tag entry
-  profile.set(enc.encode('desc'), tableOffset + 4);
-  view.setUint32(tableOffset + 8, dataOffset);
-  view.setUint32(tableOffset + 12, descTotalSize);
-
-  // desc tag data
-  profile.set(enc.encode('desc'), dataOffset);
-  view.setUint32(dataOffset + 8, descBytes.length + 1);
-  profile.set(descBytes, dataOffset + 12);
-  dataOffset += descTotalSize;
-
-  // wtpt tag entry
-  profile.set(enc.encode('wtpt'), tableOffset + 16);
-  view.setUint32(tableOffset + 20, dataOffset);
-  view.setUint32(tableOffset + 24, wtptDataSize);
-
-  // wtpt tag data (D65 white point in PCS XYZ)
-  profile.set(enc.encode('XYZ '), dataOffset);
-  view.setUint32(dataOffset + 8, 0x0000f6d6); // X
-  view.setUint32(dataOffset + 12, 0x00010000); // Y
-  view.setUint32(dataOffset + 16, 0x0000d32d); // Z
-  dataOffset += wtptDataSize;
-
-  // cprt tag entry
-  profile.set(enc.encode('cprt'), tableOffset + 28);
-  view.setUint32(tableOffset + 32, dataOffset);
-  view.setUint32(tableOffset + 36, cprtDataSize);
-
-  // cprt tag data
-  profile.set(enc.encode('text'), dataOffset);
-  profile.set(cprtBytes, dataOffset + 8);
-
-  return profile;
+/**
+ * Walk the JPEG segment list up to SOS and report whether an APP2
+ * ICC_PROFILE segment is already present.
+ */
+export function jpegHasIccProfile(data: Uint8Array): boolean {
+  let offset = 2; // skip SOI
+  while (offset + 4 <= data.length) {
+    if (data[offset] !== 0xff) return false;
+    const marker = data[offset + 1]!;
+    if (marker === 0xda || marker === 0xd9) return false; // SOS / EOI
+    const length = ((data[offset + 2]! << 8) | data[offset + 3]!) + 2;
+    if (marker === 0xe2 && length >= 4 + JPEG_ICC_IDENTIFIER.length) {
+      let matches = true;
+      for (let i = 0; i < JPEG_ICC_IDENTIFIER.length; i++) {
+        if (data[offset + 4 + i] !== JPEG_ICC_IDENTIFIER.charCodeAt(i)) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) return true;
+    }
+    offset += length;
+  }
+  return false;
 }
 
 function createJpegIccMarker(iccProfile: Uint8Array): Uint8Array {
@@ -285,14 +252,15 @@ function createJpegIccMarker(iccProfile: Uint8Array): Uint8Array {
   return marker;
 }
 
-const srgbIccProfile = buildMinimalIcc('sRGB');
-const displayP3IccProfile = buildMinimalIcc('Display P3');
-
-function getActiveIccProfile(): Uint8Array {
-  return isWideGamut() ? displayP3IccProfile : srgbIccProfile;
-}
-
-export async function addJpegComment(blob: Blob, comment: string): Promise<Blob> {
+/**
+ * Insert a COM comment segment and, when the encoder did not embed one and
+ * `icc` is provided, an APP2 ICC profile segment.
+ */
+export async function addJpegComment(
+  blob: Blob,
+  comment: string,
+  icc?: EmbeddedIccProfile,
+): Promise<Blob> {
   const data = new Uint8Array(await blob.arrayBuffer());
   const bytes = new TextEncoder().encode(comment);
 
@@ -305,14 +273,20 @@ export async function addJpegComment(blob: Blob, comment: string): Promise<Blob>
   commentMarker[3] = commentLen & 0xff;
   commentMarker.set(bytes, 4);
 
-  // Build ICC profile marker
-  const iccMarker = createJpegIccMarker(getActiveIccProfile());
+  // Only tag untagged files — readers use the first ICC_PROFILE segment,
+  // so inserting a second profile would override the encoder's.
+  const iccMarker = icc && !jpegHasIccProfile(data) ? createJpegIccMarker(icc.data) : null;
 
-  // Insert both after SOI (first 2 bytes)
-  const result = new Uint8Array(data.length + commentMarker.length + iccMarker.length);
+  // Insert after SOI (first 2 bytes)
+  const result = new Uint8Array(data.length + commentMarker.length + (iccMarker?.length ?? 0));
   result.set(data.subarray(0, 2), 0);
-  result.set(iccMarker, 2);
-  result.set(commentMarker, 2 + iccMarker.length);
-  result.set(data.subarray(2), 2 + iccMarker.length + commentMarker.length);
+  let offset = 2;
+  if (iccMarker) {
+    result.set(iccMarker, offset);
+    offset += iccMarker.length;
+  }
+  result.set(commentMarker, offset);
+  offset += commentMarker.length;
+  result.set(data.subarray(2), offset);
   return new Blob([result], { type: 'image/jpeg' });
 }

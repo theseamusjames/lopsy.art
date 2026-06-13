@@ -37,3 +37,21 @@ Undo snapshots read GPU RGBA16F textures as normalized u16 (value * 65535) and r
 
 Not worth fixing. The precision loss is perceptually invisible — sub-1-bit error in deep shadows only. Fixing would require storing raw FP16 bit patterns instead of normalized u16, changing the readback/upload pipeline in texture_pool.rs and the compressed snapshot format.
 
+
+## Browser encoders already ICC-tag wide-gamut canvas exports
+
+Chromium's `toBlob`/`convertToBlob` on a display-p3 canvas embeds the
+color profile itself: PNG gets an iCCP chunk, JPEG an APP2 ICC_PROFILE
+segment, WebP an ICCP RIFF chunk (JPEG/WebP are tagged even for sRGB).
+Post-encode metadata insertion (`src/utils/image-metadata.ts`) must
+detect existing color chunks/segments and skip — a second profile is
+invalid and readers pick the first one. Verified empirically with the
+Playwright Chromium build (2026-06).
+
+## cargo fmt/clippy are not CI-enforced and the repo doesn't conform
+
+`.github/workflows/pr.yml` runs only wasm-build, ESLint, typecheck, and
+Vitest. `cargo fmt --check` fails with ~1,190 pre-existing diffs
+repo-wide — don't reformat unrelated files; check that your own hunks
+are clean by diffing the violation count against a pristine checkout
+(`git archive HEAD engine-rs | tar -x -C /tmp/...`).

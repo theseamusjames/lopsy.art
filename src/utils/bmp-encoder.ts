@@ -1,8 +1,17 @@
+/** RGBA pixel source for the BMP encoder — structurally satisfied by ImageData. */
+export interface BmpImageSource {
+  width: number;
+  height: number;
+  data: Uint8Array | Uint8ClampedArray;
+}
+
 /**
  * Minimal BMP encoder — produces an uncompressed 24-bit BMP file.
  * BMP stores rows bottom-to-top in BGR order, padded to 4-byte boundaries.
+ * Pixel values are written as-is; BMP readers assume sRGB, so wide-gamut
+ * sources must be converted to sRGB before encoding.
  */
-export function encodeBMP(imageData: ImageData): Blob {
+export function encodeBMP(imageData: BmpImageSource): Blob {
   const { width, height, data } = imageData;
   const rowSize = Math.ceil((width * 3) / 4) * 4;
   const pixelDataSize = rowSize * height;

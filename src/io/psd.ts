@@ -21,6 +21,7 @@ import {
   initWasm,
 } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState, flushLayerSync } from '../engine-wasm/engine-sync';
+import { isWideGamut } from '../engine/color-space';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import type { Layer, GroupLayer, RasterLayer } from '../types/layers';
 import type { LayerEffects } from '../types/effects';
@@ -185,7 +186,9 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
   }
 
   const layersJson = JSON.stringify(layerMetas);
-  const psdBytes = exportPsd(engine, layersJson, allMaskData, depth);
+  // Layer pixels are read from GPU textures in the working color space, so
+  // wide-gamut documents embed a Display P3 ICC profile (resource 1039).
+  const psdBytes = exportPsd(engine, layersJson, allMaskData, depth, isWideGamut() ? 1 : 0);
 
   const blob = new Blob([psdBytes.slice().buffer], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);

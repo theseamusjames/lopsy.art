@@ -1,12 +1,15 @@
 import { useUIStore } from '../../ui-store';
 import { useEditorStore } from '../../editor-store';
 import { addPngMetadata, addJpegComment } from '../../../utils/image-metadata';
+import type { EmbeddedIccProfile } from '../../../utils/image-metadata';
 import { encodeBMP } from '../../../utils/bmp-encoder';
 import { contextOptions, canvasColorSpace, isWideGamut, createImageDataFromArray } from '../../../engine/color-space';
 import { seedBitmapFromBlob } from '../../../engine/bitmap-cache';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import {
+  buildIccProfile,
   compositeForExport,
+  convertP3ToSrgb,
   exportPng16,
   getCompositeSize,
 } from '../../../engine-wasm/wasm-bridge';
@@ -31,6 +34,20 @@ import type { ExportFormat, ExportOptions } from '../export-logic';
 import { qualityToFraction, FORMAT_EXT, FORMAT_MIME } from '../export-logic';
 
 const METADATA_NOTE = 'Made with Lopsy — http://lopsy.art';
+
+/** Color space code shared with the WASM export functions: 0 = sRGB, 1 = Display P3. */
+const COLOR_SPACE_DISPLAY_P3 = 1;
+
+/**
+ * The ICC profile to embed when an exported file ends up untagged.
+ * Wide-gamut sessions need the Display P3 profile (built in Rust) so readers
+ * interpret the P3 pixel values correctly; sRGB sessions return undefined and
+ * keep the historical sRGB tagging.
+ */
+function exportIccProfile(): EmbeddedIccProfile | undefined {
+  if (!isWideGamut()) return undefined;
+  return { name: 'Display P3', data: buildIccProfile(COLOR_SPACE_DISPLAY_P3) };
+}
 
 function confirmIfDirty(): boolean {
   if (!useEditorStore.getState().isDirty) return true;
@@ -240,10 +257,10 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, opti
   // precision and encodes directly in Rust, bypassing the 8-bit canvas.toBlob.
   if (format === 'png' && highQuality) {
     try {
-      const colorSpace: number = isWideGamut() ? 1 : 0;
+      const colorSpace: number = isWideGamut() ? COLOR_SPACE_DISPLAY_P3 : 0;
       const pngBytes = exportPng16(engine, colorSpace);
       const blob = new Blob([pngBytes as BlobPart], { type: 'image/png' });
-      addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE })
+      addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE }, exportIccProfile())
         .then((b) => downloadBlob(b, 'png', filename))
         .catch((err) => notifyError(`Failed to export: ${describeError(err)}`));
     } catch (err) {
@@ -294,16 +311,24 @@ function finishCanvasExport(
     const ctx = canvas.getContext('2d', contextOptions);
     if (!ctx) return;
     const imageData = ctx.getImageData(0, 0, width, height);
-    downloadBlob(encodeBMP(imageData), ext, filename);
+    // BMP cannot carry an ICC profile, so wide-gamut pixels are converted
+    // to sRGB in Rust — readers assume sRGB and would otherwise show
+    // desaturated colors.
+    const pixels = isWideGamut()
+      ? convertP3ToSrgb(
+          new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength),
+        )
+      : imageData.data;
+    downloadBlob(encodeBMP({ width, height, data: pixels }), ext, filename);
     return;
   }
 
   const finishExport = async (blob: Blob) => {
     const tagged =
       format === 'png'
-        ? await addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE })
+        ? await addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE }, exportIccProfile())
         : format === 'jpeg'
-          ? await addJpegComment(blob, METADATA_NOTE)
+          ? await addJpegComment(blob, METADATA_NOTE, exportIccProfile())
           : blob;
     downloadBlob(tagged, ext, filename);
   };

@@ -90,15 +90,6 @@ impl<'a> BitReader<'a> {
 
     fn decode_huffman(&mut self, table: &HuffTable) -> Result<u8, String> {
         self.fill();
-        let mut code = 0i32;
-        for len in 0..16 {
-            code = (code << 1) | ((self.peek(len as u32 + 1) >> (len as u32)) & 1) as i32;
-
-            // Rebuild: read bit by bit
-            // Actually, let's do it the standard way
-            let _ = code; // Reset approach below
-            break;
-        }
 
         // Standard JPEG Huffman decode
         let mut code = 0i32;

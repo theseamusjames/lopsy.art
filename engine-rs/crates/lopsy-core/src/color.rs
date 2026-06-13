@@ -439,6 +439,30 @@ pub fn apply_matrix3(m: &[f32; 9], r: f32, g: f32, b: f32) -> (f32, f32, f32) {
     )
 }
 
+/// Convert an RGBA8 buffer from Display P3 to sRGB in place.
+///
+/// Used for export formats that cannot carry an ICC profile (BMP), where
+/// pixel values must be in sRGB for readers to interpret them correctly.
+/// Out-of-gamut colors are clamped. Alpha is preserved.
+pub fn p3_to_srgb_pixels(pixels: &mut [u8]) {
+    // P3 shares the sRGB transfer function, so decode via the sRGB EOTF.
+    let mut eotf = [0.0f32; 256];
+    for (v, slot) in eotf.iter_mut().enumerate() {
+        *slot = srgb_to_linear(v as u8);
+    }
+    for px in pixels.chunks_exact_mut(4) {
+        let (r, g, b) = apply_matrix3(
+            &P3_TO_SRGB_MATRIX,
+            eotf[px[0] as usize],
+            eotf[px[1] as usize],
+            eotf[px[2] as usize],
+        );
+        px[0] = linear_to_srgb(r);
+        px[1] = linear_to_srgb(g);
+        px[2] = linear_to_srgb(b);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -499,5 +523,70 @@ mod tests {
         assert_eq!(BlendMode::from_u8(0), Some(BlendMode::Normal));
         assert_eq!(BlendMode::from_u8(15), Some(BlendMode::Luminosity));
         assert_eq!(BlendMode::from_u8(16), None);
+    }
+
+    #[test]
+    fn test_p3_to_srgb_neutrals_unchanged() {
+        // Grays have identical encoding in P3 and sRGB (same white point
+        // and transfer function), so they must pass through untouched.
+        let mut px = [0, 0, 0, 255, 128, 128, 128, 200, 255, 255, 255, 0];
+        p3_to_srgb_pixels(&mut px);
+        for (i, &v) in [0, 0, 0, 255, 128, 128, 128, 200, 255, 255, 255, 0]
+            .iter()
+            .enumerate()
+        {
+            assert!(
+                (px[i] as i16 - v as i16).abs() <= 1,
+                "neutral changed at {i}: {} vs {v}",
+                px[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_p3_to_srgb_preserves_alpha() {
+        let mut px = [230, 120, 30, 77];
+        p3_to_srgb_pixels(&mut px);
+        assert_eq!(px[3], 77);
+    }
+
+    #[test]
+    fn test_p3_to_srgb_known_conversion() {
+        // P3 (230, 120, 30) — a saturated orange. Reference computed with
+        // the same primaries via double-precision math: linear P3
+        // (0.7835, 0.1873, 0.0123) → linear sRGB (0.9176, 0.1623, ~-0.017)
+        // → encoded (246, 112, 0) with the blue channel gamut-clamped.
+        let mut px = [230, 120, 30, 255];
+        p3_to_srgb_pixels(&mut px);
+        assert!((px[0] as i16 - 246).abs() <= 2, "r = {}", px[0]);
+        assert!((px[1] as i16 - 112).abs() <= 2, "g = {}", px[1]);
+        assert_eq!(px[2], 0, "out-of-gamut blue must clamp to 0");
+        assert_eq!(px[3], 255);
+    }
+
+    #[test]
+    fn test_p3_to_srgb_red_expands() {
+        // P3 pure red is outside the sRGB gamut: it clamps to sRGB pure red.
+        let mut px = [255, 0, 0, 255];
+        p3_to_srgb_pixels(&mut px);
+        assert_eq!(&px, &[255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn test_p3_to_srgb_roundtrip_via_srgb_matrix() {
+        // sRGB red expressed in P3 is approximately (234, 51, 35);
+        // converting back to sRGB must recover (255, 0, 0).
+        let lin = (srgb_to_linear(255), srgb_to_linear(0), srgb_to_linear(0));
+        let (pr, pg, pb) = apply_matrix3(&SRGB_TO_P3_MATRIX, lin.0, lin.1, lin.2);
+        let mut px = [
+            linear_to_srgb(pr),
+            linear_to_srgb(pg),
+            linear_to_srgb(pb),
+            255,
+        ];
+        p3_to_srgb_pixels(&mut px);
+        assert!(px[0] >= 253, "r = {}", px[0]);
+        assert!(px[1] <= 2, "g = {}", px[1]);
+        assert!(px[2] <= 2, "b = {}", px[2]);
     }
 }

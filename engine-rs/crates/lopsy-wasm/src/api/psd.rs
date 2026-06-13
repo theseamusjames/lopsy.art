@@ -25,6 +25,10 @@ use crate::layer_manager;
 ///
 /// `depth`: 8 or 16.
 ///
+/// `color_space`: 0 = sRGB, 1 = Display P3. Selects the ICC profile embedded
+/// in the PSD (image resource 1039) so readers interpret the pixel values
+/// correctly.
+///
 /// Returns the PSD file as bytes.
 #[wasm_bindgen(js_name = "exportPsd")]
 pub fn export_psd(
@@ -32,6 +36,7 @@ pub fn export_psd(
     layers_json: &str,
     mask_data: &[u8],
     depth: u8,
+    color_space: u8,
 ) -> Result<Vec<u8>, JsError> {
     use lopsy_core::psd::types::*;
     use lopsy_core::psd::writer::write_psd;
@@ -172,12 +177,22 @@ pub fn export_psd(
         });
     }
 
+    // Wide-gamut documents embed a Display P3 profile so readers interpret
+    // the P3 pixel values correctly. sRGB documents keep `None`, which lets
+    // the writer fall back to its legacy sRGB profile (byte-identical output).
+    let icc_profile = match color_space {
+        1 => Some(lopsy_core::export::build_icc_profile(
+            lopsy_core::color::ColorSpace::DisplayP3,
+        )),
+        _ => None,
+    };
+
     let doc = PsdDocument {
         width: engine.inner.doc_width,
         height: engine.inner.doc_height,
         depth: psd_depth,
         layers: psd_layers,
-        icc_profile: None,
+        icc_profile,
     };
 
     Ok(write_psd(&doc))
