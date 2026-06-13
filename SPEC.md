@@ -376,7 +376,7 @@ All adjustments can be applied destructively (to the layer directly) or as adjus
 ## 13. Import / Export
 
 ### Import
-- Open image files: PNG, JPEG, WebP, GIF, BMP, TIFF, SVG (rasterized on import), PSD (basic support — future).
+- Open image files: PNG, JPEG, WebP, GIF, BMP, SVG (rasterized on import), PSD (basic support — future).
 - Drag and drop images onto canvas (creates new layer).
 - Paste from clipboard.
 - Import as new layer or new document.
@@ -384,7 +384,7 @@ All adjustments can be applied destructively (to the layer directly) or as adjus
 ### Export
 - **Quick export**: PNG (default), JPEG, WebP.
 - **Export dialog**:
-  - Format: PNG, JPEG, WebP, GIF, BMP, TIFF, SVG (vector layers only).
+  - Format: PNG, JPEG, WebP, GIF, BMP, SVG (vector layers only).
   - Quality slider (JPEG, WebP).
   - Scale: 1x, 2x, 0.5x, custom.
   - Export selected artboard(s), entire canvas, or selection.

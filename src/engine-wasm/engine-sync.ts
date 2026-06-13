@@ -227,25 +227,39 @@ export function syncSeamlessPattern(engine: Engine, show: boolean, dim: boolean)
 }
 
 export function syncChannelVisibility(engine: Engine, channelVisibility: ChannelVisibility): void {
-  setChannelMask(
-    engine,
-    channelVisibility.r ? 1.0 : 0.0,
-    channelVisibility.g ? 1.0 : 0.0,
-    channelVisibility.b ? 1.0 : 0.0,
-    channelVisibility.a ? 1.0 : 0.0,
-  );
+  const tracked = getTracked(engine);
+  const r = channelVisibility.r ? 1.0 : 0.0;
+  const g = channelVisibility.g ? 1.0 : 0.0;
+  const b = channelVisibility.b ? 1.0 : 0.0;
+  const a = channelVisibility.a ? 1.0 : 0.0;
+  const key = `${r},${g},${b},${a}`;
+  if (tracked.channelMask === key) return;
+  setChannelMask(engine, r, g, b, a);
+  tracked.channelMask = key;
 }
 
 export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, enabled: boolean): void {
   const tracked = getTracked(engine);
   if (!enabled) {
+    if (tracked.adjustmentsCleared === true) return;
     clearImageAdjustments(engine);
+    tracked.adjustmentsCleared = true;
+    tracked.adjustmentsRef = null;
     tracked.curvesIdentity = null;
     tracked.curvesRef = null;
     tracked.levelsIdentity = null;
     tracked.levelsRef = null;
     return;
   }
+
+  // The UI store replaces the adjustments object wholesale on every edit, so
+  // an unchanged reference means nothing below can produce a different
+  // result — skip all the setters (each one dirties the engine and would
+  // defeat the needs_recomposite frame gate on every cursor-move frame).
+  if (tracked.adjustmentsCleared === false && tracked.adjustmentsRef === adjustments) return;
+  tracked.adjustmentsCleared = false;
+  tracked.adjustmentsRef = adjustments;
+
   setImageExposure(engine, adjustments.exposure);
   setImageContrast(engine, adjustments.contrast);
   setImageHighlights(engine, adjustments.highlights);
@@ -545,11 +559,15 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
 }
 
 export function syncMaskEditMode(engine: Engine, maskEditMode: boolean, activeLayerId: string | null): void {
-  if (maskEditMode && activeLayerId) {
-    setMaskEditLayer(engine, activeLayerId);
+  const tracked = getTracked(engine);
+  const target = maskEditMode && activeLayerId ? activeLayerId : null;
+  if (tracked.maskEditLayerId === target) return;
+  if (target) {
+    setMaskEditLayer(engine, target);
   } else {
     clearMaskEditLayer(engine);
   }
+  tracked.maskEditLayerId = target;
 }
 
 export function syncOverlays(

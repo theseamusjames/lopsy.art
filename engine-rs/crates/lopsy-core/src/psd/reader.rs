@@ -1,7 +1,6 @@
-use std::io::Read as IoRead;
 use super::blend_keys::psd_key_to_blend_mode;
 use super::packbits::packbits_decode;
-use super::zip_predict::zip_predict_decode_16;
+use super::zip_predict::{zip_predict_decode_16, zip_predict_decode_8};
 use super::types::*;
 
 /// Parse a PSD file and return a document descriptor with all layer data.
@@ -682,21 +681,11 @@ fn decode_channel(
                     Ok(bytes)
                 }
                 PsdDepth::Eight => {
-                    // 8-bit ZIP with prediction: byte-level delta
-                    let mut decoder = flate2::read::ZlibDecoder::new(compressed);
-                    let mut delta_buf = Vec::new();
-                    decoder.read_to_end(&mut delta_buf)
-                        .map_err(|e| PsdError::DecompressionFailed(e.to_string()))?;
-
-                    // Undo delta per row
-                    let row_size = w;
-                    for y in 0..h {
-                        let start = y * row_size;
-                        for x in 1..row_size {
-                            delta_buf[start + x] = delta_buf[start + x].wrapping_add(delta_buf[start + x - 1]);
-                        }
-                    }
-                    Ok(delta_buf)
+                    // 8-bit ZIP with prediction: byte-level delta. The
+                    // helper validates the inflated length so a corrupt
+                    // stream errors instead of panicking out of bounds.
+                    zip_predict_decode_8(compressed, w, h)
+                        .map_err(PsdError::DecompressionFailed)
                 }
             }
         }
@@ -756,19 +745,11 @@ fn read_merged_composite(c: &mut PsdCursor, header: &PsdHeader) -> Result<Vec<u8
                     bytes
                 }
                 PsdDepth::Eight => {
-                    let mut decoder = flate2::read::ZlibDecoder::new(compressed);
-                    let mut delta_buf = Vec::new();
-                    decoder.read_to_end(&mut delta_buf)
-                        .map_err(|e| PsdError::DecompressionFailed(e.to_string()))?;
-                    let row_size = w * bpc;
-                    let total_rows = h * channels;
-                    for y in 0..total_rows {
-                        let start = y * row_size;
-                        for x in 1..row_size {
-                            delta_buf[start + x] = delta_buf[start + x].wrapping_add(delta_buf[start + x - 1]);
-                        }
-                    }
-                    delta_buf
+                    // All channel planes are stacked in one stream; the
+                    // helper validates the inflated length so a corrupt
+                    // stream errors instead of panicking out of bounds.
+                    zip_predict_decode_8(compressed, w * bpc, h * channels)
+                        .map_err(PsdError::DecompressionFailed)?
                 }
             }
         }
@@ -1012,5 +993,47 @@ mod tests {
     fn reject_invalid_signature() {
         let result = read_psd(b"NOT_PSD_DATA_HERE");
         assert!(matches!(result, Err(PsdError::InvalidSignature)));
+    }
+
+    /// A corrupt 8-bit ZIP-with-prediction channel whose stream inflates
+    /// short must surface as an error. Before the length validation this
+    /// panicked indexing past the inflated buffer — which panic=abort turns
+    /// into a whole-engine abort from user-supplied file data.
+    #[test]
+    fn corrupt_8bit_zip_predicted_channel_errors_instead_of_panicking() {
+        let header = PsdHeader {
+            width: 4,
+            height: 4,
+            depth: PsdDepth::Eight,
+            channels: 4,
+        };
+        // Only 4 bytes inflate out, but the 4x4 channel expects 16.
+        let short_stream = super::super::zip_predict::zip_encode(&[10u8, 20, 30, 40]);
+        let mut channel_data = vec![0u8, 3]; // compression type 3 (u16 BE)
+        channel_data.extend_from_slice(&short_stream);
+
+        let mut cursor = PsdCursor::new(&channel_data);
+        let result = decode_channel(&mut cursor, channel_data.len(), 4, 4, &header);
+        assert!(matches!(result, Err(PsdError::DecompressionFailed(_))));
+    }
+
+    /// Same corruption through the merged-composite path, which stacks all
+    /// channel planes in a single ZIP-predicted stream.
+    #[test]
+    fn corrupt_8bit_zip_predicted_composite_errors_instead_of_panicking() {
+        let header = PsdHeader {
+            width: 4,
+            height: 4,
+            depth: PsdDepth::Eight,
+            channels: 3,
+        };
+        // 3 channels x 16 bytes expected; only 8 inflate out.
+        let short_stream = super::super::zip_predict::zip_encode(&[0u8; 8]);
+        let mut section = vec![0u8, 3]; // compression type 3 (u16 BE)
+        section.extend_from_slice(&short_stream);
+
+        let mut cursor = PsdCursor::new(&section);
+        let result = read_merged_composite(&mut cursor, &header);
+        assert!(matches!(result, Err(PsdError::DecompressionFailed(_))));
     }
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Engine } from './wasm-bridge';
 
 // The bridge module pulls in the WASM init code at import time. Mock it
@@ -500,5 +500,139 @@ describe('buildPassThroughOpacityMap', () => {
     const index = buildLayerIndex(layers);
     const map = buildPassThroughOpacityMap(layers, index);
     expect(map.get('raster-1')).toBe(1.0);
+  });
+});
+
+describe('syncLayers — bounded retries for failing uploads (#595 follow-up)', () => {
+  // A failed upload leaves tracked versions stale so the next frame retries.
+  // Without a cap, a permanent failure (GPU OOM, detached buffer) retries —
+  // and console.errors — on every dirty frame, 60/s during interaction.
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+
+  // Shared fixtures (pixel-debt budget): each test uses its own engine and
+  // layer id, so the same buffers can back every mask. The retry logic keys
+  // on reference identity, so a subarray view stands in for "edited data".
+  const maskData = new Uint8ClampedArray(16).fill(255);
+  const editedMaskData = maskData.subarray(0, 16);
+
+  beforeEach(() => {
+    vi.mocked(bridge.uploadLayerMask).mockReset();
+    vi.mocked(bridge.uploadLayerSparsePixels).mockReset();
+    vi.mocked(bridge.addLayer).mockReset();
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.mocked(bridge.uploadLayerMask).mockReset();
+    vi.mocked(bridge.uploadLayerSparsePixels).mockReset();
+    errorSpy.mockRestore();
+  });
+
+  const makeMaskedLayer = (id: string, maskData: Uint8ClampedArray): RasterLayer => ({
+    ...baseRasterLayer,
+    id,
+    mask: { id: `${id}-mask`, enabled: true, data: maskData, width: 4, height: 4 },
+  });
+
+  it('stops attempting a persistently failing mask upload after the cap', () => {
+    const engine = makeFakeEngine();
+    vi.mocked(bridge.uploadLayerMask).mockImplementation(() => {
+      throw new Error('GL_OUT_OF_MEMORY');
+    });
+    const layer = makeMaskedLayer('fail-cap', maskData);
+
+    for (let i = 0; i < 20; i++) {
+      syncLayers(engine, [layer], [layer.id], new Set());
+    }
+
+    // 5 attempts (4 individual errors + 1 final summary), then silence.
+    expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(5);
+    expect(errorSpy).toHaveBeenCalledTimes(5);
+    expect(String(errorSpy.mock.calls[4]![0])).toContain('giving up');
+  });
+
+  it('resumes attempts when the data reference changes after the cap', () => {
+    const engine = makeFakeEngine();
+    vi.mocked(bridge.uploadLayerMask).mockImplementation(() => {
+      throw new Error('GL_OUT_OF_MEMORY');
+    });
+    const layer = makeMaskedLayer('fail-newdata', maskData);
+    for (let i = 0; i < 10; i++) {
+      syncLayers(engine, [layer], [layer.id], new Set());
+    }
+    expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(5);
+
+    // The user paints on the mask — new data reference resets the budget.
+    const edited = makeMaskedLayer('fail-newdata', editedMaskData);
+    for (let i = 0; i < 10; i++) {
+      syncLayers(engine, [edited], [edited.id], new Set());
+    }
+    expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(10);
+  });
+
+  it('clears failure bookkeeping when an upload succeeds', () => {
+    const engine = makeFakeEngine();
+    let failures = 0;
+    vi.mocked(bridge.uploadLayerMask).mockImplementation(() => {
+      if (failures < 2) {
+        failures++;
+        throw new Error('transient');
+      }
+    });
+    const layer = makeMaskedLayer('fail-transient', maskData);
+
+    syncLayers(engine, [layer], [layer.id], new Set());
+    syncLayers(engine, [layer], [layer.id], new Set());
+    syncLayers(engine, [layer], [layer.id], new Set()); // succeeds
+    expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(3);
+
+    // Synced and tracked — no further uploads for the same data.
+    for (let i = 0; i < 5; i++) {
+      syncLayers(engine, [layer], [layer.id], new Set());
+    }
+    expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(3);
+  });
+
+  it('caps a persistently failing sparse pixel upload the same way', async () => {
+    const { pixelDataManager } = await import('../engine/pixel-data-manager');
+    const engine = makeFakeEngine();
+    vi.mocked(bridge.uploadLayerSparsePixels).mockImplementation(() => {
+      throw new Error('GL_OUT_OF_MEMORY');
+    });
+    const layer: RasterLayer = { ...baseRasterLayer, id: 'fail-sparse' };
+    pixelDataManager.setSparse(layer.id, {
+      offsetX: 0,
+      offsetY: 0,
+      sparse: {
+        width: 4,
+        height: 4,
+        count: 1,
+        indices: new Uint32Array([0]),
+        rgba: maskData.subarray(0, 4),
+      },
+    });
+
+    try {
+      for (let i = 0; i < 20; i++) {
+        syncLayers(engine, [layer], [layer.id], new Set());
+      }
+      expect(vi.mocked(bridge.uploadLayerSparsePixels)).toHaveBeenCalledTimes(5);
+    } finally {
+      pixelDataManager.dropLayer(layer.id);
+    }
+  });
+
+  it('drains failure bookkeeping when the layer is removed', async () => {
+    const { getTracked } = await import('./sync-state');
+    const engine = makeFakeEngine();
+    vi.mocked(bridge.uploadLayerMask).mockImplementation(() => {
+      throw new Error('GL_OUT_OF_MEMORY');
+    });
+    const layer = makeMaskedLayer('fail-removed', maskData);
+    syncLayers(engine, [layer], [layer.id], new Set());
+    expect(getTracked(engine).uploadFailures.has('fail-removed:mask')).toBe(true);
+
+    syncLayers(engine, [], [], new Set());
+    expect(getTracked(engine).uploadFailures.size).toBe(0);
   });
 });
