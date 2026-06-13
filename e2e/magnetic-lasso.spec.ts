@@ -63,15 +63,13 @@ async function setMagneticLassoSettings(
   await page.evaluate((s) => {
     const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
       getState: () => {
-        setMagneticLassoWidth: (n: number) => void;
-        setMagneticLassoContrast: (n: number) => void;
-        setMagneticLassoFrequency: (n: number) => void;
+        setMagneticLassoSetting: (key: 'width' | 'contrast' | 'frequency', value: number) => void;
       };
     };
     const state = ts.getState();
-    if (s.width !== undefined) state.setMagneticLassoWidth(s.width);
-    if (s.contrast !== undefined) state.setMagneticLassoContrast(s.contrast);
-    if (s.frequency !== undefined) state.setMagneticLassoFrequency(s.frequency);
+    if (s.width !== undefined) state.setMagneticLassoSetting('width', s.width);
+    if (s.contrast !== undefined) state.setMagneticLassoSetting('contrast', s.contrast);
+    if (s.frequency !== undefined) state.setMagneticLassoSetting('frequency', s.frequency);
   }, settings);
 }
 

@@ -452,6 +452,88 @@ describe('per-tool slice: stamp (#453)', () => {
   });
 });
 
+describe('per-tool slice: magneticLasso (#453)', () => {
+  it('exposes magneticLasso settings under settings.magneticLasso with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setMagneticLassoSetting.
+    useToolSettingsStore.getState().setMagneticLassoSetting('width', 10);
+    useToolSettingsStore.getState().setMagneticLassoSetting('contrast', 40);
+    useToolSettingsStore.getState().setMagneticLassoSetting('frequency', 40);
+    const { magneticLasso } = useToolSettingsStore.getState().settings;
+    expect(magneticLasso).toEqual({ width: 10, contrast: 40, frequency: 40 });
+  });
+
+  it('setMagneticLassoSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.magneticLasso;
+    useToolSettingsStore.getState().setMagneticLassoSetting('width', 25);
+    const after = useToolSettingsStore.getState().settings.magneticLasso;
+    expect(after.width).toBe(25);
+    expect(after.contrast).toBe(before.contrast);
+    expect(after.frequency).toBe(before.frequency);
+  });
+
+  it('setMagneticLassoSetting clamps width into [1, 40] and rounds', () => {
+    useToolSettingsStore.getState().setMagneticLassoSetting('width', 0);
+    expect(useToolSettingsStore.getState().settings.magneticLasso.width).toBe(1);
+    useToolSettingsStore.getState().setMagneticLassoSetting('width', 999);
+    expect(useToolSettingsStore.getState().settings.magneticLasso.width).toBe(40);
+    useToolSettingsStore.getState().setMagneticLassoSetting('width', 10.4);
+    expect(useToolSettingsStore.getState().settings.magneticLasso.width).toBe(10);
+    useToolSettingsStore.getState().setMagneticLassoSetting('width', 10.6);
+    expect(useToolSettingsStore.getState().settings.magneticLasso.width).toBe(11);
+  });
+
+  it('setMagneticLassoSetting clamps contrast into [1, 100] and rounds', () => {
+    useToolSettingsStore.getState().setMagneticLassoSetting('contrast', 0);
+    expect(useToolSettingsStore.getState().settings.magneticLasso.contrast).toBe(1);
+    useToolSettingsStore.getState().setMagneticLassoSetting('contrast', 999);
+    expect(useToolSettingsStore.getState().settings.magneticLasso.contrast).toBe(100);
+    useToolSettingsStore.getState().setMagneticLassoSetting('contrast', 42.7);
+    expect(useToolSettingsStore.getState().settings.magneticLasso.contrast).toBe(43);
+  });
+
+  it('setMagneticLassoSetting clamps frequency into [0, 200] and rounds', () => {
+    // The frequency range starts at 0 (not 1) — a 0 frequency means
+    // "never auto-anchor", which is a meaningful value for the magnetic
+    // lasso, not a no-op like brush size 0.
+    useToolSettingsStore.getState().setMagneticLassoSetting('frequency', -10);
+    expect(useToolSettingsStore.getState().settings.magneticLasso.frequency).toBe(0);
+    useToolSettingsStore.getState().setMagneticLassoSetting('frequency', 999);
+    expect(useToolSettingsStore.getState().settings.magneticLasso.frequency).toBe(200);
+    useToolSettingsStore.getState().setMagneticLassoSetting('frequency', 50.6);
+    expect(useToolSettingsStore.getState().settings.magneticLasso.frequency).toBe(51);
+  });
+
+  it('setMagneticLassoSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setMagneticLassoSetting('width', 25);
+    expect(useToolSettingsStore.getState().settings.magneticLasso.width).toBe(25);
+    // Sibling slice references preserved — selectors subscribed to the
+    // other slices should not re-render when magneticLasso changes. This
+    // is the invariant that justifies slicing instead of fattening the
+    // flat bag further.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
+
 describe('per-tool slice: eraser (#453)', () => {
   it('exposes eraser settings under settings.eraser with the legacy defaults', () => {
     // Reset to the legacy defaults — prior tests in this file may have
