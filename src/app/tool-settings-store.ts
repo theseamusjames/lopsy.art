@@ -13,6 +13,7 @@ import { clampSpongeSetting } from '../tools/sponge/sponge-settings';
 import { clampEraserSetting } from '../tools/eraser/eraser-settings';
 import { clampPathSetting } from '../tools/path/path-settings';
 import { clampStampSetting } from '../tools/stamp/stamp-settings';
+import { clampMagneticLassoSetting } from '../tools/magnetic-lasso/magnetic-lasso-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -66,9 +67,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   quickSelectTolerance: 32,
   quickSelectEdgeStrength: 50,
   quickSelectMode: 'add' as const,
-  magneticLassoWidth: 10,
-  magneticLassoContrast: 40,
-  magneticLassoFrequency: 40,
   textContent: 'Text',
   textFontSize: 24,
   textFontFamily: 'Inter, sans-serif',
@@ -292,9 +290,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setQuickSelectTolerance: (tolerance) => set({ quickSelectTolerance: Math.max(0, Math.min(255, Math.round(tolerance))) }),
   setQuickSelectEdgeStrength: (strength) => set({ quickSelectEdgeStrength: Math.max(0, Math.min(100, Math.round(strength))) }),
   setQuickSelectMode: (mode) => set({ quickSelectMode: mode }),
-  setMagneticLassoWidth: (width) => set({ magneticLassoWidth: Math.max(1, Math.min(40, Math.round(width))) }),
-  setMagneticLassoContrast: (contrast) => set({ magneticLassoContrast: Math.max(1, Math.min(100, Math.round(contrast))) }),
-  setMagneticLassoFrequency: (frequency) => set({ magneticLassoFrequency: Math.max(0, Math.min(200, Math.round(frequency))) }),
+  setMagneticLassoSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      magneticLasso: { ...s.settings.magneticLasso, [key]: clampMagneticLassoSetting(key, value) },
+    },
+  })),
   setTextContent: (content) => set({ textContent: content }),
   setTextFontSize: (size) => set({ textFontSize: Math.max(1, Math.min(500, size)) }),
   setTextFontFamily: (family) => set({ textFontFamily: family }),

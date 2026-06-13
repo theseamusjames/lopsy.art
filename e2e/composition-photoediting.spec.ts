@@ -722,9 +722,17 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     await setActiveTool(page, 'lasso-magnetic');
     expect(await getActiveTool(page)).toBe('lasso-magnetic');
 
-    await setToolSetting(page, 'setMagneticLassoWidth', 20);
-    await setToolSetting(page, 'setMagneticLassoContrast', 30);
-    await setToolSetting(page, 'setMagneticLassoFrequency', 30);
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => {
+          setMagneticLassoSetting: (key: 'width' | 'contrast' | 'frequency', value: number) => void;
+        };
+      };
+      const state = store.getState();
+      state.setMagneticLassoSetting('width', 20);
+      state.setMagneticLassoSetting('contrast', 30);
+      state.setMagneticLassoSetting('frequency', 30);
+    });
 
     // Trace around the white circle (center at 250,200, radius 80)
     const startPt = await docToScreen(page, 170, 200);

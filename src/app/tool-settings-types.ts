@@ -12,6 +12,7 @@ import type { SpongeSettings } from '../tools/sponge/sponge-settings';
 import type { EraserSettings } from '../tools/eraser/eraser-settings';
 import type { PathSettings } from '../tools/path/path-settings';
 import type { StampSettings } from '../tools/stamp/stamp-settings';
+import type { MagneticLassoSettings } from '../tools/magnetic-lasso/magnetic-lasso-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -50,9 +51,6 @@ export interface ToolSettings {
   quickSelectTolerance: number;
   quickSelectEdgeStrength: number;
   quickSelectMode: 'add' | 'subtract';
-  magneticLassoWidth: number;
-  magneticLassoContrast: number;
-  magneticLassoFrequency: number;
   textContent: string;
   textFontSize: number;
   textFontFamily: string;
@@ -129,9 +127,7 @@ export interface ToolSettings {
   setQuickSelectTolerance: (tolerance: number) => void;
   setQuickSelectEdgeStrength: (strength: number) => void;
   setQuickSelectMode: (mode: 'add' | 'subtract') => void;
-  setMagneticLassoWidth: (width: number) => void;
-  setMagneticLassoContrast: (contrast: number) => void;
-  setMagneticLassoFrequency: (frequency: number) => void;
+  setMagneticLassoSetting: <K extends keyof MagneticLassoSettings>(key: K, value: MagneticLassoSettings[K]) => void;
   setTextContent: (content: string) => void;
   setTextFontSize: (size: number) => void;
   setTextFontFamily: (family: string) => void;

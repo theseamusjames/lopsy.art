@@ -29,9 +29,9 @@ let magneticLassoTrace: MagneticLassoState | null = null;
 
 function makeMagneticSnapFn(): SnapFn {
   const engine = getEngine();
-  const settings = useToolSettingsStore.getState();
-  const radius = settings.magneticLassoWidth;
-  const threshold = Math.max(1, Math.min(255, Math.round(settings.magneticLassoContrast * 2.55)));
+  const { magneticLasso } = useToolSettingsStore.getState().settings;
+  const radius = magneticLasso.width;
+  const threshold = Math.max(1, Math.min(255, Math.round(magneticLasso.contrast * 2.55)));
   return (from, to) => {
     if (!engine) return [from, to];
     const flat = wasmMagneticLassoSnap(engine, from.x, from.y, to.x, to.y, radius, threshold);
@@ -42,9 +42,9 @@ function makeMagneticSnapFn(): SnapFn {
 function snapCursorToEdge(p: Point): Point {
   const engine = getEngine();
   if (!engine) return p;
-  const settings = useToolSettingsStore.getState();
-  const radius = settings.magneticLassoWidth;
-  const threshold = Math.max(1, Math.min(255, Math.round(settings.magneticLassoContrast * 2.55)));
+  const { magneticLasso } = useToolSettingsStore.getState().settings;
+  const radius = magneticLasso.width;
+  const threshold = Math.max(1, Math.min(255, Math.round(magneticLasso.contrast * 2.55)));
   const snapped = wasmMagneticLassoSnapPoint(engine, p.x, p.y, radius, threshold);
   return snapped.length >= 2 ? { x: snapped[0]!, y: snapped[1]! } : p;
 }
@@ -64,9 +64,9 @@ export const magneticLassoStrategy: SelectionToolStrategy = {
     } catch {
       return undefined;
     }
-    const settings = useToolSettingsStore.getState();
-    const radius = settings.magneticLassoWidth;
-    const threshold = Math.max(1, Math.min(255, Math.round(settings.magneticLassoContrast * 2.55)));
+    const { magneticLasso } = useToolSettingsStore.getState().settings;
+    const radius = magneticLasso.width;
+    const threshold = Math.max(1, Math.min(255, Math.round(magneticLasso.contrast * 2.55)));
     const snapped = wasmMagneticLassoSnapPoint(engine, ctx.canvasPos.x, ctx.canvasPos.y, radius, threshold);
     const startPoint = snapped.length >= 2
       ? { x: snapped[0]!, y: snapped[1]! }
@@ -89,7 +89,7 @@ export const magneticLassoStrategy: SelectionToolStrategy = {
     if (!magneticLassoTrace) return;
     const snap = makeMagneticSnapFn();
     let trace = magneticUpdateCursor(magneticLassoTrace, canvasPos, snap);
-    const frequency = useToolSettingsStore.getState().magneticLassoFrequency;
+    const frequency = useToolSettingsStore.getState().settings.magneticLasso.frequency;
     if (shouldAutoAnchor(trace, frequency)) {
       trace = magneticAddAnchor(trace, snapCursorToEdge(canvasPos), snap);
     }

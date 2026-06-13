@@ -62,10 +62,10 @@ vi.mock('../../app/ui-store', () => ({
 }));
 
 const ts = {
-  settings: { marquee: { feather: 0 } },
-  magneticLassoWidth: 10,
-  magneticLassoContrast: 10,
-  magneticLassoFrequency: 100,
+  settings: {
+    marquee: { feather: 0 },
+    magneticLasso: { width: 10, contrast: 10, frequency: 100 },
+  },
 };
 vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
@@ -134,7 +134,7 @@ beforeEach(() => {
   uiState.clearLassoPoints.mockClear();
   editorState.setSelection.mockClear();
   editorState.clearSelection.mockClear();
-  ts.magneticLassoFrequency = 100;
+  ts.settings.magneticLasso = { width: 10, contrast: 10, frequency: 100 };
   magneticLassoSnap.mockImplementation(straightSnap);
   magneticLassoSnapPoint.mockImplementation((...args: unknown[]) => {
     const [, x, y] = args as [unknown, number, number];
@@ -171,7 +171,7 @@ describe('magnetic lasso onDown', () => {
   });
 
   it('converts the contrast setting into a 1..255 threshold for the snapper', () => {
-    ts.magneticLassoContrast = 10;
+    ts.settings.magneticLasso = { ...ts.settings.magneticLasso, contrast: 10 };
     magneticLassoStrategy.onDown(makeCtx(), 'lasso-magnetic');
     // round(10 * 2.55) = 26
     expect(magneticLassoSnapPoint.mock.calls[0]![4]).toBe(26);
@@ -196,7 +196,7 @@ describe('magnetic lasso onMove', () => {
   });
 
   it('auto-anchors when the live segment grows past the frequency length', () => {
-    ts.magneticLassoFrequency = 5;
+    ts.settings.magneticLasso = { ...ts.settings.magneticLasso, frequency: 5 };
     magneticLassoStrategy.onDown(makeCtx({ canvasPos: { x: 0, y: 0 } }), 'lasso-magnetic');
     magneticLassoStrategy.onMove!(makeState(), { x: 8, y: 0 }, false);
     // The 8px segment exceeds frequency 5, so an anchor is committed at the
@@ -221,7 +221,7 @@ describe('magnetic lasso onMove', () => {
 
 describe('magnetic lasso onUp', () => {
   it('closes the loop and commits a polygon selection', () => {
-    ts.magneticLassoFrequency = 5;
+    ts.settings.magneticLasso = { ...ts.settings.magneticLasso, frequency: 5 };
     magneticLassoStrategy.onDown(makeCtx({ canvasPos: { x: 0, y: 0 } }), 'lasso-magnetic');
     magneticLassoStrategy.onMove!(makeState(), { x: 8, y: 0 }, false);
     magneticLassoStrategy.onMove!(makeState(), { x: 8, y: 8 }, false);
