@@ -25,6 +25,7 @@ import {
   markAllLayersDirty,
 } from '../engine-wasm/engine-sync';
 import { renderOverlayFrame } from './rendering/render-overlay-frame';
+import { getMarqueePreview } from '../tools/marquee/marquee-preview';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
 import { expandLayerToDocSize, cropLayerToContent, hasFloat } from '../engine-wasm/wasm-bridge';
@@ -330,7 +331,10 @@ export function useCanvasRendering(
       } else if (!sel.active && selectionActive) {
         selectionActive = false;
       }
-      if (selectionActive || hasTextEditing) {
+      // A live marquee drag animates on the overlay only — it must not force a
+      // GPU recomposite (and it carries no committed selection yet).
+      const hasMarqueePreview = getMarqueePreview() !== null;
+      if (selectionActive || hasTextEditing || hasMarqueePreview) {
         antPhaseRef.current++;
         overlayOnly = true;
       }
