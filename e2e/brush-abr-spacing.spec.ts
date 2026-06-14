@@ -275,7 +275,8 @@ test.describe('ABR Import & Brush Properties', () => {
   // SPACING
   // -----------------------------------------------------------------------
 
-  test('Spacing — max spacing (200%) produces widely spaced dabs', async ({ page }) => {
+  test('Spacing — max spacing (200%) produces widely spaced dabs', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'stroke coordinates exceed mobile viewport width');
     await setToolOption(page, 'Size', 20);
     await setToolOption(page, 'Hardness', 100);
     await setBrushModalOption(page, 'Spacing', 200);
@@ -307,7 +308,8 @@ test.describe('ABR Import & Brush Properties', () => {
     expect(denseDiff).toBeGreaterThan(wideDiff);
   });
 
-  test('Spacing — default 25% produces smooth continuous stroke', async ({ page }) => {
+  test('Spacing — default 25% produces smooth continuous stroke', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'stroke coordinates exceed mobile viewport width');
     await setToolOption(page, 'Size', 20);
     await setToolOption(page, 'Hardness', 100);
     await setBrushModalOption(page, 'Spacing', 25);
@@ -322,7 +324,8 @@ test.describe('ABR Import & Brush Properties', () => {
     await page.screenshot({ path: 'test-results/screenshots/spacing-03-default-25pct.png' });
   });
 
-  test('Spacing — 100% shows individual dab circles', async ({ page }) => {
+  test('Spacing — 100% shows individual dab circles', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'stroke coordinates exceed mobile viewport width');
     await setToolOption(page, 'Size', 30);
     await setToolOption(page, 'Hardness', 100);
     await setBrushModalOption(page, 'Spacing', 100);
@@ -337,7 +340,8 @@ test.describe('ABR Import & Brush Properties', () => {
     await page.screenshot({ path: 'test-results/screenshots/spacing-04-100pct-dabs.png' });
   });
 
-  test('Spacing — respects spacing during fast mouse movement', async ({ page }) => {
+  test('Spacing — respects spacing during fast mouse movement', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'stroke coordinates exceed mobile viewport width');
     // Use very wide spacing and a fast stroke (few mouse events, large steps)
     await setToolOption(page, 'Size', 15);
     await setToolOption(page, 'Hardness', 100);
@@ -447,7 +451,8 @@ test.describe('ABR Import & Brush Properties', () => {
     expect(softDiff).toBeGreaterThan(0);
   });
 
-  test('Scatter spreads dabs perpendicular to stroke direction', async ({ page }) => {
+  test('Scatter spreads dabs perpendicular to stroke direction', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'stroke coordinates exceed mobile viewport width');
     await setForegroundColor(page, 255, 0, 255);
     await setToolOption(page, 'Size', 10);
     await setToolOption(page, 'Hardness', 100);
@@ -476,7 +481,8 @@ test.describe('ABR Import & Brush Properties', () => {
     expect(scatterDiff).toBeGreaterThan(0);
   });
 
-  test('Angle control rotates brush tip', async ({ page }) => {
+  test('Angle control rotates brush tip', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'stroke coordinates exceed mobile viewport width');
     // Create a wide, flat rectangular brush tip
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__brushPresetStore as {
