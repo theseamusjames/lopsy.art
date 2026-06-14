@@ -1,7 +1,6 @@
 import type { Color, FontStyle, TextAlign } from '../types';
 import type { GradientStop, GradientType } from '../tools/gradient/gradient';
 import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
-import type { DodgeMode } from '../tools/dodge/dodge';
 import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
 import type { WandSettings } from '../tools/wand/wand-settings';
 import type { FillSettings } from '../tools/fill/fill-settings';
@@ -13,6 +12,7 @@ import type { EraserSettings } from '../tools/eraser/eraser-settings';
 import type { PathSettings } from '../tools/path/path-settings';
 import type { StampSettings } from '../tools/stamp/stamp-settings';
 import type { MagneticLassoSettings } from '../tools/magnetic-lasso/magnetic-lasso-settings';
+import type { DodgeSettings } from '../tools/dodge/dodge-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -45,8 +45,6 @@ export interface ToolSettings {
   gradientReverse: boolean;
   healingSize: number;
   healingOpacity: number;
-  dodgeExposure: number;
-  dodgeMode: DodgeMode;
   quickSelectSize: number;
   quickSelectTolerance: number;
   quickSelectEdgeStrength: number;
@@ -117,8 +115,7 @@ export interface ToolSettings {
   setStampSetting: <K extends keyof StampSettings>(key: K, value: StampSettings[K]) => void;
   setHealingSize: (size: number) => void;
   setHealingOpacity: (opacity: number) => void;
-  setDodgeExposure: (exposure: number) => void;
-  setDodgeMode: (mode: DodgeMode) => void;
+  setDodgeSetting: <K extends keyof DodgeSettings>(key: K, value: DodgeSettings[K]) => void;
   setSpongeSetting: <K extends keyof SpongeSettings>(key: K, value: SpongeSettings[K]) => void;
   setSmudgeSetting: <K extends keyof SmudgeSettings>(key: K, value: SmudgeSettings[K]) => void;
   setMarqueeSetting: <K extends keyof MarqueeSettings>(key: K, value: MarqueeSettings[K]) => void;
