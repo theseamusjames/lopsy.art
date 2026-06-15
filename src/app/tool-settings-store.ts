@@ -14,6 +14,7 @@ import { clampEraserSetting } from '../tools/eraser/eraser-settings';
 import { clampPathSetting } from '../tools/path/path-settings';
 import { clampStampSetting } from '../tools/stamp/stamp-settings';
 import { clampMagneticLassoSetting } from '../tools/magnetic-lasso/magnetic-lasso-settings';
+import { clampQuickSelectSetting } from '../tools/quick-select/quick-select-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -63,10 +64,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   healingOpacity: 100,
   dodgeExposure: 50,
   dodgeMode: 'dodge',
-  quickSelectSize: 20,
-  quickSelectTolerance: 32,
-  quickSelectEdgeStrength: 50,
-  quickSelectMode: 'add' as const,
   textContent: 'Text',
   textFontSize: 24,
   textFontFamily: 'Inter, sans-serif',
@@ -286,14 +283,16 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       wand: { ...s.settings.wand, [key]: clampWandSetting(key, value) },
     },
   })),
-  setQuickSelectSize: (size) => set({ quickSelectSize: Math.max(1, Math.min(100, Math.round(size))) }),
-  setQuickSelectTolerance: (tolerance) => set({ quickSelectTolerance: Math.max(0, Math.min(255, Math.round(tolerance))) }),
-  setQuickSelectEdgeStrength: (strength) => set({ quickSelectEdgeStrength: Math.max(0, Math.min(100, Math.round(strength))) }),
-  setQuickSelectMode: (mode) => set({ quickSelectMode: mode }),
   setMagneticLassoSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,
       magneticLasso: { ...s.settings.magneticLasso, [key]: clampMagneticLassoSetting(key, value) },
+    },
+  })),
+  setQuickSelectSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      quickSelect: { ...s.settings.quickSelect, [key]: clampQuickSelectSetting(key, value) },
     },
   })),
   setTextContent: (content) => set({ textContent: content }),

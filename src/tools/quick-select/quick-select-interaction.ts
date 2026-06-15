@@ -47,7 +47,7 @@ export function handleQuickSelectDown(ctx: InteractionContext): InteractionState
     return undefined;
   }
 
-  const settings = useToolSettingsStore.getState();
+  const { quickSelect } = useToolSettingsStore.getState().settings;
   const priorMask = editorState.selection.mask
     ? new Uint8ClampedArray(editorState.selection.mask)
     : null;
@@ -61,14 +61,14 @@ export function handleQuickSelectDown(ctx: InteractionContext): InteractionState
       pixels: new Uint8ClampedArray(rawPixels.buffer, rawPixels.byteOffset, rawPixels.byteLength),
       width: docW,
       height: docH,
-      radius: settings.quickSelectSize,
-      tolerance: settings.quickSelectTolerance,
-      edgeStrength: settings.quickSelectEdgeStrength,
+      radius: quickSelect.size,
+      tolerance: quickSelect.tolerance,
+      edgeStrength: quickSelect.edgeStrength,
     },
     {
       points: [canvasPos],
       existingMask: strokeMask,
-      mode: settings.quickSelectMode,
+      mode: quickSelect.mode,
     },
   );
 
@@ -107,7 +107,7 @@ export function handleQuickSelectMove(
 ): void {
   if (!session || !state.lastPoint) return;
 
-  const settings = useToolSettingsStore.getState();
+  const { quickSelect } = useToolSettingsStore.getState().settings;
   const editorState = useEditorStore.getState();
 
   const updatedMask = applyQuickSelectStroke(
@@ -115,14 +115,14 @@ export function handleQuickSelectMove(
       pixels: session.pixels,
       width: session.docWidth,
       height: session.docHeight,
-      radius: settings.quickSelectSize,
-      tolerance: settings.quickSelectTolerance,
-      edgeStrength: settings.quickSelectEdgeStrength,
+      radius: quickSelect.size,
+      tolerance: quickSelect.tolerance,
+      edgeStrength: quickSelect.edgeStrength,
     },
     {
       points: [canvasPos],
       existingMask: session.strokeMask,
-      mode: settings.quickSelectMode,
+      mode: quickSelect.mode,
     },
   );
 
