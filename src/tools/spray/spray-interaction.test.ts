@@ -20,10 +20,9 @@ vi.mock('../../app/editor-store', () => ({
 }));
 
 const ts = {
-  spraySize: 40,
-  sprayDensity: 12,
-  sprayOpacity: 60,
-  sprayHardness: 30,
+  settings: {
+    spray: { size: 40, density: 12, opacity: 60, hardness: 30 },
+  },
   foregroundColor: { r: 255, g: 0, b: 0, a: 1 },
   addRecentColor: vi.fn(),
 };
@@ -64,8 +63,7 @@ beforeEach(() => {
   editorState.notifyRender.mockClear();
   ts.addRecentColor.mockClear();
   ts.foregroundColor = { r: 255, g: 0, b: 0, a: 1 };
-  ts.sprayDensity = 12;
-  ts.spraySize = 40;
+  ts.settings = { spray: { size: 40, density: 12, opacity: 60, hardness: 30 } };
 });
 
 afterEach(() => {
@@ -87,7 +85,7 @@ describe('spray down', () => {
 
   it('scatters dabs within the brush radius around the cursor', () => {
     handleSprayDown(makeCtx({ layerPos: { x: 100, y: 100 } }));
-    const brushRadius = ts.spraySize / 2;
+    const brushRadius = ts.settings.spray.size / 2;
     for (const call of applyBrushDab.mock.calls) {
       const x = call[2] as number;
       const y = call[3] as number;

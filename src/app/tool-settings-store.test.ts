@@ -92,14 +92,14 @@ describe('opacity setters — issue #250 (percent vs normalised footgun)', () =>
     expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('also warns from setEraserSetting(opacity) and setSprayOpacity (same footgun)', async () => {
+  it('also warns from setEraserSetting(opacity) and setSpraySetting(opacity) (same footgun)', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
     store.getState().setEraserSetting('opacity', 0.5);
-    store.getState().setSprayOpacity(0.3);
+    store.getState().setSpraySetting('opacity', 0.3);
     expect(warnSpy).toHaveBeenCalledTimes(2);
     const messages = warnSpy.mock.calls.map((c: unknown[]) => String(c[0] ?? ''));
     expect(messages.some((m: string) => m.includes('setEraserSetting(opacity)'))).toBe(true);
-    expect(messages.some((m: string) => m.includes('setSprayOpacity'))).toBe(true);
+    expect(messages.some((m: string) => m.includes('setSpraySetting(opacity)'))).toBe(true);
   });
 });
 
@@ -680,10 +680,91 @@ describe('per-tool slice: text (#453)', () => {
     const beforeBrushSize = useToolSettingsStore.getState().brushSize;
     useToolSettingsStore.getState().setTextSetting('fontSize', 48);
     expect(useToolSettingsStore.getState().settings.text.fontSize).toBe(48);
-    // Sibling slice references preserved — selectors subscribed to the
-    // other slices should not re-render when text changes. This is the
-    // invariant that justifies slicing instead of fattening the flat
-    // bag further.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: spray (#453)', () => {
+  it('exposes spray settings under settings.spray with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setSpraySetting.
+    useToolSettingsStore.getState().setSpraySetting('size', 40);
+    useToolSettingsStore.getState().setSpraySetting('density', 20);
+    useToolSettingsStore.getState().setSpraySetting('opacity', 60);
+    useToolSettingsStore.getState().setSpraySetting('hardness', 30);
+    const { spray } = useToolSettingsStore.getState().settings;
+    expect(spray).toEqual({ size: 40, density: 20, opacity: 60, hardness: 30 });
+  });
+
+  it('setSpraySetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.spray;
+    useToolSettingsStore.getState().setSpraySetting('density', 75);
+    const after = useToolSettingsStore.getState().settings.spray;
+    expect(after.density).toBe(75);
+    expect(after.size).toBe(before.size);
+    expect(after.opacity).toBe(before.opacity);
+    expect(after.hardness).toBe(before.hardness);
+  });
+
+  it('setSpraySetting clamps size into [1, 5000]', () => {
+    useToolSettingsStore.getState().setSpraySetting('size', 0);
+    expect(useToolSettingsStore.getState().settings.spray.size).toBe(1);
+    useToolSettingsStore.getState().setSpraySetting('size', 99999);
+    expect(useToolSettingsStore.getState().settings.spray.size).toBe(5000);
+  });
+
+  it('setSpraySetting clamps density into [1, 100]', () => {
+    useToolSettingsStore.getState().setSpraySetting('density', 0);
+    expect(useToolSettingsStore.getState().settings.spray.density).toBe(1);
+    useToolSettingsStore.getState().setSpraySetting('density', 9999);
+    expect(useToolSettingsStore.getState().settings.spray.density).toBe(100);
+  });
+
+  it('setSpraySetting clamps opacity into [1, 100]', () => {
+    // The legacy setSprayOpacity clamped to [1, 100], not [0, 100] —
+    // a 0 here would silently produce a no-op spray stroke, the same
+    // percent-vs-normalised footgun guarded by the warn-once dedupe.
+    // Preserve that range under the slice.
+    useToolSettingsStore.getState().setSpraySetting('opacity', -10);
+    expect(useToolSettingsStore.getState().settings.spray.opacity).toBe(1);
+    useToolSettingsStore.getState().setSpraySetting('opacity', 200);
+    expect(useToolSettingsStore.getState().settings.spray.opacity).toBe(100);
+  });
+
+  it('setSpraySetting clamps hardness into [0, 100]', () => {
+    // Hardness is exposed in the UI as a "Softness" slider with min 0,
+    // so the slice mirrors that range — distinct from opacity's
+    // [1, 100], where 0 would be a no-op.
+    useToolSettingsStore.getState().setSpraySetting('hardness', -10);
+    expect(useToolSettingsStore.getState().settings.spray.hardness).toBe(0);
+    useToolSettingsStore.getState().setSpraySetting('hardness', 200);
+    expect(useToolSettingsStore.getState().settings.spray.hardness).toBe(100);
+  });
+
+  it('setSpraySetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setSpraySetting('size', 42);
+    expect(useToolSettingsStore.getState().settings.spray.size).toBe(42);
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
     expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
     expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
