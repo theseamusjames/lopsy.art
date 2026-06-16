@@ -300,6 +300,7 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName 
   expect(layer1s2?.sparsePixels).toBeLessThanOrEqual(2);
   expect(layer1s2?.sparseBytes).toBeLessThan(100);
 
+  const layer1 = s4.storeInfo.layers.find(l => l.name === 'Layer 1');
   const addedLayer = s4.storeInfo.layers.find(l => l.name !== 'Background' && l.name !== 'Layer 1' && l.name !== 'Project');
   const bg = s4.storeInfo.layers.find(l => l.name === 'Background');
 
