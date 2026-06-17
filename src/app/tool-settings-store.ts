@@ -14,6 +14,7 @@ import { clampEraserSetting } from '../tools/eraser/eraser-settings';
 import { clampPathSetting } from '../tools/path/path-settings';
 import { clampStampSetting } from '../tools/stamp/stamp-settings';
 import { clampMagneticLassoSetting } from '../tools/magnetic-lasso/magnetic-lasso-settings';
+import { clampTextSetting } from '../tools/text/text-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -67,14 +68,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   quickSelectTolerance: 32,
   quickSelectEdgeStrength: 50,
   quickSelectMode: 'add' as const,
-  textContent: 'Text',
-  textFontSize: 24,
-  textFontFamily: 'Inter, sans-serif',
-  textFontWeight: 400,
-  textFontStyle: 'normal' as const,
-  textAlign: 'left' as const,
-  textUnderline: false,
-  textStrikethrough: false,
   brushSpacing: 0,
   brushScatter: 0,
   brushAngle: 0,
@@ -296,14 +289,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       magneticLasso: { ...s.settings.magneticLasso, [key]: clampMagneticLassoSetting(key, value) },
     },
   })),
-  setTextContent: (content) => set({ textContent: content }),
-  setTextFontSize: (size) => set({ textFontSize: Math.max(1, Math.min(500, size)) }),
-  setTextFontFamily: (family) => set({ textFontFamily: family }),
-  setTextFontWeight: (weight) => set({ textFontWeight: weight }),
-  setTextFontStyle: (style) => set({ textFontStyle: style }),
-  setTextAlign: (align) => set({ textAlign: align }),
-  setTextUnderline: (underline) => set({ textUnderline: underline }),
-  setTextStrikethrough: (strikethrough) => set({ textStrikethrough: strikethrough }),
+  setTextSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      text: { ...s.settings.text, [key]: clampTextSetting(key, value) },
+    },
+  })),
 
   setForegroundColor: (color) => set({ foregroundColor: color }),
   setBackgroundColor: (color) => set({ backgroundColor: color }),

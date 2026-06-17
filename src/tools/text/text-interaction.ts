@@ -68,19 +68,20 @@ export function commitTextEditing(): void {
     // whether the rAF-driven syncTextLayers loop had time to fire.
     const engine = getEngine();
     if (engine) {
+      const text = toolSettings.settings.text;
       const propsJson = JSON.stringify({
         text: editing.text,
-        fontFamily: toolSettings.textFontFamily,
-        fontSize: toolSettings.textFontSize,
-        fontWeight: toolSettings.textFontWeight,
-        fontStyle: toolSettings.textFontStyle,
+        fontFamily: text.fontFamily,
+        fontSize: text.fontSize,
+        fontWeight: text.fontWeight,
+        fontStyle: text.fontStyle,
         color: [textColor.r / 255, textColor.g / 255, textColor.b / 255, textColor.a],
         lineHeight: 1.4,
         letterSpacing: 0,
-        textAlign: toolSettings.textAlign,
+        textAlign: text.align,
         areaWidth: areaWidth ?? null,
-        underline: toolSettings.textUnderline,
-        strikethrough: toolSettings.textStrikethrough,
+        underline: text.underline,
+        strikethrough: text.strikethrough,
       });
       setTextLayerContent(engine, editing.layerId, propsJson);
       const boundsResult = renderTextLayer(engine, editing.layerId);
@@ -106,20 +107,21 @@ export function commitTextEditing(): void {
   editorState.pushHistory('Text');
   toolSettings.addRecentColor(textColor);
 
+  const textForLayer = toolSettings.settings.text;
   editorState.updateTextLayerProperties(editing.layerId, {
     text: editing.text,
-    fontFamily: toolSettings.textFontFamily,
-    fontSize: toolSettings.textFontSize,
-    fontWeight: toolSettings.textFontWeight,
-    fontStyle: toolSettings.textFontStyle,
+    fontFamily: textForLayer.fontFamily,
+    fontSize: textForLayer.fontSize,
+    fontWeight: textForLayer.fontWeight,
+    fontStyle: textForLayer.fontStyle,
     color: textColor,
-    textAlign: toolSettings.textAlign,
+    textAlign: textForLayer.align,
     width: areaWidth,
     x: finalX,
     y: finalY,
     visible: true,
-    underline: toolSettings.textUnderline,
-    strikethrough: toolSettings.textStrikethrough,
+    underline: textForLayer.underline,
+    strikethrough: textForLayer.strikethrough,
   });
 
   editorState.notifyRender();
@@ -140,14 +142,14 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
   const hitLayer = hitTestTextLayer(editorState.document.layers, canvasPos);
   if (hitLayer) {
     const toolSettings = useToolSettingsStore.getState();
-    toolSettings.setTextFontSize(hitLayer.fontSize);
-    toolSettings.setTextFontFamily(hitLayer.fontFamily);
-    toolSettings.setTextFontWeight(hitLayer.fontWeight);
-    toolSettings.setTextFontStyle(hitLayer.fontStyle);
-    toolSettings.setTextAlign(hitLayer.textAlign);
+    toolSettings.setTextSetting('fontSize', hitLayer.fontSize);
+    toolSettings.setTextSetting('fontFamily', hitLayer.fontFamily);
+    toolSettings.setTextSetting('fontWeight', hitLayer.fontWeight);
+    toolSettings.setTextSetting('fontStyle', hitLayer.fontStyle);
+    toolSettings.setTextSetting('align', hitLayer.textAlign);
     toolSettings.setForegroundColor(hitLayer.color);
-    toolSettings.setTextUnderline(hitLayer.underline);
-    toolSettings.setTextStrikethrough(hitLayer.strikethrough);
+    toolSettings.setTextSetting('underline', hitLayer.underline);
+    toolSettings.setTextSetting('strikethrough', hitLayer.strikethrough);
 
     editorState.setActiveLayer(hitLayer.id);
 
@@ -257,11 +259,12 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
   const boundsW = isAreaText ? Math.abs(dx) : null;
   const boundsH = isAreaText ? Math.abs(dy) : null;
 
+  const text = toolSettings.settings.text;
   const newLayer = createTextLayer({
     name: `Text ${editorState.document.layers.length + 1}`,
     text: '',
-    fontFamily: toolSettings.textFontFamily,
-    fontSize: toolSettings.textFontSize,
+    fontFamily: text.fontFamily,
+    fontSize: text.fontSize,
     color: textColor,
   });
 
@@ -270,9 +273,9 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
     x: boundsX,
     y: boundsY,
     width: boundsW,
-    fontWeight: toolSettings.textFontWeight,
-    fontStyle: toolSettings.textFontStyle,
-    textAlign: toolSettings.textAlign,
+    fontWeight: text.fontWeight,
+    fontStyle: text.fontStyle,
+    textAlign: text.align,
     visible: true, // GPU renders text preview in real-time
   });
 

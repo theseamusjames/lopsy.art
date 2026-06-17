@@ -104,10 +104,10 @@ test.describe('Text + brush + merge down', () => {
     await page.evaluate(() => {
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setTextFontSize: (s: number) => void;
+          setTextSetting: (key: 'fontSize', value: number) => void;
         };
       };
-      ts.getState().setTextFontSize(40);
+      ts.getState().setTextSetting('fontSize', 40);
     });
     await setForegroundColor(page, 255, 0, 0);
 

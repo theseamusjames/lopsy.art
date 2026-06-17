@@ -334,13 +334,12 @@ test.describe('Cut text then paste preserves correct clipboard', () => {
     await page.evaluate(() => {
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setTextFontSize: (s: number) => void;
-          setTextFontFamily: (f: string) => void;
+          setTextSetting: (key: 'fontSize' | 'fontFamily', value: number | string) => void;
         };
       };
       const s = ts.getState();
-      s.setTextFontSize(80);
-      s.setTextFontFamily('Inter');
+      s.setTextSetting('fontSize', 80);
+      s.setTextSetting('fontFamily', 'Inter');
     });
     await setForegroundColor(page, 0, 0, 0);
 

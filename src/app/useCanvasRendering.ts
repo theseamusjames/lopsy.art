@@ -168,14 +168,14 @@ function renderFrameGpu(
     syncTextLayers(
       engine,
       textEditing,
-      toolState.textFontSize,
-      toolState.textFontFamily,
-      toolState.textFontWeight,
-      toolState.textFontStyle,
-      toolState.textAlign,
+      toolState.settings.text.fontSize,
+      toolState.settings.text.fontFamily,
+      toolState.settings.text.fontWeight,
+      toolState.settings.text.fontStyle,
+      toolState.settings.text.align,
       toolState.foregroundColor,
-      toolState.textUnderline,
-      toolState.textStrikethrough,
+      toolState.settings.text.underline,
+      toolState.settings.text.strikethrough,
       (layerId, x, y) => {
         const layer = layers.find((l) => l.id === layerId);
         if (layer && (layer.x !== x || layer.y !== y)) {
