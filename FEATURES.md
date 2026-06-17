@@ -321,7 +321,7 @@ Available node types (Add menu):
 - **Exposure** — stops (multiplier = 2^value)
 - **Contrast** — -100 to +100
 - **Highlights / Shadows** — Highlights -100 to +100, Shadows -100 to +100, Whites -100 to +100, Blacks -100 to +100
-- **Saturation** — Saturation -100 to +100, Vibrance -100 to +100
+- **Saturation** — Saturation -100 to +200, Vibrance -100 to +200 (the -100 floor is full desaturation; the cap extrapolates past 1× saturation distance from gray and only clips at the gamut edge)
 - **Vignette** — 0 to 100 (now correctly piped through the per-group adjustment pipeline)
 - **Curves** — per-channel tone curves (RGB master + R / G / B), evaluated as
   monotone cubic Hermite splines. Master applies to every channel first,
