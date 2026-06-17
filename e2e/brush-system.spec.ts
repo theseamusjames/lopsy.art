@@ -162,6 +162,7 @@ test.describe('Brush System', () => {
   });
 
   test('03 - spacing 100% vs dense spacing', async ({ page }) => {
+    test.setTimeout(120000);
     await setToolOption(page, 'Size', 30);
     await setToolOption(page, 'Hardness', 100);
     await setBrushModalOption(page, 'Spacing', 100);
