@@ -661,13 +661,19 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   cropCanvas: (rect) => {
     const s = get();
+    const doc = s.document;
+    const x1 = Math.max(0, Math.round(rect.x));
+    const y1 = Math.max(0, Math.round(rect.y));
+    const x2 = Math.min(doc.width, Math.round(rect.x + rect.width));
+    const y2 = Math.min(doc.height, Math.round(rect.y + rect.height));
+    if (x2 - x1 <= 0 || y2 - y1 <= 0) return;
+    s.pushHistory('Crop Canvas');
     const result = computeCropCanvas(
-      s.document,
-      resolveAllPixelData(s.document.layerOrder, s.document.layers),
+      doc,
+      resolveAllPixelData(doc.layerOrder, doc.layers),
       s.renderVersion, rect,
     );
     if (!result) return;
-    s.pushHistory('Crop Canvas');
     applyActionResult(set, result);
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
