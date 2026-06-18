@@ -241,7 +241,8 @@ test.describe('Text — add, move, layer, duplicate', () => {
   // functionality and affects every test in this suite equally.
   test.use({ allowConsoleErrors: [/ERR_CERT_AUTHORITY_INVALID/] });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     // 800×600 white-background document

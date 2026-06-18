@@ -186,7 +186,8 @@ async function snapshot(page: Page, label: string) {
   };
 }
 
-test('memory profile: sparse layers should be tiny', async ({ page, browserName }) => {
+test('memory profile: sparse layers should be tiny', async ({ page, browserName, isMobile }) => {
+  test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
   test.skip(browserName !== 'chromium', 'CDP heap profiling requires Chromium');
   test.setTimeout(120000);
 
@@ -300,6 +301,7 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName 
   expect(layer1s2?.sparsePixels).toBeLessThanOrEqual(2);
   expect(layer1s2?.sparseBytes).toBeLessThan(100);
 
+  const layer1 = s4.storeInfo.layers.find(l => l.name === 'Layer 1');
   const addedLayer = s4.storeInfo.layers.find(l => l.name !== 'Background' && l.name !== 'Layer 1' && l.name !== 'Project');
   const bg = s4.storeInfo.layers.find(l => l.name === 'Background');
 

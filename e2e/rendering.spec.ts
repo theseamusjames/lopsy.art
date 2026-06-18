@@ -52,7 +52,8 @@ async function fitToView(page: Page) {
 
 test.describe('WASM/WebGL Rendering', () => {
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
   });

@@ -30,6 +30,8 @@ test.beforeEach(async ({ page }) => {
 // ===========================================================================
 
 test.describe('History - Basic Undo/Redo', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('undo restores previous state after adding a layer', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const s0 = await getEditorState(page);
@@ -82,6 +84,8 @@ test.describe('History - Basic Undo/Redo', () => {
 // ===========================================================================
 
 test.describe('History - Multi-Step Operations', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('undo through paint, add layer, paint, merge sequence', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const s0 = await getEditorState(page);
@@ -172,6 +176,8 @@ test.describe('History - Multi-Step Operations', () => {
 // ===========================================================================
 
 test.describe('History - Layer Visibility', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('toggling visibility is undoable', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const s0 = await getEditorState(page);
@@ -192,6 +198,8 @@ test.describe('History - Layer Visibility', () => {
 // ===========================================================================
 
 test.describe('History - Layer Opacity', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('changing opacity is undoable', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const s0 = await getEditorState(page);
@@ -211,6 +219,8 @@ test.describe('History - Layer Opacity', () => {
 // ===========================================================================
 
 test.describe('History - Layer Effects', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('updating effects is undoable', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const s0 = await getEditorState(page);
@@ -232,6 +242,8 @@ test.describe('History - Layer Effects', () => {
 // ===========================================================================
 
 test.describe('History - Layer Masks', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('adding a mask is undoable', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const s0 = await getEditorState(page);
@@ -327,6 +339,8 @@ test.describe('History - Layer Masks', () => {
 // ===========================================================================
 
 test.describe('History - Complex Sequences', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('interleaved operations across multiple layers', async ({ page }) => {
     await createDocument(page, 100, 100, true);
     const s0 = await getEditorState(page);

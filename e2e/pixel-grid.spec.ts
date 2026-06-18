@@ -98,7 +98,8 @@ async function ensurePixelGridEnabled(page: Page): Promise<void> {
 // ---------------------------------------------------------------------------
 
 test.describe('Pixel grid at high zoom', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     // Small document — at 1000% zoom each pixel is 10 screen pixels wide

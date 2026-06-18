@@ -126,7 +126,8 @@ async function selectTool(page: Page, key: string) {
 }
 
 test.describe('Free Transform', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     // The app starts with a NewDocumentModal - create a document via the store
     await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);

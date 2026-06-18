@@ -16,7 +16,8 @@ test.beforeEach(async ({ page }) => {
   await waitForStore(page);
 });
 
-test('undo color overlay does not shift layer content (#350)', async ({ page }) => {
+test('undo color overlay does not shift layer content (#350)', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
   await createDocument(page, 200, 200, true);
   const s0 = await getEditorState(page);
   const layer1Id = s0.document.layers[0]!.id;

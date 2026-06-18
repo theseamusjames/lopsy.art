@@ -111,7 +111,8 @@ async function pushHistory(page: Page) {
 // ---------------------------------------------------------------------------
 
 test.describe('Define Brush from Selection', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 400, 300, true);
@@ -333,7 +334,8 @@ test.describe('Define Brush from Selection', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Sub-Brushes', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 600, 400, true);
@@ -540,7 +542,8 @@ test.describe('Sub-Brushes', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Brush Modal Preview', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 400, 300, true);

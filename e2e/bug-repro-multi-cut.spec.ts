@@ -113,7 +113,8 @@ test.describe('Issue #224: sequential cut() calls', () => {
   // test environment and is unrelated to the bug under test.
   test.use({ allowConsoleErrors: [/ERR_CERT_AUTHORITY_INVALID/] });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
   });

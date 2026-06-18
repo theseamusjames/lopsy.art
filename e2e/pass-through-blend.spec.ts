@@ -113,7 +113,8 @@ async function setGroupExposure(page: Page, groupId: string, exposure: number): 
 // ---------------------------------------------------------------------------
 
 test.describe('Pass-through blend mode', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     // 100x100 transparent document for predictable compositing

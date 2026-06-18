@@ -90,6 +90,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('Move tool — option-drag duplicate', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
   test.use({ allowConsoleErrors: [/ERR_CERT_AUTHORITY_INVALID/] });
 
   // Regression for issue #543: option-dragging an already-duplicated layer

@@ -101,6 +101,8 @@ async function getActiveLayerId(page: Page): Promise<string> {
 }
 
 test.describe('Brush Hardness Bounds', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('softened brush fills to original shape boundary', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);

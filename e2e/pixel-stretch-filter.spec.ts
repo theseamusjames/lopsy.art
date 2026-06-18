@@ -60,7 +60,8 @@ async function readPixelAt(page: Page, x: number, y: number) {
 }
 
 test.describe('Pixel Stretch Filter', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
   });

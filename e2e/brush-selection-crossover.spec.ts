@@ -170,6 +170,8 @@ async function selectLayerAlpha(page: Page, layerId: string) {
 // =====================================================================
 
 test.describe('Brush across selection boundary', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test.fixme('red stroke through selected circle persists after mouseup', async ({ page }) => {
     // Programmatic setSelection doesn't reliably sync the selection mask
     // texture to the GPU before the brush stroke begins in SwiftShader.

@@ -28,7 +28,8 @@ async function readActiveLayerOpaqueCount(page: import('@playwright/test').Page,
   }, layerId);
 }
 
-test('issue #233 (A) — second text after move-tool commit still rasterizes content', async ({ page }) => {
+test('issue #233 (A) — second text after move-tool commit still rasterizes content', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 800, 1100, true);
@@ -81,7 +82,8 @@ test('issue #233 (A) — second text after move-tool commit still rasterizes con
   expect(jazzOpaque).toBeGreaterThan(50);
 });
 
-test('issue #233 (B) — t shortcut switches to text tool after a polygon-shape transform overlay', async ({ page }) => {
+test('issue #233 (B) — t shortcut switches to text tool after a polygon-shape transform overlay', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 800, 600, true);

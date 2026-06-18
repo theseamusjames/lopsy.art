@@ -312,6 +312,10 @@ test.beforeEach(async ({ page }) => {
 // ===========================================================================
 
 test.describe('Document Creation', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('create document with white background', async ({ page }) => {
     await createDocument(page, 400, 300, false);
     const state = await getEditorState(page);
@@ -345,7 +349,8 @@ test.describe('Document Creation', () => {
 // ===========================================================================
 
 test.describe('Brush Tool', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, true);
   });
 
@@ -419,7 +424,8 @@ test.describe('Brush Tool', () => {
 // ===========================================================================
 
 test.describe('Pencil Tool', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, true);
   });
 
@@ -458,7 +464,8 @@ test.describe('Pencil Tool', () => {
 // ===========================================================================
 
 test.describe('Eraser Tool', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, false);
     // Select the Background layer (which has the white fill) for erasing
     const bgLayerId = await page.evaluate(() => {
@@ -518,7 +525,8 @@ test.describe('Eraser Tool', () => {
 // ===========================================================================
 
 test.describe('Fill Tool', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, true);
   });
 
@@ -629,7 +637,8 @@ test.describe('Fill Tool', () => {
 // ===========================================================================
 
 test.describe('Gradient Tool', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, true);
   });
 
@@ -673,6 +682,10 @@ test.describe('Gradient Tool', () => {
 // ===========================================================================
 
 test.describe('Eyedropper Tool', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('eyedropper samples color from canvas', async ({ page }) => {
     await createDocument(page, 400, 300, true);
 
@@ -713,7 +726,8 @@ test.describe('Eyedropper Tool', () => {
 // ===========================================================================
 
 test.describe('Shape Tool', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, true);
   });
 
@@ -773,7 +787,8 @@ test.describe('Shape Tool', () => {
 // ===========================================================================
 
 test.describe('Selection Tools (Marquee)', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, false);
   });
 
@@ -825,6 +840,10 @@ test.describe('Selection Tools (Marquee)', () => {
 // ===========================================================================
 
 test.describe('Magic Wand', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('wand creates selection matching clicked color', async ({ page }) => {
     await createDocument(page, 400, 300, true);
 
@@ -923,6 +942,10 @@ test.describe('Magic Wand', () => {
 // ===========================================================================
 
 test.describe('Lasso Tool', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('freehand lasso creates polygon selection', async ({ page }) => {
     await createDocument(page, 400, 300, false);
     await page.keyboard.press('l');
@@ -958,6 +981,10 @@ test.describe('Lasso Tool', () => {
 // ===========================================================================
 
 test.describe('Crop Tool', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('crop reduces document size', async ({ page }) => {
     await createDocument(page, 400, 300, false);
     await page.keyboard.press('c');
@@ -1008,6 +1035,10 @@ test.describe('Crop Tool', () => {
 // ===========================================================================
 
 test.describe('Move Tool', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('moving layer changes position', async ({ page }) => {
     await createDocument(page, 400, 300, true);
 
@@ -1060,7 +1091,8 @@ test.describe('Move Tool', () => {
 // ===========================================================================
 
 test.describe('Layer Operations', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, false);
   });
 
@@ -1133,7 +1165,8 @@ test.describe('Layer Operations', () => {
 // ===========================================================================
 
 test.describe('Undo/Redo', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, true);
   });
 
@@ -1201,7 +1234,8 @@ test.describe('Undo/Redo', () => {
 // ===========================================================================
 
 test.describe('Keyboard Shortcuts', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, false);
   });
 
@@ -1284,7 +1318,8 @@ test.describe('Keyboard Shortcuts', () => {
 // ===========================================================================
 
 test.describe('Filters', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 100, 100, true);
   });
 
@@ -1668,7 +1703,8 @@ test.describe('Filters', () => {
 // ===========================================================================
 
 test.describe('Layer Effects', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, false);
   });
 
@@ -1726,7 +1762,8 @@ test.describe('Layer Effects', () => {
 // ===========================================================================
 
 test.describe('Layer Masking', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await createDocument(page, 400, 300, false);
   });
 
@@ -1816,6 +1853,10 @@ test.describe('Layer Masking', () => {
 // ===========================================================================
 
 test.describe('Comprehensive Scenarios', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('paint, select, move selection, then undo entire sequence', async ({ page }) => {
     await createDocument(page, 400, 300, true);
 
@@ -2015,7 +2056,8 @@ test.describe('Comprehensive Scenarios', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Mask Drawing', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
     await createDocument(page, 400, 300, false);

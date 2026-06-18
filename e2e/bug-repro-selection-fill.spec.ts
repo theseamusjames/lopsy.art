@@ -19,7 +19,8 @@ import {
   waitForStore,
 } from './helpers';
 
-test('issue #222 — small ellipse marquee + fill stays inside selection (was: silently no-op due to handle hit-radius)', async ({ page }) => {
+test('issue #222 — small ellipse marquee + fill stays inside selection (was: silently no-op due to handle hit-radius)', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 800, 1200, true);
@@ -58,7 +59,8 @@ test('issue #222 — small ellipse marquee + fill stays inside selection (was: s
   expect(farRight.a).toBe(0);
 });
 
-test('issue #222 — elliptical marquee + fill on a fresh layer (mid-size)', async ({ page }) => {
+test('issue #222 — elliptical marquee + fill on a fresh layer (mid-size)', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 800, 600, true);
@@ -93,7 +95,8 @@ test('issue #222 — elliptical marquee + fill on a fresh layer (mid-size)', asy
   expect(farOutsideBottomRight.a).toBe(0);
 });
 
-test('issue #222 — freehand lasso polygon + fill stays inside selection', async ({ page }) => {
+test('issue #222 — freehand lasso polygon + fill stays inside selection', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 400, true);

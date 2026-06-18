@@ -91,7 +91,8 @@ function selectBrushTab(page: Page, tabName: string) {
   ).then(() => page.waitForTimeout(50));
 }
 
-test('shift-click taper density matches drag taper density (round brush)', async ({ page }) => {
+test('shift-click taper density matches drag taper density (round brush)', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 600, 300);
@@ -154,7 +155,8 @@ test('shift-click taper density matches drag taper density (round brush)', async
   expect(shiftPixels).toBeGreaterThan(dragPixels * 0.6);
 });
 
-test('shift-click taper density matches drag with custom bitmap tip', async ({ page }) => {
+test('shift-click taper density matches drag with custom bitmap tip', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 600, 300);

@@ -116,7 +116,8 @@ async function liquifyDrag(page: Page, fromDocX: number, fromDocY: number, toDoc
 
 test.describe('Liquify Tool', () => {
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
   });

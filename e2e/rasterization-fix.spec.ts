@@ -436,6 +436,8 @@ test.describe('Rasterize Layer Style', () => {
 // ===========================================================================
 
 test.describe('Merge Down with Effects', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('merge down rasterizes effects from top layer into result', async ({ page }) => {
     await createDocument(page, 100, 100, true);
 

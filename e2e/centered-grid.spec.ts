@@ -84,7 +84,8 @@ function hasMarkNear(s: OverlaySample, x: number, y: number, threshold = 20, rad
 // ---------------------------------------------------------------------------
 
 test.describe('Centered grid with edge snapping (#126)', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
   });

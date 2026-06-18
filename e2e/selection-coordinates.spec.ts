@@ -142,6 +142,8 @@ test.beforeEach(async ({ page }) => {
 // ===========================================================================
 
 test.describe('Selection coordinates with layer offset', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('wand on a moved layer selects the colour at the click point in document space', async ({ page }) => {
     // 200×200 transparent doc with a single Background layer.
     await createDocument(page, 200, 200, true);

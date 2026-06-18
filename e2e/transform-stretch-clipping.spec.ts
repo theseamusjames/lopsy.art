@@ -150,7 +150,8 @@ async function readLayerPixelAtLocal(
 }
 
 test.describe('Transform stretch clipping regression', { tag: '@chromium' }, () => {
-  test.beforeEach(async ({ page, browserName }) => {
+  test.beforeEach(async ({ page, browserName, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     test.skip(browserName !== 'chromium', 'requires Chromium WebGL (SwiftShader)');
     await page.goto('/');
     await waitForStore(page);

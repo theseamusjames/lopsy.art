@@ -120,7 +120,8 @@ async function getLayers(page: Page) {
   });
 }
 
-test('delete with inverted selection clears only the correct region', async ({ page }) => {
+test('delete with inverted selection clears only the correct region', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 400);

@@ -46,6 +46,8 @@ async function getMaskStats(page: Page): Promise<{ zeros: number; total: number 
 }
 
 test.describe('Pencil on layer mask', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('paints hidden pixels into the mask and stays responsive', async ({ page }) => {
     test.setTimeout(120_000);
     await page.goto('/');

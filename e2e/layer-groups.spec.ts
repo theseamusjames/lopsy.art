@@ -87,7 +87,8 @@ async function callStore(page: Page, method: string, ...args: unknown[]) {
 // ---------------------------------------------------------------------------
 
 test.describe('Layer Groups', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page);
@@ -346,7 +347,8 @@ test.describe('Layer Groups', () => {
 });
 
 test.describe('Group Effects Rendering', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page);
@@ -472,7 +474,8 @@ test.describe('Group Effects Rendering', () => {
 });
 
 test.describe('Group effects only affect current members', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page);
@@ -571,7 +574,8 @@ test.describe('Group effects only affect current members', () => {
 });
 
 test.describe('Layer moved out of group is not affected by group visibility', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page);
@@ -688,7 +692,8 @@ test.describe('Layer moved out of group is not affected by group visibility', ()
 });
 
 test.describe('Layer visibility inside groups', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page);
@@ -729,7 +734,8 @@ test.describe('Layer visibility inside groups', () => {
 });
 
 test.describe('Drag layer out of group bug', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page);
@@ -811,7 +817,8 @@ test.describe('Drag layer out of group bug', () => {
 });
 
 test.describe('Engine descriptor verification', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page);
@@ -880,6 +887,8 @@ test.describe('Engine descriptor verification', () => {
 });
 
 test.describe('Visual rendering after group move', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('canvas shows content after layer moved out of hidden group', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
@@ -936,6 +945,8 @@ test.describe('Visual rendering after group move', () => {
 });
 
 test.describe('GPU rendering verification', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('layer content renders after being moved out of hidden group', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);

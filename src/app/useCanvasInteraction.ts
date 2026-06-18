@@ -466,8 +466,14 @@ export function useCanvasInteraction(
         handleMeshWarpUp();
         stateRef.current = { ...INITIAL_INTERACTION_STATE };
         return;
-      case 'idle':
       case 'transform':
+        if (state.gesture.selectionOnly) {
+          useUIStore.getState().setActiveTransformHandle(null);
+          stateRef.current = { ...INITIAL_INTERACTION_STATE };
+          return;
+        }
+        break;
+      case 'idle':
       case 'tool':
         break;
     }

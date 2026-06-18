@@ -128,7 +128,8 @@ async function getTextLayers(page: Page) {
 test.describe('WOFF2 TrueType font rendering', () => {
   test.use({ allowConsoleErrors: [/Failed to load resource.*403/, /WOFF2 decode failed/] });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
     await createDocument(page, 600, 500);

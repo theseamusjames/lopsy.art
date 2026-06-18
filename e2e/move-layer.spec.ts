@@ -188,6 +188,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('Move Layer — content only', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('moving a layer does not move transparent pixels', async ({ page }) => {
     // 400×300 transparent document
     await createDocument(page, 400, 300, true);

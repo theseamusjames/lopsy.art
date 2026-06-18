@@ -101,7 +101,8 @@ test.describe('Visual levels editor', () => {
     viewport: { width: 1280, height: 1000 },
   });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 200, 200, false);

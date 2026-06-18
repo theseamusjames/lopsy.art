@@ -139,6 +139,8 @@ test.beforeEach(async ({ page }) => {
 // ===========================================================================
 
 test.describe('Merge Down', () => {
+  test.beforeEach(async ({ isMobile }) => { test.skip(isMobile, 'requires sidebar panels, hidden on touch devices'); });
+
   test('merges top layer onto bottom layer', async ({ page }) => {
     await createDocument(page, 100, 100, true);
 

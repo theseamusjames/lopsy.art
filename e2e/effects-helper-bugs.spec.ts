@@ -13,6 +13,10 @@ import {
 } from './helpers';
 
 test.describe('e2e helper regressions', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('#240: openEffectsPanel works when the active layer is a group', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);

@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { waitForStore, createDocument } from './helpers';
 
-test('text layer rotation: content stays centered and does not scale', async ({ page }) => {
+test('text layer rotation: content stays centered and does not scale', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 300, false);

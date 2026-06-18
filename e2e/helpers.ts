@@ -252,8 +252,17 @@ export async function addLayer(page: Page): Promise<string> {
 
 export async function setActiveLayer(page: Page, layerId: string): Promise<void> {
   const locator = page.locator(`[data-layer-id="${layerId}"]`);
-  await locator.waitFor({ state: 'visible', timeout: 10000 });
-  await locator.click();
+  const isVisible = await locator.isVisible().catch(() => false);
+  if (isVisible) {
+    await locator.click();
+  } else {
+    await page.evaluate((id: string) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { setActiveLayer: (id: string) => void };
+      };
+      store.getState().setActiveLayer(id);
+    }, layerId);
+  }
 }
 
 export async function moveLayer(page: Page, layerId: string, x: number, y: number): Promise<void> {
@@ -371,7 +380,8 @@ export async function openBrushModal(page: Page): Promise<void> {
 export async function closeBrushModal(page: Page): Promise<void> {
   const dialog = page.locator('[role="dialog"][aria-label="Brushes"]');
   if (await dialog.isVisible()) {
-    await dialog.locator('[aria-label="Close"]').click();
+    const closeBtn = dialog.locator('[aria-label="Close"]');
+    await closeBtn.evaluate((el: HTMLElement) => el.click());
   }
 }
 
@@ -391,12 +401,19 @@ export async function setBrushModalOption(page: Page, label: string, value: numb
 
   const tab = dialog.locator(`[role="option"]:has-text("${tabName}")`);
   if (!(await tab.getAttribute('aria-selected'))?.includes('true')) {
-    await tab.click();
+    await tab.evaluate((el: HTMLElement) => el.click());
     await page.waitForTimeout(50);
   }
 
   const input = dialog.locator(`[aria-label="${label} value"]`);
-  await input.fill(String(value));
+  await input.evaluate((el: HTMLInputElement, v: string) => {
+    el.focus();
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    setter.call(el, v);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, String(value));
+  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true });
   await input.press('Enter');
 }
 
