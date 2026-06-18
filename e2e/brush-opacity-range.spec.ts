@@ -121,7 +121,8 @@ async function readCompositedPixelAt(page: Page, docX: number, docY: number): Pr
 // ---------------------------------------------------------------------------
 
 test.describe('Brush Opacity Range', () => {
-  test('opacity produces smooth transition from background to foreground color', async ({ page }) => {
+  test('opacity produces smooth transition from background to foreground color', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires desktop-size viewport for layers panel');
     test.setTimeout(120_000);
     await page.goto('/');
     await waitForStore(page);
