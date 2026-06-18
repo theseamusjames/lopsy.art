@@ -4,8 +4,6 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import {
   filterInvert,
   filterDesaturate,
-  filterAddNoise,
-  filterFillWithNoise,
   filterFindEdges,
   saveFilterPreview,
   restoreFilterPreview,
@@ -21,7 +19,6 @@ export type FilterDialogId =
   | 'box-blur'
   | 'unsharp-mask'
   | 'add-noise'
-  | 'fill-noise'
   | 'brightness-contrast'
   | 'hue-saturation'
   | 'posterize'
@@ -167,32 +164,6 @@ export function applyDesaturate(): void {
 
   useEditorStore.getState().pushHistory('Desaturate');
   filterDesaturate(engine, activeId);
-  clearJsPixelData(activeId);
-  useEditorStore.getState().notifyRender();
-}
-
-export function applyAddNoise(amount: number, monochrome: boolean): void {
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
-
-  const engine = getEngine();
-  if (!engine) return;
-
-  useEditorStore.getState().pushHistory('Add Noise');
-  filterAddNoise(engine, activeId, amount, monochrome, Math.random() * 1000);
-  clearJsPixelData(activeId);
-  useEditorStore.getState().notifyRender();
-}
-
-export function applyFillWithNoise(monochrome: boolean): void {
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
-
-  const engine = getEngine();
-  if (!engine) return;
-
-  useEditorStore.getState().pushHistory('Fill with Noise');
-  filterFillWithNoise(engine, activeId, monochrome, Math.random() * 1000);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }

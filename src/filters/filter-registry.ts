@@ -1,4 +1,5 @@
 import type { FilterDefinition } from './filter-types';
+import { addNoise } from './add-noise';
 import { gaussianBlur } from './gaussian-blur';
 import { boxBlur } from './box-blur';
 import { unsharpMask } from './unsharp-mask';
@@ -30,6 +31,7 @@ import { fibers } from './fibers';
 export type { FilterDefinition };
 
 const allFilters: FilterDefinition[] = [
+  addNoise,
   gaussianBlur,
   boxBlur,
   unsharpMask,

@@ -518,12 +518,6 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
     // =====================================================================
     const cloudLayerId = await addLayer(page);
 
-    // Fill with noise
-    await applyFilterViaMenu(page, 'Fill with Noise...');
-    await page.screenshot({ path: 'e2e/screenshots/comp3-18-fill-noise.png' });
-    await page.keyboard.press('Control+z');
-    await page.waitForTimeout(300);
-
     // Clouds
     await applyFilterViaMenu(page, 'Clouds...');
     await page.screenshot({ path: 'e2e/screenshots/comp3-19-clouds.png' });

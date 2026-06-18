@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilterDialog } from '../../components/FilterDialog/FilterDialog';
-import { NoiseDialog, FillNoiseDialog } from '../../components/FilterDialog/NoiseDialog';
 import { PatternFillDialog } from '../../components/PatternFillDialog/PatternFillDialog';
 import { ColorLutDialog } from '../../components/ColorLutDialog/ColorLutDialog';
 import { ExportDialog } from '../../components/ExportDialog/ExportDialog';
@@ -8,8 +7,6 @@ import {
   type FilterDialogId,
   getFilterDialogConfig,
   applyGenericFilter,
-  applyAddNoise,
-  applyFillWithNoise,
   beginFilterPreview,
   previewGenericFilter,
   cancelFilterPreviewSession,
@@ -147,16 +144,6 @@ export function MenuBar() {
     previewGenericFilter(activeDialog, values);
   }, [activeDialog]);
 
-  const handleNoiseApply = useCallback((settings: { amount: number; type: 'gaussian' | 'uniform'; monochromatic: boolean }) => {
-    applyAddNoise(settings.amount, settings.monochromatic);
-    setActiveDialog(null);
-  }, []);
-
-  const handleFillNoiseApply = useCallback((settings: { type: 'gaussian' | 'uniform'; monochromatic: boolean }) => {
-    applyFillWithNoise(settings.monochromatic);
-    setActiveDialog(null);
-  }, []);
-
   useEffect(() => {
     if (openMenu === null) return;
     const handleClick = (e: MouseEvent) => {
@@ -277,7 +264,7 @@ export function MenuBar() {
     setSelectDialog(null);
   }, [selectDialog]);
 
-  const filterDef = activeDialog && activeDialog !== 'add-noise' && activeDialog !== 'fill-noise' && activeDialog !== 'pattern-fill' && activeDialog !== 'color-lut'
+  const filterDef = activeDialog && activeDialog !== 'pattern-fill' && activeDialog !== 'color-lut'
     ? getFilterDialogConfig(activeDialog)
     : null;
 
@@ -336,20 +323,6 @@ export function MenuBar() {
           onPreviewStart={handlePreviewStart}
           onPreviewStop={handlePreviewStop}
           onPreviewChange={handlePreviewChange}
-        />
-      )}
-      {activeDialog === 'add-noise' && (
-        <NoiseDialog
-          title="Add Noise"
-          onApply={handleNoiseApply}
-          onCancel={handleDialogCancel}
-        />
-      )}
-      {activeDialog === 'fill-noise' && (
-        <FillNoiseDialog
-          title="Fill with Noise"
-          onApply={handleFillNoiseApply}
-          onCancel={handleDialogCancel}
         />
       )}
       {activeDialog === 'pattern-fill' && (
