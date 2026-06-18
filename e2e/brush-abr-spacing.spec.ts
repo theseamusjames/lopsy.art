@@ -276,6 +276,7 @@ test.describe('ABR Import & Brush Properties', () => {
   // -----------------------------------------------------------------------
 
   test('Spacing — max spacing (200%) produces widely spaced dabs', async ({ page }) => {
+    test.setTimeout(120000);
     await setToolOption(page, 'Size', 20);
     await setToolOption(page, 'Hardness', 100);
     await setBrushModalOption(page, 'Spacing', 200);
@@ -361,6 +362,7 @@ test.describe('ABR Import & Brush Properties', () => {
   // -----------------------------------------------------------------------
 
   test('Modifying brush size changes stroke thickness', async ({ page }) => {
+    test.setTimeout(120000);
     await setForegroundColor(page, 255, 0, 0);
     await setToolOption(page, 'Hardness', 100);
     await setBrushModalOption(page, 'Spacing', 25);

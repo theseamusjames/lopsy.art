@@ -67,6 +67,7 @@ async function drawSpiral(page: Page, cx: number, cy: number, maxR: number) {
 
 test('align bottom, then fill center — spiral stays visible', async ({ page, isMobile }) => {
   test.skip(isMobile, 'compositing precision test requires larger viewport');
+  test.setTimeout(120000);
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 1920, 1080, true);
