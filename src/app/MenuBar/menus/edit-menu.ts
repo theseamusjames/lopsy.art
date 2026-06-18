@@ -28,9 +28,10 @@ export function fillSelection(): void {
 }
 
 export function cropToSelection(): void {
-  const { selection } = useEditorStore.getState();
-  if (!selection.active || !selection.bounds) return;
-  useEditorStore.getState().cropCanvas(selection.bounds);
+  const state = useEditorStore.getState();
+  if (!state.selection.active || !state.selection.bounds) return;
+  state.cropCanvas(state.selection.bounds);
+  state.clearSelection();
 }
 
 export function createEditMenu(showFilterDialog: (id: FilterDialogId) => void): MenuDef {
