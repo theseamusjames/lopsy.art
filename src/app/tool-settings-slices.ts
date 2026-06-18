@@ -22,6 +22,8 @@ import type { TextSettings } from '../tools/text/text-settings';
 import { DEFAULT_TEXT_SETTINGS } from '../tools/text/text-settings';
 import type { SpraySettings } from '../tools/spray/spray-settings';
 import { DEFAULT_SPRAY_SETTINGS } from '../tools/spray/spray-settings';
+import type { HealingSettings } from '../tools/healing/healing-settings';
+import { DEFAULT_HEALING_SETTINGS } from '../tools/healing/healing-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -45,6 +47,7 @@ export interface ToolSettingsSlices {
   magneticLasso: MagneticLassoSettings;
   text: TextSettings;
   spray: SpraySettings;
+  healing: HealingSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -60,4 +63,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   magneticLasso: DEFAULT_MAGNETIC_LASSO_SETTINGS,
   text: DEFAULT_TEXT_SETTINGS,
   spray: DEFAULT_SPRAY_SETTINGS,
+  healing: DEFAULT_HEALING_SETTINGS,
 };

@@ -22,8 +22,9 @@ vi.mock('../../app/editor-store', () => ({
 }));
 
 const ts = {
-  healingSize: 20,
-  healingOpacity: 100,
+  settings: {
+    healing: { size: 20, opacity: 100 },
+  },
 };
 vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },

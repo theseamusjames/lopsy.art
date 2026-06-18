@@ -48,8 +48,7 @@ export function handleHealingDown(ctx: InteractionContext): InteractionState | u
     };
   }
 
-  const toolSettings = useToolSettingsStore.getState();
-  const { healingSize, healingOpacity } = toolSettings;
+  const { size: healingSize, opacity: healingOpacity } = useToolSettingsStore.getState().settings.healing;
 
   if (shiftKey && ctx.lastPaintPointRef.current && ctx.lastPaintPointRef.current.layerId === activeLayerId) {
     const spacing = Math.max(1, healingSize * 0.25);
@@ -78,8 +77,7 @@ export function handleHealingMove(
 ): void {
   if (!state.lastPoint || !stampOffsetRef.current || !state.layerId) return;
 
-  const toolSettings = useToolSettingsStore.getState();
-  const { healingSize, healingOpacity } = toolSettings;
+  const { size: healingSize, opacity: healingOpacity } = useToolSettingsStore.getState().settings.healing;
   const spacing = Math.max(1, healingSize * 0.25);
 
   const pts = interpolateFlat(state.lastPoint, layerLocalPos, spacing);
