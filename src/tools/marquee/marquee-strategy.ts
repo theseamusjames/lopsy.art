@@ -109,6 +109,11 @@ export const marqueeStrategy: SelectionToolStrategy = {
   },
 
   onUp(state: InteractionState, _canvasPos: Point, upCtx: SelectionUpContext): void {
+    if (state.gesture.kind === 'transform' && state.gesture.selectionOnly) {
+      useUIStore.getState().setActiveTransformHandle(null);
+      return;
+    }
+
     const preview = getMarqueePreview();
     setMarqueePreview(null);
     const editorState = useEditorStore.getState();
