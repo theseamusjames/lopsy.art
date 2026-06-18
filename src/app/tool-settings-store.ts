@@ -15,6 +15,7 @@ import { clampPathSetting } from '../tools/path/path-settings';
 import { clampStampSetting } from '../tools/stamp/stamp-settings';
 import { clampMagneticLassoSetting } from '../tools/magnetic-lasso/magnetic-lasso-settings';
 import { clampTextSetting } from '../tools/text/text-settings';
+import { clampSpraySetting } from '../tools/spray/spray-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -110,10 +111,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     { r: 255, g: 130, b: 0,   a: 1 },
     { r: 0,   g: 200, b: 200, a: 1 },
   ],
-  spraySize: 40,
-  sprayDensity: 20,
-  sprayOpacity: 60,
-  sprayHardness: 30,
   brushSizeJitter: 0,
   brushAngleJitter: 0,
   brushOpacityJitter: 0,
@@ -144,13 +141,15 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     brushTextures: s.brushTextures.filter((t) => t.id !== id),
     brushTextureData: s.brushTextureData?.id === id ? null : s.brushTextureData,
   })),
-  setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(5000, size)) }),
-  setSprayDensity: (density) => set({ sprayDensity: Math.max(1, Math.min(100, density)) }),
-  setSprayOpacity: (opacity) => {
-    warnIfNormalisedOpacity('setSprayOpacity', opacity);
-    set({ sprayOpacity: Math.max(1, Math.min(100, opacity)) });
+  setSpraySetting: (key, value) => {
+    if (key === 'opacity') warnIfNormalisedOpacity('setSpraySetting(opacity)', value as number);
+    set((s) => ({
+      settings: {
+        ...s.settings,
+        spray: { ...s.settings.spray, [key]: clampSpraySetting(key, value) },
+      },
+    }));
   },
-  setSprayHardness: (hardness) => set({ sprayHardness: Math.max(0, Math.min(100, hardness)) }),
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(5000, size)) }),
   setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(5000, fade)) }),
   setBrushTaper: (taper) => set({ brushTaper: Math.max(0, Math.min(5000, taper)) }),

@@ -20,6 +20,8 @@ import type { MagneticLassoSettings } from '../tools/magnetic-lasso/magnetic-las
 import { DEFAULT_MAGNETIC_LASSO_SETTINGS } from '../tools/magnetic-lasso/magnetic-lasso-settings';
 import type { TextSettings } from '../tools/text/text-settings';
 import { DEFAULT_TEXT_SETTINGS } from '../tools/text/text-settings';
+import type { SpraySettings } from '../tools/spray/spray-settings';
+import { DEFAULT_SPRAY_SETTINGS } from '../tools/spray/spray-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -42,6 +44,7 @@ export interface ToolSettingsSlices {
   stamp: StampSettings;
   magneticLasso: MagneticLassoSettings;
   text: TextSettings;
+  spray: SpraySettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -56,4 +59,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   stamp: DEFAULT_STAMP_SETTINGS,
   magneticLasso: DEFAULT_MAGNETIC_LASSO_SETTINGS,
   text: DEFAULT_TEXT_SETTINGS,
+  spray: DEFAULT_SPRAY_SETTINGS,
 };
