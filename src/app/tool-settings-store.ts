@@ -16,6 +16,7 @@ import { clampStampSetting } from '../tools/stamp/stamp-settings';
 import { clampMagneticLassoSetting } from '../tools/magnetic-lasso/magnetic-lasso-settings';
 import { clampTextSetting } from '../tools/text/text-settings';
 import { clampSpraySetting } from '../tools/spray/spray-settings';
+import { clampHealingSetting } from '../tools/healing/healing-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -61,8 +62,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
   ],
   gradientReverse: false,
-  healingSize: 20,
-  healingOpacity: 100,
   dodgeExposure: 50,
   dodgeMode: 'dodge',
   quickSelectSize: 20,
@@ -241,10 +240,14 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       stamp: { ...s.settings.stamp, [key]: clampStampSetting(key, value) },
     },
   })),
-  setHealingSize: (size) => set({ healingSize: Math.max(1, Math.min(5000, size)) }),
-  setHealingOpacity: (opacity) => {
-    warnIfNormalisedOpacity('setHealingOpacity', opacity);
-    set({ healingOpacity: Math.max(1, Math.min(100, opacity)) });
+  setHealingSetting: (key, value) => {
+    if (key === 'opacity') warnIfNormalisedOpacity('setHealingSetting(opacity)', value as number);
+    set((s) => ({
+      settings: {
+        ...s.settings,
+        healing: { ...s.settings.healing, [key]: clampHealingSetting(key, value) },
+      },
+    }));
   },
   setPathSetting: (key, value) => set((s) => ({
     settings: {

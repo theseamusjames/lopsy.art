@@ -15,6 +15,7 @@ import type { StampSettings } from '../tools/stamp/stamp-settings';
 import type { MagneticLassoSettings } from '../tools/magnetic-lasso/magnetic-lasso-settings';
 import type { TextSettings } from '../tools/text/text-settings';
 import type { SpraySettings } from '../tools/spray/spray-settings';
+import type { HealingSettings } from '../tools/healing/healing-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -45,8 +46,6 @@ export interface ToolSettings {
   gradientType: GradientType;
   gradientStops: readonly GradientStop[];
   gradientReverse: boolean;
-  healingSize: number;
-  healingOpacity: number;
   dodgeExposure: number;
   dodgeMode: DodgeMode;
   quickSelectSize: number;
@@ -102,8 +101,7 @@ export interface ToolSettings {
   setBrushAngle: (angle: number) => void;
   setActiveBrushTip: (tip: BrushTipData | null) => void;
   setStampSetting: <K extends keyof StampSettings>(key: K, value: StampSettings[K]) => void;
-  setHealingSize: (size: number) => void;
-  setHealingOpacity: (opacity: number) => void;
+  setHealingSetting: <K extends keyof HealingSettings>(key: K, value: HealingSettings[K]) => void;
   setDodgeExposure: (exposure: number) => void;
   setDodgeMode: (mode: DodgeMode) => void;
   setSpongeSetting: <K extends keyof SpongeSettings>(key: K, value: SpongeSettings[K]) => void;

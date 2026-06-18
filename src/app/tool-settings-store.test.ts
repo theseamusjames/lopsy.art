@@ -101,6 +101,23 @@ describe('opacity setters — issue #250 (percent vs normalised footgun)', () =>
     expect(messages.some((m: string) => m.includes('setEraserSetting(opacity)'))).toBe(true);
     expect(messages.some((m: string) => m.includes('setSpraySetting(opacity)'))).toBe(true);
   });
+
+  it('also warns from setHealingSetting(opacity) and clamps the value to 1', async () => {
+    const { useToolSettingsStore: store } = await import('./tool-settings-store');
+    store.getState().setHealingSetting('opacity', 0.5);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const messages = warnSpy.mock.calls.map((c: unknown[]) => String(c[0] ?? ''));
+    expect(messages.some((m: string) => m.includes('setHealingSetting(opacity)'))).toBe(true);
+    // The clamp range starts at 1, so a normalised 0.5 ends up as 1, not 0,
+    // which would have been a silent no-op stroke.
+    expect(store.getState().settings.healing.opacity).toBe(1);
+  });
+
+  it('does not warn when setHealingSetting touches size with a fractional value', async () => {
+    const { useToolSettingsStore: store } = await import('./tool-settings-store');
+    store.getState().setHealingSetting('size', 0.5);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe('per-tool slice: wand (#453)', () => {
@@ -775,6 +792,74 @@ describe('per-tool slice: spray (#453)', () => {
     expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
     expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
     expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: healing (#453)', () => {
+  it('exposes healing settings under settings.healing with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setHealingSetting.
+    useToolSettingsStore.getState().setHealingSetting('size', 20);
+    useToolSettingsStore.getState().setHealingSetting('opacity', 100);
+    const { healing } = useToolSettingsStore.getState().settings;
+    expect(healing).toEqual({ size: 20, opacity: 100 });
+  });
+
+  it('setHealingSetting updates one field without disturbing the other', () => {
+    const before = useToolSettingsStore.getState().settings.healing;
+    useToolSettingsStore.getState().setHealingSetting('size', 75);
+    const after = useToolSettingsStore.getState().settings.healing;
+    expect(after.size).toBe(75);
+    expect(after.opacity).toBe(before.opacity);
+  });
+
+  it('setHealingSetting clamps size into [1, 5000]', () => {
+    useToolSettingsStore.getState().setHealingSetting('size', 0);
+    expect(useToolSettingsStore.getState().settings.healing.size).toBe(1);
+    useToolSettingsStore.getState().setHealingSetting('size', 99999);
+    expect(useToolSettingsStore.getState().settings.healing.size).toBe(5000);
+  });
+
+  it('setHealingSetting clamps opacity into [1, 100]', () => {
+    // The legacy setHealingOpacity clamped to [1, 100], not [0, 100] —
+    // a 0 here would silently produce a no-op healing stroke, the same
+    // percent-vs-normalised footgun guarded by the warn-once dedupe.
+    // Preserve that range under the slice.
+    useToolSettingsStore.getState().setHealingSetting('opacity', -10);
+    expect(useToolSettingsStore.getState().settings.healing.opacity).toBe(1);
+    useToolSettingsStore.getState().setHealingSetting('opacity', 200);
+    expect(useToolSettingsStore.getState().settings.healing.opacity).toBe(100);
+  });
+
+  it('setHealingSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setHealingSetting('size', 42);
+    expect(useToolSettingsStore.getState().settings.healing.size).toBe(42);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
