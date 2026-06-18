@@ -28,11 +28,6 @@ pub fn filter_add_noise(
     );
 }
 
-#[wasm_bindgen(js_name = "filterFillWithNoise")]
-pub fn filter_fill_with_noise(engine: &mut Engine, layer_id: &str, monochrome: bool, seed: f32) {
-    filter_add_noise(engine, layer_id, 255.0, monochrome, seed);
-}
-
 #[wasm_bindgen(js_name = "filterClouds")]
 pub fn filter_clouds(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32) {
     filter_gpu::apply_filter(

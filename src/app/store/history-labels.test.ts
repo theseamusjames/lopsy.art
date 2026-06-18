@@ -61,7 +61,6 @@ describe('pushHistory labels — every call site is labeled', () => {
       'Nudge',
       'Invert',
       'Desaturate',
-      'Add Noise',
       'Find Edges',
       'Pattern Fill',
       'Bucket Fill',
@@ -82,6 +81,7 @@ describe('pushHistory labels — every call site is labeled', () => {
       "'Mask Erase'",
       "'Quick Mask Paint'",
       "'Quick Mask Erase'",
+      "'Add Noise'",
     ];
     for (const lit of expectedAnywhere) {
       expect(allText.includes(lit), `missing literal label ${lit} in source`).toBe(true);

@@ -32,7 +32,6 @@ export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void)
       { label: 'Voronoi...', action: () => showFilterDialog('voronoi') },
       { separator: true, label: '' },
       { label: 'Add Noise...', action: () => showFilterDialog('add-noise') },
-      { label: 'Fill with Noise...', action: () => showFilterDialog('fill-noise') },
       { separator: true, label: '' },
       { label: 'Clouds...', action: () => showFilterDialog('clouds') },
       { label: 'Fibers...', action: () => showFilterDialog('fibers') },
