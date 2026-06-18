@@ -99,9 +99,9 @@ test.describe('rasterize text + cmd+click selection alignment', () => {
     // Set font size to 200px via tool settings store
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setFontSize: (v: number) => void };
+        getState: () => { setTextSetting: (key: 'fontSize', value: number) => void };
       };
-      store.getState().setTextFontSize(200);
+      store.getState().setTextSetting('fontSize', 200);
     });
     await page.waitForTimeout(100);
 

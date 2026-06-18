@@ -26,20 +26,14 @@ const WEIGHT_LABELS: Record<number, string> = {
 };
 
 export function TextOptions() {
-  const textFontSize = useToolSettingsStore((s) => s.textFontSize);
-  const textFontFamily = useToolSettingsStore((s) => s.textFontFamily);
-  const textFontWeight = useToolSettingsStore((s) => s.textFontWeight);
-  const textFontStyle = useToolSettingsStore((s) => s.textFontStyle);
-  const textAlign = useToolSettingsStore((s) => s.textAlign);
-  const textUnderline = useToolSettingsStore((s) => s.textUnderline);
-  const textStrikethrough = useToolSettingsStore((s) => s.textStrikethrough);
-  const setTextFontSize = useToolSettingsStore((s) => s.setTextFontSize);
-  const setTextFontFamily = useToolSettingsStore((s) => s.setTextFontFamily);
-  const setTextFontWeight = useToolSettingsStore((s) => s.setTextFontWeight);
-  const setTextFontStyle = useToolSettingsStore((s) => s.setTextFontStyle);
-  const setTextAlign = useToolSettingsStore((s) => s.setTextAlign);
-  const setTextUnderline = useToolSettingsStore((s) => s.setTextUnderline);
-  const setTextStrikethrough = useToolSettingsStore((s) => s.setTextStrikethrough);
+  const textFontSize = useToolSettingsStore((s) => s.settings.text.fontSize);
+  const textFontFamily = useToolSettingsStore((s) => s.settings.text.fontFamily);
+  const textFontWeight = useToolSettingsStore((s) => s.settings.text.fontWeight);
+  const textFontStyle = useToolSettingsStore((s) => s.settings.text.fontStyle);
+  const textAlign = useToolSettingsStore((s) => s.settings.text.align);
+  const textUnderline = useToolSettingsStore((s) => s.settings.text.underline);
+  const textStrikethrough = useToolSettingsStore((s) => s.settings.text.strikethrough);
+  const setTextSetting = useToolSettingsStore((s) => s.setTextSetting);
 
   const fontEntry = useMemo(() => {
     const family = extractFamilyName(textFontFamily);
@@ -95,7 +89,7 @@ export function TextOptions() {
 
   const handleFontChange = useCallback(
     (value: string) => {
-      setTextFontFamily(value);
+      setTextSetting('fontFamily', value);
       const family = extractFamilyName(value);
       const entry = fontsByFamily.get(family);
       if (entry) {
@@ -103,7 +97,7 @@ export function TextOptions() {
           const nearest = entry.weights.reduce((prev, curr) =>
             Math.abs(curr - textFontWeight) < Math.abs(prev - textFontWeight) ? curr : prev,
           );
-          setTextFontWeight(nearest);
+          setTextSetting('fontWeight', nearest);
         }
         if (entry.source === 'google') {
           loadGoogleFont(family, entry.weights);
@@ -118,12 +112,12 @@ export function TextOptions() {
         }
       }
     },
-    [textFontWeight, setTextFontFamily, setTextFontWeight],
+    [textFontWeight, setTextSetting],
   );
 
   return (
     <>
-      <Slider label="Size" value={textFontSize} min={1} max={500} onChange={setTextFontSize} />
+      <Slider label="Size" value={textFontSize} min={1} max={500} onChange={(v) => setTextSetting('fontSize', v)} />
       <label className={styles.label} id="text-font-label">Font</label>
       <FontPicker value={textFontFamily} onChange={handleFontChange} />
       <select
@@ -131,7 +125,7 @@ export function TextOptions() {
         value={textFontWeight}
         onChange={(e) => {
           const w = Number(e.target.value);
-          setTextFontWeight(w);
+          setTextSetting('fontWeight', w);
           if (fontEntry?.source === 'google') {
             const family = extractFamilyName(textFontFamily);
             loadFontBinaryToEngine(family, w);
@@ -146,7 +140,7 @@ export function TextOptions() {
       <select
         className={styles.select}
         value={textFontStyle}
-        onChange={(e) => setTextFontStyle(e.target.value as FontStyle)}
+        onChange={(e) => setTextSetting('fontStyle', e.target.value as FontStyle)}
         aria-label="Font style"
       >
         <option value="normal">Normal</option>
@@ -156,7 +150,7 @@ export function TextOptions() {
       <select
         className={styles.select}
         value={textAlign}
-        onChange={(e) => setTextAlign(e.target.value as TextAlign)}
+        onChange={(e) => setTextSetting('align', e.target.value as TextAlign)}
         aria-labelledby="text-align-label"
       >
         <option value="left">Left</option>
@@ -167,7 +161,7 @@ export function TextOptions() {
       <div className={decorationStyles.decorationGroup}>
         <button
           className={`${decorationStyles.decorationBtn} ${textUnderline ? decorationStyles.decorationBtnActive : ''}`}
-          onClick={() => setTextUnderline(!textUnderline)}
+          onClick={() => setTextSetting('underline', !textUnderline)}
           aria-label="Toggle underline"
           aria-pressed={textUnderline}
           title="Underline"
@@ -176,7 +170,7 @@ export function TextOptions() {
         </button>
         <button
           className={`${decorationStyles.decorationBtn} ${textStrikethrough ? decorationStyles.decorationBtnActive : ''}`}
-          onClick={() => setTextStrikethrough(!textStrikethrough)}
+          onClick={() => setTextSetting('strikethrough', !textStrikethrough)}
           aria-label="Toggle strikethrough"
           aria-pressed={textStrikethrough}
           title="Strikethrough"

@@ -245,15 +245,15 @@ async function setActiveTool(page: Page, tool: string) {
   await page.waitForTimeout(100);
 }
 
-async function setToolSetting(page: Page, setter: string, value: unknown) {
+async function setTextToolSetting(page: Page, key: string, value: unknown) {
   await page.evaluate(
-    ({ setter, value }) => {
+    ({ key, value }) => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => Record<string, (v: unknown) => void>;
+        getState: () => { setTextSetting: (key: string, value: unknown) => void };
       };
-      store.getState()[setter]!(value);
+      store.getState().setTextSetting(key, value);
     },
-    { setter, value },
+    { key, value },
   );
 }
 
@@ -327,11 +327,11 @@ async function createTextLayer(
   } = {},
 ): Promise<string> {
   // Configure tool settings before entering text mode
-  if (opts.fontFamily) await setToolSetting(page, 'setTextFontFamily', opts.fontFamily);
-  if (opts.fontSize) await setToolSetting(page, 'setTextFontSize', opts.fontSize);
-  if (opts.fontWeight) await setToolSetting(page, 'setTextFontWeight', opts.fontWeight);
-  if (opts.fontStyle) await setToolSetting(page, 'setTextFontStyle', opts.fontStyle);
-  if (opts.textAlign) await setToolSetting(page, 'setTextAlign', opts.textAlign);
+  if (opts.fontFamily) await setTextToolSetting(page, 'fontFamily', opts.fontFamily);
+  if (opts.fontSize) await setTextToolSetting(page, 'fontSize', opts.fontSize);
+  if (opts.fontWeight) await setTextToolSetting(page, 'fontWeight', opts.fontWeight);
+  if (opts.fontStyle) await setTextToolSetting(page, 'fontStyle', opts.fontStyle);
+  if (opts.textAlign) await setTextToolSetting(page, 'align', opts.textAlign);
   if (opts.color) await setForegroundColor(page, opts.color);
 
   await setActiveTool(page, 'text');

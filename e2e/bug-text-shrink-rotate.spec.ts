@@ -70,9 +70,9 @@ test('text does not shrink after: add → change size while editing → commit �
   // Use the store directly to set font size — avoids stealing keyboard focus
   await page.evaluate(() => {
     const s = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => { setTextFontSize: (n: number) => void };
+      getState: () => { setTextSetting: (key: 'fontSize', value: number) => void };
     };
-    s.getState().setTextFontSize(24);
+    s.getState().setTextSetting('fontSize', 24);
   });
 
   await page.keyboard.press('t');
@@ -101,9 +101,9 @@ test('text does not shrink after: add → change size while editing → commit �
   // ─── Step 3: Change font size to LARGE via store (no focus change) ────────
   await page.evaluate(() => {
     const s = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => { setTextFontSize: (n: number) => void };
+      getState: () => { setTextSetting: (key: 'fontSize', value: number) => void };
     };
-    s.getState().setTextFontSize(80);
+    s.getState().setTextSetting('fontSize', 80);
   });
   // Wait for the live preview to upload the new texture
   await page.waitForTimeout(400);

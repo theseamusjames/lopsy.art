@@ -18,6 +18,8 @@ import type { StampSettings } from '../tools/stamp/stamp-settings';
 import { DEFAULT_STAMP_SETTINGS } from '../tools/stamp/stamp-settings';
 import type { MagneticLassoSettings } from '../tools/magnetic-lasso/magnetic-lasso-settings';
 import { DEFAULT_MAGNETIC_LASSO_SETTINGS } from '../tools/magnetic-lasso/magnetic-lasso-settings';
+import type { TextSettings } from '../tools/text/text-settings';
+import { DEFAULT_TEXT_SETTINGS } from '../tools/text/text-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -39,6 +41,7 @@ export interface ToolSettingsSlices {
   path: PathSettings;
   stamp: StampSettings;
   magneticLasso: MagneticLassoSettings;
+  text: TextSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -52,4 +55,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   path: DEFAULT_PATH_SETTINGS,
   stamp: DEFAULT_STAMP_SETTINGS,
   magneticLasso: DEFAULT_MAGNETIC_LASSO_SETTINGS,
+  text: DEFAULT_TEXT_SETTINGS,
 };

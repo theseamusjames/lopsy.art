@@ -51,22 +51,21 @@ vi.mock('../../app/editor-store', () => ({
 
 const ts = {
   foregroundColor: { r: 255, g: 128, b: 0, a: 1 },
-  textFontFamily: 'Inter',
-  textFontSize: 24,
-  textFontWeight: 400,
-  textFontStyle: 'normal' as 'normal' | 'italic',
-  textAlign: 'left' as 'left' | 'center' | 'right' | 'justify',
-  textUnderline: false,
-  textStrikethrough: false,
+  settings: {
+    text: {
+      content: 'Text',
+      fontFamily: 'Inter',
+      fontSize: 24,
+      fontWeight: 400,
+      fontStyle: 'normal' as 'normal' | 'italic',
+      align: 'left' as 'left' | 'center' | 'right' | 'justify',
+      underline: false,
+      strikethrough: false,
+    },
+  },
   addRecentColor: vi.fn(),
-  setTextFontSize: vi.fn(),
-  setTextFontFamily: vi.fn(),
-  setTextFontWeight: vi.fn(),
-  setTextFontStyle: vi.fn(),
-  setTextAlign: vi.fn(),
+  setTextSetting: vi.fn(),
   setForegroundColor: vi.fn(),
-  setTextUnderline: vi.fn(),
-  setTextStrikethrough: vi.fn(),
 };
 vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
@@ -181,15 +180,19 @@ beforeEach(() => {
   editorState.setActiveLayer.mockClear();
   editorState.addTextLayer.mockClear();
   ts.addRecentColor.mockClear();
-  ts.setTextFontSize.mockClear();
-  ts.setTextFontFamily.mockClear();
-  ts.setTextFontWeight.mockClear();
-  ts.setTextFontStyle.mockClear();
-  ts.setTextAlign.mockClear();
+  ts.setTextSetting.mockClear();
   ts.setForegroundColor.mockClear();
-  ts.setTextUnderline.mockClear();
-  ts.setTextStrikethrough.mockClear();
   ts.foregroundColor = { r: 255, g: 128, b: 0, a: 1 };
+  ts.settings.text = {
+    content: 'Text',
+    fontFamily: 'Inter',
+    fontSize: 24,
+    fontWeight: 400,
+    fontStyle: 'normal',
+    align: 'left',
+    underline: false,
+    strikethrough: false,
+  };
 });
 
 describe('text down — new text drag', () => {
@@ -237,14 +240,14 @@ describe('text down — clicking an existing text layer', () => {
     // Hit region: x 100..100+5*36*0.6, y 50..50+36*1.4
     const result = handleTextDown(makeCtx({ canvasPos: { x: 110, y: 60 } }));
     expect(result).toBeUndefined();
-    expect(ts.setTextFontSize).toHaveBeenCalledWith(36);
-    expect(ts.setTextFontFamily).toHaveBeenCalledWith('Georgia');
-    expect(ts.setTextFontWeight).toHaveBeenCalledWith(700);
-    expect(ts.setTextFontStyle).toHaveBeenCalledWith('italic');
-    expect(ts.setTextAlign).toHaveBeenCalledWith('center');
+    expect(ts.setTextSetting).toHaveBeenCalledWith('fontSize', 36);
+    expect(ts.setTextSetting).toHaveBeenCalledWith('fontFamily', 'Georgia');
+    expect(ts.setTextSetting).toHaveBeenCalledWith('fontWeight', 700);
+    expect(ts.setTextSetting).toHaveBeenCalledWith('fontStyle', 'italic');
+    expect(ts.setTextSetting).toHaveBeenCalledWith('align', 'center');
     expect(ts.setForegroundColor).toHaveBeenCalledWith({ r: 10, g: 20, b: 30, a: 1 });
-    expect(ts.setTextUnderline).toHaveBeenCalledWith(true);
-    expect(ts.setTextStrikethrough).toHaveBeenCalledWith(true);
+    expect(ts.setTextSetting).toHaveBeenCalledWith('underline', true);
+    expect(ts.setTextSetting).toHaveBeenCalledWith('strikethrough', true);
     expect(editorState.setActiveLayer).toHaveBeenCalledWith('text-1');
     expect(clearJsPixelData).toHaveBeenCalledWith('text-1');
     expect(uiState.startTextEditing).toHaveBeenCalledWith(

@@ -134,17 +134,17 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
     }
   }
   if (textEditing && !editingLayerIsPathText) {
-    const ts = toolState;
+    const text = toolState.settings.text;
     const glyphPositions = Array.from(getGlyphPositions(engine, textEditing.layerId)) as number[];
     renderTextEditOverlay(overlayCtx, textEditing, {
-      fontSize: ts.textFontSize,
-      fontFamily: ts.textFontFamily,
-      fontWeight: ts.textFontWeight,
-      fontStyle: ts.textFontStyle,
+      fontSize: text.fontSize,
+      fontFamily: text.fontFamily,
+      fontWeight: text.fontWeight,
+      fontStyle: text.fontStyle,
       color: toolState.foregroundColor,
       lineHeight: 1.4,
       letterSpacing: 0,
-      textAlign: ts.textAlign,
+      textAlign: text.align,
     }, viewport.zoom, antPhase, glyphPositions);
   }
 

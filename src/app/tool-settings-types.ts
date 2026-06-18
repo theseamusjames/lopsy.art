@@ -1,4 +1,4 @@
-import type { Color, FontStyle, TextAlign } from '../types';
+import type { Color } from '../types';
 import type { GradientStop, GradientType } from '../tools/gradient/gradient';
 import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { DodgeMode } from '../tools/dodge/dodge';
@@ -13,6 +13,7 @@ import type { EraserSettings } from '../tools/eraser/eraser-settings';
 import type { PathSettings } from '../tools/path/path-settings';
 import type { StampSettings } from '../tools/stamp/stamp-settings';
 import type { MagneticLassoSettings } from '../tools/magnetic-lasso/magnetic-lasso-settings';
+import type { TextSettings } from '../tools/text/text-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -51,14 +52,6 @@ export interface ToolSettings {
   quickSelectTolerance: number;
   quickSelectEdgeStrength: number;
   quickSelectMode: 'add' | 'subtract';
-  textContent: string;
-  textFontSize: number;
-  textFontFamily: string;
-  textFontWeight: number;
-  textFontStyle: FontStyle;
-  textAlign: TextAlign;
-  textUnderline: boolean;
-  textStrikethrough: boolean;
   brushSpacing: number;
   brushScatter: number;
   brushAngle: number;
@@ -128,14 +121,7 @@ export interface ToolSettings {
   setQuickSelectEdgeStrength: (strength: number) => void;
   setQuickSelectMode: (mode: 'add' | 'subtract') => void;
   setMagneticLassoSetting: <K extends keyof MagneticLassoSettings>(key: K, value: MagneticLassoSettings[K]) => void;
-  setTextContent: (content: string) => void;
-  setTextFontSize: (size: number) => void;
-  setTextFontFamily: (family: string) => void;
-  setTextFontWeight: (weight: number) => void;
-  setTextFontStyle: (style: FontStyle) => void;
-  setTextAlign: (align: TextAlign) => void;
-  setTextUnderline: (underline: boolean) => void;
-  setTextStrikethrough: (strikethrough: boolean) => void;
+  setTextSetting: <K extends keyof TextSettings>(key: K, value: TextSettings[K]) => void;
   setBrushOpacity: (opacity: number) => void;
   setBrushHardness: (hardness: number) => void;
   setPencilSetting: <K extends keyof PencilSettings>(key: K, value: PencilSettings[K]) => void;

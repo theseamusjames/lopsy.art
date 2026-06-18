@@ -593,3 +593,107 @@ describe('per-tool slice: eraser (#453)', () => {
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
+
+describe('per-tool slice: text (#453)', () => {
+  it('exposes text settings under settings.text with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setTextSetting.
+    useToolSettingsStore.getState().setTextSetting('content', 'Text');
+    useToolSettingsStore.getState().setTextSetting('fontSize', 24);
+    useToolSettingsStore.getState().setTextSetting('fontFamily', 'Inter, sans-serif');
+    useToolSettingsStore.getState().setTextSetting('fontWeight', 400);
+    useToolSettingsStore.getState().setTextSetting('fontStyle', 'normal');
+    useToolSettingsStore.getState().setTextSetting('align', 'left');
+    useToolSettingsStore.getState().setTextSetting('underline', false);
+    useToolSettingsStore.getState().setTextSetting('strikethrough', false);
+    const { text } = useToolSettingsStore.getState().settings;
+    expect(text).toEqual({
+      content: 'Text',
+      fontSize: 24,
+      fontFamily: 'Inter, sans-serif',
+      fontWeight: 400,
+      fontStyle: 'normal',
+      align: 'left',
+      underline: false,
+      strikethrough: false,
+    });
+  });
+
+  it('setTextSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.text;
+    useToolSettingsStore.getState().setTextSetting('fontSize', 72);
+    const after = useToolSettingsStore.getState().settings.text;
+    expect(after.fontSize).toBe(72);
+    expect(after.fontFamily).toBe(before.fontFamily);
+    expect(after.fontWeight).toBe(before.fontWeight);
+    expect(after.fontStyle).toBe(before.fontStyle);
+    expect(after.align).toBe(before.align);
+    expect(after.underline).toBe(before.underline);
+    expect(after.strikethrough).toBe(before.strikethrough);
+  });
+
+  it('setTextSetting clamps fontSize into [1, 500]', () => {
+    useToolSettingsStore.getState().setTextSetting('fontSize', 0);
+    expect(useToolSettingsStore.getState().settings.text.fontSize).toBe(1);
+    useToolSettingsStore.getState().setTextSetting('fontSize', 99999);
+    expect(useToolSettingsStore.getState().settings.text.fontSize).toBe(500);
+    useToolSettingsStore.getState().setTextSetting('fontSize', 36);
+    expect(useToolSettingsStore.getState().settings.text.fontSize).toBe(36);
+  });
+
+  it('setTextSetting accepts both normal and italic font styles', () => {
+    useToolSettingsStore.getState().setTextSetting('fontStyle', 'italic');
+    expect(useToolSettingsStore.getState().settings.text.fontStyle).toBe('italic');
+    useToolSettingsStore.getState().setTextSetting('fontStyle', 'normal');
+    expect(useToolSettingsStore.getState().settings.text.fontStyle).toBe('normal');
+  });
+
+  it('setTextSetting accepts all four alignment values', () => {
+    for (const align of ['left', 'center', 'right', 'justify'] as const) {
+      useToolSettingsStore.getState().setTextSetting('align', align);
+      expect(useToolSettingsStore.getState().settings.text.align).toBe(align);
+    }
+  });
+
+  it('setTextSetting toggles decoration booleans independently', () => {
+    useToolSettingsStore.getState().setTextSetting('underline', true);
+    useToolSettingsStore.getState().setTextSetting('strikethrough', true);
+    expect(useToolSettingsStore.getState().settings.text.underline).toBe(true);
+    expect(useToolSettingsStore.getState().settings.text.strikethrough).toBe(true);
+    useToolSettingsStore.getState().setTextSetting('underline', false);
+    expect(useToolSettingsStore.getState().settings.text.underline).toBe(false);
+    // strikethrough unchanged
+    expect(useToolSettingsStore.getState().settings.text.strikethrough).toBe(true);
+  });
+
+  it('setTextSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setTextSetting('fontSize', 48);
+    expect(useToolSettingsStore.getState().settings.text.fontSize).toBe(48);
+    // Sibling slice references preserved — selectors subscribed to the
+    // other slices should not re-render when text changes. This is the
+    // invariant that justifies slicing instead of fattening the flat
+    // bag further.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
