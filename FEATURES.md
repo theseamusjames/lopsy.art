@@ -373,10 +373,9 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Threshold**: level 0 - 255
 
 ### Noise
-- **Add Noise**: amount 1 - 100 (default 25), monochromatic on/off
-- **Fill with Noise**: monochromatic on/off
+- **Add Noise**: amount 1 - 100 (default 25), Mode: Color / Mono (monochromatic)
 
-Both noise filters open a dedicated dialog (separate from the generic filter dialog) with Cancel / Apply only — no live preview. Each press of Apply draws a fresh random seed, so re-running the filter produces a different pattern (see the Regenerate note under Render).
+Add Noise runs through the standard generic filter dialog with live preview and the **Regenerate** button (see the Regenerate note under Render) — each regenerate draws a fresh random seed so users can spin through noise patterns before committing. (The former standalone "Fill with Noise" filter was just Add Noise at maximum amount and has been removed.)
 
 ### Pixelate
 - **Pixelate / Mosaic**: block size 2 - 64 px
@@ -410,7 +409,7 @@ Both noise filters open a dedicated dialog (separate from the generic filter dia
 - **Clouds**: scale, seed
 - **Smoke**: scale, seed, turbulence
 - **Fibers**: variance 1 - 64 (color variation between strands), strength 1 - 64 (vertical coherence — higher values produce straighter fibers, lower values produce more wavy/tangled fibers), seed. Generates random vertical fiber textures resembling paper, cloth, or hair using multi-octave 1D noise with 2D wander perturbation. GPU-accelerated GLSL shader.
-- **Regenerate** button: the randomized **render** filters (Clouds, Smoke, Fibers) show a circular-arrow button next to the Preview checkbox in the generic filter dialog. Clicking it picks a new random seed and refreshes the preview, so users can spin through variations without re-opening the dialog. Confirming the dialog with Preview active commits the exact previewed pixels (the seed is captured at preview time and the GPU result is snapshotted, so what you see is what you get). The **Add Noise** / **Fill with Noise** filters live in their own simpler dialog without a preview or regenerate button; they instead draw a fresh random seed on every Apply, so re-running the filter yields a different noise pattern each time.
+- **Regenerate** button: the randomized filters (Clouds, Smoke, Fibers, and **Add Noise**) show a circular-arrow button next to the Preview checkbox in the generic filter dialog. Clicking it picks a new random seed and refreshes the preview, so users can spin through variations without re-opening the dialog. Confirming the dialog with Preview active commits the exact previewed pixels (the seed is captured at preview time and the GPU result is snapshotted, so what you see is what you get).
 - **Pattern Fill**: tiles a user-defined pattern across the active layer
   - **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern
   - **Scale**: 10 - 1000% (tile size relative to original pattern dimensions)
