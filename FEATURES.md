@@ -63,9 +63,9 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Shift+click**: draws a straight pixel-perfect line from the previous stroke endpoint
 
 ### Eraser
-- **Size**: 1 - 200 px
+- **Size**: 1 - 200 px (base range; auto-scaled by document size)
 - **Opacity**: 1 - 100%
-- **Hardness**: 0 - 100% (internal)
+- **Hardness**: fixed internal soft falloff (0.8) — there is no user-facing hardness control; the options bar exposes only Size and Opacity
 - **Shift+click**: erases a straight line from the previous stroke endpoint
 
 ### Dodge / Burn
@@ -250,7 +250,8 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - When duplicating a layer that is wider or taller than the canvas, the +10/+10 visual offset is clamped so the duplicate's far edge never moves past the canvas edge that the original was within (prevents already-oversized layers from being shoved further out of view).
 
 ### Eyedropper
-- **Sample size**: point, 3x3, 5x5
+- Click (or click-drag) to set the foreground color from the composited pixel under the cursor — samples the on-screen result, not just the active layer.
+- **Sample size**: point, 3×3, and 5×5 area-averaging modes are implemented in the sampling logic, but the live canvas eyedropper currently always samples a single pixel — there is no options-bar control to switch sample size yet.
 
 ### Fill (Paint Bucket)
 - **Tolerance**: 0 - 255
