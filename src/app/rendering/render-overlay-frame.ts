@@ -2,13 +2,13 @@ import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { getBrushCursorInfo } from '../useCanvasCursor';
-import { getEngine } from '../../engine-wasm/engine-state';
+import { getEngine, getEngineCanvas } from '../../engine-wasm/engine-state';
 import { renderGrid, renderPixelGrid, renderRulers } from './render-grid';
 import { renderSelectionAnts, renderTransformHandles, renderMarqueeDraftAnts } from './render-selection';
 import { getMarqueePreview } from '../../tools/marquee/marquee-preview';
 import { createTransformState, type TransformState } from '../../tools/transform/transform';
 import { renderMeshWarpOverlay } from './render-mesh-warp';
-import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor, renderSymmetryCenter, renderPerspectiveCropOverlay } from './render-overlays';
+import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor, renderStampSourcePreview, renderSymmetryCenter, renderPerspectiveCropOverlay } from './render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './render-text-overlay';
 import { hitTestTextLayer } from '../../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './render-guides';
@@ -154,9 +154,18 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
       : activeTool === 'pencil' ? toolState.settings.pencil.size
       : activeTool === 'eraser' ? toolState.settings.eraser.size
       : activeTool === 'stamp' ? toolState.settings.stamp.size
+      : activeTool === 'healing' ? toolState.settings.healing.size
       : activeTool === 'sponge' ? toolState.settings.sponge.size
       : brushCursorInfo.size;
-    renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip, brushCursorInfo.angle);
+    const isStampTool = activeTool === 'stamp' || activeTool === 'healing';
+    const webglCanvas = getEngineCanvas();
+    const showedPreview = isStampTool && webglCanvas && renderStampSourcePreview(
+      overlayCtx, webglCanvas, cursorPosition, size, viewport,
+      doc.width, doc.height, overlayCanvas.width, overlayCanvas.height,
+    );
+    if (!showedPreview) {
+      renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip, brushCursorInfo.angle);
+    }
   }
 
   if (uiState.liquify && cursorOnCanvas) {

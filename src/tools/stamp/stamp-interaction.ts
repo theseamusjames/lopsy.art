@@ -9,6 +9,7 @@ import {
   applyStampDabBatch as gpuStampDabBatch,
 } from '../../engine-wasm/wasm-bridge';
 import { interpolateFlat } from '../common/dab-interpolation';
+import { stampSourceState } from '../common/stamp-source-state';
 
 export function handleStampDown(ctx: InteractionContext): InteractionState | undefined {
   const { layerPos, activeLayerId, activeLayer, altKey, metaKey, shiftKey } = ctx;
@@ -16,6 +17,8 @@ export function handleStampDown(ctx: InteractionContext): InteractionState | und
   if (altKey || metaKey) {
     ctx.stampSourceRef.current = layerPos;
     ctx.stampOffsetRef.current = null;
+    stampSourceState.source = layerPos;
+    stampSourceState.offset = null;
     return undefined;
   }
   if (!ctx.stampSourceRef.current) return undefined;
@@ -28,6 +31,7 @@ export function handleStampDown(ctx: InteractionContext): InteractionState | und
       x: ctx.stampSourceRef.current.x - layerPos.x,
       y: ctx.stampSourceRef.current.y - layerPos.y,
     };
+    stampSourceState.offset = ctx.stampOffsetRef.current;
   }
 
   const toolSettings = useToolSettingsStore.getState();

@@ -6,6 +6,7 @@ import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { applyHealingDab, applyHealingDabBatch } from '../../engine-wasm/wasm-bridge';
 import { interpolateFlat } from '../common/dab-interpolation';
+import { stampSourceState } from '../common/stamp-source-state';
 
 /**
  * Apply a healing dab at layer-local position `pos` on the given layer,
@@ -34,6 +35,8 @@ export function handleHealingDown(ctx: InteractionContext): InteractionState | u
   if (altKey || metaKey) {
     ctx.stampSourceRef.current = layerPos;
     ctx.stampOffsetRef.current = null;
+    stampSourceState.source = layerPos;
+    stampSourceState.offset = null;
     return undefined;
   }
   if (!ctx.stampSourceRef.current) return undefined;
@@ -46,6 +49,7 @@ export function handleHealingDown(ctx: InteractionContext): InteractionState | u
       x: ctx.stampSourceRef.current.x - layerPos.x,
       y: ctx.stampSourceRef.current.y - layerPos.y,
     };
+    stampSourceState.offset = ctx.stampOffsetRef.current;
   }
 
   const { size: healingSize, opacity: healingOpacity } = useToolSettingsStore.getState().settings.healing;
