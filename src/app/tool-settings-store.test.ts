@@ -2,34 +2,36 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useToolSettingsStore } from './tool-settings-store';
 
-describe('setShapeMode — issue #236 (invalid modes render incorrectly)', () => {
+describe('setShapeSetting mode — issue #236 (invalid modes render incorrectly)', () => {
   it('accepts ellipse', () => {
-    useToolSettingsStore.getState().setShapeMode('ellipse');
-    expect(useToolSettingsStore.getState().shapeMode).toBe('ellipse');
+    useToolSettingsStore.getState().setShapeSetting('mode', 'ellipse');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('ellipse');
   });
 
   it('accepts polygon', () => {
-    useToolSettingsStore.getState().setShapeMode('polygon');
-    expect(useToolSettingsStore.getState().shapeMode).toBe('polygon');
+    useToolSettingsStore.getState().setShapeSetting('mode', 'polygon');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('polygon');
   });
 
-  it('ignores invalid values like "rectangle" instead of silently storing them', () => {
-    useToolSettingsStore.getState().setShapeMode('ellipse');
+  it('collapses invalid values like "rectangle" to ellipse instead of silently storing them', () => {
+    useToolSettingsStore.getState().setShapeSetting('mode', 'polygon');
     // The setter is typed as ShapeMode but JS callers (and TS @ts-ignore
-    // bypasses) can pass anything. The store must reject invalid values
-    // so the GPU dispatch doesn't render a polygon with stale `sides`
-    // when a caller asked for "rectangle".
-    (useToolSettingsStore.getState().setShapeMode as (m: string) => void)('rectangle');
-    expect(useToolSettingsStore.getState().shapeMode).toBe('ellipse');
+    // bypasses) can pass anything. The slice must collapse invalid values
+    // to the documented default ('ellipse') so the GPU dispatch doesn't
+    // render a polygon with stale `sides` when a caller asked for
+    // "rectangle" — same guard as the quick-select slice.
+    (useToolSettingsStore.getState().setShapeSetting as (k: 'mode', m: string) => void)('mode', 'rectangle');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('ellipse');
   });
 
-  it('ignores other invalid values (line, arrow, star)', () => {
-    useToolSettingsStore.getState().setShapeMode('polygon');
-    const setter = useToolSettingsStore.getState().setShapeMode as (m: string) => void;
-    setter('line');
-    setter('arrow');
-    setter('star');
-    expect(useToolSettingsStore.getState().shapeMode).toBe('polygon');
+  it('collapses other invalid values (line, arrow, star) to ellipse', () => {
+    const setter = useToolSettingsStore.getState().setShapeSetting as (k: 'mode', m: string) => void;
+    setter('mode', 'line');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('ellipse');
+    setter('mode', 'arrow');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('ellipse');
+    setter('mode', 'star');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('ellipse');
   });
 });
 
@@ -860,6 +862,123 @@ describe('per-tool slice: healing (#453)', () => {
     expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
     expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
     expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: shape (#453)', () => {
+  // Reset to the legacy defaults at the top of each test — prior tests
+  // in this file (including the #236 mode guard suite at the top) and
+  // sibling cases inside this block may have mutated the slice.
+  beforeEach(() => {
+    const set = useToolSettingsStore.getState().setShapeSetting;
+    set('mode', 'ellipse');
+    set('output', 'pixels');
+    set('fillColor', { r: 255, g: 255, b: 255, a: 1 });
+    set('strokeColor', null);
+    set('strokeWidth', 2);
+    set('polygonSides', 6);
+    set('cornerRadius', 0);
+  });
+
+  it('exposes shape settings under settings.shape with the legacy defaults', () => {
+    const { shape } = useToolSettingsStore.getState().settings;
+    expect(shape).toEqual({
+      mode: 'ellipse',
+      output: 'pixels',
+      fillColor: { r: 255, g: 255, b: 255, a: 1 },
+      strokeColor: null,
+      strokeWidth: 2,
+      polygonSides: 6,
+      cornerRadius: 0,
+    });
+  });
+
+  it('setShapeSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.shape;
+    useToolSettingsStore.getState().setShapeSetting('strokeWidth', 7);
+    const after = useToolSettingsStore.getState().settings.shape;
+    expect(after.strokeWidth).toBe(7);
+    expect(after.mode).toBe(before.mode);
+    expect(after.output).toBe(before.output);
+    expect(after.fillColor).toBe(before.fillColor);
+    expect(after.strokeColor).toBe(before.strokeColor);
+    expect(after.polygonSides).toBe(before.polygonSides);
+    expect(after.cornerRadius).toBe(before.cornerRadius);
+  });
+
+  it('setShapeSetting clamps strokeWidth into [1, 50]', () => {
+    useToolSettingsStore.getState().setShapeSetting('strokeWidth', 0);
+    expect(useToolSettingsStore.getState().settings.shape.strokeWidth).toBe(1);
+    useToolSettingsStore.getState().setShapeSetting('strokeWidth', 9999);
+    expect(useToolSettingsStore.getState().settings.shape.strokeWidth).toBe(50);
+  });
+
+  it('setShapeSetting rounds and clamps polygonSides into [3, 64]', () => {
+    // Sides must be an integer — fractional sides render as the floor
+    // count with weird seams. Legacy setShapePolygonSides rounded.
+    useToolSettingsStore.getState().setShapeSetting('polygonSides', 2);
+    expect(useToolSettingsStore.getState().settings.shape.polygonSides).toBe(3);
+    useToolSettingsStore.getState().setShapeSetting('polygonSides', 9999);
+    expect(useToolSettingsStore.getState().settings.shape.polygonSides).toBe(64);
+    useToolSettingsStore.getState().setShapeSetting('polygonSides', 6.4);
+    expect(useToolSettingsStore.getState().settings.shape.polygonSides).toBe(6);
+    useToolSettingsStore.getState().setShapeSetting('polygonSides', 6.6);
+    expect(useToolSettingsStore.getState().settings.shape.polygonSides).toBe(7);
+  });
+
+  it('setShapeSetting clamps cornerRadius into [0, 200]', () => {
+    useToolSettingsStore.getState().setShapeSetting('cornerRadius', -10);
+    expect(useToolSettingsStore.getState().settings.shape.cornerRadius).toBe(0);
+    useToolSettingsStore.getState().setShapeSetting('cornerRadius', 9999);
+    expect(useToolSettingsStore.getState().settings.shape.cornerRadius).toBe(200);
+  });
+
+  it('setShapeSetting passes nullable colors through, including null', () => {
+    useToolSettingsStore.getState().setShapeSetting('fillColor', null);
+    expect(useToolSettingsStore.getState().settings.shape.fillColor).toBeNull();
+    const red = { r: 200, g: 30, b: 40, a: 0.5 };
+    useToolSettingsStore.getState().setShapeSetting('strokeColor', red);
+    expect(useToolSettingsStore.getState().settings.shape.strokeColor).toEqual(red);
+  });
+
+  it('setShapeSetting collapses invalid output to "pixels" (mirrors mode guard)', () => {
+    useToolSettingsStore.getState().setShapeSetting('output', 'path');
+    expect(useToolSettingsStore.getState().settings.shape.output).toBe('path');
+    (useToolSettingsStore.getState().setShapeSetting as (k: 'output', v: string) => void)('output', 'vector');
+    expect(useToolSettingsStore.getState().settings.shape.output).toBe('pixels');
+  });
+
+  it('setShapeSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setShapeSetting('strokeWidth', 42);
+    expect(useToolSettingsStore.getState().settings.shape.strokeWidth).toBe(42);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });

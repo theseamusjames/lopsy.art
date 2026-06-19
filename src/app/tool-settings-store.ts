@@ -17,6 +17,7 @@ import { clampMagneticLassoSetting } from '../tools/magnetic-lasso/magnetic-lass
 import { clampTextSetting } from '../tools/text/text-settings';
 import { clampSpraySetting } from '../tools/spray/spray-settings';
 import { clampHealingSetting } from '../tools/healing/healing-settings';
+import { clampShapeSetting } from '../tools/shape/shape-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -45,13 +46,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushSize: 10,
   brushOpacity: 100,
   brushHardness: 80,
-  shapeMode: 'ellipse',
-  shapeOutput: 'pixels' as const,
-  shapeFillColor: { r: 255, g: 255, b: 255, a: 1 },
-  shapeStrokeColor: null,
-  shapeStrokeWidth: 2,
-  shapePolygonSides: 6,
-  shapeCornerRadius: 0,
   aspectRatioW: 1,
   aspectRatioH: 1,
   aspectRatioLocked: false,
@@ -182,20 +176,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       fill: { ...s.settings.fill, [key]: clampFillSetting(key, value) },
     },
   })),
-  setShapeMode: (mode) => {
-    // Guard against invalid values (e.g. 'rectangle', 'line') sneaking in
-    // via store bypass. The shader treats anything-not-ellipse as polygon
-    // and would render a polygon with whatever sides setting is current,
-    // which doesn't match what a caller passing 'rectangle' expects.
-    if (mode !== 'ellipse' && mode !== 'polygon') return;
-    set({ shapeMode: mode });
-  },
-  setShapeOutput: (output) => set({ shapeOutput: output }),
-  setShapeFillColor: (color) => set({ shapeFillColor: color }),
-  setShapeStrokeColor: (color) => set({ shapeStrokeColor: color }),
-  setShapeStrokeWidth: (width) => set({ shapeStrokeWidth: Math.max(1, Math.min(50, width)) }),
-  setShapePolygonSides: (sides) => set({ shapePolygonSides: Math.max(3, Math.min(64, Math.round(sides))) }),
-  setShapeCornerRadius: (radius) => set({ shapeCornerRadius: Math.max(0, Math.min(200, radius)) }),
+  setShapeSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      shape: { ...s.settings.shape, [key]: clampShapeSetting(key, value) },
+    },
+  })),
   setAspectRatioW: (w) => set({ aspectRatioW: Math.max(0.01, w) }),
   setAspectRatioH: (h) => set({ aspectRatioH: Math.max(0.01, h) }),
   setAspectRatioLocked: (locked) => set({ aspectRatioLocked: locked }),

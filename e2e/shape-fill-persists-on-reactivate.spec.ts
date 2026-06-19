@@ -83,18 +83,18 @@ async function dragShape(
 async function setShapeFillColor(page: Page, color: { r: number; g: number; b: number; a?: number }) {
   await page.evaluate((c) => {
     const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => { setShapeFillColor: (c: unknown) => void };
+      getState: () => { setShapeSetting: (k: string, v: unknown) => void };
     };
-    store.getState().setShapeFillColor({ r: c.r, g: c.g, b: c.b, a: c.a ?? 1 });
+    store.getState().setShapeSetting('fillColor', { r: c.r, g: c.g, b: c.b, a: c.a ?? 1 });
   }, color);
 }
 
 async function getShapeFillColor(page: Page) {
   return page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => { shapeFillColor: { r: number; g: number; b: number; a: number } | null };
+      getState: () => { settings: { shape: { fillColor: { r: number; g: number; b: number; a: number } | null } } };
     };
-    return store.getState().shapeFillColor;
+    return store.getState().settings.shape.fillColor;
   });
 }
 
@@ -128,9 +128,9 @@ test.describe('Shape tool fill color persists on re-activation (#424)', () => {
     // not gold. Disable stroke so only fill matters.
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setShapeStrokeColor: (c: unknown) => void };
+        getState: () => { setShapeSetting: (k: string, v: unknown) => void };
       };
-      store.getState().setShapeStrokeColor(null);
+      store.getState().setShapeSetting('strokeColor', null);
     });
     await page.locator('[aria-labelledby="shape-mode-label"]').selectOption('ellipse');
     await dragShape(page, { x: 200, y: 150 }, { x: 280, y: 220 });

@@ -115,18 +115,15 @@ async function setShapeTool(
     ({ mode, output, sides }) => {
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setShapeMode: (m: string) => void;
-          setShapeOutput: (o: string) => void;
-          setShapeFillColor: (c: { r: number; g: number; b: number; a: number } | null) => void;
-          setShapePolygonSides: (n: number) => void;
+          setShapeSetting: (key: string, value: unknown) => void;
         };
       };
       const settings = ts.getState();
-      settings.setShapeMode(mode);
-      settings.setShapeOutput(output);
-      settings.setShapeFillColor({ r: 255, g: 0, b: 0, a: 1 });
+      settings.setShapeSetting('mode', mode);
+      settings.setShapeSetting('output', output);
+      settings.setShapeSetting('fillColor', { r: 255, g: 0, b: 0, a: 1 });
       if (sides !== undefined) {
-        settings.setShapePolygonSides(sides);
+        settings.setShapeSetting('polygonSides', sides);
       }
     },
     { mode, output, sides: options?.sides ?? null },

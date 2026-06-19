@@ -41,16 +41,14 @@ async function docToScreen(page: Page, docX: number, docY: number) {
   );
 }
 
-async function setToolSetting(page: Page, setter: string, value: unknown) {
-  await page.evaluate(
-    ({ setter, value }) => {
-      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => Record<string, (v: unknown) => void>;
-      };
-      store.getState()[setter]!(value);
-    },
-    { setter, value },
-  );
+/** Write to the shape per-tool settings slice; see #453. */
+async function setShapeSetting(page: Page, key: string, value: unknown) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setShapeSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setShapeSetting(key, value);
+  }, { key, value });
 }
 
 async function setShapeMode(page: Page, mode: string) {
@@ -132,7 +130,7 @@ test.describe('Polygon rotation fix (#60)', () => {
     await setForegroundColor(page, 0, 0, 255);
     await selectTool(page, 'shape');
     await setShapeMode(page, 'polygon');
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
   });
 
   test('4-sided polygon renders as square with flat top edge', async ({ page }) => {

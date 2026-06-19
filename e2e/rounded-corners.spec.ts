@@ -47,16 +47,14 @@ async function dragShape(
   await page.waitForTimeout(300);
 }
 
-async function setToolSetting(page: Page, setter: string, value: unknown) {
-  await page.evaluate(
-    ({ setter, value }) => {
-      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => Record<string, (v: unknown) => void>;
-      };
-      store.getState()[setter]!(value);
-    },
-    { setter, value },
-  );
+/** Write to the shape per-tool settings slice; see #453. */
+async function setShapeSetting(page: Page, key: string, value: unknown) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setShapeSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setShapeSetting(key, value);
+  }, { key, value });
 }
 
 async function setShapeMode(page: Page, mode: string) {
@@ -155,7 +153,7 @@ test.describe('Shape tool corner radius (#62)', () => {
     await setForegroundColor(page, 255, 0, 0);
     await selectTool(page, 'shape');
     await setShapeMode(page, 'ellipse');
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     const beforeState = await getEditorState(page);
     // Drag from centre (200, 150) to edge (300, 250) — rx=ry=100, so
@@ -205,7 +203,7 @@ test.describe('Shape tool corner radius (#62)', () => {
     await selectTool(page, 'shape');
     await setShapeMode(page, 'polygon');
     await setPolygonSides(page, 6);
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Drag a 40×40 hexagon. halfSize = (20, 20). Cap is min(40, 40)/2 = 20.
     await setToolOption(page, 'Corner Radius', 20);
@@ -250,7 +248,7 @@ test.describe('Shape tool corner radius (#62)', () => {
     await setShapeMode(page, 'polygon');
     await setPolygonSides(page, 4);
     await setToolOption(page, 'Corner Radius', 0);
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     const beforeState = await getEditorState(page);
     await dragShape(page, { x: 150, y: 150 }, { x: 250, y: 250 });
@@ -293,7 +291,7 @@ test.describe('Shape tool corner radius (#62)', () => {
     await setShapeMode(page, 'polygon');
     await setPolygonSides(page, 4);
     await setToolOption(page, 'Corner Radius', 40);
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Drag from centre (200, 150) to edge (300, 250) — halfSize (100, 100)
     // → bounding box (100, 50)..(300, 250). cornerRadius = 40 means each
@@ -351,7 +349,7 @@ test.describe('Shape tool corner radius (#62)', () => {
         await setShapeMode(page, 'polygon');
         await setPolygonSides(page, sides);
         await setToolOption(page, 'Corner Radius', cornerRadius);
-        await setToolSetting(page, 'setShapeStrokeColor', null);
+        await setShapeSetting(page, 'strokeColor', null);
         await dragShape(page, { x: 200, y: 150 }, { x: 300, y: 250 });
       };
 

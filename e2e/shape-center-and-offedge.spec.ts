@@ -37,16 +37,14 @@ async function docToScreen(page: Page, docX: number, docY: number) {
   );
 }
 
-async function setToolSetting(page: Page, setter: string, value: unknown) {
-  await page.evaluate(
-    ({ setter, value }) => {
-      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => Record<string, (v: unknown) => void>;
-      };
-      store.getState()[setter]!(value);
-    },
-    { setter, value },
-  );
+/** Write to the shape per-tool settings slice; see #453. */
+async function setShapeSetting(page: Page, key: string, value: unknown) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setShapeSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setShapeSetting(key, value);
+  }, { key, value });
 }
 
 async function setShapeMode(page: Page, mode: string) {
@@ -104,7 +102,7 @@ test.describe('Shape tool click-to-size centering', () => {
     await setForegroundColor(page, 255, 0, 0);
     await selectTool(page, 'shape');
     await setShapeMode(page, 'ellipse');
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Click (no drag) at doc center (200, 150). The shape tool interprets
     // sub-threshold pointer-ups as "please open the ShapeSizeModal".
@@ -167,7 +165,7 @@ test.describe('Move tool off-edge pixel preservation', () => {
     await setForegroundColor(page, 0, 255, 0);
     await selectTool(page, 'shape');
     await setShapeMode(page, 'ellipse');
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     const dragFrom = await docToScreen(page, 200, 150);
     const dragTo = await docToScreen(page, 260, 200);
