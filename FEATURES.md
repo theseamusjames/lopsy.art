@@ -86,6 +86,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Size**: 1 - 200 px
 - **Alt/Cmd+click**: set the source sample point
 - **Shift+click**: stamps along a straight line from the previous stroke endpoint, preserving source offset
+- **Cursor**: a circular brush-size cursor (no crosshair fallback). Once a source point is set, the cursor becomes a live **source preview** — the pixels under the source offset are drawn at 70% opacity, clipped to the brush circle, with a white outline ring around the cursor and a small crosshair marking the current source point. The preview tracks the source offset as you move, so you can see exactly what will be stamped before painting.
 
 ### Healing Brush
 - **Size**: 1 px – document-scaled max (default cap 200 px, scales with canvas size)
@@ -94,6 +95,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Shift+click**: heals along a straight line from the previous stroke endpoint, preserving source offset
 - Color-correction healing: subtracts the source mean color and adds the destination mean color, so texture is borrowed from the source while tone matches the destination
 - Soft quadratic falloff at the dab edge for seamless blending
+- **Cursor**: the same circular brush-size cursor and live **source preview** as the Clone Stamp — once a source point is set, the source pixels render at 70% opacity inside the brush circle with a white outline ring and a crosshair at the source point (previously the heal brush fell through to a plain crosshair).
 
 ### Smudge
 - **Size**: 1 - 200 px
@@ -267,7 +269,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 
 ### Crop
 - **Modes**: Normal (rectangular) or Perspective (4-point quadrilateral correction). The mode dropdown lives in the options bar; switching to Perspective shows Apply / Cancel buttons next to the dropdown.
-- **Normal mode**: interactive drag to define crop rectangle.
+- **Normal mode**: interactive drag to define crop rectangle. The options bar exposes an **Aspect Ratio** control (W : H number inputs plus a lock toggle, the shared `AspectRatioControl`); when locked, the crop rectangle is constrained to the entered ratio while dragging.
 - **Perspective mode**: on first activation a quadrilateral is seeded over the full document. Dragging any of the four corner handles repositions that corner; on Apply, every raster layer is warped by the inverse homography (8×8 DLT solver, bilinear inverse-warp) and the document is resized to the inferred output dimensions (edge-length heuristic). Lets you rectify perspective-distorted photographs of paintings, documents, signs, etc.
 - **Edit → Crop**: when a marquee selection is active, the Edit menu's **Crop** item crops the canvas to the selection bounds in one click (equivalent to dragging out the same rectangle with the Crop tool). Disabled when nothing is selected.
 
