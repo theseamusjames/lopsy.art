@@ -1,5 +1,5 @@
 import type { Color } from '../types';
-import type { GradientStop, GradientType } from '../tools/gradient/gradient';
+import type { GradientStop } from '../tools/gradient/gradient';
 import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { DodgeMode } from '../tools/dodge/dodge';
 import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
@@ -16,6 +16,7 @@ import type { MagneticLassoSettings } from '../tools/magnetic-lasso/magnetic-las
 import type { TextSettings } from '../tools/text/text-settings';
 import type { SpraySettings } from '../tools/spray/spray-settings';
 import type { HealingSettings } from '../tools/healing/healing-settings';
+import type { GradientSettings } from '../tools/gradient/gradient-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -43,9 +44,6 @@ export interface ToolSettings {
   aspectRatioH: number;
   aspectRatioLocked: boolean;
   cropMode: 'normal' | 'perspective';
-  gradientType: GradientType;
-  gradientStops: readonly GradientStop[];
-  gradientReverse: boolean;
   dodgeExposure: number;
   dodgeMode: DodgeMode;
   quickSelectSize: number;
@@ -131,9 +129,7 @@ export interface ToolSettings {
   setAspectRatioH: (h: number) => void;
   setAspectRatioLocked: (locked: boolean) => void;
   setCropMode: (mode: 'normal' | 'perspective') => void;
-  setGradientType: (type: 'linear' | 'radial') => void;
-  setGradientStops: (stops: readonly GradientStop[]) => void;
-  setGradientReverse: (reverse: boolean) => void;
+  setGradientSetting: <K extends keyof GradientSettings>(key: K, value: GradientSettings[K]) => void;
   addGradientStop: (position: number, color: Color) => void;
   removeGradientStop: (index: number) => void;
   updateGradientStop: (index: number, stop: Partial<GradientStop>) => void;

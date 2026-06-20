@@ -11,16 +11,16 @@ interface GradientModalProps {
 }
 
 export function GradientModal({ onClose }: GradientModalProps) {
-  const gradientStops = useToolSettingsStore((s) => s.gradientStops);
-  const setGradientStops = useToolSettingsStore((s) => s.setGradientStops);
+  const gradientStops = useToolSettingsStore((s) => s.settings.gradient.stops);
+  const setGradientSetting = useToolSettingsStore((s) => s.setGradientSetting);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const sorted = [...gradientStops].sort((a, b) => a.position - b.position);
   const selectedStop = sorted[selectedIndex];
 
   const handleStopsChange = useCallback((stops: readonly GradientStop[]) => {
-    setGradientStops(stops);
-  }, [setGradientStops]);
+    setGradientSetting('stops', stops);
+  }, [setGradientSetting]);
 
   const handleSelectStop = useCallback((index: number) => {
     setSelectedIndex(index);
@@ -30,15 +30,15 @@ export function GradientModal({ onClose }: GradientModalProps) {
     const newStops = sorted.map((stop, i) =>
       i === selectedIndex ? { ...stop, color } : stop,
     );
-    setGradientStops(newStops);
-  }, [sorted, selectedIndex, setGradientStops]);
+    setGradientSetting('stops', newStops);
+  }, [sorted, selectedIndex, setGradientSetting]);
 
   const handleDelete = useCallback(() => {
     if (gradientStops.length <= 2) return;
     const newStops = sorted.filter((_, i) => i !== selectedIndex);
-    setGradientStops(newStops);
+    setGradientSetting('stops', newStops);
     setSelectedIndex(Math.min(selectedIndex, newStops.length - 1));
-  }, [gradientStops.length, sorted, selectedIndex, setGradientStops]);
+  }, [gradientStops.length, sorted, selectedIndex, setGradientSetting]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {

@@ -863,3 +863,136 @@ describe('per-tool slice: healing (#453)', () => {
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
+
+describe('per-tool slice: gradient (#453)', () => {
+  beforeEach(() => {
+    // Reset to the legacy defaults — prior tests in this file (and the
+    // module-state persisted across tests) may have mutated the slice.
+    useToolSettingsStore.getState().setGradientSetting('type', 'linear');
+    useToolSettingsStore.getState().setGradientSetting('reverse', false);
+    useToolSettingsStore.getState().setGradientSetting('stops', [
+      { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
+      { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
+    ]);
+  });
+
+  it('exposes gradient settings under settings.gradient with the legacy defaults', () => {
+    const { gradient } = useToolSettingsStore.getState().settings;
+    expect(gradient.type).toBe('linear');
+    expect(gradient.reverse).toBe(false);
+    expect(gradient.stops.length).toBe(2);
+    expect(gradient.stops[0]).toEqual({ position: 0, color: { r: 0, g: 0, b: 0, a: 1 } });
+    expect(gradient.stops[1]).toEqual({ position: 1, color: { r: 255, g: 255, b: 255, a: 1 } });
+  });
+
+  it('setGradientSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.gradient;
+    useToolSettingsStore.getState().setGradientSetting('reverse', true);
+    const after = useToolSettingsStore.getState().settings.gradient;
+    expect(after.reverse).toBe(true);
+    expect(after.type).toBe(before.type);
+    expect(after.stops).toBe(before.stops);
+  });
+
+  it('setGradientSetting collapses unknown type strings to linear', () => {
+    // The legacy setGradientType accepted anything typed as the union;
+    // the slice tightens that to the documented default so a typed-string
+    // @ts-ignore bypass can't leave the GPU dispatch staring at a stale
+    // enum. Same shape as the shape slice (#623).
+    useToolSettingsStore.getState().setGradientSetting('type', 'radial');
+    expect(useToolSettingsStore.getState().settings.gradient.type).toBe('radial');
+    (useToolSettingsStore.getState().setGradientSetting as (k: string, v: unknown) => void)('type', 'conic');
+    expect(useToolSettingsStore.getState().settings.gradient.type).toBe('linear');
+  });
+
+  it('setGradientSetting clamps stops list above the max (the GPU dispatch uniform cap)', () => {
+    const tooMany = Array.from({ length: 25 }, (_, i) => ({
+      position: i / 24,
+      color: { r: i * 10, g: 0, b: 0, a: 1 },
+    }));
+    useToolSettingsStore.getState().setGradientSetting('stops', tooMany);
+    expect(useToolSettingsStore.getState().settings.gradient.stops.length).toBe(16);
+  });
+
+  it('setGradientSetting pads stops list below the min so the gradient shaders always have ≥2 stops', () => {
+    useToolSettingsStore.getState().setGradientSetting('stops', [
+      { position: 0.5, color: { r: 128, g: 128, b: 128, a: 1 } },
+    ]);
+    expect(useToolSettingsStore.getState().settings.gradient.stops.length).toBe(2);
+  });
+
+  it('setGradientSetting clamps per-stop position into [0, 1] and sorts', () => {
+    useToolSettingsStore.getState().setGradientSetting('stops', [
+      { position: 1.5, color: { r: 255, g: 0, b: 0, a: 1 } },
+      { position: -0.5, color: { r: 0, g: 0, b: 255, a: 1 } },
+    ]);
+    const sorted = useToolSettingsStore.getState().settings.gradient.stops;
+    expect(sorted.map((s) => s.position)).toEqual([0, 1]);
+  });
+
+  it('addGradientStop inserts and re-sorts via settings.gradient.stops', () => {
+    useToolSettingsStore.getState().addGradientStop(0.5, { r: 128, g: 128, b: 128, a: 1 });
+    const stops = useToolSettingsStore.getState().settings.gradient.stops;
+    expect(stops.length).toBe(3);
+    expect(stops.map((s) => s.position)).toEqual([0, 0.5, 1]);
+  });
+
+  it('addGradientStop is rejected at the max', () => {
+    const max = Array.from({ length: 16 }, (_, i) => ({
+      position: i / 15,
+      color: { r: i, g: 0, b: 0, a: 1 },
+    }));
+    useToolSettingsStore.getState().setGradientSetting('stops', max);
+    useToolSettingsStore.getState().addGradientStop(0.5, { r: 0, g: 255, b: 0, a: 1 });
+    expect(useToolSettingsStore.getState().settings.gradient.stops.length).toBe(16);
+  });
+
+  it('removeGradientStop refuses to drop the list below the min', () => {
+    useToolSettingsStore.getState().removeGradientStop(0);
+    expect(useToolSettingsStore.getState().settings.gradient.stops.length).toBe(2);
+  });
+
+  it('updateGradientStop patches a single stop and re-sorts the list', () => {
+    useToolSettingsStore.getState().setGradientSetting('stops', [
+      { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
+      { position: 0.5, color: { r: 128, g: 128, b: 128, a: 1 } },
+      { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
+    ]);
+    useToolSettingsStore.getState().updateGradientStop(1, { position: 0.9 });
+    const stops = useToolSettingsStore.getState().settings.gradient.stops;
+    expect(stops.map((s) => s.position)).toEqual([0, 0.9, 1]);
+  });
+
+  it('setGradientSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setGradientSetting('reverse', true);
+    expect(useToolSettingsStore.getState().settings.gradient.reverse).toBe(true);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});

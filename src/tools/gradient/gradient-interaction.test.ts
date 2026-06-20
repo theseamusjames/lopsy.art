@@ -64,12 +64,16 @@ vi.mock('../../app/ui-store', () => ({
 }));
 
 const ts = {
-  gradientType: 'linear' as 'linear' | 'radial',
-  gradientStops: [
-    { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
-    { position: 1, color: { r: 255, g: 255, b: 255, a: 0 } },
-  ],
-  gradientReverse: false,
+  settings: {
+    gradient: {
+      type: 'linear' as 'linear' | 'radial',
+      stops: [
+        { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
+        { position: 1, color: { r: 255, g: 255, b: 255, a: 0 } },
+      ],
+      reverse: false,
+    },
+  },
   foregroundColor: { r: 0, g: 0, b: 0, a: 1 },
   backgroundColor: { r: 255, g: 255, b: 255, a: 0 },
   addRecentColor: vi.fn(),
@@ -121,7 +125,7 @@ describe('gradient drag lifecycle (issue #338)', () => {
     uiStateValues.gradientPreview = null;
     uiStateValues.isQuickMaskMode = false;
     uiStateValues.maskEditMode = false;
-    ts.gradientType = 'linear';
+    ts.settings.gradient.type = 'linear';
   });
 
   afterEach(() => {
@@ -212,7 +216,7 @@ describe('gradient on quick mask (issue #329)', () => {
     uiStateValues.gradientPreview = null;
     uiStateValues.isQuickMaskMode = false;
     uiStateValues.maskEditMode = false;
-    ts.gradientType = 'linear';
+    ts.settings.gradient.type = 'linear';
   });
 
   afterEach(() => {
@@ -233,7 +237,7 @@ describe('gradient on quick mask (issue #329)', () => {
 
   it('routes linear gradient to renderQuickMaskLinearGradient in quick-mask mode', () => {
     uiStateValues.isQuickMaskMode = true;
-    ts.gradientType = 'linear';
+    ts.settings.gradient.type = 'linear';
     const state = handleGradientDown(makeCtx());
     handleGradientMove(state, { x: 50, y: 80 });
     expect(renderQuickMaskLinearGradient).toHaveBeenCalledTimes(1);
@@ -243,7 +247,7 @@ describe('gradient on quick mask (issue #329)', () => {
 
   it('routes radial gradient to renderQuickMaskRadialGradient in quick-mask mode', () => {
     uiStateValues.isQuickMaskMode = true;
-    ts.gradientType = 'radial';
+    ts.settings.gradient.type = 'radial';
     const state = handleGradientDown(makeCtx());
     handleGradientMove(state, { x: 50, y: 80 });
     expect(renderQuickMaskRadialGradient).toHaveBeenCalledTimes(1);
@@ -273,12 +277,12 @@ describe('gradient on quick mask (issue #329)', () => {
 
   it('records a quick-mask history label on down', () => {
     uiStateValues.isQuickMaskMode = true;
-    ts.gradientType = 'linear';
+    ts.settings.gradient.type = 'linear';
     handleGradientDown(makeCtx());
     expect(editorState.pushHistory).toHaveBeenCalledWith('Quick Mask Linear Gradient');
 
     editorState.pushHistory.mockClear();
-    ts.gradientType = 'radial';
+    ts.settings.gradient.type = 'radial';
     handleGradientDown(makeCtx());
     expect(editorState.pushHistory).toHaveBeenCalledWith('Quick Mask Radial Gradient');
   });

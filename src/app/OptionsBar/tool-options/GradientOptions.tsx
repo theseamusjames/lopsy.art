@@ -7,11 +7,10 @@ import styles from '../OptionsBar.module.css';
 import gradientStyles from './GradientOptions.module.css';
 
 export function GradientOptions() {
-  const gradientType = useToolSettingsStore((s) => s.gradientType);
-  const setGradientType = useToolSettingsStore((s) => s.setGradientType);
-  const gradientStops = useToolSettingsStore((s) => s.gradientStops);
-  const gradientReverse = useToolSettingsStore((s) => s.gradientReverse);
-  const setGradientReverse = useToolSettingsStore((s) => s.setGradientReverse);
+  const gradientType = useToolSettingsStore((s) => s.settings.gradient.type);
+  const gradientStops = useToolSettingsStore((s) => s.settings.gradient.stops);
+  const gradientReverse = useToolSettingsStore((s) => s.settings.gradient.reverse);
+  const setGradientSetting = useToolSettingsStore((s) => s.setGradientSetting);
   const [showModal, setShowModal] = useState(false);
 
   const handleOpenModal = useCallback(() => {
@@ -30,7 +29,7 @@ export function GradientOptions() {
       <select
         className={styles.select}
         value={gradientType}
-        onChange={(e) => setGradientType(e.target.value as GradientType)}
+        onChange={(e) => setGradientSetting('type', e.target.value as GradientType)}
         aria-labelledby="gradient-type-label"
       >
         <option value="linear">Linear</option>
@@ -62,7 +61,7 @@ export function GradientOptions() {
         <input
           type="checkbox"
           checked={gradientReverse}
-          onChange={(e) => setGradientReverse(e.target.checked)}
+          onChange={(e) => setGradientSetting('reverse', e.target.checked)}
         />
         Reverse
       </label>

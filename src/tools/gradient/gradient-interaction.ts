@@ -30,16 +30,17 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
 
   const engine = getEngine();
 
+  const gradientType = ts.settings.gradient.type;
   if (isQuickMaskMode) {
-    editorState.pushHistory(ts.gradientType === 'radial' ? 'Quick Mask Radial Gradient' : 'Quick Mask Linear Gradient');
+    editorState.pushHistory(gradientType === 'radial' ? 'Quick Mask Radial Gradient' : 'Quick Mask Linear Gradient');
   } else if (maskEditMode && activeLayer.mask) {
-    editorState.pushHistory(ts.gradientType === 'radial' ? 'Mask Radial Gradient' : 'Mask Linear Gradient');
+    editorState.pushHistory(gradientType === 'radial' ? 'Mask Radial Gradient' : 'Mask Linear Gradient');
     if (engine) {
       const maskBytes = new Uint8Array(activeLayer.mask.data.buffer, activeLayer.mask.data.byteOffset, activeLayer.mask.data.byteLength);
       uploadLayerMask(engine, activeLayerId, maskBytes, activeLayer.mask.width, activeLayer.mask.height);
     }
   } else {
-    editorState.pushHistory(ts.gradientType === 'radial' ? 'Radial Gradient' : 'Linear Gradient');
+    editorState.pushHistory(gradientType === 'radial' ? 'Radial Gradient' : 'Linear Gradient');
   }
   ts.addRecentColor(ts.foregroundColor);
   ts.addRecentColor(ts.backgroundColor);
@@ -101,13 +102,13 @@ export function handleGradientMove(state: InteractionState, layerLocalPos: Point
   if (!state.startPoint || !state.layerId) return;
 
   const toolSettings = useToolSettingsStore.getState();
-  const gradType = toolSettings.gradientType;
-  const reverse = toolSettings.gradientReverse;
+  const gradType = toolSettings.settings.gradient.type;
+  const reverse = toolSettings.settings.gradient.reverse;
 
   const engine = getEngine();
   if (!engine) return;
 
-  const stops = toolSettings.gradientStops.map((s) => ({
+  const stops = toolSettings.settings.gradient.stops.map((s) => ({
     position: reverse ? 1 - s.position : s.position,
     r: s.color.r / 255,
     g: s.color.g / 255,

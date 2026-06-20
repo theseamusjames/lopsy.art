@@ -245,6 +245,20 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   );
 }
 
+/** Write to the gradient per-tool settings slice; see #453. */
+async function setGradientSetting(
+  page: Page,
+  key: 'type' | 'stops' | 'reverse',
+  value: unknown,
+) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setGradientSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setGradientSetting(key, value);
+  }, { key, value });
+}
+
 /** Write to a per-tool settings slice (wand, …); see #453. */
 async function setWandSetting(page: Page, key: 'tolerance' | 'contiguous' | 'graduated', value: number | boolean) {
   await page.evaluate(({ key, value }) => {
@@ -635,8 +649,8 @@ test.describe('Gradient Tool', () => {
 
   test('linear gradient creates smooth transition', async ({ page }) => {
     await page.locator('[data-tool-id="gradient"]').click();
-    await setToolSetting(page, 'setGradientType', 'linear');
-    await setToolSetting(page, 'setGradientStops', [
+    await setGradientSetting(page, 'type', 'linear');
+    await setGradientSetting(page, 'stops', [
       { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
       { position: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
     ]);
@@ -652,8 +666,8 @@ test.describe('Gradient Tool', () => {
 
   test('radial gradient creates circular pattern', async ({ page }) => {
     await page.locator('[data-tool-id="gradient"]').click();
-    await setToolSetting(page, 'setGradientType', 'radial');
-    await setToolSetting(page, 'setGradientStops', [
+    await setGradientSetting(page, 'type', 'radial');
+    await setGradientSetting(page, 'stops', [
       { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
       { position: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
     ]);
@@ -1992,8 +2006,8 @@ test.describe('Comprehensive Scenarios', () => {
 
     // Apply gradient across the canvas (no selection needed)
     await page.locator('[data-tool-id="gradient"]').click();
-    await setToolSetting(page, 'setGradientType', 'linear');
-    await setToolSetting(page, 'setGradientStops', [
+    await setGradientSetting(page, 'type', 'linear');
+    await setGradientSetting(page, 'stops', [
       { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
       { position: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
     ]);
