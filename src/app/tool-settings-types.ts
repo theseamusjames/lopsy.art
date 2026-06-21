@@ -16,6 +16,7 @@ import type { MagneticLassoSettings } from '../tools/magnetic-lasso/magnetic-las
 import type { TextSettings } from '../tools/text/text-settings';
 import type { SpraySettings } from '../tools/spray/spray-settings';
 import type { HealingSettings } from '../tools/healing/healing-settings';
+import type { CropSettings } from '../tools/crop/crop-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -42,7 +43,6 @@ export interface ToolSettings {
   aspectRatioW: number;
   aspectRatioH: number;
   aspectRatioLocked: boolean;
-  cropMode: 'normal' | 'perspective';
   gradientType: GradientType;
   gradientStops: readonly GradientStop[];
   gradientReverse: boolean;
@@ -130,7 +130,7 @@ export interface ToolSettings {
   setAspectRatioW: (w: number) => void;
   setAspectRatioH: (h: number) => void;
   setAspectRatioLocked: (locked: boolean) => void;
-  setCropMode: (mode: 'normal' | 'perspective') => void;
+  setCropSetting: <K extends keyof CropSettings>(key: K, value: CropSettings[K]) => void;
   setGradientType: (type: 'linear' | 'radial') => void;
   setGradientStops: (stops: readonly GradientStop[]) => void;
   setGradientReverse: (reverse: boolean) => void;

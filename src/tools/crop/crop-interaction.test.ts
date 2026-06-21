@@ -45,7 +45,9 @@ vi.mock('../../app/editor-store', () => ({
 }));
 
 const ts = {
-  cropMode: 'rect' as 'rect' | 'perspective',
+  settings: {
+    crop: { mode: 'normal' as 'normal' | 'perspective' },
+  },
   aspectRatioLocked: false,
   aspectRatioW: 1,
   aspectRatioH: 1,
@@ -103,7 +105,7 @@ beforeEach(() => {
   uiState.setPerspectiveCropDragging.mockClear();
   editorState.cropCanvas.mockClear();
   editorState.notifyRender.mockClear();
-  ts.cropMode = 'rect';
+  ts.settings.crop.mode = 'normal';
   ts.aspectRatioLocked = false;
 });
 
@@ -121,7 +123,7 @@ describe('crop down', () => {
   });
 
   it('delegates to the perspective handler in perspective mode', () => {
-    ts.cropMode = 'perspective';
+    ts.settings.crop.mode = 'perspective';
     const state = handleCropDown(makeCtx());
     // The perspective handler seeds the quad from the full document.
     expect(uiState.setPerspectiveCropQuad).toHaveBeenCalledWith({
@@ -180,7 +182,7 @@ describe('crop move', () => {
   });
 
   it('routes to the perspective handler in perspective mode', () => {
-    ts.cropMode = 'perspective';
+    ts.settings.crop.mode = 'perspective';
     uiState.perspectiveCropQuad = {
       topLeft: { x: 0, y: 0 },
       topRight: { x: 200, y: 0 },
@@ -219,7 +221,7 @@ describe('crop up', () => {
   });
 
   it('releases the perspective drag in perspective mode', () => {
-    ts.cropMode = 'perspective';
+    ts.settings.crop.mode = 'perspective';
     uiState.cropRect = { x: 10, y: 10, width: 50, height: 40 };
     handleCropUp(makeState());
     expect(uiState.setPerspectiveCropDragging).toHaveBeenCalledWith(null);
