@@ -9,14 +9,15 @@ import { docScaledMax } from '../../../utils/slider-ranges';
 import styles from './BrushOptions.module.css';
 
 export function BrushOptions() {
-  const brushSize = useToolSettingsStore((s) => s.brushSize);
-  const brushOpacity = useToolSettingsStore((s) => s.brushOpacity);
-  const brushHardness = useToolSettingsStore((s) => s.brushHardness);
-  const setBrushSize = useToolSettingsStore((s) => s.setBrushSize);
-  const setBrushOpacity = useToolSettingsStore((s) => s.setBrushOpacity);
-  const setBrushHardness = useToolSettingsStore((s) => s.setBrushHardness);
-  const brushFade = useToolSettingsStore((s) => s.brushFade);
-  const setBrushFade = useToolSettingsStore((s) => s.setBrushFade);
+  const brushSize = useToolSettingsStore((s) => s.settings.brush.size);
+  const brushOpacity = useToolSettingsStore((s) => s.settings.brush.opacity);
+  const brushHardness = useToolSettingsStore((s) => s.settings.brush.hardness);
+  const brushFade = useToolSettingsStore((s) => s.settings.brush.fade);
+  const setBrushSetting = useToolSettingsStore((s) => s.setBrushSetting);
+  const setBrushSize = useCallback((v: number) => setBrushSetting('size', v), [setBrushSetting]);
+  const setBrushOpacity = useCallback((v: number) => setBrushSetting('opacity', v), [setBrushSetting]);
+  const setBrushHardness = useCallback((v: number) => setBrushSetting('hardness', v), [setBrushSetting]);
+  const setBrushFade = useCallback((v: number) => setBrushSetting('fade', v), [setBrushSetting]);
 
   const presets = useToolSettingsStore((s) => s.presets);
   const activePresetId = useToolSettingsStore((s) => s.activePresetId);

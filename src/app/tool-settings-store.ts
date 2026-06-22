@@ -17,6 +17,7 @@ import { clampMagneticLassoSetting } from '../tools/magnetic-lasso/magnetic-lass
 import { clampTextSetting } from '../tools/text/text-settings';
 import { clampSpraySetting } from '../tools/spray/spray-settings';
 import { clampHealingSetting } from '../tools/healing/healing-settings';
+import { clampBrushSetting } from '../tools/brush/brush-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -42,9 +43,6 @@ function warnIfNormalisedOpacity(setter: string, value: number): void {
 
 export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   settings: DEFAULT_TOOL_SETTINGS_SLICES,
-  brushSize: 10,
-  brushOpacity: 100,
-  brushHardness: 80,
   shapeMode: 'ellipse',
   shapeOutput: 'pixels' as const,
   shapeFillColor: { r: 255, g: 255, b: 255, a: 1 },
@@ -68,11 +66,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   quickSelectTolerance: 32,
   quickSelectEdgeStrength: 50,
   quickSelectMode: 'add' as const,
-  brushSpacing: 0,
-  brushScatter: 0,
-  brushAngle: 0,
-  brushFade: 0,
-  brushTaper: 0,
   activeBrushTip: null,
   symmetryHorizontal: false,
   symmetryVertical: false,
@@ -149,18 +142,16 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       },
     }));
   },
-  setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(5000, size)) }),
-  setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(5000, fade)) }),
-  setBrushTaper: (taper) => set({ brushTaper: Math.max(0, Math.min(5000, taper)) }),
-  setBrushSpacing: (spacing) => set({ brushSpacing: Math.max(0, Math.min(200, spacing)) }),
-  setBrushScatter: (scatter) => set({ brushScatter: Math.max(0, Math.min(100, scatter)) }),
-  setBrushAngle: (angle) => set({ brushAngle: ((angle % 360) + 360) % 360 }),
-  setActiveBrushTip: (tip) => set({ activeBrushTip: tip }),
-  setBrushOpacity: (opacity) => {
-    warnIfNormalisedOpacity('setBrushOpacity', opacity);
-    set({ brushOpacity: Math.max(1, Math.min(100, opacity)) });
+  setBrushSetting: (key, value) => {
+    if (key === 'opacity') warnIfNormalisedOpacity('setBrushSetting(opacity)', value as number);
+    set((s) => ({
+      settings: {
+        ...s.settings,
+        brush: { ...s.settings.brush, [key]: clampBrushSetting(key, value) },
+      },
+    }));
   },
-  setBrushHardness: (hardness) => set({ brushHardness: Math.max(0, Math.min(100, hardness)) }),
+  setActiveBrushTip: (tip) => set({ activeBrushTip: tip }),
   setPencilSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,
@@ -328,16 +319,17 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   addPresets: (presets) => set((s) => ({ presets: [...s.presets, ...presets] })),
   saveCurrentAsPreset: (name) => {
     const s = get();
+    const b = s.settings.brush;
     const preset: BrushPreset = {
       id: createPresetId(),
       name,
       tip: s.activeBrushTip,
-      size: s.brushSize,
-      hardness: s.brushHardness,
-      spacing: s.brushSpacing,
-      scatter: s.brushScatter,
-      angle: s.brushAngle,
-      opacity: s.brushOpacity,
+      size: b.size,
+      hardness: b.hardness,
+      spacing: b.spacing,
+      scatter: b.scatter,
+      angle: b.angle,
+      opacity: b.opacity,
       flow: 100,
       isCustom: true,
       sizeJitter: s.brushSizeJitter,
@@ -347,8 +339,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       speedSize: s.brushSpeedSize,
       speedSizeInvert: s.brushSpeedSizeInvert,
       speedSensitivity: s.brushSpeedSensitivity,
-      fade: s.brushFade,
-      taper: s.brushTaper,
+      fade: b.fade,
+      taper: b.taper,
       subBrushes: s.activeSubBrushes.length > 0 ? s.activeSubBrushes : undefined,
     };
     set((state) => ({ presets: [...state.presets, preset], activePresetId: preset.id }));
@@ -366,14 +358,21 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     const state = get();
     const preset = state.presets.find((p) => p.id === id);
     if (!preset) return;
-    set({
+    set((s) => ({
       activePresetId: id,
-      brushSize: preset.size,
-      brushHardness: preset.hardness,
-      brushOpacity: preset.opacity,
-      brushSpacing: preset.spacing,
-      brushScatter: preset.scatter,
-      brushAngle: preset.angle,
+      settings: {
+        ...s.settings,
+        brush: {
+          size: preset.size,
+          opacity: preset.opacity,
+          hardness: preset.hardness,
+          spacing: preset.spacing,
+          scatter: preset.scatter,
+          angle: preset.angle,
+          fade: preset.fade ?? 0,
+          taper: preset.taper ?? 0,
+        },
+      },
       activeBrushTip: preset.tip,
       brushSizeJitter: preset.sizeJitter ?? 0,
       brushHardnessJitter: preset.hardnessJitter ?? 0,
@@ -382,13 +381,11 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       brushSpeedSize: preset.speedSize ?? 0,
       brushSpeedSizeInvert: preset.speedSizeInvert ?? false,
       brushSpeedSensitivity: preset.speedSensitivity ?? 'med',
-      brushFade: preset.fade ?? 0,
-      brushTaper: preset.taper ?? 0,
       brushTextureData: null,
       brushTextureBlendMode: 'multiply',
       brushTextureScale: 100,
       activeSubBrushes: preset.subBrushes ?? [],
-    });
+    }));
   },
   setTipFromPreset: (id) => {
     const state = get();

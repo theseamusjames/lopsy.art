@@ -100,12 +100,11 @@ test.describe('Stroke effect on in-progress brush stroke', () => {
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setBrushSize: (v: number) => void;
-          setBrushHardness: (v: number) => void;
+          setBrushSetting: (key: string, value: number) => void;
         };
       };
-      store.getState().setBrushSize(30);
-      store.getState().setBrushHardness(100);
+      store.getState().setBrushSetting('size', 30);
+      store.getState().setBrushSetting('hardness', 100);
     });
     await setForegroundColor(page, 0, 0, 0);
 

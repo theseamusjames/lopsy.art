@@ -36,10 +36,10 @@ test.describe('Brush perf — 1080x1080 profile', () => {
     await page.keyboard.press('b');
     await page.evaluate(() => {
       const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setBrushSize: (s: number) => void; setBrushHardness: (h: number) => void };
+        getState: () => { setBrushSetting: (key: string, value: number) => void };
       };
-      toolStore.getState().setBrushSize(10);
-      toolStore.getState().setBrushHardness(80);
+      toolStore.getState().setBrushSetting('size', 10);
+      toolStore.getState().setBrushSetting('hardness', 80);
     });
 
     const container = page.locator('[data-testid="canvas-container"]');

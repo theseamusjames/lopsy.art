@@ -33,7 +33,9 @@ vi.mock('../../app/editor-store', () => ({
 const ts = {
   dodgeMode: 'dodge' as 'dodge' | 'burn',
   dodgeExposure: 50,
-  brushSize: 20,
+  settings: {
+    brush: { size: 20 },
+  },
 };
 vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
@@ -90,7 +92,7 @@ beforeEach(() => {
   editorState.notifyRender.mockClear();
   ts.dodgeMode = 'dodge';
   ts.dodgeExposure = 50;
-  ts.brushSize = 20;
+  ts.settings.brush.size = 20;
 });
 
 describe('dodge down', () => {

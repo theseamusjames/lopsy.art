@@ -49,46 +49,46 @@ describe('opacity setters — issue #250 (percent vs normalised footgun)', () =>
 
   it('clamps brush opacity to the documented 1–100 percent range', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
-    store.getState().setBrushOpacity(50);
-    expect(store.getState().brushOpacity).toBe(50);
-    store.getState().setBrushOpacity(200);
-    expect(store.getState().brushOpacity).toBe(100);
-    store.getState().setBrushOpacity(-5);
-    expect(store.getState().brushOpacity).toBe(1);
+    store.getState().setBrushSetting('opacity', 50);
+    expect(store.getState().settings.brush.opacity).toBe(50);
+    store.getState().setBrushSetting('opacity', 200);
+    expect(store.getState().settings.brush.opacity).toBe(100);
+    store.getState().setBrushSetting('opacity', -5);
+    expect(store.getState().settings.brush.opacity).toBe(1);
   });
 
-  it('warns when setBrushOpacity receives a fractional value (likely 0–1 normalised)', async () => {
+  it('warns when setBrushSetting(opacity) receives a fractional value (likely 0–1 normalised)', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
-    store.getState().setBrushOpacity(0.5);
+    store.getState().setBrushSetting('opacity', 0.5);
     expect(warnSpy).toHaveBeenCalledTimes(1);
     const message = String(warnSpy.mock.calls[0]?.[0] ?? '');
-    expect(message).toContain('setBrushOpacity');
+    expect(message).toContain('setBrushSetting(opacity)');
     expect(message).toContain('percent');
     expect(message).toContain('50');
     // The value still gets clamped into the percent range (no silent
     // 1%-stroke), so callers don't get the original footgun.
-    expect(store.getState().brushOpacity).toBe(1);
+    expect(store.getState().settings.brush.opacity).toBe(1);
   });
 
   it('does not warn for the integer sentinel 0', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
-    store.getState().setBrushOpacity(0);
+    store.getState().setBrushSetting('opacity', 0);
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('does not warn for legitimate percent values, including 1', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
-    store.getState().setBrushOpacity(1);
-    store.getState().setBrushOpacity(50);
-    store.getState().setBrushOpacity(100);
+    store.getState().setBrushSetting('opacity', 1);
+    store.getState().setBrushSetting('opacity', 50);
+    store.getState().setBrushSetting('opacity', 100);
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('warns at most once per setter even with repeated bad calls', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
-    store.getState().setBrushOpacity(0.5);
-    store.getState().setBrushOpacity(0.2);
-    store.getState().setBrushOpacity(0.99);
+    store.getState().setBrushSetting('opacity', 0.5);
+    store.getState().setBrushSetting('opacity', 0.2);
+    store.getState().setBrushSetting('opacity', 0.99);
     expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -146,10 +146,10 @@ describe('per-tool slice: wand (#453)', () => {
     // The settings.wand object must be replaced (so React/Zustand
     // selectors that subscribe to it re-render) but the surrounding
     // ToolSettings shape should not churn unrelated fields.
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setWandSetting('contiguous', false);
     expect(useToolSettingsStore.getState().settings.wand.contiguous).toBe(false);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -176,13 +176,13 @@ describe('per-tool slice: fill (#453)', () => {
 
   it('setFillSetting preserves sibling slices and unrelated fields', () => {
     const beforeWand = useToolSettingsStore.getState().settings.wand;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setFillSetting('contiguous', false);
     expect(useToolSettingsStore.getState().settings.fill.contiguous).toBe(false);
     // Sibling slice reference preserved — selectors subscribed to
     // settings.wand should not re-render when fill changes.
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -216,7 +216,7 @@ describe('per-tool slice: marquee (#453)', () => {
   it('setMarqueeSetting preserves sibling slices and unrelated fields', () => {
     const beforeWand = useToolSettingsStore.getState().settings.wand;
     const beforeFill = useToolSettingsStore.getState().settings.fill;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setMarqueeSetting('feather', 50);
     expect(useToolSettingsStore.getState().settings.marquee.feather).toBe(50);
     // Sibling slice references preserved — selectors subscribed to
@@ -224,7 +224,7 @@ describe('per-tool slice: marquee (#453)', () => {
     // changes. This is the invariant that justifies slicing.
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
     expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -264,7 +264,7 @@ describe('per-tool slice: smudge (#453)', () => {
     const beforeWand = useToolSettingsStore.getState().settings.wand;
     const beforeFill = useToolSettingsStore.getState().settings.fill;
     const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setSmudgeSetting('size', 42);
     expect(useToolSettingsStore.getState().settings.smudge.size).toBe(42);
     // Sibling slice references preserved — selectors subscribed to the
@@ -274,7 +274,7 @@ describe('per-tool slice: smudge (#453)', () => {
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
     expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
     expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -301,7 +301,7 @@ describe('per-tool slice: pencil (#453)', () => {
     const beforeFill = useToolSettingsStore.getState().settings.fill;
     const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
     const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setPencilSetting('size', 7);
     expect(useToolSettingsStore.getState().settings.pencil.size).toBe(7);
     // Sibling slice references preserved — selectors subscribed to the
@@ -312,7 +312,7 @@ describe('per-tool slice: pencil (#453)', () => {
     expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
     expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
     expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -364,7 +364,7 @@ describe('per-tool slice: sponge (#453)', () => {
     const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
     const beforePencil = useToolSettingsStore.getState().settings.pencil;
     const beforeEraser = useToolSettingsStore.getState().settings.eraser;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setSpongeSetting('size', 42);
     expect(useToolSettingsStore.getState().settings.sponge.size).toBe(42);
     // Sibling slice references preserved — selectors subscribed to the
@@ -377,7 +377,7 @@ describe('per-tool slice: sponge (#453)', () => {
     expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
     expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
     expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -406,7 +406,7 @@ describe('per-tool slice: path (#453)', () => {
     const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
     const beforePencil = useToolSettingsStore.getState().settings.pencil;
     const beforeSponge = useToolSettingsStore.getState().settings.sponge;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setPathSetting('strokeWidth', 7);
     expect(useToolSettingsStore.getState().settings.path.strokeWidth).toBe(7);
     // Sibling slice references preserved — selectors subscribed to the
@@ -419,7 +419,7 @@ describe('per-tool slice: path (#453)', () => {
     expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
     expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
     expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -450,7 +450,7 @@ describe('per-tool slice: stamp (#453)', () => {
     const beforeSponge = useToolSettingsStore.getState().settings.sponge;
     const beforePath = useToolSettingsStore.getState().settings.path;
     const beforeEraser = useToolSettingsStore.getState().settings.eraser;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setStampSetting('size', 42);
     expect(useToolSettingsStore.getState().settings.stamp.size).toBe(42);
     // Sibling slice references preserved — selectors subscribed to the
@@ -465,7 +465,7 @@ describe('per-tool slice: stamp (#453)', () => {
     expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
     expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
     expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -531,7 +531,7 @@ describe('per-tool slice: magneticLasso (#453)', () => {
     const beforePath = useToolSettingsStore.getState().settings.path;
     const beforeStamp = useToolSettingsStore.getState().settings.stamp;
     const beforeEraser = useToolSettingsStore.getState().settings.eraser;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setMagneticLassoSetting('width', 25);
     expect(useToolSettingsStore.getState().settings.magneticLasso.width).toBe(25);
     // Sibling slice references preserved — selectors subscribed to the
@@ -547,7 +547,7 @@ describe('per-tool slice: magneticLasso (#453)', () => {
     expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
     expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
     expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -594,7 +594,7 @@ describe('per-tool slice: eraser (#453)', () => {
     const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
     const beforePencil = useToolSettingsStore.getState().settings.pencil;
     const beforeSponge = useToolSettingsStore.getState().settings.sponge;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setEraserSetting('size', 42);
     expect(useToolSettingsStore.getState().settings.eraser.size).toBe(42);
     // Sibling slice references preserved — selectors subscribed to the
@@ -607,7 +607,7 @@ describe('per-tool slice: eraser (#453)', () => {
     expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
     expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
     expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -694,7 +694,7 @@ describe('per-tool slice: text (#453)', () => {
     const beforeStamp = useToolSettingsStore.getState().settings.stamp;
     const beforeEraser = useToolSettingsStore.getState().settings.eraser;
     const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setTextSetting('fontSize', 48);
     expect(useToolSettingsStore.getState().settings.text.fontSize).toBe(48);
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
@@ -707,7 +707,7 @@ describe('per-tool slice: text (#453)', () => {
     expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
     expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
     expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -779,7 +779,7 @@ describe('per-tool slice: spray (#453)', () => {
     const beforeStamp = useToolSettingsStore.getState().settings.stamp;
     const beforeEraser = useToolSettingsStore.getState().settings.eraser;
     const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setSpraySetting('size', 42);
     expect(useToolSettingsStore.getState().settings.spray.size).toBe(42);
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
@@ -792,7 +792,7 @@ describe('per-tool slice: spray (#453)', () => {
     expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
     expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
     expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -845,7 +845,7 @@ describe('per-tool slice: healing (#453)', () => {
     const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
     const beforeText = useToolSettingsStore.getState().settings.text;
     const beforeSpray = useToolSettingsStore.getState().settings.spray;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setHealingSetting('size', 42);
     expect(useToolSettingsStore.getState().settings.healing.size).toBe(42);
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
@@ -860,6 +860,162 @@ describe('per-tool slice: healing (#453)', () => {
     expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
     expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
     expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: brush (#453)', () => {
+  it('exposes brush settings under settings.brush with the legacy flat-bag defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setBrushSetting.
+    useToolSettingsStore.getState().setBrushSetting('size', 10);
+    useToolSettingsStore.getState().setBrushSetting('opacity', 100);
+    useToolSettingsStore.getState().setBrushSetting('hardness', 80);
+    useToolSettingsStore.getState().setBrushSetting('spacing', 0);
+    useToolSettingsStore.getState().setBrushSetting('scatter', 0);
+    useToolSettingsStore.getState().setBrushSetting('angle', 0);
+    useToolSettingsStore.getState().setBrushSetting('fade', 0);
+    useToolSettingsStore.getState().setBrushSetting('taper', 0);
+    const { brush } = useToolSettingsStore.getState().settings;
+    expect(brush).toEqual({
+      size: 10,
+      opacity: 100,
+      hardness: 80,
+      spacing: 0,
+      scatter: 0,
+      angle: 0,
+      fade: 0,
+      taper: 0,
+    });
+  });
+
+  it('setBrushSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.brush;
+    useToolSettingsStore.getState().setBrushSetting('size', 42);
+    const after = useToolSettingsStore.getState().settings.brush;
+    expect(after.size).toBe(42);
+    expect(after.opacity).toBe(before.opacity);
+    expect(after.hardness).toBe(before.hardness);
+    expect(after.spacing).toBe(before.spacing);
+    expect(after.scatter).toBe(before.scatter);
+    expect(after.angle).toBe(before.angle);
+    expect(after.fade).toBe(before.fade);
+    expect(after.taper).toBe(before.taper);
+  });
+
+  it('setBrushSetting clamps size into [1, 5000]', () => {
+    useToolSettingsStore.getState().setBrushSetting('size', 0);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(1);
+    useToolSettingsStore.getState().setBrushSetting('size', 99999);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(5000);
+  });
+
+  it('setBrushSetting clamps hardness into [0, 100]', () => {
+    useToolSettingsStore.getState().setBrushSetting('hardness', -10);
+    expect(useToolSettingsStore.getState().settings.brush.hardness).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('hardness', 250);
+    expect(useToolSettingsStore.getState().settings.brush.hardness).toBe(100);
+  });
+
+  it('setBrushSetting clamps spacing into [0, 200]', () => {
+    useToolSettingsStore.getState().setBrushSetting('spacing', -1);
+    expect(useToolSettingsStore.getState().settings.brush.spacing).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('spacing', 9999);
+    expect(useToolSettingsStore.getState().settings.brush.spacing).toBe(200);
+  });
+
+  it('setBrushSetting clamps scatter into [0, 100]', () => {
+    useToolSettingsStore.getState().setBrushSetting('scatter', -1);
+    expect(useToolSettingsStore.getState().settings.brush.scatter).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('scatter', 9999);
+    expect(useToolSettingsStore.getState().settings.brush.scatter).toBe(100);
+  });
+
+  it('setBrushSetting wraps angle into [0, 360) modulo', () => {
+    // Replicates the legacy `setBrushAngle` shape so the shader gets a
+    // clean modulo-wrapped degree value when callers pass a delta that
+    // went negative or past 360 (e.g. via a wheel turn).
+    useToolSettingsStore.getState().setBrushSetting('angle', 720);
+    expect(useToolSettingsStore.getState().settings.brush.angle).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('angle', -90);
+    expect(useToolSettingsStore.getState().settings.brush.angle).toBe(270);
+  });
+
+  it('setBrushSetting clamps fade into [0, 5000]', () => {
+    useToolSettingsStore.getState().setBrushSetting('fade', -1);
+    expect(useToolSettingsStore.getState().settings.brush.fade).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('fade', 99999);
+    expect(useToolSettingsStore.getState().settings.brush.fade).toBe(5000);
+  });
+
+  it('setBrushSetting clamps taper into [0, 5000]', () => {
+    useToolSettingsStore.getState().setBrushSetting('taper', -1);
+    expect(useToolSettingsStore.getState().settings.brush.taper).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('taper', 99999);
+    expect(useToolSettingsStore.getState().settings.brush.taper).toBe(5000);
+  });
+
+  it('setBrushSetting preserves sibling slices', () => {
+    // The settings.brush object must be replaced (so React/Zustand
+    // selectors that subscribe to it re-render) but the surrounding
+    // ToolSettings slices should not churn. Same invariant the prior
+    // slices lock down — if a future refactor accidentally rebuilds
+    // sibling slices, this test catches it.
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    useToolSettingsStore.getState().setBrushSetting('scatter', 25);
+    expect(useToolSettingsStore.getState().settings.brush.scatter).toBe(25);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+  });
+
+  it('setActivePreset writes brush dab dynamics through the slice', () => {
+    // The preset-apply path was the largest cluster of brush flat-field
+    // writes pre-slice — eight dab fields written through a single `set()`.
+    // After the slice it routes through `settings.brush` so the slice
+    // object identity changes (selectors fire) but sibling slices stay
+    // referentially identical.
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    // Save a preset capturing the current brush state, then mutate the
+    // slice, then re-apply the preset — the slice should snap back to
+    // the captured values.
+    useToolSettingsStore.getState().setBrushSetting('size', 22);
+    useToolSettingsStore.getState().setBrushSetting('hardness', 55);
+    useToolSettingsStore.getState().setBrushSetting('spacing', 18);
+    useToolSettingsStore.getState().saveCurrentAsPreset('slice-test-preset');
+    const presets = useToolSettingsStore.getState().presets;
+    const savedPreset = presets[presets.length - 1]!;
+    useToolSettingsStore.getState().setBrushSetting('size', 999);
+    useToolSettingsStore.getState().setBrushSetting('hardness', 5);
+    useToolSettingsStore.getState().setActivePreset(savedPreset.id);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(22);
+    expect(useToolSettingsStore.getState().settings.brush.hardness).toBe(55);
+    expect(useToolSettingsStore.getState().settings.brush.spacing).toBe(18);
+    // Sibling slices untouched by the preset-apply path.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
   });
 });

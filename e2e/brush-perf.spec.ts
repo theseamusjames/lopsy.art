@@ -48,10 +48,10 @@ test.describe('Brush performance', () => {
     await page.keyboard.press('b');
     await page.evaluate(() => {
       const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setBrushSize: (s: number) => void; setBrushHardness: (h: number) => void };
+        getState: () => { setBrushSetting: (k: 'size' | 'hardness', v: number) => void };
       };
-      toolStore.getState().setBrushSize(40);
-      toolStore.getState().setBrushHardness(80);
+      toolStore.getState().setBrushSetting('size', 40);
+      toolStore.getState().setBrushSetting('hardness', 80);
     });
 
     // Get the canvas container position

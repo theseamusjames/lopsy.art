@@ -195,25 +195,17 @@ test.describe('ABR Import & Brush Properties', () => {
     // Verify tool settings were synced
     const settings = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => Record<string, unknown>;
+        getState: () => { settings: { brush: Record<string, unknown> } };
       };
-      const s = store.getState();
-      return {
-        brushSize: s.brushSize,
-        brushHardness: s.brushHardness,
-        brushSpacing: s.brushSpacing,
-        brushScatter: s.brushScatter,
-        brushAngle: s.brushAngle,
-        brushOpacity: s.brushOpacity,
-      };
+      return store.getState().settings.brush;
     });
 
-    expect(settings.brushSize).toBe(48);
-    expect(settings.brushHardness).toBe(80);
-    expect(settings.brushSpacing).toBe(35);
-    expect(settings.brushScatter).toBe(15);
-    expect(settings.brushAngle).toBe(45);
-    expect(settings.brushOpacity).toBe(90);
+    expect(settings.size).toBe(48);
+    expect(settings.hardness).toBe(80);
+    expect(settings.spacing).toBe(35);
+    expect(settings.scatter).toBe(15);
+    expect(settings.angle).toBe(45);
+    expect(settings.opacity).toBe(90);
   });
 
   test('ABR import — drawing with imported brush produces visible marks', async ({ page }) => {
@@ -500,7 +492,12 @@ test.describe('ABR Import & Brush Properties', () => {
     await setForegroundColor(page, 255, 128, 0);
 
     // Angle 0
-    await setToolSetting(page, 'setBrushAngle', 0);
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setBrushSetting: (k: 'angle', v: number) => void };
+      };
+      store.getState().setBrushSetting('angle', 0);
+    });
     const before0 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 700, y: 200 }, 20);
     const after0 = await snapshot(page);
@@ -508,7 +505,12 @@ test.describe('ABR Import & Brush Properties', () => {
     await page.screenshot({ path: 'test-results/screenshots/props-08-angle-0.png' });
 
     // Angle 90 on a different line
-    await setToolSetting(page, 'setBrushAngle', 90);
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setBrushSetting: (k: 'angle', v: number) => void };
+      };
+      store.getState().setBrushSetting('angle', 90);
+    });
     const before90 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 400 }, { x: 700, y: 400 }, 20);
     const after90 = await snapshot(page);

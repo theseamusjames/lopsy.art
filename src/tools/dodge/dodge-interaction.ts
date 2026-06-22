@@ -29,7 +29,7 @@ export function handleDodgeDown(ctx: InteractionContext): InteractionState {
   const dodgeMode = toolSettings.dodgeMode;
   editorState.pushHistory(dodgeMode === 'dodge' ? 'Dodge' : 'Burn');
   const exposure = toolSettings.dodgeExposure / 100;
-  const dodgeSize = toolSettings.brushSize;
+  const dodgeSize = toolSettings.settings.brush.size;
   const dodgeShiftLine = shiftKey
     && ctx.lastPaintPointRef.current
     && ctx.lastPaintPointRef.current.layerId === activeLayerId;
@@ -65,7 +65,7 @@ export function handleDodgeMove(state: InteractionState, layerLocalPos: Point): 
   if (!state.lastPoint) return;
   const toolSettings = useToolSettingsStore.getState();
   const exposure = toolSettings.dodgeExposure / 100;
-  const dodgeSize = toolSettings.brushSize;
+  const dodgeSize = toolSettings.settings.brush.size;
   const dodgeSpacing = Math.max(1, dodgeSize * 0.25);
 
   const engine = getEngine();

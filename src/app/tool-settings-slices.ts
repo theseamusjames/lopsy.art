@@ -24,6 +24,8 @@ import type { SpraySettings } from '../tools/spray/spray-settings';
 import { DEFAULT_SPRAY_SETTINGS } from '../tools/spray/spray-settings';
 import type { HealingSettings } from '../tools/healing/healing-settings';
 import { DEFAULT_HEALING_SETTINGS } from '../tools/healing/healing-settings';
+import type { BrushSettings } from '../tools/brush/brush-settings';
+import { DEFAULT_BRUSH_SETTINGS } from '../tools/brush/brush-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -48,6 +50,7 @@ export interface ToolSettingsSlices {
   text: TextSettings;
   spray: SpraySettings;
   healing: HealingSettings;
+  brush: BrushSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -64,4 +67,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   text: DEFAULT_TEXT_SETTINGS,
   spray: DEFAULT_SPRAY_SETTINGS,
   healing: DEFAULT_HEALING_SETTINGS,
+  brush: DEFAULT_BRUSH_SETTINGS,
 };
