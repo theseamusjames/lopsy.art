@@ -4,8 +4,11 @@ import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { DodgeMode } from '../tools/dodge/dodge';
 import type { SpongeMode } from '../tools/sponge/sponge';
 import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
+import type { SpraySettings } from '../tools/spray/spray-settings';
+import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
+  settings: ToolSettingsSlices;
   brushSize: number;
   brushOpacity: number;
   brushHardness: number;
@@ -71,10 +74,6 @@ export interface ToolSettings {
   foregroundColor: Color;
   backgroundColor: Color;
   recentColors: readonly Color[];
-  spraySize: number;
-  sprayDensity: number;
-  sprayOpacity: number;
-  sprayHardness: number;
   brushSizeJitter: number;
   brushAngleJitter: number;
   brushOpacityJitter: number;
@@ -102,10 +101,7 @@ export interface ToolSettings {
   setBrushTextureScale: (scale: number) => void;
   addBrushTexture: (texture: BrushTextureData) => void;
   removeBrushTexture: (id: string) => void;
-  setSpraySize: (size: number) => void;
-  setSprayDensity: (density: number) => void;
-  setSprayOpacity: (opacity: number) => void;
-  setSprayHardness: (hardness: number) => void;
+  setSpraySetting: <K extends keyof SpraySettings>(key: K, value: SpraySettings[K]) => void;
   setBrushSize: (size: number) => void;
   setBrushFade: (fade: number) => void;
   setBrushTaper: (taper: number) => void;

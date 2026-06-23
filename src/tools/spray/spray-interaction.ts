@@ -44,10 +44,11 @@ function sprayAtCurrentPosition(state: InteractionState): void {
   if (!engine) return;
 
   const toolSettings = useToolSettingsStore.getState();
-  const size = toolSettings.spraySize;
-  const density = toolSettings.sprayDensity;
-  const opacity = toolSettings.sprayOpacity / 100;
-  const hardness = toolSettings.sprayHardness / 100;
+  const spray = toolSettings.settings.spray;
+  const size = spray.size;
+  const density = spray.density;
+  const opacity = spray.opacity / 100;
+  const hardness = spray.hardness / 100;
   const color = state.strokeColor ?? toolSettings.foregroundColor;
   const r = color.r / 255;
   const g = color.g / 255;
@@ -84,10 +85,11 @@ export function handleSprayDown(
   const engine = getEngine();
   if (!engine) return state;
 
-  const size = toolSettings.spraySize;
-  const density = toolSettings.sprayDensity;
-  const opacity = toolSettings.sprayOpacity / 100;
-  const hardness = toolSettings.sprayHardness / 100;
+  const spray = toolSettings.settings.spray;
+  const size = spray.size;
+  const density = spray.density;
+  const opacity = spray.opacity / 100;
+  const hardness = spray.hardness / 100;
   const color = strokeColor;
   toolSettings.addRecentColor(color);
   const r = color.r / 255;
@@ -114,10 +116,11 @@ export function handleSprayMove(
   if (!engine) return;
 
   const layerLocalPos = ctx.layerPos;
-  const size = toolSettings.spraySize;
-  const density = toolSettings.sprayDensity;
-  const opacity = toolSettings.sprayOpacity / 100;
-  const hardness = toolSettings.sprayHardness / 100;
+  const spray = toolSettings.settings.spray;
+  const size = spray.size;
+  const density = spray.density;
+  const opacity = spray.opacity / 100;
+  const hardness = spray.hardness / 100;
   const color = state.strokeColor ?? toolSettings.foregroundColor;
   const r = color.r / 255;
   const g = color.g / 255;

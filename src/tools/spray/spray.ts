@@ -1,14 +1,3 @@
-export interface SpraySettings {
-  readonly size: number;
-  readonly density: number;
-  readonly opacity: number;
-  readonly hardness: number;
-}
-
-export function defaultSpraySettings(): SpraySettings {
-  return { size: 40, density: 20, opacity: 60, hardness: 30 };
-}
-
 export interface SprayDot {
   readonly x: number;
   readonly y: number;

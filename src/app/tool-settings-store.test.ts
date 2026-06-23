@@ -92,13 +92,61 @@ describe('opacity setters — issue #250 (percent vs normalised footgun)', () =>
     expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('also warns from setEraserOpacity and setSprayOpacity (same footgun)', async () => {
+  it('also warns from setEraserOpacity and setSpraySetting(opacity) (same footgun)', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
     store.getState().setEraserOpacity(0.5);
-    store.getState().setSprayOpacity(0.3);
+    store.getState().setSpraySetting('opacity', 0.3);
     expect(warnSpy).toHaveBeenCalledTimes(2);
     const messages = warnSpy.mock.calls.map((c: unknown[]) => String(c[0] ?? ''));
     expect(messages.some((m: string) => m.includes('setEraserOpacity'))).toBe(true);
-    expect(messages.some((m: string) => m.includes('setSprayOpacity'))).toBe(true);
+    expect(messages.some((m: string) => m.includes('setSpraySetting(opacity)'))).toBe(true);
+  });
+});
+
+describe('per-tool slice: spray (#453)', () => {
+  it('initialises settings.spray with the documented defaults', () => {
+    const s = useToolSettingsStore.getState();
+    expect(s.settings.spray).toEqual({
+      size: 40,
+      density: 20,
+      opacity: 60,
+      hardness: 30,
+    });
+  });
+
+  it('setSpraySetting updates a single field via the typed setter', () => {
+    useToolSettingsStore.getState().setSpraySetting('size', 120);
+    expect(useToolSettingsStore.getState().settings.spray.size).toBe(120);
+    expect(useToolSettingsStore.getState().settings.spray.density).toBe(20);
+
+    useToolSettingsStore.getState().setSpraySetting('density', 80);
+    expect(useToolSettingsStore.getState().settings.spray.density).toBe(80);
+    expect(useToolSettingsStore.getState().settings.spray.size).toBe(120);
+  });
+
+  it('setSpraySetting clamps through clampSpraySetting (size into [1, 5000])', () => {
+    useToolSettingsStore.getState().setSpraySetting('size', 99999);
+    expect(useToolSettingsStore.getState().settings.spray.size).toBe(5000);
+    useToolSettingsStore.getState().setSpraySetting('size', -10);
+    expect(useToolSettingsStore.getState().settings.spray.size).toBe(1);
+  });
+
+  it('setSpraySetting clamps density / opacity / hardness to their documented ranges', () => {
+    useToolSettingsStore.getState().setSpraySetting('density', 200);
+    expect(useToolSettingsStore.getState().settings.spray.density).toBe(100);
+    useToolSettingsStore.getState().setSpraySetting('opacity', -5);
+    expect(useToolSettingsStore.getState().settings.spray.opacity).toBe(1);
+    useToolSettingsStore.getState().setSpraySetting('hardness', -5);
+    expect(useToolSettingsStore.getState().settings.spray.hardness).toBe(0);
+    useToolSettingsStore.getState().setSpraySetting('hardness', 250);
+    expect(useToolSettingsStore.getState().settings.spray.hardness).toBe(100);
+  });
+
+  it('setSpraySetting replaces the spray slice in one set() so the slice is referentially fresh after a write', () => {
+    const before = useToolSettingsStore.getState().settings.spray;
+    useToolSettingsStore.getState().setSpraySetting('size', 50);
+    const after = useToolSettingsStore.getState().settings.spray;
+    expect(after).not.toBe(before);
+    expect(after.size).toBe(50);
   });
 });

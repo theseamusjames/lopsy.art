@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { generateSprayDots, defaultSpraySettings } from './spray';
+import { generateSprayDots } from './spray';
+import { DEFAULT_SPRAY_SETTINGS } from './spray-settings';
 
 describe('generateSprayDots', () => {
   it('returns the requested number of dots', () => {
@@ -44,12 +45,11 @@ describe('generateSprayDots', () => {
   });
 });
 
-describe('defaultSpraySettings', () => {
+describe('DEFAULT_SPRAY_SETTINGS', () => {
   it('returns sensible defaults', () => {
-    const settings = defaultSpraySettings();
-    expect(settings.size).toBeGreaterThan(0);
-    expect(settings.density).toBeGreaterThan(0);
-    expect(settings.opacity).toBeGreaterThan(0);
-    expect(settings.hardness).toBeGreaterThanOrEqual(0);
+    expect(DEFAULT_SPRAY_SETTINGS.size).toBeGreaterThan(0);
+    expect(DEFAULT_SPRAY_SETTINGS.density).toBeGreaterThan(0);
+    expect(DEFAULT_SPRAY_SETTINGS.opacity).toBeGreaterThan(0);
+    expect(DEFAULT_SPRAY_SETTINGS.hardness).toBeGreaterThanOrEqual(0);
   });
 });

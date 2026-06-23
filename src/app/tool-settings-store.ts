@@ -3,6 +3,8 @@ import type { BrushPreset } from '../types/brush';
 import type { ToolSettings } from './tool-settings-types';
 import { BUILTIN_PRESETS, BUILTIN_TEXTURES, createPresetId } from '../tools/brush/builtin-presets';
 import { colorEquals } from '../utils/color';
+import { DEFAULT_TOOL_SETTINGS_SLICES } from './tool-settings-slices';
+import { clampSpraySetting } from '../tools/spray/spray-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -27,6 +29,7 @@ function warnIfNormalisedOpacity(setter: string, value: number): void {
 }
 
 export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
+  settings: DEFAULT_TOOL_SETTINGS_SLICES,
   brushSize: 10,
   brushOpacity: 100,
   brushHardness: 80,
@@ -124,10 +127,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     { r: 255, g: 130, b: 0,   a: 1 },
     { r: 0,   g: 200, b: 200, a: 1 },
   ],
-  spraySize: 40,
-  sprayDensity: 20,
-  sprayOpacity: 60,
-  sprayHardness: 30,
   brushSizeJitter: 0,
   brushAngleJitter: 0,
   brushOpacityJitter: 0,
@@ -158,13 +157,15 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     brushTextures: s.brushTextures.filter((t) => t.id !== id),
     brushTextureData: s.brushTextureData?.id === id ? null : s.brushTextureData,
   })),
-  setSpraySize: (size) => set({ spraySize: Math.max(1, Math.min(5000, size)) }),
-  setSprayDensity: (density) => set({ sprayDensity: Math.max(1, Math.min(100, density)) }),
-  setSprayOpacity: (opacity) => {
-    warnIfNormalisedOpacity('setSprayOpacity', opacity);
-    set({ sprayOpacity: Math.max(1, Math.min(100, opacity)) });
+  setSpraySetting: (key, value) => {
+    if (key === 'opacity') warnIfNormalisedOpacity('setSpraySetting(opacity)', value as number);
+    set((s) => ({
+      settings: {
+        ...s.settings,
+        spray: { ...s.settings.spray, [key]: clampSpraySetting(key, value) },
+      },
+    }));
   },
-  setSprayHardness: (hardness) => set({ sprayHardness: Math.max(0, Math.min(100, hardness)) }),
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(5000, size)) }),
   setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(5000, fade)) }),
   setBrushTaper: (taper) => set({ brushTaper: Math.max(0, Math.min(5000, taper)) }),
