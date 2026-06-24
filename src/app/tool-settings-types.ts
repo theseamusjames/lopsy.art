@@ -16,6 +16,7 @@ import type { MagneticLassoSettings } from '../tools/magnetic-lasso/magnetic-las
 import type { TextSettings } from '../tools/text/text-settings';
 import type { SpraySettings } from '../tools/spray/spray-settings';
 import type { HealingSettings } from '../tools/healing/healing-settings';
+import type { BrushJitterSettings } from '../tools/brush/brush-jitter-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -65,10 +66,6 @@ export interface ToolSettings {
   foregroundColor: Color;
   backgroundColor: Color;
   recentColors: readonly Color[];
-  brushSizeJitter: number;
-  brushAngleJitter: number;
-  brushOpacityJitter: number;
-  brushHardnessJitter: number;
   brushSpeedSize: number;
   brushSpeedSizeInvert: boolean;
   brushSpeedSensitivity: 'low' | 'med' | 'high';
@@ -80,10 +77,7 @@ export interface ToolSettings {
   activePresetId: string | null;
   activeSubBrushes: SubBrush[];
 
-  setBrushSizeJitter: (jitter: number) => void;
-  setBrushAngleJitter: (jitter: number) => void;
-  setBrushOpacityJitter: (jitter: number) => void;
-  setBrushHardnessJitter: (jitter: number) => void;
+  setBrushJitterSetting: <K extends keyof BrushJitterSettings>(key: K, value: BrushJitterSettings[K]) => void;
   setBrushSpeedSize: (value: number) => void;
   setBrushSpeedSizeInvert: (invert: boolean) => void;
   setBrushSpeedSensitivity: (sensitivity: 'low' | 'med' | 'high') => void;

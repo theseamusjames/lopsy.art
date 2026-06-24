@@ -17,6 +17,7 @@ import { clampMagneticLassoSetting } from '../tools/magnetic-lasso/magnetic-lass
 import { clampTextSetting } from '../tools/text/text-settings';
 import { clampSpraySetting } from '../tools/spray/spray-settings';
 import { clampHealingSetting } from '../tools/healing/healing-settings';
+import { clampBrushJitterSetting } from '../tools/brush/brush-jitter-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -110,10 +111,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     { r: 255, g: 130, b: 0,   a: 1 },
     { r: 0,   g: 200, b: 200, a: 1 },
   ],
-  brushSizeJitter: 0,
-  brushAngleJitter: 0,
-  brushOpacityJitter: 0,
-  brushHardnessJitter: 0,
   brushSpeedSize: 0,
   brushSpeedSizeInvert: false,
   brushSpeedSensitivity: 'med',
@@ -125,10 +122,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   activePresetId: 'builtin-hard-round',
   activeSubBrushes: [],
 
-  setBrushSizeJitter: (jitter) => set({ brushSizeJitter: Math.max(0, Math.min(100, jitter)) }),
-  setBrushAngleJitter: (jitter) => set({ brushAngleJitter: Math.max(0, Math.min(100, jitter)) }),
-  setBrushOpacityJitter: (jitter) => set({ brushOpacityJitter: Math.max(0, Math.min(100, jitter)) }),
-  setBrushHardnessJitter: (jitter) => set({ brushHardnessJitter: Math.max(0, Math.min(100, jitter)) }),
+  setBrushJitterSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      brushJitter: { ...s.settings.brushJitter, [key]: clampBrushJitterSetting(key, value) },
+    },
+  })),
   setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(300, value)) }),
   setBrushSpeedSizeInvert: (invert) => set({ brushSpeedSizeInvert: invert }),
   setBrushSpeedSensitivity: (sensitivity) => set({ brushSpeedSensitivity: sensitivity }),
@@ -340,10 +339,10 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       opacity: s.brushOpacity,
       flow: 100,
       isCustom: true,
-      sizeJitter: s.brushSizeJitter,
-      hardnessJitter: s.brushHardnessJitter,
-      angleJitter: s.brushAngleJitter,
-      opacityJitter: s.brushOpacityJitter,
+      sizeJitter: s.settings.brushJitter.size,
+      hardnessJitter: s.settings.brushJitter.hardness,
+      angleJitter: s.settings.brushJitter.angle,
+      opacityJitter: s.settings.brushJitter.opacity,
       speedSize: s.brushSpeedSize,
       speedSizeInvert: s.brushSpeedSizeInvert,
       speedSensitivity: s.brushSpeedSensitivity,
@@ -366,7 +365,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     const state = get();
     const preset = state.presets.find((p) => p.id === id);
     if (!preset) return;
-    set({
+    set((s) => ({
       activePresetId: id,
       brushSize: preset.size,
       brushHardness: preset.hardness,
@@ -375,10 +374,15 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       brushScatter: preset.scatter,
       brushAngle: preset.angle,
       activeBrushTip: preset.tip,
-      brushSizeJitter: preset.sizeJitter ?? 0,
-      brushHardnessJitter: preset.hardnessJitter ?? 0,
-      brushAngleJitter: preset.angleJitter ?? 0,
-      brushOpacityJitter: preset.opacityJitter ?? 0,
+      settings: {
+        ...s.settings,
+        brushJitter: {
+          size: preset.sizeJitter ?? 0,
+          hardness: preset.hardnessJitter ?? 0,
+          angle: preset.angleJitter ?? 0,
+          opacity: preset.opacityJitter ?? 0,
+        },
+      },
       brushSpeedSize: preset.speedSize ?? 0,
       brushSpeedSizeInvert: preset.speedSizeInvert ?? false,
       brushSpeedSensitivity: preset.speedSensitivity ?? 'med',
@@ -388,7 +392,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       brushTextureBlendMode: 'multiply',
       brushTextureScale: 100,
       activeSubBrushes: preset.subBrushes ?? [],
-    });
+    }));
   },
   setTipFromPreset: (id) => {
     const state = get();

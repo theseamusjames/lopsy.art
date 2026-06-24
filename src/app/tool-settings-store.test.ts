@@ -863,3 +863,82 @@ describe('per-tool slice: healing (#453)', () => {
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
+
+describe('per-tool slice: brushJitter (#453)', () => {
+  it('exposes brush-jitter settings under settings.brushJitter with the legacy defaults', () => {
+    // Reset to defaults — earlier tests in this file may have mutated
+    // the slice through setBrushJitterSetting.
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('hardness', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('angle', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('opacity', 0);
+    const { brushJitter } = useToolSettingsStore.getState().settings;
+    expect(brushJitter).toEqual({ size: 0, hardness: 0, angle: 0, opacity: 0 });
+  });
+
+  it('setBrushJitterSetting updates one field without disturbing the others', () => {
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('hardness', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('angle', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('opacity', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 40);
+    const after = useToolSettingsStore.getState().settings.brushJitter;
+    expect(after).toEqual({ size: 40, hardness: 0, angle: 0, opacity: 0 });
+  });
+
+  it('setBrushJitterSetting clamps every field into [0, 100]', () => {
+    for (const key of ['size', 'hardness', 'angle', 'opacity'] as const) {
+      useToolSettingsStore.getState().setBrushJitterSetting(key, -10);
+      expect(useToolSettingsStore.getState().settings.brushJitter[key]).toBe(0);
+      useToolSettingsStore.getState().setBrushJitterSetting(key, 9999);
+      expect(useToolSettingsStore.getState().settings.brushJitter[key]).toBe(100);
+    }
+  });
+
+  it('setBrushJitterSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setBrushJitterSetting('angle', 25);
+    expect(useToolSettingsStore.getState().settings.brushJitter.angle).toBe(25);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+
+  it('saveCurrentAsPreset captures the current brushJitter values', () => {
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 17);
+    useToolSettingsStore.getState().setBrushJitterSetting('hardness', 23);
+    useToolSettingsStore.getState().setBrushJitterSetting('angle', 31);
+    useToolSettingsStore.getState().setBrushJitterSetting('opacity', 43);
+    useToolSettingsStore.getState().saveCurrentAsPreset('jitter-roundtrip');
+    const saved = useToolSettingsStore
+      .getState()
+      .presets.find((p) => p.name === 'jitter-roundtrip');
+    expect(saved).toBeDefined();
+    expect(saved?.sizeJitter).toBe(17);
+    expect(saved?.hardnessJitter).toBe(23);
+    expect(saved?.angleJitter).toBe(31);
+    expect(saved?.opacityJitter).toBe(43);
+  });
+
+  it('setActivePreset restores brushJitter from the preset', () => {
+    // Save under known-jitter, then drift the slice, then setActivePreset
+    // and assert the slice came back. Exercises both the save path
+    // (legacy flat preset fields) and the restore path (writes into the
+    // new settings.brushJitter slice).
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 11);
+    useToolSettingsStore.getState().setBrushJitterSetting('hardness', 22);
+    useToolSettingsStore.getState().setBrushJitterSetting('angle', 33);
+    useToolSettingsStore.getState().setBrushJitterSetting('opacity', 44);
+    useToolSettingsStore.getState().saveCurrentAsPreset('jitter-restore');
+    const presetId = useToolSettingsStore
+      .getState()
+      .presets.find((p) => p.name === 'jitter-restore')!.id;
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('opacity', 0);
+    useToolSettingsStore.getState().setActivePreset(presetId);
+    const restored = useToolSettingsStore.getState().settings.brushJitter;
+    expect(restored).toEqual({ size: 11, hardness: 22, angle: 33, opacity: 44 });
+  });
+});

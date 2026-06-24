@@ -60,17 +60,18 @@ export function BrushModal() {
   const brushTaper = useToolSettingsStore((s) => s.brushTaper);
   const setBrushTaper = useToolSettingsStore((s) => s.setBrushTaper);
 
-  const sizeJitter = useToolSettingsStore((s) => s.brushSizeJitter);
-  const hardnessJitter = useToolSettingsStore((s) => s.brushHardnessJitter);
-  const angleJitter = useToolSettingsStore((s) => s.brushAngleJitter);
-  const opacityJitter = useToolSettingsStore((s) => s.brushOpacityJitter);
+  const sizeJitter = useToolSettingsStore((s) => s.settings.brushJitter.size);
+  const hardnessJitter = useToolSettingsStore((s) => s.settings.brushJitter.hardness);
+  const angleJitter = useToolSettingsStore((s) => s.settings.brushJitter.angle);
+  const opacityJitter = useToolSettingsStore((s) => s.settings.brushJitter.opacity);
   const speedSize = useToolSettingsStore((s) => s.brushSpeedSize);
   const speedSizeInvert = useToolSettingsStore((s) => s.brushSpeedSizeInvert);
   const speedSensitivity = useToolSettingsStore((s) => s.brushSpeedSensitivity);
-  const setSizeJitter = useToolSettingsStore((s) => s.setBrushSizeJitter);
-  const setHardnessJitter = useToolSettingsStore((s) => s.setBrushHardnessJitter);
-  const setAngleJitter = useToolSettingsStore((s) => s.setBrushAngleJitter);
-  const setOpacityJitter = useToolSettingsStore((s) => s.setBrushOpacityJitter);
+  const setBrushJitterSetting = useToolSettingsStore((s) => s.setBrushJitterSetting);
+  const setSizeJitter = (v: number) => setBrushJitterSetting('size', v);
+  const setHardnessJitter = (v: number) => setBrushJitterSetting('hardness', v);
+  const setAngleJitter = (v: number) => setBrushJitterSetting('angle', v);
+  const setOpacityJitter = (v: number) => setBrushJitterSetting('opacity', v);
   const setSpeedSize = useToolSettingsStore((s) => s.setBrushSpeedSize);
   const setSpeedSizeInvert = useToolSettingsStore((s) => s.setBrushSpeedSizeInvert);
   const setSpeedSensitivity = useToolSettingsStore((s) => s.setBrushSpeedSensitivity);
