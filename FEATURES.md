@@ -145,8 +145,8 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Font weight**: normal (400) or bold (700)
 - **Font style**: normal or italic
 - **Text align**: left, center, right, justify
-- **Line height**: configurable
-- **Letter spacing**: configurable
+- **Line height**: stored per text layer (fixed at 1.4× the font size); not exposed as an options-bar control
+- **Letter spacing**: stored per text layer (default 0; respected by the path-bound layout) but not exposed as an options-bar control
 - **Underline (`U`)**: toggle a horizontal stroke 10% of the font size below the baseline, 8% of font-size thick
 - **Strikethrough (`S`)**: toggle a horizontal stroke 32% of the font size above the baseline, 8% of font-size thick
 - **Mode**: point text (no wrap) or area text (fixed width with wrapping)
@@ -321,7 +321,7 @@ Per-node controls (header):
 - New nodes auto-expand on creation
 
 Available node types (Add menu):
-- **Exposure** — stops (multiplier = 2^value)
+- **Exposure** — stops, -5 to +5 (multiplier = 2^value)
 - **Contrast** — -100 to +100
 - **Highlights / Shadows** — Highlights -100 to +100, Shadows -100 to +100, Whites -100 to +100, Blacks -100 to +100
 - **Saturation** — Saturation -100 to +200, Vibrance -100 to +200 (the -100 floor is full desaturation; the cap extrapolates past 1× saturation distance from gray and only clips at the gamut edge)
@@ -357,22 +357,22 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 ## Filters (Destructive, GPU-Accelerated)
 
 ### Blur
-- **Gaussian Blur**: radius
-- **Box Blur**: radius
-- **Motion Blur**: angle (degrees), distance (px)
-- **Radial Blur**: amount (centered)
+- **Gaussian Blur**: radius 1 - 400 px
+- **Box Blur**: radius 1 - 100 px (auto-scales with document size)
+- **Motion Blur**: angle 0 - 360°, distance 1 - 100 px (auto-scales with document size)
+- **Radial Blur**: amount 1 - 100 (centered)
 - **Tilt-Shift Blur**: focus position 0–100% (center of sharp band along blur axis), focus width 0–100% (width of the sharp band), blur radius 1–32 px (max blur intensity in out-of-focus regions), angle 0–360° (rotation of the focus plane). Creates selective-focus miniature photography effects by blurring areas outside a configurable focus band while leaving the focus zone sharp. **Cmd/Meta+drag** on the on-canvas angle handle snaps the focus-plane rotation to 15° increments.
 - **Surface Blur**: radius 1 – 50 px (auto-scales with document size), threshold 1 – 255 (max channel difference a neighbour is allowed to have before being excluded from the blur). Edge-preserving blur that smooths low-contrast regions (skin, gradients, noise) while leaving edges sharp — a Bilateral-style filter implemented as a single GPU pass.
 
 ### Sharpen
-- **Unsharp Mask**: radius, amount, threshold
+- **Unsharp Mask**: radius 1 - 50 px (auto-scales with document size), amount 0.1 - 5, threshold 0 - 255
 
 ### Color
 - **Brightness / Contrast**: -100 to +100 each
 - **Hue / Saturation / Lightness**: hue -180 to +180, saturation -100 to +100, lightness -100 to +100
 - **Invert**: no parameters
 - **Desaturate**: no parameters (Rec. 709 luminance)
-- **Posterize**: levels (min 2)
+- **Posterize**: levels 2 - 32
 - **Threshold**: level 0 - 255
 
 ### Noise
@@ -388,7 +388,7 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 
 ### Stylize
 - **Find Edges**: Sobel edge detection, no parameters
-- **Cel Shading**: levels, edge strength
+- **Cel Shading**: levels 2 - 10, edge strength 0 - 100
 - **Solarize**: threshold 0 - 255 (inverts tones above the threshold, classic darkroom effect)
 - **Kaleidoscope**: segments 2 - 32, rotation 0 - 360 degrees (mirrors the image into a radial wedge pattern around the center)
 - **Oil Paint**: radius 1 - 10, sharpness 0.1 - 5.0 (Kuwahara filter that smooths color regions while preserving edges, creating a painterly look)
@@ -409,8 +409,8 @@ Add Noise runs through the standard generic filter dialog with live preview and 
   - Quintic radial falloff inside each dab so the warp eases off smoothly at the brush edge
 
 ### Render
-- **Clouds**: scale, seed
-- **Smoke**: scale, seed, turbulence
+- **Clouds**: scale 1 - 20, seed
+- **Smoke**: scale 1 - 20, turbulence 0 - 100, seed
 - **Fibers**: variance 1 - 64 (color variation between strands), strength 1 - 64 (vertical coherence — higher values produce straighter fibers, lower values produce more wavy/tangled fibers), seed. Generates random vertical fiber textures resembling paper, cloth, or hair using multi-octave 1D noise with 2D wander perturbation. GPU-accelerated GLSL shader.
 - **Regenerate** button: the randomized filters (Clouds, Smoke, Fibers, and **Add Noise**) show a circular-arrow button next to the Preview checkbox in the generic filter dialog. Clicking it picks a new random seed and refreshes the preview, so users can spin through variations without re-opening the dialog. Confirming the dialog with Preview active commits the exact previewed pixels (the seed is captured at preview time and the GPU result is snapshotted, so what you see is what you get).
 - **Pattern Fill**: tiles a user-defined pattern across the active layer
