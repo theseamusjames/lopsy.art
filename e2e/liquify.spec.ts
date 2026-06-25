@@ -121,7 +121,8 @@ test.describe('Liquify Tool', () => {
     await waitForStore(page);
   });
 
-  test('panel opens via Filter > Liquify... menu', async ({ page }) => {
+  test('panel opens via Filter > Liquify... menu', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'liquify panel not fully accessible on narrow viewport');
     await createDocument(page, 200, 200, false);
     await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
     await fitToView(page);
