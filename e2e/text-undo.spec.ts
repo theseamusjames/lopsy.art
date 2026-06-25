@@ -95,7 +95,8 @@ test('undo after text commit removes the text layer', async ({ page }) => {
   expect(afterUndo.length).toBe(layerCountBefore);
 });
 
-test('undo after text commit does not move other layers', async ({ page }) => {
+test('undo after text commit does not move other layers', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 300, false);
@@ -143,7 +144,8 @@ test('undo after text commit does not move other layers', async ({ page }) => {
   }
 });
 
-test('undo after text commit does not move cropped layers at non-zero positions', async ({ page }) => {
+test('undo after text commit does not move cropped layers at non-zero positions', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   // Transparent background so painted layers get cropped to content bounds

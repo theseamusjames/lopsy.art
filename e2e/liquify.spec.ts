@@ -221,7 +221,8 @@ test.describe('Liquify Tool', () => {
     expect(anyChanged).toBe(true);
   });
 
-  test('Cancel: discards displacement, layer pixels unchanged', async ({ page }) => {
+  test('Cancel: discards displacement, layer pixels unchanged', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'liquify panel Cancel button not reachable on narrow viewport');
     await createDocument(page, 200, 200, true);
 
     // Draw a solid red block

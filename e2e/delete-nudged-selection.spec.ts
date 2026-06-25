@@ -12,7 +12,8 @@ import {
 // must clear only the moved selection — not the original (pre-nudge) area. The
 // GPU selection mask is otherwise only refreshed on the next render frame, so
 // Delete used to clear using a stale mask and wipe the whole shape.
-test('delete after nudging the marquee clears only the moved selection', async ({ page }) => {
+test('delete after nudging the marquee clears only the moved selection', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 300, false);

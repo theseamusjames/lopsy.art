@@ -499,7 +499,8 @@ test.describe('Free Transform', () => {
     expect(matchRatio).toBeGreaterThan(0.95);
   });
 
-  test('transforms on multiple layers are independent', async ({ page }) => {
+  test('transforms on multiple layers are independent', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     // Helper: fill the active layer with a solid color
     async function fillActiveLayer(page: Page, r: number, g: number, b: number) {
       await page.evaluate(({ r, g, b }) => {

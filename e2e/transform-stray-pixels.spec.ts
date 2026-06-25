@@ -273,8 +273,9 @@ async function disableGrid(page: Page) {
 }
 
 test.describe('Transform stray pixels (UI interactions)', { tag: '@chromium' }, () => {
-  test.beforeEach(async ({ page, browserName }) => {
+  test.beforeEach(async ({ page, browserName, isMobile }) => {
     test.skip(browserName !== 'chromium', 'requires Chromium WebGL (SwiftShader)');
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await page.goto('/');
     await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
   });

@@ -230,8 +230,9 @@ async function memorySnapshot(page: Page, label: string): Promise<SnapshotResult
 }
 
 test.describe('Memory: retouching session', () => {
-  test('memory stays bounded during a realistic photo retouching workflow', async ({ page, browserName }) => {
+  test('memory stays bounded during a realistic photo retouching workflow', async ({ page, browserName, isMobile }) => {
     test.skip(browserName !== 'chromium', 'CDP heap profiling requires Chromium');
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     test.skip(!existsSync(samplePath), 'sample.jpg not present');
     test.setTimeout(300_000);
 
