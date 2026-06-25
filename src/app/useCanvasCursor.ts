@@ -15,13 +15,14 @@ function isPathEditMode(): boolean {
   return ui.activeTool === 'path' && editor.selectedPathId !== null;
 }
 
-type BrushTool = 'brush' | 'pencil' | 'eraser' | 'stamp' | 'dodge' | 'sponge';
+type BrushTool = 'brush' | 'pencil' | 'eraser' | 'stamp' | 'healing' | 'dodge' | 'sponge';
 
 const BRUSH_TOOLS: ReadonlySet<string> = new Set<BrushTool>([
   'brush',
   'pencil',
   'eraser',
   'stamp',
+  'healing',
   'dodge',
   'sponge',
 ]);
@@ -43,6 +44,8 @@ function getToolSize(tool: BrushTool, settings: ReturnType<typeof useToolSetting
       return settings.settings.eraser.size;
     case 'stamp':
       return settings.settings.stamp.size;
+    case 'healing':
+      return settings.settings.healing.size;
   }
 }
 
@@ -56,6 +59,7 @@ function getCursorClassForTool(tool: ToolId): string {
     case 'pencil':
     case 'eraser':
     case 'stamp':
+    case 'healing':
     case 'dodge':
     case 'sponge':
       return styles.canvasNone ?? '';

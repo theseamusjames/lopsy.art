@@ -1,6 +1,7 @@
 import type { Color, Layer, Point, Rect } from '../../types';
 import type { PathAnchor } from '../../tools/path/path';
 import type { Quad } from '../../tools/crop/perspective-crop';
+import { stampSourceState } from '../../tools/common/stamp-source-state';
 
 interface PathOverlaySource {
   anchors: readonly PathAnchor[];
@@ -375,6 +376,72 @@ export function renderBrushCursor(
   }
 
   ctx.restore();
+}
+
+export function renderStampSourcePreview(
+  ctx: CanvasRenderingContext2D,
+  webglCanvas: HTMLCanvasElement,
+  cursorPos: Point,
+  brushSize: number,
+  viewport: { zoom: number; panX: number; panY: number },
+  docWidth: number,
+  docHeight: number,
+  screenWidth: number,
+  screenHeight: number,
+): boolean {
+  const source = stampSourceState.source;
+  if (!source) return false;
+
+  const offset = stampSourceState.offset;
+  const sourceCenter = offset
+    ? { x: cursorPos.x + offset.x, y: cursorPos.y + offset.y }
+    : source;
+
+  const { zoom, panX, panY } = viewport;
+  const half = screenWidth / 2;
+  const vHalf = screenHeight / 2;
+  const radius = brushSize / 2;
+  const radiusScreen = radius * zoom;
+
+  const cursorSX = (cursorPos.x - docWidth / 2) * zoom + panX + half;
+  const cursorSY = (cursorPos.y - docHeight / 2) * zoom + panY + vHalf;
+  const sourceSX = (sourceCenter.x - docWidth / 2) * zoom + panX + half;
+  const sourceSY = (sourceCenter.y - docHeight / 2) * zoom + panY + vHalf;
+
+  ctx.save();
+  ctx.resetTransform();
+
+  ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  ctx.arc(cursorSX, cursorSY, radiusScreen, 0, Math.PI * 2);
+  ctx.clip();
+
+  const d = radiusScreen * 2;
+  ctx.drawImage(
+    webglCanvas,
+    sourceSX - radiusScreen, sourceSY - radiusScreen, d, d,
+    cursorSX - radiusScreen, cursorSY - radiusScreen, d, d,
+  );
+
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cursorSX, cursorSY, radiusScreen, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const crossSize = 6;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(sourceSX - crossSize, sourceSY);
+  ctx.lineTo(sourceSX + crossSize, sourceSY);
+  ctx.moveTo(sourceSX, sourceSY - crossSize);
+  ctx.lineTo(sourceSX, sourceSY + crossSize);
+  ctx.stroke();
+
+  ctx.restore();
+  return true;
 }
 
 export function renderSymmetryCenter(
