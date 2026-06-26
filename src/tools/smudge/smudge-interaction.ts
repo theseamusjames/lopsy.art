@@ -8,17 +8,33 @@ import {
   applySmudgeDab as gpuSmudgeDab,
   applySmudgeDabBatch as gpuSmudgeDabBatch,
 } from '../../engine-wasm/wasm-bridge';
+import { syncLayerAfterFullSize } from '../../app/sync-layer-after-full-size';
 import { interpolateFlat } from '../common/dab-interpolation';
 
 export function handleSmudgeDown(ctx: InteractionContext): InteractionState {
-  const { layerPos, activeLayerId, activeLayer, shiftKey } = ctx;
+  const { canvasPos, activeLayerId, shiftKey } = ctx;
   const editorState = useEditorStore.getState();
   editorState.pushHistory('Smudge');
   const { size, strength: strengthPercent } = useToolSettingsStore.getState().settings.smudge;
   const strength = strengthPercent / 100;
 
+  let activeLayer = ctx.activeLayer;
+  let layerPos = ctx.layerPos;
+
   const engine = getEngine();
   if (engine) {
+    // The smudge GPU dispatch calls ensure_layer_full_size, which expands a
+    // cropped or offset layer (e.g. a freshly pasted selection) to cover the
+    // document and repositions its origin to (<=0, <=0). Sync the JS store to
+    // match BEFORE computing layer-local coords — otherwise the dab
+    // coordinates, and the layer position pushed on the next sync frame, are
+    // offset and the layer appears to jump. Mirrors the GPU brush path.
+    const synced = syncLayerAfterFullSize(engine, activeLayerId);
+    if (synced) {
+      activeLayer = synced;
+      layerPos = { x: canvasPos.x - synced.x, y: canvasPos.y - synced.y };
+    }
+
     const shiftLine = shiftKey
       && ctx.lastPaintPointRef.current
       && ctx.lastPaintPointRef.current.layerId === activeLayerId;

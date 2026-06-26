@@ -13,6 +13,11 @@ vi.mock('../../engine-wasm/engine-state', () => ({
   getEngine: () => engine,
 }));
 
+const syncLayerAfterFullSize = vi.fn<() => { id: string; x: number; y: number } | null>(() => null);
+vi.mock('../../app/sync-layer-after-full-size', () => ({
+  syncLayerAfterFullSize: (...args: unknown[]) => syncLayerAfterFullSize(...(args as [])),
+}));
+
 const editorState = {
   pushHistory: vi.fn(),
   notifyRender: vi.fn(),
@@ -74,6 +79,8 @@ beforeEach(() => {
   applySmudgeDabBatch.mockClear();
   editorState.pushHistory.mockClear();
   editorState.notifyRender.mockClear();
+  syncLayerAfterFullSize.mockClear();
+  syncLayerAfterFullSize.mockReturnValue(null);
   ts.settings.smudge = { size: 40, strength: 50 };
 });
 
@@ -123,6 +130,27 @@ describe('smudge down', () => {
     expect(state.tool).toBe('smudge');
     expect(applySmudgeDab).not.toHaveBeenCalled();
     expect(editorState.notifyRender).not.toHaveBeenCalled();
+  });
+
+  it('re-syncs layer-local coords when the engine expands an offset layer', () => {
+    // Regression: pasting a section creates an offset layer (here x=300,y=200).
+    // The first GPU smudge dab calls ensure_layer_full_size, which expands the
+    // layer to cover the document and moves its origin to (0,0). The dab coords
+    // and the returned layerStart must follow the synced origin, otherwise the
+    // stroke and the next layer-sync frame shift the layer to a new spot.
+    syncLayerAfterFullSize.mockReturnValueOnce({ id: 'layer-1', x: 0, y: 0 });
+    const state = handleSmudgeDown(makeCtx({
+      canvasPos: { x: 350, y: 250 },
+      // Stale layer-local coords computed against the pre-expand origin (300,200).
+      layerPos: { x: 50, y: 50 },
+      activeLayer: { id: 'layer-1', x: 300, y: 200 } as unknown as InteractionContext['activeLayer'],
+    }));
+    const args = applySmudgeDab.mock.calls[0]!;
+    expect(args[2]).toBe(350);
+    expect(args[3]).toBe(250);
+    expect(args[4]).toBe(350);
+    expect(args[5]).toBe(250);
+    expect(state).toMatchObject({ layerStartX: 0, layerStartY: 0, lastPoint: { x: 350, y: 250 } });
   });
 });
 
