@@ -3,6 +3,7 @@ import { useUIStore } from '../ui-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { saveFilterPreview, restoreFilterPreview, clearFilterPreview, filterTiltShiftBlur } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { syncAndClearLayerAfterFilter } from './filter-layer-sync';
 
 export function beginTiltShiftSession(): void {
   const activeId = useEditorStore.getState().document.activeLayerId;
@@ -23,7 +24,7 @@ export function beginTiltShiftSession(): void {
   });
 
   filterTiltShiftBlur(engine, activeId, 0.5, 0.4, 12, 0);
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -39,7 +40,7 @@ export function previewTiltShift(): void {
   restoreFilterPreview(engine);
   const angleRad = (session.angle * Math.PI) / 180;
   filterTiltShiftBlur(engine, activeId, session.focusPosition, session.focusWidth, session.blurRadius, angleRad);
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -74,7 +75,7 @@ export function applyTiltShift(): void {
   useEditorStore.getState().pushHistory('Tilt-Shift Blur');
   const angleRad = (session.angle * Math.PI) / 180;
   filterTiltShiftBlur(engine, activeId, session.focusPosition, session.focusWidth, session.blurRadius, angleRad);
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
 
   useUIStore.getState().setTiltShift(null);
   useEditorStore.getState().notifyRender();

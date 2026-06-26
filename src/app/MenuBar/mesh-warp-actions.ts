@@ -2,6 +2,7 @@ import { useEditorStore } from '../editor-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { saveFilterPreview, restoreFilterPreview, clearFilterPreview } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { syncLayerBoundsAfterFilter, syncAndClearLayerAfterFilter } from './filter-layer-sync';
 import { applyMeshWarpGpu } from '../../filters/mesh-warp';
 import type { MeshWarpGrid } from '../../filters/mesh-warp';
 import type { Rect } from '../../types';
@@ -20,7 +21,7 @@ export function applyMeshWarp(grid: MeshWarpGrid, bounds: Rect): void {
 
   useEditorStore.getState().pushHistory('Mesh Warp');
   applyMeshWarpGpu(engine, activeId, grid, bounds, w, h);
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -30,6 +31,7 @@ export function beginMeshWarpPreview(): void {
   const engine = getEngine();
   if (!engine) return;
   saveFilterPreview(engine, activeId);
+  syncLayerBoundsAfterFilter(engine, activeId);
 }
 
 export function previewMeshWarp(grid: MeshWarpGrid, bounds: Rect): void {
@@ -41,7 +43,7 @@ export function previewMeshWarp(grid: MeshWarpGrid, bounds: Rect): void {
 
   restoreFilterPreview(engine);
   applyMeshWarpGpu(engine, activeId, grid, bounds, w, h);
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -69,6 +71,6 @@ export function applyMeshWarpWithPreview(grid: MeshWarpGrid, bounds: Rect): void
 
   useEditorStore.getState().pushHistory('Mesh Warp');
   applyMeshWarpGpu(engine, activeId, grid, bounds, w, h);
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }

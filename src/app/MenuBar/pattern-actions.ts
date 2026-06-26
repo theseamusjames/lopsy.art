@@ -2,6 +2,7 @@ import { useEditorStore } from '../editor-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { readLayerPixels, getLayerTextureDimensions, filterPatternFill, saveFilterPreview, restoreFilterPreview, clearFilterPreview } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { syncLayerBoundsAfterFilter, syncAndClearLayerAfterFilter } from './filter-layer-sync';
 import { usePatternStore, generateThumbnail } from '../pattern-store';
 import type { PatternDefinition } from '../pattern-store';
 
@@ -104,7 +105,7 @@ export function applyPatternFill(patternId: string, scale: number, offsetX: numb
     offsetX / 100,
     offsetY / 100,
   );
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -114,6 +115,7 @@ export function beginPatternPreview(): void {
   const engine = getEngine();
   if (!engine) return;
   saveFilterPreview(engine, activeId);
+  syncLayerBoundsAfterFilter(engine, activeId);
 }
 
 export function previewPatternFill(patternId: string, scale: number, offsetX: number, offsetY: number): void {
@@ -137,7 +139,7 @@ export function previewPatternFill(patternId: string, scale: number, offsetX: nu
     offsetX / 100,
     offsetY / 100,
   );
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -177,6 +179,6 @@ export function applyPatternFillWithPreview(patternId: string, scale: number, of
     offsetX / 100,
     offsetY / 100,
   );
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }

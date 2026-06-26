@@ -11,6 +11,7 @@ import {
 } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
+import { syncLayerBoundsAfterFilter, syncAndClearLayerAfterFilter } from './filter-layer-sync';
 import { filterRegistry } from '../../filters/filter-registry';
 import type { FilterDefinition } from '../../filters/filter-types';
 
@@ -66,7 +67,7 @@ export function applyGenericFilter(id: FilterDialogId, values: Record<string, nu
 
   useEditorStore.getState().pushHistory(filter.title);
   filter.applyGpu(engine, activeId, values);
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -82,6 +83,7 @@ export function beginFilterPreview(): void {
   const state = useEditorStore.getState();
   flushLayerSync(state);
   saveFilterPreview(engine, activeId);
+  syncLayerBoundsAfterFilter(engine, activeId);
 }
 
 /** Apply a filter for preview without pushing history. */
@@ -96,7 +98,7 @@ export function previewGenericFilter(id: FilterDialogId, values: Record<string, 
   // Restore original layer content before applying new preview
   restoreFilterPreview(engine);
   filter.applyGpu(engine, activeId, values);
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -138,7 +140,7 @@ export function applyGenericFilterWithPreview(id: FilterDialogId, values: Record
     filter.applyGpu(engine, activeId, values);
   }
 
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -151,7 +153,7 @@ export function applyInvert(): void {
 
   useEditorStore.getState().pushHistory('Invert');
   filterInvert(engine, activeId);
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -164,7 +166,7 @@ export function applyDesaturate(): void {
 
   useEditorStore.getState().pushHistory('Desaturate');
   filterDesaturate(engine, activeId);
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -177,6 +179,6 @@ export function applyFindEdges(): void {
 
   useEditorStore.getState().pushHistory('Find Edges');
   filterFindEdges(engine, activeId);
-  clearJsPixelData(activeId);
+  syncAndClearLayerAfterFilter(engine, activeId);
   useEditorStore.getState().notifyRender();
 }

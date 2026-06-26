@@ -18,6 +18,7 @@ import {
   liquifyRelease,
 } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { syncLayerBoundsAfterFilter, syncAndClearLayerAfterFilter } from './filter-layer-sync';
 import { MAX_DISP, defaultLiquifySettings } from '../../tools/liquify/liquify';
 import type { LiquifySession } from '../ui-store';
 
@@ -35,6 +36,7 @@ export function openLiquify(): void {
   const { width, height } = layer;
 
   saveFilterPreview(engine, activeId);
+  syncLayerBoundsAfterFilter(engine, activeId);
 
   const zeroed = new Uint8Array(width * height * 4);
   for (let i = 0; i < width * height; i++) {
@@ -67,7 +69,7 @@ export function applyLiquify(): void {
 
   liquifyRender(engine, session.layerId, MAX_DISP);
 
-  clearJsPixelData(session.layerId);
+  syncAndClearLayerAfterFilter(engine, session.layerId);
   liquifyRelease(engine);
   clearFilterPreview(engine);
   ui.setLiquify(null);
