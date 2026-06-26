@@ -57,7 +57,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Hold-to-smooth**: pause the cursor mid-stroke for ~1500 ms and the recorded freehand path is auto-smoothed (Ramer-Douglas-Peucker simplification + Catmull-Rom interpolation, straight-line detection within a 4 px tolerance) and re-rasterized in place. Undo restores the freehand version first, then the pre-stroke state.
 
 ### Pencil
-- **Size**: 1 - 100 px
+- **Size**: 1 - 100 px (base range; auto-scaled by document size)
 - **Symmetry**: horizontal, vertical, or both
 - Pixel-perfect Bresenham lines (no anti-aliasing)
 - **Shift+click**: draws a straight pixel-perfect line from the previous stroke endpoint
@@ -71,7 +71,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 ### Dodge / Burn
 - **Mode**: dodge or burn
 - **Exposure**: 1 - 100%
-- **Size**: 1 - 200 px
+- **Size**: 1 - 200 px (base range; auto-scaled by document size)
 - **Shift+click**: applies dodge/burn along a straight line from the previous stroke endpoint
 
 ### Sponge
@@ -83,7 +83,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Shift+click**: applies the sponge along a straight line from the previous stroke endpoint
 
 ### Clone Stamp
-- **Size**: 1 - 200 px
+- **Size**: 1 - 200 px (base range; auto-scaled by document size)
 - **Alt/Cmd+click**: set the source sample point
 - **Shift+click**: stamps along a straight line from the previous stroke endpoint, preserving source offset
 - **Cursor**: a circular brush-size cursor (no crosshair fallback). Once a source point is set, the cursor becomes a live **source preview** — the pixels under the source offset are drawn at 70% opacity, clipped to the brush circle, with a white outline ring around the cursor and a small crosshair marking the current source point. The preview tracks the source offset as you move, so you can see exactly what will be stamped before painting.
@@ -98,7 +98,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Cursor**: the same circular brush-size cursor and live **source preview** as the Clone Stamp — once a source point is set, the source pixels render at 70% opacity inside the brush circle with a white outline ring and a crosshair at the source point (previously the heal brush fell through to a plain crosshair).
 
 ### Smudge
-- **Size**: 1 - 200 px
+- **Size**: 1 - 200 px (base range; auto-scaled by document size)
 - **Strength**: 0 - 100% (how far pixels are pulled along the stroke)
 - Shortcut: `R`
 - Pulls colors along the stroke direction, blending neighbouring pixels.
@@ -334,7 +334,7 @@ Available node types (Add menu):
   shader; identity curves bypass the lookup.
   - **Histogram background**: the active layer's R / G / B histograms render behind the curve as colored channel shading (red/green/blue translucent fills on per-channel tabs, neutral gray on the RGB master). Sampled live from the GPU via the shared `useGroupHistogram` hook so the histogram tracks paint operations in real time.
 - **Levels** — Photoshop-style visual editor with a layered RGB histogram and handle-driven controls (no sliders). Per-channel input/output remap with RGB master + R / G / B tabs:
-  - **Input black / gamma / white**: three rectangular handles below the histogram strip drive Input Black, Gamma (0.01 – 10, log scale), and Input White. Drag the handles directly; numeric readouts update live.
+  - **Input black / gamma / white**: three rectangular handles below the histogram strip drive Input Black, Gamma (0.1 – 10, log scale), and Input White. Drag the handles directly; numeric readouts update live.
   - **Output black / white**: two handles on a gradient bar drive Output Black and Output White.
   - **Histogram visualization**: R, G, and B histograms render layered as distinct shades of gray with additive ("lighter") compositing, so common ranges read brighter; histogram is sampled live from the active layer's GPU pixels and refreshes as paint operations advance. RGB tab shows all three layers; per-channel tabs focus the active channel and mute the others.
   - Master is applied first, then per-channel levels. Compiled to a 256×1 LUT and shares the GPU adjustments path with Curves; identity levels bypass the lookup.
@@ -465,10 +465,10 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 - **Color tag**: optional swatch (red, orange, yellow, green, blue, purple, gray, or none) shown as a vertical bar on the left edge of the layer row. Set via the layer row's right-click context menu; useful for visually grouping/organizing layers in a deep stack.
 
 ### Layer Operations
-- **New Layer** (`⇧⌘N`): appends a blank raster layer above the active one
-- **Duplicate Layer** (`⌘J`): clones the active layer in place
-- **Group Layers** (`⌘G`): wraps the currently-selected layers in a new group
-- **Merge Down** (`⌘E`): composites the active layer into the layer below
+- **New Layer** (`⇧⌘N`, menu-only accelerator — see Single-Key Shortcuts note): appends a blank raster layer above the active one
+- **Duplicate Layer** (`⌘J`, menu-only accelerator): clones the active layer in place
+- **Group Layers** (`⌘G`, menu-only accelerator): wraps the currently-selected layers in a new group
+- **Merge Down** (`⌘E`): composites the active layer into the layer below (the only layer-menu accelerator actually wired to a key handler)
 - **Flatten Image**: composites every visible layer into a single raster layer
 - **Rasterize Layer**: for non-raster layers (text, shape, group with effects), bakes the current visual into pixels in place. For text layers, reads the engine's current x/y/w/h so the rasterized result lands at the visible position even after GPU texture expansion from upstream paint ops.
 - **Rasterize Layer Style**: bakes a layer's effects (drop shadow, glow, stroke, color overlay) into the layer's pixels and clears the effect descriptors
@@ -500,7 +500,7 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 - Paste external image data (PNG/JPEG/WebP from the system clipboard) creates a new raster layer with the bitmap
 
 ### Fill from Menu
-- **Fill…** (Edit menu, `⇧F5`): opens a small modal that fills the current selection (or the entire layer if no selection) on the active layer with foreground color, background color, black, white, 50% gray, or a chosen pattern. Honors the selection mask and layer opacity.
+- **Fill…** (Edit menu, `⇧F5` — menu-only accelerator, not wired to a global key): opens a small modal that fills the current selection (or the entire layer if no selection) on the active layer with foreground color, background color, black, white, 50% gray, or a chosen pattern. Honors the selection mask and layer opacity.
 - **Fill with Pattern…** (Edit menu): opens the Pattern Fill dialog directly (same dialog as the Filter-menu entry — see Filters → Render → Pattern Fill for scale / offset / selection-mask behavior).
 - **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern (used by Fill… and the Pattern Fill filter)
 - **Define Brush…** / **Define Color Brush…** (Edit menu): captures the marquee selection as a new alpha or color brush tip (see Brush → Brush from Selection)
@@ -569,7 +569,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 
 ### UI
 - **Foreground / background color**: with swap and reset
-- **Recent colors**: up to 20
+- **Recent colors**: up to 28
 - **Sidebar collapsed**: on/off
 - **Panel visibility**: togglable per panel (color, layers, etc.)
 - **Mask edit mode**: on/off
@@ -604,6 +604,8 @@ In addition to per-tool toolbox shortcuts (`B`, `E`, `J`, `Y`, `R`, `S`, `H`, `O
 - **`Escape`** — cancels in-progress state: clears unstroked Path-tool anchors first, otherwise clears the active selection and any pending transform; ends text editing with the prior layer state restored.
 - **`Enter`** — when the Path tool is active and ≥ 2 anchors are placed, strokes the in-progress path to pixels.
 - **`Cmd/Ctrl + E`** — merge the active layer down into the layer below.
+
+**Menu accelerator labels that are *display-only* (not wired to global key handling).** Several menu items render a keyboard accelerator next to their label, but — like the `⌘R` ruler accelerator noted under Rulers — the key combo is **not** bound; the action only fires when the menu item itself is clicked. These are: **New** (`⌘N`), **Open…** (`⌘O`), **Save Project** (`⌘S`), **Export…** (`⌥⇧⌘E`), **Quick Export** (`⇧⌘E`), **New Layer** (`⇧⌘N`), **Duplicate Layer** (`⌘J`), **Group Layers** (`⌘G`), and **Fill…** (`⇧F5`). Among the layer/file menu accelerators, only **Merge Down** (`⌘E`) is actually bound to a global key handler.
 
 ### Keyboard Shortcut Customization
 Every tool shortcut (`B`, `E`, `J`, …) and the non-tool single-key actions (`X` swap colors, `D` reset colors, `Q` toggle quick mask) are user-rebindable through the **Keyboard Shortcuts modal**.
@@ -711,18 +713,18 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 ## File I/O & Export
 
 ### Open / Save
-- **New** (`⌘N`): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
-- **Open…** (`⌘O`): open a PNG/JPEG/GIF (first frame)/BMP/WebP/PSD/DNG/RAF/.lopsy from disk (the picker auto-routes by extension via a shared `classifyOpenFile` helper). The same routing backs the pre-document flow — the New Document modal's "Open file" button and drag-and-drop onto a fresh app accept the same formats, including `.lopsy` project files.
+- **New** (`⌘N`, menu-only accelerator): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
+- **Open…** (`⌘O`, menu-only accelerator): open a PNG/JPEG/GIF (first frame)/BMP/WebP/PSD/DNG/RAF/.lopsy from disk (the picker auto-routes by extension via a shared `classifyOpenFile` helper). The same routing backs the pre-document flow — the New Document modal's "Open file" button and drag-and-drop onto a fresh app accept the same formats, including `.lopsy` project files.
 - **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust)
 - **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant)
 
 ### Native Project Format (.lopsy)
-- **Save Project** (`⌘S`): writes the full editor state to a `.lopsy` file and triggers a browser download. Round-trips every layer (raster pixels, text, shape, group), masks, blend modes, opacity, position, clip-to-below, layer effects, color tags, group adjustment node stacks, the active layer, the document's name / size / background, and the workspace's stored vector paths (Paths panel) and canvas guides. (Files saved before paths/guides were serialized simply omit those fields and load with an empty path/guide set.)
+- **Save Project** (`⌘S`, menu-only accelerator): writes the full editor state to a `.lopsy` file and triggers a browser download. Round-trips every layer (raster pixels, text, shape, group), masks, blend modes, opacity, position, clip-to-below, layer effects, color tags, group adjustment node stacks, the active layer, the document's name / size / background, and the workspace's stored vector paths (Paths panel) and canvas guides. (Files saved before paths/guides were serialized simply omit those fields and load with an empty path/guide set.)
 - **Open Project…**: file picker filtered to `.lopsy`. Restores all of the above; pixel data is gzip-compressed inside the file.
 - **Format**: binary container — `LOPSY\0` magic + uint16 version + uint32 manifest-length + UTF-8 JSON manifest + per-layer gzipped RGBA blobs + per-mask raw byte blobs (referenced from the manifest by index). Entirely client-side; no server round-trip.
 
 ### Export Dialog (`⌥⇧⌘E`)
-A modal dialog with a live thumbnail preview (debounced ~200 ms) and inline options:
+Opened from File → Export… The `⌥⇧⌘E` shown next to the menu item is a display-only accelerator (not wired to a global key handler). A modal dialog with a live thumbnail preview (debounced ~200 ms) and inline options:
 
 - **Format**: PNG, JPEG, WebP, BMP
 - **Quality** (JPEG / WebP only): 1 - 100% slider, default 92
@@ -735,7 +737,7 @@ A modal dialog with a live thumbnail preview (debounced ~200 ms) and inline opti
 **Color-managed output**: when the document is in a wide-gamut working space (Display P3), exports carry the correct color metadata so other apps interpret the pixels faithfully — PNG and JPEG are tagged with a colorimetrically-correct Display P3 ICC profile (Bradford-adapted colorants, true piecewise-sRGB transfer curve), PSD embeds the matching working-space profile, and BMP (which cannot carry a profile) is converted P3 → sRGB before encoding. sRGB documents keep their historical sRGB tagging unchanged. WebP is tagged by its own encoder.
 
 ### Quick Export (`⇧⌘E`)
-One-shot PNG export through the GPU compositor — no dialog, no preview, uses the document name as the filename and quality 92.
+One-shot PNG export through the GPU compositor — no dialog, no preview, uses the document name as the filename and quality 92. (The `⇧⌘E` shown in the menu is a display-only accelerator, not wired to a global key handler.)
 
 ### DNG / RAW Import
 Camera RAW files are decoded entirely in Rust before being uploaded to a GPU layer — JS never touches the raw sensor data.
