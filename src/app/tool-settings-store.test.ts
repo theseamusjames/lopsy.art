@@ -863,3 +863,155 @@ describe('per-tool slice: healing (#453)', () => {
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
+
+describe('per-tool slice: brushTexture (#453)', () => {
+  it('exposes brushTexture settings under settings.brushTexture with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setBrushTextureSetting (or through the
+    // setActivePreset round-trip path, which also resets the slice).
+    useToolSettingsStore.getState().setBrushTextureSetting('data', null);
+    useToolSettingsStore.getState().setBrushTextureSetting('blendMode', 'multiply');
+    useToolSettingsStore.getState().setBrushTextureSetting('scale', 100);
+    const { brushTexture } = useToolSettingsStore.getState().settings;
+    expect(brushTexture).toEqual({ data: null, blendMode: 'multiply', scale: 100 });
+  });
+
+  it('setBrushTextureSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.brushTexture;
+    useToolSettingsStore.getState().setBrushTextureSetting('scale', 150);
+    const after = useToolSettingsStore.getState().settings.brushTexture;
+    expect(after.scale).toBe(150);
+    expect(after.data).toBe(before.data);
+    expect(after.blendMode).toBe(before.blendMode);
+  });
+
+  it('setBrushTextureSetting clamps scale into [10, 300]', () => {
+    // The legacy setBrushTextureScale floored at 10, not 0 — a 0 scale
+    // collapses the texture sampler. Preserve that range under the slice.
+    useToolSettingsStore.getState().setBrushTextureSetting('scale', 0);
+    expect(useToolSettingsStore.getState().settings.brushTexture.scale).toBe(10);
+    useToolSettingsStore.getState().setBrushTextureSetting('scale', 9999);
+    expect(useToolSettingsStore.getState().settings.brushTexture.scale).toBe(300);
+  });
+
+  it('setBrushTextureSetting accepts all three blend modes', () => {
+    for (const mode of ['multiply', 'subtract', 'overlay'] as const) {
+      useToolSettingsStore.getState().setBrushTextureSetting('blendMode', mode);
+      expect(useToolSettingsStore.getState().settings.brushTexture.blendMode).toBe(mode);
+    }
+  });
+
+  it('setBrushTextureSetting can clear data back to null', () => {
+    const tex = {
+      id: 'texture-clear-test',
+      name: 'Test',
+      width: 2,
+      height: 2,
+      data: new Uint8ClampedArray(4),
+    };
+    useToolSettingsStore.getState().setBrushTextureSetting('data', tex);
+    expect(useToolSettingsStore.getState().settings.brushTexture.data).toBe(tex);
+    useToolSettingsStore.getState().setBrushTextureSetting('data', null);
+    expect(useToolSettingsStore.getState().settings.brushTexture.data).toBe(null);
+  });
+
+  it('removeBrushTexture clears settings.brushTexture.data when the active texture is removed', () => {
+    // The remove-active-texture invariant predates the slice — without
+    // it, a stale BrushTextureData would survive after its underlying
+    // entry was deleted from the available-textures catalogue, and the
+    // engine sync would still try to upload a now-orphaned reference.
+    const tex = {
+      id: 'texture-remove-test',
+      name: 'Test',
+      width: 2,
+      height: 2,
+      data: new Uint8ClampedArray(4),
+    };
+    useToolSettingsStore.getState().addBrushTexture(tex);
+    useToolSettingsStore.getState().setBrushTextureSetting('data', tex);
+    expect(useToolSettingsStore.getState().settings.brushTexture.data).toBe(tex);
+    useToolSettingsStore.getState().removeBrushTexture(tex.id);
+    expect(useToolSettingsStore.getState().settings.brushTexture.data).toBe(null);
+    expect(useToolSettingsStore.getState().brushTextures.find((t) => t.id === tex.id)).toBeUndefined();
+  });
+
+  it('removeBrushTexture leaves settings.brushTexture.data alone when a different texture is removed', () => {
+    const active = {
+      id: 'texture-active',
+      name: 'Active',
+      width: 2,
+      height: 2,
+      data: new Uint8ClampedArray(4),
+    };
+    const other = {
+      id: 'texture-other',
+      name: 'Other',
+      width: 2,
+      height: 2,
+      data: new Uint8ClampedArray(4),
+    };
+    useToolSettingsStore.getState().addBrushTexture(active);
+    useToolSettingsStore.getState().addBrushTexture(other);
+    useToolSettingsStore.getState().setBrushTextureSetting('data', active);
+    useToolSettingsStore.getState().removeBrushTexture(other.id);
+    expect(useToolSettingsStore.getState().settings.brushTexture.data).toBe(active);
+  });
+
+  it('setActivePreset resets the brushTexture slice to defaults', () => {
+    // The setActivePreset path was the audit's largest single-`set`
+    // cluster of brush flat-field writes that crossed the slice
+    // boundary. Locking this in a test means the round-trip preset
+    // path stays correct after future slice migrations.
+    const tex = {
+      id: 'texture-preset-test',
+      name: 'Test',
+      width: 2,
+      height: 2,
+      data: new Uint8ClampedArray(4),
+    };
+    useToolSettingsStore.getState().setBrushTextureSetting('data', tex);
+    useToolSettingsStore.getState().setBrushTextureSetting('blendMode', 'overlay');
+    useToolSettingsStore.getState().setBrushTextureSetting('scale', 200);
+    const firstPresetId = useToolSettingsStore.getState().presets[0]?.id;
+    if (!firstPresetId) throw new Error('No built-in presets available');
+    useToolSettingsStore.getState().setActivePreset(firstPresetId);
+    expect(useToolSettingsStore.getState().settings.brushTexture).toEqual({
+      data: null,
+      blendMode: 'multiply',
+      scale: 100,
+    });
+  });
+
+  it('setBrushTextureSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setBrushTextureSetting('scale', 175);
+    expect(useToolSettingsStore.getState().settings.brushTexture.scale).toBe(175);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});

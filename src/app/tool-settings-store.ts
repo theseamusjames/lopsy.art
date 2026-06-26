@@ -17,6 +17,7 @@ import { clampMagneticLassoSetting } from '../tools/magnetic-lasso/magnetic-lass
 import { clampTextSetting } from '../tools/text/text-settings';
 import { clampSpraySetting } from '../tools/spray/spray-settings';
 import { clampHealingSetting } from '../tools/healing/healing-settings';
+import { clampBrushTextureSetting } from '../tools/brush/brush-texture-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -117,9 +118,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushSpeedSize: 0,
   brushSpeedSizeInvert: false,
   brushSpeedSensitivity: 'med',
-  brushTextureData: null,
-  brushTextureBlendMode: 'multiply',
-  brushTextureScale: 100,
   brushTextures: BUILTIN_TEXTURES,
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
@@ -132,13 +130,18 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(300, value)) }),
   setBrushSpeedSizeInvert: (invert) => set({ brushSpeedSizeInvert: invert }),
   setBrushSpeedSensitivity: (sensitivity) => set({ brushSpeedSensitivity: sensitivity }),
-  setBrushTextureData: (texture) => set({ brushTextureData: texture }),
-  setBrushTextureBlendMode: (mode) => set({ brushTextureBlendMode: mode }),
-  setBrushTextureScale: (scale) => set({ brushTextureScale: Math.max(10, Math.min(300, scale)) }),
+  setBrushTextureSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      brushTexture: { ...s.settings.brushTexture, [key]: clampBrushTextureSetting(key, value) },
+    },
+  })),
   addBrushTexture: (texture) => set((s) => ({ brushTextures: [...s.brushTextures, texture] })),
   removeBrushTexture: (id) => set((s) => ({
     brushTextures: s.brushTextures.filter((t) => t.id !== id),
-    brushTextureData: s.brushTextureData?.id === id ? null : s.brushTextureData,
+    settings: s.settings.brushTexture.data?.id === id
+      ? { ...s.settings, brushTexture: { ...s.settings.brushTexture, data: null } }
+      : s.settings,
   })),
   setSpraySetting: (key, value) => {
     if (key === 'opacity') warnIfNormalisedOpacity('setSpraySetting(opacity)', value as number);
@@ -366,7 +369,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     const state = get();
     const preset = state.presets.find((p) => p.id === id);
     if (!preset) return;
-    set({
+    set((s) => ({
       activePresetId: id,
       brushSize: preset.size,
       brushHardness: preset.hardness,
@@ -384,11 +387,9 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       brushSpeedSensitivity: preset.speedSensitivity ?? 'med',
       brushFade: preset.fade ?? 0,
       brushTaper: preset.taper ?? 0,
-      brushTextureData: null,
-      brushTextureBlendMode: 'multiply',
-      brushTextureScale: 100,
+      settings: { ...s.settings, brushTexture: { data: null, blendMode: 'multiply', scale: 100 } },
       activeSubBrushes: preset.subBrushes ?? [],
-    });
+    }));
   },
   setTipFromPreset: (id) => {
     const state = get();

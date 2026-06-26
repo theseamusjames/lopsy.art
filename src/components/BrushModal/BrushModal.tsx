@@ -75,13 +75,11 @@ export function BrushModal() {
   const setSpeedSizeInvert = useToolSettingsStore((s) => s.setBrushSpeedSizeInvert);
   const setSpeedSensitivity = useToolSettingsStore((s) => s.setBrushSpeedSensitivity);
 
-  const textureData = useToolSettingsStore((s) => s.brushTextureData);
-  const textureBlendMode = useToolSettingsStore((s) => s.brushTextureBlendMode);
-  const textureScale = useToolSettingsStore((s) => s.brushTextureScale);
+  const textureData = useToolSettingsStore((s) => s.settings.brushTexture.data);
+  const textureBlendMode = useToolSettingsStore((s) => s.settings.brushTexture.blendMode);
+  const textureScale = useToolSettingsStore((s) => s.settings.brushTexture.scale);
   const textures = useToolSettingsStore((s) => s.brushTextures);
-  const setTextureData = useToolSettingsStore((s) => s.setBrushTextureData);
-  const setTextureBlendMode = useToolSettingsStore((s) => s.setBrushTextureBlendMode);
-  const setTextureScale = useToolSettingsStore((s) => s.setBrushTextureScale);
+  const setBrushTextureSetting = useToolSettingsStore((s) => s.setBrushTextureSetting);
   const addBrushTexture = useToolSettingsStore((s) => s.addBrushTexture);
   const removeBrushTexture = useToolSettingsStore((s) => s.removeBrushTexture);
 
@@ -169,16 +167,16 @@ export function BrushModal() {
   const handleTextureChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value;
     if (id === 'none') {
-      setTextureData(null);
+      setBrushTextureSetting('data', null);
     } else {
       const tex = textures.find((t) => t.id === id);
-      if (tex) setTextureData(tex);
+      if (tex) setBrushTextureSetting('data', tex);
     }
-  }, [textures, setTextureData]);
+  }, [textures, setBrushTextureSetting]);
 
   const handleBlendModeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setTextureBlendMode(e.target.value as BrushTextureBlendMode);
-  }, [setTextureBlendMode]);
+    setBrushTextureSetting('blendMode', e.target.value as BrushTextureBlendMode);
+  }, [setBrushTextureSetting]);
 
   const handleTextureImportClick = useCallback(() => {
     textureFileInputRef.current?.click();
@@ -208,14 +206,14 @@ export function BrushModal() {
       const name = file.name.replace(/\.[^.]+$/, '');
       const tex = { id: `texture-custom-${nextTextureId++}`, name, width: img.width, height: img.height, data: grayscale };
       addBrushTexture(tex);
-      setTextureData(tex);
+      setBrushTextureSetting('data', tex);
       URL.revokeObjectURL(url);
       setTextureImporting(false);
     };
     img.onerror = () => { notifyError('Failed to load texture image.'); URL.revokeObjectURL(url); setTextureImporting(false); };
     img.src = url;
     if (textureFileInputRef.current) textureFileInputRef.current.value = '';
-  }, [addBrushTexture, setTextureData]);
+  }, [addBrushTexture, setBrushTextureSetting]);
 
   const handleTextureDelete = useCallback(() => {
     if (textureData && textureData.id.startsWith('texture-custom-')) removeBrushTexture(textureData.id);
@@ -378,7 +376,7 @@ export function BrushModal() {
                   <option value="subtract">Subtract</option>
                   <option value="overlay">Overlay</option>
                 </select>
-                <Slider label="Scale" value={textureScale} min={10} max={300} onChange={setTextureScale} />
+                <Slider label="Scale" value={textureScale} min={10} max={300} onChange={(v) => setBrushTextureSetting('scale', v)} />
               </>
             )}
           </div>
