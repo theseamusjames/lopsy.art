@@ -2,7 +2,7 @@ import type { Color } from '../types';
 import type { GradientStop, GradientType } from '../tools/gradient/gradient';
 import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { DodgeMode } from '../tools/dodge/dodge';
-import type { BrushPreset, BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
+import type { BrushPreset, BrushTipData, BrushTextureData, SubBrush } from '../types/brush';
 import type { WandSettings } from '../tools/wand/wand-settings';
 import type { FillSettings } from '../tools/fill/fill-settings';
 import type { MarqueeSettings } from '../tools/marquee/marquee-settings';
@@ -16,6 +16,7 @@ import type { MagneticLassoSettings } from '../tools/magnetic-lasso/magnetic-las
 import type { TextSettings } from '../tools/text/text-settings';
 import type { SpraySettings } from '../tools/spray/spray-settings';
 import type { HealingSettings } from '../tools/healing/healing-settings';
+import type { BrushTextureSettings } from '../tools/brush/brush-texture-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -72,9 +73,6 @@ export interface ToolSettings {
   brushSpeedSize: number;
   brushSpeedSizeInvert: boolean;
   brushSpeedSensitivity: 'low' | 'med' | 'high';
-  brushTextureData: BrushTextureData | null;
-  brushTextureBlendMode: BrushTextureBlendMode;
-  brushTextureScale: number;
   brushTextures: BrushTextureData[];
   presets: BrushPreset[];
   activePresetId: string | null;
@@ -87,9 +85,7 @@ export interface ToolSettings {
   setBrushSpeedSize: (value: number) => void;
   setBrushSpeedSizeInvert: (invert: boolean) => void;
   setBrushSpeedSensitivity: (sensitivity: 'low' | 'med' | 'high') => void;
-  setBrushTextureData: (texture: BrushTextureData | null) => void;
-  setBrushTextureBlendMode: (mode: BrushTextureBlendMode) => void;
-  setBrushTextureScale: (scale: number) => void;
+  setBrushTextureSetting: <K extends keyof BrushTextureSettings>(key: K, value: BrushTextureSettings[K]) => void;
   addBrushTexture: (texture: BrushTextureData) => void;
   removeBrushTexture: (id: string) => void;
   setSpraySetting: <K extends keyof SpraySettings>(key: K, value: SpraySettings[K]) => void;

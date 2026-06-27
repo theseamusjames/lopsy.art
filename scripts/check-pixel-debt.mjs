@@ -31,6 +31,7 @@ const ALLOWLIST = {
   // paths. These don't ship to users; they only need to round-trip.
   // ──────────────────────────────────────────────────────────────────────
   'src/app/editor-store.test.ts': 5,
+  'src/app/tool-settings-store.test.ts': 5,
   'src/app/interactions/quick-mask-move.test.ts': 2,
   'src/app/store/actions/align-layer.test.ts': 2,
   'src/app/store/actions/crop-canvas.test.ts': 1,
@@ -59,6 +60,7 @@ const ALLOWLIST = {
   'src/test-setup.ts': 1,
   'src/test/canvas-mock.ts': 3,
   'src/tools/brush/brush-from-selection.test.ts': 3,
+  'src/tools/brush/brush-texture-settings.test.ts': 1,
   'src/tools/crop/perspective-crop-interaction.test.ts': 1,
   'src/tools/crop/perspective-crop.test.ts': 3,             // see #441 (delete with prod file)
   'src/tools/fill/fill-interaction.test.ts': 3,
