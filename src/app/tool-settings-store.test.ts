@@ -1015,3 +1015,77 @@ describe('per-tool slice: brushTexture (#453)', () => {
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
+
+describe('per-tool slice: dodge (#453)', () => {
+  it('exposes dodge settings under settings.dodge with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setDodgeSetting.
+    useToolSettingsStore.getState().setDodgeSetting('mode', 'dodge');
+    useToolSettingsStore.getState().setDodgeSetting('exposure', 50);
+    const { dodge } = useToolSettingsStore.getState().settings;
+    expect(dodge).toEqual({ mode: 'dodge', exposure: 50 });
+  });
+
+  it('setDodgeSetting updates one field without disturbing the other', () => {
+    const before = useToolSettingsStore.getState().settings.dodge;
+    useToolSettingsStore.getState().setDodgeSetting('exposure', 75);
+    const after = useToolSettingsStore.getState().settings.dodge;
+    expect(after.exposure).toBe(75);
+    expect(after.mode).toBe(before.mode);
+  });
+
+  it('setDodgeSetting toggles mode between dodge and burn', () => {
+    useToolSettingsStore.getState().setDodgeSetting('mode', 'burn');
+    expect(useToolSettingsStore.getState().settings.dodge.mode).toBe('burn');
+    useToolSettingsStore.getState().setDodgeSetting('mode', 'dodge');
+    expect(useToolSettingsStore.getState().settings.dodge.mode).toBe('dodge');
+  });
+
+  it('setDodgeSetting clamps exposure into [1, 100]', () => {
+    // The legacy setDodgeExposure clamped to [1, 100], not [0, 100] —
+    // a 0 here would silently produce a no-op dodge stroke, the same
+    // percent-vs-normalised footgun guarded by the warn-once dedupe.
+    // Preserve that range under the slice.
+    useToolSettingsStore.getState().setDodgeSetting('exposure', -10);
+    expect(useToolSettingsStore.getState().settings.dodge.exposure).toBe(1);
+    useToolSettingsStore.getState().setDodgeSetting('exposure', 0);
+    expect(useToolSettingsStore.getState().settings.dodge.exposure).toBe(1);
+    useToolSettingsStore.getState().setDodgeSetting('exposure', 200);
+    expect(useToolSettingsStore.getState().settings.dodge.exposure).toBe(100);
+  });
+
+  it('setDodgeSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushTexture = useToolSettingsStore.getState().settings.brushTexture;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setDodgeSetting('exposure', 42);
+    expect(useToolSettingsStore.getState().settings.dodge.exposure).toBe(42);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+    expect(useToolSettingsStore.getState().settings.brushTexture).toBe(beforeBrushTexture);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});

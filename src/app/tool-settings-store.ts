@@ -18,6 +18,7 @@ import { clampTextSetting } from '../tools/text/text-settings';
 import { clampSpraySetting } from '../tools/spray/spray-settings';
 import { clampHealingSetting } from '../tools/healing/healing-settings';
 import { clampBrushTextureSetting } from '../tools/brush/brush-texture-settings';
+import { clampDodgeSetting } from '../tools/dodge/dodge-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -63,8 +64,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
   ],
   gradientReverse: false,
-  dodgeExposure: 50,
-  dodgeMode: 'dodge',
   quickSelectSize: 20,
   quickSelectTolerance: 32,
   quickSelectEdgeStrength: 50,
@@ -258,8 +257,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       path: { ...s.settings.path, [key]: clampPathSetting(key, value) },
     },
   })),
-  setDodgeExposure: (exposure) => set({ dodgeExposure: Math.max(1, Math.min(100, exposure)) }),
-  setDodgeMode: (mode) => set({ dodgeMode: mode }),
+  setDodgeSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      dodge: { ...s.settings.dodge, [key]: clampDodgeSetting(key, value) },
+    },
+  })),
   setSpongeSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,
