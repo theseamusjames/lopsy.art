@@ -6,11 +6,10 @@ import type { DodgeMode } from '../../../tools/dodge/dodge';
 import styles from '../OptionsBar.module.css';
 
 export function DodgeOptions() {
-  const dodgeExposure = useToolSettingsStore((s) => s.dodgeExposure);
-  const dodgeMode = useToolSettingsStore((s) => s.dodgeMode);
+  const dodgeExposure = useToolSettingsStore((s) => s.settings.dodge.exposure);
+  const dodgeMode = useToolSettingsStore((s) => s.settings.dodge.mode);
   const brushSize = useToolSettingsStore((s) => s.brushSize);
-  const setDodgeExposure = useToolSettingsStore((s) => s.setDodgeExposure);
-  const setDodgeMode = useToolSettingsStore((s) => s.setDodgeMode);
+  const setDodgeSetting = useToolSettingsStore((s) => s.setDodgeSetting);
   const setBrushSize = useToolSettingsStore((s) => s.setBrushSize);
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
@@ -22,13 +21,13 @@ export function DodgeOptions() {
       <select
         className={styles.select}
         value={dodgeMode}
-        onChange={(e) => setDodgeMode(e.target.value as DodgeMode)}
+        onChange={(e) => setDodgeSetting('mode', e.target.value as DodgeMode)}
         aria-labelledby="dodge-mode-label"
       >
         <option value="dodge">Dodge</option>
         <option value="burn">Burn</option>
       </select>
-      <Slider label="Exposure" value={dodgeExposure} min={1} max={100} onChange={setDodgeExposure} />
+      <Slider label="Exposure" value={dodgeExposure} min={1} max={100} onChange={(v) => setDodgeSetting('exposure', v)} />
       <Slider label="Size" value={brushSize} min={1} max={sizeMax} sliderMax={300} onChange={setBrushSize} />
     </>
   );

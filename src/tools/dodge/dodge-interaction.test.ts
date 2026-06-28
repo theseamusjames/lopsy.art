@@ -31,8 +31,9 @@ vi.mock('../../app/editor-store', () => ({
 }));
 
 const ts = {
-  dodgeMode: 'dodge' as 'dodge' | 'burn',
-  dodgeExposure: 50,
+  settings: {
+    dodge: { mode: 'dodge' as 'dodge' | 'burn', exposure: 50 },
+  },
   brushSize: 20,
 };
 vi.mock('../../app/tool-settings-store', () => ({
@@ -88,8 +89,8 @@ beforeEach(() => {
   clearPendingDodgeStroke.mockClear();
   editorState.pushHistory.mockClear();
   editorState.notifyRender.mockClear();
-  ts.dodgeMode = 'dodge';
-  ts.dodgeExposure = 50;
+  ts.settings.dodge.mode = 'dodge';
+  ts.settings.dodge.exposure = 50;
   ts.brushSize = 20;
 });
 
@@ -109,7 +110,7 @@ describe('dodge down', () => {
   });
 
   it('burn mode uses mode 1 and the Burn history label', () => {
-    ts.dodgeMode = 'burn';
+    ts.settings.dodge.mode = 'burn';
     handleDodgeDown(makeCtx());
     expect(editorState.pushHistory).toHaveBeenCalledWith('Burn');
     expect(beginDodgeBurnStroke).toHaveBeenCalledWith(expect.anything(), 'layer-1', 1);
@@ -157,7 +158,7 @@ describe('dodge move', () => {
   });
 
   it('passes the current exposure setting on every move', () => {
-    ts.dodgeExposure = 80;
+    ts.settings.dodge.exposure = 80;
     handleDodgeMove(makeState({ lastPoint: { x: 0, y: 0 } }), { x: 10, y: 0 });
     expect(applyDodgeBurnDabBatch.mock.calls[0]![5]).toBeCloseTo(0.8);
   });
