@@ -38,7 +38,7 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
   const hardnessJitter = toolSettings.brushHardnessJitter / 100;
   const aJ = toolSettings.brushAngleJitter / 100;
   const oJ = toolSettings.brushOpacityJitter / 100;
-  const speedSize = toolSettings.brushSpeedSize / 100;
+  const speedSize = toolSettings.settings.brushSpeed.size / 100;
   const color = state.strokeColor ?? useToolSettingsStore.getState().foregroundColor;
   const r = color.r / 255;
   const g = color.g / 255;
@@ -57,15 +57,16 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
     const maxSpeed = 5;
     const normalizedSpeed = Math.min(rawSpeed / maxSpeed, 1);
 
-    const maWindow = toolSettings.brushSpeedSensitivity === 'high' ? 2
-      : toolSettings.brushSpeedSensitivity === 'low' ? 6 : 3;
+    const sensitivity = toolSettings.settings.brushSpeed.sensitivity;
+    const maWindow = sensitivity === 'high' ? 2
+      : sensitivity === 'low' ? 6 : 3;
     if (!state.speedHistory) state.speedHistory = [];
     state.speedHistory.push(normalizedSpeed);
     if (state.speedHistory.length > maWindow) state.speedHistory.shift();
 
     const avgSpeed = state.speedHistory.reduce((a, b) => a + b, 0) / state.speedHistory.length;
 
-    const invert = toolSettings.brushSpeedSizeInvert;
+    const invert = toolSettings.settings.brushSpeed.sizeInvert;
     const targetScale = invert
       ? 1 + speedSize * avgSpeed
       : 1 - speedSize * avgSpeed;

@@ -29,6 +29,7 @@ import {
 } from '../tools/gradient/gradient-settings';
 import { clampCropSetting } from '../tools/crop/crop-settings';
 import { clampBrushSetting } from '../tools/brush/brush-settings';
+import { clampBrushSpeedSetting } from '../tools/brush/brush-speed-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -98,9 +99,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   brushAngleJitter: 0,
   brushOpacityJitter: 0,
   brushHardnessJitter: 0,
-  brushSpeedSize: 0,
-  brushSpeedSizeInvert: false,
-  brushSpeedSensitivity: 'med',
   brushTextures: BUILTIN_TEXTURES,
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
@@ -110,9 +108,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setBrushAngleJitter: (jitter) => set({ brushAngleJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushOpacityJitter: (jitter) => set({ brushOpacityJitter: Math.max(0, Math.min(100, jitter)) }),
   setBrushHardnessJitter: (jitter) => set({ brushHardnessJitter: Math.max(0, Math.min(100, jitter)) }),
-  setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(300, value)) }),
-  setBrushSpeedSizeInvert: (invert) => set({ brushSpeedSizeInvert: invert }),
-  setBrushSpeedSensitivity: (sensitivity) => set({ brushSpeedSensitivity: sensitivity }),
+  setBrushSpeedSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      brushSpeed: { ...s.settings.brushSpeed, [key]: clampBrushSpeedSetting(key, value) },
+    },
+  })),
   setBrushTextureSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,
@@ -335,9 +336,9 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       hardnessJitter: s.brushHardnessJitter,
       angleJitter: s.brushAngleJitter,
       opacityJitter: s.brushOpacityJitter,
-      speedSize: s.brushSpeedSize,
-      speedSizeInvert: s.brushSpeedSizeInvert,
-      speedSensitivity: s.brushSpeedSensitivity,
+      speedSize: s.settings.brushSpeed.size,
+      speedSizeInvert: s.settings.brushSpeed.sizeInvert,
+      speedSensitivity: s.settings.brushSpeed.sensitivity,
       fade: b.fade,
       taper: b.taper,
       subBrushes: s.activeSubBrushes.length > 0 ? s.activeSubBrushes : undefined,
@@ -372,15 +373,17 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
           taper: preset.taper ?? 0,
         },
         brushTexture: { data: null, blendMode: 'multiply', scale: 100 },
+        brushSpeed: {
+          size: clampBrushSpeedSetting('size', preset.speedSize ?? 0),
+          sizeInvert: preset.speedSizeInvert ?? false,
+          sensitivity: clampBrushSpeedSetting('sensitivity', preset.speedSensitivity ?? 'med'),
+        },
       },
       activeBrushTip: preset.tip,
       brushSizeJitter: preset.sizeJitter ?? 0,
       brushHardnessJitter: preset.hardnessJitter ?? 0,
       brushAngleJitter: preset.angleJitter ?? 0,
       brushOpacityJitter: preset.opacityJitter ?? 0,
-      brushSpeedSize: preset.speedSize ?? 0,
-      brushSpeedSizeInvert: preset.speedSizeInvert ?? false,
-      brushSpeedSensitivity: preset.speedSensitivity ?? 'med',
       activeSubBrushes: preset.subBrushes ?? [],
     }));
   },

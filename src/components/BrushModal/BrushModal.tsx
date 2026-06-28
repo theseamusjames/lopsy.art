@@ -65,16 +65,14 @@ export function BrushModal() {
   const hardnessJitter = useToolSettingsStore((s) => s.brushHardnessJitter);
   const angleJitter = useToolSettingsStore((s) => s.brushAngleJitter);
   const opacityJitter = useToolSettingsStore((s) => s.brushOpacityJitter);
-  const speedSize = useToolSettingsStore((s) => s.brushSpeedSize);
-  const speedSizeInvert = useToolSettingsStore((s) => s.brushSpeedSizeInvert);
-  const speedSensitivity = useToolSettingsStore((s) => s.brushSpeedSensitivity);
+  const speedSize = useToolSettingsStore((s) => s.settings.brushSpeed.size);
+  const speedSizeInvert = useToolSettingsStore((s) => s.settings.brushSpeed.sizeInvert);
+  const speedSensitivity = useToolSettingsStore((s) => s.settings.brushSpeed.sensitivity);
   const setSizeJitter = useToolSettingsStore((s) => s.setBrushSizeJitter);
   const setHardnessJitter = useToolSettingsStore((s) => s.setBrushHardnessJitter);
   const setAngleJitter = useToolSettingsStore((s) => s.setBrushAngleJitter);
   const setOpacityJitter = useToolSettingsStore((s) => s.setBrushOpacityJitter);
-  const setSpeedSize = useToolSettingsStore((s) => s.setBrushSpeedSize);
-  const setSpeedSizeInvert = useToolSettingsStore((s) => s.setBrushSpeedSizeInvert);
-  const setSpeedSensitivity = useToolSettingsStore((s) => s.setBrushSpeedSensitivity);
+  const setBrushSpeedSetting = useToolSettingsStore((s) => s.setBrushSpeedSetting);
 
   const textureData = useToolSettingsStore((s) => s.settings.brushTexture.data);
   const textureBlendMode = useToolSettingsStore((s) => s.settings.brushTexture.blendMode);
@@ -294,19 +292,19 @@ export function BrushModal() {
             <Slider label="Hardness Jitter" value={hardnessJitter} min={0} max={100} onChange={setHardnessJitter} />
             <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
             <Slider label="Opacity Jitter" value={opacityJitter} min={0} max={100} onChange={setOpacityJitter} />
-            <Slider label="Speed Size" value={speedSize} min={0} max={speedSizeInvert ? 300 : 100} onChange={setSpeedSize} />
+            <Slider label="Speed Size" value={speedSize} min={0} max={speedSizeInvert ? 300 : 100} onChange={(v) => setBrushSpeedSetting('size', v)} />
             <div className={styles.speedToggleRow}>
               <span className={styles.speedToggleLabel}>Faster is</span>
               <div className={styles.speedToggleGroup}>
                 <button
                   className={`${styles.speedToggle}${!speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
-                  onClick={() => { setSpeedSizeInvert(false); if (speedSize > 100) setSpeedSize(100); }}
+                  onClick={() => { setBrushSpeedSetting('sizeInvert', false); if (speedSize > 100) setBrushSpeedSetting('size', 100); }}
                 >
                   Thinner
                 </button>
                 <button
                   className={`${styles.speedToggle}${speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
-                  onClick={() => setSpeedSizeInvert(true)}
+                  onClick={() => setBrushSpeedSetting('sizeInvert', true)}
                 >
                   Wider
                 </button>
@@ -315,19 +313,19 @@ export function BrushModal() {
               <div className={styles.speedToggleGroup}>
                 <button
                   className={`${styles.speedToggle}${speedSensitivity === 'low' ? ` ${styles.speedToggleActive}` : ''}`}
-                  onClick={() => setSpeedSensitivity('low')}
+                  onClick={() => setBrushSpeedSetting('sensitivity', 'low')}
                 >
                   Low
                 </button>
                 <button
                   className={`${styles.speedToggle}${speedSensitivity === 'med' ? ` ${styles.speedToggleActive}` : ''}`}
-                  onClick={() => setSpeedSensitivity('med')}
+                  onClick={() => setBrushSpeedSetting('sensitivity', 'med')}
                 >
                   Med
                 </button>
                 <button
                   className={`${styles.speedToggle}${speedSensitivity === 'high' ? ` ${styles.speedToggleActive}` : ''}`}
-                  onClick={() => setSpeedSensitivity('high')}
+                  onClick={() => setBrushSpeedSetting('sensitivity', 'high')}
                 >
                   High
                 </button>

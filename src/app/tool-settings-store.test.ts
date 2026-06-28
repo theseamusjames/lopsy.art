@@ -1662,3 +1662,102 @@ describe('per-tool slice: crop (#453)', () => {
     expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
+
+describe('per-tool slice: brushSpeed (#453)', () => {
+  // First sub-slice carved out of the flat `brushSpeed*` brush fields.
+  // Same shape as the per-tool slices above: read via
+  // `settings.brushSpeed.<field>`, write via `setBrushSpeedSetting`.
+  // The remaining brush sub-slices (jitter, texture, tip/presets/
+  // sub-brushes) still live flat on the store and land in follow-up
+  // PRs.
+  it('exposes brushSpeed settings under settings.brushSpeed with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setBrushSpeedSetting or setActivePreset.
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', 0);
+    useToolSettingsStore.getState().setBrushSpeedSetting('sizeInvert', false);
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'med');
+    const { brushSpeed } = useToolSettingsStore.getState().settings;
+    expect(brushSpeed).toEqual({ size: 0, sizeInvert: false, sensitivity: 'med' });
+  });
+
+  it('setBrushSpeedSetting updates one field without disturbing the others', () => {
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', 50);
+    useToolSettingsStore.getState().setBrushSpeedSetting('sizeInvert', true);
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'high');
+    const before = useToolSettingsStore.getState().settings.brushSpeed;
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', 120);
+    const after = useToolSettingsStore.getState().settings.brushSpeed;
+    expect(after.size).toBe(120);
+    expect(after.sizeInvert).toBe(before.sizeInvert);
+    expect(after.sensitivity).toBe(before.sensitivity);
+  });
+
+  it('setBrushSpeedSetting clamps size into [0, 300]', () => {
+    // The UI surfaces 0–100 with sizeInvert=false and 0–300 with
+    // sizeInvert=true. The store-level clamp is the looser bound so
+    // flipping the invert toggle never truncates the slider value.
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', -10);
+    expect(useToolSettingsStore.getState().settings.brushSpeed.size).toBe(0);
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', 9999);
+    expect(useToolSettingsStore.getState().settings.brushSpeed.size).toBe(300);
+  });
+
+  it('setBrushSpeedSetting accepts the three documented sensitivity values', () => {
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'low');
+    expect(useToolSettingsStore.getState().settings.brushSpeed.sensitivity).toBe('low');
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'med');
+    expect(useToolSettingsStore.getState().settings.brushSpeed.sensitivity).toBe('med');
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'high');
+    expect(useToolSettingsStore.getState().settings.brushSpeed.sensitivity).toBe('high');
+  });
+
+  it('setBrushSpeedSetting collapses unknown sensitivity strings to "med"', () => {
+    // brush-stroke.ts maps sensitivity to a moving-average window
+    // (low → 6, med → 3, high → 2). An unrecognised enum would leave
+    // the ternary on the `med` branch silently, so the slice collapses
+    // unknown strings to 'med' explicitly — same enum-guard policy as
+    // shape/quickSelect/gradient.
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'high');
+    const setter = useToolSettingsStore.getState().setBrushSpeedSetting as (
+      key: 'sensitivity',
+      value: string,
+    ) => void;
+    setter('sensitivity', 'medium');
+    expect(useToolSettingsStore.getState().settings.brushSpeed.sensitivity).toBe('med');
+    setter('sensitivity', 'turbo');
+    expect(useToolSettingsStore.getState().settings.brushSpeed.sensitivity).toBe('med');
+  });
+
+  it('setBrushSpeedSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', 42);
+    expect(useToolSettingsStore.getState().settings.brushSpeed.size).toBe(42);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
+  });
+});

@@ -21,6 +21,7 @@ import type { QuickSelectSettings } from '../tools/quick-select/quick-select-set
 import type { ShapeSettings } from '../tools/shape/shape-settings';
 import type { GradientSettings } from '../tools/gradient/gradient-settings';
 import type { CropSettings } from '../tools/crop/crop-settings';
+import type { BrushSpeedSettings } from '../tools/brush/brush-speed-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -49,9 +50,6 @@ export interface ToolSettings {
   brushAngleJitter: number;
   brushOpacityJitter: number;
   brushHardnessJitter: number;
-  brushSpeedSize: number;
-  brushSpeedSizeInvert: boolean;
-  brushSpeedSensitivity: 'low' | 'med' | 'high';
   brushTextures: BrushTextureData[];
   presets: BrushPreset[];
   activePresetId: string | null;
@@ -61,9 +59,7 @@ export interface ToolSettings {
   setBrushAngleJitter: (jitter: number) => void;
   setBrushOpacityJitter: (jitter: number) => void;
   setBrushHardnessJitter: (jitter: number) => void;
-  setBrushSpeedSize: (value: number) => void;
-  setBrushSpeedSizeInvert: (invert: boolean) => void;
-  setBrushSpeedSensitivity: (sensitivity: 'low' | 'med' | 'high') => void;
+  setBrushSpeedSetting: <K extends keyof BrushSpeedSettings>(key: K, value: BrushSpeedSettings[K]) => void;
   setBrushTextureSetting: <K extends keyof BrushTextureSettings>(key: K, value: BrushTextureSettings[K]) => void;
   addBrushTexture: (texture: BrushTextureData) => void;
   removeBrushTexture: (id: string) => void;
