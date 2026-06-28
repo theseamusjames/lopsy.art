@@ -127,6 +127,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Corner radius**: 0 - 200 px
 - **Aspect ratio lock**: width/height ratio constraint
 - **Cmd/Meta+drag**: holding meta while dragging temporarily forces a 1:1 aspect ratio (perfect square / circle / regular polygon) regardless of the persistent aspect-ratio toggle. Releasing meta returns to the unconstrained or persistently-locked behavior.
+- **Click without dragging** (pixel output only): a click that doesn't drag past the threshold opens the **Shape Size modal** — type an exact Width and Height (1 - 16384 px) and the shape is created at the click point with those dimensions (Photoshop-style click-to-create). `Enter` confirms, `Escape` (or clicking the backdrop) cancels. In **path** output mode a no-drag click is ignored instead of opening the modal.
 
 ### Path / Pen Tool
 - **Stroke width**: 1 - 50 px
