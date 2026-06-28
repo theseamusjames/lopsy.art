@@ -1,5 +1,5 @@
 import type { Color } from '../types';
-import type { GradientStop, GradientType } from '../tools/gradient/gradient';
+import type { GradientStop } from '../tools/gradient/gradient';
 import type { BrushPreset, BrushTipData, BrushTextureData, SubBrush } from '../types/brush';
 import type { WandSettings } from '../tools/wand/wand-settings';
 import type { FillSettings } from '../tools/fill/fill-settings';
@@ -18,6 +18,7 @@ import type { BrushTextureSettings } from '../tools/brush/brush-texture-settings
 import type { DodgeSettings } from '../tools/dodge/dodge-settings';
 import type { QuickSelectSettings } from '../tools/quick-select/quick-select-settings';
 import type { ShapeSettings } from '../tools/shape/shape-settings';
+import type { GradientSettings } from '../tools/gradient/gradient-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -38,9 +39,6 @@ export interface ToolSettings {
   aspectRatioH: number;
   aspectRatioLocked: boolean;
   cropMode: 'normal' | 'perspective';
-  gradientType: GradientType;
-  gradientStops: readonly GradientStop[];
-  gradientReverse: boolean;
   brushSpacing: number;
   brushScatter: number;
   brushAngle: number;
@@ -105,9 +103,7 @@ export interface ToolSettings {
   setAspectRatioH: (h: number) => void;
   setAspectRatioLocked: (locked: boolean) => void;
   setCropMode: (mode: 'normal' | 'perspective') => void;
-  setGradientType: (type: 'linear' | 'radial') => void;
-  setGradientStops: (stops: readonly GradientStop[]) => void;
-  setGradientReverse: (reverse: boolean) => void;
+  setGradientSetting: <K extends keyof GradientSettings>(key: K, value: GradientSettings[K]) => void;
   addGradientStop: (position: number, color: Color) => void;
   removeGradientStop: (index: number) => void;
   updateGradientStop: (index: number, stop: Partial<GradientStop>) => void;

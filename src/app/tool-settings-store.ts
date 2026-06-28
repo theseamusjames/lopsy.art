@@ -21,6 +21,12 @@ import { clampBrushTextureSetting } from '../tools/brush/brush-texture-settings'
 import { clampDodgeSetting } from '../tools/dodge/dodge-settings';
 import { clampQuickSelectSetting } from '../tools/quick-select/quick-select-settings';
 import { clampShapeSetting } from '../tools/shape/shape-settings';
+import {
+  appendGradientStop,
+  clampGradientSetting,
+  removeGradientStopAt,
+  updateGradientStopAt,
+} from '../tools/gradient/gradient-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -53,12 +59,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   aspectRatioH: 1,
   aspectRatioLocked: false,
   cropMode: 'normal' as const,
-  gradientType: 'linear',
-  gradientStops: [
-    { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
-    { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
-  ],
-  gradientReverse: false,
   brushSpacing: 0,
   brushScatter: 0,
   brushAngle: 0,
@@ -185,36 +185,39 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setAspectRatioH: (h) => set({ aspectRatioH: Math.max(0.01, h) }),
   setAspectRatioLocked: (locked) => set({ aspectRatioLocked: locked }),
   setCropMode: (mode) => set({ cropMode: mode }),
-  setGradientType: (type) => set({ gradientType: type }),
-  setGradientStops: (stops) => {
-    const clamped = stops.length < 2
-      ? [...stops, ...Array.from({ length: 2 - stops.length }, (_, i) => ({ position: i, color: { r: 0, g: 0, b: 0, a: 1 } }))]
-      : stops.slice(0, 16);
-    const sorted = [...clamped].sort((a, b) => a.position - b.position);
-    set({ gradientStops: sorted });
-  },
-  setGradientReverse: (reverse) => set({ gradientReverse: reverse }),
-  addGradientStop: (position, color) => set((state) => {
-    if (state.gradientStops.length >= 16) return state;
-    const newStops = [...state.gradientStops, { position: Math.max(0, Math.min(1, position)), color }];
-    newStops.sort((a, b) => a.position - b.position);
-    return { gradientStops: newStops };
-  }),
-  removeGradientStop: (index) => set((state) => {
-    if (state.gradientStops.length <= 2) return state;
-    const newStops = state.gradientStops.filter((_, i) => i !== index);
-    return { gradientStops: newStops };
-  }),
-  updateGradientStop: (index, partial) => set((state) => {
-    const newStops = state.gradientStops.map((stop, i) => {
-      if (i !== index) return stop;
-      return {
-        position: partial.position !== undefined ? Math.max(0, Math.min(1, partial.position)) : stop.position,
-        color: partial.color ?? stop.color,
-      };
-    });
-    return { gradientStops: [...newStops].sort((a, b) => a.position - b.position) };
-  }),
+  setGradientSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      gradient: { ...s.settings.gradient, [key]: clampGradientSetting(key, value) },
+    },
+  })),
+  addGradientStop: (position, color) => set((s) => ({
+    settings: {
+      ...s.settings,
+      gradient: {
+        ...s.settings.gradient,
+        stops: appendGradientStop(s.settings.gradient.stops, position, color),
+      },
+    },
+  })),
+  removeGradientStop: (index) => set((s) => ({
+    settings: {
+      ...s.settings,
+      gradient: {
+        ...s.settings.gradient,
+        stops: removeGradientStopAt(s.settings.gradient.stops, index),
+      },
+    },
+  })),
+  updateGradientStop: (index, partial) => set((s) => ({
+    settings: {
+      ...s.settings,
+      gradient: {
+        ...s.settings.gradient,
+        stops: updateGradientStopAt(s.settings.gradient.stops, index, partial),
+      },
+    },
+  })),
   setSymmetryHorizontal: (enabled) => set({ symmetryHorizontal: enabled }),
   setSymmetryVertical: (enabled) => set({ symmetryVertical: enabled }),
   setSymmetryRadialSegments: (segments) => set({ symmetryRadialSegments: Math.max(0, Math.min(32, Math.round(segments))) }),

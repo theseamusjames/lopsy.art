@@ -32,6 +32,8 @@ import type { QuickSelectSettings } from '../tools/quick-select/quick-select-set
 import { DEFAULT_QUICK_SELECT_SETTINGS } from '../tools/quick-select/quick-select-settings';
 import type { ShapeSettings } from '../tools/shape/shape-settings';
 import { DEFAULT_SHAPE_SETTINGS } from '../tools/shape/shape-settings';
+import type { GradientSettings } from '../tools/gradient/gradient-settings';
+import { DEFAULT_GRADIENT_SETTINGS } from '../tools/gradient/gradient-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -60,6 +62,7 @@ export interface ToolSettingsSlices {
   dodge: DodgeSettings;
   quickSelect: QuickSelectSettings;
   shape: ShapeSettings;
+  gradient: GradientSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -80,4 +83,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   dodge: DEFAULT_DODGE_SETTINGS,
   quickSelect: DEFAULT_QUICK_SELECT_SETTINGS,
   shape: DEFAULT_SHAPE_SETTINGS,
+  gradient: DEFAULT_GRADIENT_SETTINGS,
 };

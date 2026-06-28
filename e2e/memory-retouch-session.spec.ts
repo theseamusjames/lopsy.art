@@ -320,13 +320,12 @@ test.describe('Memory: retouching session', () => {
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setGradientType: (t: string) => void;
-          setGradientStops: (s: Array<{ position: number; color: { r: number; g: number; b: number; a: number } }>) => void;
+          setGradientSetting: (key: 'type' | 'stops', value: unknown) => void;
         };
       };
       const s = store.getState();
-      s.setGradientType('linear');
-      s.setGradientStops([
+      s.setGradientSetting('type', 'linear');
+      s.setGradientSetting('stops', [
         { position: 0, color: { r: 255, g: 200, b: 50, a: 1 } },
         { position: 0.5, color: { r: 200, g: 100, b: 150, a: 0.5 } },
         { position: 1, color: { r: 50, g: 100, b: 200, a: 0 } },

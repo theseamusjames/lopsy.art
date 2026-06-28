@@ -3,16 +3,7 @@ import {
   interpolateGradient,
   computeLinearGradientT,
   computeRadialGradientT,
-  defaultGradientSettings,
 } from './gradient';
-
-describe('defaultGradientSettings', () => {
-  it('returns black to white linear gradient', () => {
-    const s = defaultGradientSettings();
-    expect(s.type).toBe('linear');
-    expect(s.stops.length).toBe(2);
-  });
-});
 
 describe('interpolateGradient', () => {
   const stops = [

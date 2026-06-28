@@ -81,9 +81,9 @@ async function setGradientStops(
   await page.evaluate(
     (stops) => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setGradientStops: (s: typeof stops) => void };
+        getState: () => { setGradientSetting: (k: 'stops', v: typeof stops) => void };
       };
-      store.getState().setGradientStops(stops);
+      store.getState().setGradientSetting('stops', stops);
     },
     stops,
   );
@@ -93,9 +93,9 @@ async function setGradientType(page: Page, type: 'linear' | 'radial') {
   await page.evaluate(
     (t) => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setGradientType: (t: string) => void };
+        getState: () => { setGradientSetting: (k: 'type', v: string) => void };
       };
-      store.getState().setGradientType(t);
+      store.getState().setGradientSetting('type', t);
     },
     type,
   );
@@ -294,9 +294,9 @@ test.describe('Multi-step gradient', () => {
 
     const stopCount = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { gradientStops: Array<{ position: number }> };
+        getState: () => { settings: { gradient: { stops: Array<{ position: number }> } } };
       };
-      return store.getState().gradientStops.length;
+      return store.getState().settings.gradient.stops.length;
     });
 
     expect(stopCount).toBe(3);
