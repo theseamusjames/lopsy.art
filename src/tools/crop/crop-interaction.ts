@@ -11,7 +11,7 @@ import {
 } from './perspective-crop-interaction';
 
 export function handleCropDown(ctx: InteractionContext): InteractionState {
-  if (useToolSettingsStore.getState().cropMode === 'perspective') {
+  if (useToolSettingsStore.getState().settings.crop.mode === 'perspective') {
     return handlePerspectiveCropDown(ctx);
   }
 
@@ -30,7 +30,7 @@ export function handleCropDown(ctx: InteractionContext): InteractionState {
 }
 
 export function handleCropMove(state: InteractionState, canvasPos: Point): void {
-  if (useToolSettingsStore.getState().cropMode === 'perspective') {
+  if (useToolSettingsStore.getState().settings.crop.mode === 'perspective') {
     handlePerspectiveCropMove(state, canvasPos);
     return;
   }
@@ -61,7 +61,7 @@ export function handleCropMove(state: InteractionState, canvasPos: Point): void 
 export function handleCropUp(state: InteractionState): void {
   if (state.tool !== 'crop') return;
 
-  if (useToolSettingsStore.getState().cropMode === 'perspective') {
+  if (useToolSettingsStore.getState().settings.crop.mode === 'perspective') {
     handlePerspectiveCropUp(state);
     return;
   }

@@ -27,6 +27,7 @@ import {
   removeGradientStopAt,
   updateGradientStopAt,
 } from '../tools/gradient/gradient-settings';
+import { clampCropSetting } from '../tools/crop/crop-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -58,7 +59,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   aspectRatioW: 1,
   aspectRatioH: 1,
   aspectRatioLocked: false,
-  cropMode: 'normal' as const,
   brushSpacing: 0,
   brushScatter: 0,
   brushAngle: 0,
@@ -184,7 +184,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   setAspectRatioW: (w) => set({ aspectRatioW: Math.max(0.01, w) }),
   setAspectRatioH: (h) => set({ aspectRatioH: Math.max(0.01, h) }),
   setAspectRatioLocked: (locked) => set({ aspectRatioLocked: locked }),
-  setCropMode: (mode) => set({ cropMode: mode }),
+  setCropSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      crop: { ...s.settings.crop, [key]: clampCropSetting(key, value) },
+    },
+  })),
   setGradientSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,

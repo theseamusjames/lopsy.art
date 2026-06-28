@@ -34,6 +34,8 @@ import type { ShapeSettings } from '../tools/shape/shape-settings';
 import { DEFAULT_SHAPE_SETTINGS } from '../tools/shape/shape-settings';
 import type { GradientSettings } from '../tools/gradient/gradient-settings';
 import { DEFAULT_GRADIENT_SETTINGS } from '../tools/gradient/gradient-settings';
+import type { CropSettings } from '../tools/crop/crop-settings';
+import { DEFAULT_CROP_SETTINGS } from '../tools/crop/crop-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -63,6 +65,7 @@ export interface ToolSettingsSlices {
   quickSelect: QuickSelectSettings;
   shape: ShapeSettings;
   gradient: GradientSettings;
+  crop: CropSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -84,4 +87,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   quickSelect: DEFAULT_QUICK_SELECT_SETTINGS,
   shape: DEFAULT_SHAPE_SETTINGS,
   gradient: DEFAULT_GRADIENT_SETTINGS,
+  crop: DEFAULT_CROP_SETTINGS,
 };

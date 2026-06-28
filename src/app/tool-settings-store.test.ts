@@ -1439,3 +1439,70 @@ describe('per-tool slice: gradient (#453)', () => {
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
+
+describe('per-tool slice: crop (#453)', () => {
+  it('exposes crop settings under settings.crop with the legacy default', () => {
+    // Reset to the legacy default — prior tests in this file may have
+    // mutated the slice through setCropSetting.
+    useToolSettingsStore.getState().setCropSetting('mode', 'normal');
+    const { crop } = useToolSettingsStore.getState().settings;
+    expect(crop).toEqual({ mode: 'normal' });
+  });
+
+  it('setCropSetting toggles mode between normal and perspective', () => {
+    useToolSettingsStore.getState().setCropSetting('mode', 'perspective');
+    expect(useToolSettingsStore.getState().settings.crop.mode).toBe('perspective');
+    useToolSettingsStore.getState().setCropSetting('mode', 'normal');
+    expect(useToolSettingsStore.getState().settings.crop.mode).toBe('normal');
+  });
+
+  it('setCropSetting rejects unknown mode values and falls back to "normal"', () => {
+    useToolSettingsStore.getState().setCropSetting('mode', 'perspective');
+    // The setter is typed as CropSettings['mode'] but JS callers (and
+    // any `as` cast in TS) can pass anything. The store must reject
+    // unknown values so the crop dispatcher doesn't read a state that
+    // neither the rect nor the perspective handler will service —
+    // mirrors the setShapeMode reject-and-reset behaviour from #236.
+    const setter = useToolSettingsStore.getState().setCropSetting as (
+      key: 'mode',
+      value: string,
+    ) => void;
+    setter('mode', 'rect');
+    expect(useToolSettingsStore.getState().settings.crop.mode).toBe('normal');
+    setter('mode', 'free');
+    expect(useToolSettingsStore.getState().settings.crop.mode).toBe('normal');
+  });
+
+  it('setCropSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setCropSetting('mode', 'perspective');
+    expect(useToolSettingsStore.getState().settings.crop.mode).toBe('perspective');
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});

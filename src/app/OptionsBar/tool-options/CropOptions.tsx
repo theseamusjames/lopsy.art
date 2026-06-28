@@ -5,14 +5,14 @@ import { AspectRatioControl } from './AspectRatioControl';
 import styles from '../OptionsBar.module.css';
 
 export function CropOptions() {
-  const cropMode = useToolSettingsStore((s) => s.cropMode);
-  const setCropMode = useToolSettingsStore((s) => s.setCropMode);
+  const cropMode = useToolSettingsStore((s) => s.settings.crop.mode);
+  const setCropSetting = useToolSettingsStore((s) => s.setCropSetting);
   const perspectiveCropQuad = useUIStore((s) => s.perspectiveCropQuad);
   const setPerspectiveCropQuad = useUIStore((s) => s.setPerspectiveCropQuad);
   const setPerspectiveCropDragging = useUIStore((s) => s.setPerspectiveCropDragging);
 
   function handleModeChange(mode: 'normal' | 'perspective') {
-    setCropMode(mode);
+    setCropSetting('mode', mode);
     // Clear any active overlay when switching modes
     setPerspectiveCropQuad(null);
     setPerspectiveCropDragging(null);

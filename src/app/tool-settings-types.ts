@@ -19,6 +19,7 @@ import type { DodgeSettings } from '../tools/dodge/dodge-settings';
 import type { QuickSelectSettings } from '../tools/quick-select/quick-select-settings';
 import type { ShapeSettings } from '../tools/shape/shape-settings';
 import type { GradientSettings } from '../tools/gradient/gradient-settings';
+import type { CropSettings } from '../tools/crop/crop-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -38,7 +39,6 @@ export interface ToolSettings {
   aspectRatioW: number;
   aspectRatioH: number;
   aspectRatioLocked: boolean;
-  cropMode: 'normal' | 'perspective';
   brushSpacing: number;
   brushScatter: number;
   brushAngle: number;
@@ -102,7 +102,7 @@ export interface ToolSettings {
   setAspectRatioW: (w: number) => void;
   setAspectRatioH: (h: number) => void;
   setAspectRatioLocked: (locked: boolean) => void;
-  setCropMode: (mode: 'normal' | 'perspective') => void;
+  setCropSetting: <K extends keyof CropSettings>(key: K, value: CropSettings[K]) => void;
   setGradientSetting: <K extends keyof GradientSettings>(key: K, value: GradientSettings[K]) => void;
   addGradientStop: (position: number, color: Color) => void;
   removeGradientStop: (index: number) => void;
