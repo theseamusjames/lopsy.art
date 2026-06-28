@@ -47,7 +47,7 @@ export function handleSizeShortcut(e: KeyboardEvent): boolean {
   const ts = useToolSettingsStore.getState();
 
   if (tool === 'brush' || tool === 'dodge') {
-    ts.setBrushSize(ts.brushSize + delta);
+    ts.setBrushSetting('size', ts.settings.brush.size + delta);
   } else if (tool === 'smudge') {
     ts.setSmudgeSetting('size', ts.settings.smudge.size + delta);
   } else if (tool === 'pencil') {
@@ -61,7 +61,7 @@ export function handleSizeShortcut(e: KeyboardEvent): boolean {
   } else if (tool === 'path') {
     ts.setPathSetting('strokeWidth', ts.settings.path.strokeWidth + delta);
   } else if (tool === 'shape') {
-    ts.setShapeStrokeWidth(ts.shapeStrokeWidth + delta);
+    ts.setShapeSetting('strokeWidth', ts.settings.shape.strokeWidth + delta);
   }
   return true;
 }

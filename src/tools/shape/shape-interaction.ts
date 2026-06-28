@@ -81,8 +81,9 @@ export function handleShapeDown(ctx: InteractionContext): InteractionState {
   editorState.pushHistory('Shape');
 
   const ts = useToolSettingsStore.getState();
-  if (ts.shapeFillColor) ts.addRecentColor(ts.shapeFillColor);
-  if (ts.shapeStrokeColor) ts.addRecentColor(ts.shapeStrokeColor);
+  const shape = ts.settings.shape;
+  if (shape.fillColor) ts.addRecentColor(shape.fillColor);
+  if (shape.strokeColor) ts.addRecentColor(shape.strokeColor);
   const engine = getEngine();
   if (engine) gpuSaveShapePreview(engine, activeLayerId);
 
@@ -101,7 +102,7 @@ export function handleShapeDown(ctx: InteractionContext): InteractionState {
 export function handleShapeMove(state: InteractionState, layerLocalPos: Point, metaKey = false): void {
   if (!state.startPoint || !state.layerId) return;
 
-  const toolSettings = useToolSettingsStore.getState();
+  const shape = useToolSettingsStore.getState().settings.shape;
   const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos, metaKey);
   const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
   const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
@@ -110,11 +111,11 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point, m
   const engine = getEngine();
   if (!engine) return;
 
-  const fillColor = toolSettings.shapeFillColor;
-  const strokeColor = toolSettings.shapeStrokeColor;
+  const fillColor = shape.fillColor;
+  const strokeColor = shape.strokeColor;
   gpuRenderShape(
     engine, state.layerId,
-    shapeModeToU32(toolSettings.shapeMode),
+    shapeModeToU32(shape.mode),
     state.startPoint.x + state.layerStartX,
     state.startPoint.y + state.layerStartY,
     rx * 2, ry * 2,
@@ -122,8 +123,8 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point, m
     fillColor ? fillColor.b / 255 : 0, fillColor ? fillColor.a : 0,
     strokeColor ? strokeColor.r / 255 : 0, strokeColor ? strokeColor.g / 255 : 0,
     strokeColor ? strokeColor.b / 255 : 0, strokeColor ? strokeColor.a : 0,
-    toolSettings.shapeStrokeWidth, toolSettings.shapePolygonSides,
-    Math.min(toolSettings.shapeCornerRadius, Math.min(rx * 2, ry * 2) / 2),
+    shape.strokeWidth, shape.polygonSides,
+    Math.min(shape.cornerRadius, Math.min(rx * 2, ry * 2) / 2),
   );
   clearJsPixelData(state.layerId);
   useEditorStore.getState().notifyRender();
@@ -137,10 +138,11 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point, m
 export function confirmShapeSize(width: number, height: number, click: ShapeSizeClick): void {
   const editorState = useEditorStore.getState();
   const ts = useToolSettingsStore.getState();
+  const shape = ts.settings.shape;
 
   editorState.pushHistory('Shape');
-  if (ts.shapeFillColor) ts.addRecentColor(ts.shapeFillColor);
-  if (ts.shapeStrokeColor) ts.addRecentColor(ts.shapeStrokeColor);
+  if (shape.fillColor) ts.addRecentColor(shape.fillColor);
+  if (shape.strokeColor) ts.addRecentColor(shape.strokeColor);
 
   const engine = getEngine();
   if (!engine) return;
@@ -148,18 +150,18 @@ export function confirmShapeSize(width: number, height: number, click: ShapeSize
   const cx = click.center.x + click.layerX;
   const cy = click.center.y + click.layerY;
 
-  const fillColor = ts.shapeFillColor;
-  const strokeColor = ts.shapeStrokeColor;
+  const fillColor = shape.fillColor;
+  const strokeColor = shape.strokeColor;
   gpuRenderShapeExpanded(
     engine, click.layerId,
-    shapeModeToU32(ts.shapeMode),
+    shapeModeToU32(shape.mode),
     cx, cy, width, height,
     fillColor ? fillColor.r / 255 : 0, fillColor ? fillColor.g / 255 : 0,
     fillColor ? fillColor.b / 255 : 0, fillColor ? fillColor.a : 0,
     strokeColor ? strokeColor.r / 255 : 0, strokeColor ? strokeColor.g / 255 : 0,
     strokeColor ? strokeColor.b / 255 : 0, strokeColor ? strokeColor.a : 0,
-    ts.shapeStrokeWidth, ts.shapePolygonSides,
-    Math.min(ts.shapeCornerRadius, Math.min(width, height) / 2),
+    shape.strokeWidth, shape.polygonSides,
+    Math.min(shape.cornerRadius, Math.min(width, height) / 2),
   );
   syncLayerBoundsFromEngine(engine, click.layerId);
   clearJsPixelData(click.layerId);
@@ -174,11 +176,11 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point, met
 
   const dx = layerLocalPos.x - state.startPoint.x;
   const dy = layerLocalPos.y - state.startPoint.y;
-  const toolSettings = useToolSettingsStore.getState();
+  const shape = useToolSettingsStore.getState().settings.shape;
 
   if (Math.sqrt(dx * dx + dy * dy) < CLICK_THRESHOLD) {
     useEditorStore.getState().undo();
-    if (toolSettings.shapeOutput === 'path') return;
+    if (shape.output === 'path') return;
     useUIStore.getState().setPendingShapeClick({
       center: state.startPoint,
       layerId: state.layerId!,
@@ -188,34 +190,34 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point, met
     return;
   }
 
-  if (engine && state.layerId && toolSettings.shapeOutput !== 'path') {
+  if (engine && state.layerId && shape.output !== 'path') {
     const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos, metaKey);
     const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
     const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
     const docCx = state.startPoint.x + state.layerStartX;
     const docCy = state.startPoint.y + state.layerStartY;
-    const sw = toolSettings.shapeStrokeWidth;
+    const sw = shape.strokeWidth;
     const { width: docW, height: docH } = useEditorStore.getState().document;
     if (docCx - rx - sw < 0 || docCy - ry - sw < 0
         || docCx + rx + sw > docW || docCy + ry + sw > docH) {
-      const fillColor = toolSettings.shapeFillColor;
-      const strokeColor = toolSettings.shapeStrokeColor;
+      const fillColor = shape.fillColor;
+      const strokeColor = shape.strokeColor;
       gpuRenderShapeExpanded(
         engine, state.layerId,
-        shapeModeToU32(toolSettings.shapeMode),
+        shapeModeToU32(shape.mode),
         docCx, docCy, rx * 2, ry * 2,
         fillColor ? fillColor.r / 255 : 0, fillColor ? fillColor.g / 255 : 0,
         fillColor ? fillColor.b / 255 : 0, fillColor ? fillColor.a : 0,
         strokeColor ? strokeColor.r / 255 : 0, strokeColor ? strokeColor.g / 255 : 0,
         strokeColor ? strokeColor.b / 255 : 0, strokeColor ? strokeColor.a : 0,
-        sw, toolSettings.shapePolygonSides,
-        Math.min(toolSettings.shapeCornerRadius, Math.min(rx * 2, ry * 2) / 2),
+        sw, shape.polygonSides,
+        Math.min(shape.cornerRadius, Math.min(rx * 2, ry * 2) / 2),
       );
     }
     syncLayerBoundsFromEngine(engine, state.layerId);
   }
 
-  if (toolSettings.shapeOutput === 'path') {
+  if (shape.output === 'path') {
     // Undo the raster preview that was rendered during drag.
     useEditorStore.getState().undo();
 
@@ -229,10 +231,10 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point, met
 
     const editorState = useEditorStore.getState();
     let anchors: PathAnchor[];
-    if (toolSettings.shapeMode === 'ellipse') {
+    if (shape.mode === 'ellipse') {
       anchors = ellipseToPathAnchors(cx, cy, rx, ry);
     } else {
-      anchors = polygonToPathAnchors(cx, cy, rx, ry, toolSettings.shapePolygonSides);
+      anchors = polygonToPathAnchors(cx, cy, rx, ry, shape.polygonSides);
     }
     editorState.addPath(anchors, true);
     editorState.notifyRender();

@@ -28,16 +28,17 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
   if (!state.lastPoint || !state.layerId) return;
 
   const toolSettings = useToolSettingsStore.getState();
-  const baseSize = toolSettings.brushSize;
-  const baseHardness = toolSettings.brushHardness / 100;
-  const opacity = toolSettings.brushOpacity / 100;
-  const brushScatter = toolSettings.brushScatter;
-  const brushFade = toolSettings.brushFade;
-  const sizeJitter = toolSettings.brushSizeJitter / 100;
-  const hardnessJitter = toolSettings.brushHardnessJitter / 100;
-  const aJ = toolSettings.brushAngleJitter / 100;
-  const oJ = toolSettings.brushOpacityJitter / 100;
-  const speedSize = toolSettings.brushSpeedSize / 100;
+  const brush = toolSettings.settings.brush;
+  const baseSize = brush.size;
+  const baseHardness = brush.hardness / 100;
+  const opacity = brush.opacity / 100;
+  const brushScatter = brush.scatter;
+  const brushFade = brush.fade;
+  const sizeJitter = toolSettings.settings.brushJitter.size / 100;
+  const hardnessJitter = toolSettings.settings.brushJitter.hardness / 100;
+  const aJ = toolSettings.settings.brushJitter.angle / 100;
+  const oJ = toolSettings.settings.brushJitter.opacity / 100;
+  const speedSize = toolSettings.settings.brushSpeed.size / 100;
   const color = state.strokeColor ?? useToolSettingsStore.getState().foregroundColor;
   const r = color.r / 255;
   const g = color.g / 255;
@@ -56,15 +57,16 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
     const maxSpeed = 5;
     const normalizedSpeed = Math.min(rawSpeed / maxSpeed, 1);
 
-    const maWindow = toolSettings.brushSpeedSensitivity === 'high' ? 2
-      : toolSettings.brushSpeedSensitivity === 'low' ? 6 : 3;
+    const sensitivity = toolSettings.settings.brushSpeed.sensitivity;
+    const maWindow = sensitivity === 'high' ? 2
+      : sensitivity === 'low' ? 6 : 3;
     if (!state.speedHistory) state.speedHistory = [];
     state.speedHistory.push(normalizedSpeed);
     if (state.speedHistory.length > maWindow) state.speedHistory.shift();
 
     const avgSpeed = state.speedHistory.reduce((a, b) => a + b, 0) / state.speedHistory.length;
 
-    const invert = toolSettings.brushSpeedSizeInvert;
+    const invert = toolSettings.settings.brushSpeed.sizeInvert;
     const targetScale = invert
       ? 1 + speedSize * avgSpeed
       : 1 - speedSize * avgSpeed;
@@ -82,7 +84,7 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
   size = jittered.size;
   const hardness = jittered.hardness;
 
-  const brushTaper = toolSettings.brushTaper;
+  const brushTaper = brush.taper;
   if (brushTaper > 0) {
     const taperFactor = Math.max(0, 1 - (state.strokeDistance ?? 0) / brushTaper);
     size = size * taperFactor;
@@ -92,7 +94,7 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
     }
   }
 
-  const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
+  const spacing = Math.max(1, size * brush.spacing / 100);
 
   if (brushFade > 0 && (state.strokeDistance ?? 0) >= brushFade) {
     state.lastPoint = layerLocalPos;

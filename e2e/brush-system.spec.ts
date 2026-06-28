@@ -253,7 +253,12 @@ test.describe('Brush System', () => {
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
-    await setToolSetting(page, 'setBrushAngle', 90);
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+        getState: () => { setBrushSetting: (k: 'angle', v: number) => void };
+      };
+      store.getState().setBrushSetting('angle', 90);
+    });
     await page.waitForTimeout(200);
     const base90 = await snapshot(page);
     await drawStroke(page, { x: 100, y: 200 }, { x: 500, y: 200 }, 20);
@@ -348,9 +353,9 @@ test.describe('Brush System', () => {
 
     const newSize = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { brushSize: number };
+        getState: () => { settings: { brush: { size: number } } };
       };
-      return store.getState().brushSize;
+      return store.getState().settings.brush.size;
     });
     expect(newSize).toBe(60);
 

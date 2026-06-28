@@ -19,6 +19,18 @@ import { clampSpraySetting } from '../tools/spray/spray-settings';
 import { clampHealingSetting } from '../tools/healing/healing-settings';
 import { clampBrushTextureSetting } from '../tools/brush/brush-texture-settings';
 import { clampDodgeSetting } from '../tools/dodge/dodge-settings';
+import { clampQuickSelectSetting } from '../tools/quick-select/quick-select-settings';
+import { clampShapeSetting } from '../tools/shape/shape-settings';
+import {
+  appendGradientStop,
+  clampGradientSetting,
+  removeGradientStopAt,
+  updateGradientStopAt,
+} from '../tools/gradient/gradient-settings';
+import { clampCropSetting } from '../tools/crop/crop-settings';
+import { clampBrushSetting } from '../tools/brush/brush-settings';
+import { clampBrushSpeedSetting } from '../tools/brush/brush-speed-settings';
+import { clampBrushJitterSetting } from '../tools/brush/brush-jitter-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -44,35 +56,9 @@ function warnIfNormalisedOpacity(setter: string, value: number): void {
 
 export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   settings: DEFAULT_TOOL_SETTINGS_SLICES,
-  brushSize: 10,
-  brushOpacity: 100,
-  brushHardness: 80,
-  shapeMode: 'ellipse',
-  shapeOutput: 'pixels' as const,
-  shapeFillColor: { r: 255, g: 255, b: 255, a: 1 },
-  shapeStrokeColor: null,
-  shapeStrokeWidth: 2,
-  shapePolygonSides: 6,
-  shapeCornerRadius: 0,
   aspectRatioW: 1,
   aspectRatioH: 1,
   aspectRatioLocked: false,
-  cropMode: 'normal' as const,
-  gradientType: 'linear',
-  gradientStops: [
-    { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
-    { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
-  ],
-  gradientReverse: false,
-  quickSelectSize: 20,
-  quickSelectTolerance: 32,
-  quickSelectEdgeStrength: 50,
-  quickSelectMode: 'add' as const,
-  brushSpacing: 0,
-  brushScatter: 0,
-  brushAngle: 0,
-  brushFade: 0,
-  brushTaper: 0,
   activeBrushTip: null,
   symmetryHorizontal: false,
   symmetryVertical: false,
@@ -110,25 +96,23 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     { r: 255, g: 130, b: 0,   a: 1 },
     { r: 0,   g: 200, b: 200, a: 1 },
   ],
-  brushSizeJitter: 0,
-  brushAngleJitter: 0,
-  brushOpacityJitter: 0,
-  brushHardnessJitter: 0,
-  brushSpeedSize: 0,
-  brushSpeedSizeInvert: false,
-  brushSpeedSensitivity: 'med',
   brushTextures: BUILTIN_TEXTURES,
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
   activeSubBrushes: [],
 
-  setBrushSizeJitter: (jitter) => set({ brushSizeJitter: Math.max(0, Math.min(100, jitter)) }),
-  setBrushAngleJitter: (jitter) => set({ brushAngleJitter: Math.max(0, Math.min(100, jitter)) }),
-  setBrushOpacityJitter: (jitter) => set({ brushOpacityJitter: Math.max(0, Math.min(100, jitter)) }),
-  setBrushHardnessJitter: (jitter) => set({ brushHardnessJitter: Math.max(0, Math.min(100, jitter)) }),
-  setBrushSpeedSize: (value) => set({ brushSpeedSize: Math.max(0, Math.min(300, value)) }),
-  setBrushSpeedSizeInvert: (invert) => set({ brushSpeedSizeInvert: invert }),
-  setBrushSpeedSensitivity: (sensitivity) => set({ brushSpeedSensitivity: sensitivity }),
+  setBrushJitterSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      brushJitter: { ...s.settings.brushJitter, [key]: clampBrushJitterSetting(key, value) },
+    },
+  })),
+  setBrushSpeedSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      brushSpeed: { ...s.settings.brushSpeed, [key]: clampBrushSpeedSetting(key, value) },
+    },
+  })),
   setBrushTextureSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,
@@ -151,18 +135,16 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       },
     }));
   },
-  setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(5000, size)) }),
-  setBrushFade: (fade) => set({ brushFade: Math.max(0, Math.min(5000, fade)) }),
-  setBrushTaper: (taper) => set({ brushTaper: Math.max(0, Math.min(5000, taper)) }),
-  setBrushSpacing: (spacing) => set({ brushSpacing: Math.max(0, Math.min(200, spacing)) }),
-  setBrushScatter: (scatter) => set({ brushScatter: Math.max(0, Math.min(100, scatter)) }),
-  setBrushAngle: (angle) => set({ brushAngle: ((angle % 360) + 360) % 360 }),
-  setActiveBrushTip: (tip) => set({ activeBrushTip: tip }),
-  setBrushOpacity: (opacity) => {
-    warnIfNormalisedOpacity('setBrushOpacity', opacity);
-    set({ brushOpacity: Math.max(1, Math.min(100, opacity)) });
+  setBrushSetting: (key, value) => {
+    if (key === 'opacity') warnIfNormalisedOpacity('setBrushSetting(opacity)', value as number);
+    set((s) => ({
+      settings: {
+        ...s.settings,
+        brush: { ...s.settings.brush, [key]: clampBrushSetting(key, value) },
+      },
+    }));
   },
-  setBrushHardness: (hardness) => set({ brushHardness: Math.max(0, Math.min(100, hardness)) }),
+  setActiveBrushTip: (tip) => set({ activeBrushTip: tip }),
   setPencilSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,
@@ -184,54 +166,54 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       fill: { ...s.settings.fill, [key]: clampFillSetting(key, value) },
     },
   })),
-  setShapeMode: (mode) => {
-    // Guard against invalid values (e.g. 'rectangle', 'line') sneaking in
-    // via store bypass. The shader treats anything-not-ellipse as polygon
-    // and would render a polygon with whatever sides setting is current,
-    // which doesn't match what a caller passing 'rectangle' expects.
-    if (mode !== 'ellipse' && mode !== 'polygon') return;
-    set({ shapeMode: mode });
-  },
-  setShapeOutput: (output) => set({ shapeOutput: output }),
-  setShapeFillColor: (color) => set({ shapeFillColor: color }),
-  setShapeStrokeColor: (color) => set({ shapeStrokeColor: color }),
-  setShapeStrokeWidth: (width) => set({ shapeStrokeWidth: Math.max(1, Math.min(50, width)) }),
-  setShapePolygonSides: (sides) => set({ shapePolygonSides: Math.max(3, Math.min(64, Math.round(sides))) }),
-  setShapeCornerRadius: (radius) => set({ shapeCornerRadius: Math.max(0, Math.min(200, radius)) }),
+  setShapeSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      shape: { ...s.settings.shape, [key]: clampShapeSetting(key, value) },
+    },
+  })),
   setAspectRatioW: (w) => set({ aspectRatioW: Math.max(0.01, w) }),
   setAspectRatioH: (h) => set({ aspectRatioH: Math.max(0.01, h) }),
   setAspectRatioLocked: (locked) => set({ aspectRatioLocked: locked }),
-  setCropMode: (mode) => set({ cropMode: mode }),
-  setGradientType: (type) => set({ gradientType: type }),
-  setGradientStops: (stops) => {
-    const clamped = stops.length < 2
-      ? [...stops, ...Array.from({ length: 2 - stops.length }, (_, i) => ({ position: i, color: { r: 0, g: 0, b: 0, a: 1 } }))]
-      : stops.slice(0, 16);
-    const sorted = [...clamped].sort((a, b) => a.position - b.position);
-    set({ gradientStops: sorted });
-  },
-  setGradientReverse: (reverse) => set({ gradientReverse: reverse }),
-  addGradientStop: (position, color) => set((state) => {
-    if (state.gradientStops.length >= 16) return state;
-    const newStops = [...state.gradientStops, { position: Math.max(0, Math.min(1, position)), color }];
-    newStops.sort((a, b) => a.position - b.position);
-    return { gradientStops: newStops };
-  }),
-  removeGradientStop: (index) => set((state) => {
-    if (state.gradientStops.length <= 2) return state;
-    const newStops = state.gradientStops.filter((_, i) => i !== index);
-    return { gradientStops: newStops };
-  }),
-  updateGradientStop: (index, partial) => set((state) => {
-    const newStops = state.gradientStops.map((stop, i) => {
-      if (i !== index) return stop;
-      return {
-        position: partial.position !== undefined ? Math.max(0, Math.min(1, partial.position)) : stop.position,
-        color: partial.color ?? stop.color,
-      };
-    });
-    return { gradientStops: [...newStops].sort((a, b) => a.position - b.position) };
-  }),
+  setCropSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      crop: { ...s.settings.crop, [key]: clampCropSetting(key, value) },
+    },
+  })),
+  setGradientSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      gradient: { ...s.settings.gradient, [key]: clampGradientSetting(key, value) },
+    },
+  })),
+  addGradientStop: (position, color) => set((s) => ({
+    settings: {
+      ...s.settings,
+      gradient: {
+        ...s.settings.gradient,
+        stops: appendGradientStop(s.settings.gradient.stops, position, color),
+      },
+    },
+  })),
+  removeGradientStop: (index) => set((s) => ({
+    settings: {
+      ...s.settings,
+      gradient: {
+        ...s.settings.gradient,
+        stops: removeGradientStopAt(s.settings.gradient.stops, index),
+      },
+    },
+  })),
+  updateGradientStop: (index, partial) => set((s) => ({
+    settings: {
+      ...s.settings,
+      gradient: {
+        ...s.settings.gradient,
+        stops: updateGradientStopAt(s.settings.gradient.stops, index, partial),
+      },
+    },
+  })),
   setSymmetryHorizontal: (enabled) => set({ symmetryHorizontal: enabled }),
   setSymmetryVertical: (enabled) => set({ symmetryVertical: enabled }),
   setSymmetryRadialSegments: (segments) => set({ symmetryRadialSegments: Math.max(0, Math.min(32, Math.round(segments))) }),
@@ -287,10 +269,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       wand: { ...s.settings.wand, [key]: clampWandSetting(key, value) },
     },
   })),
-  setQuickSelectSize: (size) => set({ quickSelectSize: Math.max(1, Math.min(100, Math.round(size))) }),
-  setQuickSelectTolerance: (tolerance) => set({ quickSelectTolerance: Math.max(0, Math.min(255, Math.round(tolerance))) }),
-  setQuickSelectEdgeStrength: (strength) => set({ quickSelectEdgeStrength: Math.max(0, Math.min(100, Math.round(strength))) }),
-  setQuickSelectMode: (mode) => set({ quickSelectMode: mode }),
   setMagneticLassoSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,
@@ -301,6 +279,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     settings: {
       ...s.settings,
       text: { ...s.settings.text, [key]: clampTextSetting(key, value) },
+    },
+  })),
+  setQuickSelectSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      quickSelect: { ...s.settings.quickSelect, [key]: clampQuickSelectSetting(key, value) },
     },
   })),
 
@@ -334,27 +318,28 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
   addPresets: (presets) => set((s) => ({ presets: [...s.presets, ...presets] })),
   saveCurrentAsPreset: (name) => {
     const s = get();
+    const b = s.settings.brush;
     const preset: BrushPreset = {
       id: createPresetId(),
       name,
       tip: s.activeBrushTip,
-      size: s.brushSize,
-      hardness: s.brushHardness,
-      spacing: s.brushSpacing,
-      scatter: s.brushScatter,
-      angle: s.brushAngle,
-      opacity: s.brushOpacity,
+      size: b.size,
+      hardness: b.hardness,
+      spacing: b.spacing,
+      scatter: b.scatter,
+      angle: b.angle,
+      opacity: b.opacity,
       flow: 100,
       isCustom: true,
-      sizeJitter: s.brushSizeJitter,
-      hardnessJitter: s.brushHardnessJitter,
-      angleJitter: s.brushAngleJitter,
-      opacityJitter: s.brushOpacityJitter,
-      speedSize: s.brushSpeedSize,
-      speedSizeInvert: s.brushSpeedSizeInvert,
-      speedSensitivity: s.brushSpeedSensitivity,
-      fade: s.brushFade,
-      taper: s.brushTaper,
+      sizeJitter: s.settings.brushJitter.size,
+      hardnessJitter: s.settings.brushJitter.hardness,
+      angleJitter: s.settings.brushJitter.angle,
+      opacityJitter: s.settings.brushJitter.opacity,
+      speedSize: s.settings.brushSpeed.size,
+      speedSizeInvert: s.settings.brushSpeed.sizeInvert,
+      speedSensitivity: s.settings.brushSpeed.sensitivity,
+      fade: b.fade,
+      taper: b.taper,
       subBrushes: s.activeSubBrushes.length > 0 ? s.activeSubBrushes : undefined,
     };
     set((state) => ({ presets: [...state.presets, preset], activePresetId: preset.id }));
@@ -374,23 +359,32 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     if (!preset) return;
     set((s) => ({
       activePresetId: id,
-      brushSize: preset.size,
-      brushHardness: preset.hardness,
-      brushOpacity: preset.opacity,
-      brushSpacing: preset.spacing,
-      brushScatter: preset.scatter,
-      brushAngle: preset.angle,
+      settings: {
+        ...s.settings,
+        brush: {
+          size: preset.size,
+          opacity: preset.opacity,
+          hardness: preset.hardness,
+          spacing: preset.spacing,
+          scatter: preset.scatter,
+          angle: preset.angle,
+          fade: preset.fade ?? 0,
+          taper: preset.taper ?? 0,
+        },
+        brushTexture: { data: null, blendMode: 'multiply', scale: 100 },
+        brushSpeed: {
+          size: clampBrushSpeedSetting('size', preset.speedSize ?? 0),
+          sizeInvert: preset.speedSizeInvert ?? false,
+          sensitivity: clampBrushSpeedSetting('sensitivity', preset.speedSensitivity ?? 'med'),
+        },
+        brushJitter: {
+          size: preset.sizeJitter ?? 0,
+          hardness: preset.hardnessJitter ?? 0,
+          angle: preset.angleJitter ?? 0,
+          opacity: preset.opacityJitter ?? 0,
+        },
+      },
       activeBrushTip: preset.tip,
-      brushSizeJitter: preset.sizeJitter ?? 0,
-      brushHardnessJitter: preset.hardnessJitter ?? 0,
-      brushAngleJitter: preset.angleJitter ?? 0,
-      brushOpacityJitter: preset.opacityJitter ?? 0,
-      brushSpeedSize: preset.speedSize ?? 0,
-      brushSpeedSizeInvert: preset.speedSizeInvert ?? false,
-      brushSpeedSensitivity: preset.speedSensitivity ?? 'med',
-      brushFade: preset.fade ?? 0,
-      brushTaper: preset.taper ?? 0,
-      settings: { ...s.settings, brushTexture: { data: null, blendMode: 'multiply', scale: 100 } },
       activeSubBrushes: preset.subBrushes ?? [],
     }));
   },

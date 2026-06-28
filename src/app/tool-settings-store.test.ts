@@ -2,34 +2,36 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useToolSettingsStore } from './tool-settings-store';
 
-describe('setShapeMode — issue #236 (invalid modes render incorrectly)', () => {
+describe('setShapeSetting mode — issue #236 (invalid modes render incorrectly)', () => {
   it('accepts ellipse', () => {
-    useToolSettingsStore.getState().setShapeMode('ellipse');
-    expect(useToolSettingsStore.getState().shapeMode).toBe('ellipse');
+    useToolSettingsStore.getState().setShapeSetting('mode', 'ellipse');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('ellipse');
   });
 
   it('accepts polygon', () => {
-    useToolSettingsStore.getState().setShapeMode('polygon');
-    expect(useToolSettingsStore.getState().shapeMode).toBe('polygon');
+    useToolSettingsStore.getState().setShapeSetting('mode', 'polygon');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('polygon');
   });
 
-  it('ignores invalid values like "rectangle" instead of silently storing them', () => {
-    useToolSettingsStore.getState().setShapeMode('ellipse');
+  it('collapses invalid values like "rectangle" to ellipse instead of silently storing them', () => {
+    useToolSettingsStore.getState().setShapeSetting('mode', 'polygon');
     // The setter is typed as ShapeMode but JS callers (and TS @ts-ignore
-    // bypasses) can pass anything. The store must reject invalid values
-    // so the GPU dispatch doesn't render a polygon with stale `sides`
-    // when a caller asked for "rectangle".
-    (useToolSettingsStore.getState().setShapeMode as (m: string) => void)('rectangle');
-    expect(useToolSettingsStore.getState().shapeMode).toBe('ellipse');
+    // bypasses) can pass anything. The slice must collapse invalid values
+    // to the documented default ('ellipse') so the GPU dispatch doesn't
+    // render a polygon with stale `sides` when a caller asked for
+    // "rectangle" — same guard as the quick-select slice.
+    (useToolSettingsStore.getState().setShapeSetting as (k: 'mode', m: string) => void)('mode', 'rectangle');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('ellipse');
   });
 
-  it('ignores other invalid values (line, arrow, star)', () => {
-    useToolSettingsStore.getState().setShapeMode('polygon');
-    const setter = useToolSettingsStore.getState().setShapeMode as (m: string) => void;
-    setter('line');
-    setter('arrow');
-    setter('star');
-    expect(useToolSettingsStore.getState().shapeMode).toBe('polygon');
+  it('collapses other invalid values (line, arrow, star) to ellipse', () => {
+    const setter = useToolSettingsStore.getState().setShapeSetting as (k: 'mode', m: string) => void;
+    setter('mode', 'line');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('ellipse');
+    setter('mode', 'arrow');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('ellipse');
+    setter('mode', 'star');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('ellipse');
   });
 });
 
@@ -49,46 +51,46 @@ describe('opacity setters — issue #250 (percent vs normalised footgun)', () =>
 
   it('clamps brush opacity to the documented 1–100 percent range', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
-    store.getState().setBrushOpacity(50);
-    expect(store.getState().brushOpacity).toBe(50);
-    store.getState().setBrushOpacity(200);
-    expect(store.getState().brushOpacity).toBe(100);
-    store.getState().setBrushOpacity(-5);
-    expect(store.getState().brushOpacity).toBe(1);
+    store.getState().setBrushSetting('opacity', 50);
+    expect(store.getState().settings.brush.opacity).toBe(50);
+    store.getState().setBrushSetting('opacity', 200);
+    expect(store.getState().settings.brush.opacity).toBe(100);
+    store.getState().setBrushSetting('opacity', -5);
+    expect(store.getState().settings.brush.opacity).toBe(1);
   });
 
-  it('warns when setBrushOpacity receives a fractional value (likely 0–1 normalised)', async () => {
+  it('warns when setBrushSetting(opacity) receives a fractional value (likely 0–1 normalised)', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
-    store.getState().setBrushOpacity(0.5);
+    store.getState().setBrushSetting('opacity', 0.5);
     expect(warnSpy).toHaveBeenCalledTimes(1);
     const message = String(warnSpy.mock.calls[0]?.[0] ?? '');
-    expect(message).toContain('setBrushOpacity');
+    expect(message).toContain('setBrushSetting(opacity)');
     expect(message).toContain('percent');
     expect(message).toContain('50');
     // The value still gets clamped into the percent range (no silent
     // 1%-stroke), so callers don't get the original footgun.
-    expect(store.getState().brushOpacity).toBe(1);
+    expect(store.getState().settings.brush.opacity).toBe(1);
   });
 
   it('does not warn for the integer sentinel 0', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
-    store.getState().setBrushOpacity(0);
+    store.getState().setBrushSetting('opacity', 0);
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('does not warn for legitimate percent values, including 1', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
-    store.getState().setBrushOpacity(1);
-    store.getState().setBrushOpacity(50);
-    store.getState().setBrushOpacity(100);
+    store.getState().setBrushSetting('opacity', 1);
+    store.getState().setBrushSetting('opacity', 50);
+    store.getState().setBrushSetting('opacity', 100);
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('warns at most once per setter even with repeated bad calls', async () => {
     const { useToolSettingsStore: store } = await import('./tool-settings-store');
-    store.getState().setBrushOpacity(0.5);
-    store.getState().setBrushOpacity(0.2);
-    store.getState().setBrushOpacity(0.99);
+    store.getState().setBrushSetting('opacity', 0.5);
+    store.getState().setBrushSetting('opacity', 0.2);
+    store.getState().setBrushSetting('opacity', 0.99);
     expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -146,10 +148,10 @@ describe('per-tool slice: wand (#453)', () => {
     // The settings.wand object must be replaced (so React/Zustand
     // selectors that subscribe to it re-render) but the surrounding
     // ToolSettings shape should not churn unrelated fields.
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setWandSetting('contiguous', false);
     expect(useToolSettingsStore.getState().settings.wand.contiguous).toBe(false);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -176,13 +178,13 @@ describe('per-tool slice: fill (#453)', () => {
 
   it('setFillSetting preserves sibling slices and unrelated fields', () => {
     const beforeWand = useToolSettingsStore.getState().settings.wand;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setFillSetting('contiguous', false);
     expect(useToolSettingsStore.getState().settings.fill.contiguous).toBe(false);
     // Sibling slice reference preserved — selectors subscribed to
     // settings.wand should not re-render when fill changes.
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -216,7 +218,7 @@ describe('per-tool slice: marquee (#453)', () => {
   it('setMarqueeSetting preserves sibling slices and unrelated fields', () => {
     const beforeWand = useToolSettingsStore.getState().settings.wand;
     const beforeFill = useToolSettingsStore.getState().settings.fill;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setMarqueeSetting('feather', 50);
     expect(useToolSettingsStore.getState().settings.marquee.feather).toBe(50);
     // Sibling slice references preserved — selectors subscribed to
@@ -224,7 +226,7 @@ describe('per-tool slice: marquee (#453)', () => {
     // changes. This is the invariant that justifies slicing.
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
     expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -264,7 +266,7 @@ describe('per-tool slice: smudge (#453)', () => {
     const beforeWand = useToolSettingsStore.getState().settings.wand;
     const beforeFill = useToolSettingsStore.getState().settings.fill;
     const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setSmudgeSetting('size', 42);
     expect(useToolSettingsStore.getState().settings.smudge.size).toBe(42);
     // Sibling slice references preserved — selectors subscribed to the
@@ -274,7 +276,7 @@ describe('per-tool slice: smudge (#453)', () => {
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
     expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
     expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -301,7 +303,7 @@ describe('per-tool slice: pencil (#453)', () => {
     const beforeFill = useToolSettingsStore.getState().settings.fill;
     const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
     const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setPencilSetting('size', 7);
     expect(useToolSettingsStore.getState().settings.pencil.size).toBe(7);
     // Sibling slice references preserved — selectors subscribed to the
@@ -312,7 +314,7 @@ describe('per-tool slice: pencil (#453)', () => {
     expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
     expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
     expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -364,7 +366,7 @@ describe('per-tool slice: sponge (#453)', () => {
     const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
     const beforePencil = useToolSettingsStore.getState().settings.pencil;
     const beforeEraser = useToolSettingsStore.getState().settings.eraser;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setSpongeSetting('size', 42);
     expect(useToolSettingsStore.getState().settings.sponge.size).toBe(42);
     // Sibling slice references preserved — selectors subscribed to the
@@ -377,7 +379,7 @@ describe('per-tool slice: sponge (#453)', () => {
     expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
     expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
     expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -406,7 +408,7 @@ describe('per-tool slice: path (#453)', () => {
     const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
     const beforePencil = useToolSettingsStore.getState().settings.pencil;
     const beforeSponge = useToolSettingsStore.getState().settings.sponge;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setPathSetting('strokeWidth', 7);
     expect(useToolSettingsStore.getState().settings.path.strokeWidth).toBe(7);
     // Sibling slice references preserved — selectors subscribed to the
@@ -419,7 +421,7 @@ describe('per-tool slice: path (#453)', () => {
     expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
     expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
     expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -450,7 +452,7 @@ describe('per-tool slice: stamp (#453)', () => {
     const beforeSponge = useToolSettingsStore.getState().settings.sponge;
     const beforePath = useToolSettingsStore.getState().settings.path;
     const beforeEraser = useToolSettingsStore.getState().settings.eraser;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setStampSetting('size', 42);
     expect(useToolSettingsStore.getState().settings.stamp.size).toBe(42);
     // Sibling slice references preserved — selectors subscribed to the
@@ -465,7 +467,7 @@ describe('per-tool slice: stamp (#453)', () => {
     expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
     expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
     expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -531,7 +533,7 @@ describe('per-tool slice: magneticLasso (#453)', () => {
     const beforePath = useToolSettingsStore.getState().settings.path;
     const beforeStamp = useToolSettingsStore.getState().settings.stamp;
     const beforeEraser = useToolSettingsStore.getState().settings.eraser;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setMagneticLassoSetting('width', 25);
     expect(useToolSettingsStore.getState().settings.magneticLasso.width).toBe(25);
     // Sibling slice references preserved — selectors subscribed to the
@@ -547,7 +549,7 @@ describe('per-tool slice: magneticLasso (#453)', () => {
     expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
     expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
     expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -594,7 +596,7 @@ describe('per-tool slice: eraser (#453)', () => {
     const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
     const beforePencil = useToolSettingsStore.getState().settings.pencil;
     const beforeSponge = useToolSettingsStore.getState().settings.sponge;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setEraserSetting('size', 42);
     expect(useToolSettingsStore.getState().settings.eraser.size).toBe(42);
     // Sibling slice references preserved — selectors subscribed to the
@@ -607,7 +609,7 @@ describe('per-tool slice: eraser (#453)', () => {
     expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
     expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
     expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -694,7 +696,7 @@ describe('per-tool slice: text (#453)', () => {
     const beforeStamp = useToolSettingsStore.getState().settings.stamp;
     const beforeEraser = useToolSettingsStore.getState().settings.eraser;
     const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setTextSetting('fontSize', 48);
     expect(useToolSettingsStore.getState().settings.text.fontSize).toBe(48);
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
@@ -707,7 +709,7 @@ describe('per-tool slice: text (#453)', () => {
     expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
     expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
     expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -779,7 +781,7 @@ describe('per-tool slice: spray (#453)', () => {
     const beforeStamp = useToolSettingsStore.getState().settings.stamp;
     const beforeEraser = useToolSettingsStore.getState().settings.eraser;
     const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setSpraySetting('size', 42);
     expect(useToolSettingsStore.getState().settings.spray.size).toBe(42);
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
@@ -792,7 +794,7 @@ describe('per-tool slice: spray (#453)', () => {
     expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
     expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
     expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -845,7 +847,7 @@ describe('per-tool slice: healing (#453)', () => {
     const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
     const beforeText = useToolSettingsStore.getState().settings.text;
     const beforeSpray = useToolSettingsStore.getState().settings.spray;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setHealingSetting('size', 42);
     expect(useToolSettingsStore.getState().settings.healing.size).toBe(42);
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
@@ -860,7 +862,163 @@ describe('per-tool slice: healing (#453)', () => {
     expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
     expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
     expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: brush (#453)', () => {
+  it('exposes brush settings under settings.brush with the legacy flat-bag defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setBrushSetting.
+    useToolSettingsStore.getState().setBrushSetting('size', 10);
+    useToolSettingsStore.getState().setBrushSetting('opacity', 100);
+    useToolSettingsStore.getState().setBrushSetting('hardness', 80);
+    useToolSettingsStore.getState().setBrushSetting('spacing', 0);
+    useToolSettingsStore.getState().setBrushSetting('scatter', 0);
+    useToolSettingsStore.getState().setBrushSetting('angle', 0);
+    useToolSettingsStore.getState().setBrushSetting('fade', 0);
+    useToolSettingsStore.getState().setBrushSetting('taper', 0);
+    const { brush } = useToolSettingsStore.getState().settings;
+    expect(brush).toEqual({
+      size: 10,
+      opacity: 100,
+      hardness: 80,
+      spacing: 0,
+      scatter: 0,
+      angle: 0,
+      fade: 0,
+      taper: 0,
+    });
+  });
+
+  it('setBrushSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.brush;
+    useToolSettingsStore.getState().setBrushSetting('size', 42);
+    const after = useToolSettingsStore.getState().settings.brush;
+    expect(after.size).toBe(42);
+    expect(after.opacity).toBe(before.opacity);
+    expect(after.hardness).toBe(before.hardness);
+    expect(after.spacing).toBe(before.spacing);
+    expect(after.scatter).toBe(before.scatter);
+    expect(after.angle).toBe(before.angle);
+    expect(after.fade).toBe(before.fade);
+    expect(after.taper).toBe(before.taper);
+  });
+
+  it('setBrushSetting clamps size into [1, 5000]', () => {
+    useToolSettingsStore.getState().setBrushSetting('size', 0);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(1);
+    useToolSettingsStore.getState().setBrushSetting('size', 99999);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(5000);
+  });
+
+  it('setBrushSetting clamps hardness into [0, 100]', () => {
+    useToolSettingsStore.getState().setBrushSetting('hardness', -10);
+    expect(useToolSettingsStore.getState().settings.brush.hardness).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('hardness', 250);
+    expect(useToolSettingsStore.getState().settings.brush.hardness).toBe(100);
+  });
+
+  it('setBrushSetting clamps spacing into [0, 200]', () => {
+    useToolSettingsStore.getState().setBrushSetting('spacing', -1);
+    expect(useToolSettingsStore.getState().settings.brush.spacing).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('spacing', 9999);
+    expect(useToolSettingsStore.getState().settings.brush.spacing).toBe(200);
+  });
+
+  it('setBrushSetting clamps scatter into [0, 100]', () => {
+    useToolSettingsStore.getState().setBrushSetting('scatter', -1);
+    expect(useToolSettingsStore.getState().settings.brush.scatter).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('scatter', 9999);
+    expect(useToolSettingsStore.getState().settings.brush.scatter).toBe(100);
+  });
+
+  it('setBrushSetting wraps angle into [0, 360) modulo', () => {
+    // Replicates the legacy `setBrushAngle` shape so the shader gets a
+    // clean modulo-wrapped degree value when callers pass a delta that
+    // went negative or past 360 (e.g. via a wheel turn).
+    useToolSettingsStore.getState().setBrushSetting('angle', 720);
+    expect(useToolSettingsStore.getState().settings.brush.angle).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('angle', -90);
+    expect(useToolSettingsStore.getState().settings.brush.angle).toBe(270);
+  });
+
+  it('setBrushSetting clamps fade into [0, 5000]', () => {
+    useToolSettingsStore.getState().setBrushSetting('fade', -1);
+    expect(useToolSettingsStore.getState().settings.brush.fade).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('fade', 99999);
+    expect(useToolSettingsStore.getState().settings.brush.fade).toBe(5000);
+  });
+
+  it('setBrushSetting clamps taper into [0, 5000]', () => {
+    useToolSettingsStore.getState().setBrushSetting('taper', -1);
+    expect(useToolSettingsStore.getState().settings.brush.taper).toBe(0);
+    useToolSettingsStore.getState().setBrushSetting('taper', 99999);
+    expect(useToolSettingsStore.getState().settings.brush.taper).toBe(5000);
+  });
+
+  it('setBrushSetting preserves sibling slices', () => {
+    // The settings.brush object must be replaced (so React/Zustand
+    // selectors that subscribe to it re-render) but the surrounding
+    // ToolSettings slices should not churn. Same invariant the prior
+    // slices lock down — if a future refactor accidentally rebuilds
+    // sibling slices, this test catches it.
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    useToolSettingsStore.getState().setBrushSetting('scatter', 25);
+    expect(useToolSettingsStore.getState().settings.brush.scatter).toBe(25);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+  });
+
+  it('setActivePreset writes brush dab dynamics through the slice', () => {
+    // The preset-apply path was the largest cluster of brush flat-field
+    // writes pre-slice — eight dab fields written through a single `set()`.
+    // After the slice it routes through `settings.brush` so the slice
+    // object identity changes (selectors fire) but sibling slices stay
+    // referentially identical.
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    // Save a preset capturing the current brush state, then mutate the
+    // slice, then re-apply the preset — the slice should snap back to
+    // the captured values.
+    useToolSettingsStore.getState().setBrushSetting('size', 22);
+    useToolSettingsStore.getState().setBrushSetting('hardness', 55);
+    useToolSettingsStore.getState().setBrushSetting('spacing', 18);
+    useToolSettingsStore.getState().saveCurrentAsPreset('slice-test-preset');
+    const presets = useToolSettingsStore.getState().presets;
+    const savedPreset = presets[presets.length - 1]!;
+    useToolSettingsStore.getState().setBrushSetting('size', 999);
+    useToolSettingsStore.getState().setBrushSetting('hardness', 5);
+    useToolSettingsStore.getState().setActivePreset(savedPreset.id);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(22);
+    expect(useToolSettingsStore.getState().settings.brush.hardness).toBe(55);
+    expect(useToolSettingsStore.getState().settings.brush.spacing).toBe(18);
+    // Sibling slices untouched by the preset-apply path.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
   });
 });
 
@@ -996,7 +1154,7 @@ describe('per-tool slice: brushTexture (#453)', () => {
     const beforeText = useToolSettingsStore.getState().settings.text;
     const beforeSpray = useToolSettingsStore.getState().settings.spray;
     const beforeHealing = useToolSettingsStore.getState().settings.healing;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setBrushTextureSetting('scale', 175);
     expect(useToolSettingsStore.getState().settings.brushTexture.scale).toBe(175);
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
@@ -1012,7 +1170,7 @@ describe('per-tool slice: brushTexture (#453)', () => {
     expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
     expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
     expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
   });
 });
 
@@ -1069,7 +1227,7 @@ describe('per-tool slice: dodge (#453)', () => {
     const beforeSpray = useToolSettingsStore.getState().settings.spray;
     const beforeHealing = useToolSettingsStore.getState().settings.healing;
     const beforeBrushTexture = useToolSettingsStore.getState().settings.brushTexture;
-    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
     useToolSettingsStore.getState().setDodgeSetting('exposure', 42);
     expect(useToolSettingsStore.getState().settings.dodge.exposure).toBe(42);
     expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
@@ -1086,6 +1244,599 @@ describe('per-tool slice: dodge (#453)', () => {
     expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
     expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
     expect(useToolSettingsStore.getState().settings.brushTexture).toBe(beforeBrushTexture);
-    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: quickSelect (#453)', () => {
+  it('exposes quickSelect settings under settings.quickSelect with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setQuickSelectSetting.
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 20);
+    useToolSettingsStore.getState().setQuickSelectSetting('tolerance', 32);
+    useToolSettingsStore.getState().setQuickSelectSetting('edgeStrength', 50);
+    useToolSettingsStore.getState().setQuickSelectSetting('mode', 'add');
+    const { quickSelect } = useToolSettingsStore.getState().settings;
+    expect(quickSelect).toEqual({ size: 20, tolerance: 32, edgeStrength: 50, mode: 'add' });
+  });
+
+  it('setQuickSelectSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.quickSelect;
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 40);
+    const after = useToolSettingsStore.getState().settings.quickSelect;
+    expect(after.size).toBe(40);
+    expect(after.tolerance).toBe(before.tolerance);
+    expect(after.edgeStrength).toBe(before.edgeStrength);
+    expect(after.mode).toBe(before.mode);
+  });
+
+  it('setQuickSelectSetting clamps size into [1, 100] and rounds', () => {
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 0);
+    expect(useToolSettingsStore.getState().settings.quickSelect.size).toBe(1);
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 999);
+    expect(useToolSettingsStore.getState().settings.quickSelect.size).toBe(100);
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 12.4);
+    expect(useToolSettingsStore.getState().settings.quickSelect.size).toBe(12);
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 12.6);
+    expect(useToolSettingsStore.getState().settings.quickSelect.size).toBe(13);
+  });
+
+  it('setQuickSelectSetting clamps tolerance into [0, 255] and rounds', () => {
+    // Tolerance lives in the same units as RGBA channels because the
+    // stroke compares pixel deltas against it directly — preserve the
+    // 0–255 byte range exactly, not a percent 0–100.
+    useToolSettingsStore.getState().setQuickSelectSetting('tolerance', -10);
+    expect(useToolSettingsStore.getState().settings.quickSelect.tolerance).toBe(0);
+    useToolSettingsStore.getState().setQuickSelectSetting('tolerance', 999);
+    expect(useToolSettingsStore.getState().settings.quickSelect.tolerance).toBe(255);
+    useToolSettingsStore.getState().setQuickSelectSetting('tolerance', 60.6);
+    expect(useToolSettingsStore.getState().settings.quickSelect.tolerance).toBe(61);
+  });
+
+  it('setQuickSelectSetting clamps edgeStrength into [0, 100] and rounds', () => {
+    useToolSettingsStore.getState().setQuickSelectSetting('edgeStrength', -10);
+    expect(useToolSettingsStore.getState().settings.quickSelect.edgeStrength).toBe(0);
+    useToolSettingsStore.getState().setQuickSelectSetting('edgeStrength', 999);
+    expect(useToolSettingsStore.getState().settings.quickSelect.edgeStrength).toBe(100);
+    useToolSettingsStore.getState().setQuickSelectSetting('edgeStrength', 42.3);
+    expect(useToolSettingsStore.getState().settings.quickSelect.edgeStrength).toBe(42);
+  });
+
+  it('setQuickSelectSetting normalises mode to a known tag', () => {
+    useToolSettingsStore.getState().setQuickSelectSetting('mode', 'subtract');
+    expect(useToolSettingsStore.getState().settings.quickSelect.mode).toBe('subtract');
+    useToolSettingsStore.getState().setQuickSelectSetting('mode', 'add');
+    expect(useToolSettingsStore.getState().settings.quickSelect.mode).toBe('add');
+    // Unknown strings collapse to 'add' rather than silently passing
+    // through — guards against a typed-string @ts-ignore bypass leaving
+    // the selection in an unhandled state.
+    (useToolSettingsStore.getState().setQuickSelectSetting as (k: 'mode', v: string) => void)('mode', 'replace');
+    expect(useToolSettingsStore.getState().settings.quickSelect.mode).toBe('add');
+  });
+
+  it('setQuickSelectSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 55);
+    expect(useToolSettingsStore.getState().settings.quickSelect.size).toBe(55);
+    // Sibling slice references preserved — selectors subscribed to the
+    // other slices should not re-render when quickSelect changes. This
+    // is the invariant that justifies slicing instead of fattening the
+    // flat bag further.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: shape (#453)', () => {
+  // Reset to the legacy defaults at the top of each test — prior tests
+  // in this file (including the #236 mode guard suite at the top) and
+  // sibling cases inside this block may have mutated the slice.
+  beforeEach(() => {
+    const set = useToolSettingsStore.getState().setShapeSetting;
+    set('mode', 'ellipse');
+    set('output', 'pixels');
+    set('fillColor', { r: 255, g: 255, b: 255, a: 1 });
+    set('strokeColor', null);
+    set('strokeWidth', 2);
+    set('polygonSides', 6);
+    set('cornerRadius', 0);
+  });
+
+  it('exposes shape settings under settings.shape with the legacy defaults', () => {
+    const { shape } = useToolSettingsStore.getState().settings;
+    expect(shape).toEqual({
+      mode: 'ellipse',
+      output: 'pixels',
+      fillColor: { r: 255, g: 255, b: 255, a: 1 },
+      strokeColor: null,
+      strokeWidth: 2,
+      polygonSides: 6,
+      cornerRadius: 0,
+    });
+  });
+
+  it('setShapeSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.shape;
+    useToolSettingsStore.getState().setShapeSetting('strokeWidth', 7);
+    const after = useToolSettingsStore.getState().settings.shape;
+    expect(after.strokeWidth).toBe(7);
+    expect(after.mode).toBe(before.mode);
+    expect(after.output).toBe(before.output);
+    expect(after.fillColor).toBe(before.fillColor);
+    expect(after.strokeColor).toBe(before.strokeColor);
+    expect(after.polygonSides).toBe(before.polygonSides);
+    expect(after.cornerRadius).toBe(before.cornerRadius);
+  });
+
+  it('setShapeSetting clamps strokeWidth into [1, 50]', () => {
+    useToolSettingsStore.getState().setShapeSetting('strokeWidth', 0);
+    expect(useToolSettingsStore.getState().settings.shape.strokeWidth).toBe(1);
+    useToolSettingsStore.getState().setShapeSetting('strokeWidth', 9999);
+    expect(useToolSettingsStore.getState().settings.shape.strokeWidth).toBe(50);
+  });
+
+  it('setShapeSetting rounds and clamps polygonSides into [3, 64]', () => {
+    // Sides must be an integer — fractional sides render as the floor
+    // count with weird seams. Legacy setShapePolygonSides rounded.
+    useToolSettingsStore.getState().setShapeSetting('polygonSides', 2);
+    expect(useToolSettingsStore.getState().settings.shape.polygonSides).toBe(3);
+    useToolSettingsStore.getState().setShapeSetting('polygonSides', 9999);
+    expect(useToolSettingsStore.getState().settings.shape.polygonSides).toBe(64);
+    useToolSettingsStore.getState().setShapeSetting('polygonSides', 6.4);
+    expect(useToolSettingsStore.getState().settings.shape.polygonSides).toBe(6);
+    useToolSettingsStore.getState().setShapeSetting('polygonSides', 6.6);
+    expect(useToolSettingsStore.getState().settings.shape.polygonSides).toBe(7);
+  });
+
+  it('setShapeSetting clamps cornerRadius into [0, 200]', () => {
+    useToolSettingsStore.getState().setShapeSetting('cornerRadius', -10);
+    expect(useToolSettingsStore.getState().settings.shape.cornerRadius).toBe(0);
+    useToolSettingsStore.getState().setShapeSetting('cornerRadius', 9999);
+    expect(useToolSettingsStore.getState().settings.shape.cornerRadius).toBe(200);
+  });
+
+  it('setShapeSetting passes nullable colors through, including null', () => {
+    useToolSettingsStore.getState().setShapeSetting('fillColor', null);
+    expect(useToolSettingsStore.getState().settings.shape.fillColor).toBeNull();
+    const red = { r: 200, g: 30, b: 40, a: 0.5 };
+    useToolSettingsStore.getState().setShapeSetting('strokeColor', red);
+    expect(useToolSettingsStore.getState().settings.shape.strokeColor).toEqual(red);
+  });
+
+  it('setShapeSetting collapses invalid output to "pixels" (mirrors mode guard)', () => {
+    useToolSettingsStore.getState().setShapeSetting('output', 'path');
+    expect(useToolSettingsStore.getState().settings.shape.output).toBe('path');
+    (useToolSettingsStore.getState().setShapeSetting as (k: 'output', v: string) => void)('output', 'vector');
+    expect(useToolSettingsStore.getState().settings.shape.output).toBe('pixels');
+  });
+
+  it('setShapeSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
+    useToolSettingsStore.getState().setShapeSetting('strokeWidth', 42);
+    expect(useToolSettingsStore.getState().settings.shape.strokeWidth).toBe(42);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: gradient (#453)', () => {
+  beforeEach(() => {
+    // Reset to the legacy defaults — prior tests in this file (and the
+    // module-state persisted across tests) may have mutated the slice.
+    useToolSettingsStore.getState().setGradientSetting('type', 'linear');
+    useToolSettingsStore.getState().setGradientSetting('reverse', false);
+    useToolSettingsStore.getState().setGradientSetting('stops', [
+      { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
+      { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
+    ]);
+  });
+
+  it('exposes gradient settings under settings.gradient with the legacy defaults', () => {
+    const { gradient } = useToolSettingsStore.getState().settings;
+    expect(gradient.type).toBe('linear');
+    expect(gradient.reverse).toBe(false);
+    expect(gradient.stops.length).toBe(2);
+    expect(gradient.stops[0]).toEqual({ position: 0, color: { r: 0, g: 0, b: 0, a: 1 } });
+    expect(gradient.stops[1]).toEqual({ position: 1, color: { r: 255, g: 255, b: 255, a: 1 } });
+  });
+
+  it('setGradientSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.gradient;
+    useToolSettingsStore.getState().setGradientSetting('reverse', true);
+    const after = useToolSettingsStore.getState().settings.gradient;
+    expect(after.reverse).toBe(true);
+    expect(after.type).toBe(before.type);
+    expect(after.stops).toBe(before.stops);
+  });
+
+  it('setGradientSetting collapses unknown type strings to linear', () => {
+    // The legacy setGradientType accepted anything typed as the union;
+    // the slice tightens that to the documented default so a typed-string
+    // @ts-ignore bypass can't leave the GPU dispatch staring at a stale
+    // enum. Same shape as the shape slice (#623).
+    useToolSettingsStore.getState().setGradientSetting('type', 'radial');
+    expect(useToolSettingsStore.getState().settings.gradient.type).toBe('radial');
+    (useToolSettingsStore.getState().setGradientSetting as (k: string, v: unknown) => void)('type', 'conic');
+    expect(useToolSettingsStore.getState().settings.gradient.type).toBe('linear');
+  });
+
+  it('setGradientSetting clamps stops list above the max (the GPU dispatch uniform cap)', () => {
+    const tooMany = Array.from({ length: 25 }, (_, i) => ({
+      position: i / 24,
+      color: { r: i * 10, g: 0, b: 0, a: 1 },
+    }));
+    useToolSettingsStore.getState().setGradientSetting('stops', tooMany);
+    expect(useToolSettingsStore.getState().settings.gradient.stops.length).toBe(16);
+  });
+
+  it('setGradientSetting pads stops list below the min so the gradient shaders always have ≥2 stops', () => {
+    useToolSettingsStore.getState().setGradientSetting('stops', [
+      { position: 0.5, color: { r: 128, g: 128, b: 128, a: 1 } },
+    ]);
+    expect(useToolSettingsStore.getState().settings.gradient.stops.length).toBe(2);
+  });
+
+  it('setGradientSetting clamps per-stop position into [0, 1] and sorts', () => {
+    useToolSettingsStore.getState().setGradientSetting('stops', [
+      { position: 1.5, color: { r: 255, g: 0, b: 0, a: 1 } },
+      { position: -0.5, color: { r: 0, g: 0, b: 255, a: 1 } },
+    ]);
+    const sorted = useToolSettingsStore.getState().settings.gradient.stops;
+    expect(sorted.map((s) => s.position)).toEqual([0, 1]);
+  });
+
+  it('addGradientStop inserts and re-sorts via settings.gradient.stops', () => {
+    useToolSettingsStore.getState().addGradientStop(0.5, { r: 128, g: 128, b: 128, a: 1 });
+    const stops = useToolSettingsStore.getState().settings.gradient.stops;
+    expect(stops.length).toBe(3);
+    expect(stops.map((s) => s.position)).toEqual([0, 0.5, 1]);
+  });
+
+  it('addGradientStop is rejected at the max', () => {
+    const max = Array.from({ length: 16 }, (_, i) => ({
+      position: i / 15,
+      color: { r: i, g: 0, b: 0, a: 1 },
+    }));
+    useToolSettingsStore.getState().setGradientSetting('stops', max);
+    useToolSettingsStore.getState().addGradientStop(0.5, { r: 0, g: 255, b: 0, a: 1 });
+    expect(useToolSettingsStore.getState().settings.gradient.stops.length).toBe(16);
+  });
+
+  it('removeGradientStop refuses to drop the list below the min', () => {
+    useToolSettingsStore.getState().removeGradientStop(0);
+    expect(useToolSettingsStore.getState().settings.gradient.stops.length).toBe(2);
+  });
+
+  it('updateGradientStop patches a single stop and re-sorts the list', () => {
+    useToolSettingsStore.getState().setGradientSetting('stops', [
+      { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
+      { position: 0.5, color: { r: 128, g: 128, b: 128, a: 1 } },
+      { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
+    ]);
+    useToolSettingsStore.getState().updateGradientStop(1, { position: 0.9 });
+    const stops = useToolSettingsStore.getState().settings.gradient.stops;
+    expect(stops.map((s) => s.position)).toEqual([0, 0.9, 1]);
+  });
+
+  it('setGradientSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
+    useToolSettingsStore.getState().setGradientSetting('reverse', true);
+    expect(useToolSettingsStore.getState().settings.gradient.reverse).toBe(true);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: crop (#453)', () => {
+  it('exposes crop settings under settings.crop with the legacy default', () => {
+    // Reset to the legacy default — prior tests in this file may have
+    // mutated the slice through setCropSetting.
+    useToolSettingsStore.getState().setCropSetting('mode', 'normal');
+    const { crop } = useToolSettingsStore.getState().settings;
+    expect(crop).toEqual({ mode: 'normal' });
+  });
+
+  it('setCropSetting toggles mode between normal and perspective', () => {
+    useToolSettingsStore.getState().setCropSetting('mode', 'perspective');
+    expect(useToolSettingsStore.getState().settings.crop.mode).toBe('perspective');
+    useToolSettingsStore.getState().setCropSetting('mode', 'normal');
+    expect(useToolSettingsStore.getState().settings.crop.mode).toBe('normal');
+  });
+
+  it('setCropSetting rejects unknown mode values and falls back to "normal"', () => {
+    useToolSettingsStore.getState().setCropSetting('mode', 'perspective');
+    // The setter is typed as CropSettings['mode'] but JS callers (and
+    // any `as` cast in TS) can pass anything. The store must reject
+    // unknown values so the crop dispatcher doesn't read a state that
+    // neither the rect nor the perspective handler will service —
+    // mirrors the setShapeMode reject-and-reset behaviour from #236.
+    const setter = useToolSettingsStore.getState().setCropSetting as (
+      key: 'mode',
+      value: string,
+    ) => void;
+    setter('mode', 'rect');
+    expect(useToolSettingsStore.getState().settings.crop.mode).toBe('normal');
+    setter('mode', 'free');
+    expect(useToolSettingsStore.getState().settings.crop.mode).toBe('normal');
+  });
+
+  it('setCropSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
+    useToolSettingsStore.getState().setCropSetting('mode', 'perspective');
+    expect(useToolSettingsStore.getState().settings.crop.mode).toBe('perspective');
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: brushSpeed (#453)', () => {
+  // First sub-slice carved out of the flat `brushSpeed*` brush fields.
+  // Same shape as the per-tool slices above: read via
+  // `settings.brushSpeed.<field>`, write via `setBrushSpeedSetting`.
+  // The remaining brush sub-slices (jitter, texture, tip/presets/
+  // sub-brushes) still live flat on the store and land in follow-up
+  // PRs.
+  it('exposes brushSpeed settings under settings.brushSpeed with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setBrushSpeedSetting or setActivePreset.
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', 0);
+    useToolSettingsStore.getState().setBrushSpeedSetting('sizeInvert', false);
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'med');
+    const { brushSpeed } = useToolSettingsStore.getState().settings;
+    expect(brushSpeed).toEqual({ size: 0, sizeInvert: false, sensitivity: 'med' });
+  });
+
+  it('setBrushSpeedSetting updates one field without disturbing the others', () => {
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', 50);
+    useToolSettingsStore.getState().setBrushSpeedSetting('sizeInvert', true);
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'high');
+    const before = useToolSettingsStore.getState().settings.brushSpeed;
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', 120);
+    const after = useToolSettingsStore.getState().settings.brushSpeed;
+    expect(after.size).toBe(120);
+    expect(after.sizeInvert).toBe(before.sizeInvert);
+    expect(after.sensitivity).toBe(before.sensitivity);
+  });
+
+  it('setBrushSpeedSetting clamps size into [0, 300]', () => {
+    // The UI surfaces 0–100 with sizeInvert=false and 0–300 with
+    // sizeInvert=true. The store-level clamp is the looser bound so
+    // flipping the invert toggle never truncates the slider value.
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', -10);
+    expect(useToolSettingsStore.getState().settings.brushSpeed.size).toBe(0);
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', 9999);
+    expect(useToolSettingsStore.getState().settings.brushSpeed.size).toBe(300);
+  });
+
+  it('setBrushSpeedSetting accepts the three documented sensitivity values', () => {
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'low');
+    expect(useToolSettingsStore.getState().settings.brushSpeed.sensitivity).toBe('low');
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'med');
+    expect(useToolSettingsStore.getState().settings.brushSpeed.sensitivity).toBe('med');
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'high');
+    expect(useToolSettingsStore.getState().settings.brushSpeed.sensitivity).toBe('high');
+  });
+
+  it('setBrushSpeedSetting collapses unknown sensitivity strings to "med"', () => {
+    // brush-stroke.ts maps sensitivity to a moving-average window
+    // (low → 6, med → 3, high → 2). An unrecognised enum would leave
+    // the ternary on the `med` branch silently, so the slice collapses
+    // unknown strings to 'med' explicitly — same enum-guard policy as
+    // shape/quickSelect/gradient.
+    useToolSettingsStore.getState().setBrushSpeedSetting('sensitivity', 'high');
+    const setter = useToolSettingsStore.getState().setBrushSpeedSetting as (
+      key: 'sensitivity',
+      value: string,
+    ) => void;
+    setter('sensitivity', 'medium');
+    expect(useToolSettingsStore.getState().settings.brushSpeed.sensitivity).toBe('med');
+    setter('sensitivity', 'turbo');
+    expect(useToolSettingsStore.getState().settings.brushSpeed.sensitivity).toBe('med');
+  });
+
+  it('setBrushSpeedSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeText = useToolSettingsStore.getState().settings.text;
+    const beforeSpray = useToolSettingsStore.getState().settings.spray;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
+    useToolSettingsStore.getState().setBrushSpeedSetting('size', 42);
+    expect(useToolSettingsStore.getState().settings.brushSpeed.size).toBe(42);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().settings.text).toBe(beforeText);
+    expect(useToolSettingsStore.getState().settings.spray).toBe(beforeSpray);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
+  });
+});
+
+describe('per-tool slice: brushJitter (#453)', () => {
+  it('exposes brush-jitter settings under settings.brushJitter with the legacy defaults', () => {
+    // Reset to defaults — earlier tests in this file may have mutated
+    // the slice through setBrushJitterSetting.
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('hardness', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('angle', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('opacity', 0);
+    const { brushJitter } = useToolSettingsStore.getState().settings;
+    expect(brushJitter).toEqual({ size: 0, hardness: 0, angle: 0, opacity: 0 });
+  });
+
+  it('setBrushJitterSetting updates one field without disturbing the others', () => {
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('hardness', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('angle', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('opacity', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 40);
+    const after = useToolSettingsStore.getState().settings.brushJitter;
+    expect(after).toEqual({ size: 40, hardness: 0, angle: 0, opacity: 0 });
+  });
+
+  it('setBrushJitterSetting clamps every field into [0, 100]', () => {
+    for (const key of ['size', 'hardness', 'angle', 'opacity'] as const) {
+      useToolSettingsStore.getState().setBrushJitterSetting(key, -10);
+      expect(useToolSettingsStore.getState().settings.brushJitter[key]).toBe(0);
+      useToolSettingsStore.getState().setBrushJitterSetting(key, 9999);
+      expect(useToolSettingsStore.getState().settings.brushJitter[key]).toBe(100);
+    }
+  });
+
+  it('setBrushJitterSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeHealing = useToolSettingsStore.getState().settings.healing;
+    const beforeBrushSize = useToolSettingsStore.getState().settings.brush.size;
+    useToolSettingsStore.getState().setBrushJitterSetting('angle', 25);
+    expect(useToolSettingsStore.getState().settings.brushJitter.angle).toBe(25);
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.healing).toBe(beforeHealing);
+    expect(useToolSettingsStore.getState().settings.brush.size).toBe(beforeBrushSize);
+  });
+
+  it('saveCurrentAsPreset captures the current brushJitter values', () => {
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 17);
+    useToolSettingsStore.getState().setBrushJitterSetting('hardness', 23);
+    useToolSettingsStore.getState().setBrushJitterSetting('angle', 31);
+    useToolSettingsStore.getState().setBrushJitterSetting('opacity', 43);
+    useToolSettingsStore.getState().saveCurrentAsPreset('jitter-roundtrip');
+    const saved = useToolSettingsStore
+      .getState()
+      .presets.find((p) => p.name === 'jitter-roundtrip');
+    expect(saved).toBeDefined();
+    expect(saved?.sizeJitter).toBe(17);
+    expect(saved?.hardnessJitter).toBe(23);
+    expect(saved?.angleJitter).toBe(31);
+    expect(saved?.opacityJitter).toBe(43);
+  });
+
+  it('setActivePreset restores brushJitter from the preset', () => {
+    // Save under known-jitter, then drift the slice, then setActivePreset
+    // and assert the slice came back. Exercises both the save path
+    // (legacy flat preset fields) and the restore path (writes into the
+    // new settings.brushJitter slice).
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 11);
+    useToolSettingsStore.getState().setBrushJitterSetting('hardness', 22);
+    useToolSettingsStore.getState().setBrushJitterSetting('angle', 33);
+    useToolSettingsStore.getState().setBrushJitterSetting('opacity', 44);
+    useToolSettingsStore.getState().saveCurrentAsPreset('jitter-restore');
+    const presetId = useToolSettingsStore
+      .getState()
+      .presets.find((p) => p.name === 'jitter-restore')!.id;
+    useToolSettingsStore.getState().setBrushJitterSetting('size', 0);
+    useToolSettingsStore.getState().setBrushJitterSetting('opacity', 0);
+    useToolSettingsStore.getState().setActivePreset(presetId);
+    const restored = useToolSettingsStore.getState().settings.brushJitter;
+    expect(restored).toEqual({ size: 11, hardness: 22, angle: 33, opacity: 44 });
   });
 });

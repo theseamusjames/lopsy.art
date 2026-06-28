@@ -135,12 +135,11 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
     await page.evaluate(() => {
       const toolStore = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setBrushSize: (s: number) => void;
-          setBrushHardness: (h: number) => void;
+          setBrushSetting: (key: string, value: number) => void;
         };
       };
-      toolStore.getState().setBrushSize(12);
-      toolStore.getState().setBrushHardness(90);
+      toolStore.getState().setBrushSetting('size', 12);
+      toolStore.getState().setBrushSetting('hardness', 90);
     });
 
     const container = page.locator('[data-testid="canvas-container"]');

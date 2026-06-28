@@ -142,9 +142,9 @@ export function handlePaintDown(
     const mode = getQuickMaskPaintMode(tool, toolSettings.foregroundColor);
 
     if (tool === 'brush') {
-      const size = toolSettings.brushSize;
-      const hardness = toolSettings.brushHardness / 100;
-      const opacity = toolSettings.brushOpacity / 100;
+      const size = toolSettings.settings.brush.size;
+      const hardness = toolSettings.settings.brush.hardness / 100;
+      const opacity = toolSettings.settings.brush.opacity / 100;
       if (shiftLine) {
         const arr = packDabLine(qmShiftFrom, canvasPos, size);
         gpuQuickMaskDabBatch(engine, arr, size, hardness, opacity, mode);
@@ -207,9 +207,9 @@ export function handlePaintDown(
     const mode = tool === 'eraser' ? 0 : 1;
 
     if (tool === 'brush') {
-      const size = toolSettings.brushSize;
-      const hardness = toolSettings.brushHardness / 100;
-      const opacity = toolSettings.brushOpacity / 100;
+      const size = toolSettings.settings.brush.size;
+      const hardness = toolSettings.settings.brush.hardness / 100;
+      const opacity = toolSettings.settings.brush.opacity / 100;
       if (shiftLine) {
         const arr = packDabLine(lineFrom, layerPos, size);
         gpuMaskDabBatch(engine, activeLayerId, arr, size, hardness, opacity, mode);
@@ -279,17 +279,18 @@ export function handlePaintDown(
   const sym = getSymmetryConfig(docCenter);
 
   if (tool === 'brush') {
-    const baseSize = toolSettings.brushSize;
-    const baseHardness = toolSettings.brushHardness / 100;
-    const opacity = toolSettings.brushOpacity / 100;
-    const brushSpacing = toolSettings.brushSpacing;
-    const brushScatter = toolSettings.brushScatter;
-    const brushFade = toolSettings.brushFade;
-    const sizeJitter = toolSettings.brushSizeJitter / 100;
-    const hardnessJitter = toolSettings.brushHardnessJitter / 100;
-    const aJ = toolSettings.brushAngleJitter / 100;
-    const oJ = toolSettings.brushOpacityJitter / 100;
-    const brushTaper = toolSettings.brushTaper;
+    const brush = toolSettings.settings.brush;
+    const baseSize = brush.size;
+    const baseHardness = brush.hardness / 100;
+    const opacity = brush.opacity / 100;
+    const brushSpacing = brush.spacing;
+    const brushScatter = brush.scatter;
+    const brushFade = brush.fade;
+    const sizeJitter = toolSettings.settings.brushJitter.size / 100;
+    const hardnessJitter = toolSettings.settings.brushJitter.hardness / 100;
+    const aJ = toolSettings.settings.brushJitter.angle / 100;
+    const oJ = toolSettings.settings.brushJitter.opacity / 100;
+    const brushTaper = brush.taper;
     const needsPerDab = sizeJitter > 0 || hardnessJitter > 0 || brushTaper > 0;
     const color = strokeColor;
     useToolSettingsStore.getState().addRecentColor(color);
@@ -657,7 +658,7 @@ function handleMaskPaintMoveUnified(
 
   switch (state.tool) {
     case 'brush':
-      emitDabs(toolSettings.brushSize, toolSettings.brushHardness / 100, toolSettings.brushOpacity / 100);
+      emitDabs(toolSettings.settings.brush.size, toolSettings.settings.brush.hardness / 100, toolSettings.settings.brush.opacity / 100);
       break;
     case 'pencil': {
       const size = toolSettings.settings.pencil.size;

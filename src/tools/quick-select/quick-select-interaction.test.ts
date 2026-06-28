@@ -39,10 +39,14 @@ vi.mock('../../app/ui-store', () => ({
 }));
 
 const ts = {
-  quickSelectSize: 3,
-  quickSelectTolerance: 32,
-  quickSelectEdgeStrength: 0,
-  quickSelectMode: 'add' as 'add' | 'subtract',
+  settings: {
+    quickSelect: {
+      size: 3,
+      tolerance: 32,
+      edgeStrength: 0,
+      mode: 'add' as 'add' | 'subtract',
+    },
+  },
 };
 vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
@@ -127,8 +131,8 @@ beforeEach(() => {
   editorState.clearSelection.mockClear();
   editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
   uiState.setTransform.mockClear();
-  ts.quickSelectMode = 'add';
-  ts.quickSelectTolerance = 32;
+  ts.settings.quickSelect.mode = 'add';
+  ts.settings.quickSelect.tolerance = 32;
   // Clear the module-level stroke session from any previous test.
   handleQuickSelectUp();
 });
@@ -184,7 +188,7 @@ describe('quick select down', () => {
   });
 
   it('subtract mode removes the clicked region from a prior selection', () => {
-    ts.quickSelectMode = 'subtract';
+    ts.settings.quickSelect.mode = 'subtract';
     const prior = new Uint8ClampedArray(DOC_W * DOC_H).fill(255);
     editorState.selection = {
       active: true,
@@ -204,7 +208,7 @@ describe('quick select down', () => {
   });
 
   it('clears the selection when subtracting leaves nothing', () => {
-    ts.quickSelectMode = 'subtract';
+    ts.settings.quickSelect.mode = 'subtract';
     const prior = new Uint8ClampedArray(DOC_W * DOC_H);
     for (let y = 0; y < 6; y++) {
       for (let x = 0; x < DOC_W; x++) prior[y * DOC_W + x] = 255;

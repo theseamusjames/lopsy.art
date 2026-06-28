@@ -7,23 +7,6 @@ export interface GradientStop {
   readonly color: Color;
 }
 
-export interface GradientSettings {
-  readonly type: GradientType;
-  readonly stops: readonly GradientStop[];
-  readonly reverse: boolean;
-}
-
-export function defaultGradientSettings(): GradientSettings {
-  return {
-    type: 'linear',
-    stops: [
-      { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
-      { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
-    ],
-    reverse: false,
-  };
-}
-
 export function interpolateGradient(stops: readonly GradientStop[], t: number): Color {
   if (stops.length === 0) return { r: 0, g: 0, b: 0, a: 0 };
   if (stops.length === 1) return stops[0]!.color;

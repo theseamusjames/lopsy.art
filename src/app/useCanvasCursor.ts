@@ -35,7 +35,7 @@ function getToolSize(tool: BrushTool, settings: ReturnType<typeof useToolSetting
   switch (tool) {
     case 'brush':
     case 'dodge':
-      return settings.brushSize;
+      return settings.settings.brush.size;
     case 'sponge':
       return settings.settings.sponge.size;
     case 'pencil':
@@ -186,6 +186,6 @@ export function getBrushCursorInfo(tool: ToolId): BrushCursorInfo | null {
     size: getToolSize(tool, settings),
     shape: tool === 'pencil' ? 'square' : 'circle',
     tip: tool === 'brush' ? settings.activeBrushTip : null,
-    angle: tool === 'brush' ? (settings.brushAngle * Math.PI) / 180 : 0,
+    angle: tool === 'brush' ? (settings.settings.brush.angle * Math.PI) / 180 : 0,
   };
 }

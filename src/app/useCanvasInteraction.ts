@@ -365,14 +365,15 @@ export function useCanvasInteraction(
           if (!engine) return;
 
           const toolSettings = useToolSettingsStore.getState();
-          const size = toolSettings.brushSize;
-          const hardness = toolSettings.brushHardness / 100;
-          const opacity = toolSettings.brushOpacity / 100;
+          const brush = toolSettings.settings.brush;
+          const size = brush.size;
+          const hardness = brush.hardness / 100;
+          const opacity = brush.opacity / 100;
           const color = toolSettings.foregroundColor;
           const r = color.r / 255;
           const g = color.g / 255;
           const b = color.b / 255;
-          const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
+          const spacing = Math.max(1, size * brush.spacing / 100);
 
           const result = smoothStroke(strokePoints, spacing);
           if (result.sampledPoints.length < 2) return;

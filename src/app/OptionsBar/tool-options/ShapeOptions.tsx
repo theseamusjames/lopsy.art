@@ -45,21 +45,15 @@ function ColorPopover({ anchorRef, popoverRef, color, onChange, onRemove, remove
 }
 
 export function ShapeOptions() {
-  const shapeMode = useToolSettingsStore((s) => s.shapeMode);
-  const shapeOutput = useToolSettingsStore((s) => s.shapeOutput);
-  const shapeFillColor = useToolSettingsStore((s) => s.shapeFillColor);
-  const shapeStrokeColor = useToolSettingsStore((s) => s.shapeStrokeColor);
-  const shapeStrokeWidth = useToolSettingsStore((s) => s.shapeStrokeWidth);
-  const shapePolygonSides = useToolSettingsStore((s) => s.shapePolygonSides);
-  const shapeCornerRadius = useToolSettingsStore((s) => s.shapeCornerRadius);
-  const setShapeMode = useToolSettingsStore((s) => s.setShapeMode);
-  const setShapeOutput = useToolSettingsStore((s) => s.setShapeOutput);
-  const setShapeFillColor = useToolSettingsStore((s) => s.setShapeFillColor);
-  const setShapeStrokeColor = useToolSettingsStore((s) => s.setShapeStrokeColor);
+  const shapeMode = useToolSettingsStore((s) => s.settings.shape.mode);
+  const shapeOutput = useToolSettingsStore((s) => s.settings.shape.output);
+  const shapeFillColor = useToolSettingsStore((s) => s.settings.shape.fillColor);
+  const shapeStrokeColor = useToolSettingsStore((s) => s.settings.shape.strokeColor);
+  const shapeStrokeWidth = useToolSettingsStore((s) => s.settings.shape.strokeWidth);
+  const shapePolygonSides = useToolSettingsStore((s) => s.settings.shape.polygonSides);
+  const shapeCornerRadius = useToolSettingsStore((s) => s.settings.shape.cornerRadius);
+  const setShapeSetting = useToolSettingsStore((s) => s.setShapeSetting);
   const setForegroundColor = useToolSettingsStore((s) => s.setForegroundColor);
-  const setShapeStrokeWidth = useToolSettingsStore((s) => s.setShapeStrokeWidth);
-  const setShapePolygonSides = useToolSettingsStore((s) => s.setShapePolygonSides);
-  const setShapeCornerRadius = useToolSettingsStore((s) => s.setShapeCornerRadius);
 
   const [openPopover, setOpenPopover] = useState<PopoverTarget>(null);
   const fillRef = useRef<HTMLDivElement>(null);
@@ -85,7 +79,7 @@ export function ShapeOptions() {
       <select
         className={styles.select}
         value={shapeMode}
-        onChange={(e) => setShapeMode(e.target.value as ShapeMode)}
+        onChange={(e) => setShapeSetting('mode', e.target.value as ShapeMode)}
         aria-labelledby="shape-mode-label"
       >
         <option value="ellipse">Ellipse</option>
@@ -96,7 +90,7 @@ export function ShapeOptions() {
       <select
         className={styles.select}
         value={shapeOutput}
-        onChange={(e) => setShapeOutput(e.target.value as ShapeOutput)}
+        onChange={(e) => setShapeSetting('output', e.target.value as ShapeOutput)}
         aria-labelledby="shape-output-label"
       >
         <option value="pixels">Pixels</option>
@@ -113,13 +107,13 @@ export function ShapeOptions() {
             min={3}
             max={64}
             value={shapePolygonSides}
-            onChange={(e) => setShapePolygonSides(Number(e.target.value))}
+            onChange={(e) => setShapeSetting('polygonSides', Number(e.target.value))}
           />
         </>
       )}
 
       {shapeMode !== 'ellipse' && (
-        <Slider label="Corner Radius" value={shapeCornerRadius} min={0} max={200} onChange={setShapeCornerRadius} />
+        <Slider label="Corner Radius" value={shapeCornerRadius} min={0} max={200} onChange={(v) => setShapeSetting('cornerRadius', v)} />
       )}
 
       <AspectRatioControl />
@@ -143,7 +137,7 @@ export function ShapeOptions() {
             type="button"
             aria-label="Add fill color"
             onClick={() => {
-              setShapeFillColor({ r: 255, g: 255, b: 255, a: 1 });
+              setShapeSetting('fillColor', { r: 255, g: 255, b: 255, a: 1 });
               setOpenPopover('fill');
             }}
           >
@@ -155,8 +149,8 @@ export function ShapeOptions() {
             anchorRef={fillRef}
             popoverRef={popoverRef}
             color={shapeFillColor}
-            onChange={setShapeFillColor}
-            onRemove={() => { setShapeFillColor(null); setOpenPopover(null); }}
+            onChange={(c) => setShapeSetting('fillColor', c)}
+            onRemove={() => { setShapeSetting('fillColor', null); setOpenPopover(null); }}
             removeLabel="Remove fill"
           />
         )}
@@ -181,7 +175,7 @@ export function ShapeOptions() {
             type="button"
             aria-label="Add stroke color"
             onClick={() => {
-              setShapeStrokeColor({ r: 0, g: 0, b: 0, a: 1 });
+              setShapeSetting('strokeColor', { r: 0, g: 0, b: 0, a: 1 });
               setOpenPopover('stroke');
             }}
           >
@@ -193,15 +187,15 @@ export function ShapeOptions() {
             anchorRef={strokeRef}
             popoverRef={popoverRef}
             color={shapeStrokeColor}
-            onChange={setShapeStrokeColor}
-            onRemove={() => { setShapeStrokeColor(null); setOpenPopover(null); }}
+            onChange={(c) => setShapeSetting('strokeColor', c)}
+            onRemove={() => { setShapeSetting('strokeColor', null); setOpenPopover(null); }}
             removeLabel="Remove stroke"
           />
         )}
       </div>
 
       {shapeStrokeColor && (
-        <Slider label="Width" value={shapeStrokeWidth} min={1} max={50} onChange={setShapeStrokeWidth} />
+        <Slider label="Width" value={shapeStrokeWidth} min={1} max={50} onChange={(v) => setShapeSetting('strokeWidth', v)} />
       )}
     </>
   );

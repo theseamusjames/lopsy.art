@@ -43,37 +43,37 @@ export function BrushModal() {
   const saveCurrentAsPreset = useToolSettingsStore((s) => s.saveCurrentAsPreset);
   const setShowBrushModal = useUIStore((s) => s.setShowBrushModal);
 
-  const brushSize = useToolSettingsStore((s) => s.brushSize);
-  const brushOpacity = useToolSettingsStore((s) => s.brushOpacity);
-  const brushHardness = useToolSettingsStore((s) => s.brushHardness);
-  const brushSpacing = useToolSettingsStore((s) => s.brushSpacing);
-  const brushScatter = useToolSettingsStore((s) => s.brushScatter);
-  const brushAngle = useToolSettingsStore((s) => s.brushAngle);
+  const brushSize = useToolSettingsStore((s) => s.settings.brush.size);
+  const brushOpacity = useToolSettingsStore((s) => s.settings.brush.opacity);
+  const brushHardness = useToolSettingsStore((s) => s.settings.brush.hardness);
+  const brushSpacing = useToolSettingsStore((s) => s.settings.brush.spacing);
+  const brushScatter = useToolSettingsStore((s) => s.settings.brush.scatter);
+  const brushAngle = useToolSettingsStore((s) => s.settings.brush.angle);
+  const brushTaper = useToolSettingsStore((s) => s.settings.brush.taper);
   const activeBrushTip = useToolSettingsStore((s) => s.activeBrushTip);
 
-  const setBrushSize = useToolSettingsStore((s) => s.setBrushSize);
-  const setBrushOpacity = useToolSettingsStore((s) => s.setBrushOpacity);
-  const setBrushHardness = useToolSettingsStore((s) => s.setBrushHardness);
-  const setBrushSpacing = useToolSettingsStore((s) => s.setBrushSpacing);
-  const setBrushScatter = useToolSettingsStore((s) => s.setBrushScatter);
-  const setBrushAngle = useToolSettingsStore((s) => s.setBrushAngle);
-  const brushTaper = useToolSettingsStore((s) => s.brushTaper);
-  const setBrushTaper = useToolSettingsStore((s) => s.setBrushTaper);
+  const setBrushSetting = useToolSettingsStore((s) => s.setBrushSetting);
+  const setBrushSize = useCallback((v: number) => setBrushSetting('size', v), [setBrushSetting]);
+  const setBrushOpacity = useCallback((v: number) => setBrushSetting('opacity', v), [setBrushSetting]);
+  const setBrushHardness = useCallback((v: number) => setBrushSetting('hardness', v), [setBrushSetting]);
+  const setBrushSpacing = useCallback((v: number) => setBrushSetting('spacing', v), [setBrushSetting]);
+  const setBrushScatter = useCallback((v: number) => setBrushSetting('scatter', v), [setBrushSetting]);
+  const setBrushAngle = useCallback((v: number) => setBrushSetting('angle', v), [setBrushSetting]);
+  const setBrushTaper = useCallback((v: number) => setBrushSetting('taper', v), [setBrushSetting]);
 
-  const sizeJitter = useToolSettingsStore((s) => s.brushSizeJitter);
-  const hardnessJitter = useToolSettingsStore((s) => s.brushHardnessJitter);
-  const angleJitter = useToolSettingsStore((s) => s.brushAngleJitter);
-  const opacityJitter = useToolSettingsStore((s) => s.brushOpacityJitter);
-  const speedSize = useToolSettingsStore((s) => s.brushSpeedSize);
-  const speedSizeInvert = useToolSettingsStore((s) => s.brushSpeedSizeInvert);
-  const speedSensitivity = useToolSettingsStore((s) => s.brushSpeedSensitivity);
-  const setSizeJitter = useToolSettingsStore((s) => s.setBrushSizeJitter);
-  const setHardnessJitter = useToolSettingsStore((s) => s.setBrushHardnessJitter);
-  const setAngleJitter = useToolSettingsStore((s) => s.setBrushAngleJitter);
-  const setOpacityJitter = useToolSettingsStore((s) => s.setBrushOpacityJitter);
-  const setSpeedSize = useToolSettingsStore((s) => s.setBrushSpeedSize);
-  const setSpeedSizeInvert = useToolSettingsStore((s) => s.setBrushSpeedSizeInvert);
-  const setSpeedSensitivity = useToolSettingsStore((s) => s.setBrushSpeedSensitivity);
+  const sizeJitter = useToolSettingsStore((s) => s.settings.brushJitter.size);
+  const hardnessJitter = useToolSettingsStore((s) => s.settings.brushJitter.hardness);
+  const angleJitter = useToolSettingsStore((s) => s.settings.brushJitter.angle);
+  const opacityJitter = useToolSettingsStore((s) => s.settings.brushJitter.opacity);
+  const speedSize = useToolSettingsStore((s) => s.settings.brushSpeed.size);
+  const speedSizeInvert = useToolSettingsStore((s) => s.settings.brushSpeed.sizeInvert);
+  const speedSensitivity = useToolSettingsStore((s) => s.settings.brushSpeed.sensitivity);
+  const setBrushJitterSetting = useToolSettingsStore((s) => s.setBrushJitterSetting);
+  const setSizeJitter = (v: number) => setBrushJitterSetting('size', v);
+  const setHardnessJitter = (v: number) => setBrushJitterSetting('hardness', v);
+  const setAngleJitter = (v: number) => setBrushJitterSetting('angle', v);
+  const setOpacityJitter = (v: number) => setBrushJitterSetting('opacity', v);
+  const setBrushSpeedSetting = useToolSettingsStore((s) => s.setBrushSpeedSetting);
 
   const textureData = useToolSettingsStore((s) => s.settings.brushTexture.data);
   const textureBlendMode = useToolSettingsStore((s) => s.settings.brushTexture.blendMode);
@@ -293,19 +293,19 @@ export function BrushModal() {
             <Slider label="Hardness Jitter" value={hardnessJitter} min={0} max={100} onChange={setHardnessJitter} />
             <Slider label="Angle Jitter" value={angleJitter} min={0} max={100} onChange={setAngleJitter} />
             <Slider label="Opacity Jitter" value={opacityJitter} min={0} max={100} onChange={setOpacityJitter} />
-            <Slider label="Speed Size" value={speedSize} min={0} max={speedSizeInvert ? 300 : 100} onChange={setSpeedSize} />
+            <Slider label="Speed Size" value={speedSize} min={0} max={speedSizeInvert ? 300 : 100} onChange={(v) => setBrushSpeedSetting('size', v)} />
             <div className={styles.speedToggleRow}>
               <span className={styles.speedToggleLabel}>Faster is</span>
               <div className={styles.speedToggleGroup}>
                 <button
                   className={`${styles.speedToggle}${!speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
-                  onClick={() => { setSpeedSizeInvert(false); if (speedSize > 100) setSpeedSize(100); }}
+                  onClick={() => { setBrushSpeedSetting('sizeInvert', false); if (speedSize > 100) setBrushSpeedSetting('size', 100); }}
                 >
                   Thinner
                 </button>
                 <button
                   className={`${styles.speedToggle}${speedSizeInvert ? ` ${styles.speedToggleActive}` : ''}`}
-                  onClick={() => setSpeedSizeInvert(true)}
+                  onClick={() => setBrushSpeedSetting('sizeInvert', true)}
                 >
                   Wider
                 </button>
@@ -314,19 +314,19 @@ export function BrushModal() {
               <div className={styles.speedToggleGroup}>
                 <button
                   className={`${styles.speedToggle}${speedSensitivity === 'low' ? ` ${styles.speedToggleActive}` : ''}`}
-                  onClick={() => setSpeedSensitivity('low')}
+                  onClick={() => setBrushSpeedSetting('sensitivity', 'low')}
                 >
                   Low
                 </button>
                 <button
                   className={`${styles.speedToggle}${speedSensitivity === 'med' ? ` ${styles.speedToggleActive}` : ''}`}
-                  onClick={() => setSpeedSensitivity('med')}
+                  onClick={() => setBrushSpeedSetting('sensitivity', 'med')}
                 >
                   Med
                 </button>
                 <button
                   className={`${styles.speedToggle}${speedSensitivity === 'high' ? ` ${styles.speedToggleActive}` : ''}`}
-                  onClick={() => setSpeedSensitivity('high')}
+                  onClick={() => setBrushSpeedSetting('sensitivity', 'high')}
                 >
                   High
                 </button>

@@ -245,6 +245,20 @@ async function setToolSetting(page: Page, setter: string, value: unknown) {
   );
 }
 
+/** Write to the gradient per-tool settings slice; see #453. */
+async function setGradientSetting(
+  page: Page,
+  key: 'type' | 'stops' | 'reverse',
+  value: unknown,
+) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setGradientSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setGradientSetting(key, value);
+  }, { key, value });
+}
+
 /** Write to a per-tool settings slice (wand, …); see #453. */
 async function setWandSetting(page: Page, key: 'tolerance' | 'contiguous' | 'graduated', value: number | boolean) {
   await page.evaluate(({ key, value }) => {
@@ -272,6 +286,16 @@ async function setPencilSetting(page: Page, key: 'size', value: number) {
       getState: () => { setPencilSetting: (k: string, v: unknown) => void };
     };
     store.getState().setPencilSetting(key, value);
+  }, { key, value });
+}
+
+/** Write to the shape per-tool settings slice; see #453. */
+async function setShapeSetting(page: Page, key: string, value: unknown) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setShapeSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setShapeSetting(key, value);
   }, { key, value });
 }
 
@@ -635,8 +659,8 @@ test.describe('Gradient Tool', () => {
 
   test('linear gradient creates smooth transition', async ({ page }) => {
     await page.locator('[data-tool-id="gradient"]').click();
-    await setToolSetting(page, 'setGradientType', 'linear');
-    await setToolSetting(page, 'setGradientStops', [
+    await setGradientSetting(page, 'type', 'linear');
+    await setGradientSetting(page, 'stops', [
       { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
       { position: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
     ]);
@@ -652,8 +676,8 @@ test.describe('Gradient Tool', () => {
 
   test('radial gradient creates circular pattern', async ({ page }) => {
     await page.locator('[data-tool-id="gradient"]').click();
-    await setToolSetting(page, 'setGradientType', 'radial');
-    await setToolSetting(page, 'setGradientStops', [
+    await setGradientSetting(page, 'type', 'radial');
+    await setGradientSetting(page, 'stops', [
       { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
       { position: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
     ]);
@@ -719,10 +743,10 @@ test.describe('Shape Tool', () => {
 
   test('drawing polygon creates filled pixels', async ({ page }) => {
     await page.keyboard.press('u');
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 6);
-    await setToolSetting(page, 'setShapeFillColor', { r: 0, g: 0, b: 255, a: 1 });
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'mode', 'polygon');
+    await setShapeSetting(page, 'polygonSides', 6);
+    await setShapeSetting(page, 'fillColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Center-outward: click center at 125,125, drag to 200,200 (radius ~75px)
     await drawStroke(page, { x: 125, y: 125 }, { x: 200, y: 200 }, 5);
@@ -734,9 +758,9 @@ test.describe('Shape Tool', () => {
 
   test('drawing ellipse creates filled pixels', async ({ page }) => {
     await page.keyboard.press('u');
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 1 });
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'mode', 'ellipse');
+    await setShapeSetting(page, 'fillColor', { r: 255, g: 0, b: 0, a: 1 });
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Center-outward: click center at 200,150, drag to 300,250 (100x100 radii)
     await drawStroke(page, { x: 200, y: 150 }, { x: 300, y: 250 }, 5);
@@ -750,10 +774,10 @@ test.describe('Shape Tool', () => {
 
   test('shape tool with stroke only creates outline', async ({ page }) => {
     await page.keyboard.press('u');
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', null);
-    await setToolSetting(page, 'setShapeStrokeColor', { r: 0, g: 255, b: 0, a: 1 });
-    await setToolSetting(page, 'setShapeStrokeWidth', 3);
+    await setShapeSetting(page, 'mode', 'ellipse');
+    await setShapeSetting(page, 'fillColor', null);
+    await setShapeSetting(page, 'strokeColor', { r: 0, g: 255, b: 0, a: 1 });
+    await setShapeSetting(page, 'strokeWidth', 3);
 
     // Center-outward: click center at 125,125, drag to 200,200
     await drawStroke(page, { x: 125, y: 125 }, { x: 200, y: 200 }, 5);
@@ -1860,9 +1884,9 @@ test.describe('Comprehensive Scenarios', () => {
 
     // Draw a filled ellipse
     await page.keyboard.press('u');
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', { r: 100, g: 150, b: 200, a: 1 });
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'mode', 'ellipse');
+    await setShapeSetting(page, 'fillColor', { r: 100, g: 150, b: 200, a: 1 });
+    await setShapeSetting(page, 'strokeColor', null);
     // Center-outward: center at 100,100, drag to 180,180 (80px radii)
     const beforeShape = await readComposited(page);
     await drawStroke(page, { x: 100, y: 100 }, { x: 180, y: 180 }, 5);
@@ -1992,8 +2016,8 @@ test.describe('Comprehensive Scenarios', () => {
 
     // Apply gradient across the canvas (no selection needed)
     await page.locator('[data-tool-id="gradient"]').click();
-    await setToolSetting(page, 'setGradientType', 'linear');
-    await setToolSetting(page, 'setGradientStops', [
+    await setGradientSetting(page, 'type', 'linear');
+    await setGradientSetting(page, 'stops', [
       { position: 0, color: { r: 255, g: 0, b: 0, a: 1 } },
       { position: 1, color: { r: 0, g: 0, b: 255, a: 1 } },
     ]);

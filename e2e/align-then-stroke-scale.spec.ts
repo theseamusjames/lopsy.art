@@ -59,12 +59,11 @@ async function setBrush(page: Page, size: number) {
     ({ size }) => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setBrushSize: (v: number) => void;
-          setBrushHardness: (v: number) => void;
+          setBrushSetting: (key: string, value: number) => void;
         };
       };
-      store.getState().setBrushSize(size);
-      store.getState().setBrushHardness(100);
+      store.getState().setBrushSetting('size', size);
+      store.getState().setBrushSetting('hardness', 100);
     },
     { size },
   );

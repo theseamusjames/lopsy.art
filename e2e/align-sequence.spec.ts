@@ -78,12 +78,11 @@ async function paintRectWithBrush(page: Page, docX: number, docY: number, w: num
   await page.evaluate(() => {
     const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
       getState: () => {
-        setBrushSize: (v: number) => void;
-        setBrushHardness: (v: number) => void;
+        setBrushSetting: (key: string, value: number) => void;
       };
     };
-    store.getState().setBrushSize(8);
-    store.getState().setBrushHardness(100);
+    store.getState().setBrushSetting('size', 8);
+    store.getState().setBrushSetting('hardness', 100);
   });
   await setForegroundColor(page, 0, 0, 0);
   for (let yy = docY; yy <= docY + h; yy += 4) {

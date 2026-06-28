@@ -29,13 +29,12 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setBrushSize: (v: number) => void;
-          setBrushOpacity: (v: number) => void;
+          setBrushSetting: (key: string, value: number) => void;
         };
       };
       const state = store.getState();
-      state.setBrushSize(20);
-      state.setBrushOpacity(100);
+      state.setBrushSetting('size', 20);
+      state.setBrushSetting('opacity', 100);
     });
 
     // Select brush tool
@@ -120,13 +119,12 @@ test.describe('Brush symmetry renders immediately (#119)', () => {
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setBrushSize: (v: number) => void;
-          setBrushOpacity: (v: number) => void;
+          setBrushSetting: (key: string, value: number) => void;
         };
       };
       const state = store.getState();
-      state.setBrushSize(20);
-      state.setBrushOpacity(100);
+      state.setBrushSetting('size', 20);
+      state.setBrushSetting('opacity', 100);
     });
 
     // Draw a stroke

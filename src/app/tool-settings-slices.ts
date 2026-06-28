@@ -28,6 +28,20 @@ import type { BrushTextureSettings } from '../tools/brush/brush-texture-settings
 import { DEFAULT_BRUSH_TEXTURE_SETTINGS } from '../tools/brush/brush-texture-settings';
 import type { DodgeSettings } from '../tools/dodge/dodge-settings';
 import { DEFAULT_DODGE_SETTINGS } from '../tools/dodge/dodge-settings';
+import type { QuickSelectSettings } from '../tools/quick-select/quick-select-settings';
+import { DEFAULT_QUICK_SELECT_SETTINGS } from '../tools/quick-select/quick-select-settings';
+import type { ShapeSettings } from '../tools/shape/shape-settings';
+import { DEFAULT_SHAPE_SETTINGS } from '../tools/shape/shape-settings';
+import type { GradientSettings } from '../tools/gradient/gradient-settings';
+import { DEFAULT_GRADIENT_SETTINGS } from '../tools/gradient/gradient-settings';
+import type { CropSettings } from '../tools/crop/crop-settings';
+import { DEFAULT_CROP_SETTINGS } from '../tools/crop/crop-settings';
+import type { BrushSettings } from '../tools/brush/brush-settings';
+import { DEFAULT_BRUSH_SETTINGS } from '../tools/brush/brush-settings';
+import type { BrushSpeedSettings } from '../tools/brush/brush-speed-settings';
+import { DEFAULT_BRUSH_SPEED_SETTINGS } from '../tools/brush/brush-speed-settings';
+import type { BrushJitterSettings } from '../tools/brush/brush-jitter-settings';
+import { DEFAULT_BRUSH_JITTER_SETTINGS } from '../tools/brush/brush-jitter-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -54,6 +68,13 @@ export interface ToolSettingsSlices {
   healing: HealingSettings;
   brushTexture: BrushTextureSettings;
   dodge: DodgeSettings;
+  quickSelect: QuickSelectSettings;
+  shape: ShapeSettings;
+  gradient: GradientSettings;
+  crop: CropSettings;
+  brush: BrushSettings;
+  brushSpeed: BrushSpeedSettings;
+  brushJitter: BrushJitterSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -72,4 +93,11 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   healing: DEFAULT_HEALING_SETTINGS,
   brushTexture: DEFAULT_BRUSH_TEXTURE_SETTINGS,
   dodge: DEFAULT_DODGE_SETTINGS,
+  quickSelect: DEFAULT_QUICK_SELECT_SETTINGS,
+  shape: DEFAULT_SHAPE_SETTINGS,
+  gradient: DEFAULT_GRADIENT_SETTINGS,
+  crop: DEFAULT_CROP_SETTINGS,
+  brush: DEFAULT_BRUSH_SETTINGS,
+  brushSpeed: DEFAULT_BRUSH_SPEED_SETTINGS,
+  brushJitter: DEFAULT_BRUSH_JITTER_SETTINGS,
 };

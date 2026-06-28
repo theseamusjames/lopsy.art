@@ -150,7 +150,7 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
 
   const brushCursorInfo = getBrushCursorInfo(activeTool);
   if (brushCursorInfo !== null && cursorOnCanvas) {
-    const size = activeTool === 'brush' ? toolState.brushSize
+    const size = activeTool === 'brush' ? toolState.settings.brush.size
       : activeTool === 'pencil' ? toolState.settings.pencil.size
       : activeTool === 'eraser' ? toolState.settings.eraser.size
       : activeTool === 'stamp' ? toolState.settings.stamp.size
