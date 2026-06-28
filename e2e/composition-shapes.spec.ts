@@ -461,6 +461,7 @@ test.describe('Composition 2: Geometric Design', () => {
     // PHASE 5: MOVE TOOL — Nudge with arrow keys
     // =====================================================================
     await page.locator(`[data-layer-id="${triLayerId}"]`).click();
+    await page.locator('[data-testid="canvas-container"]').click();
 
     const posBefore = await page.evaluate((lid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {

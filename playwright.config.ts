@@ -36,6 +36,7 @@ export default defineConfig({
     },
     {
       name: 'mobile-chrome',
+      testMatch: /mobile[-\w]*\.spec\.ts/,
       use: {
         ...devices['Pixel 5'],
         launchOptions: {
