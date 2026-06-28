@@ -169,18 +169,17 @@ test('shift-click taper density matches drag with custom bitmap tip', async ({ p
       getState: () => {
         presets: Array<{ id: string; name: string }>;
         setActivePreset: (id: string) => void;
-        setBrushSize: (s: number) => void;
-        setBrushTaper: (t: number) => void;
+        setBrushSetting: (key: string, value: number) => void;
         setForegroundColor: (c: { r: number; g: number; b: number; a: number }) => void;
       };
     };
     const s = ts.getState();
     const star = s.presets.find((p) => p.name === 'Star');
     if (star) s.setActivePreset(star.id);
-    s.setBrushSize(30);
-    s.setBrushTaper(400);
+    s.setBrushSetting('size', 30);
+    s.setBrushSetting('taper', 400);
     // Star preset has scatter=0, but test with scatter to cover that path
-    (s as unknown as { setBrushScatter: (v: number) => void }).setBrushScatter(20);
+    s.setBrushSetting('scatter', 20);
     s.setForegroundColor({ r: 0, g: 0, b: 0, a: 1 });
   });
   await page.waitForTimeout(200);

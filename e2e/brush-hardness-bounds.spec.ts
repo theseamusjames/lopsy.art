@@ -76,9 +76,9 @@ async function selectTriangleBrush(page: Page) {
 async function setHardness(page: Page, value: number) {
   await page.evaluate((v) => {
     const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-      getState: () => { setBrushHardness: (v: number) => void };
+      getState: () => { setBrushSetting: (k: 'hardness', v: number) => void };
     };
-    store.getState().setBrushHardness(v);
+    store.getState().setBrushSetting('hardness', v);
   }, value);
   await page.waitForTimeout(100);
 }

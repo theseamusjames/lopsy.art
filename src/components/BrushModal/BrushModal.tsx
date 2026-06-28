@@ -43,22 +43,23 @@ export function BrushModal() {
   const saveCurrentAsPreset = useToolSettingsStore((s) => s.saveCurrentAsPreset);
   const setShowBrushModal = useUIStore((s) => s.setShowBrushModal);
 
-  const brushSize = useToolSettingsStore((s) => s.brushSize);
-  const brushOpacity = useToolSettingsStore((s) => s.brushOpacity);
-  const brushHardness = useToolSettingsStore((s) => s.brushHardness);
-  const brushSpacing = useToolSettingsStore((s) => s.brushSpacing);
-  const brushScatter = useToolSettingsStore((s) => s.brushScatter);
-  const brushAngle = useToolSettingsStore((s) => s.brushAngle);
+  const brushSize = useToolSettingsStore((s) => s.settings.brush.size);
+  const brushOpacity = useToolSettingsStore((s) => s.settings.brush.opacity);
+  const brushHardness = useToolSettingsStore((s) => s.settings.brush.hardness);
+  const brushSpacing = useToolSettingsStore((s) => s.settings.brush.spacing);
+  const brushScatter = useToolSettingsStore((s) => s.settings.brush.scatter);
+  const brushAngle = useToolSettingsStore((s) => s.settings.brush.angle);
+  const brushTaper = useToolSettingsStore((s) => s.settings.brush.taper);
   const activeBrushTip = useToolSettingsStore((s) => s.activeBrushTip);
 
-  const setBrushSize = useToolSettingsStore((s) => s.setBrushSize);
-  const setBrushOpacity = useToolSettingsStore((s) => s.setBrushOpacity);
-  const setBrushHardness = useToolSettingsStore((s) => s.setBrushHardness);
-  const setBrushSpacing = useToolSettingsStore((s) => s.setBrushSpacing);
-  const setBrushScatter = useToolSettingsStore((s) => s.setBrushScatter);
-  const setBrushAngle = useToolSettingsStore((s) => s.setBrushAngle);
-  const brushTaper = useToolSettingsStore((s) => s.brushTaper);
-  const setBrushTaper = useToolSettingsStore((s) => s.setBrushTaper);
+  const setBrushSetting = useToolSettingsStore((s) => s.setBrushSetting);
+  const setBrushSize = useCallback((v: number) => setBrushSetting('size', v), [setBrushSetting]);
+  const setBrushOpacity = useCallback((v: number) => setBrushSetting('opacity', v), [setBrushSetting]);
+  const setBrushHardness = useCallback((v: number) => setBrushSetting('hardness', v), [setBrushSetting]);
+  const setBrushSpacing = useCallback((v: number) => setBrushSetting('spacing', v), [setBrushSetting]);
+  const setBrushScatter = useCallback((v: number) => setBrushSetting('scatter', v), [setBrushSetting]);
+  const setBrushAngle = useCallback((v: number) => setBrushSetting('angle', v), [setBrushSetting]);
+  const setBrushTaper = useCallback((v: number) => setBrushSetting('taper', v), [setBrushSetting]);
 
   const sizeJitter = useToolSettingsStore((s) => s.brushSizeJitter);
   const hardnessJitter = useToolSettingsStore((s) => s.brushHardnessJitter);

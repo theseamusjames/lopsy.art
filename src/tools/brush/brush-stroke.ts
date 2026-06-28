@@ -28,11 +28,12 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
   if (!state.lastPoint || !state.layerId) return;
 
   const toolSettings = useToolSettingsStore.getState();
-  const baseSize = toolSettings.brushSize;
-  const baseHardness = toolSettings.brushHardness / 100;
-  const opacity = toolSettings.brushOpacity / 100;
-  const brushScatter = toolSettings.brushScatter;
-  const brushFade = toolSettings.brushFade;
+  const brush = toolSettings.settings.brush;
+  const baseSize = brush.size;
+  const baseHardness = brush.hardness / 100;
+  const opacity = brush.opacity / 100;
+  const brushScatter = brush.scatter;
+  const brushFade = brush.fade;
   const sizeJitter = toolSettings.brushSizeJitter / 100;
   const hardnessJitter = toolSettings.brushHardnessJitter / 100;
   const aJ = toolSettings.brushAngleJitter / 100;
@@ -82,7 +83,7 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
   size = jittered.size;
   const hardness = jittered.hardness;
 
-  const brushTaper = toolSettings.brushTaper;
+  const brushTaper = brush.taper;
   if (brushTaper > 0) {
     const taperFactor = Math.max(0, 1 - (state.strokeDistance ?? 0) / brushTaper);
     size = size * taperFactor;
@@ -92,7 +93,7 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
     }
   }
 
-  const spacing = Math.max(1, size * toolSettings.brushSpacing / 100);
+  const spacing = Math.max(1, size * brush.spacing / 100);
 
   if (brushFade > 0 && (state.strokeDistance ?? 0) >= brushFade) {
     state.lastPoint = layerLocalPos;

@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { useEditorStore } from '../../editor-store';
 import { Slider } from '../../../components/Slider/Slider';
@@ -8,9 +9,10 @@ import styles from '../OptionsBar.module.css';
 export function DodgeOptions() {
   const dodgeExposure = useToolSettingsStore((s) => s.settings.dodge.exposure);
   const dodgeMode = useToolSettingsStore((s) => s.settings.dodge.mode);
-  const brushSize = useToolSettingsStore((s) => s.brushSize);
+  const brushSize = useToolSettingsStore((s) => s.settings.brush.size);
   const setDodgeSetting = useToolSettingsStore((s) => s.setDodgeSetting);
-  const setBrushSize = useToolSettingsStore((s) => s.setBrushSize);
+  const setBrushSetting = useToolSettingsStore((s) => s.setBrushSetting);
+  const setBrushSize = useCallback((v: number) => setBrushSetting('size', v), [setBrushSetting]);
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
   const sizeMax = docScaledMax(docWidth, docHeight, 200);

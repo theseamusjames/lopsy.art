@@ -1,6 +1,7 @@
 import type { Color } from '../types';
 import type { GradientStop } from '../tools/gradient/gradient';
 import type { BrushPreset, BrushTipData, BrushTextureData, SubBrush } from '../types/brush';
+import type { BrushSettings } from '../tools/brush/brush-settings';
 import type { WandSettings } from '../tools/wand/wand-settings';
 import type { FillSettings } from '../tools/fill/fill-settings';
 import type { MarqueeSettings } from '../tools/marquee/marquee-settings';
@@ -33,17 +34,9 @@ export interface ToolSettings {
    * on this interface.
    */
   settings: ToolSettingsSlices;
-  brushSize: number;
-  brushOpacity: number;
-  brushHardness: number;
   aspectRatioW: number;
   aspectRatioH: number;
   aspectRatioLocked: boolean;
-  brushSpacing: number;
-  brushScatter: number;
-  brushAngle: number;
-  brushFade: number;
-  brushTaper: number;
   activeBrushTip: BrushTipData | null;
   symmetryHorizontal: boolean;
   symmetryVertical: boolean;
@@ -75,12 +68,7 @@ export interface ToolSettings {
   addBrushTexture: (texture: BrushTextureData) => void;
   removeBrushTexture: (id: string) => void;
   setSpraySetting: <K extends keyof SpraySettings>(key: K, value: SpraySettings[K]) => void;
-  setBrushSize: (size: number) => void;
-  setBrushFade: (fade: number) => void;
-  setBrushTaper: (taper: number) => void;
-  setBrushSpacing: (spacing: number) => void;
-  setBrushScatter: (scatter: number) => void;
-  setBrushAngle: (angle: number) => void;
+  setBrushSetting: <K extends keyof BrushSettings>(key: K, value: BrushSettings[K]) => void;
   setActiveBrushTip: (tip: BrushTipData | null) => void;
   setStampSetting: <K extends keyof StampSettings>(key: K, value: StampSettings[K]) => void;
   setHealingSetting: <K extends keyof HealingSettings>(key: K, value: HealingSettings[K]) => void;
@@ -92,8 +80,6 @@ export interface ToolSettings {
   setMagneticLassoSetting: <K extends keyof MagneticLassoSettings>(key: K, value: MagneticLassoSettings[K]) => void;
   setTextSetting: <K extends keyof TextSettings>(key: K, value: TextSettings[K]) => void;
   setQuickSelectSetting: <K extends keyof QuickSelectSettings>(key: K, value: QuickSelectSettings[K]) => void;
-  setBrushOpacity: (opacity: number) => void;
-  setBrushHardness: (hardness: number) => void;
   setPencilSetting: <K extends keyof PencilSettings>(key: K, value: PencilSettings[K]) => void;
   setEraserSetting: <K extends keyof EraserSettings>(key: K, value: EraserSettings[K]) => void;
   setPathSetting: <K extends keyof PathSettings>(key: K, value: PathSettings[K]) => void;
