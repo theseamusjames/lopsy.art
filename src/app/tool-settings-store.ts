@@ -19,6 +19,7 @@ import { clampSpraySetting } from '../tools/spray/spray-settings';
 import { clampHealingSetting } from '../tools/healing/healing-settings';
 import { clampBrushTextureSetting } from '../tools/brush/brush-texture-settings';
 import { clampDodgeSetting } from '../tools/dodge/dodge-settings';
+import { clampQuickSelectSetting } from '../tools/quick-select/quick-select-settings';
 
 export type { ToolSettings } from './tool-settings-types';
 
@@ -64,10 +65,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
   ],
   gradientReverse: false,
-  quickSelectSize: 20,
-  quickSelectTolerance: 32,
-  quickSelectEdgeStrength: 50,
-  quickSelectMode: 'add' as const,
   brushSpacing: 0,
   brushScatter: 0,
   brushAngle: 0,
@@ -287,10 +284,6 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       wand: { ...s.settings.wand, [key]: clampWandSetting(key, value) },
     },
   })),
-  setQuickSelectSize: (size) => set({ quickSelectSize: Math.max(1, Math.min(100, Math.round(size))) }),
-  setQuickSelectTolerance: (tolerance) => set({ quickSelectTolerance: Math.max(0, Math.min(255, Math.round(tolerance))) }),
-  setQuickSelectEdgeStrength: (strength) => set({ quickSelectEdgeStrength: Math.max(0, Math.min(100, Math.round(strength))) }),
-  setQuickSelectMode: (mode) => set({ quickSelectMode: mode }),
   setMagneticLassoSetting: (key, value) => set((s) => ({
     settings: {
       ...s.settings,
@@ -301,6 +294,12 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     settings: {
       ...s.settings,
       text: { ...s.settings.text, [key]: clampTextSetting(key, value) },
+    },
+  })),
+  setQuickSelectSetting: (key, value) => set((s) => ({
+    settings: {
+      ...s.settings,
+      quickSelect: { ...s.settings.quickSelect, [key]: clampQuickSelectSetting(key, value) },
     },
   })),
 

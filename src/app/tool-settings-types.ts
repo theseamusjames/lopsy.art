@@ -17,6 +17,7 @@ import type { SpraySettings } from '../tools/spray/spray-settings';
 import type { HealingSettings } from '../tools/healing/healing-settings';
 import type { BrushTextureSettings } from '../tools/brush/brush-texture-settings';
 import type { DodgeSettings } from '../tools/dodge/dodge-settings';
+import type { QuickSelectSettings } from '../tools/quick-select/quick-select-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -47,10 +48,6 @@ export interface ToolSettings {
   gradientType: GradientType;
   gradientStops: readonly GradientStop[];
   gradientReverse: boolean;
-  quickSelectSize: number;
-  quickSelectTolerance: number;
-  quickSelectEdgeStrength: number;
-  quickSelectMode: 'add' | 'subtract';
   brushSpacing: number;
   brushScatter: number;
   brushAngle: number;
@@ -101,12 +98,9 @@ export interface ToolSettings {
   setSmudgeSetting: <K extends keyof SmudgeSettings>(key: K, value: SmudgeSettings[K]) => void;
   setMarqueeSetting: <K extends keyof MarqueeSettings>(key: K, value: MarqueeSettings[K]) => void;
   setWandSetting: <K extends keyof WandSettings>(key: K, value: WandSettings[K]) => void;
-  setQuickSelectSize: (size: number) => void;
-  setQuickSelectTolerance: (tolerance: number) => void;
-  setQuickSelectEdgeStrength: (strength: number) => void;
-  setQuickSelectMode: (mode: 'add' | 'subtract') => void;
   setMagneticLassoSetting: <K extends keyof MagneticLassoSettings>(key: K, value: MagneticLassoSettings[K]) => void;
   setTextSetting: <K extends keyof TextSettings>(key: K, value: TextSettings[K]) => void;
+  setQuickSelectSetting: <K extends keyof QuickSelectSettings>(key: K, value: QuickSelectSettings[K]) => void;
   setBrushOpacity: (opacity: number) => void;
   setBrushHardness: (hardness: number) => void;
   setPencilSetting: <K extends keyof PencilSettings>(key: K, value: PencilSettings[K]) => void;

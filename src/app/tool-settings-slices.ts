@@ -28,6 +28,8 @@ import type { BrushTextureSettings } from '../tools/brush/brush-texture-settings
 import { DEFAULT_BRUSH_TEXTURE_SETTINGS } from '../tools/brush/brush-texture-settings';
 import type { DodgeSettings } from '../tools/dodge/dodge-settings';
 import { DEFAULT_DODGE_SETTINGS } from '../tools/dodge/dodge-settings';
+import type { QuickSelectSettings } from '../tools/quick-select/quick-select-settings';
+import { DEFAULT_QUICK_SELECT_SETTINGS } from '../tools/quick-select/quick-select-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -54,6 +56,7 @@ export interface ToolSettingsSlices {
   healing: HealingSettings;
   brushTexture: BrushTextureSettings;
   dodge: DodgeSettings;
+  quickSelect: QuickSelectSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -72,4 +75,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   healing: DEFAULT_HEALING_SETTINGS,
   brushTexture: DEFAULT_BRUSH_TEXTURE_SETTINGS,
   dodge: DEFAULT_DODGE_SETTINGS,
+  quickSelect: DEFAULT_QUICK_SELECT_SETTINGS,
 };

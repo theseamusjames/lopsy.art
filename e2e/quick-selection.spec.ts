@@ -179,17 +179,14 @@ test.describe('Quick Selection tool', () => {
     await page.evaluate(() => {
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setQuickSelectSize: (v: number) => void;
-          setQuickSelectTolerance: (v: number) => void;
-          setQuickSelectEdgeStrength: (v: number) => void;
-          setQuickSelectMode: (m: 'add' | 'subtract') => void;
+          setQuickSelectSetting: (key: 'size' | 'tolerance' | 'edgeStrength' | 'mode', value: number | 'add' | 'subtract') => void;
         };
       };
       const state = ts.getState();
-      state.setQuickSelectSize(15);
-      state.setQuickSelectTolerance(60);
-      state.setQuickSelectEdgeStrength(80);
-      state.setQuickSelectMode('add');
+      state.setQuickSelectSetting('size', 15);
+      state.setQuickSelectSetting('tolerance', 60);
+      state.setQuickSelectSetting('edgeStrength', 80);
+      state.setQuickSelectSetting('mode', 'add');
     });
 
     // Drag across the red half (stay well away from the center boundary)
@@ -251,17 +248,14 @@ test.describe('Quick Selection tool', () => {
     await page.evaluate(() => {
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
         getState: () => {
-          setQuickSelectSize: (v: number) => void;
-          setQuickSelectTolerance: (v: number) => void;
-          setQuickSelectEdgeStrength: (v: number) => void;
-          setQuickSelectMode: (m: 'add' | 'subtract') => void;
+          setQuickSelectSetting: (key: 'size' | 'tolerance' | 'edgeStrength' | 'mode', value: number | 'add' | 'subtract') => void;
         };
       };
       const state = ts.getState();
-      state.setQuickSelectSize(20);
-      state.setQuickSelectTolerance(50);
-      state.setQuickSelectEdgeStrength(0);
-      state.setQuickSelectMode('add');
+      state.setQuickSelectSetting('size', 20);
+      state.setQuickSelectSetting('tolerance', 50);
+      state.setQuickSelectSetting('edgeStrength', 0);
+      state.setQuickSelectSetting('mode', 'add');
     });
 
     // First stroke: add — drag across the left portion
@@ -288,9 +282,9 @@ test.describe('Quick Selection tool', () => {
     // Switch to subtract mode
     await page.evaluate(() => {
       const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => { setQuickSelectMode: (m: 'add' | 'subtract') => void };
+        getState: () => { setQuickSelectSetting: (key: 'mode', value: 'add' | 'subtract') => void };
       };
-      ts.getState().setQuickSelectMode('subtract');
+      ts.getState().setQuickSelectSetting('mode', 'subtract');
     });
 
     // Second stroke: subtract — drag over the center of the added region

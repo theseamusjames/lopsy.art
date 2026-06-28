@@ -1089,3 +1089,101 @@ describe('per-tool slice: dodge (#453)', () => {
     expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
   });
 });
+
+describe('per-tool slice: quickSelect (#453)', () => {
+  it('exposes quickSelect settings under settings.quickSelect with the legacy defaults', () => {
+    // Reset to the legacy defaults — prior tests in this file may have
+    // mutated the slice through setQuickSelectSetting.
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 20);
+    useToolSettingsStore.getState().setQuickSelectSetting('tolerance', 32);
+    useToolSettingsStore.getState().setQuickSelectSetting('edgeStrength', 50);
+    useToolSettingsStore.getState().setQuickSelectSetting('mode', 'add');
+    const { quickSelect } = useToolSettingsStore.getState().settings;
+    expect(quickSelect).toEqual({ size: 20, tolerance: 32, edgeStrength: 50, mode: 'add' });
+  });
+
+  it('setQuickSelectSetting updates one field without disturbing the others', () => {
+    const before = useToolSettingsStore.getState().settings.quickSelect;
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 40);
+    const after = useToolSettingsStore.getState().settings.quickSelect;
+    expect(after.size).toBe(40);
+    expect(after.tolerance).toBe(before.tolerance);
+    expect(after.edgeStrength).toBe(before.edgeStrength);
+    expect(after.mode).toBe(before.mode);
+  });
+
+  it('setQuickSelectSetting clamps size into [1, 100] and rounds', () => {
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 0);
+    expect(useToolSettingsStore.getState().settings.quickSelect.size).toBe(1);
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 999);
+    expect(useToolSettingsStore.getState().settings.quickSelect.size).toBe(100);
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 12.4);
+    expect(useToolSettingsStore.getState().settings.quickSelect.size).toBe(12);
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 12.6);
+    expect(useToolSettingsStore.getState().settings.quickSelect.size).toBe(13);
+  });
+
+  it('setQuickSelectSetting clamps tolerance into [0, 255] and rounds', () => {
+    // Tolerance lives in the same units as RGBA channels because the
+    // stroke compares pixel deltas against it directly — preserve the
+    // 0–255 byte range exactly, not a percent 0–100.
+    useToolSettingsStore.getState().setQuickSelectSetting('tolerance', -10);
+    expect(useToolSettingsStore.getState().settings.quickSelect.tolerance).toBe(0);
+    useToolSettingsStore.getState().setQuickSelectSetting('tolerance', 999);
+    expect(useToolSettingsStore.getState().settings.quickSelect.tolerance).toBe(255);
+    useToolSettingsStore.getState().setQuickSelectSetting('tolerance', 60.6);
+    expect(useToolSettingsStore.getState().settings.quickSelect.tolerance).toBe(61);
+  });
+
+  it('setQuickSelectSetting clamps edgeStrength into [0, 100] and rounds', () => {
+    useToolSettingsStore.getState().setQuickSelectSetting('edgeStrength', -10);
+    expect(useToolSettingsStore.getState().settings.quickSelect.edgeStrength).toBe(0);
+    useToolSettingsStore.getState().setQuickSelectSetting('edgeStrength', 999);
+    expect(useToolSettingsStore.getState().settings.quickSelect.edgeStrength).toBe(100);
+    useToolSettingsStore.getState().setQuickSelectSetting('edgeStrength', 42.3);
+    expect(useToolSettingsStore.getState().settings.quickSelect.edgeStrength).toBe(42);
+  });
+
+  it('setQuickSelectSetting normalises mode to a known tag', () => {
+    useToolSettingsStore.getState().setQuickSelectSetting('mode', 'subtract');
+    expect(useToolSettingsStore.getState().settings.quickSelect.mode).toBe('subtract');
+    useToolSettingsStore.getState().setQuickSelectSetting('mode', 'add');
+    expect(useToolSettingsStore.getState().settings.quickSelect.mode).toBe('add');
+    // Unknown strings collapse to 'add' rather than silently passing
+    // through — guards against a typed-string @ts-ignore bypass leaving
+    // the selection in an unhandled state.
+    (useToolSettingsStore.getState().setQuickSelectSetting as (k: 'mode', v: string) => void)('mode', 'replace');
+    expect(useToolSettingsStore.getState().settings.quickSelect.mode).toBe('add');
+  });
+
+  it('setQuickSelectSetting preserves sibling slices and unrelated fields', () => {
+    const beforeWand = useToolSettingsStore.getState().settings.wand;
+    const beforeFill = useToolSettingsStore.getState().settings.fill;
+    const beforeMarquee = useToolSettingsStore.getState().settings.marquee;
+    const beforeSmudge = useToolSettingsStore.getState().settings.smudge;
+    const beforePencil = useToolSettingsStore.getState().settings.pencil;
+    const beforeSponge = useToolSettingsStore.getState().settings.sponge;
+    const beforePath = useToolSettingsStore.getState().settings.path;
+    const beforeStamp = useToolSettingsStore.getState().settings.stamp;
+    const beforeEraser = useToolSettingsStore.getState().settings.eraser;
+    const beforeMagneticLasso = useToolSettingsStore.getState().settings.magneticLasso;
+    const beforeBrushSize = useToolSettingsStore.getState().brushSize;
+    useToolSettingsStore.getState().setQuickSelectSetting('size', 55);
+    expect(useToolSettingsStore.getState().settings.quickSelect.size).toBe(55);
+    // Sibling slice references preserved — selectors subscribed to the
+    // other slices should not re-render when quickSelect changes. This
+    // is the invariant that justifies slicing instead of fattening the
+    // flat bag further.
+    expect(useToolSettingsStore.getState().settings.wand).toBe(beforeWand);
+    expect(useToolSettingsStore.getState().settings.fill).toBe(beforeFill);
+    expect(useToolSettingsStore.getState().settings.marquee).toBe(beforeMarquee);
+    expect(useToolSettingsStore.getState().settings.smudge).toBe(beforeSmudge);
+    expect(useToolSettingsStore.getState().settings.pencil).toBe(beforePencil);
+    expect(useToolSettingsStore.getState().settings.sponge).toBe(beforeSponge);
+    expect(useToolSettingsStore.getState().settings.path).toBe(beforePath);
+    expect(useToolSettingsStore.getState().settings.stamp).toBe(beforeStamp);
+    expect(useToolSettingsStore.getState().settings.eraser).toBe(beforeEraser);
+    expect(useToolSettingsStore.getState().settings.magneticLasso).toBe(beforeMagneticLasso);
+    expect(useToolSettingsStore.getState().brushSize).toBe(beforeBrushSize);
+  });
+});
