@@ -1,6 +1,5 @@
 import type { Color } from '../types';
 import type { GradientStop, GradientType } from '../tools/gradient/gradient';
-import type { ShapeMode, ShapeOutput } from '../tools/shape/shape';
 import type { BrushPreset, BrushTipData, BrushTextureData, SubBrush } from '../types/brush';
 import type { WandSettings } from '../tools/wand/wand-settings';
 import type { FillSettings } from '../tools/fill/fill-settings';
@@ -18,6 +17,7 @@ import type { HealingSettings } from '../tools/healing/healing-settings';
 import type { BrushTextureSettings } from '../tools/brush/brush-texture-settings';
 import type { DodgeSettings } from '../tools/dodge/dodge-settings';
 import type { QuickSelectSettings } from '../tools/quick-select/quick-select-settings';
+import type { ShapeSettings } from '../tools/shape/shape-settings';
 import type { ToolSettingsSlices } from './tool-settings-slices';
 
 export interface ToolSettings {
@@ -34,13 +34,6 @@ export interface ToolSettings {
   brushSize: number;
   brushOpacity: number;
   brushHardness: number;
-  shapeMode: ShapeMode;
-  shapeOutput: ShapeOutput;
-  shapeFillColor: Color | null;
-  shapeStrokeColor: Color | null;
-  shapeStrokeWidth: number;
-  shapePolygonSides: number;
-  shapeCornerRadius: number;
   aspectRatioW: number;
   aspectRatioH: number;
   aspectRatioLocked: boolean;
@@ -107,13 +100,7 @@ export interface ToolSettings {
   setEraserSetting: <K extends keyof EraserSettings>(key: K, value: EraserSettings[K]) => void;
   setPathSetting: <K extends keyof PathSettings>(key: K, value: PathSettings[K]) => void;
   setFillSetting: <K extends keyof FillSettings>(key: K, value: FillSettings[K]) => void;
-  setShapeMode: (mode: ShapeMode) => void;
-  setShapeOutput: (output: ShapeOutput) => void;
-  setShapeFillColor: (color: Color | null) => void;
-  setShapeStrokeColor: (color: Color | null) => void;
-  setShapeStrokeWidth: (width: number) => void;
-  setShapePolygonSides: (sides: number) => void;
-  setShapeCornerRadius: (radius: number) => void;
+  setShapeSetting: <K extends keyof ShapeSettings>(key: K, value: ShapeSettings[K]) => void;
   setAspectRatioW: (w: number) => void;
   setAspectRatioH: (h: number) => void;
   setAspectRatioLocked: (locked: boolean) => void;

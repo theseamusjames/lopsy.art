@@ -460,10 +460,10 @@ instead. `sides=6` works for the polygon SDF and can be used for
 
 ### 11. Tool-settings store expects specific ranges
 
-`setShapePolygonSides` clamps to `[3, 64]`. `setShapeCornerRadius`
-clamps to `[0, 200]`. `setBrushSize` clamps to `[1, 2000]`. Check the
-setter before asserting on the stored value — the clamp may silently
-change what you wrote.
+`setShapeSetting('polygonSides', …)` clamps to `[3, 64]`.
+`setShapeSetting('cornerRadius', …)` clamps to `[0, 200]`. `setBrushSize`
+clamps to `[1, 2000]`. Check the setter before asserting on the stored
+value — the clamp may silently change what you wrote.
 
 ### 12. Fit-to-view caps zoom at 1.0
 

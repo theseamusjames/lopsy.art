@@ -292,7 +292,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
       if (shapeFillSeededFromForeground) return;
       shapeFillSeededFromForeground = true;
       const ts = useToolSettingsStore.getState();
-      ts.setShapeFillColor(ts.foregroundColor);
+      ts.setShapeSetting('fillColor', ts.foregroundColor);
     },
   },
   text: {

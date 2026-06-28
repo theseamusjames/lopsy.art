@@ -56,16 +56,14 @@ async function dragShape(
   await page.waitForTimeout(300);
 }
 
-async function setToolSetting(page: Page, setter: string, value: unknown) {
-  await page.evaluate(
-    ({ setter, value }) => {
-      const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
-        getState: () => Record<string, (v: unknown) => void>;
-      };
-      store.getState()[setter]!(value);
-    },
-    { setter, value },
-  );
+/** Write to the shape per-tool settings slice; see #453. */
+async function setShapeSetting(page: Page, key: string, value: unknown) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setShapeSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setShapeSetting(key, value);
+  }, { key, value });
 }
 
 async function setShapeMode(page: Page, mode: string) {
@@ -161,7 +159,7 @@ test.describe('Shape tool corner radius', () => {
     await setShapeMode(page, 'polygon');
     await setPolygonSides(page, 4);
     await setToolOption(page, 'Corner Radius', 30);
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Draw rectangle: center at (200,150), drag to (300,250)
     // This creates a polygon with ~100px radius in each direction
@@ -193,7 +191,7 @@ test.describe('Shape tool corner radius', () => {
     await setShapeMode(page, 'polygon');
     await setPolygonSides(page, 6);
     await setToolOption(page, 'Corner Radius', 20);
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Draw hexagon: center at (200,150), drag to (280,230)
     // rx = 80, ry = 80
@@ -220,7 +218,7 @@ test.describe('Shape tool corner radius', () => {
     await setShapeMode(page, 'polygon');
     await setPolygonSides(page, 3);
     await setToolOption(page, 'Corner Radius', 15);
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Draw triangle: center at (200,150), drag to (280,230)
     await dragShape(page, { x: 200, y: 150 }, { x: 280, y: 230 });
@@ -261,7 +259,7 @@ test.describe('Shape tool click-and-drag', () => {
     await setForegroundColor(page, 255, 0, 0);
     await selectTool(page, 'shape');
     await setShapeMode(page, 'ellipse');
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Draw an ellipse from center (200,150) to edge (280,220)
     await dragShape(page, { x: 200, y: 150 }, { x: 280, y: 220 });
@@ -296,7 +294,7 @@ test.describe('Shape tool click-and-drag', () => {
     await setShapeMode(page, 'polygon');
     await setPolygonSides(page, 4);
     await setToolOption(page, 'Corner Radius', 0);
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Simulate a realistic drag where the first mousemove is axis-aligned.
     // In a real browser the mouse often registers horizontal movement before
@@ -345,7 +343,7 @@ test.describe('Shape tool click-and-drag', () => {
     await setShapeMode(page, 'polygon');
     await setPolygonSides(page, 6);
     await setToolOption(page, 'Corner Radius', 0);
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Drag purely horizontally — height dimension is 0 throughout
     await dragShape(page, { x: 150, y: 150 }, { x: 300, y: 150 }, 10);
@@ -370,8 +368,8 @@ test.describe('Shape tool click-and-drag', () => {
     // to full opacity after a few frames.
     await selectTool(page, 'shape');
     await setShapeMode(page, 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', { r: 255, g: 0, b: 0, a: 0.5 });
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'fillColor', { r: 255, g: 0, b: 0, a: 0.5 });
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Draw with many steps to accumulate renders
     await dragShape(page, { x: 200, y: 150 }, { x: 280, y: 220 }, 15);
@@ -397,7 +395,7 @@ test.describe('Shape tool click-and-drag', () => {
     await setForegroundColor(page, 255, 0, 0);
     await selectTool(page, 'shape');
     await setShapeMode(page, 'ellipse');
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Draw on the active layer (Layer 1)
     await dragShape(page, { x: 200, y: 150 }, { x: 280, y: 220 });
@@ -419,7 +417,7 @@ test.describe('Shape tool click-and-drag', () => {
     await setForegroundColor(page, 255, 0, 0);
     await selectTool(page, 'shape');
     await setShapeMode(page, 'ellipse');
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Drag only 2 pixels — below the 4px click threshold
     await dragShape(page, { x: 200, y: 150 }, { x: 201, y: 151 });
@@ -435,8 +433,8 @@ test.describe('Shape tool click-and-drag', () => {
   test('shape with stroke only creates visible outline', async ({ page }) => {
     await selectTool(page, 'shape');
     await setShapeMode(page, 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', null);
-    await setToolSetting(page, 'setShapeStrokeColor', { r: 0, g: 0, b: 255, a: 1 });
+    await setShapeSetting(page, 'fillColor', null);
+    await setShapeSetting(page, 'strokeColor', { r: 0, g: 0, b: 255, a: 1 });
     await setToolOption(page, 'Width', 4);
 
     // Draw an ellipse from center (200,150) to edge (280,220)
@@ -464,8 +462,8 @@ test.describe('Shape tool click-and-drag', () => {
     await setShapeMode(page, 'polygon');
     await setPolygonSides(page, 3);
     await setToolOption(page, 'Corner Radius', 0);
-    await setToolSetting(page, 'setShapeFillColor', null);
-    await setToolSetting(page, 'setShapeStrokeColor', { r: 255, g: 0, b: 128, a: 1 });
+    await setShapeSetting(page, 'fillColor', null);
+    await setShapeSetting(page, 'strokeColor', { r: 255, g: 0, b: 128, a: 1 });
     await setToolOption(page, 'Width', 3);
 
     // Drag from canvas center to lower-right so the bbox sits inside the
@@ -519,8 +517,8 @@ test.describe('Shape tool click-and-drag', () => {
     await setShapeMode(page, 'polygon');
     await setPolygonSides(page, 3);
     await setToolOption(page, 'Corner Radius', 0);
-    await setToolSetting(page, 'setShapeFillColor', null);
-    await setToolSetting(page, 'setShapeStrokeColor', { r: 0, g: 0, b: 0, a: 1 });
+    await setShapeSetting(page, 'fillColor', null);
+    await setShapeSetting(page, 'strokeColor', { r: 0, g: 0, b: 0, a: 1 });
     await setToolOption(page, 'Width', 3);
 
     // Drag from (200, 150) to (260, 210). bbox = (140, 90) → (260, 210).
@@ -542,7 +540,7 @@ test.describe('Shape tool click-and-drag', () => {
     await setForegroundColor(page, 255, 0, 0);
     await selectTool(page, 'shape');
     await setShapeMode(page, 'ellipse');
-    await setToolSetting(page, 'setShapeStrokeColor', null);
+    await setShapeSetting(page, 'strokeColor', null);
 
     // Draw first shape
     await dragShape(page, { x: 100, y: 100 }, { x: 150, y: 140 });

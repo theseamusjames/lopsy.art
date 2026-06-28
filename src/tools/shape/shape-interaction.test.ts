@@ -75,13 +75,17 @@ vi.mock('../../app/ui-store', () => ({
 import type { Color } from '../../types';
 
 const ts = {
-  shapeMode: 'ellipse' as 'ellipse' | 'polygon',
-  shapeOutput: 'pixels' as 'pixels' | 'path',
-  shapeFillColor: { r: 255, g: 0, b: 0, a: 1 } as Color | null,
-  shapeStrokeColor: { r: 0, g: 0, b: 255, a: 0.5 } as Color | null,
-  shapeStrokeWidth: 2,
-  shapePolygonSides: 5,
-  shapeCornerRadius: 0,
+  settings: {
+    shape: {
+      mode: 'ellipse' as 'ellipse' | 'polygon',
+      output: 'pixels' as 'pixels' | 'path',
+      fillColor: { r: 255, g: 0, b: 0, a: 1 } as Color | null,
+      strokeColor: { r: 0, g: 0, b: 255, a: 0.5 } as Color | null,
+      strokeWidth: 2,
+      polygonSides: 5,
+      cornerRadius: 0,
+    },
+  },
   aspectRatioLocked: false,
   aspectRatioW: 1,
   aspectRatioH: 1,
@@ -160,13 +164,13 @@ beforeEach(() => {
   editorState.addPath.mockClear();
   setState.mockClear();
   uiState.setPendingShapeClick.mockClear();
-  ts.shapeMode = 'ellipse';
-  ts.shapeOutput = 'pixels';
-  ts.shapeFillColor = { r: 255, g: 0, b: 0, a: 1 };
-  ts.shapeStrokeColor = { r: 0, g: 0, b: 255, a: 0.5 };
-  ts.shapeStrokeWidth = 2;
-  ts.shapePolygonSides = 5;
-  ts.shapeCornerRadius = 0;
+  ts.settings.shape.mode = 'ellipse';
+  ts.settings.shape.output = 'pixels';
+  ts.settings.shape.fillColor = { r: 255, g: 0, b: 0, a: 1 };
+  ts.settings.shape.strokeColor = { r: 0, g: 0, b: 255, a: 0.5 };
+  ts.settings.shape.strokeWidth = 2;
+  ts.settings.shape.polygonSides = 5;
+  ts.settings.shape.cornerRadius = 0;
   ts.aspectRatioLocked = false;
   ts.addRecentColor.mockClear();
 });
@@ -189,8 +193,8 @@ describe('shape down', () => {
   });
 
   it('does not record recent colors when fill and stroke are disabled', () => {
-    ts.shapeFillColor = null;
-    ts.shapeStrokeColor = null;
+    ts.settings.shape.fillColor = null;
+    ts.settings.shape.strokeColor = null;
     handleShapeDown(makeCtx());
     expect(ts.addRecentColor).not.toHaveBeenCalled();
   });
@@ -239,7 +243,7 @@ describe('shape move', () => {
   });
 
   it('renders polygons with mode 1', () => {
-    ts.shapeMode = 'polygon';
+    ts.settings.shape.mode = 'polygon';
     handleShapeMove(makeState(), { x: 80, y: 70 });
     expect(renderShape.mock.calls[0]![2]).toBe(1);
   });
@@ -264,14 +268,14 @@ describe('shape move', () => {
   });
 
   it('caps the corner radius at half the smaller dimension', () => {
-    ts.shapeCornerRadius = 50;
+    ts.settings.shape.cornerRadius = 50;
     handleShapeMove(makeState({ startPoint: { x: 50, y: 50 } }), { x: 80, y: 60 });
     // w 60, h 20 => cap is 10.
     expect(renderShape.mock.calls[0]![17]).toBe(10);
   });
 
   it('renders a transparent fill when the fill color is disabled', () => {
-    ts.shapeFillColor = null;
+    ts.settings.shape.fillColor = null;
     handleShapeMove(makeState(), { x: 80, y: 70 });
     const args = renderShape.mock.calls[0]!;
     expect(args[7]).toBe(0);
@@ -314,7 +318,7 @@ describe('shape up — click vs drag', () => {
   });
 
   it('a click in path-output mode undoes without opening the size modal', () => {
-    ts.shapeOutput = 'path';
+    ts.settings.shape.output = 'path';
     handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 51, y: 51 });
     expect(editorState.undo).toHaveBeenCalledTimes(1);
     expect(uiState.setPendingShapeClick).not.toHaveBeenCalled();
@@ -383,7 +387,7 @@ describe('shape up — committing pixels', () => {
 
 describe('shape up — path output', () => {
   beforeEach(() => {
-    ts.shapeOutput = 'path';
+    ts.settings.shape.output = 'path';
   });
 
   it('undoes the raster preview and adds a closed ellipse path', () => {
@@ -411,8 +415,8 @@ describe('shape up — path output', () => {
   });
 
   it('adds a polygon path with one anchor per side', () => {
-    ts.shapeMode = 'polygon';
-    ts.shapePolygonSides = 3;
+    ts.settings.shape.mode = 'polygon';
+    ts.settings.shape.polygonSides = 3;
     handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 80, y: 70 });
     const [anchors] = editorState.addPath.mock.calls[0]! as [PathAnchor[]];
     expect(anchors).toHaveLength(3);
@@ -455,7 +459,7 @@ describe('confirmShapeSize', () => {
   });
 
   it('caps the corner radius at half the smaller dimension', () => {
-    ts.shapeCornerRadius = 100;
+    ts.settings.shape.cornerRadius = 100;
     confirmShapeSize(60, 40, click);
     expect(renderShapeExpanded.mock.calls[0]![17]).toBe(20);
   });

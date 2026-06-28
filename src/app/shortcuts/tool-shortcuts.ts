@@ -61,7 +61,7 @@ export function handleSizeShortcut(e: KeyboardEvent): boolean {
   } else if (tool === 'path') {
     ts.setPathSetting('strokeWidth', ts.settings.path.strokeWidth + delta);
   } else if (tool === 'shape') {
-    ts.setShapeStrokeWidth(ts.shapeStrokeWidth + delta);
+    ts.setShapeSetting('strokeWidth', ts.settings.shape.strokeWidth + delta);
   }
   return true;
 }

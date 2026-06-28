@@ -123,6 +123,16 @@ async function setFillSetting(page: Page, key: 'tolerance' | 'contiguous', value
   }, { key, value });
 }
 
+/** Write to the shape per-tool settings slice; see #453. */
+async function setShapeSetting(page: Page, key: string, value: unknown) {
+  await page.evaluate(({ key, value }) => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => { setShapeSetting: (k: string, v: unknown) => void };
+    };
+    store.getState().setShapeSetting(key, value);
+  }, { key, value });
+}
+
 const toolKeyMap: Record<string, string> = {
   move: 'v',
   brush: 'b',
@@ -370,10 +380,10 @@ test.describe('Composition 2: Geometric Design', () => {
     await setActiveTool(page, 'shape');
     expect(await getActiveTool(page)).toBe('shape');
 
-    await setToolSetting(page, 'setShapeMode', 'ellipse');
-    await setToolSetting(page, 'setShapeFillColor', { r: 220, g: 50, b: 50, a: 1 });
-    await setToolSetting(page, 'setShapeStrokeColor', { r: 0, g: 0, b: 0, a: 0 });
-    await setToolSetting(page, 'setShapeStrokeWidth', 0);
+    await setShapeSetting(page, 'mode', 'ellipse');
+    await setShapeSetting(page, 'fillColor', { r: 220, g: 50, b: 50, a: 1 });
+    await setShapeSetting(page, 'strokeColor', { r: 0, g: 0, b: 0, a: 0 });
+    await setShapeSetting(page, 'strokeWidth', 0);
 
     await dragAtDoc(page, { x: 200, y: 200 }, { x: 300, y: 300 });
 
@@ -389,12 +399,12 @@ test.describe('Composition 2: Geometric Design', () => {
     const hexLayerId = await addLayer(page);
 
     await setActiveTool(page, 'shape');
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 6);
-    await setToolSetting(page, 'setShapeCornerRadius', 8);
-    await setToolSetting(page, 'setShapeFillColor', { r: 50, g: 120, b: 220, a: 1 });
-    await setToolSetting(page, 'setShapeStrokeColor', { r: 255, g: 255, b: 255, a: 1 });
-    await setToolSetting(page, 'setShapeStrokeWidth', 3);
+    await setShapeSetting(page, 'mode', 'polygon');
+    await setShapeSetting(page, 'polygonSides', 6);
+    await setShapeSetting(page, 'cornerRadius', 8);
+    await setShapeSetting(page, 'fillColor', { r: 50, g: 120, b: 220, a: 1 });
+    await setShapeSetting(page, 'strokeColor', { r: 255, g: 255, b: 255, a: 1 });
+    await setShapeSetting(page, 'strokeWidth', 3);
 
     await dragAtDoc(page, { x: 100, y: 100 }, { x: 200, y: 200 });
 
@@ -410,11 +420,11 @@ test.describe('Composition 2: Geometric Design', () => {
     const triLayerId = await addLayer(page);
 
     await setActiveTool(page, 'shape');
-    await setToolSetting(page, 'setShapeMode', 'polygon');
-    await setToolSetting(page, 'setShapePolygonSides', 3);
-    await setToolSetting(page, 'setShapeCornerRadius', 0);
-    await setToolSetting(page, 'setShapeFillColor', { r: 50, g: 200, b: 100, a: 1 });
-    await setToolSetting(page, 'setShapeStrokeColor', { r: 0, g: 0, b: 0, a: 0 });
+    await setShapeSetting(page, 'mode', 'polygon');
+    await setShapeSetting(page, 'polygonSides', 3);
+    await setShapeSetting(page, 'cornerRadius', 0);
+    await setShapeSetting(page, 'fillColor', { r: 50, g: 200, b: 100, a: 1 });
+    await setShapeSetting(page, 'strokeColor', { r: 0, g: 0, b: 0, a: 0 });
 
     await dragAtDoc(page, { x: 320, y: 80 }, { x: 420, y: 200 });
 

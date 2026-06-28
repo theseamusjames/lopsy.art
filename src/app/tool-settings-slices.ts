@@ -30,6 +30,8 @@ import type { DodgeSettings } from '../tools/dodge/dodge-settings';
 import { DEFAULT_DODGE_SETTINGS } from '../tools/dodge/dodge-settings';
 import type { QuickSelectSettings } from '../tools/quick-select/quick-select-settings';
 import { DEFAULT_QUICK_SELECT_SETTINGS } from '../tools/quick-select/quick-select-settings';
+import type { ShapeSettings } from '../tools/shape/shape-settings';
+import { DEFAULT_SHAPE_SETTINGS } from '../tools/shape/shape-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -57,6 +59,7 @@ export interface ToolSettingsSlices {
   brushTexture: BrushTextureSettings;
   dodge: DodgeSettings;
   quickSelect: QuickSelectSettings;
+  shape: ShapeSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -76,4 +79,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   brushTexture: DEFAULT_BRUSH_TEXTURE_SETTINGS,
   dodge: DEFAULT_DODGE_SETTINGS,
   quickSelect: DEFAULT_QUICK_SELECT_SETTINGS,
+  shape: DEFAULT_SHAPE_SETTINGS,
 };

@@ -132,15 +132,13 @@ test('delete with inverted selection clears only the correct region', async ({ p
     };
     const ts = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
       getState: () => {
-        setShapeMode: (m: string) => void;
-        setShapeFillColor: (c: { r: number; g: number; b: number; a: number }) => void;
-        setShapeOutput: (o: string) => void;
+        setShapeSetting: (key: string, value: unknown) => void;
       };
     };
     ui.getState().setActiveTool('shape');
-    ts.getState().setShapeMode('ellipse');
-    ts.getState().setShapeFillColor({ r: 0, g: 0, b: 0, a: 1 });
-    ts.getState().setShapeOutput('pixels');
+    ts.getState().setShapeSetting('mode', 'ellipse');
+    ts.getState().setShapeSetting('fillColor', { r: 0, g: 0, b: 0, a: 1 });
+    ts.getState().setShapeSetting('output', 'pixels');
   });
   await page.waitForTimeout(100);
 
