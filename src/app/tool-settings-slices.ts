@@ -40,6 +40,8 @@ import type { BrushSettings } from '../tools/brush/brush-settings';
 import { DEFAULT_BRUSH_SETTINGS } from '../tools/brush/brush-settings';
 import type { BrushSpeedSettings } from '../tools/brush/brush-speed-settings';
 import { DEFAULT_BRUSH_SPEED_SETTINGS } from '../tools/brush/brush-speed-settings';
+import type { BrushJitterSettings } from '../tools/brush/brush-jitter-settings';
+import { DEFAULT_BRUSH_JITTER_SETTINGS } from '../tools/brush/brush-jitter-settings';
 
 /**
  * Per-tool settings slices owned by the global ToolSettings store.
@@ -72,6 +74,7 @@ export interface ToolSettingsSlices {
   crop: CropSettings;
   brush: BrushSettings;
   brushSpeed: BrushSpeedSettings;
+  brushJitter: BrushJitterSettings;
 }
 
 export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
@@ -96,4 +99,5 @@ export const DEFAULT_TOOL_SETTINGS_SLICES: ToolSettingsSlices = {
   crop: DEFAULT_CROP_SETTINGS,
   brush: DEFAULT_BRUSH_SETTINGS,
   brushSpeed: DEFAULT_BRUSH_SPEED_SETTINGS,
+  brushJitter: DEFAULT_BRUSH_JITTER_SETTINGS,
 };

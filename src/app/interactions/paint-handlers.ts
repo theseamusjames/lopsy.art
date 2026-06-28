@@ -286,10 +286,10 @@ export function handlePaintDown(
     const brushSpacing = brush.spacing;
     const brushScatter = brush.scatter;
     const brushFade = brush.fade;
-    const sizeJitter = toolSettings.brushSizeJitter / 100;
-    const hardnessJitter = toolSettings.brushHardnessJitter / 100;
-    const aJ = toolSettings.brushAngleJitter / 100;
-    const oJ = toolSettings.brushOpacityJitter / 100;
+    const sizeJitter = toolSettings.settings.brushJitter.size / 100;
+    const hardnessJitter = toolSettings.settings.brushJitter.hardness / 100;
+    const aJ = toolSettings.settings.brushJitter.angle / 100;
+    const oJ = toolSettings.settings.brushJitter.opacity / 100;
     const brushTaper = brush.taper;
     const needsPerDab = sizeJitter > 0 || hardnessJitter > 0 || brushTaper > 0;
     const color = strokeColor;
