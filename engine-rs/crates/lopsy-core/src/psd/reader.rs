@@ -48,6 +48,7 @@ struct PsdHeader {
     height: u32,
     depth: PsdDepth,
     channels: u16,
+    is_cmyk: bool,
 }
 
 struct PsdCursor<'a> {
@@ -132,9 +133,11 @@ fn read_header(c: &mut PsdCursor) -> Result<PsdHeader, PsdError> {
     let depth_bits = c.read_u16()?;
     let color_mode = c.read_u16()?;
 
-    if color_mode != 3 {
-        return Err(PsdError::UnsupportedColorMode(color_mode));
-    }
+    let is_cmyk = match color_mode {
+        3 => false,
+        4 => true,
+        _ => return Err(PsdError::UnsupportedColorMode(color_mode)),
+    };
 
     let depth = match depth_bits {
         8 => PsdDepth::Eight,
@@ -142,7 +145,7 @@ fn read_header(c: &mut PsdCursor) -> Result<PsdHeader, PsdError> {
         _ => return Err(PsdError::UnsupportedDepth(depth_bits)),
     };
 
-    Ok(PsdHeader { width, height, depth, channels })
+    Ok(PsdHeader { width, height, depth, channels, is_cmyk })
 }
 
 // ─── Section 2: Color Mode Data ────────────────────────────────────────
@@ -521,10 +524,11 @@ fn read_all_layer_channels(
     let bpc = header.depth.bytes_per_channel();
     let pixel_count = w * h;
 
-    // Read each channel
-    let mut r_plane: Option<Vec<u8>> = None;
-    let mut g_plane: Option<Vec<u8>> = None;
-    let mut b_plane: Option<Vec<u8>> = None;
+    // Read each channel.  For RGB: 0=R, 1=G, 2=B.  For CMYK: 0=C, 1=M, 2=Y, 3=K.
+    let mut ch0_plane: Option<Vec<u8>> = None;
+    let mut ch1_plane: Option<Vec<u8>> = None;
+    let mut ch2_plane: Option<Vec<u8>> = None;
+    let mut ch3_plane: Option<Vec<u8>> = None; // K channel for CMYK
     let mut a_plane: Option<Vec<u8>> = None;
     let mut mask_plane: Option<Vec<u8>> = None;
 
@@ -535,12 +539,12 @@ fn read_all_layer_channels(
                 let mw = mr.rect.width() as usize;
                 let mh = mr.rect.height() as usize;
                 if mw > 0 && mh > 0 {
-                    // Masks are always 8-bit grayscale
                     let mask_header = PsdHeader {
                         width: mw as u32,
                         height: mh as u32,
                         depth: PsdDepth::Eight,
                         channels: 1,
+                        is_cmyk: false,
                     };
                     let plane = decode_channel(c, ch.data_length as usize, mw, mh, &mask_header)?;
                     mask_plane = Some(plane);
@@ -557,14 +561,15 @@ fn read_all_layer_channels(
 
         match ch.id {
             -1 => a_plane = Some(plane),
-            0 => r_plane = Some(plane),
-            1 => g_plane = Some(plane),
-            2 => b_plane = Some(plane),
-            _ => {} // skip unknown channels
+            0 => ch0_plane = Some(plane),
+            1 => ch1_plane = Some(plane),
+            2 => ch2_plane = Some(plane),
+            3 => ch3_plane = Some(plane),
+            _ => {}
         }
     }
 
-    // Interleave into RGBA
+    // Interleave into RGBA (converting CMYK→RGB if needed)
     let default_color = vec![0u8; pixel_count * bpc];
     let default_alpha = match header.depth {
         PsdDepth::Eight => vec![255u8; pixel_count],
@@ -577,27 +582,57 @@ fn read_all_layer_channels(
         }
     };
 
-    let r = r_plane.as_ref().unwrap_or(&default_color);
-    let g = g_plane.as_ref().unwrap_or(&default_color);
-    let b = b_plane.as_ref().unwrap_or(&default_color);
+    let c0 = ch0_plane.as_ref().unwrap_or(&default_color);
+    let c1 = ch1_plane.as_ref().unwrap_or(&default_color);
+    let c2 = ch2_plane.as_ref().unwrap_or(&default_color);
     let a = a_plane.as_ref().unwrap_or(&default_alpha);
 
     let mut interleaved = Vec::with_capacity(pixel_count * 4 * bpc);
-    match header.depth {
-        PsdDepth::Eight => {
-            for i in 0..pixel_count {
-                interleaved.push(r[i]);
-                interleaved.push(g[i]);
-                interleaved.push(b[i]);
-                interleaved.push(a[i]);
+
+    if header.is_cmyk {
+        let default_k = vec![0u8; pixel_count * bpc];
+        let k = ch3_plane.as_ref().unwrap_or(&default_k);
+        match header.depth {
+            PsdDepth::Eight => {
+                for i in 0..pixel_count {
+                    let (r, g, b) = cmyk_to_rgb_u8(c0[i], c1[i], c2[i], k[i]);
+                    interleaved.push(r);
+                    interleaved.push(g);
+                    interleaved.push(b);
+                    interleaved.push(a[i]);
+                }
+            }
+            PsdDepth::Sixteen => {
+                for i in 0..pixel_count {
+                    let cv = u16::from_be_bytes([c0[i * 2], c0[i * 2 + 1]]);
+                    let mv = u16::from_be_bytes([c1[i * 2], c1[i * 2 + 1]]);
+                    let yv = u16::from_be_bytes([c2[i * 2], c2[i * 2 + 1]]);
+                    let kv = u16::from_be_bytes([k[i * 2], k[i * 2 + 1]]);
+                    let (r, g, b) = cmyk_to_rgb_u16(cv, mv, yv, kv);
+                    interleaved.extend_from_slice(&r.to_be_bytes());
+                    interleaved.extend_from_slice(&g.to_be_bytes());
+                    interleaved.extend_from_slice(&b.to_be_bytes());
+                    interleaved.extend_from_slice(&a[i * 2..i * 2 + 2]);
+                }
             }
         }
-        PsdDepth::Sixteen => {
-            for i in 0..pixel_count {
-                interleaved.extend_from_slice(&r[i * 2..i * 2 + 2]);
-                interleaved.extend_from_slice(&g[i * 2..i * 2 + 2]);
-                interleaved.extend_from_slice(&b[i * 2..i * 2 + 2]);
-                interleaved.extend_from_slice(&a[i * 2..i * 2 + 2]);
+    } else {
+        match header.depth {
+            PsdDepth::Eight => {
+                for i in 0..pixel_count {
+                    interleaved.push(c0[i]);
+                    interleaved.push(c1[i]);
+                    interleaved.push(c2[i]);
+                    interleaved.push(a[i]);
+                }
+            }
+            PsdDepth::Sixteen => {
+                for i in 0..pixel_count {
+                    interleaved.extend_from_slice(&c0[i * 2..i * 2 + 2]);
+                    interleaved.extend_from_slice(&c1[i * 2..i * 2 + 2]);
+                    interleaved.extend_from_slice(&c2[i * 2..i * 2 + 2]);
+                    interleaved.extend_from_slice(&a[i * 2..i * 2 + 2]);
+                }
             }
         }
     }
@@ -699,6 +734,24 @@ fn decode_channel(
     }
 }
 
+// ─── CMYK → RGB conversion ────────────────────────────────────────────
+
+#[inline]
+fn cmyk_to_rgb_u8(c: u8, m: u8, y: u8, k: u8) -> (u8, u8, u8) {
+    let r = ((255 - c as u16) * (255 - k as u16) / 255) as u8;
+    let g = ((255 - m as u16) * (255 - k as u16) / 255) as u8;
+    let b = ((255 - y as u16) * (255 - k as u16) / 255) as u8;
+    (r, g, b)
+}
+
+#[inline]
+fn cmyk_to_rgb_u16(c: u16, m: u16, y: u16, k: u16) -> (u16, u16, u16) {
+    let r = ((65535u32 - c as u32) * (65535u32 - k as u32) / 65535) as u16;
+    let g = ((65535u32 - m as u32) * (65535u32 - k as u32) / 65535) as u16;
+    let b = ((65535u32 - y as u32) * (65535u32 - k as u32) / 65535) as u16;
+    (r, g, b)
+}
+
 // ─── Section 5: Merged Composite ───────────────────────────────────────
 
 fn read_merged_composite(c: &mut PsdCursor, header: &PsdHeader) -> Result<Vec<u8>, PsdError> {
@@ -758,47 +811,80 @@ fn read_merged_composite(c: &mut PsdCursor, header: &PsdHeader) -> Result<Vec<u8
         }
     };
 
-    // Deinterleave from planar (R plane, G plane, B plane, [A plane]) to interleaved RGBA
     let pixel_count = w * h;
-    let has_alpha = channels >= 4;
 
     let mut rgba = Vec::with_capacity(pixel_count * 4 * bpc);
-    match header.depth {
-        PsdDepth::Eight => {
-            let r_plane = &all_planes[0..plane_size];
-            let g_plane = &all_planes[plane_size..plane_size * 2];
-            let b_plane = &all_planes[plane_size * 2..plane_size * 3];
-            let a_plane = if has_alpha {
-                &all_planes[plane_size * 3..plane_size * 4]
-            } else {
-                &[]
-            };
 
-            for i in 0..pixel_count {
-                rgba.push(r_plane[i]);
-                rgba.push(g_plane[i]);
-                rgba.push(b_plane[i]);
-                rgba.push(if has_alpha { a_plane[i] } else { 255 });
+    if header.is_cmyk {
+        // Planes: C, M, Y, K, [A]
+        let has_alpha = channels >= 5;
+        let c_plane = &all_planes[0..plane_size];
+        let m_plane = &all_planes[plane_size..plane_size * 2];
+        let y_plane = &all_planes[plane_size * 2..plane_size * 3];
+        let k_plane = &all_planes[plane_size * 3..plane_size * 4];
+
+        match header.depth {
+            PsdDepth::Eight => {
+                let a_plane = if has_alpha { &all_planes[plane_size * 4..plane_size * 5] } else { &[] as &[u8] };
+                for i in 0..pixel_count {
+                    let (r, g, b) = cmyk_to_rgb_u8(c_plane[i], m_plane[i], y_plane[i], k_plane[i]);
+                    rgba.push(r);
+                    rgba.push(g);
+                    rgba.push(b);
+                    rgba.push(if has_alpha { a_plane[i] } else { 255 });
+                }
+            }
+            PsdDepth::Sixteen => {
+                let a_plane = if has_alpha { &all_planes[plane_size * 4..plane_size * 5] } else { &[] as &[u8] };
+                for i in 0..pixel_count {
+                    let cv = u16::from_be_bytes([c_plane[i * 2], c_plane[i * 2 + 1]]);
+                    let mv = u16::from_be_bytes([m_plane[i * 2], m_plane[i * 2 + 1]]);
+                    let yv = u16::from_be_bytes([y_plane[i * 2], y_plane[i * 2 + 1]]);
+                    let kv = u16::from_be_bytes([k_plane[i * 2], k_plane[i * 2 + 1]]);
+                    let (r, g, b) = cmyk_to_rgb_u16(cv, mv, yv, kv);
+                    rgba.extend_from_slice(&r.to_be_bytes());
+                    rgba.extend_from_slice(&g.to_be_bytes());
+                    rgba.extend_from_slice(&b.to_be_bytes());
+                    if has_alpha {
+                        rgba.extend_from_slice(&a_plane[i * 2..i * 2 + 2]);
+                    } else {
+                        rgba.extend_from_slice(&[0xFF, 0xFF]);
+                    }
+                }
             }
         }
-        PsdDepth::Sixteen => {
-            let r_plane = &all_planes[0..plane_size];
-            let g_plane = &all_planes[plane_size..plane_size * 2];
-            let b_plane = &all_planes[plane_size * 2..plane_size * 3];
-            let a_plane = if has_alpha {
-                &all_planes[plane_size * 3..plane_size * 4]
-            } else {
-                &[]
-            };
+    } else {
+        // RGB planes
+        let has_alpha = channels >= 4;
+        match header.depth {
+            PsdDepth::Eight => {
+                let r_plane = &all_planes[0..plane_size];
+                let g_plane = &all_planes[plane_size..plane_size * 2];
+                let b_plane = &all_planes[plane_size * 2..plane_size * 3];
+                let a_plane = if has_alpha { &all_planes[plane_size * 3..plane_size * 4] } else { &[] as &[u8] };
 
-            for i in 0..pixel_count {
-                rgba.extend_from_slice(&r_plane[i * 2..i * 2 + 2]);
-                rgba.extend_from_slice(&g_plane[i * 2..i * 2 + 2]);
-                rgba.extend_from_slice(&b_plane[i * 2..i * 2 + 2]);
-                if has_alpha {
-                    rgba.extend_from_slice(&a_plane[i * 2..i * 2 + 2]);
-                } else {
-                    rgba.extend_from_slice(&[0xFF, 0xFF]);
+                for i in 0..pixel_count {
+                    rgba.push(r_plane[i]);
+                    rgba.push(g_plane[i]);
+                    rgba.push(b_plane[i]);
+                    rgba.push(if has_alpha { a_plane[i] } else { 255 });
+                }
+            }
+            PsdDepth::Sixteen => {
+                let r_plane = &all_planes[0..plane_size];
+                let g_plane = &all_planes[plane_size..plane_size * 2];
+                let b_plane = &all_planes[plane_size * 2..plane_size * 3];
+                let a_plane = if has_alpha { &all_planes[plane_size * 3..plane_size * 4] } else { &[] as &[u8] };
+
+                for i in 0..pixel_count {
+                    rgba.extend_from_slice(&r_plane[i * 2..i * 2 + 2]);
+                    rgba.extend_from_slice(&g_plane[i * 2..i * 2 + 2]);
+                    rgba.extend_from_slice(&b_plane[i * 2..i * 2 + 2]);
+                    if has_alpha {
+                        rgba.extend_from_slice(&a_plane[i * 2..i * 2 + 2]);
+                    } else {
+                        rgba.extend_from_slice(&[0xFF, 0xFF]);
+                    }
                 }
             }
         }
@@ -1006,6 +1092,7 @@ mod tests {
             height: 4,
             depth: PsdDepth::Eight,
             channels: 4,
+            is_cmyk: false,
         };
         // Only 4 bytes inflate out, but the 4x4 channel expects 16.
         let short_stream = super::super::zip_predict::zip_encode(&[10u8, 20, 30, 40]);
@@ -1026,6 +1113,7 @@ mod tests {
             height: 4,
             depth: PsdDepth::Eight,
             channels: 3,
+            is_cmyk: false,
         };
         // 3 channels x 16 bytes expected; only 8 inflate out.
         let short_stream = super::super::zip_predict::zip_encode(&[0u8; 8]);
@@ -1035,5 +1123,43 @@ mod tests {
         let mut cursor = PsdCursor::new(&section);
         let result = read_merged_composite(&mut cursor, &header);
         assert!(matches!(result, Err(PsdError::DecompressionFailed(_))));
+    }
+
+    #[test]
+    fn cmyk_to_rgb_known_values() {
+        // Pure white: C=0, M=0, Y=0, K=0 → R=255, G=255, B=255
+        assert_eq!(super::cmyk_to_rgb_u8(0, 0, 0, 0), (255, 255, 255));
+        // Pure black: K=255 → R=0, G=0, B=0
+        assert_eq!(super::cmyk_to_rgb_u8(0, 0, 0, 255), (0, 0, 0));
+        // Full cyan: C=255, K=0 → R=0, G=255, B=255
+        assert_eq!(super::cmyk_to_rgb_u8(255, 0, 0, 0), (0, 255, 255));
+        // Full magenta: M=255, K=0 → R=255, G=0, B=255
+        assert_eq!(super::cmyk_to_rgb_u8(0, 255, 0, 0), (255, 0, 255));
+        // Full yellow: Y=255, K=0 → R=255, G=255, B=0
+        assert_eq!(super::cmyk_to_rgb_u8(0, 0, 255, 0), (255, 255, 0));
+    }
+
+    #[test]
+    fn parse_cmyk_psd_file() {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let path = std::path::Path::new(manifest_dir)
+            .join("../../../samples/shippinglabels.psd");
+        let data = std::fs::read(&path)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+        let doc = read_psd(&data).unwrap();
+        assert_eq!(doc.width, 2550);
+        assert_eq!(doc.height, 3300);
+        assert_eq!(doc.depth, PsdDepth::Eight);
+        assert!(!doc.layers.is_empty());
+        for layer in &doc.layers {
+            if layer.rect.width() > 0 && layer.rect.height() > 0 {
+                let expected = layer.rect.width() as usize * layer.rect.height() as usize * 4;
+                assert_eq!(
+                    layer.pixel_data.len(), expected,
+                    "layer '{}' pixel data length mismatch: expected RGBA {expected}, got {}",
+                    layer.name, layer.pixel_data.len()
+                );
+            }
+        }
     }
 }
