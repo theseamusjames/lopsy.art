@@ -129,13 +129,35 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
       const floatBounds = floatSelection(engine, activeLayerId);
       compositeFloat(engine, 0, 0);
 
-      // Sync expanded position to Zustand so engine-sync doesn't override it.
+      // Sync expanded position AND dimensions to Zustand so engine-sync
+      // doesn't push stale width/height back to the engine.
       if (floatBounds.length >= 4) {
         const newX = floatBounds[0]!;
         const newY = floatBounds[1]!;
+        const newW = floatBounds[2]!;
+        const newH = floatBounds[3]!;
         const currentLayer = useEditorStore.getState().document.layers.find(l => l.id === activeLayerId);
-        if (currentLayer && (currentLayer.x !== newX || currentLayer.y !== newY)) {
-          useEditorStore.getState().updateLayerPosition(activeLayerId, newX, newY);
+        if (currentLayer) {
+          const posChanged = currentLayer.x !== newX || currentLayer.y !== newY;
+          const sizeChanged = currentLayer.type === 'raster'
+            && (currentLayer.width !== newW || currentLayer.height !== newH);
+          if (posChanged || sizeChanged) {
+            useEditorStore.setState((s) => ({
+              document: {
+                ...s.document,
+                layers: s.document.layers.map((l) =>
+                  l.id === activeLayerId
+                    ? {
+                      ...l,
+                      x: newX,
+                      y: newY,
+                      ...(l.type === 'raster' ? { width: newW, height: newH } : {}),
+                    }
+                    : l
+                ),
+              },
+            }));
+          }
         }
       }
 

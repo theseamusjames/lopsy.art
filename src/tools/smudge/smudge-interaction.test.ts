@@ -13,9 +13,15 @@ vi.mock('../../engine-wasm/engine-state', () => ({
   getEngine: () => engine,
 }));
 
+const syncLayerAfterFullSize = vi.fn();
+vi.mock('../../app/sync-layer-after-full-size', () => ({
+  syncLayerAfterFullSize: (...args: unknown[]) => syncLayerAfterFullSize(...args),
+}));
+
 const editorState = {
   pushHistory: vi.fn(),
   notifyRender: vi.fn(),
+  document: { layers: [{ id: 'layer-1', type: 'raster', x: 0, y: 0, width: 100, height: 100 }] },
 };
 vi.mock('../../app/editor-store', () => ({
   useEditorStore: { getState: () => editorState },

@@ -37,13 +37,33 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
   // Float if needed
   if (!hasFloat(engine)) {
     const floatBounds = floatSelection(engine, activeLayerId);
-    // Sync expanded position to Zustand (text layers expand to diagonal size).
     if (floatBounds.length >= 4) {
       const newX = floatBounds[0]!;
       const newY = floatBounds[1]!;
+      const newW = floatBounds[2]!;
+      const newH = floatBounds[3]!;
       const curLayer = editorState.document.layers.find(l => l.id === activeLayerId);
-      if (curLayer && (curLayer.x !== newX || curLayer.y !== newY)) {
-        editorState.updateLayerPosition(activeLayerId, newX, newY);
+      if (curLayer) {
+        const posChanged = curLayer.x !== newX || curLayer.y !== newY;
+        const sizeChanged = curLayer.type === 'raster'
+          && (curLayer.width !== newW || curLayer.height !== newH);
+        if (posChanged || sizeChanged) {
+          useEditorStore.setState((s) => ({
+            document: {
+              ...s.document,
+              layers: s.document.layers.map((l) =>
+                l.id === activeLayerId
+                  ? {
+                    ...l,
+                    x: newX,
+                    y: newY,
+                    ...(l.type === 'raster' ? { width: newW, height: newH } : {}),
+                  }
+                  : l
+              ),
+            },
+          }));
+        }
       }
     }
   }

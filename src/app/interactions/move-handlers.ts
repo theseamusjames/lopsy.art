@@ -150,9 +150,30 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       if (floatBoundsMove.length >= 4) {
         const newX = floatBoundsMove[0]!;
         const newY = floatBoundsMove[1]!;
+        const newW = floatBoundsMove[2]!;
+        const newH = floatBoundsMove[3]!;
         const curLayer = useEditorStore.getState().document.layers.find(l => l.id === activeLayerId);
-        if (curLayer && (curLayer.x !== newX || curLayer.y !== newY)) {
-          useEditorStore.getState().updateLayerPosition(activeLayerId, newX, newY);
+        if (curLayer) {
+          const posChanged = curLayer.x !== newX || curLayer.y !== newY;
+          const sizeChanged = curLayer.type === 'raster'
+            && (curLayer.width !== newW || curLayer.height !== newH);
+          if (posChanged || sizeChanged) {
+            useEditorStore.setState((s) => ({
+              document: {
+                ...s.document,
+                layers: s.document.layers.map((l) =>
+                  l.id === activeLayerId
+                    ? {
+                      ...l,
+                      x: newX,
+                      y: newY,
+                      ...(l.type === 'raster' ? { width: newW, height: newH } : {}),
+                    }
+                    : l
+                ),
+              },
+            }));
+          }
         }
       }
 
@@ -447,13 +468,34 @@ export function handleNudgeMove(
       const floatBoundsDup = floatSelection(engine, activeId);
       compositeFloat(engine, 0, 0);
 
-      // Sync expanded position to Zustand (text layers expand to diagonal size).
+      // Sync expanded position AND dimensions to Zustand.
       if (floatBoundsDup.length >= 4) {
         const newX = floatBoundsDup[0]!;
         const newY = floatBoundsDup[1]!;
+        const newW = floatBoundsDup[2]!;
+        const newH = floatBoundsDup[3]!;
         const curLayer = useEditorStore.getState().document.layers.find(l => l.id === activeId);
-        if (curLayer && (curLayer.x !== newX || curLayer.y !== newY)) {
-          useEditorStore.getState().updateLayerPosition(activeId, newX, newY);
+        if (curLayer) {
+          const posChanged = curLayer.x !== newX || curLayer.y !== newY;
+          const sizeChanged = curLayer.type === 'raster'
+            && (curLayer.width !== newW || curLayer.height !== newH);
+          if (posChanged || sizeChanged) {
+            useEditorStore.setState((s) => ({
+              document: {
+                ...s.document,
+                layers: s.document.layers.map((l) =>
+                  l.id === activeId
+                    ? {
+                      ...l,
+                      x: newX,
+                      y: newY,
+                      ...(l.type === 'raster' ? { width: newW, height: newH } : {}),
+                    }
+                    : l
+                ),
+              },
+            }));
+          }
         }
       }
 
