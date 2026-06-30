@@ -208,6 +208,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     label: 'Smudge',
     shortcut: 'r',
     optionsComponent: SmudgeOptions,
+    isGpu: true,
     handler: {
       down: (ctx) => handleSmudgeDown(ctx),
       move: (ctx, state) => handleSmudgeMove(state, ctx.layerPos),

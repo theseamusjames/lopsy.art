@@ -8,23 +8,30 @@ import {
   applySmudgeDab as gpuSmudgeDab,
   applySmudgeDabBatch as gpuSmudgeDabBatch,
 } from '../../engine-wasm/wasm-bridge';
+import { syncLayerAfterFullSize } from '../../app/sync-layer-after-full-size';
 import { interpolateFlat } from '../common/dab-interpolation';
 
 export function handleSmudgeDown(ctx: InteractionContext): InteractionState {
-  const { layerPos, activeLayerId, activeLayer, shiftKey } = ctx;
+  const { activeLayerId, activeLayer, shiftKey } = ctx;
+  let { layerPos } = ctx;
   const editorState = useEditorStore.getState();
   editorState.pushHistory('Smudge');
   const { size, strength: strengthPercent } = useToolSettingsStore.getState().settings.smudge;
   const strength = strengthPercent / 100;
 
+  let startLayer = activeLayer;
   const engine = getEngine();
   if (engine) {
+    const synced = syncLayerAfterFullSize(engine, activeLayerId);
+    if (synced) {
+      startLayer = synced;
+      layerPos = { x: ctx.canvasPos.x - synced.x, y: ctx.canvasPos.y - synced.y };
+    }
+
     const shiftLine = shiftKey
       && ctx.lastPaintPointRef.current
       && ctx.lastPaintPointRef.current.layerId === activeLayerId;
     if (shiftLine) {
-      // Build a flat [prev, p1, p2, ...] array starting from the last stroke
-      // endpoint so the smudge pulls along the full shift-click line.
       const from = ctx.lastPaintPointRef.current!.point;
       const spacing = Math.max(1, size * 0.25);
       const interior = interpolateFlat(from, layerPos, spacing);
@@ -34,8 +41,6 @@ export function handleSmudgeDown(ctx: InteractionContext): InteractionState {
       pts.set(interior, 2);
       gpuSmudgeDabBatch(engine, activeLayerId, pts, size, strength);
     } else {
-      // First dab has no prior point — use the current position as its own
-      // prev, which is a no-op by construction (delta = 0).
       gpuSmudgeDab(engine, activeLayerId, layerPos.x, layerPos.y, layerPos.x, layerPos.y, size, strength);
     }
     editorState.notifyRender();
@@ -47,8 +52,8 @@ export function handleSmudgeDown(ctx: InteractionContext): InteractionState {
     layerId: activeLayerId,
     tool: 'smudge',
     startPoint: null,
-    layerStartX: activeLayer.x,
-    layerStartY: activeLayer.y,
+    layerStartX: startLayer.x,
+    layerStartY: startLayer.y,
     ...DEFAULT_TRANSFORM_FIELDS,
   };
 }

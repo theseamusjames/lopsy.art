@@ -236,13 +236,15 @@ export function useCanvasInteraction(
         finalizePendingStroke(pendingStrokeRef);
 
         // Only expand the active layer's pixel data for tools that actually
-        // read/write it (move, smudge, fill). Tools like text, crop, path,
-        // eyedropper, and selection tools don't need pixel data and expanding
-        // would destructively change layer bounds before pushHistory captures
+        // read/write it via JS. Tools like text, crop, path, eyedropper,
+        // and selection tools don't need pixel data and expanding would
+        // destructively change layer bounds before pushHistory captures
         // them — causing undo to restore the wrong positions.
+        // Move is excluded: selection moves use the float system (GPU-only)
+        // and non-selection moves call expandLayerForEditing in the handler.
         // Quick Mask Mode paints on the quick mask buffer (not the layer), so
         // no pixel data expansion is needed — same as non-paint tools.
-        const needsPixelData = (isPaintTool && !isQuickMaskMode) || activeTool === 'move' || activeTool === 'fill';
+        const needsPixelData = (isPaintTool && !isQuickMaskMode) || activeTool === 'fill';
         if (needsPixelData) {
           const imageData = editorState.expandLayerForEditing(activeLayerId);
           expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
@@ -274,6 +276,16 @@ export function useCanvasInteraction(
         persistentTransformRef.current = null;
         floatingSelectionRef.current = null;
         selectLayerAlpha(activeLayerId);
+
+        // After dropping the float, the engine may have resized/repositioned
+        // the layer texture. Sync JS bounds so that syncLayers doesn't push
+        // stale dimensions back to the engine.
+        const synced = syncLayerAfterFullSize(engine, activeLayerId);
+        if (synced) {
+          expandedLayer = synced;
+          layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
+        }
+
         const selAfter = useEditorStore.getState().selection;
         if (selAfter.active && selAfter.mask) {
           const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
@@ -281,8 +293,16 @@ export function useCanvasInteraction(
         }
       }
 
+      // Rebuild context if the float commit updated layer position/bounds.
+      const finalCtx = (expandedLayer !== ctx.activeLayer || layerPos !== ctx.layerPos)
+        ? buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer)
+        : ctx;
+      if (useGpu) {
+        finalCtx.isStrokeContinuation = true;
+      }
+
       const handler = toolHandlers[activeTool];
-      const newState = handler?.down?.(ctx);
+      const newState = handler?.down?.(finalCtx);
       if (newState) {
         stateRef.current = withToolGesture(newState, !!useGpuStroke);
       }

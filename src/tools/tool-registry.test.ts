@@ -31,7 +31,7 @@ describe('tool registry', () => {
 
   it('exposes the same GPU set the manual constant used to', () => {
     expect(new Set(GPU_TOOLS)).toEqual(new Set<ToolId>([
-      'brush', 'pencil', 'eraser', 'dodge', 'sponge', 'stamp', 'healing', 'gradient', 'shape', 'spray',
+      'brush', 'pencil', 'eraser', 'dodge', 'sponge', 'smudge', 'stamp', 'healing', 'gradient', 'shape', 'spray',
     ]))
   });
 
