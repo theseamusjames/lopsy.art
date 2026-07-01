@@ -363,7 +363,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Motion Blur**: angle 0 - 360°, distance 1 - 100 px (auto-scales with document size)
 - **Radial Blur**: amount 1 - 100 (centered)
 - **Tilt-Shift Blur**: focus position 0–100% (center of sharp band along blur axis), focus width 0–100% (width of the sharp band), blur radius 1–32 px (max blur intensity in out-of-focus regions), angle 0–360° (rotation of the focus plane). Creates selective-focus miniature photography effects by blurring areas outside a configurable focus band while leaving the focus zone sharp. **Cmd/Meta+drag** on the on-canvas angle handle snaps the focus-plane rotation to 15° increments.
-- **Surface Blur**: radius 1 – 50 px (auto-scales with document size), threshold 1 – 255 (max channel difference a neighbour is allowed to have before being excluded from the blur). Edge-preserving blur that smooths low-contrast regions (skin, gradients, noise) while leaving edges sharp — a Bilateral-style filter implemented as a single GPU pass.
+- **Surface Blur**: radius 1 – 50 px (fixed range, does not auto-scale with document size), threshold 1 – 255 (max channel difference a neighbour is allowed to have before being excluded from the blur). Edge-preserving blur that smooths low-contrast regions (skin, gradients, noise) while leaving edges sharp — a Bilateral-style filter implemented as a single GPU pass.
 
 ### Sharpen
 - **Unsharp Mask**: radius 1 - 50 px (auto-scales with document size), amount 0.1 - 5, threshold 0 - 255
