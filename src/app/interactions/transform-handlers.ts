@@ -383,6 +383,39 @@ function handleSelectionTransformMove(
   const newBounds = getTransformedBounds(newTransform);
   if (newBounds.width < 1 || newBounds.height < 1) return;
 
+  // During the drag we ONLY publish the new transform. The selection mask is
+  // NOT rebuilt or re-uploaded per move — `renderSelectionAnts` already
+  // applies the transform matrix to the existing mask contours, so the
+  // outline stays visually correct. The full docW×docH mask alloc + upload
+  // (~16.7MB per event on a 4K canvas) is deferred to pointer-up (#643).
+  useUIStore.getState().setTransform(newTransform);
+  useEditorStore.getState().notifyRender();
+}
+
+/**
+ * Commit a selection-only transform on pointer-up. Materializes the resized
+ * selection mask once from the final transform state — during the drag we
+ * only updated the transform preview to avoid a per-move full-document mask
+ * alloc + GPU upload (#643).
+ */
+export function handleSelectionTransformUp(state: InteractionState): void {
+  if (state.gesture.kind !== 'transform' || !state.gesture.selectionOnly) return;
+
+  const startState = state.gesture.startState;
+  const currentTransform = useUIStore.getState().transform;
+  if (!currentTransform) return;
+
+  const newTransform: TransformState = {
+    ...startState,
+    scaleX: currentTransform.scaleX,
+    scaleY: currentTransform.scaleY,
+    translateX: currentTransform.translateX,
+    translateY: currentTransform.translateY,
+  };
+
+  const newBounds = getTransformedBounds(newTransform);
+  if (newBounds.width < 1 || newBounds.height < 1) return;
+
   const editorState = useEditorStore.getState();
   const { width: docW, height: docH } = editorState.document;
   const activeTool = useUIStore.getState().activeTool;

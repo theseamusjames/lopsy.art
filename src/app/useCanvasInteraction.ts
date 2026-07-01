@@ -26,7 +26,7 @@ import type {
   PreToolDownGuard,
 } from './interactions/interaction-types';
 import { gestureUsedGpuStroke, INITIAL_INTERACTION_STATE, withToolGesture } from './interactions/interaction-types';
-import { handleTransformDown } from './interactions/transform-handlers';
+import { handleTransformDown, handleSelectionTransformUp } from './interactions/transform-handlers';
 import {
   handleMeshWarpDown,
   handleMeshWarpMove,
@@ -557,6 +557,11 @@ export function useCanvasInteraction(
     // grabs can re-transform from the original pixels without degradation.
     // The float is only dropped when the user commits (clearPersistentTransform).
     if (state.gesture.kind === 'transform') {
+      // Selection-only transforms defer mask materialization to pointer-up
+      // to avoid per-move full-document alloc + GPU upload (#643).
+      if (state.gesture.selectionOnly) {
+        handleSelectionTransformUp(state);
+      }
       useUIStore.getState().setActiveTransformHandle(null);
     }
 

@@ -18,7 +18,7 @@ vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
 }));
 
-import { handleEyedropperDown, handleEyedropperMove } from './eyedropper-interaction';
+import { handleEyedropperDown, handleEyedropperMove, _flushEyedropperSampleForTest } from './eyedropper-interaction';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 
@@ -121,5 +121,54 @@ describe('eyedropper interaction', () => {
     expect(args[1]).toBe(-5);
     expect(args[2]).toBe(-8);
     expect(ts.setForegroundColor).not.toHaveBeenCalled();
+  });
+
+  describe('move throttling (fixes #641)', () => {
+    it('coalesces rapid move events to one readPixels call per animation frame', () => {
+      const raf = vi.fn((cb: () => void) => {
+        (raf as unknown as { pending?: () => void }).pending = cb;
+        return 1;
+      });
+      const cancelRaf = vi.fn();
+      (globalThis as Record<string, unknown>).requestAnimationFrame = raf;
+      (globalThis as Record<string, unknown>).cancelAnimationFrame = cancelRaf;
+
+      try {
+        sampleColor.mockReturnValue(new Uint8Array([1, 2, 3, 255]));
+
+        // 5 pointer moves within one frame => only one rAF scheduled.
+        for (let i = 0; i < 5; i++) {
+          handleEyedropperMove(makeState(), { x: i, y: i });
+        }
+        expect(raf).toHaveBeenCalledTimes(1);
+        expect(sampleColor).not.toHaveBeenCalled();
+
+        // Firing the rAF samples only the last coalesced position.
+        const pending = (raf as unknown as { pending?: () => void }).pending;
+        expect(pending).toBeDefined();
+        pending!();
+        expect(sampleColor).toHaveBeenCalledTimes(1);
+        const args = sampleColor.mock.calls[0]!;
+        expect(args[1]).toBe(4);
+        expect(args[2]).toBe(4);
+        expect(ts.setForegroundColor).toHaveBeenCalledTimes(1);
+        expect(ts.setForegroundColor).toHaveBeenCalledWith({ r: 1, g: 2, b: 3, a: 1 });
+      } finally {
+        delete (globalThis as Record<string, unknown>).requestAnimationFrame;
+        delete (globalThis as Record<string, unknown>).cancelAnimationFrame;
+        _flushEyedropperSampleForTest();
+      }
+    });
+
+    it('runs synchronously when requestAnimationFrame is unavailable', () => {
+      // Node test env has no rAF — verifies fallback so tests still work.
+      sampleColor.mockReturnValue(new Uint8Array([9, 8, 7, 255]));
+      handleEyedropperMove(makeState({ layerStartX: 100, layerStartY: 200 }), { x: 10, y: 15 });
+      expect(sampleColor).toHaveBeenCalledTimes(1);
+      const args = sampleColor.mock.calls[0]!;
+      expect(args[1]).toBe(110);
+      expect(args[2]).toBe(215);
+      expect(ts.setForegroundColor).toHaveBeenCalledWith({ r: 9, g: 8, b: 7, a: 1 });
+    });
   });
 });

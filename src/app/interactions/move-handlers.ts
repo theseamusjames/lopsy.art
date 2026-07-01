@@ -25,6 +25,7 @@ import type {
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
+import { setMarqueePreview } from '../../tools/marquee/marquee-preview';
 
 interface QuickMaskSnapshot {
   pixels: Uint8Array;
@@ -238,46 +239,20 @@ export function handleMoveMove(
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);
   const dragDy = Math.round(canvasPos.y - state.startPoint.y);
 
-  // Quick-mask + marquee move: translate both the marquee outline AND the
-  // painted quick-mask content under it (issue #315). The layer texture is
-  // untouched — only the quick-mask texture moves.
+  // Quick-mask + marquee move: during the drag we ONLY translate the marquee
+  // outline via the analytic preview — the same pattern the regular move path
+  // uses (see the comment below at line 300). The quick-mask pixel translate
+  // + full-document GPU upload happens once, on pointer-up (#642). This
+  // avoids a docW*docH CPU loop + docW*docH-byte upload per move event
+  // (~16.7MB on a 4K canvas).
   if (
     useUIStore.getState().maskMode === 'quickMask'
     && !floatingSelectionRef.current
     && state.moveOriginalMask
     && state.moveOriginalBounds
   ) {
-    const edState = useEditorStore.getState();
-    const { width: docW, height: docH } = edState.document;
-    const { mask: newMask, bounds: newBounds } = translateSelectionMask(
-      state.moveOriginalMask,
-      state.moveOriginalBounds,
-      dragDx,
-      dragDy,
-      docW,
-      docH,
-    );
-    edState.setSelection(newBounds, newMask, docW, docH);
-    useUIStore.getState().setTransform(createTransformState(newBounds));
-
-    const engine = getEngine();
-    if (
-      engine
-      && state.quickMaskOriginalPixels
-      && state.quickMaskOriginalWidth === docW
-      && state.quickMaskOriginalHeight === docH
-    ) {
-      const newPixels = translateQuickMaskContent(
-        state.quickMaskOriginalPixels,
-        state.moveOriginalMask,
-        dragDx,
-        dragDy,
-        docW,
-        docH,
-      );
-      uploadQuickMaskPixels(engine, newPixels, docW, docH);
-    }
-    edState.notifyRender();
+    setMarqueePreview({ kind: 'move', dx: dragDx, dy: dragDy });
+    useEditorStore.getState().notifyRender();
     return;
   }
 
@@ -363,6 +338,57 @@ export function handleMoveUp(
   _persistentTransformRef: MutableRefObject<PersistentTransform | null>,
 ): void {
   useUIStore.getState().clearSnapLines();
+
+  // Quick-mask + marquee move: the drag-time path only updated the marquee
+  // outline preview to avoid per-move CPU translates and GPU uploads.
+  // Materialize the translated quick-mask pixels + selection mask now, once.
+  if (
+    useUIStore.getState().maskMode === 'quickMask'
+    && !floatingSelectionRef.current
+    && state.moveOriginalMask
+    && state.moveOriginalBounds
+    && state.startPoint
+  ) {
+    const dragDx = Math.round(canvasPos.x - state.startPoint.x);
+    const dragDy = Math.round(canvasPos.y - state.startPoint.y);
+    const edState = useEditorStore.getState();
+    const { width: docW, height: docH } = edState.document;
+
+    if (dragDx !== 0 || dragDy !== 0) {
+      const { mask: newMask, bounds: newBounds } = translateSelectionMask(
+        state.moveOriginalMask,
+        state.moveOriginalBounds,
+        dragDx,
+        dragDy,
+        docW,
+        docH,
+      );
+      edState.setSelection(newBounds, newMask, docW, docH);
+      useUIStore.getState().setTransform(createTransformState(newBounds));
+
+      const engine = getEngine();
+      if (
+        engine
+        && state.quickMaskOriginalPixels
+        && state.quickMaskOriginalWidth === docW
+        && state.quickMaskOriginalHeight === docH
+      ) {
+        const newPixels = translateQuickMaskContent(
+          state.quickMaskOriginalPixels,
+          state.moveOriginalMask,
+          dragDx,
+          dragDy,
+          docW,
+          docH,
+        );
+        uploadQuickMaskPixels(engine, newPixels, docW, docH);
+      }
+    }
+    setMarqueePreview(null);
+    edState.notifyRender();
+    return;
+  }
+
   if (!floatingSelectionRef.current || !state.startPoint) return;
 
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);
