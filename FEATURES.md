@@ -716,7 +716,7 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 ### Open / Save
 - **New** (`⌘N`, menu-only accelerator): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
 - **Open…** (`⌘O`, menu-only accelerator): open a PNG/JPEG/GIF (first frame)/BMP/WebP/PSD/DNG/RAF/.lopsy from disk (the picker auto-routes by extension via a shared `classifyOpenFile` helper). The same routing backs the pre-document flow — the New Document modal's "Open file" button and drag-and-drop onto a fresh app accept the same formats, including `.lopsy` project files.
-- **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust)
+- **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust). Both **RGB** and **CMYK** color modes are accepted at 8-bit and 16-bit depth — CMYK files are converted to RGB on import (naive `(1−C)(1−K)` channel math) for both the per-layer and merged-composite paths. Other color modes (grayscale, indexed, Lab, etc.) are rejected with an unsupported-color-mode error.
 - **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant)
 
 ### Native Project Format (.lopsy)
