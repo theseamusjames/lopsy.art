@@ -54,7 +54,7 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
     // descriptor before selectLayerAlpha tries to float it.
     const pastedId = useEditorStore.getState().document.activeLayerId;
     if (pastedId) {
-      requestAnimationFrame(() => selectLayerAlpha(pastedId));
+      requestAnimationFrame(() => selectLayerAlpha(pastedId, true));
     }
   } else {
     const layerId = crypto.randomUUID();
