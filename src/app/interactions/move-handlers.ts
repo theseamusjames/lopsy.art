@@ -238,9 +238,12 @@ export function handleMoveMove(
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);
   const dragDy = Math.round(canvasPos.y - state.startPoint.y);
 
-  // Quick-mask + marquee move: translate both the marquee outline AND the
-  // painted quick-mask content under it (issue #315). The layer texture is
-  // untouched — only the quick-mask texture moves.
+  // Quick-mask + marquee move: during the drag we only translate the
+  // marquee bounds so the outline moves under the cursor. Materializing
+  // the translated selection mask (docW * docH allocation) and re-uploading
+  // the quick-mask pixels to the GPU (docW * docH bytes) is deferred to
+  // handleMoveUp — the same "materialize once on commit" pattern the
+  // non-quick-mask move path uses. See issue #642.
   if (
     useUIStore.getState().maskMode === 'quickMask'
     && !floatingSelectionRef.current
@@ -248,35 +251,15 @@ export function handleMoveMove(
     && state.moveOriginalBounds
   ) {
     const edState = useEditorStore.getState();
-    const { width: docW, height: docH } = edState.document;
-    const { mask: newMask, bounds: newBounds } = translateSelectionMask(
-      state.moveOriginalMask,
-      state.moveOriginalBounds,
-      dragDx,
-      dragDy,
-      docW,
-      docH,
-    );
-    edState.setSelection(newBounds, newMask, docW, docH);
+    const origBounds = state.moveOriginalBounds;
+    const newBounds = {
+      x: origBounds.x + dragDx,
+      y: origBounds.y + dragDy,
+      width: origBounds.width,
+      height: origBounds.height,
+    };
+    edState.setSelectionBounds(newBounds);
     useUIStore.getState().setTransform(createTransformState(newBounds));
-
-    const engine = getEngine();
-    if (
-      engine
-      && state.quickMaskOriginalPixels
-      && state.quickMaskOriginalWidth === docW
-      && state.quickMaskOriginalHeight === docH
-    ) {
-      const newPixels = translateQuickMaskContent(
-        state.quickMaskOriginalPixels,
-        state.moveOriginalMask,
-        dragDx,
-        dragDy,
-        docW,
-        docH,
-      );
-      uploadQuickMaskPixels(engine, newPixels, docW, docH);
-    }
     edState.notifyRender();
     return;
   }
@@ -363,6 +346,54 @@ export function handleMoveUp(
   _persistentTransformRef: MutableRefObject<PersistentTransform | null>,
 ): void {
   useUIStore.getState().clearSnapLines();
+
+  // Quick-mask + marquee: materialize the translated selection mask and
+  // upload the shifted quick-mask pixels now, at the end of the drag.
+  // handleMoveMove intentionally skipped these to keep every pointer-move
+  // off the docW * docH CPU/GPU path (#642).
+  if (
+    useUIStore.getState().maskMode === 'quickMask'
+    && !floatingSelectionRef.current
+    && state.moveOriginalMask
+    && state.moveOriginalBounds
+    && state.startPoint
+  ) {
+    const dragDx = Math.round(canvasPos.x - state.startPoint.x);
+    const dragDy = Math.round(canvasPos.y - state.startPoint.y);
+    const edState = useEditorStore.getState();
+    const { width: docW, height: docH } = edState.document;
+    const { mask: newMask, bounds: newBounds } = translateSelectionMask(
+      state.moveOriginalMask,
+      state.moveOriginalBounds,
+      dragDx,
+      dragDy,
+      docW,
+      docH,
+    );
+    edState.setSelection(newBounds, newMask, docW, docH);
+    useUIStore.getState().setTransform(createTransformState(newBounds));
+
+    const engine = getEngine();
+    if (
+      engine
+      && state.quickMaskOriginalPixels
+      && state.quickMaskOriginalWidth === docW
+      && state.quickMaskOriginalHeight === docH
+    ) {
+      const newPixels = translateQuickMaskContent(
+        state.quickMaskOriginalPixels,
+        state.moveOriginalMask,
+        dragDx,
+        dragDy,
+        docW,
+        docH,
+      );
+      uploadQuickMaskPixels(engine, newPixels, docW, docH);
+    }
+    edState.notifyRender();
+    return;
+  }
+
   if (!floatingSelectionRef.current || !state.startPoint) return;
 
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);

@@ -18,9 +18,22 @@ vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
 }));
 
-import { handleEyedropperDown, handleEyedropperMove } from './eyedropper-interaction';
+import {
+  handleEyedropperDown,
+  handleEyedropperMove,
+  _resetEyedropperThrottleForTests,
+} from './eyedropper-interaction';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
+
+// Run any scheduled rAF callback immediately, so the async
+// eyedropper-move path is deterministic under Vitest.
+let rafQueue: FrameRequestCallback[] = [];
+const flushRaf = (): void => {
+  const q = rafQueue;
+  rafQueue = [];
+  for (const cb of q) cb(0);
+};
 
 function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContext {
   const layer = { id: 'layer-1', x: 0, y: 0, visible: true } as unknown as InteractionContext['activeLayer'];
@@ -63,6 +76,13 @@ describe('eyedropper interaction', () => {
     sampleColor.mockReset();
     ts.setForegroundColor.mockClear();
     engine = { __engine: 'mock' };
+    rafQueue = [];
+    _resetEyedropperThrottleForTests();
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback): number => {
+      rafQueue.push(cb);
+      return rafQueue.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (): void => {});
   });
 
   it('samples the composite at the canvas position and sets the foreground color', () => {
@@ -108,6 +128,8 @@ describe('eyedropper interaction', () => {
   it('move samples at layer-local position translated back to canvas space', () => {
     sampleColor.mockReturnValue(new Uint8Array([5, 6, 7, 255]));
     handleEyedropperMove(makeState({ layerStartX: 100, layerStartY: 200 }), { x: 10, y: 15 });
+    expect(sampleColor).not.toHaveBeenCalled();
+    flushRaf();
     const args = sampleColor.mock.calls[0]!;
     expect(args[1]).toBe(110);
     expect(args[2]).toBe(215);
@@ -117,9 +139,41 @@ describe('eyedropper interaction', () => {
   it('move with negative coordinates still forwards them to the sampler', () => {
     sampleColor.mockReturnValue(new Uint8Array(0));
     handleEyedropperMove(makeState(), { x: -5, y: -8 });
+    flushRaf();
     const args = sampleColor.mock.calls[0]!;
     expect(args[1]).toBe(-5);
     expect(args[2]).toBe(-8);
     expect(ts.setForegroundColor).not.toHaveBeenCalled();
+  });
+
+  it('coalesces a burst of pointer-moves to a single GPU readback per frame (issue #641)', () => {
+    // Ten pointer-moves in a single frame — before the fix each one
+    // called sampleColor and stalled on readPixels. After the fix,
+    // only the last position is sampled when the rAF fires.
+    sampleColor.mockReturnValue(new Uint8Array([9, 9, 9, 255]));
+    const state = makeState({ layerStartX: 0, layerStartY: 0 });
+    for (let i = 0; i < 10; i++) {
+      handleEyedropperMove(state, { x: i, y: i * 2 });
+    }
+    expect(sampleColor).not.toHaveBeenCalled();
+    flushRaf();
+    expect(sampleColor).toHaveBeenCalledTimes(1);
+    const args = sampleColor.mock.calls[0]!;
+    expect(args[1]).toBe(9);
+    expect(args[2]).toBe(18);
+  });
+
+  it('next frame after a drain samples again', () => {
+    sampleColor.mockReturnValue(new Uint8Array([1, 1, 1, 255]));
+    const state = makeState();
+    handleEyedropperMove(state, { x: 1, y: 2 });
+    flushRaf();
+    expect(sampleColor).toHaveBeenCalledTimes(1);
+    handleEyedropperMove(state, { x: 3, y: 4 });
+    expect(sampleColor).toHaveBeenCalledTimes(1);
+    flushRaf();
+    expect(sampleColor).toHaveBeenCalledTimes(2);
+    expect(sampleColor.mock.calls[1]![1]).toBe(3);
+    expect(sampleColor.mock.calls[1]![2]).toBe(4);
   });
 });

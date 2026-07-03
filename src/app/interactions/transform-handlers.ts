@@ -29,11 +29,6 @@ import {
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import type { InteractionState, InteractionContext, CanvasGesture } from './interaction-types';
 import type { Point } from '../../types';
-import {
-  createRectSelection,
-  createEllipseSelection,
-  selectionBounds,
-} from '../../selection/selection';
 
 const SELECTION_TOOLS = new Set([
   'marquee-rect', 'marquee-ellipse', 'lasso', 'lasso-magnetic', 'wand',
@@ -384,18 +379,16 @@ function handleSelectionTransformMove(
   if (newBounds.width < 1 || newBounds.height < 1) return;
 
   const editorState = useEditorStore.getState();
-  const { width: docW, height: docH } = editorState.document;
-  const activeTool = useUIStore.getState().activeTool;
 
-  const mask = activeTool === 'marquee-ellipse'
-    ? createEllipseSelection(newBounds, docW, docH)
-    : createRectSelection(newBounds, docW, docH);
-
-  const bounds = selectionBounds(mask, docW, docH);
-  if (bounds) {
-    editorState.setSelection(bounds, mask, docW, docH);
-    useUIStore.getState().setTransform(createTransformState(bounds));
+  // Update only the marquee bounds during the drag — the mask itself and
+  // its GPU upload are deferred to pointer-up (marquee-strategy.onUp).
+  // Before the fix, allocating a fresh docW * docH mask and calling
+  // setSelection on every pointer-move forced syncSelection to push the
+  // whole mask to the GPU each frame (#643).
+  if (editorState.selection.active) {
+    editorState.setSelectionBounds(newBounds);
   }
+  useUIStore.getState().setTransform(createTransformState(newBounds));
 
   editorState.notifyRender();
 }

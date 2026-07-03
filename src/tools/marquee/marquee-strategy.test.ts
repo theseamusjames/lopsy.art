@@ -54,11 +54,26 @@ vi.mock('../../app/editor-store', () => ({
   useEditorStore: { getState: () => editorState },
 }));
 
-const uiState = {
+const uiState: {
+  setTransform: ReturnType<typeof vi.fn>;
+  setActiveTransformHandle: ReturnType<typeof vi.fn>;
+  showGrid: boolean;
+  snapToGrid: boolean;
+  gridSize: number;
+  transform: null | {
+    originalBounds: { x: number; y: number; width: number; height: number };
+    scaleX: number;
+    scaleY: number;
+    translateX: number;
+    translateY: number;
+  };
+} = {
   setTransform: vi.fn(),
+  setActiveTransformHandle: vi.fn(),
   showGrid: false,
   snapToGrid: false,
   gridSize: 10,
+  transform: null,
 };
 vi.mock('../../app/ui-store', () => ({
   useUIStore: { getState: () => uiState },
@@ -135,10 +150,12 @@ beforeEach(() => {
   editorState.setSelection.mockClear();
   editorState.clearSelection.mockClear();
   uiState.setTransform.mockClear();
+  uiState.setActiveTransformHandle.mockClear();
   editorState.document = { width: DOC_W, height: DOC_H, layers: [] };
   editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
   uiState.showGrid = false;
   uiState.snapToGrid = false;
+  uiState.transform = null;
   ts.aspectRatioLocked = false;
   ts.settings.marquee.feather = 0;
   setMarqueePreview(null);
@@ -372,5 +389,72 @@ describe('marquee onUp', () => {
     marqueeStrategy.onUp!(state, { x: 50, y: 50 }, makeUpCtx(50, 50));
     expect(editorState.clearSelection).not.toHaveBeenCalled();
     expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('materializes the selection mask from ui.transform when a selection-only transform ends (issue #643)', () => {
+    // Simulate the tail end of a selection-transform-resize: the move
+    // handler has already updated ui.transform to reflect the final
+    // rect, but never rebuilt the mask.
+    editorState.selection = {
+      active: true,
+      mask: new Uint8ClampedArray(DOC_W * DOC_H),
+      bounds: { x: 20, y: 20, width: 40, height: 40 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
+    uiState.transform = {
+      originalBounds: { x: 20, y: 20, width: 40, height: 40 },
+      scaleX: 1,
+      scaleY: 1,
+      translateX: 0,
+      translateY: 0,
+    };
+    const state = makeState({
+      tool: 'marquee-rect',
+      gesture: { kind: 'transform', handle: 'top-left', startState: {} as never, startAngle: 0, selectionOnly: true },
+    });
+    marqueeStrategy.onUp!(state, { x: 0, y: 0 }, makeUpCtx(0, 0));
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    const [bounds, mask, w, h] = editorState.setSelection.mock.calls[0]! as [
+      { x: number; y: number; width: number; height: number },
+      Uint8ClampedArray,
+      number,
+      number,
+    ];
+    expect(bounds).toEqual({ x: 20, y: 20, width: 40, height: 40 });
+    expect(w).toBe(DOC_W);
+    expect(h).toBe(DOC_H);
+    // Pixel inside the rect should be selected.
+    expect(mask[30 * DOC_W + 30]).toBe(255);
+    // Pixel outside should not.
+    expect(mask[5 * DOC_W + 5]).toBe(0);
+    expect(uiState.setActiveTransformHandle).toHaveBeenCalledWith(null);
+  });
+
+  it('materializes an ellipse mask for the ellipse tool on transform end', () => {
+    editorState.selection = {
+      active: true,
+      mask: new Uint8ClampedArray(DOC_W * DOC_H),
+      bounds: { x: 20, y: 20, width: 40, height: 40 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
+    uiState.transform = {
+      originalBounds: { x: 20, y: 20, width: 40, height: 40 },
+      scaleX: 1,
+      scaleY: 1,
+      translateX: 0,
+      translateY: 0,
+    };
+    const state = makeState({
+      tool: 'marquee-ellipse',
+      gesture: { kind: 'transform', handle: 'top-left', startState: {} as never, startAngle: 0, selectionOnly: true },
+    });
+    marqueeStrategy.onUp!(state, { x: 0, y: 0 }, makeUpCtx(0, 0));
+    const [, mask] = editorState.setSelection.mock.calls[0]! as [unknown, Uint8ClampedArray];
+    // Center of the rect is inside the ellipse.
+    expect(mask[40 * DOC_W + 40]).toBe(255);
+    // Corner of the bounding rect is outside the ellipse.
+    expect(mask[20 * DOC_W + 20]).toBe(0);
   });
 });

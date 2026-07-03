@@ -56,9 +56,20 @@ import {
   handleQuickSelectDown,
   handleQuickSelectMove,
   handleQuickSelectUp,
+  _resetQuickSelectThrottleForTests,
 } from './quick-select-interaction';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
+
+// The move handler coalesces to at most one applyQuickSelectStroke call
+// per animation frame (#643). Tests drive the frame manually so we can
+// assert both the throttling behavior and the eventual result.
+let rafQueue: FrameRequestCallback[] = [];
+const flushRaf = (): void => {
+  const q = rafQueue;
+  rafQueue = [];
+  for (const cb of q) cb(0);
+};
 
 /**
  * 12x12 RGBA image split into two flat-color regions:
@@ -135,6 +146,13 @@ beforeEach(() => {
   ts.settings.quickSelect.tolerance = 32;
   // Clear the module-level stroke session from any previous test.
   handleQuickSelectUp();
+  _resetQuickSelectThrottleForTests();
+  rafQueue = [];
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback): number => {
+    rafQueue.push(cb);
+    return rafQueue.length;
+  });
+  vi.stubGlobal('cancelAnimationFrame', (): void => {});
 });
 
 describe('quick select down', () => {
@@ -231,6 +249,7 @@ describe('quick select move', () => {
     handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
     editorState.setSelection.mockClear();
     handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    flushRaf();
     const mask = lastSetSelectionMask();
     expect(mask[2 * DOC_W + 2]).toBe(255); // red band from the down
     expect(mask[9 * DOC_W + 2]).toBe(255); // blue band from the move
@@ -238,6 +257,7 @@ describe('quick select move', () => {
 
   it('does nothing without an active session', () => {
     handleQuickSelectMove(makeState(), { x: 5, y: 5 });
+    flushRaf();
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
 
@@ -246,6 +266,37 @@ describe('quick select move', () => {
     handleQuickSelectUp();
     editorState.setSelection.mockClear();
     handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    flushRaf();
     expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('coalesces a burst of pointer-moves to a single setSelection per frame (issue #643)', () => {
+    // Before the fix, every pointer-move ran applyQuickSelectStroke +
+    // setSelection which forced syncSelection to push the full docW * docH
+    // selection mask to the GPU each time. After the fix, moves are
+    // scheduled into a rAF so at most one selection replacement happens
+    // per rendered frame.
+    handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    editorState.setSelection.mockClear();
+    for (let i = 0; i < 10; i++) {
+      handleQuickSelectMove(makeState(), { x: 2, y: 3 + i });
+    }
+    // Not once, despite ten pointer events in the frame.
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    flushRaf();
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it('handleQuickSelectUp flushes any pending move so the final cursor position is committed', () => {
+    handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    editorState.setSelection.mockClear();
+    handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    // rAF hasn't fired yet.
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    handleQuickSelectUp();
+    // Up-handler flushes the pending move even if the rAF never fires.
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    const mask = lastSetSelectionMask();
+    expect(mask[9 * DOC_W + 2]).toBe(255);
   });
 });

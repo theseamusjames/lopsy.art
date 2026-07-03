@@ -5,10 +5,10 @@ import type { Point } from '../../types';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
-import { getSelectionMaskValue } from '../../selection/selection';
+import { getSelectionMaskValue, selectionBounds } from '../../selection/selection';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
-import { createTransformState } from '../transform/transform';
+import { createTransformState, getTransformedBounds } from '../transform/transform';
 import { snapPositionToGrid } from '../move/move';
 import {
   constrainMarqueeSize,
@@ -110,6 +110,23 @@ export const marqueeStrategy: SelectionToolStrategy = {
 
   onUp(state: InteractionState, _canvasPos: Point, upCtx: SelectionUpContext): void {
     if (state.gesture.kind === 'transform' && state.gesture.selectionOnly) {
+      // Materialize the mask now that the drag is done. During the drag
+      // handleSelectionTransformMove only updated bounds — this rebuilds
+      // the actual pixel mask once from the final rect (#643).
+      const editorState = useEditorStore.getState();
+      const currentTransform = useUIStore.getState().transform;
+      if (currentTransform && editorState.selection.active) {
+        const { width: docW, height: docH } = editorState.document;
+        const finalBounds = getTransformedBounds(currentTransform);
+        const mask = state.tool === 'marquee-ellipse'
+          ? createEllipseSelection(finalBounds, docW, docH)
+          : createRectSelection(finalBounds, docW, docH);
+        const bounds = selectionBounds(mask, docW, docH);
+        if (bounds) {
+          editorState.setSelection(bounds, mask, docW, docH);
+          useUIStore.getState().setTransform(createTransformState(bounds));
+        }
+      }
       useUIStore.getState().setActiveTransformHandle(null);
       return;
     }

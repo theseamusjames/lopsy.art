@@ -101,11 +101,19 @@ export function handleQuickSelectDown(ctx: InteractionContext): InteractionState
   };
 }
 
-export function handleQuickSelectMove(
-  state: InteractionState,
-  canvasPos: { x: number; y: number },
-): void {
-  if (!session || !state.lastPoint) return;
+// Coalesce pointer-moves to at most one applyQuickSelectStroke per
+// animation frame. Every stroke call allocates a docW * docH mask and
+// forces syncSelection to re-upload the whole selection texture to the
+// GPU, so on a 4K canvas with a fast pointer stream we were doing
+// multiple full-doc CPU + GPU passes per rendered frame (#643).
+let pendingMove: { x: number; y: number } | null = null;
+let rafHandle: number | null = null;
+
+function drainPendingMove(): void {
+  rafHandle = null;
+  const pt = pendingMove;
+  pendingMove = null;
+  if (!pt || !session) return;
 
   const { quickSelect } = useToolSettingsStore.getState().settings;
   const editorState = useEditorStore.getState();
@@ -120,7 +128,7 @@ export function handleQuickSelectMove(
       edgeStrength: quickSelect.edgeStrength,
     },
     {
-      points: [canvasPos],
+      points: [pt],
       existingMask: session.strokeMask,
       mode: quickSelect.mode,
     },
@@ -137,7 +145,37 @@ export function handleQuickSelectMove(
   }
 }
 
+export function handleQuickSelectMove(
+  state: InteractionState,
+  canvasPos: { x: number; y: number },
+): void {
+  if (!session || !state.lastPoint) return;
+
+  pendingMove = canvasPos;
+  if (rafHandle !== null) return;
+  const raf = typeof requestAnimationFrame === 'function'
+    ? requestAnimationFrame
+    : (cb: FrameRequestCallback): number => setTimeout(() => cb(0), 16) as unknown as number;
+  rafHandle = raf(drainPendingMove);
+}
+
 export function handleQuickSelectUp(): void {
-  // Nothing special — the final mask is already in the editor store.
+  // Flush any pending move so the final cursor position gets committed
+  // to the selection mask before the drag ends.
+  if (rafHandle !== null && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(rafHandle);
+    rafHandle = null;
+  }
+  if (pendingMove) drainPendingMove();
+  session = null;
+}
+
+/** Test hook: reset the coalesce state so tests can start fresh. */
+export function _resetQuickSelectThrottleForTests(): void {
+  pendingMove = null;
+  if (rafHandle !== null && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(rafHandle);
+  }
+  rafHandle = null;
   session = null;
 }
