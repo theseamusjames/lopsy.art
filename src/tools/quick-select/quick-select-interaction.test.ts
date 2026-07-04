@@ -56,6 +56,7 @@ import {
   handleQuickSelectDown,
   handleQuickSelectMove,
   handleQuickSelectUp,
+  __flushQuickSelectStrokeForTest,
 } from './quick-select-interaction';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
@@ -231,6 +232,7 @@ describe('quick select move', () => {
     handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
     editorState.setSelection.mockClear();
     handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    __flushQuickSelectStrokeForTest();
     const mask = lastSetSelectionMask();
     expect(mask[2 * DOC_W + 2]).toBe(255); // red band from the down
     expect(mask[9 * DOC_W + 2]).toBe(255); // blue band from the move
@@ -238,6 +240,7 @@ describe('quick select move', () => {
 
   it('does nothing without an active session', () => {
     handleQuickSelectMove(makeState(), { x: 5, y: 5 });
+    __flushQuickSelectStrokeForTest();
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
 
@@ -246,6 +249,34 @@ describe('quick select move', () => {
     handleQuickSelectUp();
     editorState.setSelection.mockClear();
     handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    __flushQuickSelectStrokeForTest();
     expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+
+  // Regression for #643: applyQuickSelectStroke does full-doc CPU work
+  // per invocation. Coalescing many pointer-moves within a single
+  // animation frame collapses that to one stroke pass per frame.
+  it('coalesces multiple mid-frame moves into a single stroke pass', () => {
+    handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    editorState.setSelection.mockClear();
+    handleQuickSelectMove(makeState(), { x: 2, y: 7 });
+    handleQuickSelectMove(makeState(), { x: 2, y: 8 });
+    handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    // Nothing has fired yet — all points sit in the pending buffer.
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    __flushQuickSelectStrokeForTest();
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    const mask = lastSetSelectionMask();
+    expect(mask[9 * DOC_W + 2]).toBe(255);
+  });
+
+  it('flushes any pending stroke on pointer-up so the last move is not dropped', () => {
+    handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    editorState.setSelection.mockClear();
+    handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    handleQuickSelectUp();
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    const mask = lastSetSelectionMask();
+    expect(mask[9 * DOC_W + 2]).toBe(255);
   });
 });

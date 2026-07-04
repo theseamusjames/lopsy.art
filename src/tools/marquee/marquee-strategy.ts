@@ -110,6 +110,8 @@ export const marqueeStrategy: SelectionToolStrategy = {
 
   onUp(state: InteractionState, _canvasPos: Point, upCtx: SelectionUpContext): void {
     if (state.gesture.kind === 'transform' && state.gesture.selectionOnly) {
+      // The transform commit runs in the interaction dispatcher for every
+      // selection tool (issue #643) — nothing marquee-specific left here.
       useUIStore.getState().setActiveTransformHandle(null);
       return;
     }

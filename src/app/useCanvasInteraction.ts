@@ -26,7 +26,7 @@ import type {
   PreToolDownGuard,
 } from './interactions/interaction-types';
 import { gestureUsedGpuStroke, INITIAL_INTERACTION_STATE, withToolGesture } from './interactions/interaction-types';
-import { handleTransformDown } from './interactions/transform-handlers';
+import { handleTransformDown, commitSelectionTransform } from './interactions/transform-handlers';
 import {
   handleMeshWarpDown,
   handleMeshWarpMove,
@@ -517,6 +517,14 @@ export function useCanvasInteraction(
       stateRef, floatingSelectionRef, persistentTransformRef,
       stampSourceRef, stampOffsetRef, lastPaintPointRef,
     };
+
+    // Selection-only transform-resize: the move handler deferred the mask
+    // rebuild during the drag (issue #643). Commit the pending transform
+    // now, before the tool's up handler runs, so the selection reflects
+    // the final scaled shape regardless of which selection tool is active.
+    if (state.gesture.kind === 'transform' && state.gesture.selectionOnly) {
+      commitSelectionTransform(state);
+    }
 
     toolHandlers[state.tool]?.up?.(ctx, state);
 

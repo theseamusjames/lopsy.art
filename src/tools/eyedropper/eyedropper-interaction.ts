@@ -14,13 +14,21 @@ function gpuSampleColorAt(canvasX: number, canvasY: number): { r: number; g: num
   return { r: rgba[0]!, g: rgba[1]!, b: rgba[2]!, a: rgba[3]! / 255 };
 }
 
-export function handleEyedropperDown(ctx: InteractionContext): InteractionState {
-  const { canvasPos, activeLayerId, activeLayer } = ctx;
-
-  const gpuColor = gpuSampleColorAt(canvasPos.x, canvasPos.y);
+function performSample(canvasX: number, canvasY: number): void {
+  const gpuColor = gpuSampleColorAt(canvasX, canvasY);
   if (gpuColor) {
     useToolSettingsStore.getState().setForegroundColor(gpuColor);
   }
+}
+
+export function handleEyedropperDown(ctx: InteractionContext): InteractionState {
+  const { canvasPos, activeLayerId, activeLayer } = ctx;
+
+  // Reset any coalesced move state left over from a prior gesture.
+  pendingSample = null;
+  scheduledHandle = null;
+
+  performSample(canvasPos.x, canvasPos.y);
 
   return {
     drawing: true,
@@ -34,11 +42,45 @@ export function handleEyedropperDown(ctx: InteractionContext): InteractionState 
   };
 }
 
-export function handleEyedropperMove(state: InteractionState, layerLocalPos: Point): void {
-  const canvasX = layerLocalPos.x + state.layerStartX;
-  const canvasY = layerLocalPos.y + state.layerStartY;
-  const gpuColor = gpuSampleColorAt(canvasX, canvasY);
-  if (gpuColor) {
-    useToolSettingsStore.getState().setForegroundColor(gpuColor);
+// GPU→CPU readback (gl.readPixels) is a pipeline-synchronising call that
+// stalls until pending compositing work has finished. Firing it on every
+// pointer move floods the main thread on a large canvas with many layers.
+// Coalesce moves to at most once per animation frame — the latest position
+// wins.
+let pendingSample: { x: number; y: number } | null = null;
+let scheduledHandle: number | null = null;
+
+function flushPendingSample(): void {
+  scheduledHandle = null;
+  const p = pendingSample;
+  pendingSample = null;
+  if (p) performSample(p.x, p.y);
+}
+
+function scheduleSample(): void {
+  if (scheduledHandle !== null) return;
+  if (typeof requestAnimationFrame === 'function') {
+    scheduledHandle = requestAnimationFrame(flushPendingSample);
+  } else {
+    // Environments without rAF (e.g. some test setups): fall back to a
+    // microtask so the coalescing behaviour still holds.
+    scheduledHandle = 1;
+    queueMicrotask(flushPendingSample);
   }
+}
+
+export function handleEyedropperMove(state: InteractionState, layerLocalPos: Point): void {
+  pendingSample = {
+    x: layerLocalPos.x + state.layerStartX,
+    y: layerLocalPos.y + state.layerStartY,
+  };
+  scheduleSample();
+}
+
+/** Test-only helper: run any pending coalesced sample synchronously. */
+export function __flushEyedropperSampleForTest(): void {
+  if (scheduledHandle !== null && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(scheduledHandle);
+  }
+  flushPendingSample();
 }

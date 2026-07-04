@@ -31,6 +31,68 @@ interface QuickSelectSession {
 
 let session: QuickSelectSession | null = null;
 
+// Per-frame coalescing of pointer-move events (issue #643). Every move used
+// to run applyQuickSelectStroke — a full-document CPU pass that allocates a
+// fresh docW×docH mask — even though syncSelection only pushes one mask per
+// animation frame. Buffering the points and draining in rAF collapses that
+// per-move CPU cost to per-frame.
+let pendingPoints: { x: number; y: number }[] = [];
+let scheduledHandle: number | null = null;
+
+function flushPendingStroke(): void {
+  scheduledHandle = null;
+  if (!session || pendingPoints.length === 0) return;
+
+  const points = pendingPoints;
+  pendingPoints = [];
+
+  const { quickSelect } = useToolSettingsStore.getState().settings;
+  const editorState = useEditorStore.getState();
+
+  const updatedMask = applyQuickSelectStroke(
+    {
+      pixels: session.pixels,
+      width: session.docWidth,
+      height: session.docHeight,
+      radius: quickSelect.size,
+      tolerance: quickSelect.tolerance,
+      edgeStrength: quickSelect.edgeStrength,
+    },
+    {
+      points,
+      existingMask: session.strokeMask,
+      mode: quickSelect.mode,
+    },
+  );
+
+  session.strokeMask = updatedMask;
+
+  const bounds = selectionBounds(updatedMask, session.docWidth, session.docHeight);
+  if (bounds) {
+    editorState.setSelection(bounds, updatedMask, session.docWidth, session.docHeight);
+    useUIStore.getState().setTransform(createTransformState(bounds));
+  } else {
+    editorState.clearSelection();
+  }
+}
+
+function scheduleStrokeFlush(): void {
+  if (scheduledHandle !== null) return;
+  if (typeof requestAnimationFrame === 'function') {
+    scheduledHandle = requestAnimationFrame(flushPendingStroke);
+  } else {
+    scheduledHandle = 1;
+    queueMicrotask(flushPendingStroke);
+  }
+}
+
+function cancelStrokeFlush(): void {
+  if (scheduledHandle !== null && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(scheduledHandle);
+  }
+  scheduledHandle = null;
+}
+
 export function handleQuickSelectDown(ctx: InteractionContext): InteractionState | undefined {
   const engine = getEngine();
   if (!engine) return undefined;
@@ -79,6 +141,7 @@ export function handleQuickSelectDown(ctx: InteractionContext): InteractionState
     strokeMask: seedMask,
     priorMask,
   };
+  pendingPoints = [];
 
   // Update live selection
   const bounds = selectionBounds(seedMask, docW, docH);
@@ -106,38 +169,25 @@ export function handleQuickSelectMove(
   canvasPos: { x: number; y: number },
 ): void {
   if (!session || !state.lastPoint) return;
-
-  const { quickSelect } = useToolSettingsStore.getState().settings;
-  const editorState = useEditorStore.getState();
-
-  const updatedMask = applyQuickSelectStroke(
-    {
-      pixels: session.pixels,
-      width: session.docWidth,
-      height: session.docHeight,
-      radius: quickSelect.size,
-      tolerance: quickSelect.tolerance,
-      edgeStrength: quickSelect.edgeStrength,
-    },
-    {
-      points: [canvasPos],
-      existingMask: session.strokeMask,
-      mode: quickSelect.mode,
-    },
-  );
-
-  session.strokeMask = updatedMask;
-
-  const bounds = selectionBounds(updatedMask, session.docWidth, session.docHeight);
-  if (bounds) {
-    editorState.setSelection(bounds, updatedMask, session.docWidth, session.docHeight);
-    useUIStore.getState().setTransform(createTransformState(bounds));
-  } else {
-    editorState.clearSelection();
-  }
+  pendingPoints.push(canvasPos);
+  scheduleStrokeFlush();
 }
 
 export function handleQuickSelectUp(): void {
-  // Nothing special — the final mask is already in the editor store.
+  // Drain any pending points so the final stroke position isn't lost when
+  // pointer-up fires before the coalescing rAF.
+  if (session && pendingPoints.length > 0) {
+    cancelStrokeFlush();
+    flushPendingStroke();
+  } else {
+    cancelStrokeFlush();
+    pendingPoints = [];
+  }
   session = null;
+}
+
+/** Test-only helper: run any pending coalesced stroke work synchronously. */
+export function __flushQuickSelectStrokeForTest(): void {
+  cancelStrokeFlush();
+  flushPendingStroke();
 }

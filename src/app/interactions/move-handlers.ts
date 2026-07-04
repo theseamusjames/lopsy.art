@@ -241,6 +241,12 @@ export function handleMoveMove(
   // Quick-mask + marquee move: translate both the marquee outline AND the
   // painted quick-mask content under it (issue #315). The layer texture is
   // untouched — only the quick-mask texture moves.
+  //
+  // During the drag we only update the selection bounds + transform offset
+  // so the marching ants slide visually. The expensive full-document
+  // translate + GPU upload are deferred to handleMoveUp (issue #642) — on a
+  // 4K canvas doing them per pointer-move was a ~16.7M-element CPU loop and
+  // a ~16.7 MB CPU→GPU transfer per move event.
   if (
     useUIStore.getState().maskMode === 'quickMask'
     && !floatingSelectionRef.current
@@ -248,35 +254,18 @@ export function handleMoveMove(
     && state.moveOriginalBounds
   ) {
     const edState = useEditorStore.getState();
-    const { width: docW, height: docH } = edState.document;
-    const { mask: newMask, bounds: newBounds } = translateSelectionMask(
-      state.moveOriginalMask,
-      state.moveOriginalBounds,
-      dragDx,
-      dragDy,
-      docW,
-      docH,
-    );
-    edState.setSelection(newBounds, newMask, docW, docH);
-    useUIStore.getState().setTransform(createTransformState(newBounds));
-
-    const engine = getEngine();
-    if (
-      engine
-      && state.quickMaskOriginalPixels
-      && state.quickMaskOriginalWidth === docW
-      && state.quickMaskOriginalHeight === docH
-    ) {
-      const newPixels = translateQuickMaskContent(
-        state.quickMaskOriginalPixels,
-        state.moveOriginalMask,
-        dragDx,
-        dragDy,
-        docW,
-        docH,
-      );
-      uploadQuickMaskPixels(engine, newPixels, docW, docH);
-    }
+    const newBounds = {
+      x: state.moveOriginalBounds.x + dragDx,
+      y: state.moveOriginalBounds.y + dragDy,
+      width: state.moveOriginalBounds.width,
+      height: state.moveOriginalBounds.height,
+    };
+    edState.setSelectionBounds(newBounds);
+    useUIStore.getState().setTransform({
+      ...createTransformState(state.moveOriginalBounds),
+      translateX: dragDx,
+      translateY: dragDy,
+    });
     edState.notifyRender();
     return;
   }
@@ -363,6 +352,61 @@ export function handleMoveUp(
   _persistentTransformRef: MutableRefObject<PersistentTransform | null>,
 ): void {
   useUIStore.getState().clearSnapLines();
+
+  // Quick-mask + marquee move commit: during the drag we deferred the
+  // full-document mask translation + GPU pixel upload (issue #642). Now
+  // that the drag is done, do them exactly once.
+  if (
+    useUIStore.getState().maskMode === 'quickMask'
+    && !floatingSelectionRef.current
+    && state.moveOriginalMask
+    && state.moveOriginalBounds
+    && state.startPoint
+  ) {
+    const edState = useEditorStore.getState();
+    const { width: docW, height: docH } = edState.document;
+    const dx = Math.round(canvasPos.x - state.startPoint.x);
+    const dy = Math.round(canvasPos.y - state.startPoint.y);
+
+    // No actual drag — nothing to commit. Reset the transform so the
+    // ants render at the original bounds instead of the drag offset.
+    if (dx === 0 && dy === 0) {
+      useUIStore.getState().setTransform(createTransformState(state.moveOriginalBounds));
+      return;
+    }
+
+    const { mask: newMask, bounds: newBounds } = translateSelectionMask(
+      state.moveOriginalMask,
+      state.moveOriginalBounds,
+      dx,
+      dy,
+      docW,
+      docH,
+    );
+    edState.setSelection(newBounds, newMask, docW, docH);
+    useUIStore.getState().setTransform(createTransformState(newBounds));
+
+    const engine = getEngine();
+    if (
+      engine
+      && state.quickMaskOriginalPixels
+      && state.quickMaskOriginalWidth === docW
+      && state.quickMaskOriginalHeight === docH
+    ) {
+      const newPixels = translateQuickMaskContent(
+        state.quickMaskOriginalPixels,
+        state.moveOriginalMask,
+        dx,
+        dy,
+        docW,
+        docH,
+      );
+      uploadQuickMaskPixels(engine, newPixels, docW, docH);
+    }
+    edState.notifyRender();
+    return;
+  }
+
   if (!floatingSelectionRef.current || !state.startPoint) return;
 
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);

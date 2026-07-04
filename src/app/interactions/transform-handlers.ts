@@ -383,9 +383,35 @@ function handleSelectionTransformMove(
   const newBounds = getTransformedBounds(newTransform);
   if (newBounds.width < 1 || newBounds.height < 1) return;
 
+  // Only update the transform state during the drag — the marching-ants
+  // renderer scales/translates the existing mask contours from the
+  // transform, so the ants track the handle without any per-move mask
+  // rebuild or GPU upload. On a 4K canvas the old path uploaded ~16.7 MB
+  // per pointer-move (issue #643). The mask is materialised once, on
+  // pointer-up, by marqueeStrategy.onUp.
+  useUIStore.getState().setTransform(newTransform);
+  useEditorStore.getState().notifyRender();
+}
+
+/**
+ * Commit a selection transform-resize drag: build the new selection mask
+ * from the transform's final scale/translate and upload it to the GPU. The
+ * transform is reset to identity around the committed bounds. Called from
+ * marqueeStrategy.onUp for selection-only transform gestures.
+ */
+export function commitSelectionTransform(state: InteractionState): void {
+  if (state.gesture.kind !== 'transform' || !state.gesture.selectionOnly) return;
+
+  const uiState = useUIStore.getState();
+  const currentTransform = uiState.transform;
+  if (!currentTransform) return;
+
+  const newBounds = getTransformedBounds(currentTransform);
+  if (newBounds.width < 1 || newBounds.height < 1) return;
+
   const editorState = useEditorStore.getState();
   const { width: docW, height: docH } = editorState.document;
-  const activeTool = useUIStore.getState().activeTool;
+  const activeTool = uiState.activeTool;
 
   const mask = activeTool === 'marquee-ellipse'
     ? createEllipseSelection(newBounds, docW, docH)
@@ -394,7 +420,7 @@ function handleSelectionTransformMove(
   const bounds = selectionBounds(mask, docW, docH);
   if (bounds) {
     editorState.setSelection(bounds, mask, docW, docH);
-    useUIStore.getState().setTransform(createTransformState(bounds));
+    uiState.setTransform(createTransformState(bounds));
   }
 
   editorState.notifyRender();

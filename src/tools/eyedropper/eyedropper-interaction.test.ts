@@ -18,7 +18,11 @@ vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
 }));
 
-import { handleEyedropperDown, handleEyedropperMove } from './eyedropper-interaction';
+import {
+  handleEyedropperDown,
+  handleEyedropperMove,
+  __flushEyedropperSampleForTest,
+} from './eyedropper-interaction';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 
@@ -108,6 +112,7 @@ describe('eyedropper interaction', () => {
   it('move samples at layer-local position translated back to canvas space', () => {
     sampleColor.mockReturnValue(new Uint8Array([5, 6, 7, 255]));
     handleEyedropperMove(makeState({ layerStartX: 100, layerStartY: 200 }), { x: 10, y: 15 });
+    __flushEyedropperSampleForTest();
     const args = sampleColor.mock.calls[0]!;
     expect(args[1]).toBe(110);
     expect(args[2]).toBe(215);
@@ -117,9 +122,30 @@ describe('eyedropper interaction', () => {
   it('move with negative coordinates still forwards them to the sampler', () => {
     sampleColor.mockReturnValue(new Uint8Array(0));
     handleEyedropperMove(makeState(), { x: -5, y: -8 });
+    __flushEyedropperSampleForTest();
     const args = sampleColor.mock.calls[0]!;
     expect(args[1]).toBe(-5);
     expect(args[2]).toBe(-8);
     expect(ts.setForegroundColor).not.toHaveBeenCalled();
+  });
+
+  // Regression for #641: readPixels stalls the pipeline, so firing it on
+  // every pointer-move was slow on large canvases. Coalescing means many
+  // moves within one animation frame issue at most one readback (the last
+  // position wins).
+  it('coalesces many pointer-moves into a single sample per animation frame', () => {
+    sampleColor.mockReturnValue(new Uint8Array([9, 9, 9, 255]));
+    const state = makeState({ layerStartX: 0, layerStartY: 0 });
+    handleEyedropperMove(state, { x: 1, y: 1 });
+    handleEyedropperMove(state, { x: 2, y: 2 });
+    handleEyedropperMove(state, { x: 3, y: 3 });
+    // No samples until the frame flushes.
+    expect(sampleColor).not.toHaveBeenCalled();
+    __flushEyedropperSampleForTest();
+    expect(sampleColor).toHaveBeenCalledTimes(1);
+    const args = sampleColor.mock.calls[0]!;
+    // The latest position wins.
+    expect(args[1]).toBe(3);
+    expect(args[2]).toBe(3);
   });
 });
