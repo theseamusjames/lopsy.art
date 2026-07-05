@@ -25,6 +25,7 @@ import type {
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
+import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 
 interface QuickMaskSnapshot {
   pixels: Uint8Array;
@@ -42,6 +43,58 @@ function snapshotQuickMaskPixels(): QuickMaskSnapshot | null {
   const height = dv.getInt32(4, true);
   if (width <= 0 || height <= 0) return null;
   return { pixels: buf.subarray(8), width, height };
+}
+
+/**
+ * The quick-mask move path (issue #642) rebuilds a full document-sized
+ * pixel buffer and uploads it to the GPU on every pointer-move. On a 4K
+ * canvas a high-frequency pointer (250Hz pen tablet) can fire ~4 events
+ * per frame — but only the last position ends up on screen. Coalesce
+ * the CPU translate + GPU upload to rAF so we pay it once per rendered
+ * frame instead of once per pointer event.
+ *
+ * Captured args are the current drag offset plus the snapshotted
+ * originals from pointer-down (those are immutable for the drag).
+ */
+interface QuickMaskDragTarget {
+  origPixels: Uint8Array;
+  origMask: Uint8ClampedArray;
+  docW: number;
+  docH: number;
+  lastAppliedDx: number;
+  lastAppliedDy: number;
+}
+
+let quickMaskDragTarget: QuickMaskDragTarget | null = null;
+
+function applyQuickMaskTranslate(dx: number, dy: number): void {
+  const t = quickMaskDragTarget;
+  if (!t) return;
+  if (dx === t.lastAppliedDx && dy === t.lastAppliedDy) return;
+  const engine = getEngine();
+  if (!engine) return;
+  const newPixels = translateQuickMaskContent(
+    t.origPixels,
+    t.origMask,
+    dx,
+    dy,
+    t.docW,
+    t.docH,
+  );
+  uploadQuickMaskPixels(engine, newPixels, t.docW, t.docH);
+  t.lastAppliedDx = dx;
+  t.lastAppliedDy = dy;
+  useEditorStore.getState().notifyRender();
+}
+
+const coalescedQuickMaskTranslate = coalesceToAnimationFrame(applyQuickMaskTranslate);
+
+/** Test seam: flush any pending quick-mask translate + clear the drag target. */
+export function flushQuickMaskDrag(): void {
+  if (quickMaskDragTarget) {
+    coalescedQuickMaskTranslate.flush();
+    quickMaskDragTarget = null;
+  }
 }
 
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
@@ -260,22 +313,30 @@ export function handleMoveMove(
     edState.setSelection(newBounds, newMask, docW, docH);
     useUIStore.getState().setTransform(createTransformState(newBounds));
 
-    const engine = getEngine();
+    // Quick-mask pixel translate + GPU upload is the hot path (#642) —
+    // coalesce to rAF so a 250Hz pen tablet issues one upload per
+    // rendered frame, not one per pointer event.
     if (
-      engine
-      && state.quickMaskOriginalPixels
+      state.quickMaskOriginalPixels
       && state.quickMaskOriginalWidth === docW
       && state.quickMaskOriginalHeight === docH
     ) {
-      const newPixels = translateQuickMaskContent(
-        state.quickMaskOriginalPixels,
-        state.moveOriginalMask,
-        dragDx,
-        dragDy,
-        docW,
-        docH,
-      );
-      uploadQuickMaskPixels(engine, newPixels, docW, docH);
+      if (
+        !quickMaskDragTarget
+        || quickMaskDragTarget.origPixels !== state.quickMaskOriginalPixels
+        || quickMaskDragTarget.docW !== docW
+        || quickMaskDragTarget.docH !== docH
+      ) {
+        quickMaskDragTarget = {
+          origPixels: state.quickMaskOriginalPixels,
+          origMask: state.moveOriginalMask,
+          docW,
+          docH,
+          lastAppliedDx: Number.NaN,
+          lastAppliedDy: Number.NaN,
+        };
+      }
+      coalescedQuickMaskTranslate(dragDx, dragDy);
     }
     edState.notifyRender();
     return;
@@ -363,6 +424,14 @@ export function handleMoveUp(
   _persistentTransformRef: MutableRefObject<PersistentTransform | null>,
 ): void {
   useUIStore.getState().clearSnapLines();
+
+  // Flush any pending quick-mask translate so the final drop position is
+  // materialized on the GPU before we clear the drag target.
+  if (quickMaskDragTarget) {
+    coalescedQuickMaskTranslate.flush();
+    quickMaskDragTarget = null;
+  }
+
   if (!floatingSelectionRef.current || !state.startPoint) return;
 
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);

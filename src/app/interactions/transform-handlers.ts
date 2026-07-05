@@ -34,6 +34,7 @@ import {
   createEllipseSelection,
   selectionBounds,
 } from '../../selection/selection';
+import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 
 const SELECTION_TOOLS = new Set([
   'marquee-rect', 'marquee-ellipse', 'lasso', 'lasso-magnetic', 'wand',
@@ -356,24 +357,29 @@ export function handleTransformMove(
   editorState.notifyRender();
 }
 
-function handleSelectionTransformMove(
-  state: InteractionState,
-  gesture: Extract<CanvasGesture, { kind: 'transform' }>,
-  canvasPos: Point,
-  metaKey: boolean,
-): void {
-  const handle = gesture.handle;
-  const startState = gesture.startState;
+/**
+ * The selection-transform mask rebuild (#643) allocates a fresh
+ * `docW × docH` `Uint8ClampedArray` and hands it to `setSelection`, and
+ * on the next frame `syncSelection` uploads the whole thing to the GPU.
+ * On a 4K canvas that's ~16MB per pointer move. Coalescing the mask
+ * rebuild + `setSelection` to rAF collapses a burst of pointer events
+ * into a single alloc + upload per rendered frame.
+ */
+type SelectionTransformArgs = {
+  ellipse: boolean;
+  handle: ReturnType<typeof hitTestHandle>;
+  startPoint: Point;
+  snappedInput: Point;
+  startState: TransformState;
+  metaKey: boolean;
+  docW: number;
+  docH: number;
+};
 
-  const uiSnap = useUIStore.getState();
-  const snapEnabled = uiSnap.showGrid && uiSnap.snapToGrid;
-  const snappedInput = snapEnabled
-    ? { x: Math.round(canvasPos.x / uiSnap.gridSize) * uiSnap.gridSize, y: Math.round(canvasPos.y / uiSnap.gridSize) * uiSnap.gridSize }
-    : canvasPos;
-
-  const result = computeScale(handle, state.startPoint!, snappedInput, startState, metaKey);
+function applySelectionTransform(args: SelectionTransformArgs): void {
+  const result = computeScale(args.handle!, args.startPoint, args.snappedInput, args.startState, args.metaKey);
   const newTransform: TransformState = {
-    ...startState,
+    ...args.startState,
     scaleX: result.scaleX,
     scaleY: result.scaleY,
     translateX: result.translateX,
@@ -383,19 +389,50 @@ function handleSelectionTransformMove(
   const newBounds = getTransformedBounds(newTransform);
   if (newBounds.width < 1 || newBounds.height < 1) return;
 
+  const mask = args.ellipse
+    ? createEllipseSelection(newBounds, args.docW, args.docH)
+    : createRectSelection(newBounds, args.docW, args.docH);
+
+  const bounds = selectionBounds(mask, args.docW, args.docH);
+  if (bounds) {
+    const editorState = useEditorStore.getState();
+    editorState.setSelection(bounds, mask, args.docW, args.docH);
+    useUIStore.getState().setTransform(createTransformState(bounds));
+    editorState.notifyRender();
+  }
+}
+
+const coalescedSelectionTransform = coalesceToAnimationFrame(applySelectionTransform);
+
+function handleSelectionTransformMove(
+  state: InteractionState,
+  gesture: Extract<CanvasGesture, { kind: 'transform' }>,
+  canvasPos: Point,
+  metaKey: boolean,
+): void {
+  const uiSnap = useUIStore.getState();
+  const snapEnabled = uiSnap.showGrid && uiSnap.snapToGrid;
+  const snappedInput = snapEnabled
+    ? { x: Math.round(canvasPos.x / uiSnap.gridSize) * uiSnap.gridSize, y: Math.round(canvasPos.y / uiSnap.gridSize) * uiSnap.gridSize }
+    : canvasPos;
+
   const editorState = useEditorStore.getState();
   const { width: docW, height: docH } = editorState.document;
-  const activeTool = useUIStore.getState().activeTool;
+  const activeTool = uiSnap.activeTool;
 
-  const mask = activeTool === 'marquee-ellipse'
-    ? createEllipseSelection(newBounds, docW, docH)
-    : createRectSelection(newBounds, docW, docH);
+  coalescedSelectionTransform({
+    ellipse: activeTool === 'marquee-ellipse',
+    handle: gesture.handle,
+    startPoint: state.startPoint!,
+    snappedInput,
+    startState: gesture.startState,
+    metaKey,
+    docW,
+    docH,
+  });
+}
 
-  const bounds = selectionBounds(mask, docW, docH);
-  if (bounds) {
-    editorState.setSelection(bounds, mask, docW, docH);
-    useUIStore.getState().setTransform(createTransformState(bounds));
-  }
-
-  editorState.notifyRender();
+/** Test seam: flush any pending selection-transform update. */
+export function flushSelectionTransform(): void {
+  coalescedSelectionTransform.flush();
 }
