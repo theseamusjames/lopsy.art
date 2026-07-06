@@ -151,8 +151,9 @@ async function dragRotate(page: Page, angleRadians: number) {
 }
 
 test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => {
-  test.beforeEach(async ({ page, browserName }) => {
+  test.beforeEach(async ({ page, browserName, isMobile }) => {
     test.skip(browserName !== 'chromium', 'requires Chromium WebGL (SwiftShader)');
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 600, 600);
@@ -284,8 +285,9 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
 });
 
 test.describe('Perspective mode', { tag: '@chromium' }, () => {
-  test.beforeEach(async ({ page, browserName }) => {
+  test.beforeEach(async ({ page, browserName, isMobile }) => {
     test.skip(browserName !== 'chromium', 'requires Chromium WebGL (SwiftShader)');
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 600, 600);

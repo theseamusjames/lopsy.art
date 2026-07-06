@@ -2,7 +2,8 @@ import { test, expect } from './fixtures';
 import { waitForStore, createDocument, drawRect, addLayer, getEditorState } from './helpers';
 
 test.describe('New document clears engine resources (#124)', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
   });

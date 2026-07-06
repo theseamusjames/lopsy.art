@@ -23,7 +23,8 @@ import {
  * retain their content positions.
  */
 test.describe('Undo does not shift non-target layer positions', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 400, 400, false);

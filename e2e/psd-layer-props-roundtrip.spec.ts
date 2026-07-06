@@ -329,7 +329,8 @@ async function getDocSnapshot(page: Page): Promise<DocSnapshot> {
 // ---------------------------------------------------------------------------
 
 test.describe('PSD Layer Properties Round-Trip', () => {
-  test('10-layer document with blend modes, effects, and opacity survives PSD export/import', async ({ page, allowConsoleErrors }) => {
+  test('10-layer document with blend modes, effects, and opacity survives PSD export/import', async ({ page, isMobile, allowConsoleErrors }) => {
+    test.skip(isMobile, 'effects drawer requires sidebar, hidden on touch devices');
     (allowConsoleErrors as RegExp[]).push(/WebSocket connection/);
     test.setTimeout(180_000);
 

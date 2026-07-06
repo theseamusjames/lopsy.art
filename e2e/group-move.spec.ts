@@ -2,7 +2,8 @@ import { test, expect } from './fixtures';
 import { waitForStore, createDocument, drawRect, setActiveLayer, addLayer } from './helpers';
 
 test.describe('Group move moves all children (#121)', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 400, 300, true);

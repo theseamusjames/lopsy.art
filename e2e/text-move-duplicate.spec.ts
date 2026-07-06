@@ -407,7 +407,8 @@ test.describe('Text — add, move, layer, duplicate', () => {
     expect(darkAtSecond).toBeGreaterThan(0);
   });
 
-  test('duplicating a text layer then moving the duplicate leaves the original unchanged', async ({ page }) => {
+  test('duplicating a text layer then moving the duplicate leaves the original unchanged', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await selectTextTool(page);
 
     // Create and commit text at doc (120, 100).

@@ -80,7 +80,8 @@ const mod = isMac ? 'Meta' : 'Control';
 // ---------------------------------------------------------------------------
 
 test.describe('Text + brush + merge down', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await page.goto('/');
     await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
     await createDocument(page, 200, 200);

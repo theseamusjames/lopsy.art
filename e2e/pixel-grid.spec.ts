@@ -157,7 +157,8 @@ test.describe('Pixel grid at high zoom', () => {
     await page.screenshot({ path: 'e2e/screenshots/pixel-grid-visible.png' });
   });
 
-  test('pixel grid is NOT visible at 400% zoom', async ({ page }) => {
+  test('pixel grid is NOT visible at 400% zoom', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'mobile DPR makes 400% zoom exceed pixel-grid threshold');
     await ensurePixelGridEnabled(page);
     await setZoom(page, 4);
 

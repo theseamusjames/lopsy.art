@@ -25,7 +25,8 @@ async function selectionMaskAt(page: Page, docX: number, docY: number): Promise<
   );
 }
 
-test('shift-clicking the magic wand adds each shape to the selection', async ({ page }) => {
+test('shift-clicking the magic wand adds each shape to the selection', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 400, 300, false);
