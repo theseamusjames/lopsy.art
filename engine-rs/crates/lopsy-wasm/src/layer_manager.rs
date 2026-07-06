@@ -33,7 +33,21 @@ pub fn remove_layer(engine: &mut EngineInner, layer_id: &str) {
 
 pub fn update_layer(engine: &mut EngineInner, desc: LayerDesc) {
     if let Some(existing) = engine.layer_stack.iter_mut().find(|l| l.id == desc.id) {
-        *existing = desc;
+        // When a float is active on this layer, the engine has expanded
+        // the texture to doc size and updated x/y/width/height to match.
+        // Preserve these so that syncLayers (pushing content dimensions
+        // from the JS model) doesn't corrupt the expanded texture state.
+        let is_float_layer = engine.float_layer_id.as_deref() == Some(desc.id.as_str());
+        if is_float_layer {
+            let (px, py, pw, ph) = (existing.x, existing.y, existing.width, existing.height);
+            *existing = desc;
+            existing.x = px;
+            existing.y = py;
+            existing.width = pw;
+            existing.height = ph;
+        } else {
+            *existing = desc;
+        }
     }
     engine.needs_recomposite = true;
 }
