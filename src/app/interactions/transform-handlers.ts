@@ -353,6 +353,14 @@ type SelectionTransformArgs = {
 };
 
 function applySelectionTransform(args: SelectionTransformArgs): void {
+  // Zero-delta drag: pointer hasn't moved from its down position (common
+  // when the user taps a handle without dragging, or when a burst of
+  // pointer events all resolve to the same snapped grid cell). Rebuilding
+  // the full-doc mask in that case would be wasted work.
+  if (args.snappedInput.x === args.startPoint.x && args.snappedInput.y === args.startPoint.y) {
+    return;
+  }
+
   const result = computeScale(args.handle!, args.startPoint, args.snappedInput, args.startState, args.metaKey);
   const newTransform: TransformState = {
     ...args.startState,

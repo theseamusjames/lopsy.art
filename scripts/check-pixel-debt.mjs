@@ -34,6 +34,7 @@ const ALLOWLIST = {
   'src/app/tool-settings-store.test.ts': 5,
   'src/app/interactions/move-handlers.test.ts': 1,
   'src/app/interactions/quick-mask-move.test.ts': 2,
+  'src/app/interactions/transform-handlers.test.ts': 1,
   'src/app/store/actions/align-layer.test.ts': 2,
   'src/app/store/actions/crop-canvas.test.ts': 1,
   'src/app/store/actions/duplicate-layer.test.ts': 1,

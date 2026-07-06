@@ -27,16 +27,17 @@ export function coalesceToAnimationFrame<Args extends readonly unknown[]>(
   let pending: Args | null = null;
   let rafId: number | null = null;
 
-  const raf =
+  // Look up rAF dynamically each schedule so a coalescer created before
+  // the test harness stubs `globalThis.requestAnimationFrame` still hits
+  // the stub. Cheap — one property read per rendered frame.
+  const scheduleRaf = (cb: FrameRequestCallback): number =>
     typeof requestAnimationFrame === 'function'
-      ? requestAnimationFrame
-      : (cb: FrameRequestCallback): number => {
-          return setTimeout(() => cb(0), 16) as unknown as number;
-        };
-  const caf =
-    typeof cancelAnimationFrame === 'function'
-      ? cancelAnimationFrame
-      : (id: number): void => clearTimeout(id as unknown as ReturnType<typeof setTimeout>);
+      ? requestAnimationFrame(cb)
+      : (setTimeout(() => cb(0), 16) as unknown as number);
+  const cancelRaf = (id: number): void => {
+    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(id);
+    else clearTimeout(id as unknown as ReturnType<typeof setTimeout>);
+  };
 
   function run(): void {
     rafId = null;
@@ -49,12 +50,12 @@ export function coalesceToAnimationFrame<Args extends readonly unknown[]>(
   const coalescer = ((...args: Args) => {
     pending = args;
     if (rafId !== null) return;
-    rafId = raf(run);
+    rafId = scheduleRaf(run);
   }) as RafCoalescer<Args>;
 
   coalescer.flush = () => {
     if (rafId !== null) {
-      caf(rafId);
+      cancelRaf(rafId);
       rafId = null;
     }
     run();
@@ -62,7 +63,7 @@ export function coalesceToAnimationFrame<Args extends readonly unknown[]>(
 
   coalescer.cancel = () => {
     if (rafId !== null) {
-      caf(rafId);
+      cancelRaf(rafId);
       rafId = null;
     }
     pending = null;
