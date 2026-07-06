@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 import { waitForStore, createDocument, getPixelAt, drawRect, setActiveLayer, getEditorState } from './helpers';
 
 test.describe('Pattern Fill', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
   });

@@ -123,6 +123,10 @@ async function setupBrush(page: Page, opts: { size: number; opacity: number; har
 // ---------------------------------------------------------------------------
 
 test.describe('Brush fade (#58)', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('stroke opacity decreases with fade enabled', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);

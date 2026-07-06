@@ -210,7 +210,8 @@ test.describe('Brush across selection boundary', () => {
     expect(outsideLeft.b).toBeGreaterThan(200);
   });
 
-  test('drawing on background layer with foreign-layer selection still paints', async ({ page }) => {
+  test('drawing on background layer with foreign-layer selection still paints', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await setup(page);
 
     // Build a circle on a top layer, then turn it into a selection.

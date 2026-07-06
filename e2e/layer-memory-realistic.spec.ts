@@ -10,8 +10,9 @@ async function getJSHeapUsedMB(page: import('@playwright/test').Page): Promise<n
 }
 
 test.describe('Layer memory (realistic 4K scenario)', () => {
-  test('user scenario: load image, add layers, paint dots, add more layers', async ({ page, browserName }) => {
+  test('user scenario: load image, add layers, paint dots, add more layers', async ({ page, browserName, isMobile }) => {
     test.skip(browserName !== 'chromium', 'CDP heap profiling requires Chromium');
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
 

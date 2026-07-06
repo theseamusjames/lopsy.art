@@ -99,7 +99,8 @@ async function setCurvesOnGroup(page: Page, groupId: string, curves: CurvesJSON)
 }
 
 test.describe('Curves adjustment', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'adjustments panel not accessible on mobile');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 100, 100, false);

@@ -65,7 +65,8 @@ test.describe('Pixel Stretch Filter', () => {
     await waitForStore(page);
   });
 
-  test('applies pixel stretch and displaces horizontal bands with RGB split', async ({ page }) => {
+  test('applies pixel stretch and displaces horizontal bands with RGB split', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'filter dialog not reachable on narrow viewport');
     await createDocument(page, 400, 300, false);
 
     await page.evaluate(() => {

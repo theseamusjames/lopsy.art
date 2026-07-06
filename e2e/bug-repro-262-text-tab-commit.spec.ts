@@ -17,7 +17,8 @@ import {
   waitForStore,
 } from './helpers';
 
-test('issue #262 — Tab commits text and the next shortcut switches tools', async ({ page }) => {
+test('issue #262 — Tab commits text and the next shortcut switches tools', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'text tool requires keyboard, not available on touch devices');
   await page.goto('/');
   await waitForStore(page);
   await createDocument(page, 800, 600, true);

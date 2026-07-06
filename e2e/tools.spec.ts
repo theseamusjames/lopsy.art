@@ -482,7 +482,8 @@ test.describe('Pencil Tool', () => {
 // ===========================================================================
 
 test.describe('Eraser Tool', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await createDocument(page, 400, 300, false);
     // Select the Background layer (which has the white fill) for erasing
     const bgLayerId = await page.evaluate(() => {
@@ -1084,7 +1085,8 @@ test.describe('Move Tool', () => {
 // ===========================================================================
 
 test.describe('Layer Operations', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await createDocument(page, 400, 300, false);
   });
 
@@ -1692,7 +1694,8 @@ test.describe('Filters', () => {
 // ===========================================================================
 
 test.describe('Layer Effects', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'effects drawer requires sidebar, hidden on touch devices');
     await createDocument(page, 400, 300, false);
   });
 
@@ -1900,7 +1903,8 @@ test.describe('Comprehensive Scenarios', () => {
     expect(pixelDiff(beforeShape, afterUndo)).toBe(0);
   });
 
-  test('multi-layer workflow: create layers, draw on each, merge down', async ({ page }) => {
+  test('multi-layer workflow: create layers, draw on each, merge down', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await createDocument(page, 200, 200, true);
 
     // Draw red on first layer
@@ -2125,7 +2129,8 @@ test.describe('Mask Drawing', () => {
     expect(maskAfter.blackPixels).toBeGreaterThan(0);
   });
 
-  test('eraser on mask uses background color to paint', async ({ page }) => {
+  test('eraser on mask uses background color to paint', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Add Mask button requires sidebar, hidden on touch devices');
     // Add a mask
     await page.locator('[aria-label="Add Mask"]').click();
 

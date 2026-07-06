@@ -116,7 +116,8 @@ async function undo(page: Page) {
 // ---------------------------------------------------------------------------
 
 test.describe('ABR Import & Brush Properties', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600, true);

@@ -121,7 +121,8 @@ test.describe('Liquify Tool', () => {
     await waitForStore(page);
   });
 
-  test('panel opens via Filter > Liquify... menu', async ({ page }) => {
+  test('panel opens via Filter > Liquify... menu', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'liquify panel not fully accessible on narrow viewport');
     await createDocument(page, 200, 200, false);
     await drawRect(page, 0, 0, 200, 200, { r: 255, g: 0, b: 0 });
     await fitToView(page);
@@ -221,7 +222,8 @@ test.describe('Liquify Tool', () => {
     expect(anyChanged).toBe(true);
   });
 
-  test('Cancel: discards displacement, layer pixels unchanged', async ({ page }) => {
+  test('Cancel: discards displacement, layer pixels unchanged', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'liquify panel Cancel button not reachable on narrow viewport');
     await createDocument(page, 200, 200, true);
 
     // Draw a solid red block

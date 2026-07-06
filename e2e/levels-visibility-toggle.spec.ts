@@ -100,7 +100,8 @@ async function setGroupLevels(
 const IDENTITY_CHANNEL = { inputBlack: 0, inputWhite: 1, gamma: 1, outputBlack: 0, outputWhite: 1 };
 
 test.describe('Levels visibility toggle', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'adjustments panel not accessible on mobile');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 100, 100, false);

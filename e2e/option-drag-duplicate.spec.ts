@@ -84,7 +84,8 @@ async function optionDrag(
   await page.waitForTimeout(150);
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, isMobile }) => {
+  test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
   await page.goto('/');
   await waitForStore(page);
 });

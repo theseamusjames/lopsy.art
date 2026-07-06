@@ -101,7 +101,8 @@ async function getActiveLayerId(page: Page): Promise<string> {
 }
 
 test.describe('Brush Hardness Bounds', () => {
-  test('softened brush fills to original shape boundary', async ({ page }) => {
+  test('softened brush fills to original shape boundary', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'effects drawer requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 600, 250);

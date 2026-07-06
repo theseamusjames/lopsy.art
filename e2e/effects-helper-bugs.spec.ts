@@ -13,7 +13,8 @@ import {
 } from './helpers';
 
 test.describe('e2e helper regressions', () => {
-  test('#240: openEffectsPanel works when the active layer is a group', async ({ page }) => {
+  test('#240: openEffectsPanel works when the active layer is a group', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'effects drawer requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 400, 400, false);
@@ -45,7 +46,8 @@ test.describe('e2e helper regressions', () => {
     await expect(page.locator('[aria-label="Add Adjustment"]')).toBeVisible();
   });
 
-  test('#242: configureEffect picks the drawer Size input even when a tool-options Size exists', async ({ page }) => {
+  test('#242: configureEffect picks the drawer Size input even when a tool-options Size exists', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'effects drawer requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 400, 400, false);

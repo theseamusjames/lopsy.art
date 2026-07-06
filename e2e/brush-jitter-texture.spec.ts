@@ -165,6 +165,10 @@ async function selectTextureBlendMode(page: Page, mode: string) {
 // ---------------------------------------------------------------------------
 
 test.describe('Brush jitter (#346)', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('size jitter produces varied dab sizes', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
@@ -386,6 +390,10 @@ test.describe('Brush jitter (#346)', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Brush speed size (#346)', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('fast stroke produces thinner line than slow stroke', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
@@ -461,6 +469,10 @@ test.describe('Brush speed size (#346)', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Brush texture (#346)', () => {
+  test.beforeEach(async ({ isMobile }) => {
+    test.skip(isMobile, 'requires sidebar panels, hidden on touch devices');
+  });
+
   test('texture modulates brush stroke', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);

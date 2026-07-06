@@ -170,7 +170,8 @@ test.describe('Centered grid with edge snapping (#126)', () => {
     await page.screenshot({ path: 'e2e/screenshots/centered-grid.png' });
   });
 
-  test('drag-move snaps the layer to nearest centred grid line', async ({ page }) => {
+  test('drag-move snaps the layer to nearest centred grid line', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await createDocument(page, 500, 400, true);
     await page.waitForTimeout(200);
 

@@ -200,33 +200,14 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       const floatBoundsMove = floatSelection(engine, activeLayerId);
       compositeFloat(engine, 0, 0);
 
-      if (floatBoundsMove.length >= 4) {
+      // Sync expanded position only. Width/height are protected
+      // engine-side (update_layer preserves them while a float is active).
+      if (floatBoundsMove.length >= 2) {
         const newX = floatBoundsMove[0]!;
         const newY = floatBoundsMove[1]!;
-        const newW = floatBoundsMove[2]!;
-        const newH = floatBoundsMove[3]!;
         const curLayer = useEditorStore.getState().document.layers.find(l => l.id === activeLayerId);
-        if (curLayer) {
-          const posChanged = curLayer.x !== newX || curLayer.y !== newY;
-          const sizeChanged = curLayer.type === 'raster'
-            && (curLayer.width !== newW || curLayer.height !== newH);
-          if (posChanged || sizeChanged) {
-            useEditorStore.setState((s) => ({
-              document: {
-                ...s.document,
-                layers: s.document.layers.map((l) =>
-                  l.id === activeLayerId
-                    ? {
-                      ...l,
-                      x: newX,
-                      y: newY,
-                      ...(l.type === 'raster' ? { width: newW, height: newH } : {}),
-                    }
-                    : l
-                ),
-              },
-            }));
-          }
+        if (curLayer && (curLayer.x !== newX || curLayer.y !== newY)) {
+          useEditorStore.getState().updateLayerPosition(activeLayerId, newX, newY);
         }
       }
 

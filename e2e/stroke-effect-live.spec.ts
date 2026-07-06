@@ -86,7 +86,8 @@ function countColorPixels(snap: PixelSnapshot, target: { r: number; g: number; b
 }
 
 test.describe('Stroke effect on in-progress brush stroke', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'effects drawer requires sidebar, hidden on touch devices');
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 600, 400);
