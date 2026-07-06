@@ -18,7 +18,7 @@ vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
 }));
 
-import { handleEyedropperDown, handleEyedropperMove } from './eyedropper-interaction';
+import { handleEyedropperDown, handleEyedropperMove, flushEyedropperSample } from './eyedropper-interaction';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 
@@ -108,6 +108,7 @@ describe('eyedropper interaction', () => {
   it('move samples at layer-local position translated back to canvas space', () => {
     sampleColor.mockReturnValue(new Uint8Array([5, 6, 7, 255]));
     handleEyedropperMove(makeState({ layerStartX: 100, layerStartY: 200 }), { x: 10, y: 15 });
+    flushEyedropperSample();
     const args = sampleColor.mock.calls[0]!;
     expect(args[1]).toBe(110);
     expect(args[2]).toBe(215);
@@ -117,9 +118,31 @@ describe('eyedropper interaction', () => {
   it('move with negative coordinates still forwards them to the sampler', () => {
     sampleColor.mockReturnValue(new Uint8Array(0));
     handleEyedropperMove(makeState(), { x: -5, y: -8 });
+    flushEyedropperSample();
     const args = sampleColor.mock.calls[0]!;
     expect(args[1]).toBe(-5);
     expect(args[2]).toBe(-8);
     expect(ts.setForegroundColor).not.toHaveBeenCalled();
+  });
+
+  // Issue #641 regression: readPixels is a pipeline-synchronizing call.
+  // Every pointer event should NOT trigger a sample — they should be
+  // coalesced to at most one sample per animation frame.
+  it('coalesces bursts of moves into a single sample per frame (issue #641)', () => {
+    sampleColor.mockReturnValue(new Uint8Array([1, 2, 3, 255]));
+    const state = makeState({ layerStartX: 0, layerStartY: 0 });
+
+    // Simulate a burst of 10 pointer-move events within one frame.
+    for (let i = 0; i < 10; i++) {
+      handleEyedropperMove(state, { x: i, y: i });
+    }
+    // Before the frame fires nothing has actually run.
+    expect(sampleColor).not.toHaveBeenCalled();
+    flushEyedropperSample();
+    // Exactly one sample — using the LAST position.
+    expect(sampleColor).toHaveBeenCalledTimes(1);
+    const args = sampleColor.mock.calls[0]!;
+    expect(args[1]).toBe(9);
+    expect(args[2]).toBe(9);
   });
 });

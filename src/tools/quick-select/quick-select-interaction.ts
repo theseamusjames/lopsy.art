@@ -16,6 +16,7 @@ import { readLayerPixelsForFill } from '../../engine-wasm/wasm-bridge';
 import { selectionBounds } from '../../selection/selection';
 import { createTransformState } from '../transform/transform';
 import { applyQuickSelectStroke } from './quick-select';
+import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 
 /** Module-local stroke accumulator — avoids cluttering InteractionState. */
 interface QuickSelectSession {
@@ -101,14 +102,22 @@ export function handleQuickSelectDown(ctx: InteractionContext): InteractionState
   };
 }
 
-export function handleQuickSelectMove(
-  state: InteractionState,
-  canvasPos: { x: number; y: number },
-): void {
-  if (!session || !state.lastPoint) return;
+/**
+ * Applying a quick-select stroke allocates a fresh docW × docH mask and
+ * hands it to `setSelection`; on the next frame `syncSelection` uploads
+ * the entire mask to the GPU. Coalescing per-move stroke application to
+ * rAF caps the mask alloc + GPU upload at once per rendered frame
+ * (issue #643).
+ */
+const pendingPoints: { x: number; y: number }[] = [];
+
+function applyPendingPoints(): void {
+  if (!session || pendingPoints.length === 0) return;
 
   const { quickSelect } = useToolSettingsStore.getState().settings;
   const editorState = useEditorStore.getState();
+
+  const points = pendingPoints.splice(0, pendingPoints.length);
 
   const updatedMask = applyQuickSelectStroke(
     {
@@ -120,7 +129,7 @@ export function handleQuickSelectMove(
       edgeStrength: quickSelect.edgeStrength,
     },
     {
-      points: [canvasPos],
+      points,
       existingMask: session.strokeMask,
       mode: quickSelect.mode,
     },
@@ -137,7 +146,25 @@ export function handleQuickSelectMove(
   }
 }
 
+const coalescedApply = coalesceToAnimationFrame(applyPendingPoints);
+
+export function handleQuickSelectMove(
+  state: InteractionState,
+  canvasPos: { x: number; y: number },
+): void {
+  if (!session || !state.lastPoint) return;
+  pendingPoints.push(canvasPos);
+  coalescedApply();
+}
+
 export function handleQuickSelectUp(): void {
-  // Nothing special — the final mask is already in the editor store.
+  // Flush any pending stroke application before dropping the session,
+  // otherwise the last few move samples would be silently lost.
+  coalescedApply.flush();
   session = null;
+}
+
+/** Test seam: flush any pending quick-select stroke application. */
+export function flushQuickSelect(): void {
+  coalescedApply.flush();
 }

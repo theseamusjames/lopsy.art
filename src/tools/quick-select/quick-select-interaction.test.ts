@@ -56,6 +56,7 @@ import {
   handleQuickSelectDown,
   handleQuickSelectMove,
   handleQuickSelectUp,
+  flushQuickSelect,
 } from './quick-select-interaction';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
@@ -231,6 +232,7 @@ describe('quick select move', () => {
     handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
     editorState.setSelection.mockClear();
     handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    flushQuickSelect();
     const mask = lastSetSelectionMask();
     expect(mask[2 * DOC_W + 2]).toBe(255); // red band from the down
     expect(mask[9 * DOC_W + 2]).toBe(255); // blue band from the move
@@ -238,6 +240,7 @@ describe('quick select move', () => {
 
   it('does nothing without an active session', () => {
     handleQuickSelectMove(makeState(), { x: 5, y: 5 });
+    flushQuickSelect();
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
 
@@ -246,6 +249,24 @@ describe('quick select move', () => {
     handleQuickSelectUp();
     editorState.setSelection.mockClear();
     handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    flushQuickSelect();
     expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+
+  // Issue #643 regression: allocating a fresh docW×docH mask and calling
+  // setSelection per pointer-move forces syncSelection to re-upload the
+  // whole mask to the GPU every frame. Coalescing to rAF caps the mask
+  // rebuild + setSelection at once per rendered frame regardless of how
+  // many pointer-move events fire.
+  it('coalesces bursts of moves into a single setSelection per frame (issue #643)', () => {
+    handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    editorState.setSelection.mockClear();
+    for (let i = 0; i < 10; i++) {
+      handleQuickSelectMove(makeState(), { x: 2 + i * 0.1, y: 9 });
+    }
+    // Before the frame fires, nothing has been pushed to the store.
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    flushQuickSelect();
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
   });
 });
