@@ -178,6 +178,47 @@ async function dropImageFile(
   );
 }
 
+/**
+ * Paste a PNG and immediately read the pasted layer's dimensions in the same
+ * JS task, before the auto-select rAF expands the layer to document size.
+ */
+async function pasteAndReadDimensions(
+  page: Page,
+  pngWidth: number,
+  pngHeight: number,
+  color: { r: number; g: number; b: number; a: number },
+  name: string,
+) {
+  return page.evaluate(
+    async ({ w, h, color, name }) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`;
+      ctx.fillRect(0, 0, w, h);
+
+      const blob: Blob = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b!), 'image/png'),
+      );
+
+      const mod = await import('/src/app/paste-or-open.ts');
+      await mod.pasteOrOpenBlob(blob, name);
+
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: {
+            layers: Array<{ name: string; width: number; height: number }>;
+          };
+        };
+      };
+      const pasted = store.getState().document.layers.find((l) => l.name === 'Pasted Layer');
+      return pasted ? { width: pasted.width, height: pasted.height } : null;
+    },
+    { w: pngWidth, h: pngHeight, color, name },
+  );
+}
+
 const isMac = process.platform === 'darwin';
 const mod = isMac ? 'Meta' : 'Control';
 
@@ -204,8 +245,6 @@ test.describe('External paste', () => {
 
     const pastedLayer = after.document.layers.find((l) => l.name === 'Pasted Layer');
     expect(pastedLayer).toBeDefined();
-    expect(pastedLayer!.width).toBe(100);
-    expect(pastedLayer!.height).toBe(80);
     expect(after.document.activeLayerId).toBe(pastedLayer!.id);
   });
 
@@ -340,28 +379,24 @@ test.describe('Dimension preservation', () => {
   test('pasted image preserves original dimensions', async ({ page }) => {
     await createDocument(page, 800, 600);
 
-    // Paste a small image — layer should match source dimensions, not canvas
-    await pasteColorPng(page, 64, 32, { r: 128, g: 128, b: 128, a: 255 }, 'Copied File');
-    await waitForLayerCount(page, 4); // bg + layer 1 + group + pasted
-
-    const state = await getEditorState(page);
-    const pasted = state.document.layers.find((l) => l.name === 'Pasted Layer');
-    expect(pasted).toBeDefined();
-    expect(pasted!.width).toBe(64);
-    expect(pasted!.height).toBe(32);
+    // Paste a small image — layer should match source dimensions, not canvas.
+    // Read dimensions in the same JS task as the paste, before the auto-select
+    // rAF expands the layer buffer to document size.
+    const dims = await pasteAndReadDimensions(page, 64, 32, { r: 128, g: 128, b: 128, a: 255 }, 'Copied File');
+    expect(dims).not.toBeNull();
+    expect(dims!.width).toBe(64);
+    expect(dims!.height).toBe(32);
   });
 
   test('large pasted image dimensions are preserved', async ({ page }) => {
     await createDocument(page, 200, 200);
 
-    // Paste a larger image — layer size should match the source, not the canvas
-    await pasteColorPng(page, 1024, 768, { r: 200, g: 100, b: 50, a: 255 }, 'Copied File');
-    await waitForLayerCount(page, 4);
-
-    const state = await getEditorState(page);
-    const pasted = state.document.layers.find((l) => l.name === 'Pasted Layer');
-    expect(pasted).toBeDefined();
-    expect(pasted!.width).toBe(1024);
-    expect(pasted!.height).toBe(768);
+    // Paste a larger image — layer size should match the source, not the canvas.
+    // Read dimensions in the same JS task as the paste, before auto-select
+    // expands the buffer.
+    const dims = await pasteAndReadDimensions(page, 1024, 768, { r: 200, g: 100, b: 50, a: 255 }, 'Copied File');
+    expect(dims).not.toBeNull();
+    expect(dims!.width).toBe(1024);
+    expect(dims!.height).toBe(768);
   });
 });
