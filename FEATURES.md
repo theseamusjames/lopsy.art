@@ -363,7 +363,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Motion Blur**: angle 0 - 360°, distance 1 - 100 px (auto-scales with document size)
 - **Radial Blur**: amount 1 - 100 (centered)
 - **Tilt-Shift Blur**: focus position 0–100% (center of sharp band along blur axis), focus width 0–100% (width of the sharp band), blur radius 1–32 px (max blur intensity in out-of-focus regions), angle 0–360° (rotation of the focus plane). Creates selective-focus miniature photography effects by blurring areas outside a configurable focus band while leaving the focus zone sharp. **Cmd/Meta+drag** on the on-canvas angle handle snaps the focus-plane rotation to 15° increments.
-- **Surface Blur**: radius 1 – 50 px (auto-scales with document size), threshold 1 – 255 (max channel difference a neighbour is allowed to have before being excluded from the blur). Edge-preserving blur that smooths low-contrast regions (skin, gradients, noise) while leaving edges sharp — a Bilateral-style filter implemented as a single GPU pass.
+- **Surface Blur**: radius 1 – 50 px (fixed range, does not auto-scale with document size), threshold 1 – 255 (max channel difference a neighbour is allowed to have before being excluded from the blur). Edge-preserving blur that smooths low-contrast regions (skin, gradients, noise) while leaving edges sharp — a Bilateral-style filter implemented as a single GPU pass.
 
 ### Sharpen
 - **Unsharp Mask**: radius 1 - 50 px (auto-scales with document size), amount 0.1 - 5, threshold 0 - 255
@@ -716,7 +716,7 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 ### Open / Save
 - **New** (`⌘N`, menu-only accelerator): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
 - **Open…** (`⌘O`, menu-only accelerator): open a PNG/JPEG/GIF (first frame)/BMP/WebP/PSD/DNG/RAF/.lopsy from disk (the picker auto-routes by extension via a shared `classifyOpenFile` helper). The same routing backs the pre-document flow — the New Document modal's "Open file" button and drag-and-drop onto a fresh app accept the same formats, including `.lopsy` project files.
-- **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust)
+- **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust). Both **RGB** and **CMYK** color modes are accepted at 8-bit and 16-bit depth — CMYK files are converted to RGB on import (naive `(1−C)(1−K)` channel math) for both the per-layer and merged-composite paths. Other color modes (grayscale, indexed, Lab, etc.) are rejected with an unsupported-color-mode error.
 - **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant)
 
 ### Native Project Format (.lopsy)

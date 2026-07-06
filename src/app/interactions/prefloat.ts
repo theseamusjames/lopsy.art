@@ -66,30 +66,9 @@ function executePrefloat(layerId: string, mask: Uint8ClampedArray, bounds: Rect)
   if (result.length >= 4) {
     const newX = result[0]!;
     const newY = result[1]!;
-    const newW = result[2]!;
-    const newH = result[3]!;
     const curLayer = useEditorStore.getState().document.layers.find(l => l.id === layerId);
-    if (curLayer) {
-      const posChanged = curLayer.x !== newX || curLayer.y !== newY;
-      const sizeChanged = curLayer.type === 'raster'
-        && (curLayer.width !== newW || curLayer.height !== newH);
-      if (posChanged || sizeChanged) {
-        useEditorStore.setState((s) => ({
-          document: {
-            ...s.document,
-            layers: s.document.layers.map((l) =>
-              l.id === layerId
-                ? {
-                  ...l,
-                  x: newX,
-                  y: newY,
-                  ...(l.type === 'raster' ? { width: newW, height: newH } : {}),
-                }
-                : l
-            ),
-          },
-        }));
-      }
+    if (curLayer && (curLayer.x !== newX || curLayer.y !== newY)) {
+      useEditorStore.getState().updateLayerPosition(layerId, newX, newY);
     }
   }
 
