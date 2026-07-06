@@ -77,12 +77,13 @@ test.describe('Reference Image Panel', () => {
     await expect(viewer).toBeVisible();
 
     const img = page.locator('[data-testid="reference-preview"] img');
-    const transformBefore = await img.evaluate((el) => getComputedStyle(el).transform);
+    const transformBefore = await img.evaluate((el) => el.style.getPropertyValue('--image-transform'));
 
     await page.locator('button[title="Flip horizontal"]').click();
 
-    const transformAfterFlipH = await img.evaluate((el) => getComputedStyle(el).transform);
+    const transformAfterFlipH = await img.evaluate((el) => el.style.getPropertyValue('--image-transform'));
     expect(transformAfterFlipH).not.toBe(transformBefore);
+    expect(transformAfterFlipH).toContain('-');
 
     await page.screenshot({ path: 'e2e/screenshots/reference-panel-flipped.png' });
   });
