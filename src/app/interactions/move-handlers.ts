@@ -89,11 +89,54 @@ function applyQuickMaskTranslate(dx: number, dy: number): void {
 
 const coalescedQuickMaskTranslate = coalesceToAnimationFrame(applyQuickMaskTranslate);
 
+/**
+ * Sibling of `quickMaskDragTarget` for the selection-mask rebuild. Issue
+ * #656: the quick-mask marquee move branch also rebuilds + reference-swaps
+ * the selection mask on every pointer event, which reroutes `syncSelection`
+ * into a full-doc `setSelectionMask` GPU upload every frame. Coalesce the
+ * `translateSelectionMask` → `setSelection` → `setTransform` chain to rAF
+ * so only the last position per rendered frame allocates + uploads.
+ */
+interface QuickMaskMaskTarget {
+  origMask: Uint8ClampedArray;
+  origBounds: { x: number; y: number; width: number; height: number };
+  docW: number;
+  docH: number;
+  lastAppliedDx: number;
+  lastAppliedDy: number;
+}
+
+let quickMaskMaskTarget: QuickMaskMaskTarget | null = null;
+
+function applyQuickMaskMaskTranslate(dx: number, dy: number): void {
+  const t = quickMaskMaskTarget;
+  if (!t) return;
+  if (dx === t.lastAppliedDx && dy === t.lastAppliedDy) return;
+  const { mask: newMask, bounds: newBounds } = translateSelectionMask(
+    t.origMask,
+    t.origBounds,
+    dx,
+    dy,
+    t.docW,
+    t.docH,
+  );
+  useEditorStore.getState().setSelection(newBounds, newMask, t.docW, t.docH);
+  useUIStore.getState().setTransform(createTransformState(newBounds));
+  t.lastAppliedDx = dx;
+  t.lastAppliedDy = dy;
+}
+
+const coalescedQuickMaskMaskTranslate = coalesceToAnimationFrame(applyQuickMaskMaskTranslate);
+
 /** Test seam: flush any pending quick-mask translate + clear the drag target. */
 export function flushQuickMaskDrag(): void {
   if (quickMaskDragTarget) {
     coalescedQuickMaskTranslate.flush();
     quickMaskDragTarget = null;
+  }
+  if (quickMaskMaskTarget) {
+    coalescedQuickMaskMaskTranslate.flush();
+    quickMaskMaskTarget = null;
   }
 }
 
@@ -283,16 +326,29 @@ export function handleMoveMove(
   ) {
     const edState = useEditorStore.getState();
     const { width: docW, height: docH } = edState.document;
-    const { mask: newMask, bounds: newBounds } = translateSelectionMask(
-      state.moveOriginalMask,
-      state.moveOriginalBounds,
-      dragDx,
-      dragDy,
-      docW,
-      docH,
-    );
-    edState.setSelection(newBounds, newMask, docW, docH);
-    useUIStore.getState().setTransform(createTransformState(newBounds));
+
+    // Selection-mask rebuild + setSelection + setTransform is the sibling
+    // hot path (#656): translateSelectionMask allocates a docW*docH buffer,
+    // and swapping the mask reference forces syncSelection to re-upload the
+    // full-doc selection mask to the GPU on the next frame. Coalesce to rAF
+    // so a burst of pointer events collapses to a single rebuild + upload
+    // per rendered frame.
+    if (
+      !quickMaskMaskTarget
+      || quickMaskMaskTarget.origMask !== state.moveOriginalMask
+      || quickMaskMaskTarget.docW !== docW
+      || quickMaskMaskTarget.docH !== docH
+    ) {
+      quickMaskMaskTarget = {
+        origMask: state.moveOriginalMask,
+        origBounds: { ...state.moveOriginalBounds },
+        docW,
+        docH,
+        lastAppliedDx: Number.NaN,
+        lastAppliedDy: Number.NaN,
+      };
+    }
+    coalescedQuickMaskMaskTranslate(dragDx, dragDy);
 
     // Quick-mask pixel translate + GPU upload is the hot path (#642) —
     // coalesce to rAF so a 250Hz pen tablet issues one upload per
@@ -411,6 +467,10 @@ export function handleMoveUp(
   if (quickMaskDragTarget) {
     coalescedQuickMaskTranslate.flush();
     quickMaskDragTarget = null;
+  }
+  if (quickMaskMaskTarget) {
+    coalescedQuickMaskMaskTranslate.flush();
+    quickMaskMaskTarget = null;
   }
 
   if (!floatingSelectionRef.current || !state.startPoint) return;
