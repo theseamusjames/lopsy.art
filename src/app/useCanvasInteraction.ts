@@ -25,7 +25,12 @@ import type {
   FloatingSelection, PersistentTransform, LastPaintPoint,
   PreToolDownGuard,
 } from './interactions/interaction-types';
-import { gestureUsedGpuStroke, INITIAL_INTERACTION_STATE, withToolGesture } from './interactions/interaction-types';
+import {
+  gestureUsedGpuStroke,
+  INITIAL_INTERACTION_STATE,
+  withPaintGesture,
+  withToolGesture,
+} from './interactions/interaction-types';
 import { handleTransformDown } from './interactions/transform-handlers';
 import {
   handleMeshWarpDown,
@@ -304,7 +309,9 @@ export function useCanvasInteraction(
       const handler = toolHandlers[activeTool];
       const newState = handler?.down?.(finalCtx);
       if (newState) {
-        stateRef.current = withToolGesture(newState, !!useGpuStroke);
+        stateRef.current = isPaintTool
+          ? withPaintGesture(newState, !!useGpuStroke)
+          : withToolGesture(newState);
       }
     },
     [screenToCanvas, containerRef, buildContext, cancelHoldTimer],
@@ -343,6 +350,7 @@ export function useCanvasInteraction(
           return;
         case 'idle':
           return;
+        case 'paint':
         case 'tool':
           break;
       }
@@ -495,6 +503,7 @@ export function useCanvasInteraction(
         }
         break;
       case 'idle':
+      case 'paint':
       case 'tool':
         break;
     }
