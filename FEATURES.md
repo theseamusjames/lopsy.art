@@ -105,7 +105,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Shift+click**: smudges along a straight line from the previous stroke endpoint
 
 ### Spray
-- **Size**: 1 - 500 px
+- **Size**: 1 - 500 px (base range; auto-scaled by document size)
 - **Density**: 1 - 100 (number of dots emitted per dab)
 - **Opacity**: 1 - 100%
 - **Softness**: 0 - 100% (per-dot hardness falloff)
