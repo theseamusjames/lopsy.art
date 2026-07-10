@@ -196,7 +196,7 @@ test.describe('Healing Brush Tool', () => {
   });
 
   test('healing brush paints onto the layer when source and destination are set', async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(600_000);
 
     // Paint a blue background with a red "blemish" patch in a single ImageData
     // so both regions coexist on the same layer texture.

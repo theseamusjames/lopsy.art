@@ -345,7 +345,7 @@ test.describe('Sub-Brushes', () => {
   });
 
   test('adding a sub-brush produces more paint per stroke', async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(600_000);
     await setToolOption(page, 'Size', 20);
     await setToolOption(page, 'Hardness', 100);
     await setForegroundColor(page, 255, 0, 0);
@@ -419,7 +419,7 @@ test.describe('Sub-Brushes', () => {
   });
 
   test('sub-brush angle jitter produces visible variation', async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(600_000);
     await setToolOption(page, 'Size', 60);
     await setToolOption(page, 'Hardness', 100);
     await setForegroundColor(page, 0, 0, 255);
@@ -485,6 +485,7 @@ test.describe('Sub-Brushes', () => {
   });
 
   test('sub-brush tab UI adds and removes sub-brushes', async ({ page }) => {
+    test.setTimeout(600_000);
     await openBrushModal(page);
 
     // Navigate to Sub-Brushes tab

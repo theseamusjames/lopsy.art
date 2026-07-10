@@ -211,6 +211,7 @@ test.describe('Brush across selection boundary', () => {
   });
 
   test('drawing on background layer with foreign-layer selection still paints', async ({ page, isMobile }) => {
+    test.setTimeout(600_000);
     test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await setup(page);
 

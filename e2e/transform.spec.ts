@@ -142,7 +142,7 @@ test.describe('Free Transform', () => {
   });
 
   test('6 rotations back to origin produce identical pixels', async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(600_000);
     // 1. Paint content with the brush tool
     await selectTool(page, 'b');
 

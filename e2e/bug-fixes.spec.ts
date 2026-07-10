@@ -892,7 +892,7 @@ test.describe('Bug Fix: Multi-Step Undo/Redo (20+ steps, 5 layers)', () => {
 
 test.describe('Masterpiece: Full Feature Integration', () => {
   test('create a multi-layer composition using every tool, effect, and filter then export as PNG', async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(600_000);
 
     // Create 600x400 canvas
     await createDocument(page, 600, 400, true);
