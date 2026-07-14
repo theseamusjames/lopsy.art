@@ -126,6 +126,11 @@ interface UIState {
   showGuides: boolean;
   showSeamlessPattern: boolean;
   dimSeamlessPattern: boolean;
+  /** When enabled alongside `showSeamlessPattern`, layer compositing wraps
+   *  at the document edges — content moved off one side reappears on the
+   *  opposite side. The layer texture is left untouched so repeated moves
+   *  operate on the original pixels, not on the already-wrapped result. */
+  wrapSeamlessPattern: boolean;
   snapToGrid: boolean;
   snapToLayers: boolean;
   /** Temporary snap alignment lines shown during move/transform. */
@@ -192,6 +197,7 @@ interface UIState {
   toggleGuides: () => void;
   toggleSeamlessPattern: () => void;
   toggleDimSeamlessPattern: () => void;
+  toggleWrapSeamlessPattern: () => void;
   toggleSnapToGrid: () => void;
   toggleSnapToLayers: () => void;
   setSnapLines: (lines: readonly SnapLine[]) => void;
@@ -273,6 +279,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   showGuides: true,
   showSeamlessPattern: false,
   dimSeamlessPattern: true,
+  wrapSeamlessPattern: false,
   snapToGrid: false,
   snapToLayers: false,
   snapLines: [],
@@ -371,6 +378,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleGuides: () => set((state) => ({ showGuides: !state.showGuides })),
   toggleSeamlessPattern: () => set((state) => ({ showSeamlessPattern: !state.showSeamlessPattern })),
   toggleDimSeamlessPattern: () => set((state) => ({ dimSeamlessPattern: !state.dimSeamlessPattern })),
+  toggleWrapSeamlessPattern: () => set((state) => ({ wrapSeamlessPattern: !state.wrapSeamlessPattern })),
   toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),
   toggleSnapToLayers: () => set((state) => ({ snapToLayers: !state.snapToLayers })),
   setSnapLines: (lines) => set({ snapLines: lines }),

@@ -217,12 +217,17 @@ export function syncRulers(engine: Engine, showRulers: boolean): void {
   }
 }
 
-export function syncSeamlessPattern(engine: Engine, show: boolean, dim: boolean): void {
+export function syncSeamlessPattern(engine: Engine, show: boolean, dim: boolean, wrap: boolean): void {
   const tracked = getTracked(engine);
-  if (tracked.showSeamlessPattern !== show || tracked.dimSeamlessPattern !== dim) {
-    setSeamlessPattern(engine, show, dim);
+  if (
+    tracked.showSeamlessPattern !== show
+    || tracked.dimSeamlessPattern !== dim
+    || tracked.wrapSeamlessPattern !== wrap
+  ) {
+    setSeamlessPattern(engine, show, dim, wrap);
     tracked.showSeamlessPattern = show;
     tracked.dimSeamlessPattern = dim;
+    tracked.wrapSeamlessPattern = wrap;
   }
 }
 

@@ -76,9 +76,10 @@ pub fn set_rulers_visible(engine: &mut Engine, visible: bool) {
 }
 
 #[wasm_bindgen(js_name = "setSeamlessPattern")]
-pub fn set_seamless_pattern(engine: &mut Engine, enabled: bool, dim: bool) {
+pub fn set_seamless_pattern(engine: &mut Engine, enabled: bool, dim: bool, wrap: bool) {
     engine.inner.seamless_pattern = enabled;
     engine.inner.seamless_dim = dim;
+    engine.inner.seamless_wrap = wrap;
     engine.inner.needs_recomposite = true;
 }
 
