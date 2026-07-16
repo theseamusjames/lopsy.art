@@ -35,6 +35,25 @@ function cancelFallbackPaste(): void {
   }
 }
 
+/**
+ * Route a pasted image blob, preferring the internal clipboard when the image
+ * is a paste-back of content that was copied *inside* the app.
+ *
+ * `copy()`/`cut()` mirror the copied pixels to the system clipboard as a plain
+ * PNG so they can be pasted into other apps. That PNG carries no position, so
+ * routing it through `pasteOrOpenBlob` drops the new layer at 0,0 — losing the
+ * location the content was copied from. The internal clipboard, by contrast,
+ * records the copy offset and pastes in place. `tryPasteInternalCopy` uses it
+ * when the incoming image matches the internal clipboard's dimensions and
+ * pixels; otherwise this is a genuinely external image and we open it normally.
+ */
+async function pasteImageBlob(blob: Blob, name: string): Promise<void> {
+  const handledInternally = await useEditorStore.getState().tryPasteInternalCopy(blob);
+  if (!handledInternally) {
+    await pasteOrOpenBlob(blob, name);
+  }
+}
+
 interface KeyboardShortcutDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
   /**
@@ -180,7 +199,7 @@ export function useKeyboardShortcuts({
         if (file && file.type.startsWith('image/')) {
           e.preventDefault();
           const name = file.name.replace(/\.[^.]+$/, '') || 'Copied File';
-          pasteOrOpenBlob(file, name).catch((err) =>
+          pasteImageBlob(file, name).catch((err) =>
             notifyError(`Failed to paste image: ${describeError(err)}`),
           );
           return;
@@ -197,7 +216,7 @@ export function useKeyboardShortcuts({
             const blob = item.getAsFile();
             if (blob) {
               e.preventDefault();
-              pasteOrOpenBlob(blob, 'Copied File').catch((err) =>
+              pasteImageBlob(blob, 'Copied File').catch((err) =>
                 notifyError(`Failed to paste image: ${describeError(err)}`),
               );
               return;
@@ -215,7 +234,7 @@ export function useKeyboardShortcuts({
             const imageType = clipboardItem.types.find((t: string) => t.startsWith('image/'));
             if (imageType) {
               const blob = await clipboardItem.getType(imageType);
-              await pasteOrOpenBlob(blob, 'Copied File');
+              await pasteImageBlob(blob, 'Copied File');
               return;
             }
           }

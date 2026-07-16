@@ -13,7 +13,7 @@ export function PencilOptions() {
 
   return (
     <>
-      <Slider label="Size" value={pencilSize} min={1} max={sizeMax} onChange={(size) => setPencilSetting('size', size)} />
+      <Slider label="Size" value={pencilSize} min={1} max={sizeMax} sliderMax={250} onChange={(size) => setPencilSetting('size', size)} />
       <SymmetryControls />
     </>
   );

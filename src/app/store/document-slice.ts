@@ -229,7 +229,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     clearEngine();
     const result = computeCreateDocument(width, height, transparentBg);
     applyActionResult(set, result);
-    set({ documentVersion: get().documentVersion + 1 });
+    // clearEngine() released the GPU clipboard texture; drop the stale JS
+    // clipboard so a subsequent paste doesn't operate on a freed texture.
+    set({ documentVersion: get().documentVersion + 1, clipboard: null });
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
@@ -243,7 +245,8 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     clearEngine();
     const result = computeOpenImage(imageData, name);
     applyActionResult(set, result);
-    set({ documentVersion: get().documentVersion + 1 });
+    // See createDocument: the GPU clipboard texture is gone after clearEngine().
+    set({ documentVersion: get().documentVersion + 1, clipboard: null });
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }

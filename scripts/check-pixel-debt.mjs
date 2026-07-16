@@ -45,6 +45,7 @@ const ALLOWLIST = {
   'src/app/store/actions/remove-layer.test.ts': 1,
   'src/app/store/actions/resize-canvas.test.ts': 1,
   'src/app/store/actions/resize-image.test.ts': 1,
+  'src/app/store/clipboard-image-match.test.ts': 1,
   'src/engine-wasm/engine-sync.test.ts': 3,
   'src/engine-wasm/sync-layers.test.ts': 7,            // +1: shared mask fixture for upload-retry-cap tests
   'src/engine/pixel-data-manager.test.ts': 2,
