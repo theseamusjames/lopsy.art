@@ -55,9 +55,11 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 **Stroke modifiers**
 - **Shift+click**: draws a straight line from the previous stroke endpoint to the click point
 - **Hold-to-smooth**: pause the cursor mid-stroke for ~1500 ms and the recorded freehand path is auto-smoothed and re-rasterized in place. The path is first tested for straightness — if every point lies within a tolerance of the first→last line it is replaced with a perfect straight segment; the tolerance is the larger of **4 px** or **10% of the stroke length**, so long strokes with small relative wobble still snap straight. Otherwise the path is simplified with Ramer-Douglas-Peucker (9 px epsilon) and re-interpolated as a Catmull-Rom spline. Undo restores the freehand version first, then the pre-stroke state.
+  - **Applies to the Brush only**, requires the GPU stroke path, and is disabled while `maskMode` is set — so it never fires when painting a layer mask or in Quick Mask.
+  - **The re-raster does not carry every brush parameter.** It emits uniform dabs carrying size, hardness, opacity, color, and symmetry only: angle jitter and opacity jitter are hard-coded to zero, and taper, fade, scatter, and sub-brushes are not routed through at all. A heavily scattered / jittered / tapered / sub-brush tip therefore visibly changes character the moment hold-to-smooth fires.
 
 ### Pencil
-- **Size**: 1 - 100 px (base range; auto-scaled by document size)
+- **Size**: 1 - 100 px (base range; auto-scaled by document size). The slider knob's draggable range is capped at 250 px — matching the convention the other size sliders use (Brush and Eraser cap at 300, Spray at 500) — while the numeric input still accepts anything up to the document-scaled maximum.
 - **Symmetry**: horizontal, vertical, or both
 - Pixel-perfect Bresenham lines (no anti-aliasing)
 - **Shift+click**: draws a straight pixel-perfect line from the previous stroke endpoint
@@ -249,7 +251,12 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Cmd/Meta+drag (transform handles)**: constrains aspect ratio when scaling and snaps rotation to 15° increments. Grid + snap-to-grid also forces snapping automatically during the transform.
 
 ### Paste / Drop behavior
-- Pasting from the clipboard or drag-and-dropping an image file onto the canvas creates a new raster layer at the image's natural dimensions and **auto-selects** the new layer's non-transparent pixels (loads the alpha as a marquee selection). Combined with the **Fit** button, oversized images can be quickly scaled in to fit without first hunting for a transform handle off-canvas.
+
+Paste takes one of two routes depending on where the image came from.
+
+- **Pasting back content copied inside Lopsy** (`⌘C` / `⌘X` / `⇧⌘C`, then `⌘V`) **pastes in place**: the new layer lands at the offset the content was copied from, not at the canvas origin. Copy/cut also mirror the pixels to the system clipboard as a plain PNG so they can be pasted into other apps, and that position-less PNG is what a real browser hands back on paste — so Lopsy compares the incoming image against the GPU-resident internal clipboard and uses the internal (positioned) copy only when the dimensions **and** pixels both match. The comparison samples up to ~4096 pixels, tolerates the small RGB drift a clipboard round-trip introduces under partial alpha, and decodes with `colorSpaceConversion: 'none'` so a wide-gamut round-trip doesn't push values past the match tolerance. A same-size but genuinely different external image (say, a document-sized screenshot pasted after Copy Merged) fails the pixel check and is treated as external.
+- **Pasting or dropping an external image** creates a new raster layer at the image's natural dimensions, positioned at the canvas origin, and **auto-selects** the new layer's non-transparent pixels (loads the alpha as a marquee selection). Combined with the **Fit** button, oversized images can be quickly scaled in to fit without first hunting for a transform handle off-canvas.
+- File → New and opening an image drop the internal clipboard, since resetting the engine frees the GPU clipboard texture that an in-place paste would read from. A copy made before a New therefore pastes as an external image afterward.
 - When duplicating a layer that is wider or taller than the canvas, the +10/+10 visual offset is clamped so the duplicate's far edge never moves past the canvas edge that the original was within (prevents already-oversized layers from being shoved further out of view).
 
 ### Eyedropper
@@ -414,7 +421,7 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 - **Smoke**: scale 1 - 20, turbulence 0 - 100, seed
 - **Fibers**: variance 1 - 64 (color variation between strands), strength 1 - 64 (vertical coherence — higher values produce straighter fibers, lower values produce more wavy/tangled fibers), seed. Generates random vertical fiber textures resembling paper, cloth, or hair using multi-octave 1D noise with 2D wander perturbation. GPU-accelerated GLSL shader.
 - **Regenerate** button: the randomized filters (Clouds, Smoke, Fibers, and **Add Noise**) show a circular-arrow button next to the Preview checkbox in the generic filter dialog. Clicking it picks a new random seed and refreshes the preview, so users can spin through variations without re-opening the dialog. Confirming the dialog with Preview active commits the exact previewed pixels (the seed is captured at preview time and the GPU result is snapshotted, so what you see is what you get).
-- **Pattern Fill**: tiles a user-defined pattern across the active layer
+- **Pattern Fill**: tiles a user-defined pattern across the active layer. Reached from **Edit → Fill with Pattern…** (it is documented here with the other render filters because it shares the generic filter-dialog machinery, but it has no Filter-menu entry of its own).
   - **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern
   - **Scale**: 10 - 1000% (tile size relative to original pattern dimensions)
   - **Column / Row Offset**: 0 - 100% (shifts the tiling origin along X / Y)
@@ -447,12 +454,14 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 ## Layer System
 
 ### Layer Types
+There are exactly four layer types (`LayerType = 'raster' | 'text' | 'shape' | 'group'`):
+
 - **Raster**: pixel layer
 - **Text**: live-editable text
 - **Shape**: vector shape (ellipse, polygon — see Shape Tool above)
 - **Group**: folder with optional per-group adjustments
-- **Adjustment**: adjustment layer
-- **Fill**: fill layer
+
+Lopsy has **no** Adjustment-layer or Fill-layer type. Adjustments are non-destructive **nodes** stacked on a group rather than layers of their own (see Image Adjustments), and fills are painted into a raster layer.
 
 ### Layer Properties
 - **Opacity**: 0 - 1
@@ -471,7 +480,7 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 - **Group Layers** (`⌘G`, menu-only accelerator): wraps the currently-selected layers in a new group
 - **Merge Down** (`⌘E`): composites the active layer into the layer below (the only layer-menu accelerator actually wired to a key handler)
 - **Flatten Image**: composites every visible layer into a single raster layer
-- **Rasterize Layer**: for non-raster layers (text, shape, group with effects), bakes the current visual into pixels in place. For text layers, reads the engine's current x/y/w/h so the rasterized result lands at the visible position even after GPU texture expansion from upstream paint ops.
+- **Rasterize Layer**: bakes a **text** layer's current visual into pixels in place, reading the engine's current x/y/w/h so the result lands at the visible position even after GPU texture expansion from upstream paint ops. The button appears in the Layers panel toolbar only while a text layer is active — there is currently no rasterize entry point for shape or group layers.
 - **Rasterize Layer Style**: bakes a layer's effects (drop shadow, glow, stroke, color overlay) into the layer's pixels and clears the effect descriptors
 - Reorder (drag)
 - Move to group (reparent)
@@ -501,9 +510,9 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 - Paste external image data (PNG/JPEG/WebP from the system clipboard) creates a new raster layer with the bitmap
 
 ### Fill from Menu
-- **Fill…** (Edit menu, `⇧F5` — menu-only accelerator, not wired to a global key): opens a small modal that fills the current selection (or the entire layer if no selection) on the active layer with foreground color, background color, black, white, 50% gray, or a chosen pattern. Honors the selection mask and layer opacity.
-- **Fill with Pattern…** (Edit menu): opens the Pattern Fill dialog directly (same dialog as the Filter-menu entry — see Filters → Render → Pattern Fill for scale / offset / selection-mask behavior).
-- **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern (used by Fill… and the Pattern Fill filter)
+- **Fill** (Edit menu, `⇧F5` — menu-only accelerator, not wired to a global key): fills the current selection (or the entire layer if no selection) on the active layer with the **foreground color**, immediately. There is no dialog and no color/pattern choice — to fill with anything else, set the foreground color first or use Fill with Pattern. The fill runs on the GPU and honors the active selection mask.
+- **Fill with Pattern…** (Edit menu): opens the Pattern Fill dialog — see Filters → Render → Pattern Fill for scale / offset / selection-mask behavior. This Edit-menu item is the **only** entry point; the Filter menu has no Pattern Fill entry.
+- **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern (used by Fill with Pattern… / the Pattern Fill dialog)
 - **Define Brush…** / **Define Color Brush…** (Edit menu): captures the marquee selection as a new alpha or color brush tip (see Brush → Brush from Selection)
 
 ---
@@ -537,7 +546,8 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Pan**: unlimited
 - **Fit to view**: auto-zoom with padding
 - **Space+drag** or **middle-click drag**: temporarily pan from any tool
-- **Cmd/Ctrl+scroll**: zoom centered on the cursor; plain scroll pans
+- **Cmd/Ctrl+scroll**: zoom in / out (factor `1.002^-deltaY`, clamped to 0.01× – 64×); plain scroll pans. The zoom is anchored to the **viewport center**, not the cursor — the wheel handler only writes `viewport.zoom` and does not compensate pan. (The Reference Image drawer's wheel zoom *is* cursor-centered; the canvas is not.)
+- **Two-finger pinch** (touch): pinching anywhere in the viewport scales the zoom from the gesture's start distance (clamped 0.01× – 64×) and pans by the touch-midpoint delta. The gesture is picked up even when a finger lands on surrounding UI chrome rather than the canvas, and it cancels any in-flight tool stroke first so a pinch never leaves a stray mark.
 - **Cmd/Ctrl + `=`** / **Cmd/Ctrl + `-`**: zoom in / out by 1.5× (clamped to the 0.01× – 64× range)
 - **Cmd/Ctrl + `0`**: fit document to view (90% of the smaller canvas-to-document ratio, pan reset to origin)
 - **Cmd/Ctrl + `1`**: jump to 100% (1×) zoom and recenter
@@ -554,9 +564,11 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 
 ### Guides
 - **Show guides**: on/off
-- **Guide color**: configurable
 - **Orientation**: horizontal or vertical
-- Drag from ruler to create
+- **Click a ruler to create**: a single click on the horizontal ruler drops a vertical guide at that position (and vice versa) — this is a click, not a drag. There is no drag-to-create, and placed guides cannot be repositioned by dragging; remove and re-place instead.
+- **Click a guide on the ruler to remove it**: clicking the ruler within ±1 px of an existing guide's position deletes that guide rather than adding another.
+- **Guide color**: click the **ruler corner square** (the box where the two rulers meet) to open the guide-color picker; clicking it again closes it. This is the only entry point to the picker.
+- Guide creation, removal, and the color picker all require **both** Show Rulers and Show Guides to be on — with either off, ruler clicks do nothing.
 - **Cmd/Ctrl + `;`**: toggle guides visibility from anywhere in the app
 - **Clear Guides** (Edit menu): removes every guide currently placed on the canvas in a single action
 
@@ -566,7 +578,8 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 
 ### Seamless Pattern Preview
 - **Show Seamless Pattern** (View menu): tiles the document outside the canvas bounds so tileable textures and patterns can be previewed in context. The center tile is the actual document; surrounding tiles are repeats of the same pixels with edge wrapping (`fract(uv)`) so seams are visible immediately.
-- **Dim pattern**: a per-tool options-bar checkbox (visible whenever Show Seamless Pattern is on) dims the surrounding repeat tiles so the center document stays the focal point while still showing how it tiles. Default on.
+- **Dim pattern**: an options-bar checkbox (visible whenever Show Seamless Pattern is on) dims the surrounding repeat tiles so the center document stays the focal point while still showing how it tiles. Default on.
+- **Wrap**: a second options-bar checkbox next to Dim pattern (also only visible while Show Seamless Pattern is on, default off). When enabled, layer compositing wraps modularly at the document edges — content dragged off one side reappears on the opposite side, so a tile can be edited across its own seam. The wrap happens in the blend shader, which shifts each layer's source offset per axis to whichever tile center is nearest the fragment; the layer texture itself is never rewritten, so repeated moves keep sampling the original pixels instead of compounding an already-wrapped result.
 
 ### UI
 - **Foreground / background color**: with swap and reset
@@ -600,16 +613,20 @@ In addition to per-tool toolbox shortcuts (`B`, `E`, `J`, `Y`, `R`, `S`, `H`, `O
 - **`Q`** — toggle Quick Mask mode
 - **`[` / `]`** — decrement / increment the active tool's size by 1 (works for brush, dodge & burn, smudge, pencil, eraser, clone stamp, healing brush, pen-tool stroke width, and shape-tool stroke width — the bracket maps to whichever size slider the current tool exposes)
 - **`Space+drag`** / **middle-click drag** — temporary pan from any tool
-- **`Cmd/Ctrl+scroll`** — zoom centered on the cursor; plain scroll pans
+- **`Cmd/Ctrl+scroll`** — zoom in / out (anchored to the viewport center, not the cursor); plain scroll pans. **Two-finger pinch** on touch devices zooms and pans together.
 - **`Backspace` / `Delete`** (canvas focused) — when a marquee selection is active, clears the selected pixels on the active layer (GPU clear, undoable as "Clear Selection"); when no selection is active, removes the active layer from the document. Suppressed while a text input or text-layer edit is focused.
 - **`Escape`** — cancels in-progress state: clears unstroked Path-tool anchors first, otherwise clears the active selection and any pending transform; ends text editing with the prior layer state restored.
 - **`Enter`** — when the Path tool is active and ≥ 2 anchors are placed, strokes the in-progress path to pixels.
 - **`Cmd/Ctrl + E`** — merge the active layer down into the layer below.
 
-**Menu accelerator labels that are *display-only* (not wired to global key handling).** Several menu items render a keyboard accelerator next to their label, but — like the `⌘R` ruler accelerator noted under Rulers — the key combo is **not** bound; the action only fires when the menu item itself is clicked. These are: **New** (`⌘N`), **Open…** (`⌘O`), **Save Project** (`⌘S`), **Export…** (`⌥⇧⌘E`), **Quick Export** (`⇧⌘E`), **New Layer** (`⇧⌘N`), **Duplicate Layer** (`⌘J`), **Group Layers** (`⌘G`), and **Fill…** (`⇧F5`). Among the layer/file menu accelerators, only **Merge Down** (`⌘E`) is actually bound to a global key handler.
+**Menu accelerator labels that are *display-only* (not wired to global key handling).** Several menu items render a keyboard accelerator next to their label, but — like the `⌘R` ruler accelerator noted under Rulers — the key combo is **not** bound; the action only fires when the menu item itself is clicked. These are: **New** (`⌘N`), **Open…** (`⌘O`), **Save Project** (`⌘S`), **Export…** (`⌥⇧⌘E`), **Quick Export PNG** (`⇧⌘E`), **New Layer** (`⇧⌘N`), **Duplicate Layer** (`⌘J`), **Group Layers** (`⌘G`), and **Fill** (`⇧F5`). Among the layer/file menu accelerators, only **Merge Down** (`⌘E`) is actually bound to a global key handler.
+
+### Help Menu
+- **Keyboard Shortcuts**: opens the Keyboard Shortcuts modal (see below) — this menu item is its entry point.
+- **About Lopsy**: opens the About dialog.
 
 ### Keyboard Shortcut Customization
-Every tool shortcut (`B`, `E`, `J`, …) and the non-tool single-key actions (`X` swap colors, `D` reset colors, `Q` toggle quick mask) are user-rebindable through the **Keyboard Shortcuts modal**.
+Every tool shortcut (`B`, `E`, `J`, …) and the non-tool single-key actions (`X` swap colors, `D` reset colors, `Q` toggle quick mask) are user-rebindable through the **Keyboard Shortcuts modal** (Help → Keyboard Shortcuts).
 
 - Each row shows the action label and its current key. Clicking a key enters **listening mode** — the next key the user presses becomes the new binding (lower-cased, single-character bindings only).
 - **Conflict detection**: if the chosen key is already bound to another action, the modal flags the conflict inline; the user can confirm the swap or pick a different key.
@@ -682,6 +699,7 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 - **Center**: configurable (defaults to canvas center)
 - Available on brush, pencil, and eraser. The symmetry config (axes, center, radial segment count) is global, so it applies to whichever of these tools is active. Only the Brush options bar exposes the **Radial Symmetry** toggle and its segment-count number input; the Pencil options bar exposes just the horizontal/vertical toggles (radial set from the Brush still applies to pencil/eraser strokes), and the Eraser inherits the active config without its own toggles.
 - **Cmd/Meta+click** on the canvas while any symmetry mode (horizontal, vertical, or radial with 2+ segments) is active moves the symmetry center to the click point without painting a dab. Lets the user reposition the mirror axis directly from the canvas without opening a settings panel.
+- **Caveat — this intercept is global, not brush-only.** The check runs at the top of the canvas pointer-down handler, before the tool guards and before any tool dispatch, and it is not scoped to the paint tools. So while *any* symmetry axis is enabled, a Cmd/Meta+click is swallowed by the symmetry-center move for **every** tool — which suppresses the other documented Cmd/Meta gestures (shape and marquee 1:1 lock, gradient 15° snap, transform snap, Path anchor convert, and the Cmd half of the Clone Stamp / Healing source-set). Alt/Option still sets the stamp and healing source. Turn symmetry off to get those gestures back.
 
 ---
 
@@ -737,7 +755,7 @@ Opened from File → Export… The `⌥⇧⌘E` shown next to the menu item is a
 
 **Color-managed output**: when the document is in a wide-gamut working space (Display P3), exports carry the correct color metadata so other apps interpret the pixels faithfully — PNG and JPEG are tagged with a colorimetrically-correct Display P3 ICC profile (Bradford-adapted colorants, true piecewise-sRGB transfer curve), PSD embeds the matching working-space profile, and BMP (which cannot carry a profile) is converted P3 → sRGB before encoding. sRGB documents keep their historical sRGB tagging unchanged. WebP is tagged by its own encoder.
 
-### Quick Export (`⇧⌘E`)
+### Quick Export PNG (`⇧⌘E`)
 One-shot PNG export through the GPU compositor — no dialog, no preview, uses the document name as the filename and quality 92. (The `⇧⌘E` shown in the menu is a display-only accelerator, not wired to a global key handler.)
 
 ### DNG / RAW Import
