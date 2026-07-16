@@ -154,22 +154,27 @@ test.describe('History - Multi-Step Operations', () => {
     expect(empty.document.layers).toHaveLength(2);
     expect(empty.redoStackLength).toBe(3);
 
-    // Redo everything — wait two frames after each so the compositor
-    // uploads the restored texture and renders before we readback.
-    const waitTwoFrames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    // Redo everything. The restored texture is uploaded and composited on a
+    // later frame, so the readback is eventually-consistent — poll rather than
+    // wait a fixed number of frames, which under a software GPU (SwiftShader)
+    // is not always enough and reads back an empty texture. The assertion still
+    // fails if redo never restores the pixel.
     await redo(page); // redo paint bg
-    await page.evaluate(waitTwoFrames);
-    const bgPixel = await getPixelAt(page, 10, 10, bgId);
-    expect(bgPixel.r).toBe(255);
+    await expect
+      .poll(async () => (await getPixelAt(page, 10, 10, bgId)).r, {
+        message: 'redo of the bg paint should restore the red rect',
+      })
+      .toBe(255);
 
     await redo(page); // redo add layer
-    await page.evaluate(waitTwoFrames);
     expect((await getEditorState(page)).document.layers).toHaveLength(3);
 
     await redo(page); // redo paint top
-    await page.evaluate(waitTwoFrames);
-    const topPixel = await getPixelAt(page, 60, 60, topId);
-    expect(topPixel.g).toBe(255);
+    await expect
+      .poll(async () => (await getPixelAt(page, 60, 60, topId)).g, {
+        message: 'redo of the top paint should restore the green rect',
+      })
+      .toBe(255);
   });
 });
 
