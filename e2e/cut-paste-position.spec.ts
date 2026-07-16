@@ -177,10 +177,24 @@ const mod = isMac ? 'Meta' : 'Control';
 // Setup
 // ---------------------------------------------------------------------------
 
-test.beforeEach(async ({ page, isMobile }) => {
+test.beforeEach(async ({ page, isMobile, browserName }) => {
   test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
   await page.goto('/');
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
+  // Every test in this worker shares one browser, and so one OS clipboard.
+  // copy()/cut() mirror to it asynchronously, so an image left behind by an
+  // earlier test leaks into the next one's Ctrl+V: the handler compares the
+  // pasted image against the internal clipboard and, on a dimension mismatch,
+  // treats it as a genuinely external image and drops it at 0,0. That makes
+  // outcomes depend on test order rather than on the behaviour under test.
+  // Start every test from a known-empty clipboard.
+  // (Playwright's Firefox has no clipboard permissions to grant; it also does
+  // not implement navigator.clipboard.read(), so it always falls back to the
+  // internal clipboard and never inherits an image.)
+  if (browserName === 'chromium') {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.evaluate(() => navigator.clipboard.writeText(''));
+  }
 });
 
 // ===========================================================================
@@ -305,7 +319,12 @@ test.describe('Cut/paste ellipse positioning', () => {
     await page.screenshot({ path: 'e2e/screenshots/cut-paste-position-no-selection.png' });
   });
 
-  test('system-clipboard paste-back of an internal copy lands at the copied position, not 0,0', async ({ page }) => {
+  test('system-clipboard paste-back of an internal copy lands at the copied position, not 0,0', async ({ page, browserName }) => {
+    // Chromium-only: Playwright's Firefox has no 'clipboard-read' permission
+    // to grant, and Firefox does not implement navigator.clipboard.read().
+    // The production path this covers is browser-agnostic; only the harness
+    // is not.
+    test.skip(browserName !== 'chromium', 'needs clipboard-read permission + navigator.clipboard.read()');
     // Reproduces the real-browser path that unit-headless tests miss: copy()
     // mirrors the selection to the system clipboard as a position-less PNG, so
     // a native Cmd+V paste event carries that image. The handler must recognise
@@ -378,7 +397,13 @@ test.describe('Cut/paste ellipse positioning', () => {
     expect(pastedLayer!.y).not.toBe(0);
   });
 
-  test('external image matching the copied dimensions still pastes as a new external layer at 0,0', async ({ page }) => {
+  test('external image matching the copied dimensions still pastes as a new external layer at 0,0', async ({ page, browserName }) => {
+    // Chromium-only: Firefox drops the DataTransfer contents of a ClipboardEvent
+    // built via its constructor — the handler sees clipboardData with zero files
+    // and zero items, falls through to the internal-clipboard branch, and pastes
+    // in place at the copied offset. That is a synthetic-event limitation, not a
+    // product bug: a real Firefox paste carries the OS clipboard's data.
+    test.skip(browserName !== 'chromium', 'Firefox strips clipboardData from a constructed ClipboardEvent');
     // Guards the content-verification path: a *different* image that merely
     // shares the copied dimensions must NOT be substituted with the internal
     // clipboard's pixels — it is genuinely external and pastes at 0,0.
@@ -531,7 +556,8 @@ test.describe('Cut text then paste preserves correct clipboard', () => {
     expect(pastedPixels).toBeGreaterThan(0);
   });
 
-  test('undo after cut does not corrupt clipboard on subsequent paste', async ({ page }) => {
+  test('undo after cut does not corrupt clipboard on subsequent paste', async ({ page, browserName }) => {
+    const isChromium = browserName === 'chromium';
     await createDocument(page, 600, 400, true);
     await page.waitForTimeout(300);
 
@@ -548,6 +574,19 @@ test.describe('Cut text then paste preserves correct clipboard', () => {
     await setSelection(page, 350, 160, 100, 80);
     await page.keyboard.press(`${mod}+KeyX`);
     await page.waitForTimeout(300);
+
+    // The system-clipboard mirror is async; with the clipboard cleared above,
+    // an image appearing can only be this cut's.
+    if (isChromium) {
+      await page.waitForFunction(async () => {
+        try {
+          const items = await navigator.clipboard.read();
+          return items.some((it) => it.types.some((t) => t.startsWith('image/')));
+        } catch {
+          return false;
+        }
+      }, undefined, { timeout: 5000 });
+    }
 
     // Clipboard should have the red ellipse content
     const clipAfterCut = await getEditorState(page);
