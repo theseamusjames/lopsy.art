@@ -8,7 +8,7 @@ use crate::filter_gpu;
 #[wasm_bindgen(js_name = "filterAddNoise")]
 pub fn filter_add_noise(
     engine: &mut Engine, layer_id: &str,
-    amount: f32, monochrome: bool, seed: f32,
+    amount: f32, monochrome: bool, gaussian: bool, seed: f32,
 ) {
     filter_gpu::apply_filter(
         &mut engine.inner,
@@ -20,6 +20,9 @@ pub fn filter_add_noise(
             }
             if let Some(loc) = shader.location(gl, "u_monochrome") {
                 gl.uniform1i(Some(&loc), if monochrome { 1 } else { 0 });
+            }
+            if let Some(loc) = shader.location(gl, "u_gaussian") {
+                gl.uniform1i(Some(&loc), if gaussian { 1 } else { 0 });
             }
             if let Some(loc) = shader.location(gl, "u_seed") {
                 gl.uniform1f(Some(&loc), seed);

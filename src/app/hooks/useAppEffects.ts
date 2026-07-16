@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, type RefObject } from 'react';
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { commitTextEditing } from '../../tools/text/text-interaction';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { markAllLayersDirty } from '../../engine-wasm/engine-sync';
 
 interface AppEffectsDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -58,12 +60,22 @@ export function useAppEffects({
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = container.getBoundingClientRect();
+      const sizeChanged = canvas.width !== rect.width || canvas.height !== rect.height;
       canvas.width = rect.width;
       canvas.height = rect.height;
       useEditorStore.getState().setViewportSize(rect.width, rect.height);
       if (!hasInitialFit && rect.width > 0 && rect.height > 0) {
         hasInitialFit = true;
         useEditorStore.getState().fitToView();
+      }
+      // Setting canvas.width/height wipes the WebGL drawing buffer. If the
+      // engine's tracked viewport already matches the new dimensions (e.g.
+      // the render loop had already synced them before this callback), the
+      // next frame's `syncViewport` would skip and no recomposite would run,
+      // leaving the canvas blank. Force a recomposite here.
+      if (sizeChanged) {
+        const engine = getEngine();
+        if (engine) markAllLayersDirty(engine);
       }
     });
 

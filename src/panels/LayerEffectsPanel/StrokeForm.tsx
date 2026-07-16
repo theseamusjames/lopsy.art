@@ -32,7 +32,10 @@ export function StrokeForm({ stroke, onChange, onDragStart }: StrokeFormProps) {
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
-          <Slider label="Width" value={stroke.width} min={1} max={widthMax} onChange={(v) => onChange({ ...stroke, width: v })} onDragStart={onDragStart} />
+          {/* #664 — text input accepts up to the document-scaled max;
+              sliderMax pins the drag range to a usable ~100px so the
+              knob resolution stays sane on large canvases. */}
+          <Slider label="Width" value={stroke.width} min={1} max={widthMax} sliderMax={100} onChange={(v) => onChange({ ...stroke, width: v })} onDragStart={onDragStart} />
         </div>
       </div>
       <div className={styles.row}>
