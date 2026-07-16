@@ -16,7 +16,8 @@ import type { TransformHandle, TransformState } from '../../tools/transform/tran
  */
 export type CanvasGesture =
   | { kind: 'idle' }
-  | { kind: 'tool'; usedGpuStroke: boolean }
+  | { kind: 'paint'; usedGpuStroke: boolean }
+  | { kind: 'tool' }
   | { kind: 'liquify'; lastPoint: Point }
   | { kind: 'tiltShift' }
   | { kind: 'meshWarp' }
@@ -29,26 +30,36 @@ export type CanvasGesture =
     };
 
 /**
- * True when the active tool gesture is a paint stroke that started on
- * the GPU path (brush/pencil/eraser with engine available, outside
- * mask/quick-mask modes). Replaces the legacy `_usedGpuStroke?` flag
- * on InteractionState. Lives on the gesture variant so it can't be
- * set unless we're actually inside a `tool` gesture.
+ * True when the active gesture is a paint stroke that started on the
+ * GPU path (brush/pencil/eraser with engine available, outside mask/
+ * quick-mask modes). Structurally scoped to the `paint` variant so
+ * non-paint tool gestures can't accidentally claim a GPU stroke.
+ * Replaces the legacy `_usedGpuStroke?` flag on InteractionState (#444).
  */
 export function gestureUsedGpuStroke(gesture: CanvasGesture): boolean {
-  return gesture.kind === 'tool' && gesture.usedGpuStroke;
+  return gesture.kind === 'paint' && gesture.usedGpuStroke;
 }
 
 /**
- * Construct a tool-gesture InteractionState from a down-handler's
- * freshly-returned state, without mutating the input. The dispatcher
- * used to write `newState.gesture = { kind: 'tool', … }` directly on
- * the returned object — the audit issue (#444) calls out post-return
- * mutation as the bag-of-flags smell. Returning a new object instead
- * keeps the no-mutation invariant.
+ * Construct a paint-gesture InteractionState from a paint-tool down
+ * handler's freshly-returned state, without mutating the input. Only
+ * paint tools (brush/pencil/eraser) carry the `usedGpuStroke` flag;
+ * splitting them out from the generic `tool` variant means the type
+ * system now guarantees a `tool` gesture can't claim a GPU stroke (#444).
  */
-export function withToolGesture(state: InteractionState, usedGpuStroke: boolean): InteractionState {
-  return { ...state, gesture: { kind: 'tool', usedGpuStroke } };
+export function withPaintGesture(state: InteractionState, usedGpuStroke: boolean): InteractionState {
+  return { ...state, gesture: { kind: 'paint', usedGpuStroke } };
+}
+
+/**
+ * Construct a non-paint tool-gesture InteractionState from a down
+ * handler's freshly-returned state, without mutating the input. The
+ * dispatcher used to write `newState.gesture = { kind: 'tool', … }`
+ * directly on the returned object — the audit issue (#444) calls out
+ * post-return mutation as the bag-of-flags smell.
+ */
+export function withToolGesture(state: InteractionState): InteractionState {
+  return { ...state, gesture: { kind: 'tool' } };
 }
 
 export const GESTURE_IDLE: CanvasGesture = { kind: 'idle' };
