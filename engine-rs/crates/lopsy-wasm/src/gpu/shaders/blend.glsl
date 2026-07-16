@@ -16,6 +16,10 @@ uniform vec2 u_srcOffset;  // layer position in document pixels
 uniform vec2 u_srcSize;    // layer texture size in pixels
 uniform vec2 u_docSize;    // document size in pixels
 uniform int u_srcPremultiplied; // 1 if source is premultiplied alpha
+// When 1, the layer texture wraps modularly across the document — content
+// that overhangs one edge appears on the opposite side. Enabled by the
+// "Wrap" checkbox next to "Dim pattern" in the seamless-preview options.
+uniform int u_wrapLayer;
 uniform int u_overlayEnabled;   // 1 if color overlay is active
 uniform vec3 u_overlayColor;    // overlay color (RGB)
 uniform float u_overlayOpacity; // overlay mix factor
@@ -119,9 +123,19 @@ vec3 blendMode(vec3 s, vec3 d) {
 void main() {
     vec4 dst = texture(u_dstTex, v_uv);
 
-    // Map document UV to layer-local UV
+    // Map document UV to layer-local UV. When u_wrapLayer is on, pick the
+    // integer shift `n` per axis that puts the fragment closest to the
+    // nearest tiled copy of the layer's center — turning overhang on one
+    // edge into coverage on the opposite edge. The shift is applied to
+    // u_srcOffset (not to the layer texture), so repeated moves keep
+    // sampling from the original pixels.
     vec2 docPos = v_uv * u_docSize;
-    vec2 layerUV = (docPos - u_srcOffset) / u_srcSize;
+    vec2 effectiveOffset = u_srcOffset;
+    if (u_wrapLayer == 1) {
+        vec2 n = floor((docPos - u_srcOffset - u_srcSize * 0.5) / u_docSize + 0.5);
+        effectiveOffset = u_srcOffset + n * u_docSize;
+    }
+    vec2 layerUV = (docPos - effectiveOffset) / u_srcSize;
 
     // Outside layer bounds: pass through destination
     if (layerUV.x < 0.0 || layerUV.x > 1.0 || layerUV.y < 0.0 || layerUV.y > 1.0) {
@@ -153,9 +167,10 @@ void main() {
         src.rgb = mix(src.rgb, u_overlayColor, u_overlayOpacity);
     }
 
-    // Apply layer mask: multiply source alpha by mask value
+    // Apply layer mask: multiply source alpha by mask value.
+    // Use the same effectiveOffset so the mask wraps with the layer.
     if (u_hasMask == 1) {
-        vec2 maskUV = (docPos - u_srcOffset) / u_maskSize;
+        vec2 maskUV = (docPos - effectiveOffset) / u_maskSize;
         if (maskUV.x >= 0.0 && maskUV.x <= 1.0 && maskUV.y >= 0.0 && maskUV.y <= 1.0) {
             float maskVal = texture(u_maskTex, maskUV).r;
             src.a *= maskVal;

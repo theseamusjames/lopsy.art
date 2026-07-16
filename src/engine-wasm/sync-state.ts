@@ -47,6 +47,7 @@ export interface TrackedState {
   showRulers: boolean;
   showSeamlessPattern: boolean;
   dimSeamlessPattern: boolean;
+  wrapSeamlessPattern: boolean;
   /** Last channel mask pushed to the engine as an "r,g,b,a" key.
    *  Empty string = unknown (first frame / after reset), forces a push. */
   channelMask: string;
@@ -142,6 +143,7 @@ function createTrackedState(): TrackedState {
     showRulers: false,
     showSeamlessPattern: false,
     dimSeamlessPattern: true,
+    wrapSeamlessPattern: false,
     channelMask: '',
     maskEditLayerId: undefined,
     adjustmentsRef: null,

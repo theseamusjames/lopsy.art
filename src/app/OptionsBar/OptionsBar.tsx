@@ -26,6 +26,8 @@ export function OptionsBar() {
   const showSeamlessPattern = useUIStore((s) => s.showSeamlessPattern);
   const dimSeamlessPattern = useUIStore((s) => s.dimSeamlessPattern);
   const toggleDimSeamlessPattern = useUIStore((s) => s.toggleDimSeamlessPattern);
+  const wrapSeamlessPattern = useUIStore((s) => s.wrapSeamlessPattern);
+  const toggleWrapSeamlessPattern = useUIStore((s) => s.toggleWrapSeamlessPattern);
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
 
@@ -88,6 +90,16 @@ export function OptionsBar() {
                 onChange={toggleDimSeamlessPattern}
               />
               Dim pattern
+            </label>
+          )}
+          {showSeamlessPattern && (
+            <label className={styles.checkbox}>
+              <input
+                type="checkbox"
+                checked={wrapSeamlessPattern}
+                onChange={toggleWrapSeamlessPattern}
+              />
+              Wrap
             </label>
           )}
         </div>

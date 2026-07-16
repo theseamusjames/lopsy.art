@@ -169,6 +169,45 @@ describe('syncChannelVisibility — per-frame diffing (#595 follow-up)', () => {
   });
 });
 
+describe('syncSeamlessPattern — per-frame diffing + wrap flag (#349)', () => {
+  beforeEach(() => {
+    vi.mocked(bridge.setSeamlessPattern).mockClear();
+  });
+
+  it('pushes once for repeated identical state, again when show/dim/wrap changes', () => {
+    const engine = makeFakeEngine();
+    sync.syncSeamlessPattern(engine, false, true, false);
+    // Initial call from cleared tracked state → first push.
+    sync.syncSeamlessPattern(engine, false, true, false);
+    expect(vi.mocked(bridge.setSeamlessPattern)).toHaveBeenCalledTimes(0);
+    // (tracked state initialises to the same values, so the first call above
+    // was a no-op. Turning on `show` should push.)
+    sync.syncSeamlessPattern(engine, true, true, false);
+    expect(vi.mocked(bridge.setSeamlessPattern)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(bridge.setSeamlessPattern)).toHaveBeenLastCalledWith(engine, true, true, false);
+
+    // Flipping wrap independently pushes again — this is the new bit from #349.
+    sync.syncSeamlessPattern(engine, true, true, true);
+    expect(vi.mocked(bridge.setSeamlessPattern)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(bridge.setSeamlessPattern)).toHaveBeenLastCalledWith(engine, true, true, true);
+
+    // Same values three times → no extra pushes.
+    sync.syncSeamlessPattern(engine, true, true, true);
+    sync.syncSeamlessPattern(engine, true, true, true);
+    expect(vi.mocked(bridge.setSeamlessPattern)).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-pushes after resetTrackedState so undo/redo full re-sync includes wrap', () => {
+    const engine = makeFakeEngine();
+    sync.syncSeamlessPattern(engine, true, false, true);
+    expect(vi.mocked(bridge.setSeamlessPattern)).toHaveBeenCalledTimes(1);
+    sync.resetTrackedState(engine);
+    sync.syncSeamlessPattern(engine, true, false, true);
+    expect(vi.mocked(bridge.setSeamlessPattern)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(bridge.setSeamlessPattern)).toHaveBeenLastCalledWith(engine, true, false, true);
+  });
+});
+
 describe('syncMaskEditMode — per-frame diffing (#595 follow-up)', () => {
   beforeEach(() => {
     vi.mocked(bridge.setMaskEditLayer).mockClear();

@@ -201,7 +201,7 @@ function renderFrameGpu(
   syncSelection(engine, selection);
   syncGrid(engine, showGrid, gridSize);
   syncRulers(engine, showRulers);
-  syncSeamlessPattern(engine, uiState.showSeamlessPattern, uiState.dimSeamlessPattern);
+  syncSeamlessPattern(engine, uiState.showSeamlessPattern, uiState.dimSeamlessPattern, uiState.wrapSeamlessPattern);
   syncChannelVisibility(engine, uiState.channelVisibility);
   syncAdjustments(engine, adjustments, adjustmentsEnabled);
   syncGroupAdjustments(engine, layers);

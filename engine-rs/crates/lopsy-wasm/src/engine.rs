@@ -251,6 +251,12 @@ pub struct EngineInner {
     pub path_overlay: Option<String>,
     pub seamless_pattern: bool,
     pub seamless_dim: bool,
+    /// When true (and seamless_pattern is on), layer compositing wraps
+    /// modularly at the document edges — content that overhangs one side
+    /// reappears on the opposite side. The layer texture itself is untouched
+    /// so repeated moves keep transforming the original content, not the
+    /// already-wrapped result.
+    pub seamless_wrap: bool,
     pub channel_mask: [f32; 4],
     pub selection_time: f64,
     /// Per-document image adjustments — exposure/contrast/highlights/
@@ -408,6 +414,7 @@ impl EngineInner {
             path_overlay: None,
             seamless_pattern: false,
             seamless_dim: true,
+            seamless_wrap: false,
             channel_mask: [1.0, 1.0, 1.0, 1.0],
             selection_time: 0.0,
             adjustments: ImageAdjustmentState::default(),
