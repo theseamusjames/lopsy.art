@@ -150,6 +150,7 @@ export interface EditorState {
   copyMerged: () => void;
   cut: () => void;
   paste: () => void;
+  tryPasteInternalCopy: (blob: Blob) => Promise<boolean>;
   pasteImageData: (imageData: ImageData) => void;
   pasteGpuLayer: (layerId: string, width: number, height: number) => void;
 

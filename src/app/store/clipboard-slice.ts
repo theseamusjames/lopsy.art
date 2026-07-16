@@ -12,6 +12,7 @@ import {
   uploadClipboardPixels,
   compositeForExport,
 } from '../../engine-wasm/wasm-bridge';
+import { decodeBlobToRgba, pixelsLikelySame } from './clipboard-image-match';
 import type { ClipboardData, SliceCreator } from './types';
 
 function writeToSystemClipboard(width: number, height: number): void {
@@ -43,6 +44,13 @@ export interface ClipboardSlice {
   copyMerged: () => void;
   cut: () => void;
   paste: () => void;
+  /**
+   * If `blob` is a paste-back of content copied inside the app — same
+   * dimensions AND (near-)identical pixels as the GPU-resident clipboard —
+   * paste it in place at the copied offset and return true. Otherwise return
+   * false so the caller can treat it as an external image.
+   */
+  tryPasteInternalCopy: (blob: Blob) => Promise<boolean>;
   pasteImageData: (imageData: ImageData) => void;
   /** Create a layer for pixels already uploaded to the GPU by decodeAndUploadImage. */
   pasteGpuLayer: (layerId: string, width: number, height: number) => void;
@@ -215,6 +223,30 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
       },
       renderVersion: state.renderVersion + 1,
     });
+  },
+
+  tryPasteInternalCopy: async (blob: Blob): Promise<boolean> => {
+    const clip = get().clipboard;
+    if (!clip) return false;
+    const engine = getEngine();
+    if (!engine) return false;
+
+    const decoded = await decodeBlobToRgba(blob);
+    if (!decoded || decoded.width !== clip.width || decoded.height !== clip.height) return false;
+
+    // read_clipboard_pixels throws when the GPU clipboard texture is gone
+    // (e.g. after the engine was reset by File > New), which also guards
+    // paste() below from operating on a released clipboard.
+    let clipPixels: Uint8Array;
+    try {
+      clipPixels = readClipboardPixels(engine);
+    } catch {
+      return false;
+    }
+    if (!pixelsLikelySame(clipPixels, decoded.data)) return false;
+
+    get().paste();
+    return true;
   },
 
   pasteImageData: (imageData: ImageData) => {

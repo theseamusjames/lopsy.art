@@ -304,6 +304,130 @@ test.describe('Cut/paste ellipse positioning', () => {
 
     await page.screenshot({ path: 'e2e/screenshots/cut-paste-position-no-selection.png' });
   });
+
+  test('system-clipboard paste-back of an internal copy lands at the copied position, not 0,0', async ({ page }) => {
+    // Reproduces the real-browser path that unit-headless tests miss: copy()
+    // mirrors the selection to the system clipboard as a position-less PNG, so
+    // a native Cmd+V paste event carries that image. The handler must recognise
+    // it as our own copy (by matching dimensions AND pixels) and paste in
+    // place, not drop a fresh layer at 0,0.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await createDocument(page, 600, 400, true);
+    await page.waitForTimeout(300);
+
+    await drawEllipse(page, 450, 300, 40, 30, { r: 255, g: 128, b: 0 });
+
+    await setSelection(page, 410, 270, 80, 60);
+    await page.waitForTimeout(100);
+    await page.keyboard.press(`${mod}+KeyC`);
+    await page.waitForTimeout(200);
+
+    const afterCopy = await getEditorState(page);
+    expect(afterCopy.clipboard).not.toBeNull();
+    const offsetX = afterCopy.clipboard!.offsetX;
+    const offsetY = afterCopy.clipboard!.offsetY;
+    expect(offsetX).toBeGreaterThanOrEqual(410);
+    expect(offsetY).toBeGreaterThanOrEqual(270);
+
+    // copy() writes the real copied pixels to the system clipboard asynchronously.
+    await page.waitForFunction(async () => {
+      try {
+        const items = await navigator.clipboard.read();
+        return items.some((it) => it.types.some((t) => t.startsWith('image/')));
+      } catch {
+        return false;
+      }
+    }, undefined, { timeout: 5000 });
+
+    // Dispatch a native paste event carrying the *actual* PNG the OS clipboard
+    // now holds — content that matches the internal clipboard pixel-for-pixel.
+    await page.evaluate(async () => {
+      const items = await navigator.clipboard.read();
+      let blob: Blob | null = null;
+      for (const it of items) {
+        const type = it.types.find((t) => t.startsWith('image/'));
+        if (type) {
+          blob = await it.getType(type);
+          break;
+        }
+      }
+      if (!blob) throw new Error('no image on system clipboard');
+      const file = new File([blob], 'image.png', { type: 'image/png' });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const evt = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+      window.dispatchEvent(evt);
+    });
+
+    await page.waitForFunction(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: Array<{ name: string }> } };
+      };
+      return store.getState().document.layers.some((l) => l.name === 'Pasted Layer');
+    }, { timeout: 5000 });
+
+    const state = await getEditorState(page);
+    const pastedLayer = state.document.layers.find((l) => l.name === 'Pasted Layer');
+    expect(pastedLayer).toBeDefined();
+
+    // The bug: system-clipboard paste-back dropped the layer at 0,0.
+    // The fix: it pastes in place at the copied offset.
+    expect(pastedLayer!.x).toBe(offsetX);
+    expect(pastedLayer!.y).toBe(offsetY);
+    expect(pastedLayer!.x).not.toBe(0);
+    expect(pastedLayer!.y).not.toBe(0);
+  });
+
+  test('external image matching the copied dimensions still pastes as a new external layer at 0,0', async ({ page }) => {
+    // Guards the content-verification path: a *different* image that merely
+    // shares the copied dimensions must NOT be substituted with the internal
+    // clipboard's pixels — it is genuinely external and pastes at 0,0.
+    await createDocument(page, 600, 400, true);
+    await page.waitForTimeout(300);
+
+    await drawEllipse(page, 450, 300, 40, 30, { r: 255, g: 128, b: 0 });
+    await setSelection(page, 410, 270, 80, 60);
+    await page.waitForTimeout(100);
+    await page.keyboard.press(`${mod}+KeyC`);
+    await page.waitForTimeout(200);
+
+    const afterCopy = await getEditorState(page);
+    expect(afterCopy.clipboard).not.toBeNull();
+    const clipW = afterCopy.clipboard!.width;
+    const clipH = afterCopy.clipboard!.height;
+
+    // A solid blue PNG of the same dimensions — same size, different content.
+    await page.evaluate(async ({ w, h }) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = 'rgba(0,0,255,1)';
+      ctx.fillRect(0, 0, w, h);
+      const blob: Blob = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b!), 'image/png'),
+      );
+      const file = new File([blob], 'image.png', { type: 'image/png' });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const evt = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+      window.dispatchEvent(evt);
+    }, { w: clipW, h: clipH });
+
+    await page.waitForFunction(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: Array<{ name: string }> } };
+      };
+      return store.getState().document.layers.some((l) => l.name === 'Pasted Layer');
+    }, { timeout: 5000 });
+
+    const state = await getEditorState(page);
+    const pastedLayer = state.document.layers.find((l) => l.name === 'Pasted Layer');
+    expect(pastedLayer).toBeDefined();
+    // External image → pasted via pasteOrOpenBlob at the origin, not in place.
+    expect(pastedLayer!.x).toBe(0);
+    expect(pastedLayer!.y).toBe(0);
+  });
 });
 
 // ===========================================================================
