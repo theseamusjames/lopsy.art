@@ -1,6 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
+import { createHash } from 'node:crypto';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const port = Number(process.env.VITE_PORT ?? 5174);
+/**
+ * `reuseExistingServer` only checks that *something* listens on the port, not
+ * which checkout is behind it. On a fixed port, a dev server left running in
+ * another worktree gets silently reused and the whole suite runs against that
+ * checkout's code — reporting passes for code it never loaded. Deriving the
+ * default from this checkout's path keeps worktrees on separate ports.
+ *
+ * Reuse within a checkout stays safe: vite serves current disk content, so a
+ * warm server always tracks the working tree.
+ */
+const checkoutRoot = dirname(fileURLToPath(import.meta.url));
+const portOffset = createHash('sha256').update(checkoutRoot).digest().readUInt16BE(0) % 1000;
+const port = Number(process.env.VITE_PORT ?? 41000 + portOffset);
 
 export default defineConfig({
   testDir: './e2e',

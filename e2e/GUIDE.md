@@ -601,8 +601,11 @@ screenshot and verify your assertions without running the test.
 ## Command reference
 
 ```bash
-# Warm the dev server (playwright's webServer config reuses it)
-npx vite --port 5174
+# Warm the dev server (playwright's webServer config reuses it).
+# Pin the port explicitly and pass the same value to playwright, so the
+# two agree:
+VITE_PORT=5174 npx vite --port 5174
+VITE_PORT=5174 npx playwright test
 
 # Run one test file in chromium only
 npx playwright test --project=chromium e2e/<file>.spec.ts
@@ -618,3 +621,25 @@ The WASM build **must** be present in `src/engine-wasm/pkg/` or the app
 fails to initialise and every test times out in `waitForStore`. The
 dev server emits a "WASM is stale" warning when the Rust sources are
 newer than the compiled output — heed it.
+
+### The dev server port is per-checkout
+
+With no `VITE_PORT` set, `playwright.config.ts` derives the port from a
+hash of the checkout path (`41000`–`41999`), so two worktrees never
+land on the same one.
+
+This matters because `reuseExistingServer: true` only checks that
+*something* is listening on the port — not which checkout is behind it.
+On a shared fixed port, a dev server left running in another worktree
+is silently reused, and the entire suite runs against **that** checkout's
+code while reporting passes for code it never loaded. Only tests
+covering code that differs between the two checkouts fail, so the
+symptom looks like a handful of unrelated failures rather than a bad
+server.
+
+Reusing a server from the *same* checkout is always safe — vite serves
+current disk content, so a warm server tracks the working tree (and
+branch switches) automatically.
+
+If you override `VITE_PORT`, pass the same value to both vite and
+playwright, and don't share it across worktrees.
