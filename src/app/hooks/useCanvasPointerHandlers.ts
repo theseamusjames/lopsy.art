@@ -4,6 +4,7 @@ import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { isPanning, POINTER_IDLE, type PointerMode } from '../pointer-mode';
 import { RULER_SIZE } from '../rendering/ruler-constants';
+import { updatePaintLinePreview } from '../interactions/paint-line-preview';
 
 interface Point {
   x: number;
@@ -339,6 +340,14 @@ export function useCanvasPointerHandlers({
         }
       } else if (toolPointerIdRef.current === null && inside) {
         deps.updateHoveredHandle(canvasPos);
+      }
+
+      // #666 — while just hovering (no active tool pointer), update the
+      // paint-line preview so shift-hold draws a live line from the last
+      // painted point to the cursor. Cmd/meta shows the snapped variant.
+      if (!isToolPointer) {
+        const meta = e.metaKey || e.ctrlKey;
+        updatePaintLinePreview(canvasPos, e.shiftKey, meta, inside);
       }
     };
 

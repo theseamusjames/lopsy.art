@@ -7,6 +7,140 @@ use web_sys::WebGl2RenderingContext;
 
 use crate::{Engine, layer_manager};
 
+/// #667 — Fast path: fill an entire layer with a solid color, optionally
+/// restricted to a doc-space selection mask, without ever touching the CPU
+/// flood-fill machinery. Used by the bucket tool when we can prove the fill
+/// covers everything (empty layer + no color match needed) so the caller
+/// avoids the pixel-readback + CPU flood + mask-upload roundtrip.
+///
+/// Runs `flood_fill_apply` with an all-1 pseudo-mask synthesized on the fly
+/// from either the selection mask or a full-coverage upload.
+#[wasm_bindgen(js_name = "bucketFillSolid")]
+pub fn bucket_fill_solid(
+    engine: &mut Engine, layer_id: &str,
+    fill_r: f32, fill_g: f32, fill_b: f32, fill_a: f32,
+    selection_mask: Option<Vec<u8>>, sel_w: u32, sel_h: u32,
+) {
+    let _ = engine.inner.ensure_layer_full_size(layer_id);
+
+    let (w, h, mask_bytes) = if let Some(mask) = selection_mask {
+        (sel_w, sel_h, mask)
+    } else {
+        // No selection — synthesize an all-255 mask sized to the doc.
+        let dw = engine.inner.doc_width;
+        let dh = engine.inner.doc_height;
+        (dw, dh, vec![255u8; (dw as usize) * (dh as usize)])
+    };
+
+    apply_fill_impl(engine, layer_id, fill_r, fill_g, fill_b, fill_a, &mask_bytes, w, h);
+}
+
+/// #667 — Non-contiguous ("fill by color") bucket fill entirely on the GPU.
+/// Compares each layer texel against a reference sampled at the click point;
+/// fills where `channel_delta <= tolerance`. Skips CPU readback + flood fill
+/// so a click on a 5000x4000 layer becomes one shader pass instead of two
+/// full-buffer WASM<->JS round trips.
+///
+/// `doc_x/doc_y` are the click's doc-space coordinates. The selection mask,
+/// when provided, is a doc-sized single-channel buffer (0..255).
+#[wasm_bindgen(js_name = "bucketFillByColorGpu")]
+pub fn bucket_fill_by_color_gpu(
+    engine: &mut Engine, layer_id: &str,
+    doc_x: i32, doc_y: i32,
+    fill_r: f32, fill_g: f32, fill_b: f32, fill_a: f32,
+    tolerance: f32,
+    selection_mask: Option<Vec<u8>>, sel_w: u32, sel_h: u32,
+) {
+    let _ = engine.inner.ensure_layer_full_size(layer_id);
+
+    let tex_handle = match engine.inner.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+    let (tw, th) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+
+    // Convert doc-space click into layer-local, then UV space [0..1].
+    let (layer_x, layer_y) = engine.inner.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| (l.x, l.y))
+        .unwrap_or((0, 0));
+    let sample_lx = doc_x - layer_x;
+    let sample_ly = doc_y - layer_y;
+    if sample_lx < 0 || sample_ly < 0 || sample_lx >= tw as i32 || sample_ly >= th as i32 {
+        // Click landed outside the layer texture — nothing to sample from.
+        return;
+    }
+    let sample_u = (sample_lx as f32 + 0.5) / tw as f32;
+    let sample_v = (sample_ly as f32 + 0.5) / th as f32;
+
+    let layer_tex = match engine.inner.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    // Selection mask (if any) is uploaded into a layer-sized RGBA texture
+    // with the doc mask placed at (-layer_x, -layer_y) — same alignment
+    // machinery as apply_fill_impl.
+    let sel_tex_handle_gl = if let Some(mask) = selection_mask {
+        upload_doc_mask_to_layer_tex(engine, layer_x, layer_y, tw, th, &mask, sel_w, sel_h)
+    } else {
+        None
+    };
+    let sel_tex_gl = sel_tex_handle_gl.and_then(|h| {
+        engine.inner.texture_pool.get(h).cloned().map(|t| (h, t))
+    });
+
+    let gl = &engine.inner.gl;
+    let out_tex_h = match engine.inner.texture_pool.acquire(gl, tw, th) {
+        Ok(h) => h,
+        Err(_) => {
+            if let Some((h, _)) = sel_tex_gl { engine.inner.texture_pool.release(h); }
+            return;
+        }
+    };
+    let out_tex = match engine.inner.texture_pool.get(out_tex_h) {
+        Some(t) => t.clone(),
+        None => {
+            engine.inner.texture_pool.release(out_tex_h);
+            if let Some((h, _)) = sel_tex_gl { engine.inner.texture_pool.release(h); }
+            return;
+        }
+    };
+
+    let has_sel = sel_tex_gl.is_some();
+    let sel_tex_gl_ref = sel_tex_gl.as_ref().map(|(_, t)| t.clone());
+
+    engine.inner.render_to_texture(&out_tex, tw as i32, th as i32, |eng| {
+        let gl = &eng.gl;
+        let shader = &eng.shaders.bucket_fill_color_match;
+        gl.use_program(Some(&shader.program));
+
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        if let Some(loc) = shader.location(gl, "u_layerTex") { gl.uniform1i(Some(&loc), 0); }
+
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        if let Some(t) = &sel_tex_gl_ref {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
+        }
+        if let Some(loc) = shader.location(gl, "u_selMaskTex") { gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(gl, "u_hasSelMask") { gl.uniform1i(Some(&loc), if has_sel { 1 } else { 0 }); }
+        if let Some(loc) = shader.location(gl, "u_sampleUv") { gl.uniform2f(Some(&loc), sample_u, sample_v); }
+        if let Some(loc) = shader.location(gl, "u_fillColor") { gl.uniform4f(Some(&loc), fill_r, fill_g, fill_b, fill_a); }
+        if let Some(loc) = shader.location(gl, "u_tolerance") { gl.uniform1f(Some(&loc), tolerance); }
+
+        eng.draw_fullscreen_quad();
+    });
+
+    if let Some(old) = engine.inner.layer_textures.insert(layer_id.to_string(), out_tex_h) {
+        engine.inner.texture_pool.release(old);
+    }
+    if let Some((h, _)) = sel_tex_gl {
+        engine.inner.texture_pool.release(h);
+    }
+    engine.inner.mark_layer_dirty(layer_id);
+}
+
 // ============================================================
 // Flood Fill
 // ============================================================
@@ -36,22 +170,25 @@ pub fn apply_fill_to_layer(
     fill_r: f32, fill_g: f32, fill_b: f32, fill_a: f32,
     mask: &[u8], width: u32, height: u32,
 ) {
-    // Ensure the layer texture covers at least the document area. This also
-    // re-positions the texture so the layer's own x/y snap to (min(0,x), min(0,y)),
-    // which is what we use below to align the doc-space mask with the layer
-    // texture coordinate system.
+    apply_fill_impl(engine, layer_id, fill_r, fill_g, fill_b, fill_a, mask, width, height);
+}
+
+/// Shared implementation used by `applyFillToLayer` (with a caller-supplied
+/// flood-fill mask) and `bucketFillSolid` (with a synthesized full-coverage
+/// mask). Uploads a layer-sized mask texture, runs `flood_fill_apply`, and
+/// swaps in the resulting texture as the layer's new texture.
+fn apply_fill_impl(
+    engine: &mut Engine, layer_id: &str,
+    fill_r: f32, fill_g: f32, fill_b: f32, fill_a: f32,
+    mask: &[u8], width: u32, height: u32,
+) {
     let _ = engine.inner.ensure_layer_full_size(layer_id);
 
-    let gl = &engine.inner.gl;
     let tex_handle = match engine.inner.layer_textures.get(layer_id) {
         Some(&h) => h,
         None => return,
     };
     let (w, h) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-
-    // After ensure_layer_full_size, layer.x and layer.y are <= 0 and
-    // layer.width/height cover at least the document. Doc-space (dx, dy) maps
-    // to layer-local (dx - layer.x, dy - layer.y).
     let (layer_x, layer_y) = engine.inner.layer_stack.iter()
         .find(|l| l.id == layer_id)
         .map(|l| (l.x, l.y))
@@ -62,45 +199,12 @@ pub fn apply_fill_to_layer(
         None => return,
     };
 
-    // Build a layer-sized mask with the doc-space mask placed at
-    // (-layer_x, -layer_y). Sampling both the layer tex and the mask with the
-    // same v_uv (the shader's design) only aligns them when the textures are
-    // the same size.
-    let mask_tex = match engine.inner.texture_pool.acquire(gl, w, h) {
-        Ok(h) => h,
-        Err(_) => return,
+    let mask_tex = match upload_doc_mask_to_layer_tex(engine, layer_x, layer_y, w, h, mask, width, height) {
+        Some(h) => h,
+        None => return,
     };
-    let mut mask_rgba = vec![0u8; (w * h * 4) as usize];
-    let offset_x = -layer_x;
-    let offset_y = -layer_y;
-    let doc_w = width as i32;
-    let doc_h = height as i32;
-    let tex_w = w as i32;
-    let tex_h = h as i32;
-    for dy in 0..doc_h {
-        let ly = dy + offset_y;
-        if ly < 0 || ly >= tex_h { continue; }
-        for dx in 0..doc_w {
-            let lx = dx + offset_x;
-            if lx < 0 || lx >= tex_w { continue; }
-            let si = (dy * doc_w + dx) as usize;
-            let v = if si < mask.len() { mask[si] } else { 0 };
-            let di = ((ly * tex_w + lx) * 4) as usize;
-            mask_rgba[di] = v;
-            mask_rgba[di + 1] = 0;
-            mask_rgba[di + 2] = 0;
-            mask_rgba[di + 3] = 255;
-        }
-    }
-    let _ = engine.inner.texture_pool.upload_rgba(
-        gl, mask_tex, 0, 0, w, h, &mask_rgba,
-    );
 
-    // Allocate an output texture the same size as the layer tex. We render the
-    // fill shader into it (sampling the old layer tex), then swap it in as the
-    // new layer tex. Using a layer-sized output avoids the scratch textures,
-    // which are only doc-sized and would clip writes when the layer extends
-    // past the document bounds (e.g. after ensure_layer_full_size expanded it).
+    let gl = &engine.inner.gl;
     let out_tex_h = match engine.inner.texture_pool.acquire(gl, w, h) {
         Ok(h) => h,
         Err(_) => {
@@ -124,28 +228,60 @@ pub fn apply_fill_to_layer(
         gl.use_program(Some(&shader.program));
         gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = shader.location(gl, "u_layerTex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
+        if let Some(loc) = shader.location(gl, "u_layerTex") { gl.uniform1i(Some(&loc), 0); }
         gl.active_texture(WebGl2RenderingContext::TEXTURE1);
         if let Some(t) = &mask_tex_gl {
             gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
         }
-        if let Some(loc) = shader.location(gl, "u_maskTex") {
-            gl.uniform1i(Some(&loc), 1);
-        }
-        if let Some(loc) = shader.location(gl, "u_fillColor") {
-            gl.uniform4f(Some(&loc), fill_r, fill_g, fill_b, fill_a);
-        }
+        if let Some(loc) = shader.location(gl, "u_maskTex") { gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(gl, "u_fillColor") { gl.uniform4f(Some(&loc), fill_r, fill_g, fill_b, fill_a); }
         eng.draw_fullscreen_quad();
     });
 
-    // Swap: the new output texture becomes the layer's texture.
     if let Some(old) = engine.inner.layer_textures.insert(layer_id.to_string(), out_tex_h) {
         engine.inner.texture_pool.release(old);
     }
     engine.inner.texture_pool.release(mask_tex);
     engine.inner.mark_layer_dirty(layer_id);
+}
+
+/// Convert a doc-space single-channel mask into a layer-sized RGBA texture,
+/// placing it at (-layer_x, -layer_y) so the shader can sample the mask with
+/// the same UVs as the layer texture. Returns the texture handle, or None on
+/// allocation failure.
+fn upload_doc_mask_to_layer_tex(
+    engine: &mut Engine,
+    layer_x: i32, layer_y: i32,
+    tex_w: u32, tex_h: u32,
+    doc_mask: &[u8], doc_w: u32, doc_h: u32,
+) -> Option<crate::gpu::texture_pool::TextureHandle> {
+    let gl = &engine.inner.gl;
+    let mask_tex = engine.inner.texture_pool.acquire(gl, tex_w, tex_h).ok()?;
+
+    let mut mask_rgba = vec![0u8; (tex_w as usize) * (tex_h as usize) * 4];
+    let offset_x = -layer_x;
+    let offset_y = -layer_y;
+    let doc_wi = doc_w as i32;
+    let doc_hi = doc_h as i32;
+    let tex_wi = tex_w as i32;
+    let tex_hi = tex_h as i32;
+    for dy in 0..doc_hi {
+        let ly = dy + offset_y;
+        if ly < 0 || ly >= tex_hi { continue; }
+        for dx in 0..doc_wi {
+            let lx = dx + offset_x;
+            if lx < 0 || lx >= tex_wi { continue; }
+            let si = (dy * doc_wi + dx) as usize;
+            let v = if si < doc_mask.len() { doc_mask[si] } else { 0 };
+            let di = ((ly * tex_wi + lx) * 4) as usize;
+            mask_rgba[di] = v;
+            mask_rgba[di + 1] = 0;
+            mask_rgba[di + 2] = 0;
+            mask_rgba[di + 3] = 255;
+        }
+    }
+    let _ = engine.inner.texture_pool.upload_rgba(gl, mask_tex, 0, 0, tex_w, tex_h, &mask_rgba);
+    Some(mask_tex)
 }
 
 #[wasm_bindgen(js_name = "readLayerPixelsForFill")]

@@ -3,19 +3,36 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const floodFill = vi.fn();
 const applyFillToLayer = vi.fn();
 const readLayerPixelsForFill = vi.fn();
+const bucketFillSolid = vi.fn();
+const bucketFillByColorGpu = vi.fn();
 const fillQuickMask = vi.fn();
 const fillMask = vi.fn();
 const uploadLayerMask = vi.fn();
 const readMaskTexture = vi.fn();
+// #667 fast-path branches ask the engine for the layer texture dimensions to
+// decide "is this layer effectively empty?". Default to a full-size texture
+// so the existing "regular content" tests still hit the CPU flood-fill path;
+// the empty-layer test flips this to (1, 1) locally.
+const getLayerTextureDimensions = vi.fn((..._args: unknown[]) => new Uint32Array([64, 64]));
 
 vi.mock('../../engine-wasm/wasm-bridge', () => ({
   floodFill: (...args: unknown[]) => floodFill(...args),
   applyFillToLayer: (...args: unknown[]) => applyFillToLayer(...args),
   readLayerPixelsForFill: (...args: unknown[]) => readLayerPixelsForFill(...args),
+  bucketFillSolid: (...args: unknown[]) => bucketFillSolid(...args),
+  bucketFillByColorGpu: (...args: unknown[]) => bucketFillByColorGpu(...args),
+  getLayerTextureDimensions: (...args: unknown[]) => getLayerTextureDimensions(...args),
   fillQuickMask: (...args: unknown[]) => fillQuickMask(...args),
   fillMask: (...args: unknown[]) => fillMask(...args),
   uploadLayerMask: (...args: unknown[]) => uploadLayerMask(...args),
   readMaskTexture: (...args: unknown[]) => readMaskTexture(...args),
+}));
+
+// #667 empty-layer fast path also consults the pixel-data manager to
+// distinguish "lazy 1x1 texture, no JS pixel data" from "cleared full-size
+// texture, JS pixel data queued". Stub both accessors as always-empty here.
+vi.mock('../../engine/pixel-data-manager', () => ({
+  pixelDataManager: { get: () => null, getSparse: () => null },
 }));
 
 let engine: { __engine: string } | null = { __engine: 'mock' };

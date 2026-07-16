@@ -173,8 +173,6 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     originalSelectionMask: persistent?.originalMask ?? null,
     originalSelectionMaskWidth: persistent?.maskWidth ?? 0,
     originalSelectionMaskHeight: persistent?.maskHeight ?? 0,
-    moveOriginalMask: null,
-    moveOriginalBounds: null,
   };
 
   uiState.setActiveTransformHandle(hit);
@@ -224,8 +222,6 @@ function handleSelectionTransformDown(
     originalSelectionMask: null,
     originalSelectionMaskWidth: 0,
     originalSelectionMaskHeight: 0,
-    moveOriginalMask: null,
-    moveOriginalBounds: null,
   };
 
   uiState.setActiveTransformHandle(hit);

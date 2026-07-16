@@ -1,5 +1,5 @@
 import type { InteractionState, InteractionContext } from '../../app/interactions/interaction-types';
-import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
+import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from '../../app/interactions/interaction-types';
 import type { SelectionToolStrategy, SelectionToolId, SelectionUpContext } from '../../app/interactions/selection-strategy';
 import type { Point } from '../../types';
 import { useUIStore } from '../../app/ui-store';
@@ -33,7 +33,7 @@ export const marqueeStrategy: SelectionToolStrategy = {
       }
       ctx.floatingSelectionRef.current = null;
       ctx.persistentTransformRef.current = null;
-      return {
+      const base: InteractionState = {
         drawing: true,
         lastPoint: canvasPos,
         layerId: activeLayerId,
@@ -42,9 +42,11 @@ export const marqueeStrategy: SelectionToolStrategy = {
         layerStartX: 0,
         layerStartY: 0,
         ...DEFAULT_TRANSFORM_FIELDS,
-        moveOriginalMask: new Uint8ClampedArray(sel.mask),
-        moveOriginalBounds: sel.bounds ? { ...sel.bounds } : null,
       };
+      return withMoveGesture(base, {
+        originalMask: new Uint8ClampedArray(sel.mask),
+        originalBounds: sel.bounds ? { ...sel.bounds } : null,
+      });
     }
     useUIStore.getState().setTransform(null);
     ctx.persistentTransformRef.current = null;
@@ -68,7 +70,8 @@ export const marqueeStrategy: SelectionToolStrategy = {
   onMove(state: InteractionState, canvasPos: Point, metaKey: boolean): void {
     if (!state.startPoint) return;
 
-    if (state.moveOriginalMask && state.moveOriginalBounds) {
+    const move = state.gesture.kind === 'move' ? state.gesture : null;
+    if (move?.originalMask && move.originalBounds) {
       const dx = Math.round(canvasPos.x - state.startPoint.x);
       const dy = Math.round(canvasPos.y - state.startPoint.y);
       setMarqueePreview({ kind: 'move', dx, dy });
@@ -122,13 +125,14 @@ export const marqueeStrategy: SelectionToolStrategy = {
     // Commit a moved selection: translate the original mask by the final
     // delta. Only the original bounding box holds content, so the copy walks
     // that region rather than the whole document.
-    if (state.moveOriginalMask && state.moveOriginalBounds) {
+    const move = state.gesture.kind === 'move' ? state.gesture : null;
+    if (move?.originalMask && move.originalBounds) {
       if (!preview || preview.kind !== 'move' || (preview.dx === 0 && preview.dy === 0)) {
         return;
       }
       const { dx, dy } = preview;
-      const orig = state.moveOriginalBounds;
-      const srcMask = state.moveOriginalMask;
+      const orig = move.originalBounds;
+      const srcMask = move.originalMask;
       const newMask = new Uint8ClampedArray(srcMask.length);
       const rx0 = Math.max(0, Math.floor(orig.x));
       const ry0 = Math.max(0, Math.floor(orig.y));

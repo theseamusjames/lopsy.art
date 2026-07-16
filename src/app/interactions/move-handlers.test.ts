@@ -95,14 +95,14 @@ import {
   flushQuickMaskDrag,
 } from './move-handlers';
 import type { InteractionState, FloatingSelection, PersistentTransform } from './interaction-types';
-import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
+import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 
 function makeMoveState(overrides: Partial<InteractionState> = {}): InteractionState {
   const mask = new Uint8ClampedArray(DOC_W * DOC_H);
   for (let y = 5; y < 10; y++) {
     for (let x = 5; x < 10; x++) mask[y * DOC_W + x] = 255;
   }
-  return {
+  const base: InteractionState = {
     drawing: true,
     lastPoint: { x: 0, y: 0 },
     layerId: 'layer-1',
@@ -111,10 +111,12 @@ function makeMoveState(overrides: Partial<InteractionState> = {}): InteractionSt
     layerStartX: 0,
     layerStartY: 0,
     ...DEFAULT_TRANSFORM_FIELDS,
-    moveOriginalMask: mask,
-    moveOriginalBounds: { x: 5, y: 5, width: 5, height: 5 },
     ...overrides,
   };
+  return withMoveGesture(base, {
+    originalMask: mask,
+    originalBounds: { x: 5, y: 5, width: 5, height: 5 },
+  });
 }
 
 function makeFloatRef(): { current: FloatingSelection | null } {

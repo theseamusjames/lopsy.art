@@ -352,6 +352,7 @@ export function useCanvasInteraction(
           return;
         case 'paint':
         case 'tool':
+        case 'move':
           break;
       }
 
@@ -505,6 +506,7 @@ export function useCanvasInteraction(
       case 'idle':
       case 'paint':
       case 'tool':
+      case 'move':
         break;
     }
 
@@ -563,9 +565,12 @@ export function useCanvasInteraction(
       }
     }
 
-    // Save last paint point for shift+click line drawing
+    // Save last paint point for shift+click line drawing. Mirror the ref
+    // into ui-store so the pointer-move handler can compute a preview line
+    // while shift is held before the next click (#666).
     if (PAINT_TOOLS.has(state.tool) && state.lastPoint && state.layerId) {
       lastPaintPointRef.current = { point: state.lastPoint, layerId: state.layerId };
+      useUIStore.getState().setLastPaintPoint({ point: state.lastPoint, layerId: state.layerId });
     }
 
     // Finalize transform handle drag: keep the GPU float alive so subsequent

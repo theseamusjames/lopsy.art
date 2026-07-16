@@ -104,6 +104,7 @@ pub const GRADIENT_RADIAL_FRAG: &str = include_str!("shaders/gradient/gradient_r
 // Shape
 pub const SHAPE_FILL_FRAG: &str = include_str!("shaders/shape/shape_fill.glsl");
 pub const FLOOD_FILL_APPLY_FRAG: &str = include_str!("shaders/shape/flood_fill_apply.glsl");
+pub const BUCKET_FILL_COLOR_MATCH_FRAG: &str = include_str!("shaders/shape/bucket_fill_color_match.glsl");
 
 // Selection
 pub const MARCHING_ANTS_FRAG: &str = include_str!("shaders/selection/marching_ants.glsl");
@@ -321,6 +322,7 @@ pub struct ShaderPrograms {
     // Shape
     pub shape_fill: ShaderProgram,
     pub flood_fill_apply: ShaderProgram,
+    pub bucket_fill_color_match: ShaderProgram,
     // Selection
     pub marching_ants: ShaderProgram,
     // Color
@@ -448,6 +450,7 @@ impl ShaderPrograms {
             // Shape
             shape_fill: compile_program(gl, v, SHAPE_FILL_FRAG)?,
             flood_fill_apply: compile_program(gl, v, FLOOD_FILL_APPLY_FRAG)?,
+            bucket_fill_color_match: compile_program(gl, v, BUCKET_FILL_COLOR_MATCH_FRAG)?,
             // Selection
             marching_ants: compile_program(gl, v, MARCHING_ANTS_FRAG)?,
             // Color
