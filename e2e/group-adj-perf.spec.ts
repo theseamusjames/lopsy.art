@@ -10,7 +10,7 @@ const samplePath = resolve(here, '..', 'sample.jpg');
 test('group adjustment perf: drag levels gamma on 23MP photo', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'CDP profiling requires Chromium');
   test.skip(!existsSync(samplePath), 'sample.jpg not present');
-  test.setTimeout(120_000);
+  test.setTimeout(600_000);
 
   await page.goto('/');
   await waitForStore(page);

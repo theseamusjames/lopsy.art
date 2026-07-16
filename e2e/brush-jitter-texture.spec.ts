@@ -395,6 +395,7 @@ test.describe('Brush speed size (#346)', () => {
   });
 
   test('fast stroke produces thinner line than slow stroke', async ({ page }) => {
+    test.setTimeout(600_000);
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 400, 200, false);

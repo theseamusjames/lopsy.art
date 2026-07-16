@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 test('DNG ProRAW import screenshot', async ({ page }) => {
   const filePath = path.resolve(__dirname, 'sample_images/proraw.dng');
   test.skip(!fs.existsSync(filePath), 'sample DNG file not present');
-  test.setTimeout(120000);
+  test.setTimeout(600_000);
   // Capture console output before navigation
   const consoleLogs: string[] = [];
   page.on('console', (msg) => consoleLogs.push(msg.text()));

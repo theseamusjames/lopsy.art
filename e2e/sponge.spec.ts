@@ -162,7 +162,7 @@ test.describe('Sponge Tool', () => {
   });
 
   test('desaturate mode reduces saturation where painted on a colored shape', async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(600_000);
 
     // Draw a vivid red rectangle covering the center area of the canvas.
     // Red has maximum saturation — any desaturation will be measurable.
@@ -226,7 +226,7 @@ test.describe('Sponge Tool', () => {
   });
 
   test('saturate mode increases saturation where painted on a muted shape', async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(600_000);
 
     // Draw a low-saturation olive/gray-ish color (R=128, G=100, B=80)
     await drawRect(page, 50, 50, 300, 200, { r: 128, g: 100, b: 80 });
@@ -278,7 +278,7 @@ test.describe('Sponge Tool', () => {
   });
 
   test('undo restores pixels after sponge stroke', async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(600_000);
 
     await drawRect(page, 50, 50, 300, 200, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(300);

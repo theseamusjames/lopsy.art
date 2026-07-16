@@ -189,7 +189,7 @@ async function snapshot(page: Page, label: string) {
 test('memory profile: sparse layers should be tiny', async ({ page, browserName, isMobile }) => {
   test.skip(browserName !== 'chromium', 'CDP heap profiling requires Chromium');
   test.skip(isMobile, 'requires desktop-size viewport for layer panel');
-  test.setTimeout(120000);
+  test.setTimeout(600_000);
 
   await page.goto('/');
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);

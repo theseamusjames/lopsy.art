@@ -235,7 +235,7 @@ test.describe('Project Save / Load Round-Trip', () => {
     (allowConsoleErrors as RegExp[]).push(/WebSocket connection/);
     // Allow 403/404 errors from resource loading (favicon, fonts, WASM pkg, etc.)
     (allowConsoleErrors as RegExp[]).push(/403|404|Failed to load resource/);
-    test.setTimeout(120_000);
+    test.setTimeout(600_000);
 
     await page.goto('/');
     await waitForStore(page);

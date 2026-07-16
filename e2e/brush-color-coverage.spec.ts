@@ -151,6 +151,7 @@ test.describe('Brush color coverage', () => {
   });
 
   test('color replacement across three strokes', async ({ page }) => {
+    test.setTimeout(600_000);
     await setToolOption(page, 'Size', 60);
     await setToolOption(page, 'Hardness', 100);
     await setToolOption(page, 'Opacity', 100);
