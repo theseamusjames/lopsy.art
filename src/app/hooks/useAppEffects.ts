@@ -4,6 +4,7 @@ import { useUIStore } from '../ui-store';
 import { commitTextEditing } from '../../tools/text/text-interaction';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { markAllLayersDirty } from '../../engine-wasm/engine-sync';
+import { installPaintLinePreviewKeyListener } from '../interactions/paint-line-preview';
 
 interface AppEffectsDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -49,6 +50,10 @@ export function useAppEffects({
     });
     return unsub;
   }, []);
+
+  // #666 — track shift/meta key changes so the paint-line preview updates
+  // when the user presses/releases the modifier without moving the mouse.
+  useEffect(() => installPaintLinePreviewKeyListener(), []);
 
   // Resize observer
   useEffect(() => {

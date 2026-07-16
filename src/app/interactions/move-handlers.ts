@@ -22,7 +22,7 @@ import type {
   FloatingSelection,
   PersistentTransform,
 } from './interaction-types';
-import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
+import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
@@ -169,7 +169,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // marquee (issue #315). The layer texture stays untouched.
   if (isQuickMaskMode && sel.active && sel.mask) {
     const snapshot = snapshotQuickMaskPixels();
-    return {
+    const base: InteractionState = {
       drawing: true,
       lastPoint: canvasPos,
       layerId: activeLayerId,
@@ -178,12 +178,14 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       layerStartX: 0,
       layerStartY: 0,
       ...DEFAULT_TRANSFORM_FIELDS,
-      moveOriginalMask: new Uint8ClampedArray(sel.mask),
-      moveOriginalBounds: { ...sel.bounds! },
+    };
+    return withMoveGesture(base, {
+      originalMask: new Uint8ClampedArray(sel.mask),
+      originalBounds: { ...sel.bounds! },
       quickMaskOriginalPixels: snapshot?.pixels ?? null,
       quickMaskOriginalWidth: snapshot?.width ?? 0,
       quickMaskOriginalHeight: snapshot?.height ?? 0,
-    };
+    });
   }
 
   // Option+drag with no selection: duplicate layer first, then move the copy
@@ -272,7 +274,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     // Clear persistentTransformRef — transform is committed
     persistentTransformRef.current = null;
     const floatRef = floatingSelectionRef.current!;
-    return {
+    const baseFloat: InteractionState = {
       drawing: true,
       lastPoint: canvasPos,
       layerId: activeLayerId,
@@ -281,9 +283,11 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       layerStartX: 0,
       layerStartY: 0,
       ...DEFAULT_TRANSFORM_FIELDS,
-      moveOriginalMask: floatRef.originalMask,
-      moveOriginalBounds: floatRef.originalBounds,
     };
+    return withMoveGesture(baseFloat, {
+      originalMask: floatRef.originalMask,
+      originalBounds: floatRef.originalBounds,
+    });
   }
 
   // Crop the layer to content bounds before moving so that only opaque
@@ -294,7 +298,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     (l) => l.id === activeLayerId,
   );
 
-  return {
+  const baseWholeLayer: InteractionState = {
     drawing: true,
     lastPoint: canvasPos,
     layerId: activeLayerId,
@@ -304,6 +308,11 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     layerStartY: croppedLayer?.y ?? activeLayer.y,
     ...DEFAULT_TRANSFORM_FIELDS,
   };
+  // Whole-layer move (no marquee): the move gesture still owns its
+  // "no snapshot needed" state so consumers can pattern-match on
+  // `state.gesture.kind === 'move'` regardless of whether pixels or a
+  // marquee are being translated.
+  return withMoveGesture(baseWholeLayer, {});
 }
 
 export function handleMoveMove(
@@ -314,6 +323,8 @@ export function handleMoveMove(
   if (!state.startPoint) return;
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);
   const dragDy = Math.round(canvasPos.y - state.startPoint.y);
+  // #444 — move-tool snapshots live on the `move` gesture variant.
+  const move = state.gesture.kind === 'move' ? state.gesture : null;
 
   // Quick-mask + marquee move: translate both the marquee outline AND the
   // painted quick-mask content under it (issue #315). The layer texture is
@@ -321,8 +332,9 @@ export function handleMoveMove(
   if (
     useUIStore.getState().maskMode === 'quickMask'
     && !floatingSelectionRef.current
-    && state.moveOriginalMask
-    && state.moveOriginalBounds
+    && move
+    && move.originalMask
+    && move.originalBounds
   ) {
     const edState = useEditorStore.getState();
     const { width: docW, height: docH } = edState.document;
@@ -335,13 +347,13 @@ export function handleMoveMove(
     // per rendered frame.
     if (
       !quickMaskMaskTarget
-      || quickMaskMaskTarget.origMask !== state.moveOriginalMask
+      || quickMaskMaskTarget.origMask !== move.originalMask
       || quickMaskMaskTarget.docW !== docW
       || quickMaskMaskTarget.docH !== docH
     ) {
       quickMaskMaskTarget = {
-        origMask: state.moveOriginalMask,
-        origBounds: { ...state.moveOriginalBounds },
+        origMask: move.originalMask,
+        origBounds: { ...move.originalBounds },
         docW,
         docH,
         lastAppliedDx: Number.NaN,
@@ -354,19 +366,19 @@ export function handleMoveMove(
     // coalesce to rAF so a 250Hz pen tablet issues one upload per
     // rendered frame, not one per pointer event.
     if (
-      state.quickMaskOriginalPixels
-      && state.quickMaskOriginalWidth === docW
-      && state.quickMaskOriginalHeight === docH
+      move.quickMaskOriginalPixels
+      && move.quickMaskOriginalWidth === docW
+      && move.quickMaskOriginalHeight === docH
     ) {
       if (
         !quickMaskDragTarget
-        || quickMaskDragTarget.origPixels !== state.quickMaskOriginalPixels
+        || quickMaskDragTarget.origPixels !== move.quickMaskOriginalPixels
         || quickMaskDragTarget.docW !== docW
         || quickMaskDragTarget.docH !== docH
       ) {
         quickMaskDragTarget = {
-          origPixels: state.quickMaskOriginalPixels,
-          origMask: state.moveOriginalMask,
+          origPixels: move.quickMaskOriginalPixels,
+          origMask: move.originalMask,
           docW,
           docH,
           lastAppliedDx: Number.NaN,
@@ -399,12 +411,12 @@ export function handleMoveMove(
     // during the drag. The marching ants renderer already applies the
     // transform offset via ctx.translate(). The mask is materialized
     // once in handleMoveUp.
-    if (state.moveOriginalBounds) {
+    if (move?.originalBounds) {
       const newBounds = {
-        x: state.moveOriginalBounds.x + dx,
-        y: state.moveOriginalBounds.y + dy,
-        width: state.moveOriginalBounds.width,
-        height: state.moveOriginalBounds.height,
+        x: move.originalBounds.x + dx,
+        y: move.originalBounds.y + dy,
+        width: move.originalBounds.width,
+        height: move.originalBounds.height,
       };
       useEditorStore.getState().setSelectionBounds(newBounds);
       useUIStore.getState().setTransform(createTransformState(newBounds));
@@ -482,12 +494,13 @@ export function handleMoveUp(
 
   // Materialize the translated selection mask now that the drag is done.
   // During the drag we only updated bounds to avoid per-move mask copies.
-  if (state.moveOriginalMask && state.moveOriginalBounds) {
+  const moveGesture = state.gesture.kind === 'move' ? state.gesture : null;
+  if (moveGesture?.originalMask && moveGesture.originalBounds) {
     const edState = useEditorStore.getState();
     const { width: docW, height: docH } = edState.document;
     const dx = floatingSelectionRef.current.offsetX;
     const dy = floatingSelectionRef.current.offsetY;
-    const origMask = state.moveOriginalMask;
+    const origMask = moveGesture.originalMask;
     const newMask = new Uint8ClampedArray(docW * docH);
     for (let y = 0; y < docH; y++) {
       for (let x = 0; x < docW; x++) {
@@ -499,10 +512,10 @@ export function handleMoveUp(
       }
     }
     const newBounds = {
-      x: state.moveOriginalBounds.x + dx,
-      y: state.moveOriginalBounds.y + dy,
-      width: state.moveOriginalBounds.width,
-      height: state.moveOriginalBounds.height,
+      x: moveGesture.originalBounds.x + dx,
+      y: moveGesture.originalBounds.y + dy,
+      width: moveGesture.originalBounds.width,
+      height: moveGesture.originalBounds.height,
     };
     edState.setSelection(newBounds, newMask, docW, docH);
   }

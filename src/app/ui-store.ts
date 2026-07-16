@@ -172,8 +172,25 @@ interface UIState {
   cursorPosition: Point;
   cursorOnCanvas: boolean;
   gradientPreview: { start: Point; end: Point } | null;
+  /**
+   * #666 — Origin of the next shift-click line for paint tools (brush,
+   * pencil, eraser). The paint handlers set this on pointer-up so the
+   * pointer-move handler can materialize a preview line while shift is
+   * held. `point` is layer-local; `layerId` is the layer it was painted
+   * on (so we suppress the preview when the active layer changes).
+   */
+  lastPaintPoint: { point: Point; layerId: string } | null;
+  /**
+   * #666 — Preview line drawn while the user is hovering with shift held
+   * after painting a point. `snapped` is true when meta/cmd is also held
+   * and the line has been locked to the nearest 15° angle. Points are in
+   * layer-local coords (matches `lastPaintPoint.point`).
+   */
+  paintLinePreview: { start: Point; end: Point; snapped: boolean } | null;
   setCursorPosition: (pos: Point) => void;
   setCursorOnCanvas: (onCanvas: boolean) => void;
+  setLastPaintPoint: (p: { point: Point; layerId: string } | null) => void;
+  setPaintLinePreview: (preview: { start: Point; end: Point; snapped: boolean } | null) => void;
   setMaskEditMode: (mode: boolean) => void;
   toggleQuickMaskMode: () => void;
   /** Open a modal, replacing any that was already open. */
@@ -312,8 +329,12 @@ export const useUIStore = create<UIState>((set, get) => ({
   setAdjustments: (adj) => set({ adjustments: adj }),
   setAdjustmentsEnabled: (enabled) => set({ adjustmentsEnabled: enabled }),
   gradientPreview: null,
+  lastPaintPoint: null,
+  paintLinePreview: null,
   setCursorPosition: (pos) => set({ cursorPosition: pos }),
   setCursorOnCanvas: (onCanvas) => set({ cursorOnCanvas: onCanvas }),
+  setLastPaintPoint: (p) => set({ lastPaintPoint: p, paintLinePreview: null }),
+  setPaintLinePreview: (preview) => set({ paintLinePreview: preview }),
   setMaskEditMode: (mode) => set({ maskMode: mode ? 'layerMask' : 'off' }),
   toggleQuickMaskMode: () => set((state) => ({
     maskMode: state.maskMode === 'quickMask' ? 'off' : 'quickMask',
@@ -360,12 +381,15 @@ export const useUIStore = create<UIState>((set, get) => ({
     const current = useUIStore.getState();
     if (current.activeTool === tool) return;
     toolRegistry[current.activeTool]?.onDeactivate?.();
+    // #666 — leaving a paint tool means the shift-line origin is stale.
+    // Suppress the preview until the user paints a fresh point.
+    const preview = null;
     if (current.activeTool === 'path' && tool !== 'path') {
-      set({ activeTool: tool, pathDraft: null });
+      set({ activeTool: tool, pathDraft: null, paintLinePreview: preview });
     } else if (current.activeTool === 'crop' && tool !== 'crop') {
-      set({ activeTool: tool, perspectiveCropQuad: null, perspectiveCropDragging: null });
+      set({ activeTool: tool, perspectiveCropQuad: null, perspectiveCropDragging: null, paintLinePreview: preview });
     } else {
-      set({ activeTool: tool });
+      set({ activeTool: tool, paintLinePreview: preview });
     }
     toolRegistry[tool]?.onActivate?.();
   },

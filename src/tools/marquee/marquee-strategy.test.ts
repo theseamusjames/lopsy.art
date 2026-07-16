@@ -77,7 +77,7 @@ vi.mock('../../app/tool-settings-store', () => ({
 import { marqueeStrategy } from './marquee-strategy';
 import { getMarqueePreview, setMarqueePreview } from './marquee-preview';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
-import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
+import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from '../../app/interactions/interaction-types';
 import type { SelectionUpContext } from '../../app/interactions/selection-strategy';
 
 function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContext {
@@ -159,8 +159,10 @@ describe('marquee onDown', () => {
       drawing: true,
       tool: 'marquee-rect',
       startPoint: { x: 10, y: 10 },
-      moveOriginalMask: null,
     });
+    // A fresh selection drag is not a move gesture — the move-specific
+    // payload only appears when the click lands inside an existing sel.
+    expect(state?.gesture.kind).not.toBe('move');
     expect(uiState.setTransform).toHaveBeenCalledWith(null);
     expect(ctx.floatingSelectionRef.current).toBeNull();
     expect(ctx.persistentTransformRef.current).toBeNull();
@@ -177,9 +179,10 @@ describe('marquee onDown', () => {
       maskHeight: DOC_H,
     };
     const state = marqueeStrategy.onDown(makeCtx(), 'marquee-rect');
-    expect(state?.moveOriginalMask).toBeInstanceOf(Uint8ClampedArray);
-    expect(state?.moveOriginalMask).not.toBe(mask); // defensive copy
-    expect(state?.moveOriginalBounds).toEqual({ x: 10, y: 10, width: 1, height: 1 });
+    if (state?.gesture.kind !== 'move') throw new Error('expected a move gesture');
+    expect(state.gesture.originalMask).toBeInstanceOf(Uint8ClampedArray);
+    expect(state.gesture.originalMask).not.toBe(mask); // defensive copy
+    expect(state.gesture.originalBounds).toEqual({ x: 10, y: 10, width: 1, height: 1 });
     expect(uiState.setTransform).not.toHaveBeenCalled();
   });
 
@@ -221,7 +224,9 @@ describe('marquee onDown', () => {
       maskHeight: DOC_H,
     };
     const state = marqueeStrategy.onDown(makeCtx({ canvasPos: { x: 10, y: 10 } }), 'marquee-rect');
-    expect(state?.moveOriginalMask).toBeNull();
+    // Fresh drag (not a move) even with an active selection because the
+    // click landed outside its mask.
+    expect(state?.gesture.kind).not.toBe('move');
     expect(uiState.setTransform).toHaveBeenCalledWith(null);
   });
 });
@@ -283,11 +288,13 @@ describe('marquee onMove — creating a selection', () => {
 
 describe('marquee onMove — moving an existing selection', () => {
   it('previews the move delta without rebuilding or committing a mask', () => {
-    const state = makeState({
-      startPoint: { x: 0, y: 0 },
-      moveOriginalMask: new Uint8ClampedArray(100),
-      moveOriginalBounds: { x: 2, y: 2, width: 2, height: 2 },
-    });
+    const state = withMoveGesture(
+      makeState({ startPoint: { x: 0, y: 0 } }),
+      {
+        originalMask: new Uint8ClampedArray(100),
+        originalBounds: { x: 2, y: 2, width: 2, height: 2 },
+      },
+    );
     marqueeStrategy.onMove!(state, { x: 3, y: 2 }, false);
     expect(editorState.setSelection).not.toHaveBeenCalled();
     expect(getMarqueePreview()).toEqual({ kind: 'move', dx: 3, dy: 2 });
@@ -329,11 +336,10 @@ describe('marquee onUp', () => {
     src[3 * 10 + 2] = 255;
     src[3 * 10 + 3] = 255;
     setMarqueePreview({ kind: 'move', dx: 3, dy: 2 });
-    const state = makeState({
-      startPoint: { x: 0, y: 0 },
-      moveOriginalMask: src,
-      moveOriginalBounds: { x: 2, y: 2, width: 2, height: 2 },
-    });
+    const state = withMoveGesture(
+      makeState({ startPoint: { x: 0, y: 0 } }),
+      { originalMask: src, originalBounds: { x: 2, y: 2, width: 2, height: 2 } },
+    );
     marqueeStrategy.onUp!(state, { x: 3, y: 2 }, makeUpCtx(3, 2));
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
@@ -349,11 +355,10 @@ describe('marquee onUp', () => {
     const src = new Uint8ClampedArray(10 * 10);
     src[0] = 255; // pixel at (0,0)
     setMarqueePreview({ kind: 'move', dx: -3, dy: -3 });
-    const state = makeState({
-      startPoint: { x: 0, y: 0 },
-      moveOriginalMask: src,
-      moveOriginalBounds: { x: 0, y: 0, width: 1, height: 1 },
-    });
+    const state = withMoveGesture(
+      makeState({ startPoint: { x: 0, y: 0 } }),
+      { originalMask: src, originalBounds: { x: 0, y: 0, width: 1, height: 1 } },
+    );
     marqueeStrategy.onUp!(state, { x: -3, y: -3 }, makeUpCtx(-3, -3));
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
@@ -365,9 +370,9 @@ describe('marquee onUp', () => {
 
   it('leaves the selection untouched when a move ends with no delta', () => {
     setMarqueePreview({ kind: 'move', dx: 0, dy: 0 });
-    const state = makeState({
-      moveOriginalMask: new Uint8ClampedArray(4),
-      moveOriginalBounds: { x: 0, y: 0, width: 2, height: 2 },
+    const state = withMoveGesture(makeState(), {
+      originalMask: new Uint8ClampedArray(4),
+      originalBounds: { x: 0, y: 0, width: 2, height: 2 },
     });
     marqueeStrategy.onUp!(state, { x: 50, y: 50 }, makeUpCtx(50, 50));
     expect(editorState.clearSelection).not.toHaveBeenCalled();

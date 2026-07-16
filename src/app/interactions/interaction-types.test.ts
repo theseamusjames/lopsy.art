@@ -142,8 +142,6 @@ const makeBaseState = (overrides: Partial<InteractionState> = {}): InteractionSt
   originalSelectionMask: null,
   originalSelectionMaskWidth: 0,
   originalSelectionMaskHeight: 0,
-  moveOriginalMask: null,
-  moveOriginalBounds: null,
   ...overrides,
 });
 

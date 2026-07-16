@@ -170,6 +170,41 @@ export function renderCropPreview(
   ctx.restore();
 }
 
+/**
+ * #666 — Preview line for shift-hold paint-tool line drawing. Rendered
+ * while shift is held and a `lastPaintPoint` exists on the active layer.
+ * A blue "snapped" line marks that cmd/meta is locking to 15° intervals.
+ */
+export function renderPaintLinePreview(
+  ctx: CanvasRenderingContext2D,
+  preview: { start: Point; end: Point; snapped: boolean } | null,
+  zoom: number,
+): void {
+  if (!preview) return;
+
+  const { start, end, snapped } = preview;
+
+  ctx.save();
+  ctx.setLineDash([]);
+
+  // White under-stroke for contrast on dark artwork, thin black over-stroke.
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.5 / zoom;
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+  ctx.lineTo(end.x, end.y);
+  ctx.stroke();
+
+  ctx.strokeStyle = snapped ? '#2196f3' : '#000000';
+  ctx.lineWidth = 0.75 / zoom;
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+  ctx.lineTo(end.x, end.y);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 export function renderGradientPreview(
   ctx: CanvasRenderingContext2D,
   gradientPreview: { start: Point; end: Point } | null,

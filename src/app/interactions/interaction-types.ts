@@ -17,6 +17,23 @@ import type { TransformHandle, TransformState } from '../../tools/transform/tran
 export type CanvasGesture =
   | { kind: 'idle' }
   | { kind: 'paint'; usedGpuStroke: boolean }
+  | {
+      /**
+       * Move-tool drag. #444 — split out from the catch-all `tool` variant
+       * so the move-specific payload (marquee snapshot, quick-mask pixel
+       * snapshot) lives inline on the gesture instead of hanging on
+       * InteractionState as optional fields.
+       */
+      kind: 'move';
+      originalMask: Uint8ClampedArray | null;
+      originalBounds: Rect | null;
+      /** Quick-mask pixels captured at drag-start so we can translate the
+       *  painted mask content with the marquee (#315). docW*docH bytes,
+       *  single-channel. Null when not moving in quick-mask mode. */
+      quickMaskOriginalPixels: Uint8Array | null;
+      quickMaskOriginalWidth: number;
+      quickMaskOriginalHeight: number;
+    }
   | { kind: 'tool' }
   | { kind: 'liquify'; lastPoint: Point }
   | { kind: 'tiltShift' }
@@ -62,6 +79,35 @@ export function withToolGesture(state: InteractionState): InteractionState {
   return { ...state, gesture: { kind: 'tool' } };
 }
 
+/**
+ * Construct an InteractionState for the move-tool drag, packing the marquee
+ * snapshot and quick-mask pixel snapshot inline on the gesture variant.
+ * The optional `moveOriginal*` / `quickMaskOriginal*` fields on
+ * InteractionState were removed in favour of this payload (#444).
+ */
+export function withMoveGesture(
+  state: InteractionState,
+  payload: {
+    originalMask?: Uint8ClampedArray | null;
+    originalBounds?: Rect | null;
+    quickMaskOriginalPixels?: Uint8Array | null;
+    quickMaskOriginalWidth?: number;
+    quickMaskOriginalHeight?: number;
+  },
+): InteractionState {
+  return {
+    ...state,
+    gesture: {
+      kind: 'move',
+      originalMask: payload.originalMask ?? null,
+      originalBounds: payload.originalBounds ?? null,
+      quickMaskOriginalPixels: payload.quickMaskOriginalPixels ?? null,
+      quickMaskOriginalWidth: payload.quickMaskOriginalWidth ?? 0,
+      quickMaskOriginalHeight: payload.quickMaskOriginalHeight ?? 0,
+    },
+  };
+}
+
 export const GESTURE_IDLE: CanvasGesture = { kind: 'idle' };
 
 /**
@@ -84,8 +130,6 @@ export const INITIAL_INTERACTION_STATE: InteractionState = {
   originalSelectionMask: null,
   originalSelectionMaskWidth: 0,
   originalSelectionMaskHeight: 0,
-  moveOriginalMask: null,
-  moveOriginalBounds: null,
 };
 
 /**
@@ -134,15 +178,14 @@ export interface InteractionState {
   hardnessJitterPrevTarget?: number;
   hardnessJitterTransitionDist?: number;
   hardnessJitterDistTraveled?: number;
-  moveOriginalMask: Uint8ClampedArray | null;
-  moveOriginalBounds: Rect | null;
-  /** Quick-mask pixels captured at drag-start so we can translate the
-   *  painted mask content with the marquee (#315). docW * docH bytes,
-   *  single-channel (0..255). Only set when moving inside quick-mask mode
-   *  with an active marquee. */
-  quickMaskOriginalPixels?: Uint8Array | null;
-  quickMaskOriginalWidth?: number;
-  quickMaskOriginalHeight?: number;
+  /**
+   * NOTE (#444): move-tool fields (`moveOriginalMask`, `moveOriginalBounds`,
+   * `quickMaskOriginal*`) used to live here as optional top-level fields.
+   * They now live inline on the `move` variant of `CanvasGesture` — see
+   * `withMoveGesture`. Access via `state.gesture.kind === 'move' &&
+   * state.gesture.originalMask` etc. so the type system enforces they're
+   * only touched during a move gesture.
+   */
 }
 
 export const DEFAULT_TRANSFORM_FIELDS = {
@@ -151,8 +194,6 @@ export const DEFAULT_TRANSFORM_FIELDS = {
   originalSelectionMask: null as Uint8ClampedArray | null,
   originalSelectionMaskWidth: 0,
   originalSelectionMaskHeight: 0,
-  moveOriginalMask: null as Uint8ClampedArray | null,
-  moveOriginalBounds: null as Rect | null,
 };
 
 export interface FloatingSelection {

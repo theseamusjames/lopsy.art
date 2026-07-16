@@ -3,11 +3,15 @@ import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
+import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   floodFill as wasmFloodFill,
   applyFillToLayer as wasmApplyFillToLayer,
   readLayerPixelsForFill as wasmReadLayerPixelsForFill,
+  bucketFillSolid as wasmBucketFillSolid,
+  bucketFillByColorGpu as wasmBucketFillByColorGpu,
+  getLayerTextureDimensions,
   fillQuickMask as wasmFillQuickMask,
   fillMask as wasmFillMask,
   uploadLayerMask,
@@ -88,7 +92,45 @@ export function handleFillDown(ctx: InteractionContext): void {
       return;
     }
   }
+  const selMaskBytes = (selection.active && selection.mask)
+    ? new Uint8Array(selection.mask.buffer, selection.mask.byteOffset, selection.mask.byteLength)
+    : null;
+  const selW = selection.active ? selection.maskWidth : 0;
+  const selH = selection.active ? selection.maskHeight : 0;
 
+  // #667 fast path — empty layer + no JS pixel data yet means the GPU
+  // texture is still lazy (1x1) or hasn't been painted since alloc. The
+  // flood fill would cover everything regardless of contiguous/tolerance,
+  // so skip the readback + CPU flood + mask upload roundtrip entirely.
+  if (isLayerEffectivelyEmpty(engine, activeLayerId)) {
+    wasmBucketFillSolid(
+      engine, activeLayerId,
+      color.r / 255, color.g / 255, color.b / 255, color.a,
+      selMaskBytes ?? undefined, selW, selH,
+    );
+    clearJsPixelData(activeLayerId);
+    editorState.notifyRender();
+    return;
+  }
+
+  // #667 fast path — non-contiguous fill ("fill by color") is a pure
+  // per-pixel color-match. Run it as a single shader pass instead of
+  // reading 80MB back to JS + walking every pixel on CPU.
+  if (!contiguous) {
+    wasmBucketFillByColorGpu(
+      engine, activeLayerId,
+      canvasX, canvasY,
+      color.r / 255, color.g / 255, color.b / 255, color.a,
+      tolerance / 255,
+      selMaskBytes ?? undefined, selW, selH,
+    );
+    clearJsPixelData(activeLayerId);
+    editorState.notifyRender();
+    return;
+  }
+
+  // Contiguous fill: BFS is sequential — still runs on CPU via the
+  // WASM flood-fill routine — but we compose the result on GPU.
   const pixelData = wasmReadLayerPixelsForFill(engine, activeLayerId);
   const fillMask = wasmFloodFill(
     pixelData, docW, docH,
@@ -111,4 +153,24 @@ export function handleFillDown(ctx: InteractionContext): void {
   );
   clearJsPixelData(activeLayerId);
   editorState.notifyRender();
+}
+
+/**
+ * True when the layer has no committed content — its GPU texture is still
+ * the lazy 1x1 placeholder and there's no JS pixel buffer waiting to sync.
+ * Both conditions matter: a freshly-added layer has 1x1 GPU + no JS data;
+ * a layer that was cleared retains a doc-sized (all-transparent) texture.
+ */
+function isLayerEffectivelyEmpty(
+  engine: ReturnType<typeof getEngine>,
+  layerId: string,
+): boolean {
+  if (!engine) return false;
+  const dims = getLayerTextureDimensions(engine, layerId);
+  const w = dims[0] ?? 0;
+  const h = dims[1] ?? 0;
+  if (w > 1 || h > 1) return false;
+  if (pixelDataManager.get(layerId)) return false;
+  if (pixelDataManager.getSparse(layerId)) return false;
+  return true;
 }

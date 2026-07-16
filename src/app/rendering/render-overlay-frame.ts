@@ -8,7 +8,7 @@ import { renderSelectionAnts, renderTransformHandles, renderMarqueeDraftAnts } f
 import { getMarqueePreview } from '../../tools/marquee/marquee-preview';
 import { createTransformState, type TransformState } from '../../tools/transform/transform';
 import { renderMeshWarpOverlay } from './render-mesh-warp';
-import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderBrushCursor, renderStampSourcePreview, renderSymmetryCenter, renderPerspectiveCropOverlay } from './render-overlays';
+import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderPaintLinePreview, renderBrushCursor, renderStampSourcePreview, renderSymmetryCenter, renderPerspectiveCropOverlay } from './render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './render-text-overlay';
 import { hitTestTextLayer } from '../../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './render-guides';
@@ -52,6 +52,7 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
   const perspectiveCropQuad = uiState.perspectiveCropQuad;
   const transform = uiState.transform;
   const gradientPreview = uiState.gradientPreview;
+  const paintLinePreview = uiState.paintLinePreview;
   const showGuides = uiState.showGuides;
   const guides = uiState.guides;
   const snapLines = uiState.snapLines;
@@ -118,6 +119,7 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
     renderPerspectiveCropOverlay(overlayCtx, perspectiveCropQuad, viewport.zoom);
   }
   renderGradientPreview(overlayCtx, gradientPreview, viewport.zoom);
+  renderPaintLinePreview(overlayCtx, paintLinePreview, viewport.zoom);
 
   // Text tool overlays
   const textDrag = uiState.textDrag;
