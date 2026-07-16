@@ -267,11 +267,13 @@ export function BrushModal() {
               </div>
             </div>
             <div className={styles.sliderSection}>
-              <Slider label="Size" value={brushSize} min={1} max={sizeMax} onChange={setBrushSize} />
+              {/* #664 — pin drag ranges to a usable interval; text input
+                  still accepts up to the document-scaled max. */}
+              <Slider label="Size" value={brushSize} min={1} max={sizeMax} sliderMax={300} onChange={setBrushSize} />
               <Slider label="Spacing" value={brushSpacing} min={1} max={200} onChange={setBrushSpacing} />
               <Slider label="Hardness" value={brushHardness} min={0} max={100} onChange={setBrushHardness} />
               <Slider label="Opacity" value={brushOpacity} min={1} max={100} onChange={setBrushOpacity} />
-              <Slider label="Taper" value={brushTaper} min={0} max={taperMax} onChange={setBrushTaper} suffix="px" />
+              <Slider label="Taper" value={brushTaper} min={0} max={taperMax} sliderMax={1000} onChange={setBrushTaper} suffix="px" />
             </div>
             <div className={styles.angleRow}>
               <AngleControl angle={brushAngle} onAngleChange={setBrushAngle} />

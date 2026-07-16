@@ -34,22 +34,26 @@ export function DropShadowForm({ shadow, onChange, onDragStart }: DropShadowForm
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
-          <Slider label="Offset X" value={shadow.offsetX} min={-offsetAbs} max={offsetAbs} onChange={(v) => onChange({ ...shadow, offsetX: v })} onDragStart={onDragStart} />
+          {/* #664: `max` accepts wide document-scaled input via the text
+              field, but the drag range is pinned to a usable ±200px so
+              on a 5000px canvas a slider drag isn't hunting one-pixel
+              precision across the whole width. */}
+          <Slider label="Offset X" value={shadow.offsetX} min={-offsetAbs} max={offsetAbs} sliderMin={-200} sliderMax={200} onChange={(v) => onChange({ ...shadow, offsetX: v })} onDragStart={onDragStart} />
         </div>
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
-          <Slider label="Offset Y" value={shadow.offsetY} min={-offsetAbs} max={offsetAbs} onChange={(v) => onChange({ ...shadow, offsetY: v })} onDragStart={onDragStart} />
+          <Slider label="Offset Y" value={shadow.offsetY} min={-offsetAbs} max={offsetAbs} sliderMin={-200} sliderMax={200} onChange={(v) => onChange({ ...shadow, offsetY: v })} onDragStart={onDragStart} />
         </div>
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
-          <Slider label="Blur" value={shadow.blur} min={0} max={blurMax} onChange={(v) => onChange({ ...shadow, blur: v })} onDragStart={onDragStart} />
+          <Slider label="Blur" value={shadow.blur} min={0} max={blurMax} sliderMax={200} onChange={(v) => onChange({ ...shadow, blur: v })} onDragStart={onDragStart} />
         </div>
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
-          <Slider label="Spread" value={shadow.spread} min={0} max={spreadMax} onChange={(v) => onChange({ ...shadow, spread: v })} onDragStart={onDragStart} />
+          <Slider label="Spread" value={shadow.spread} min={0} max={spreadMax} sliderMax={200} onChange={(v) => onChange({ ...shadow, spread: v })} onDragStart={onDragStart} />
         </div>
       </div>
       <div className={styles.row}>

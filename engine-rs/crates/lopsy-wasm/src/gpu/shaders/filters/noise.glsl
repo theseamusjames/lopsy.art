@@ -5,6 +5,10 @@ in vec2 v_uv;
 uniform sampler2D u_tex;
 uniform float u_amount;
 uniform bool u_monochrome;
+// #668 — 0: uniform distribution (previous default); 1: Gaussian via
+// Box-Muller. Gaussian noise is visually softer and looks more like
+// real sensor / film grain.
+uniform bool u_gaussian;
 uniform float u_seed;
 out vec4 fragColor;
 
@@ -31,14 +35,38 @@ vec3 hash3(vec2 p) {
     return vec3(v) / 4294967295.0;
 }
 
+// Convert two uniform values in (0,1] into one Gaussian sample via
+// Box-Muller. We use only the cos branch — the sin branch is discarded
+// (single sample per invocation) which is fine here since we call this
+// for each channel with a separate pair of uniforms.
+float gaussian_from_uniform(float u1, float u2) {
+    // Nudge u1 off zero so log() stays finite.
+    float safe_u1 = max(u1, 1.0e-6);
+    // Scale down so ±3σ maps to ±0.5 amplitude (matches uniform range).
+    return sqrt(-2.0 * log(safe_u1)) * cos(6.28318530718 * u2) * (1.0 / 6.0);
+}
+
 void main() {
     vec4 c = texture(u_tex, v_uv);
     vec2 coord = gl_FragCoord.xy;
-    vec3 n = hash3(coord);
-    if (u_monochrome) {
-        c.rgb += (n.x - 0.5) * u_amount;
+    vec3 n1 = hash3(coord);
+    if (u_gaussian) {
+        // Need a second batch of uniforms for the sin/cos pair.
+        vec3 n2 = hash3(coord + vec2(37.0, 71.0));
+        if (u_monochrome) {
+            float g = gaussian_from_uniform(n1.x, n2.x);
+            c.rgb += vec3(g) * u_amount;
+        } else {
+            c.r += gaussian_from_uniform(n1.x, n2.x) * u_amount;
+            c.g += gaussian_from_uniform(n1.y, n2.y) * u_amount;
+            c.b += gaussian_from_uniform(n1.z, n2.z) * u_amount;
+        }
     } else {
-        c.rgb += (n - 0.5) * u_amount;
+        if (u_monochrome) {
+            c.rgb += (n1.x - 0.5) * u_amount;
+        } else {
+            c.rgb += (n1 - 0.5) * u_amount;
+        }
     }
     fragColor = vec4(clamp(c.rgb, 0.0, 1.0), c.a);
 }

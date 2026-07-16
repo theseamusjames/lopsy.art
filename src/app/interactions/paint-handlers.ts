@@ -91,11 +91,31 @@ function packDabLine(from: Point, to: Point, size: number): Float64Array {
   return arr;
 }
 
+/**
+ * #666 — When shift-click drawing a straight line, holding cmd/meta snaps
+ * the end point to the nearest 15° angle relative to the line's origin.
+ * Mirrors the gradient tool's snap behavior. Returns the possibly-snapped
+ * point in the same coordinate space as `end`.
+ */
+function snapPointToLineAngle(end: Point, start: Point): Point {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist === 0) return end;
+  const rawAngle = Math.atan2(dy, dx);
+  const snapRad = Math.PI / 12; // 15 degrees
+  const snappedAngle = Math.round(rawAngle / snapRad) * snapRad;
+  return {
+    x: start.x + dist * Math.cos(snappedAngle),
+    y: start.y + dist * Math.sin(snappedAngle),
+  };
+}
+
 export function handlePaintDown(
   ctx: InteractionContext,
   tool: PaintTool,
 ): InteractionState | undefined {
-  const { canvasPos, layerPos, activeLayer, activeLayerId, shiftKey, lastPaintPointRef } = ctx;
+  const { activeLayer, activeLayerId, shiftKey, metaKey, lastPaintPointRef } = ctx;
   const toolSettings = useToolSettingsStore.getState();
 
   useUIStore.getState().setIsStroking(true);
@@ -103,6 +123,19 @@ export function handlePaintDown(
   const shiftLine = shiftKey
     && lastPaintPointRef.current
     && lastPaintPointRef.current.layerId === activeLayerId;
+
+  // #666: while shift-click drawing a line, cmd/meta snaps to 15° angle
+  // intervals from the line's origin, matching the gradient tool.
+  let canvasPos = ctx.canvasPos;
+  let layerPos = ctx.layerPos;
+  if (shiftLine && metaKey) {
+    const originLayer = lastPaintPointRef.current!.point;
+    const snappedLayer = snapPointToLineAngle(layerPos, originLayer);
+    const dx = snappedLayer.x - layerPos.x;
+    const dy = snappedLayer.y - layerPos.y;
+    layerPos = snappedLayer;
+    canvasPos = { x: canvasPos.x + dx, y: canvasPos.y + dy };
+  }
   const lineFrom = shiftLine ? lastPaintPointRef.current!.point : layerPos;
 
   const editorState = useEditorStore.getState();

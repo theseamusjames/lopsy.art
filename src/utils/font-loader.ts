@@ -60,19 +60,38 @@ export function loadGoogleFont(family: string, weights: readonly number[]): Prom
  * where slug = family.toLowerCase().replace(/\s+/g, '')
  * and FamilyNoSpaces = family.replace(/\s+/g, '')
  *
- * We try all three license directories (ofl, apache, ufl).
+ * We try all three license directories (ofl, apache, ufl) and several
+ * filename patterns because Google Fonts uses inconsistent conventions:
+ *   - Static fonts:            {Family}-{WeightName}.ttf
+ *   - Italic-only fonts:       {Family}-Italic.ttf (e.g. Molle)
+ *   - Variable fonts:          {Family}-VariableFont_wght.ttf
+ *                              {Family}[wght].ttf
+ *                              {Family}[opsz,wght].ttf
+ *
+ * #665 — before adding the italic-only + variable-font fallbacks, roughly
+ * 10% of Google fonts (Molle, Playwrite AU/HR/…, Amarante and others)
+ * failed to load because only `-Regular.ttf` was probed.
  */
 function githubTtfUrls(family: string, weight: number): string[] {
   const slug = family.toLowerCase().replace(/\s+/g, '');
   const noSpaces = family.replace(/\s+/g, '');
   const weightName = WEIGHT_NAMES[weight] ?? 'Regular';
-  const filename = `${noSpaces}-${weightName}.ttf`;
-  // Variable fonts moved static variants to a `static/` subdirectory. Try
-  // the top-level path first (older/non-variable fonts), then static/.
-  return LICENSE_DIRS.flatMap(dir => [
-    `${GOOGLE_FONTS_GH_CDN}/${dir}/${slug}/${filename}`,
-    `${GOOGLE_FONTS_GH_CDN}/${dir}/${slug}/static/${filename}`,
-  ]);
+  const filenames = [
+    `${noSpaces}-${weightName}.ttf`,
+    `${noSpaces}-Italic.ttf`,                // italic-only families (Molle, Kirang Haerang etc.)
+    `${noSpaces}-VariableFont_wght.ttf`,      // simple variable-weight fonts
+    `${noSpaces}-VariableFont_opsz,wght.ttf`, // opsz+wght variable fonts
+    `${noSpaces}[wght].ttf`,                  // bracket-syntax variable fonts
+    `${noSpaces}[opsz,wght].ttf`,             // opsz+wght bracket syntax
+  ];
+  const paths: string[] = [];
+  for (const dir of LICENSE_DIRS) {
+    for (const fn of filenames) {
+      paths.push(`${GOOGLE_FONTS_GH_CDN}/${dir}/${slug}/${fn}`);
+      paths.push(`${GOOGLE_FONTS_GH_CDN}/${dir}/${slug}/static/${fn}`);
+    }
+  }
+  return paths;
 }
 
 /**

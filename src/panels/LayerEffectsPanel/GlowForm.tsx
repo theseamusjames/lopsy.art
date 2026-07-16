@@ -33,12 +33,15 @@ export function GlowForm({ glow, onChange, onDragStart }: GlowFormProps) {
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
-          <Slider label="Size" value={glow.size} min={0} max={sizeMax} onChange={(v) => onChange({ ...glow, size: v })} onDragStart={onDragStart} />
+          {/* #664 — sliderMax caps the drag range at ~200px so precise
+              tuning on large canvases stays practical; the text input
+              accepts the full document-scaled max. */}
+          <Slider label="Size" value={glow.size} min={0} max={sizeMax} sliderMax={200} onChange={(v) => onChange({ ...glow, size: v })} onDragStart={onDragStart} />
         </div>
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
-          <Slider label="Spread" value={glow.spread} min={0} max={spreadMax} onChange={(v) => onChange({ ...glow, spread: v })} onDragStart={onDragStart} />
+          <Slider label="Spread" value={glow.spread} min={0} max={spreadMax} sliderMax={200} onChange={(v) => onChange({ ...glow, spread: v })} onDragStart={onDragStart} />
         </div>
       </div>
       <div className={styles.row}>

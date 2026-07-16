@@ -15,6 +15,13 @@
   white-space: nowrap;
 }
 
+.zoom {
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
 .number {
   font-family: var(--font-mono);
   color: var(--color-text-primary);
