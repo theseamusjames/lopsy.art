@@ -29,13 +29,16 @@ describe('computeCreateDocument', () => {
     expect(result.document!.backgroundColor).toEqual({ r: 0, g: 0, b: 0, a: 0 });
   });
 
-  it('creates empty pixel data for transparent background', () => {
+  it('skips pixel data allocation for transparent background (#667)', () => {
+    // A fresh transparent Background layer used to be handed an all-
+    // zero ImageData of the full doc size — but that data got uploaded
+    // straight to the GPU, promoting the layer texture from lazy 1x1
+    // to doc-sized and forcing the paint-bucket fast path (empty-layer
+    // detection) to miss. The layer is now left with no pixel data
+    // entry so the GPU texture stays lazy and the fast path fires.
     const result = computeCreateDocument(2, 2, true);
     const layerId = result.document!.layers[0]!.id;
-    const imgData = result.layerPixelData!.get(layerId)!;
-    for (let i = 0; i < imgData.data.length; i++) {
-      expect(imgData.data[i]).toBe(0);
-    }
+    expect(result.layerPixelData!.has(layerId)).toBe(false);
     expect(result.document!.backgroundColor).toEqual({ r: 0, g: 0, b: 0, a: 0 });
   });
 

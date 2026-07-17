@@ -11,16 +11,22 @@ export function computeCreateDocument(
 ): ActionResult {
   const bgLayer = createRasterLayer({ name: 'Background', width, height });
   const pixelData = new Map<string, ImageData>();
-  const imgData = createImageData(width, height);
+  // #667 — Only allocate + upload pixel data when it's actually non-zero.
+  // A fresh transparent Background layer used to be handed an 80MB all-
+  // zero ImageData that got pushed straight to the GPU, promoting the
+  // layer's texture from lazy 1x1 to doc-sized and forcing the paint-
+  // bucket's slow path (readback → CPU flood → upload) on the very
+  // first fill. Leaving it lazy keeps the fast path viable.
   if (!transparentBg) {
+    const imgData = createImageData(width, height);
     for (let i = 0; i < imgData.data.length; i += 4) {
       imgData.data[i] = 255;
       imgData.data[i + 1] = 255;
       imgData.data[i + 2] = 255;
       imgData.data[i + 3] = 255;
     }
+    pixelData.set(bgLayer.id, imgData);
   }
-  pixelData.set(bgLayer.id, imgData);
 
   const childIds = [bgLayer.id];
   const layers: Layer[] = [bgLayer];
@@ -28,6 +34,8 @@ export function computeCreateDocument(
   let activeLayerId = bgLayer.id;
 
   if (!transparentBg) {
+    // Layer 1 is empty (transparent) — don't allocate zero-filled pixel
+    // data for it. See the note above on the Background layer.
     const drawLayer = createRasterLayer({ name: 'Layer 1', width, height });
     layers.push(drawLayer);
     layerOrder.push(drawLayer.id);
