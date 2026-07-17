@@ -31,7 +31,7 @@ import {
   withPaintGesture,
   withToolGesture,
 } from './interactions/interaction-types';
-import { handleTransformDown } from './interactions/transform-handlers';
+import { handleTransformDown, flushSelectionTransform } from './interactions/transform-handlers';
 import {
   handleMeshWarpDown,
   handleMeshWarpMove,
@@ -498,6 +498,10 @@ export function useCanvasInteraction(
         return;
       case 'transform':
         if (state.gesture.selectionOnly) {
+          // Drain any pointer-move that's still parked in the coalescer's
+          // rAF slot — otherwise the final drag position is dropped if the
+          // browser fires pointer-up before the next frame boundary.
+          flushSelectionTransform();
           useUIStore.getState().setActiveTransformHandle(null);
           stateRef.current = { ...INITIAL_INTERACTION_STATE };
           return;
