@@ -53,7 +53,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - Tip hardness is implemented as an inner-glow falloff: the tip alpha is inverted, Gaussian-blurred, normalized, then multiplied back in as an opacity mask. This preserves the tip silhouette while softening edges — corners and straight edges soften proportionally to their distance from the interior, so non-circular tips (Square, Star, Slash, Leaf) don't degenerate into circular blobs when hardness is reduced.
 
 **Stroke modifiers**
-- **Shift+click**: draws a straight line from the previous stroke endpoint to the click point
+- **Shift+click**: draws a straight line from the previous stroke endpoint to the click point (see Straight-Line Strokes below for the shared cross-tool behavior, the live preview, and the 15° snap)
 - **Hold-to-smooth**: pause the cursor mid-stroke for ~1500 ms and the recorded freehand path is auto-smoothed and re-rasterized in place. The path is first tested for straightness — if every point lies within a tolerance of the first→last line it is replaced with a perfect straight segment; the tolerance is the larger of **4 px** or **10% of the stroke length**, so long strokes with small relative wobble still snap straight. Otherwise the path is simplified with Ramer-Douglas-Peucker (9 px epsilon) and re-interpolated as a Catmull-Rom spline. Undo restores the freehand version first, then the pre-stroke state.
   - **Applies to the Brush only**, requires the GPU stroke path, and is disabled while `maskMode` is set — so it never fires when painting a layer mask or in Quick Mask.
   - **The re-raster does not carry every brush parameter.** It emits uniform dabs carrying size, hardness, opacity, color, and symmetry only: angle jitter and opacity jitter are hard-coded to zero, and taper, fade, scatter, and sub-brushes are not routed through at all. A heavily scattered / jittered / tapered / sub-brush tip therefore visibly changes character the moment hold-to-smooth fires.
@@ -104,7 +104,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Strength**: 0 - 100% (how far pixels are pulled along the stroke)
 - Shortcut: `R`
 - Pulls colors along the stroke direction, blending neighbouring pixels.
-- **Shift+click**: smudges along a straight line from the previous stroke endpoint
+- **Shift+click**: the straight-line smudge is implemented but does not fire after a smudge stroke — smudge is not registered as a paint tool, so its strokes never record a line origin. See the Smudge caveat under Straight-Line Strokes.
 
 ### Spray
 - **Size**: 1 - 500 px (base range; auto-scaled by document size)
@@ -113,6 +113,36 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Softness**: 0 - 100% (per-dot hardness falloff)
 - Shortcut: `J`
 - Holding the cursor still keeps emitting dots at ~6 Hz so paint accumulates over time, mimicking an airbrush. Dragging spreads dots along the path with automatic spacing scaled to brush size.
+- **No shift+click straight line**: unlike the other paint tools, the spray handler never reads the shift key, so shift+click sprays a normal dab at the click point. A shift-hold line preview *is* drawn (see below) even though clicking will not follow it.
+
+### Straight-Line Strokes (shared across paint tools)
+
+After you finish a stroke, its endpoint is remembered as the origin for a straight-line stroke. **Shift+click** then paints a straight line from that origin to the click point instead of a single dab. The origin is only remembered per layer — switching the active layer discards it.
+
+**Which tools support it**
+
+| Tool | Shift+click line | Cmd/Meta 15° snap | Notes |
+|------|------------------|-------------------|-------|
+| Brush, Pencil, Eraser | yes | yes | the full behavior |
+| Dodge / Burn, Sponge | yes | no | line only, no angle snap |
+| Clone Stamp, Healing Brush | yes | no | Cmd is already taken — see below |
+| Spray | no | no | preview draws, click does not follow it |
+| Smudge | not on its own | no | see the caveat below |
+
+- **Cmd/Meta+shift**: while shift-clicking a line, holding Cmd/Meta snaps the endpoint to the nearest **15°** increment about the origin (matching the gradient tool's snap). This is implemented only in the shared brush/pencil/eraser handler — the other paint tools draw an unsnapped line.
+- **Clone Stamp / Healing Brush caveat**: those two tools branch on `Alt || Cmd` to set the clone source *before* any shift-line handling, so Cmd+shift+click **re-sets the source point and paints nothing** rather than snapping. Use Alt to set the source and plain shift+click for lines.
+- **Smudge caveat**: the smudge handler implements shift-line smudging, but smudge is not registered as a paint tool, so a smudge stroke never records an endpoint. Shift+click therefore does nothing after a smudge stroke; it only fires if the *previous* stroke came from a different paint tool on the same layer (e.g. brush, then switch to smudge, then shift+click). Smudge also draws no shift-hold preview.
+
+**Shift-hold line preview**
+
+Holding **Shift** while hovering the canvas draws a live hairline showing exactly where the straight-line stroke will land, before you commit it.
+
+- **Requires a prior stroke** on the **active layer** — a shift-hover on a fresh document or a just-switched layer shows nothing.
+- Drawn for every registered paint tool (brush, pencil, eraser, clone stamp, healing brush, dodge/burn, sponge, spray) — note this includes spray and excludes smudge, neither of which matches its actual shift+click behavior.
+- **Style**: a solid (undashed) hairline — a 1.5 px white under-stroke for contrast against dark artwork, over-stroked at 0.75 px in **black** normally or **blue** (`#2196f3`) while the 15° snap is engaged, so the color tells you whether the angle is snapped. Widths are divided by zoom, so the line stays ~1.5 screen px at any magnification.
+- **Cmd/Meta** (or **Ctrl**) while hovering snaps the previewed endpoint to 15°. Note the preview accepts Ctrl as a Meta alias but the actual paint commit does not — on Windows/Linux, Ctrl+Shift+hover previews a *snapped* line while the click draws an *unsnapped* one.
+- The preview updates from a global key listener as well as on pointer-move, so pressing or releasing the modifier re-draws it without moving the mouse.
+- **Clears on**: releasing shift, leaving the canvas, switching tools, changing the active layer, or finishing a stroke (it reappears on the next hover).
 
 ---
 
@@ -264,14 +294,22 @@ Paste takes one of two routes depending on where the image came from.
 - **Sample size**: point, 3×3, and 5×5 area-averaging modes are implemented in the sampling logic, but the live canvas eyedropper currently always samples a single pixel — there is no options-bar control to switch sample size yet.
 
 ### Fill (Paint Bucket)
-- **Tolerance**: 0 - 255
-- **Contiguous**: on/off
+- **Tolerance**: 0 - 255 (default 32)
+- **Contiguous**: on/off (default on). Turning it **off** is the "fill by color" mode — instead of flooding outward from the click point, every pixel in the layer within tolerance of the clicked color is filled, whether or not it connects to the click.
+- These two are the tool's entire surface: there is no opacity, blend mode, anti-alias, or "all layers" option, and no modifier-key behavior. Shortcut: `G`.
+- Fills honor the active selection mask, and route into the quick mask instead of the layer while Quick Mask is on (see Quick Mask Mode).
+- **GPU fast paths**: three routes, chosen automatically —
+  - *Empty layer or full-coverage fill* → filled directly on the GPU from a synthesized full-coverage (or selection-derived) mask, with no readback.
+  - *Non-contiguous ("fill by color")* → a single per-pixel shader that samples the clicked color and fills everywhere within tolerance, optionally clipped by the selection. No readback.
+  - *Contiguous fill on real content* → still a CPU flood fill (the BFS is inherently sequential), paying a GPU readback and re-upload.
 
 ### Gradient
-- **Type**: linear, radial
-- **Stops**: multiple color stops with position (0-1)
-- **Reverse**: on/off
-- **Cmd/Meta+drag**: snaps the gradient angle to 15° increments while dragging (handy for aligning a gradient to a horizontal, vertical, or 45° axis without having to drag a perfectly straight line)
+- **Type**: linear, radial — these are the only two types; there is no angular, reflected, or diamond gradient.
+- **Stops**: 2 - 16 color stops with position (0-1), edited in the **Gradient modal** (opened by clicking either the gradient swatch or the "Advanced…" button in the options bar — both go to the same place). Click an empty spot on the handle row to insert a stop there, drag a handle to reposition it, and select a handle to drive a full ColorPicker (HSV square + hue strip + RGB/HSV/hex fields, including alpha) with a percent position readout. Delete is gated at the 2-stop minimum; the 16-stop cap matches the GPU uniform limit. Stops are re-sorted by position on every edit. `Escape` or an overlay click closes the modal.
+- **Reverse**: on/off (default off)
+- There is no dither, opacity, or blend-mode option, and — unlike Fill (`G`) and every neighbouring tool — **the gradient tool has no keyboard shortcut**; it is reachable only from the toolbox.
+- **Cmd/Meta+drag**: snaps the gradient angle to 15° increments while dragging (handy for aligning a gradient to a horizontal, vertical, or 45° axis without having to drag a perfectly straight line). Note this reads `metaKey` only, with no Ctrl fallback, so on Windows/Linux the snap is effectively unreachable.
+- **Shift** does nothing in this tool, despite being the angle-constraint convention in Photoshop / GIMP / Figma / Krita.
 - **Mask edit mode**: when the active layer's mask is being edited, gradient drags paint into the mask texture instead of the layer pixels.
 - **Quick Mask mode**: when Quick Mask is active, gradient drags paint into the GPU quick-mask texture in document space — produces smooth selection falloffs.
 
@@ -612,6 +650,7 @@ In addition to per-tool toolbox shortcuts (`B`, `E`, `J`, `Y`, `R`, `S`, `H`, `O
 - **`D`** — reset foreground/background to the defaults (black / white)
 - **`Q`** — toggle Quick Mask mode
 - **`[` / `]`** — decrement / increment the active tool's size by 1 (works for brush, dodge & burn, smudge, pencil, eraser, clone stamp, healing brush, pen-tool stroke width, and shape-tool stroke width — the bracket maps to whichever size slider the current tool exposes)
+- **`Shift`** (held, paint tool, after a stroke on the active layer) — previews the straight-line stroke as a hairline from the last stroke endpoint to the cursor; shift+click commits it. Adding **Cmd/Meta** snaps to 15° and turns the preview blue. See Straight-Line Strokes.
 - **`Space+drag`** / **middle-click drag** — temporary pan from any tool
 - **`Cmd/Ctrl+scroll`** — zoom in / out (anchored to the viewport center, not the cursor); plain scroll pans. **Two-finger pinch** on touch devices zooms and pans together.
 - **`Backspace` / `Delete`** (canvas focused) — when a marquee selection is active, clears the selected pixels on the active layer (GPU clear, undoable as "Clear Selection"); when no selection is active, removes the active layer from the document. Suppressed while a text input or text-layer edit is focused.
@@ -699,7 +738,7 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 - **Center**: configurable (defaults to canvas center)
 - Available on brush, pencil, and eraser. The symmetry config (axes, center, radial segment count) is global, so it applies to whichever of these tools is active. Only the Brush options bar exposes the **Radial Symmetry** toggle and its segment-count number input; the Pencil options bar exposes just the horizontal/vertical toggles (radial set from the Brush still applies to pencil/eraser strokes), and the Eraser inherits the active config without its own toggles.
 - **Cmd/Meta+click** on the canvas while any symmetry mode (horizontal, vertical, or radial with 2+ segments) is active moves the symmetry center to the click point without painting a dab. Lets the user reposition the mirror axis directly from the canvas without opening a settings panel.
-- **Caveat — this intercept is global, not brush-only.** The check runs at the top of the canvas pointer-down handler, before the tool guards and before any tool dispatch, and it is not scoped to the paint tools. So while *any* symmetry axis is enabled, a Cmd/Meta+click is swallowed by the symmetry-center move for **every** tool — which suppresses the other documented Cmd/Meta gestures (shape and marquee 1:1 lock, gradient 15° snap, transform snap, Path anchor convert, and the Cmd half of the Clone Stamp / Healing source-set). Alt/Option still sets the stamp and healing source. Turn symmetry off to get those gestures back.
+- **Caveat — this intercept is global, not brush-only.** The check runs at the top of the canvas pointer-down handler, before the tool guards and before any tool dispatch, and it is not scoped to the paint tools. So while *any* symmetry axis is enabled, a Cmd/Meta+click is swallowed by the symmetry-center move for **every** tool — which suppresses the other documented Cmd/Meta gestures (shape and marquee 1:1 lock, gradient 15° snap, transform snap, Path anchor convert, the Cmd+shift 15° snap on straight-line brush/pencil/eraser strokes, and the Cmd half of the Clone Stamp / Healing source-set). Alt/Option still sets the stamp and healing source. Turn symmetry off to get those gestures back.
 
 ---
 
