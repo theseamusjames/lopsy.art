@@ -69,6 +69,9 @@ export default defineConfig({
   webServer: {
     command: `npx vite --port ${port}`,
     port,
-    reuseExistingServer: true,
+    // Never adopt a server we did not start: if something else holds the port,
+    // it is not this checkout's build, and reusing it would test the wrong
+    // code. Failing to start is the loud, correct outcome.
+    reuseExistingServer: false,
   },
 });
