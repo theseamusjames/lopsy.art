@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, type RefObject } from 'react';
+import { useEffect, type RefObject } from 'react';
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { commitTextEditing } from '../../tools/text/text-interaction';
@@ -9,19 +9,13 @@ import { installPaintLinePreviewKeyListener } from '../interactions/paint-line-p
 interface AppEffectsDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
   containerRef: RefObject<HTMLDivElement | null>;
-  sidebarBottomRef: RefObject<HTMLDivElement | null>;
-  effectsDrawerRef: RefObject<HTMLDivElement | null>;
   documentReady: boolean;
-  showEffectsDrawer: boolean;
 }
 
 export function useAppEffects({
   canvasRef,
   containerRef,
-  sidebarBottomRef,
-  effectsDrawerRef,
   documentReady,
-  showEffectsDrawer,
 }: AppEffectsDeps): void {
   // Warn before navigating away with unsaved changes
   useEffect(() => {
@@ -87,25 +81,5 @@ export function useAppEffects({
     observer.observe(container);
     return () => observer.disconnect();
   }, [canvasRef, containerRef, documentReady]);
-
-  // Effects drawer hangs off the bottom panel block. Subscribe to the block's
-  // size via ResizeObserver instead of pinning to a specific panel's collapse
-  // state — works regardless of which panels are open or collapsed.
-  useLayoutEffect(() => {
-    const bottom = sidebarBottomRef.current;
-    const drawer = effectsDrawerRef.current;
-    if (!bottom || !drawer || !showEffectsDrawer) return;
-    const update = () => {
-      const parentRect = bottom.offsetParent?.getBoundingClientRect();
-      const bottomRect = bottom.getBoundingClientRect();
-      if (!parentRect) return;
-      drawer.style.top = `${bottomRect.top - parentRect.top}px`;
-      drawer.style.height = `${bottom.offsetHeight}px`;
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(bottom);
-    return () => ro.disconnect();
-  }, [sidebarBottomRef, effectsDrawerRef, showEffectsDrawer]);
 
 }

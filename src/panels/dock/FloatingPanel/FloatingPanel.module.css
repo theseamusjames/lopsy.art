@@ -1,0 +1,98 @@
+.window {
+  position: absolute;
+  left: var(--fp-x);
+  top: var(--fp-y);
+  width: var(--fp-w);
+  height: var(--fp-h);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 20;
+}
+
+.resizeN,
+.resizeS,
+.resizeE,
+.resizeW,
+.resizeNE,
+.resizeNW,
+.resizeSE,
+.resizeSW {
+  position: absolute;
+  touch-action: none;
+  z-index: 2;
+}
+
+.resizeN,
+.resizeS {
+  left: 8px;
+  right: 8px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.resizeN {
+  top: -3px;
+}
+
+.resizeS {
+  bottom: -3px;
+}
+
+.resizeE,
+.resizeW {
+  top: 8px;
+  bottom: 8px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.resizeE {
+  right: -3px;
+}
+
+.resizeW {
+  left: -3px;
+}
+
+.resizeNE,
+.resizeNW,
+.resizeSE,
+.resizeSW {
+  width: 10px;
+  height: 10px;
+}
+
+.resizeNE {
+  top: -3px;
+  right: -3px;
+  cursor: nesw-resize;
+}
+
+.resizeNW {
+  top: -3px;
+  left: -3px;
+  cursor: nwse-resize;
+}
+
+.resizeSE {
+  bottom: -3px;
+  right: -3px;
+  cursor: nwse-resize;
+}
+
+.resizeSW {
+  bottom: -3px;
+  left: -3px;
+  cursor: nesw-resize;
+}
+
+@media (max-width: 600px) {
+  .window {
+    display: none;
+  }
+}

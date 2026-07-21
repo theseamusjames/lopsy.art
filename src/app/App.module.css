@@ -94,7 +94,8 @@
 .effectsDrawer,
 .referenceDrawer {
   position: absolute;
-  right: 100%;
+  right: calc(100% + var(--right-dock-width, 0px));
+  top: 0;
   z-index: 1;
   transform: translate(var(--drag-x, 0px), var(--drag-y, 0px));
   background: var(--color-bg-secondary);
@@ -109,8 +110,6 @@
 }
 
 .effectsDrawer {
-  right: auto;
-  left: -420px;
   width: 420px;
   min-width: 280px;
   min-height: 200px;
@@ -124,36 +123,11 @@
   height: 300px;
   min-width: 200px;
   min-height: 200px;
-  top: 0;
   background: transparent;
   border-radius: var(--radius-md);
 }
 
-.sidebar {
-  flex-shrink: 0;
-  width: var(--sidebar-width);
-  background: var(--color-bg-secondary);
-  border-left: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebarScroll {
-  flex-shrink: 0;
-  overflow-y: auto;
-}
-
-.sidebarBottom {
-  flex: 1;
-  border-top: 1px solid var(--color-border);
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
 @media (max-width: 600px) {
-  .sidebar,
   .sidebarArea {
     display: none;
   }
