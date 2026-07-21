@@ -6,6 +6,7 @@ import type { ImageAdjustments } from '../filters/image-adjustments';
 import type { MeshWarpGrid } from '../filters/mesh-warp';
 import type { LiquifySettings } from '../tools/liquify/liquify';
 import { toolRegistry } from '../tools/tool-registry';
+import { setVisiblePanelsSink, togglePanelById } from '../panels/dock/dock-ui-bridge';
 
 export interface TextEditingState {
   layerId: string;
@@ -137,7 +138,6 @@ interface UIState {
   snapLines: readonly SnapLine[];
   gridSize: number;
   guideColor: Color;
-  sidebarCollapsed: boolean;
   /** In-progress path being drawn with the path tool. null when the tool
    *  is inactive or has been cleared. `closed` is only meaningful while
    *  draft exists; closing without anchors was previously representable
@@ -221,7 +221,6 @@ interface UIState {
   clearSnapLines: () => void;
   setGridSize: (size: number) => void;
   setGuideColor: (color: Color) => void;
-  toggleSidebar: () => void;
   addPathAnchor: (anchor: PathAnchor) => void;
   updateLastPathAnchor: (anchor: PathAnchor) => void;
   closePath: () => void;
@@ -302,7 +301,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   snapLines: [],
   gridSize: 16,
   guideColor: { r: 0, g: 180, b: 255, a: 1 },
-  sidebarCollapsed: false,
   pathDraft: null,
   lassoPoints: [],
   cropRect: null,
@@ -365,16 +363,9 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setShowEffectsDrawer: (show) => set({ showEffectsDrawer: show }),
   setShowReferenceModal: (show) => set({ showReferenceModal: show }),
-  togglePanel: (panelId) =>
-    set((state) => {
-      const next = new Set(state.visiblePanels);
-      if (next.has(panelId)) {
-        next.delete(panelId);
-      } else {
-        next.add(panelId);
-      }
-      return { visiblePanels: next };
-    }),
+  // The dock store owns panel layout; `visiblePanels` here is a read-only
+  // mirror it maintains. Toggling delegates through a bridge (no import cycle).
+  togglePanel: (panelId) => togglePanelById(panelId),
   setGradientPreview: (preview) => set({ gradientPreview: preview }),
 
   setActiveTool: (tool) => {
@@ -409,7 +400,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   clearSnapLines: () => set({ snapLines: [] }),
   setGridSize: (size) => set({ gridSize: size }),
   setGuideColor: (color) => set({ guideColor: color }),
-  toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
   addPathAnchor: (anchor) =>
     set((state) => {
       const prev = state.pathDraft;
@@ -500,3 +490,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (get().isStroking !== stroking) set({ isStroking: stroking });
   },
 }));
+
+// The dock store owns which panels are open; mirror its published set into
+// `visiblePanels` (registered via the bridge to avoid an import cycle).
+setVisiblePanelsSink((panels) => useUIStore.setState({ visiblePanels: panels }));

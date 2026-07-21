@@ -1,25 +1,10 @@
-import { Palette, Layers, History, Info, Spline, ImagePlus, Map, Columns3 } from 'lucide-react';
+import { ImagePlus } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useUIStore } from '../../app/ui-store';
+import { DOCK_PANELS } from '../dock/panel-registry';
 import styles from './PanelToolbar.module.css';
 
 const ICON_SIZE = 16;
-
-interface PanelDef {
-  id: string;
-  icon: React.ReactNode;
-  label: string;
-}
-
-const panels: PanelDef[] = [
-  { id: 'navigator', icon: <Map size={ICON_SIZE} />, label: 'Navigator' },
-  { id: 'info', icon: <Info size={ICON_SIZE} />, label: 'Info' },
-  { id: 'color', icon: <Palette size={ICON_SIZE} />, label: 'Color' },
-  { id: 'layers', icon: <Layers size={ICON_SIZE} />, label: 'Layers' },
-  { id: 'channels', icon: <Columns3 size={ICON_SIZE} />, label: 'Channels' },
-  { id: 'history', icon: <History size={ICON_SIZE} />, label: 'History' },
-  { id: 'paths', icon: <Spline size={ICON_SIZE} />, label: 'Paths' },
-];
 
 export function PanelToolbar() {
   const visiblePanels = useUIStore((s) => s.visiblePanels);
@@ -29,15 +14,18 @@ export function PanelToolbar() {
 
   return (
     <div className={styles.toolbar} role="toolbar" aria-label="Panel visibility">
-      {panels.map((panel) => (
-        <IconButton
-          key={panel.id}
-          icon={panel.icon}
-          label={panel.label}
-          isActive={visiblePanels.has(panel.id)}
-          onClick={() => togglePanel(panel.id)}
-        />
-      ))}
+      {DOCK_PANELS.map((panel) => {
+        const Icon = panel.icon;
+        return (
+          <IconButton
+            key={panel.id}
+            icon={<Icon size={ICON_SIZE} />}
+            label={panel.title}
+            isActive={visiblePanels.has(panel.id)}
+            onClick={() => togglePanel(panel.id)}
+          />
+        );
+      })}
       <IconButton
         icon={<ImagePlus size={ICON_SIZE} />}
         label="Reference"

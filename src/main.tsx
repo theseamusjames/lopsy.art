@@ -6,6 +6,7 @@ import { useUIStore } from './app/ui-store';
 import { useToolSettingsStore } from './app/tool-settings-store';
 import { usePatternStore } from './app/pattern-store';
 import { useShortcutStore } from './app/store/shortcut-store';
+import { useDockStore } from './panels/dock/dock-store';
 import { pixelDataManager } from './engine/pixel-data-manager';
 import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
 import { render as renderWasm, markAllDirty, readLayerPixels, getLayerTextureDimensions, initWasm, isFontLoaded } from './engine-wasm/wasm-bridge';
@@ -38,6 +39,7 @@ declare global {
     __brushPresetStore?: typeof useToolSettingsStore;
     __patternStore?: typeof usePatternStore;
     __shortcutStore?: typeof useShortcutStore;
+    __dockStore?: typeof useDockStore;
     __pixelData?: typeof pixelDataManager;
     __readCompositedPixels?: () => Promise<ReadPixelsResult>;
     __readLayerPixels?: (layerId?: string) => Promise<ReadPixelsResult>;
@@ -59,6 +61,7 @@ if (import.meta.env.DEV) {
   window.__brushPresetStore = useToolSettingsStore;
   window.__patternStore = usePatternStore;
   window.__shortcutStore = useShortcutStore;
+  window.__dockStore = useDockStore;
   // Pixel-data Maps used to live on the store; they live on the manager now.
   // E2e tests that read or mutate pixel state go through this singleton.
   window.__pixelData = pixelDataManager;

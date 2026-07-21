@@ -3,8 +3,6 @@ import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { readCompositeThumbnail } from '../../engine-wasm/wasm-bridge';
-import { PanelContainer } from '../PanelContainer/PanelContainer';
-import { usePanelCollapse } from '../usePanelCollapse';
 import { computeViewportRect, thumbnailPointToDocPoint, docPointToPan } from './navigator-math';
 import { createNavigatorScheduler } from './navigator-scheduler';
 import styles from './NavigatorPanel.module.css';
@@ -12,8 +10,6 @@ import styles from './NavigatorPanel.module.css';
 const THUMBNAIL_UPDATE_INTERVAL_MS = 200;
 
 export function NavigatorPanel() {
-  const [collapsed, setCollapsed] = usePanelCollapse('navigator');
-
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
   const viewport = useEditorStore((s) => s.viewport);
@@ -46,8 +42,6 @@ export function NavigatorPanel() {
   // The scheduler skips ticks while a paint stroke is in progress so the GPU
   // readback doesn't stall the brush hot path (issue #380).
   useEffect(() => {
-    if (collapsed) return;
-
     const update = () => {
       const thumbCanvas = thumbnailCanvasRef.current;
       if (!thumbCanvas) return;
@@ -89,7 +83,7 @@ export function NavigatorPanel() {
       unsubscribe();
       scheduler.stop();
     };
-  }, [collapsed, thumbnailSize]);
+  }, [thumbnailSize]);
 
   // Compute viewport indicator rect in thumbnail space
   const vpRect = computeViewportRect(
@@ -172,65 +166,61 @@ export function NavigatorPanel() {
   const sliderValue = Math.log(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, viewport.zoom)) / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN) * 100;
 
   return (
-    <PanelContainer title="Navigator" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
-      <div className={styles.panel}>
-        {!collapsed && (
+    <div className={styles.panel}>
+      <div
+        ref={containerRef}
+        className={styles.minimapContainer}
+        data-testid="navigator-minimap-container"
+      >
+        {thumbnailSize.width > 0 && thumbnailSize.height > 0 && (
           <div
-            ref={containerRef}
-            className={styles.minimapContainer}
-            data-testid="navigator-minimap-container"
+            className={styles.minimapWrapper}
+            style={{
+              '--minimap-width': `${thumbnailSize.width}px`,
+              '--minimap-height': `${thumbnailSize.height}px`,
+            } as React.CSSProperties}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            role="presentation"
           >
-            {thumbnailSize.width > 0 && thumbnailSize.height > 0 && (
-              <div
-                className={styles.minimapWrapper}
-                style={{
-                  '--minimap-width': `${thumbnailSize.width}px`,
-                  '--minimap-height': `${thumbnailSize.height}px`,
-                } as React.CSSProperties}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                role="presentation"
-              >
-                <canvas
-                  ref={thumbnailCanvasRef}
-                  className={styles.thumbnail}
-                  width={thumbnailSize.width}
-                  height={thumbnailSize.height}
-                  aria-hidden="true"
-                  data-testid="navigator-thumbnail"
-                />
-                <div
-                  className={styles.viewportIndicator}
-                  data-testid="navigator-viewport-indicator"
-                  style={{
-                    '--indicator-x': `${vpRect.x}px`,
-                    '--indicator-y': `${vpRect.y}px`,
-                    '--indicator-width': `${Math.max(4, vpRect.width)}px`,
-                    '--indicator-height': `${Math.max(4, vpRect.height)}px`,
-                  } as React.CSSProperties}
-                />
-              </div>
-            )}
+            <canvas
+              ref={thumbnailCanvasRef}
+              className={styles.thumbnail}
+              width={thumbnailSize.width}
+              height={thumbnailSize.height}
+              aria-hidden="true"
+              data-testid="navigator-thumbnail"
+            />
+            <div
+              className={styles.viewportIndicator}
+              data-testid="navigator-viewport-indicator"
+              style={{
+                '--indicator-x': `${vpRect.x}px`,
+                '--indicator-y': `${vpRect.y}px`,
+                '--indicator-width': `${Math.max(4, vpRect.width)}px`,
+                '--indicator-height': `${Math.max(4, vpRect.height)}px`,
+              } as React.CSSProperties}
+            />
           </div>
         )}
-        <div className={styles.zoomRow}>
-          <input
-            type="range"
-            className={styles.zoomSlider}
-            min={0}
-            max={100}
-            step={0.5}
-            value={sliderValue}
-            onChange={handleZoomSliderChange}
-            onDoubleClick={handleZoomSliderDoubleClick}
-            aria-label="Zoom level"
-          />
-          <span className={styles.zoomValue} data-testid="navigator-zoom-value">
-            {zoomPercent}%
-          </span>
-        </div>
       </div>
-    </PanelContainer>
+      <div className={styles.zoomRow}>
+        <input
+          type="range"
+          className={styles.zoomSlider}
+          min={0}
+          max={100}
+          step={0.5}
+          value={sliderValue}
+          onChange={handleZoomSliderChange}
+          onDoubleClick={handleZoomSliderDoubleClick}
+          aria-label="Zoom level"
+        />
+        <span className={styles.zoomValue} data-testid="navigator-zoom-value">
+          {zoomPercent}%
+        </span>
+      </div>
+    </div>
   );
 }

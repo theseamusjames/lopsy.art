@@ -1,11 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useEditorStore } from '../../app/editor-store';
-import { PanelContainer } from '../PanelContainer/PanelContainer';
-import { usePanelCollapse } from '../usePanelCollapse';
 import styles from './HistoryPanel.module.css';
 
 export function HistoryPanel() {
-  const [collapsed, setCollapsed] = usePanelCollapse('history');
   const listRef = useRef<HTMLDivElement>(null);
   const undoStack = useEditorStore((s) => s.undoStack);
   const redoStack = useEditorStore((s) => s.redoStack);
@@ -28,50 +25,48 @@ export function HistoryPanel() {
     }
   };
 
+  if (undoStack.length === 0 && redoStack.length === 0) {
+    return <div className={styles.empty}>No history</div>;
+  }
+
   return (
-    <PanelContainer title="History" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
-      {undoStack.length === 0 && redoStack.length === 0 ? (
-        <div className={styles.empty}>No history</div>
-      ) : (
-        <div className={collapsed ? styles.listCollapsed : styles.list} ref={listRef}>
+    <div className={styles.list} ref={listRef}>
+      <button
+        className={`${styles.entry} ${currentIndex === 0 ? styles.entryActive : ''}`}
+        onClick={() => handleClick(0)}
+        type="button"
+      >
+        <span className={styles.index}>0</span>
+        <span>Original</span>
+      </button>
+      {undoStack.map((snapshot, i) => {
+        const entryIndex = i + 1;
+        return (
           <button
-            className={`${styles.entry} ${currentIndex === 0 ? styles.entryActive : ''}`}
-            onClick={() => handleClick(0)}
+            key={i}
+            className={`${styles.entry} ${entryIndex === currentIndex ? styles.entryActive : ''}`}
+            onClick={() => handleClick(entryIndex)}
             type="button"
           >
-            <span className={styles.index}>0</span>
-            <span>Original</span>
+            <span className={styles.index}>{entryIndex}</span>
+            <span>{snapshot.label}</span>
           </button>
-          {undoStack.map((snapshot, i) => {
-            const entryIndex = i + 1;
-            return (
-              <button
-                key={i}
-                className={`${styles.entry} ${entryIndex === currentIndex ? styles.entryActive : ''}`}
-                onClick={() => handleClick(entryIndex)}
-                type="button"
-              >
-                <span className={styles.index}>{entryIndex}</span>
-                <span>{snapshot.label}</span>
-              </button>
-            );
-          })}
-          {redoStack.slice().reverse().map((snapshot, i) => {
-            const entryIndex = currentIndex + i + 1;
-            return (
-              <button
-                key={`redo-${i}`}
-                className={`${styles.entry} ${styles.entryFuture}`}
-                onClick={() => handleClick(entryIndex)}
-                type="button"
-              >
-                <span className={styles.index}>{entryIndex}</span>
-                <span>{snapshot.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </PanelContainer>
+        );
+      })}
+      {redoStack.slice().reverse().map((snapshot, i) => {
+        const entryIndex = currentIndex + i + 1;
+        return (
+          <button
+            key={`redo-${i}`}
+            className={`${styles.entry} ${styles.entryFuture}`}
+            onClick={() => handleClick(entryIndex)}
+            type="button"
+          >
+            <span className={styles.index}>{entryIndex}</span>
+            <span>{snapshot.label}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

@@ -1,0 +1,32 @@
+.indicator {
+  position: absolute;
+  left: var(--di-x);
+  top: var(--di-y);
+  width: var(--di-w);
+  height: var(--di-h);
+  background: var(--color-accent-subtle);
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  z-index: 40;
+}
+
+.ghost {
+  position: absolute;
+  left: var(--ghost-x);
+  top: var(--ghost-y);
+  transform: translate(12px, 10px);
+  padding: 3px 10px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 41;
+}

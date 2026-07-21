@@ -1,18 +1,14 @@
 .panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .list {
   overflow-y: auto;
-  height: 250px;
-}
-
-.listCollapsed {
   flex: 1;
-  overflow-y: auto;
-  max-height: 80px;
+  min-height: 0;
 }
 
 .itemWrapper {

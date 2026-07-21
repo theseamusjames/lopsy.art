@@ -50,13 +50,6 @@
   color: var(--color-text-disabled);
 }
 
-.listCollapsed {
-  display: flex;
-  flex-direction: column;
-  max-height: 56px;
-  overflow-y: auto;
-}
-
 .empty {
   padding: var(--space-2);
   font-family: var(--font-ui);

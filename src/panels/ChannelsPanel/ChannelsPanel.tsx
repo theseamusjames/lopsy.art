@@ -1,7 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { PanelContainer } from '../PanelContainer/PanelContainer';
-import { usePanelCollapse } from '../usePanelCollapse';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import type { ActiveChannel, ChannelVisibility } from '../../app/ui-store';
@@ -123,7 +121,6 @@ function ChannelThumbnail({ layerId, channel, pixelVersion }: ChannelThumbnailPr
 }
 
 export function ChannelsPanel() {
-  const [collapsed, setCollapsed] = usePanelCollapse('channels');
   const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
   const channelVisibility = useUIStore((s) => s.channelVisibility);
   const activeChannel = useUIStore((s) => s.activeChannel);
@@ -138,59 +135,57 @@ export function ChannelsPanel() {
   };
 
   return (
-    <PanelContainer title="Channels" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
-      <div className={styles.panel}>
-        <div className={styles.channelList} data-testid="channels-list">
-          {CHANNEL_DEFS.map(({ id, label, dotClass }) => {
-            const isVisible = isChannelVisible(id);
-            const isActive = activeChannel === id;
-            const isDisabled = id !== 'rgb' && !channelVisibility[id as keyof ChannelVisibility];
+    <div className={styles.panel}>
+      <div className={styles.channelList} data-testid="channels-list">
+        {CHANNEL_DEFS.map(({ id, label, dotClass }) => {
+          const isVisible = isChannelVisible(id);
+          const isActive = activeChannel === id;
+          const isDisabled = id !== 'rgb' && !channelVisibility[id as keyof ChannelVisibility];
 
-            return (
-              <div
-                key={id}
-                className={[
-                  styles.row,
-                  isActive ? styles.rowActive : '',
-                  isDisabled ? styles.rowDisabled : '',
-                ].filter(Boolean).join(' ')}
-                onClick={() => setActiveChannel(id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setActiveChannel(id);
-                }}
-                data-testid={`channel-row-${id}`}
-                aria-selected={isActive}
-              >
-                <span className={`${styles.dot} ${dotClass}`} aria-hidden="true" />
-                <span className={styles.channelName}>{label}</span>
-                {!collapsed && activeLayerId && (
-                  <ChannelThumbnail
-                    layerId={activeLayerId}
-                    channel={id}
-                    pixelVersion={pixelVersion}
-                  />
-                )}
-                {id !== 'rgb' && (
-                  <button
-                    className={styles.visibilityBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleChannelVisibility(id as keyof ChannelVisibility);
-                    }}
-                    type="button"
-                    aria-label={isVisible ? `Hide ${label} channel` : `Show ${label} channel`}
-                    data-testid={`channel-visibility-${id}`}
-                  >
-                    {isVisible ? <Eye size={14} /> : <EyeOff size={14} />}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+          return (
+            <div
+              key={id}
+              className={[
+                styles.row,
+                isActive ? styles.rowActive : '',
+                isDisabled ? styles.rowDisabled : '',
+              ].filter(Boolean).join(' ')}
+              onClick={() => setActiveChannel(id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') setActiveChannel(id);
+              }}
+              data-testid={`channel-row-${id}`}
+              aria-selected={isActive}
+            >
+              <span className={`${styles.dot} ${dotClass}`} aria-hidden="true" />
+              <span className={styles.channelName}>{label}</span>
+              {activeLayerId && (
+                <ChannelThumbnail
+                  layerId={activeLayerId}
+                  channel={id}
+                  pixelVersion={pixelVersion}
+                />
+              )}
+              {id !== 'rgb' && (
+                <button
+                  className={styles.visibilityBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleChannelVisibility(id as keyof ChannelVisibility);
+                  }}
+                  type="button"
+                  aria-label={isVisible ? `Hide ${label} channel` : `Show ${label} channel`}
+                  data-testid={`channel-visibility-${id}`}
+                >
+                  {isVisible ? <Eye size={14} /> : <EyeOff size={14} />}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
-    </PanelContainer>
+    </div>
   );
 }

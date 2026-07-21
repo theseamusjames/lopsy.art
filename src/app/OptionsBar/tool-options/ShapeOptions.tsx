@@ -4,7 +4,7 @@ import { useToolSettingsStore } from '../../tool-settings-store';
 import { Slider } from '../../../components/Slider/Slider';
 import { ColorSwatch } from '../../../components/ColorSwatch/ColorSwatch';
 import { ColorPicker } from '../../../components/ColorPicker/ColorPicker';
-import { setPanelCollapsed } from '../../../panels/usePanelCollapse';
+import { useDockStore } from '../../../panels/dock/dock-store';
 import { AspectRatioControl } from './AspectRatioControl';
 import type { Color } from '../../../types';
 import type { ShapeMode, ShapeOutput } from '../../../tools/shape/shape';
@@ -128,7 +128,7 @@ export function ShapeOptions() {
             onDoubleClick={() => {
               setOpenPopover(null);
               setForegroundColor(shapeFillColor);
-              setPanelCollapsed('color', false);
+              useDockStore.getState().revealPanel('color');
             }}
           />
         ) : (
@@ -166,7 +166,7 @@ export function ShapeOptions() {
             onDoubleClick={() => {
               setOpenPopover(null);
               setForegroundColor(shapeStrokeColor);
-              setPanelCollapsed('color', false);
+              useDockStore.getState().revealPanel('color');
             }}
           />
         ) : (

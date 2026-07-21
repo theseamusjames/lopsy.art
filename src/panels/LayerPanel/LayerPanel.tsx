@@ -3,8 +3,6 @@ import { Copy, Folder, FolderPlus, Plus, RectangleCircle, Trash2, Type } from 'l
 import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
-import { PanelContainer } from '../PanelContainer/PanelContainer';
-import { usePanelCollapse } from '../usePanelCollapse';
 import { selectLayerAlpha, convertMaskToMarquee } from './layer-selection';
 import { buildFlatDisplayList } from '../../layers/group-utils';
 import { useLayerDnd } from './useLayerDnd';
@@ -18,7 +16,6 @@ interface LayerPanelProps {
 }
 
 export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
-  const [collapsed, setCollapsed] = usePanelCollapse('layers');
   const layers = useEditorStore((s) => s.document.layers);
   const activeLayerId = useEditorStore((s) => s.document.activeLayerId);
   const selectedLayerIds = useEditorStore((s) => s.document.selectedLayerIds);
@@ -156,11 +153,10 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
 
   return (
     <>
-    <PanelContainer title="Layers" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
     <div className={styles.panel} ref={panelRef}>
       <div
         ref={listRef}
-        className={collapsed ? styles.listCollapsed : styles.list}
+        className={styles.list}
       >
         {displayList.map(({ layer, depth }, ri) => (
           <LayerRow
@@ -230,7 +226,6 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
         />
       </div>
     </div>
-    </PanelContainer>
     {contextMenu && (
       <LayerContextMenu
         x={contextMenu.x}

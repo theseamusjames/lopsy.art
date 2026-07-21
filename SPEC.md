@@ -437,13 +437,19 @@ Single letter to select tool (e.g., `V` move, `B` brush, `E` eraser, `G` gradien
 ### Left Sidebar — Toolbox
 - Vertically stacked tool icons. Grouped tools in flyout menus (click and hold to see alternatives, e.g., marquee group).
 
-### Right Sidebar — Panels
-- **Layers panel** — always visible.
-- **Properties panel** — shows settings for selected layer/object.
-- **Color panel** — color picker + swatches.
-- **History panel** — collapsible.
-- **Navigator panel** — minimap, collapsible.
-- Panels are collapsible, reorderable, and can be detached (future).
+### Panels — Dockable System
+- Panels (Navigator, Info, Color, Layers, Channels, History, Paths) live in a
+  docking system rather than a fixed sidebar. Default layout: Color above
+  Layers docked to the right edge.
+- Every panel can be moved independently by dragging its tab.
+- Panels dock to the left/right/top/bottom edges of the workspace, or to any
+  side of another panel (splitting the space alongside it).
+- Dropping a panel onto the center of another combines them into a tabbed
+  group — max 3 tabs per group.
+- Panels can float as draggable, resizable windows; docks and splits are
+  resizable via dividers. Panel content fills the panel.
+- The layout persists across sessions; the panel toolbar (right rail)
+  toggles panels on/off at their default spot.
 
 ### Center — Canvas
 - The main workspace. Takes up all remaining space.

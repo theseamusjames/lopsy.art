@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { WebGL2Warning, checkWebGL2Support } from '../components/WebGL2Warning/WebGL2Warning';
 import { LiquifyPanel } from '../components/LiquifyPanel/LiquifyPanel';
 import { Toolbox } from '../toolbox/Toolbox';
@@ -13,6 +14,8 @@ import { NavigatorPanel } from '../panels/NavigatorPanel/NavigatorPanel';
 import { ChannelsPanel } from '../panels/ChannelsPanel/ChannelsPanel';
 import { ReferenceImagePanel } from '../panels/ReferenceImagePanel/ReferenceImagePanel';
 import { PanelToolbar } from '../panels/PanelToolbar/PanelToolbar';
+import { DockHost } from '../panels/dock/DockHost/DockHost';
+import { useDockStore } from '../panels/dock/dock-store';
 import { MenuBar } from './MenuBar/MenuBar';
 import { OptionsBar } from './OptionsBar/OptionsBar';
 import { StatusBar } from './StatusBar/StatusBar';
@@ -56,8 +59,6 @@ export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const sidebarBottomRef = useRef<HTMLDivElement>(null);
-  const effectsDrawerRef = useRef<HTMLDivElement>(null);
 
   const doc = useEditorStore((s) => s.document);
   const viewport = useEditorStore((s) => s.viewport);
@@ -86,7 +87,9 @@ export function App() {
     document.title = name === 'lopsy' ? 'Lopsy' : `Lopsy — ${name}`;
   }, [doc.name]);
 
-  const visiblePanels = useUIStore((s) => s.visiblePanels);
+  // The floating drawers sit immediately left of the right dock; this width
+  // feeds a CSS custom property so they track dock resizing.
+  const rightDockWidth = useDockStore((s) => (s.layout.docks.right ? s.layout.dockSizes.right : 0));
 
   const { offset: drawerOffset, reset: resetDrawerOffset, dragProps: drawerDragProps } = useDraggablePanel();
   useEffect(() => {
@@ -111,10 +114,7 @@ export function App() {
   useAppEffects({
     canvasRef,
     containerRef,
-    sidebarBottomRef,
-    effectsDrawerRef,
     documentReady,
-    showEffectsDrawer,
   });
 
   // Screen to canvas coordinate transform
@@ -168,6 +168,27 @@ export function App() {
     setActiveLayer(id);
   }, [clearPersistentTransform, setActiveLayer]);
 
+  const renderPanel = useCallback((panelId: string): ReactNode => {
+    switch (panelId) {
+      case 'navigator':
+        return <NavigatorPanel />;
+      case 'info':
+        return <InfoPanel />;
+      case 'color':
+        return <ColorPanel />;
+      case 'channels':
+        return <ChannelsPanel />;
+      case 'history':
+        return <HistoryPanel />;
+      case 'paths':
+        return <PathsPanel />;
+      case 'layers':
+        return <LayerPanel onSelectLayer={handleSelectLayer} />;
+      default:
+        return null;
+    }
+  }, [handleSelectLayer]);
+
   if (!hasWebGL2) {
     return <WebGL2Warning />;
   }
@@ -198,21 +219,23 @@ export function App() {
       </div>
       <div className={styles.body}>
         <Toolbox />
-        <main
-          ref={containerRef}
-          data-testid="canvas-container"
-          className={styles.canvas}
-          onContextMenu={handleContextMenu}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-        >
-          <canvas ref={canvasRef} aria-label="Drawing canvas" />
-          <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} aria-hidden="true" />
-          <TextActionButtons containerRef={containerRef} />
-          <PathActionButtons containerRef={containerRef} />
-          <TiltShiftControls />
-          <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
-        </main>
+        <DockHost renderPanel={renderPanel}>
+          <main
+            ref={containerRef}
+            data-testid="canvas-container"
+            className={styles.canvas}
+            onContextMenu={handleContextMenu}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+            <canvas ref={canvasRef} aria-label="Drawing canvas" />
+            <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} aria-hidden="true" />
+            <TextActionButtons containerRef={containerRef} />
+            <PathActionButtons containerRef={containerRef} />
+            <TiltShiftControls />
+            <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
+          </main>
+        </DockHost>
         {contextMenu.visible && (
           <ContextMenu
             items={contextMenu.items}
@@ -223,11 +246,13 @@ export function App() {
         )}
         <GuideColorPicker />
         {isLiquifyOpen && <LiquifyPanel />}
-        <div className={styles.sidebarArea}>
+        <div
+          className={styles.sidebarArea}
+          style={{ '--right-dock-width': `${rightDockWidth}px` } as React.CSSProperties}
+        >
           {showEffectsDrawer && (
             <div
               className={styles.effectsDrawer}
-              ref={effectsDrawerRef}
               data-testid="effects-drawer"
               style={{ '--drag-x': `${drawerOffset.x}px`, '--drag-y': `${drawerOffset.y}px` } as React.CSSProperties}
             >
@@ -245,21 +270,6 @@ export function App() {
               {...refDrawerDragProps}
             >
               <ReferenceImagePanel />
-            </div>
-          )}
-          {visiblePanels.size > 0 && (
-            <div className={styles.sidebar}>
-              <div className={styles.sidebarScroll}>
-                {visiblePanels.has('navigator') && <NavigatorPanel />}
-                {visiblePanels.has('info') && <InfoPanel />}
-                {visiblePanels.has('color') && <ColorPanel />}
-                {visiblePanels.has('channels') && <ChannelsPanel />}
-                {visiblePanels.has('history') && <HistoryPanel />}
-                {visiblePanels.has('paths') && <PathsPanel />}
-              </div>
-              <div className={styles.sidebarBottom} ref={sidebarBottomRef}>
-                {visiblePanels.has('layers') && <LayerPanel onSelectLayer={handleSelectLayer} />}
-              </div>
             </div>
           )}
           <PanelToolbar />
