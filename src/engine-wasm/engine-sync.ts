@@ -870,13 +870,21 @@ export function syncTextLayers(
   strikethrough: boolean,
   onPositionChange: (layerId: string, x: number, y: number) => void,
 ): void {
-  if (!textEditing) return;
+  const tracked = getTracked(engine);
+
+  if (!textEditing) {
+    tracked.editingTextKey = null;
+    return;
+  }
 
   // When text is empty, replace the layer texture with a 1x1 transparent pixel.
   // fillWithColor can't be used here because it blits from a document-sized
   // scratch FBO into the small layer texture, sampling stale compositor content.
   if (textEditing.text.length === 0) {
+    const emptyKey = `${textEditing.layerId}\0empty`;
+    if (tracked.editingTextKey === emptyKey) return;
     uploadLayerPixels(engine, textEditing.layerId, new Uint8Array(4), 1, 1, 0, 0);
+    tracked.editingTextKey = emptyKey;
     return;
   }
 
@@ -897,6 +905,9 @@ export function syncTextLayers(
     strikethrough,
   });
 
+  const cacheKey = `${layerId}\0${bounds.x}\0${bounds.y}\0${propsJson}`;
+  if (tracked.editingTextKey === cacheKey) return;
+
   setTextLayerContent(engine, layerId, propsJson);
 
   const boundsResult = renderTextLayer(engine, layerId);
@@ -915,6 +926,7 @@ export function syncTextLayers(
 
   uploadLayerPixels(engine, layerId, pixels, width, height, desiredX, desiredY);
   onPositionChange(layerId, desiredX, desiredY);
+  tracked.editingTextKey = cacheKey;
 }
 
 /**
