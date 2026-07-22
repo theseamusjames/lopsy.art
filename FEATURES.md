@@ -546,8 +546,8 @@ Lopsy has **no** Adjustment-layer or Fill-layer type. Adjustments are non-destru
 - **Plain click**: selects only the clicked layer (standard behavior)
 - **Cmd/Ctrl+click**: toggles a layer in/out of the current multi-selection without changing which layer is "active"
 - **Shift+click**: selects the contiguous range from the active layer to the clicked layer
-- **Cmd/Ctrl+A** (Layers panel focused): selects every layer in the document
-- **Delete / Backspace** (Layers panel focused): removes every selected layer
+- **Cmd/Ctrl+A**: selects every layer in the document (the root group is excluded). The handler fires when focus is inside the Layers panel **or when nothing is focused at all** (`document.body`), which is the normal state while drawing. Because the global Edit shortcut for the same chord is a separate `document` listener, in that focus-less case `⌘A` runs **both** actions at once — it selects all layers *and* runs Select All on the canvas. Only a text input swallows the chord. (Matched lower-case only, so `⇧⌘A` is not the same binding.)
+- **Delete / Backspace** (Layers panel focused): removes every selected layer. The global Delete handler is not suppressed, so this also runs the canvas delete on the active layer in the same keystroke — clearing the selected pixels if a marquee is active, or removing the active layer if not. Two history entries can result from one press.
 - Selected layers can be grouped or reordered together; the active layer remains the target for tool operations
 
 ### Clipboard
@@ -722,6 +722,14 @@ Dragging starts on a tab (or a floating window's tab bar) after **5 px** of poin
 - Self-drops are no-ops: dropping a tab on its own group's center just activates it, and a lone tab can't split its own group.
 - Dragging a floating window whose group is a single tab moves the **whole window**; with 2–3 tabs, dragging a tab extracts just that panel and dragging the empty part of the tab bar moves the window.
 
+### Tab Keyboard Navigation
+Tab strips follow the WAI-ARIA tabs pattern, so a group's tabs are reachable without a pointer:
+
+- **Left/Up** and **Right/Down** move to the previous/next tab and wrap around at either end; **Home** / **End** jump to the first / last tab.
+- Selection *follows focus* — arrowing onto a tab activates its panel immediately, no Enter or Space needed.
+- Roving tabindex: only the active tab is in the Tab order, so a single <kbd>Tab</kbd> press enters the strip and the next one leaves it for the panel body.
+- Each tab is wired to its panel with `aria-controls` / `role="tabpanel"` so screen readers announce the pairing.
+
 ### Floating Windows
 - Dragged by the tab bar, resized from **all eight** edges and corners (minimum 200 × 140).
 - Clicking anywhere in a window raises it above the others.
@@ -800,10 +808,15 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 
 ## History
 
-- Undo/redo with labeled snapshots (the 50 most recent states are kept)
+- Undo/redo with labeled snapshots (the 50 most recent states are kept — each push keeps the last 49 plus the new one, and the oldest silently falls off)
 - **Undo** (`⌘Z`) / **Redo** (`⇧⌘Z`) from the Edit menu or keyboard
-- History panel lists every snapshot with its label; clicking a row jumps the document to that state
 - RLE-compressed GPU texture snapshots; metadata-only snapshots for lightweight operations (visibility toggles, blend-mode changes, etc.) so the history list stays cheap even after long sessions
+
+### History Panel
+- Rows are numbered from **0 — "Original"**, the state before the first recorded edit; every later row shows the label of the action that produced it (`Brush`, `Merge Down`, `Clear Selection`, …).
+- The row matching the current state is highlighted. Clicking any row jumps there by replaying `undo`/`redo` one step at a time until it is reached — so it is a fast scrub through history, not a random-access restore.
+- **Undone steps stay in the list** below the current position, dimmed as future states, and clicking one redoes forward into it. They are discarded the moment a new edit is pushed (the redo stack is cleared on every push).
+- The list auto-scrolls to the newest entry as you work, and shows a plain **"No history"** placeholder until the first snapshot is recorded.
 
 ---
 
@@ -820,7 +833,11 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 
 ### Open / Save
 - **New** (`⌘N`, menu-only accelerator): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
-- **Open…** (`⌘O`, menu-only accelerator): open a PNG/JPEG/GIF (first frame)/BMP/WebP/PSD/DNG/RAF/.lopsy from disk (the picker auto-routes by extension via a shared `classifyOpenFile` helper). The same routing backs the pre-document flow — the New Document modal's "Open file" button and drag-and-drop onto a fresh app accept the same formats, including `.lopsy` project files.
+- **Open…** (`⌘O`, menu-only accelerator): open a PNG/JPEG/GIF (first frame)/BMP/WebP/PSD/DNG/RAF/.lopsy from disk. The picker lists every supported extension explicitly rather than `image/*` — mixing the two makes Chrome on macOS collapse the dialog down to a single filter.
+- **Two routing paths, not one.** The File-menu picker routes inline **by extension** (`.lopsy` → project loader, `.psd` → PSD importer, `.dng` / `.raf` → the Rust RAW decoders, anything else → browser `<img>` decode). The pre-document flow — the New Document modal's "Open file" button and drag-and-drop — instead uses the shared `classifyOpenFile` helper, which checks the same four extensions but falls back to the **MIME type** (`image/*`) rather than attempting a decode. The practical difference is at the edges: a file with an image MIME type but an odd extension opens on drop and fails from the menu picker, while an unrecognized file dropped on the canvas is silently ignored (the New Document modal's button surfaces a friendly error instead).
+- **Drag-and-drop is always live**, not just before a document exists — the drop target is the whole app shell as well as the canvas. Dropping an image onto an open document adds it as a layer (see Paste / Drop behavior); dropping a `.psd`, `.dng`, `.raf`, or `.lopsy` **replaces** the open document.
+- **Unsaved-changes guard**: **New**, **Open…**, and **Open Project…** check the document's dirty flag and put up a browser `confirm()` — "You have unsaved changes. Are you sure you want to continue?" — before discarding work. Closing or reloading the tab triggers the browser's own `beforeunload` warning. The drop path performs **no** such check: a `.psd` or `.lopsy` dropped onto a dirty document replaces it immediately.
+- The dirty flag is cleared by **Save Project** and by **PSD import** — and also by any **export**, since the shared download helper marks the document clean. Exporting a PNG therefore silences the unsaved-changes warnings even though nothing was saved to a project file.
 - **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust). Both **RGB** and **CMYK** color modes are accepted at 8-bit and 16-bit depth — CMYK files are converted to RGB on import (naive `(1−C)(1−K)` channel math) for both the per-layer and merged-composite paths. Other color modes (grayscale, indexed, Lab, etc.) are rejected with an unsupported-color-mode error.
 - **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant)
 
@@ -838,9 +855,12 @@ Opened from File → Export… The `⌥⇧⌘E` shown next to the menu item is a
   - **Regular** — 8-bit PNG via `canvas.toBlob`
   - **High** — 16-bit PNG via the Rust engine, preserving FP16 precision for wide-gamut workflows
 - **Filename**: editable text field; the document name is used by default and the format-appropriate extension (`.png`, `.jpg`, `.webp`, `.bmp`) is appended automatically
-- **Enter** confirms; **Escape** cancels
+- A live pixel-dimension readout (`W × H px`) sits under the preview
+- **Enter** confirms; **Escape** cancels (the handler is on the dialog, so it responds once focus is inside it)
 
 **Color-managed output**: when the document is in a wide-gamut working space (Display P3), exports carry the correct color metadata so other apps interpret the pixels faithfully — PNG and JPEG are tagged with a colorimetrically-correct Display P3 ICC profile (Bradford-adapted colorants, true piecewise-sRGB transfer curve), PSD embeds the matching working-space profile, and BMP (which cannot carry a profile) is converted P3 → sRGB before encoding. sRGB documents keep their historical sRGB tagging unchanged. WebP is tagged by its own encoder.
+
+**Embedded credit**: PNG exports carry a `Software: Lopsy` text chunk plus a `Comment` of "Made with Lopsy — http://lopsy.art"; JPEG exports carry the same note as a JPEG comment segment. WebP and BMP carry no note.
 
 ### Quick Export PNG (`⇧⌘E`)
 One-shot PNG export through the GPU compositor — no dialog, no preview, uses the document name as the filename and quality 92. (The `⇧⌘E` shown in the menu is a display-only accelerator, not wired to a global key handler.)
