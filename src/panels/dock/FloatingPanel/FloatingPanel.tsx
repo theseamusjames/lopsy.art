@@ -37,7 +37,7 @@ export function FloatingPanel({ window: win, renderPanel }: FloatingPanelProps) 
 
   const handleResizeDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>, dir: ResizeDir) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || resizeRef.current) return;
       e.preventDefault();
       e.stopPropagation();
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -72,6 +72,12 @@ export function FloatingPanel({ window: win, renderPanel }: FloatingPanelProps) 
     resizeRef.current = null;
   }, []);
 
+  // Capture can be lost if the handle unmounts mid-resize (e.g. the window is
+  // docked away); clear the ref so no stale resize state lingers.
+  const handleLostCapture = useCallback(() => {
+    resizeRef.current = null;
+  }, []);
+
   return (
     <div
       className={styles.window}
@@ -101,6 +107,7 @@ export function FloatingPanel({ window: win, renderPanel }: FloatingPanelProps) 
           onPointerMove={handleResizeMove}
           onPointerUp={handleResizeEnd}
           onPointerCancel={handleResizeEnd}
+          onLostPointerCapture={handleLostCapture}
         />
       ))}
     </div>

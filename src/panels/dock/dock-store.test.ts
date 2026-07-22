@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDockStore } from './dock-store';
 import { setVisiblePanelsSink } from './dock-ui-bridge';
-import { collectGroups, createDefaultLayout, findPanelGroupId, panelsInLayout } from './dock-layout';
+import { collectGroups, findPanelGroupId, panelsInLayout } from './dock-layout';
 
 // The dock store publishes visiblePanels through the bridge (ui-store
 // registers the real sink); capture publishes here.
@@ -9,7 +9,10 @@ const setState = vi.fn();
 setVisiblePanelsSink((panels) => setState({ visiblePanels: panels }));
 
 function reset(): void {
-  useDockStore.setState({ layout: createDefaultLayout(), drag: null });
+  // Go through the real action so the store's internal visible-panels
+  // dedup key stays in sync with the layout we reset to.
+  useDockStore.setState({ drag: null });
+  useDockStore.getState().resetLayout();
   setState.mockClear();
 }
 
@@ -89,6 +92,24 @@ describe('drag/drop actions', () => {
     state = useDockStore.getState();
     expect(state.layout.floating).toHaveLength(0);
     expect(collectGroups(state.layout.docks.left).map((g) => g.tabs)).toEqual([['color']]);
+  });
+
+  it('does not republish visiblePanels during a geometry-only change', () => {
+    // Float a panel (this changes nothing about which panels are open — the
+    // same set stays visible), then move the window repeatedly.
+    useDockStore.getState().dropTab('color', { kind: 'float', rect: { x: 0, y: 0, width: 300, height: 300 } });
+    const id = useDockStore.getState().layout.floating[0]?.id ?? '';
+    setState.mockClear();
+    useDockStore.getState().moveWindow(id, 40, 40);
+    useDockStore.getState().moveWindow(id, 80, 80);
+    useDockStore.getState().resizeWindow(id, { x: 80, y: 80, width: 320, height: 340 });
+    expect(setState).not.toHaveBeenCalled();
+  });
+
+  it('republishes visiblePanels when the open set actually changes', () => {
+    setState.mockClear();
+    useDockStore.getState().togglePanel('history');
+    expect(setState).toHaveBeenCalled();
   });
 
   it('resizeDock clamps and stores px sizes', () => {

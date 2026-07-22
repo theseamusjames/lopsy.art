@@ -172,7 +172,10 @@ function handlePointerCancel(e: PointerEvent): void {
 }
 
 function handleKeyDown(e: KeyboardEvent): void {
-  if (e.key !== 'Escape' || !active) return;
+  // Only consume Escape once the gesture has actually crossed the drag
+  // threshold — a bare pointerdown that never moved must not swallow Escape
+  // from modals or tool-cancel handlers.
+  if (e.key !== 'Escape' || !active?.activated) return;
   e.stopPropagation();
   cancelDrag();
 }
@@ -228,9 +231,4 @@ export function beginWindowDrag(e: PointerDownLike, windowId: string): void {
     { kind: 'window', windowId, originX: window_.x, originY: window_.y },
     windowId,
   );
-}
-
-/** True while a dock drag gesture is in progress (post-threshold). */
-export function isDockDragActive(): boolean {
-  return active?.activated ?? false;
 }

@@ -525,17 +525,22 @@ export function bringFloatingToFront(layout: DockLayout, windowId: string): Dock
   return { ...layout, floating };
 }
 
-/** Keep at least a grabbable strip of the window inside the host. */
+/**
+ * Keep floating windows fully inside the host. Windows are children of the
+ * dock host, whose right/bottom edges border the panel rail and drawers; a
+ * window allowed to overflow those edges would be painted *under* the rail
+ * (different stacking context) and become partly unreachable. So we clamp the
+ * whole window into [0, host] — snapping it back on resize / drop.
+ */
 export function clampFloatingToHost(
   layout: DockLayout,
   hostWidth: number,
   hostHeight: number,
 ): DockLayout {
-  const MARGIN = 48;
   let changed = false;
   const floating = layout.floating.map((w) => {
-    const x = Math.min(Math.max(w.x, MARGIN - w.width), Math.max(0, hostWidth - MARGIN));
-    const y = Math.min(Math.max(w.y, 0), Math.max(0, hostHeight - MARGIN));
+    const x = Math.min(Math.max(w.x, 0), Math.max(0, hostWidth - w.width));
+    const y = Math.min(Math.max(w.y, 0), Math.max(0, hostHeight - w.height));
     if (x === w.x && y === w.y) return w;
     changed = true;
     return { ...w, x, y };

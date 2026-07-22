@@ -362,13 +362,24 @@ describe('floating window geometry', () => {
     expect(bringFloatingToFront(next, firstId)).toBe(next);
   });
 
-  it('clamps windows back into the host', () => {
+  it('clamps windows fully back inside the host (no overflow past the edges)', () => {
     let layout = base();
     const id = layout.floating[0]?.id ?? '';
     layout = moveFloatingWindow(layout, id, 5000, 5000);
     const next = clampFloatingToHost(layout, 1200, 800);
-    expect(next.floating[0]?.x).toBeLessThanOrEqual(1200 - 48);
-    expect(next.floating[0]?.y).toBeLessThanOrEqual(800 - 48);
+    const w = next.floating[0];
+    expect(w).toBeDefined();
+    expect(w!.x).toBeGreaterThanOrEqual(0);
+    expect(w!.y).toBeGreaterThanOrEqual(0);
+    expect(w!.x + w!.width).toBeLessThanOrEqual(1200);
+    expect(w!.y + w!.height).toBeLessThanOrEqual(800);
+  });
+
+  it('leaves a window that already fits untouched', () => {
+    let layout = base();
+    const id = layout.floating[0]?.id ?? '';
+    layout = moveFloatingWindow(layout, id, 100, 60);
+    expect(clampFloatingToHost(layout, 1200, 800).floating[0]).toMatchObject({ x: 100, y: 60 });
   });
 });
 

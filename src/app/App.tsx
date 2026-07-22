@@ -217,7 +217,10 @@ export function App() {
         <MenuBar />
         <OptionsBar />
       </div>
-      <div className={styles.body}>
+      <div
+        className={styles.body}
+        style={{ '--right-dock-width': `${rightDockWidth}px` } as React.CSSProperties}
+      >
         <Toolbox />
         <DockHost renderPanel={renderPanel}>
           <main
@@ -246,10 +249,7 @@ export function App() {
         )}
         <GuideColorPicker />
         {isLiquifyOpen && <LiquifyPanel />}
-        <div
-          className={styles.sidebarArea}
-          style={{ '--right-dock-width': `${rightDockWidth}px` } as React.CSSProperties}
-        >
+        <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div
               className={styles.effectsDrawer}

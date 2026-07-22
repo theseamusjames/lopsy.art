@@ -5,6 +5,9 @@
   display: flex;
   flex-direction: column;
   position: relative;
+  /* Own stacking context so floating windows and the drop indicator layer
+     cleanly against the canvas/docks rather than the app-level z-scale. */
+  isolation: isolate;
 }
 
 .middleRow {

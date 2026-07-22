@@ -153,8 +153,8 @@ you missed.
 
 **Always write tests by screenshot first, assertion second.** The
 screenshot is the contract — it's the visual record of what the test
-is actually verifying, committed alongside the spec file for future
-reviewers.
+is actually verifying, and the thing you reconcile your assertions
+against while writing and debugging.
 
 ### The screenshot-first workflow
 
@@ -179,19 +179,18 @@ reviewers.
    looks correct, your assertion values or coordinates are wrong —
    not the feature.
 
-### Screenshots are committed to git
+### Screenshots are local artifacts — don't commit them
 
-Every test that saves a screenshot commits it. This is intentional:
+`e2e/screenshots/` is a scratch directory. Tests write into it on every
+run, and those files stay out of git — never add them to a commit.
 
-- **Reviewers** can open the screenshot and verify that the assertions
-  correspond to visible facts in the image. Without the screenshot, a
-  reviewer has no way to tell whether `expect(pixel.r).toBe(255)` is
-  correct — maybe the shape tool never rendered the red fill and the
-  test is reading an unrelated pixel.
-- **Regressions** are easier to diagnose. When a test fails months
-  later, the committed screenshot is the reference for what the test
-  used to see. Compare it against Playwright's failure screenshot in
-  `test-results/` to pinpoint what changed.
+- **Regenerate instead of archiving.** If you need to know what a test
+  sees, run it and look at the fresh output. A stale image checked in
+  months ago is worse than no image.
+- **Assertions carry the contract into review.** Since a reviewer
+  can't open the image, the pixel probes have to be self-explanatory:
+  name the coordinates, say what's expected to be there, and make the
+  reason obvious from the test code alone.
 - **Stable output is a feature, not a side effect.** Two runs of the
   same test should produce byte-for-byte identical screenshots unless
   production code changed. If your test produces non-deterministic
@@ -559,9 +558,9 @@ you to model the output.
 ### Screenshots belong with the test
 
 See "Screenshots are the source of truth" at the top of this file. In
-short: save to `e2e/screenshots/<descriptive-name>.png`, commit
-alongside the spec, and make sure a reviewer can look at the
-screenshot and verify your assertions without running the test.
+short: save to `e2e/screenshots/<descriptive-name>.png`, leave those
+files out of the commit, and write assertions specific enough that a
+reviewer can follow them without seeing the image.
 
 ---
 
@@ -569,10 +568,11 @@ screenshot and verify your assertions without running the test.
 
 1. **Run the single failing test** to get the real error message, not a
    summary count. `npx playwright test --project=chromium e2e/<file> -g "<name>"`.
-2. **Open the committed screenshot for this test** (or Playwright's
-   failure screenshot in `test-results/` if there's no baseline).
-   That's the source of truth — you're reconciling the assertions
-   against what's actually on screen, not the other way around.
+2. **Open the screenshot the run just produced** in `e2e/screenshots/`
+   (or Playwright's failure screenshot in `test-results/` if the test
+   died before saving one). That's the source of truth — you're
+   reconciling the assertions against what's actually on screen, not
+   the other way around.
 3. **Read the test and ask: what is it trying to verify?** Compare
    the assertion's claim ("pixel at (50, 50) should be red") to the
    screenshot. If they don't agree, one of them is wrong.
