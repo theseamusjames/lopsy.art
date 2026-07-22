@@ -3,6 +3,7 @@ import { useToolSettingsStore } from '../tool-settings-store';
 import { toolRegistry } from '../../tools/tool-registry';
 import { useShortcutStore, buildKeyToActionMap, NON_TOOL_ACTION_IDS } from '../store/shortcut-store';
 import { toggleQuickMaskMode } from '../interactions/quick-mask-ops';
+import { scheduleNudge } from './nudge-coalesce';
 import type { ToolId } from '../../types';
 
 /** Actions that aren't tool selections but live in the single-key namespace. */
@@ -93,10 +94,11 @@ export function handleNudgeShortcut(
   else if (e.key === 'ArrowLeft') dx = -amount;
   else if (e.key === 'ArrowRight') dx = amount;
 
-  if (isSelection) {
-    nudgeSelection(dx, dy);
-  } else {
-    nudgeMove(dx, dy);
-  }
+  // Coalesce to rAF: a held arrow key auto-repeats faster than the browser
+  // can render, and each event previously did a full-document mask rebuild
+  // + GPU upload (issue #684). scheduleNudge accumulates dx/dy and applies
+  // once per frame, and pushes one history entry per key-hold.
+  const apply = isSelection ? nudgeSelection : nudgeMove;
+  scheduleNudge(e.key, e.repeat, dx, dy, apply);
   return true;
 }

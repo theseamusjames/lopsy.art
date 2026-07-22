@@ -7,6 +7,7 @@ import { getEngine } from '../engine-wasm/engine-state';
 import { clipboardCut, hasFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
+import { releaseNudgeKey } from './shortcuts/nudge-coalesce';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob } from './paste-or-open';
@@ -181,6 +182,10 @@ export function useKeyboardShortcuts({
         // Releasing space ends both the "ready to pan" state and any
         // pan-in-progress; both collapse back to idle.
         setPointerMode(POINTER_IDLE);
+      }
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        // Flush any coalesced nudge and reset the per-hold history latch.
+        releaseNudgeKey(e.key);
       }
     };
 
