@@ -39,8 +39,11 @@ export function NavigatorPanel() {
   }, [docWidth, docHeight]);
 
   // Throttled thumbnail update by reading the composite texture from the engine.
-  // The scheduler skips ticks while a paint stroke is in progress so the GPU
-  // readback doesn't stall the brush hot path (issue #380).
+  // The scheduler skips ticks while any pointer gesture is in progress (drag,
+  // pan, pinch) so the GPU readback doesn't stall the frame (issues #380 /
+  // #682). The `isStroking` flag only covered paint tools — every other drag
+  // (move, transform, marquee, gradient, crop, mesh warp, tilt shift) was
+  // still paying a full-composite readback five times a second.
   useEffect(() => {
     const update = () => {
       const thumbCanvas = thumbnailCanvasRef.current;
@@ -69,14 +72,14 @@ export function NavigatorPanel() {
       ctx.putImageData(imageData, 0, 0);
     };
 
-    if (!useUIStore.getState().isStroking) update();
+    if (!useUIStore.getState().isInteracting) update();
     const scheduler = createNavigatorScheduler({
       read: update,
       intervalMs: THUMBNAIL_UPDATE_INTERVAL_MS,
     });
     const unsubscribe = useUIStore.subscribe((state, prev) => {
-      if (state.isStroking !== prev.isStroking) {
-        scheduler.setStroking(state.isStroking);
+      if (state.isInteracting !== prev.isInteracting) {
+        scheduler.setInteracting(state.isInteracting);
       }
     });
     return () => {

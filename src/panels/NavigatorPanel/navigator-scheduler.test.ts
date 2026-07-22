@@ -10,7 +10,7 @@ describe('createNavigatorScheduler', () => {
     vi.useRealTimers();
   });
 
-  it('reads on each interval tick when no stroke is active', () => {
+  it('reads on each interval tick when no interaction is active', () => {
     const read = vi.fn();
     const sched = createNavigatorScheduler({ read, intervalMs: 200 });
 
@@ -23,26 +23,26 @@ describe('createNavigatorScheduler', () => {
     sched.stop();
   });
 
-  it('skips ticks while stroking', () => {
+  it('skips ticks while an interaction is in progress', () => {
     const read = vi.fn();
     const sched = createNavigatorScheduler({ read, intervalMs: 200 });
 
-    sched.setStroking(true);
+    sched.setInteracting(true);
     vi.advanceTimersByTime(1000);
     expect(read).not.toHaveBeenCalled();
 
     sched.stop();
   });
 
-  it('fires one catch-up read when stroke ends', () => {
+  it('fires one catch-up read when the interaction ends', () => {
     const read = vi.fn();
     const sched = createNavigatorScheduler({ read, intervalMs: 200 });
 
-    sched.setStroking(true);
+    sched.setInteracting(true);
     vi.advanceTimersByTime(1000);
     expect(read).not.toHaveBeenCalled();
 
-    sched.setStroking(false);
+    sched.setInteracting(false);
     // Catch-up runs on the next macrotask (timeout 0).
     vi.advanceTimersByTime(0);
     expect(read).toHaveBeenCalledTimes(1);
@@ -50,13 +50,13 @@ describe('createNavigatorScheduler', () => {
     sched.stop();
   });
 
-  it('resumes interval reads after the stroke ends', () => {
+  it('resumes interval reads after the interaction ends', () => {
     const read = vi.fn();
     const sched = createNavigatorScheduler({ read, intervalMs: 200 });
 
-    sched.setStroking(true);
+    sched.setInteracting(true);
     vi.advanceTimersByTime(400);
-    sched.setStroking(false);
+    sched.setInteracting(false);
     vi.advanceTimersByTime(0); // catch-up
     expect(read).toHaveBeenCalledTimes(1);
 
@@ -66,27 +66,27 @@ describe('createNavigatorScheduler', () => {
     sched.stop();
   });
 
-  it('does not fire a catch-up if stroking turns true again before it runs', () => {
+  it('does not fire a catch-up if an interaction restarts before it runs', () => {
     const read = vi.fn();
     const sched = createNavigatorScheduler({ read, intervalMs: 200 });
 
-    sched.setStroking(true);
-    sched.setStroking(false); // schedules catch-up
-    sched.setStroking(true); // re-enter stroke before catch-up runs
+    sched.setInteracting(true);
+    sched.setInteracting(false); // schedules catch-up
+    sched.setInteracting(true); // re-enter interaction before catch-up runs
     vi.advanceTimersByTime(0);
     expect(read).not.toHaveBeenCalled();
 
     sched.stop();
   });
 
-  it('ignores redundant setStroking calls (no extra catch-up)', () => {
+  it('ignores redundant setInteracting calls (no extra catch-up) — #682', () => {
     const read = vi.fn();
     const sched = createNavigatorScheduler({ read, intervalMs: 200 });
 
-    sched.setStroking(true);
-    sched.setStroking(true);
-    sched.setStroking(false);
-    sched.setStroking(false);
+    sched.setInteracting(true);
+    sched.setInteracting(true);
+    sched.setInteracting(false);
+    sched.setInteracting(false);
     vi.advanceTimersByTime(0);
     expect(read).toHaveBeenCalledTimes(1); // single catch-up
 
@@ -97,8 +97,8 @@ describe('createNavigatorScheduler', () => {
     const read = vi.fn();
     const sched = createNavigatorScheduler({ read, intervalMs: 200 });
 
-    sched.setStroking(true);
-    sched.setStroking(false); // catch-up scheduled
+    sched.setInteracting(true);
+    sched.setInteracting(false); // catch-up scheduled
     sched.stop();
     vi.advanceTimersByTime(1000);
     expect(read).not.toHaveBeenCalled();

@@ -285,6 +285,13 @@ interface UIState {
    *  expensive readback during the brush hot path. */
   isStroking: boolean;
   setIsStroking: (stroking: boolean) => void;
+  /** True while ANY pointer gesture is active — tool drag, pan, or pinch/zoom
+   *  — not just paint strokes. Set by useCanvasPointerHandlers on any
+   *  interaction start and cleared when the last active pointer ends. Panels
+   *  that read back from the GPU key off this instead of `isStroking` so the
+   *  readback is paused during every drag, not only paint strokes (#682). */
+  isInteracting: boolean;
+  setIsInteracting: (interacting: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -488,6 +495,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   isStroking: false,
   setIsStroking: (stroking) => {
     if (get().isStroking !== stroking) set({ isStroking: stroking });
+  },
+  isInteracting: false,
+  setIsInteracting: (interacting) => {
+    if (get().isInteracting !== interacting) set({ isInteracting: interacting });
   },
 }));
 
