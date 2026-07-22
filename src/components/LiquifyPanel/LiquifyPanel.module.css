@@ -1,7 +1,9 @@
 .panel {
   position: fixed;
   top: calc(var(--header-height) + var(--options-bar-height) + var(--space-4));
-  right: calc(var(--sidebar-width) + var(--space-4));
+  /* Sit just left of the panel rail + right dock (dock width is dynamic,
+     fed from App as --right-dock-width; falls back to 0 with no right dock). */
+  right: calc(var(--toolbox-width) + var(--right-dock-width, 0px) + var(--space-4));
   width: 220px;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
