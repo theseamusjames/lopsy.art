@@ -2,16 +2,17 @@
  * Schedules thumbnail readbacks for the Navigator panel.
  *
  * The thumbnail update calls into the WASM engine to read back the composite
- * texture, which stalls the GPU pipeline. Doing that during an active brush
- * stroke ties up the GPU and causes the brush to lag (issue #380). The
- * scheduler skips ticks while a stroke is in progress and fires one
- * catch-up tick when the stroke ends so the user sees the result.
+ * texture, which stalls the GPU pipeline. Doing that during any active
+ * pointer gesture ties up the GPU and causes the drag to lag (issue #380,
+ * broadened by #682 from paint strokes to every pointer gesture). The
+ * scheduler skips ticks while an interaction is in progress and fires one
+ * catch-up tick when the interaction ends so the user sees the result.
  */
 
 export interface SchedulerHooks {
   /** Read the composite and paint the thumbnail. */
   read: () => void;
-  /** Polling interval in ms when no stroke is active. */
+  /** Polling interval in ms when no interaction is active. */
   intervalMs: number;
   /** Inject timer functions for tests. */
   setInterval?: (fn: () => void, ms: number) => unknown;
@@ -21,11 +22,11 @@ export interface SchedulerHooks {
 }
 
 export interface NavigatorScheduler {
-  /** Run a tick now if not stroking. Called by the interval timer. */
+  /** Run a tick now if no interaction is active. Called by the interval timer. */
   tick: () => void;
-  /** Update the stroking flag. When transitioning true→false, schedules
-   *  one catch-up tick on the next event-loop turn. */
-  setStroking: (stroking: boolean) => void;
+  /** Update the "interaction in progress" flag. When transitioning
+   *  true→false, schedules one catch-up tick on the next event-loop turn. */
+  setInteracting: (interacting: boolean) => void;
   /** Stop the timer and forget any scheduled catch-up. */
   stop: () => void;
 }
@@ -36,27 +37,27 @@ export function createNavigatorScheduler(hooks: SchedulerHooks): NavigatorSchedu
   const setT = hooks.setTimeout ?? ((fn, ms) => setTimeout(fn, ms));
   const clearT = hooks.clearTimeout ?? ((id) => clearTimeout(id as ReturnType<typeof setTimeout>));
 
-  let stroking = false;
+  let interacting = false;
   let catchUpId: unknown = null;
 
   const tick = (): void => {
-    if (stroking) return;
+    if (interacting) return;
     hooks.read();
   };
 
   const intervalId = setI(tick, hooks.intervalMs);
 
-  const setStroking = (next: boolean): void => {
-    if (next === stroking) return;
-    const wasStroking = stroking;
-    stroking = next;
-    if (wasStroking && !next) {
-      // Stroke just ended — schedule one catch-up read so the thumbnail
+  const setInteracting = (next: boolean): void => {
+    if (next === interacting) return;
+    const wasInteracting = interacting;
+    interacting = next;
+    if (wasInteracting && !next) {
+      // Interaction just ended — schedule one catch-up read so the thumbnail
       // reflects the final pixels without waiting up to intervalMs.
       if (catchUpId !== null) clearT(catchUpId);
       catchUpId = setT(() => {
         catchUpId = null;
-        if (!stroking) hooks.read();
+        if (!interacting) hooks.read();
       }, 0);
     }
   };
@@ -69,5 +70,5 @@ export function createNavigatorScheduler(hooks: SchedulerHooks): NavigatorSchedu
     }
   };
 
-  return { tick, setStroking, stop };
+  return { tick, setInteracting, stop };
 }

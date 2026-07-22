@@ -184,6 +184,7 @@ export function useCanvasPointerHandlers({
           toolPointerIdRef.current = null;
         }
         startGesture(deps.viewport);
+        useUIStore.getState().setIsInteracting(true);
         return;
       }
 
@@ -209,6 +210,7 @@ export function useCanvasPointerHandlers({
           startPanX: deps.viewport.panX,
           startPanY: deps.viewport.panY,
         });
+        useUIStore.getState().setIsInteracting(true);
         e.preventDefault();
         return;
       }
@@ -254,6 +256,7 @@ export function useCanvasPointerHandlers({
       if (e.button === 0) {
         toolPointerIdRef.current = e.pointerId;
         deps.handleToolDown(e);
+        useUIStore.getState().setIsInteracting(true);
       }
     };
 
@@ -360,7 +363,6 @@ export function useCanvasPointerHandlers({
         if (countTouchPointers(pointersRef.current) < 2) {
           gestureRef.current.active = false;
         }
-        return;
       }
 
       if (deps.pointerMode.kind === 'panning') {
@@ -370,6 +372,17 @@ export function useCanvasPointerHandlers({
       if (wasToolPointer) {
         toolPointerIdRef.current = null;
         deps.handleToolUp(e);
+      }
+
+      // Clear the "any pointer gesture is active" flag once every interaction
+      // path is idle. Kept in sync with tool/pan/gesture starts above so
+      // NavigatorPanel's scheduler can pause the composite readback for any
+      // drag, not just paint strokes (#682).
+      const stillGesturing = gestureRef.current.active;
+      const stillPanning = deps.pointerMode.kind === 'panning';
+      const stillTool = toolPointerIdRef.current !== null;
+      if (!stillGesturing && !stillPanning && !stillTool) {
+        useUIStore.getState().setIsInteracting(false);
       }
     };
 

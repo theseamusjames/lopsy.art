@@ -3,9 +3,8 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import type { ActiveChannel, ChannelVisibility } from '../../app/ui-store';
-import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { extractChannelPixels, getLayerTextureDimensions } from '../../engine-wasm/wasm-bridge';
+import { readChannelThumbnail, readLayerThumbnail } from '../../engine-wasm/wasm-bridge';
 import { usePixelDataVersion } from '../../engine/usePixelDataVersion';
 import { contextOptions, createImageData } from '../../engine/color-space';
 import type { ChannelId } from './channel-extract';
@@ -14,6 +13,7 @@ import styles from './ChannelsPanel.module.css';
 const THUMB_W = 40;
 const THUMB_H = 20;
 const MAX_RETRIES = 10;
+const THUMB_MAX = Math.max(THUMB_W, THUMB_H);
 
 interface ChannelDef {
   id: ActiveChannel;
@@ -33,6 +33,34 @@ interface ChannelThumbnailProps {
   layerId: string;
   channel: ChannelId | 'rgb';
   pixelVersion: number;
+}
+
+function readThumbForChannel(
+  layerId: string,
+  channel: ChannelId | 'rgb',
+): ImageData | null {
+  const engine = getEngine();
+  if (!engine) return null;
+
+  // Both bridge functions return an 8-byte header [tw_u32_le, th_u32_le]
+  // followed by RGBA pixels — full documentation in the Rust side.
+  const data = channel === 'rgb'
+    ? readLayerThumbnail(engine, layerId, THUMB_MAX)
+    : readChannelThumbnail(
+      engine,
+      layerId,
+      channel === 'r' ? 0 : channel === 'g' ? 1 : channel === 'b' ? 2 : 3,
+      THUMB_MAX,
+    );
+
+  if (data.length < 8) return null;
+  const tw = data[0]! | (data[1]! << 8) | (data[2]! << 16) | (data[3]! << 24);
+  const th = data[4]! | (data[5]! << 8) | (data[6]! << 16) | (data[7]! << 24);
+  if (tw <= 0 || th <= 0 || data.length < 8 + tw * th * 4) return null;
+
+  const imageData = createImageData(tw, th);
+  imageData.data.set(new Uint8ClampedArray(data.buffer, data.byteOffset + 8, tw * th * 4));
+  return imageData;
 }
 
 function ChannelThumbnail({ layerId, channel, pixelVersion }: ChannelThumbnailProps) {
@@ -55,8 +83,13 @@ function ChannelThumbnail({ layerId, channel, pixelVersion }: ChannelThumbnailPr
       canvas.width = THUMB_W;
       canvas.height = THUMB_H;
 
-      const imageData = readLayerAsImageData(layerId);
-      if (!imageData) {
+      // GPU-side downscale: readChannelThumbnail / readLayerThumbnail render
+      // into a small (≤THUMB_MAX) RGBA8 texture and read back only that.
+      // Previously each thumbnail did a full-doc GPU→CPU readback, so a 4K
+      // layer with the panel open moved ~67 MB per channel per pixel-version
+      // bump (5 thumbnails × ~67 MB) — see #683.
+      const sourceData = readThumbForChannel(layerId, channel);
+      if (!sourceData) {
         ctx.clearRect(0, 0, THUMB_W, THUMB_H);
         if (retries < MAX_RETRIES) {
           retries++;
@@ -65,44 +98,24 @@ function ChannelThumbnail({ layerId, channel, pixelVersion }: ChannelThumbnailPr
         return;
       }
 
-      let sourceData: ImageData;
-      if (channel === 'rgb') {
-        sourceData = imageData;
-      } else {
-        const engine = getEngine();
-        const channelIdx = channel === 'r' ? 0 : channel === 'g' ? 1 : channel === 'b' ? 2 : 3;
-        if (engine) {
-          const dims = getLayerTextureDimensions(engine, layerId);
-          const tw = dims[0] ?? 0;
-          const th = dims[1] ?? 0;
-          if (tw > 0 && th > 0) {
-            const pixels = extractChannelPixels(engine, layerId, channelIdx);
-            if (pixels.length === tw * th * 4) {
-              sourceData = createImageData(tw, th);
-              sourceData.data.set(new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength));
-            } else {
-              sourceData = imageData;
-            }
-          } else {
-            sourceData = imageData;
-          }
-        } else {
-          sourceData = imageData;
-        }
-      }
-
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = sourceData.width;
-      tempCanvas.height = sourceData.height;
-      const tempCtx = tempCanvas.getContext('2d', contextOptions);
-      if (!tempCtx) return;
-      tempCtx.putImageData(sourceData, 0, 0);
-
       ctx.clearRect(0, 0, THUMB_W, THUMB_H);
-      const scale = Math.min(THUMB_W / sourceData.width, THUMB_H / sourceData.height);
-      const w = sourceData.width * scale;
-      const h = sourceData.height * scale;
-      ctx.drawImage(tempCanvas, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h);
+      // The thumbnail may not exactly match the canvas aspect — center it
+      // and letterbox, same as before. The pixel-per-pixel put is cheap
+      // because sourceData is at most THUMB_MAX px on a side.
+      if (sourceData.width === THUMB_W && sourceData.height === THUMB_H) {
+        ctx.putImageData(sourceData, 0, 0);
+      } else {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = sourceData.width;
+        tempCanvas.height = sourceData.height;
+        const tempCtx = tempCanvas.getContext('2d', contextOptions);
+        if (!tempCtx) return;
+        tempCtx.putImageData(sourceData, 0, 0);
+        const scale = Math.min(THUMB_W / sourceData.width, THUMB_H / sourceData.height);
+        const w = sourceData.width * scale;
+        const h = sourceData.height * scale;
+        ctx.drawImage(tempCanvas, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h);
+      }
     };
 
     rafId = requestAnimationFrame(tryRead);

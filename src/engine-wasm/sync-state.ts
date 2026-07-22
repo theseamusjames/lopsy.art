@@ -86,6 +86,15 @@ export interface TrackedState {
    */
   pathTextKeys: Map<string, string> | null;
   /**
+   * Cache key for the layer currently in text-edit mode. syncTextLayers
+   * runs on every dirty frame — including frames dirtied only by mouse
+   * movement over the canvas — so without this the swash rasterizer plus
+   * WASM→JS pixel readback plus GPU upload cycle would fire every frame
+   * even when the text has not changed. `null` means no key cached (fresh
+   * engine, or editing just ended).
+   */
+  editingTextKey: string | null;
+  /**
    * Consecutive upload-failure bookkeeping, keyed by `${layerId}:{kind}`
    * (kind: pixels | sparse | mask). A persistently failing upload retries on
    * every dirty frame; once the count for an unchanged data reference reaches
@@ -162,6 +171,7 @@ function createTrackedState(): TrackedState {
     levelsRef: null,
     levelsIdentity: null,
     pathTextKeys: null,
+    editingTextKey: null,
     uploadFailures: new Map(),
     groupAdjTracked: new Map(),
     groupAdjNeedsFullSync: true,

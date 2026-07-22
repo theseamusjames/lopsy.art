@@ -159,3 +159,25 @@ pub fn extract_channel_pixels(
 ) -> Vec<u8> {
     filter_gpu::extract_channel_pixels(&mut engine.inner, layer_id, channel)
 }
+
+/// GPU-side downscaled thumbnail for a single channel of a layer texture.
+///
+/// Renders the channel via the channel_extract shader into a small RGBA8
+/// texture (bilinearly downsampled via LINEAR filtering on the source
+/// layer texture), then reads back only the thumbnail-sized pixels.
+///
+/// Replaces `readLayerAsImageData` + `extractChannelPixels` in
+/// ChannelsPanel — those combined to move ~67 MB per channel per
+/// pixel-version bump on a 4K layer even though the panel displays 40×20
+/// thumbnails (#683).
+///
+/// Returns 8-byte header [width_u32_le, height_u32_le] + RGBA pixels.
+#[wasm_bindgen(js_name = "readChannelThumbnail")]
+pub fn read_channel_thumbnail(
+    engine: &mut Engine,
+    layer_id: &str,
+    channel: u32,
+    max_size: u32,
+) -> Vec<u8> {
+    filter_gpu::read_channel_thumbnail(&mut engine.inner, layer_id, channel, max_size)
+}

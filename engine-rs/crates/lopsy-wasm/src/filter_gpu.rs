@@ -320,3 +320,120 @@ pub fn extract_channel_pixels(
     engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h)
         .unwrap_or_default()
 }
+
+/// GPU-side downscaled thumbnail for one channel of a layer texture.
+///
+/// Mirror of `read_layer_thumbnail` / `read_composite_thumbnail`: renders
+/// the channel_extract shader into a small tw×th RGBA8 texture with
+/// LINEAR filtering on the source layer texture so the downscale happens
+/// on the GPU, then reads back only tw×th pixels.
+///
+/// Returns 8-byte header `[width_u32_le, height_u32_le]` + RGBA pixels.
+pub fn read_channel_thumbnail(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    channel: u32,
+    max_size: u32,
+) -> Vec<u8> {
+    let tex_handle = match engine.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return Vec::new(),
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
+    if w == 0 || h == 0 { return Vec::new(); }
+    let layer_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return Vec::new(),
+    };
+
+    let (tw, th) = if w <= max_size && h <= max_size {
+        (w, h)
+    } else {
+        let scale = (max_size as f64) / (w.max(h) as f64);
+        (((w as f64 * scale).round() as u32).max(1),
+         ((h as f64 * scale).round() as u32).max(1))
+    };
+
+    let gl = &engine.gl;
+    let thumb_tex = match gl.create_texture() {
+        Some(t) => t,
+        None => return Vec::new(),
+    };
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&thumb_tex));
+    let _ = gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+        WebGl2RenderingContext::TEXTURE_2D, 0,
+        WebGl2RenderingContext::RGBA8 as i32,
+        tw as i32, th as i32, 0,
+        WebGl2RenderingContext::RGBA,
+        WebGl2RenderingContext::UNSIGNED_BYTE,
+        None,
+    );
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+        WebGl2RenderingContext::LINEAR as i32);
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+        WebGl2RenderingContext::LINEAR as i32);
+
+    let fbo = match gl.create_framebuffer() {
+        Some(f) => f,
+        None => { gl.delete_texture(Some(&thumb_tex)); return Vec::new(); }
+    };
+    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+    gl.framebuffer_texture_2d(
+        WebGl2RenderingContext::FRAMEBUFFER,
+        WebGl2RenderingContext::COLOR_ATTACHMENT0,
+        WebGl2RenderingContext::TEXTURE_2D,
+        Some(&thumb_tex), 0,
+    );
+    gl.viewport(0, 0, tw as i32, th as i32);
+
+    let shader = &engine.shaders.channel_extract;
+    gl.use_program(Some(&shader.program));
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+    // Layer textures default to NEAREST; flip to LINEAR for the downscale so
+    // the sampler averages source texels, then restore before returning so
+    // the compositor's subsequent NEAREST reads aren't disturbed.
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+        WebGl2RenderingContext::LINEAR as i32);
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+        WebGl2RenderingContext::LINEAR as i32);
+    if let Some(loc) = shader.location(gl, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+    if let Some(loc) = shader.location(gl, "u_channel") {
+        gl.uniform1i(Some(&loc), channel as i32);
+    }
+    engine.draw_fullscreen_quad();
+
+    let count = (tw * th * 4) as usize;
+    let mut thumb = vec![0u8; count];
+    let _ = engine.gl.read_pixels_with_opt_u8_array(
+        0, 0, tw as i32, th as i32,
+        WebGl2RenderingContext::RGBA,
+        WebGl2RenderingContext::UNSIGNED_BYTE,
+        Some(&mut thumb),
+    );
+
+    let gl = &engine.gl;
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+        WebGl2RenderingContext::NEAREST as i32);
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+        WebGl2RenderingContext::NEAREST as i32);
+
+    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+    gl.delete_framebuffer(Some(&fbo));
+    gl.delete_texture(Some(&thumb_tex));
+
+    let mut result = Vec::with_capacity(8 + thumb.len());
+    result.extend_from_slice(&tw.to_le_bytes());
+    result.extend_from_slice(&th.to_le_bytes());
+    result.extend_from_slice(&thumb);
+    result
+}

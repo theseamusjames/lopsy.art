@@ -540,7 +540,9 @@ export function handleNudgeMove(
 
   const sel = editor.selection;
   const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
-  editor.pushHistory('Nudge');
+  // History is pushed once per key-hold by the shortcut-layer nudge
+  // coalescer (see src/app/shortcuts/nudge-coalesce.ts). Pushing here would
+  // spam the undo stack with one entry per key auto-repeat event (#684).
 
   // Quick-mask + marquee nudge: translate both the marquee outline AND the
   // painted quick-mask content under it (issue #315). The layer texture is

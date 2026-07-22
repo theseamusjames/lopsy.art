@@ -57,7 +57,6 @@ const ALLOWLIST = {
   'src/filters/surface-blur.test.ts': 5,
   'src/io/project-save.test.ts': 1,
   'src/panels/AdjustmentsPanel/histogram-compute.test.ts': 2,
-  'src/panels/ChannelsPanel/channel-extract.test.ts': 2,    // see #440 (delete with prod file)
   'src/selection/selection-to-path.test.ts': 2,
   'src/selection/selection.test.ts': 17,
   'src/test-setup.ts': 1,
@@ -142,7 +141,6 @@ const ALLOWLIST = {
   // Tracked GPU-port debt — each file has a dedicated tracking issue
   // for the shader port that will eliminate the CPU implementation.
   // ──────────────────────────────────────────────────────────────────────
-  'src/panels/ChannelsPanel/channel-extract.ts': 2,          // #440 — retained for fallback and tests
   'src/panels/ChannelsPanel/ChannelsPanel.tsx': 1,           // GPU readback creates ImageData for thumbnail
   'src/tools/crop/perspective-crop.ts': 1,                   // #441 — port homography warp to GPU
   'src/tools/liquify/liquify.ts': 2,                         // #443 — port displacement map to GPU
