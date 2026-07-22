@@ -40,13 +40,32 @@ function sanitizeNumber(value: unknown, min: number, max: number, fallback: numb
 }
 
 /**
- * Validate a node tree. `seen` accumulates panel ids across the whole
- * layout so a panel can never appear twice (first occurrence wins).
+ * Mint a stable id for a persisted node/window: reuse the incoming id only if
+ * it's a non-empty string that hasn't already been claimed elsewhere in the
+ * layout; otherwise generate a fresh one. This guarantees every node/window
+ * id is unique — the tree ops (replaceGroupInNode replaces *every* matching
+ * id, the element registry keys by id) rely on that invariant, and a crafted
+ * or corrupted payload must not be able to violate it.
+ */
+function uniqueId(raw: unknown, usedIds: Set<string>): string {
+  const id = typeof raw === 'string' && raw.length > 0 && !usedIds.has(raw) ? raw : crypto.randomUUID();
+  usedIds.add(id);
+  return id;
+}
+
+/** Smallest fraction a persisted split pane may hold, so it never collapses. */
+const MIN_SPLIT_FRACTION = 0.05;
+
+/**
+ * Validate a node tree. `seen` accumulates panel ids across the whole layout
+ * so a panel can never appear twice (first occurrence wins); `usedIds`
+ * accumulates node ids so no two nodes/windows share one.
  */
 function sanitizeNode(
   raw: unknown,
   knownPanels: readonly string[],
   seen: Set<string>,
+  usedIds: Set<string>,
 ): LayoutNode | null {
   if (!isRecord(raw)) return null;
   if (raw.kind === 'tabs') {
@@ -62,8 +81,7 @@ function sanitizeNode(
     if (!first) return null;
     const activeTab =
       typeof raw.activeTab === 'string' && tabs.includes(raw.activeTab) ? raw.activeTab : first;
-    const id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id : crypto.randomUUID();
-    const group: TabGroupNode = { kind: 'tabs', id, tabs, activeTab };
+    const group: TabGroupNode = { kind: 'tabs', id: uniqueId(raw.id, usedIds), tabs, activeTab };
     return group;
   }
   if (raw.kind === 'split') {
@@ -73,19 +91,20 @@ function sanitizeNode(
     const children: LayoutNode[] = [];
     const sizes: number[] = [];
     raw.children.forEach((child, i) => {
-      const node = sanitizeNode(child, knownPanels, seen);
+      const node = sanitizeNode(child, knownPanels, seen, usedIds);
       if (!node) return;
       children.push(node);
       const size = rawSizes[i];
-      sizes.push(typeof size === 'number' && Number.isFinite(size) && size > 0 ? size : 0);
+      // Floor every pane to a small positive share so a persisted 0 (or a
+      // negative/NaN) can't yield a pane the flexbox renderer collapses away.
+      sizes.push(typeof size === 'number' && Number.isFinite(size) && size > 0 ? size : MIN_SPLIT_FRACTION);
     });
     const only = children[0];
     if (!only) return null;
     if (children.length === 1) return only;
     const sum = sizes.reduce((a, b) => a + b, 0);
     const normalized = sum > 0 ? sizes.map((s) => s / sum) : sizes.map(() => 1 / sizes.length);
-    const id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id : crypto.randomUUID();
-    const split: SplitNode = { kind: 'split', id, direction, children, sizes: normalized };
+    const split: SplitNode = { kind: 'split', id: uniqueId(raw.id, usedIds), direction, children, sizes: normalized };
     return split;
   }
   return null;
@@ -95,6 +114,7 @@ function sanitizeFloating(
   raw: unknown,
   knownPanels: readonly string[],
   seen: Set<string>,
+  usedIds: Set<string>,
 ): FloatingWindow | null {
   if (!isRecord(raw) || !Array.isArray(raw.tabs)) return null;
   const tabs: string[] = [];
@@ -109,7 +129,7 @@ function sanitizeFloating(
   const activeTab =
     typeof raw.activeTab === 'string' && tabs.includes(raw.activeTab) ? raw.activeTab : first;
   return {
-    id: typeof raw.id === 'string' && raw.id.length > 0 ? raw.id : crypto.randomUUID(),
+    id: uniqueId(raw.id, usedIds),
     tabs,
     activeTab,
     x: sanitizeNumber(raw.x, -10_000, 10_000, 0),
@@ -122,9 +142,10 @@ function sanitizeFloating(
 export function sanitizeLayout(raw: unknown, knownPanels: readonly string[]): DockLayout | null {
   if (!isRecord(raw) || !isRecord(raw.docks)) return null;
   const seen = new Set<string>();
+  const usedIds = new Set<string>();
   const docks = {} as Record<DockSide, LayoutNode | null>;
   for (const side of DOCK_SIDES) {
-    const node = sanitizeNode(raw.docks[side], knownPanels, seen);
+    const node = sanitizeNode(raw.docks[side], knownPanels, seen, usedIds);
     docks[side] = node ? normalizeNode(node) : null;
   }
   const rawSizes = isRecord(raw.dockSizes) ? raw.dockSizes : {};
@@ -140,7 +161,7 @@ export function sanitizeLayout(raw: unknown, knownPanels: readonly string[]): Do
   const floating: FloatingWindow[] = [];
   if (Array.isArray(raw.floating)) {
     for (const entry of raw.floating) {
-      const window = sanitizeFloating(entry, knownPanels, seen);
+      const window = sanitizeFloating(entry, knownPanels, seen, usedIds);
       if (window) floating.push(window);
     }
   }

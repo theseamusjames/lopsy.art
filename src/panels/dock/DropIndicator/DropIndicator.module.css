@@ -8,7 +8,7 @@
   border: 2px solid var(--color-accent);
   border-radius: var(--radius-sm);
   pointer-events: none;
-  z-index: 40;
+  z-index: var(--z-dock-drop-indicator);
 }
 
 .ghost {
@@ -28,5 +28,5 @@
   box-shadow: var(--shadow-md);
   pointer-events: none;
   white-space: nowrap;
-  z-index: 41;
+  z-index: var(--z-dock-drop-ghost);
 }

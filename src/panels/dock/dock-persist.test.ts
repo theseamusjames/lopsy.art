@@ -108,6 +108,66 @@ describe('sanitizeLayout', () => {
     expect(layout?.floating[0]).toMatchObject({ x: 50, y: 60, width: 200, height: 140 });
   });
 
+  it('forces every node/window id to be unique across the layout', () => {
+    const raw = {
+      docks: {
+        left: { kind: 'tabs', id: 'dup', tabs: ['navigator'], activeTab: 'navigator' },
+        right: {
+          kind: 'split',
+          id: 'dup',
+          direction: 'column',
+          children: [
+            { kind: 'tabs', id: 'dup', tabs: ['color'], activeTab: 'color' },
+            { kind: 'tabs', id: 'dup', tabs: ['layers'], activeTab: 'layers' },
+          ],
+          sizes: [0.5, 0.5],
+        },
+      },
+      floating: [{ id: 'dup', tabs: ['history'], activeTab: 'history', x: 0, y: 0, width: 300, height: 300 }],
+    };
+    const layout = sanitizeLayout(raw, PANELS);
+    expect(layout).not.toBeNull();
+    const ids: string[] = [];
+    const walk = (node: { kind: string; id: string; children?: { kind: string; id: string }[] } | null) => {
+      if (!node) return;
+      ids.push(node.id);
+      if (node.kind === 'split' && 'children' in node) {
+        for (const child of node.children ?? []) walk(child as never);
+      }
+    };
+    for (const side of ['left', 'right', 'top', 'bottom'] as const) walk(layout?.docks[side] as never);
+    for (const w of layout?.floating ?? []) ids.push(w.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    // Every panel still survives — dedup of ids must not drop content.
+    expect(panelsInLayout(layout ?? createDefaultLayout()).sort()).toEqual([
+      'color',
+      'history',
+      'layers',
+      'navigator',
+    ]);
+  });
+
+  it('floors a persisted zero-size pane to a visible fraction', () => {
+    const raw = {
+      docks: {
+        right: {
+          kind: 'split',
+          id: 's',
+          direction: 'column',
+          children: [
+            { kind: 'tabs', id: 'g1', tabs: ['color'], activeTab: 'color' },
+            { kind: 'tabs', id: 'g2', tabs: ['layers'], activeTab: 'layers' },
+          ],
+          sizes: [1, 0],
+        },
+      },
+    };
+    const layout = sanitizeLayout(raw, PANELS);
+    const sizes = (layout?.docks.right as SplitNode).sizes;
+    expect(sizes.every((s) => s > 0)).toBe(true);
+    expect(sizes[1]).toBeGreaterThan(0);
+  });
+
   it('collapses a split left with one child after invalid children are dropped', () => {
     const raw = {
       docks: {

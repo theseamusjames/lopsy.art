@@ -15,7 +15,7 @@ export function DockSplitter({ orientation, onDragStart, onDrag, label }: DockSp
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || dragRef.current) return;
       e.preventDefault();
       e.currentTarget.setPointerCapture(e.pointerId);
       dragRef.current = {
@@ -42,6 +42,13 @@ export function DockSplitter({ orientation, onDragStart, onDrag, label }: DockSp
     dragRef.current = null;
   }, []);
 
+  // If capture is lost (element unmounts mid-drag, browser steals it) the
+  // pointerup on this element never arrives — clear the ref so a stale drag
+  // can't resume on the next pointerdown.
+  const handleLostCapture = useCallback(() => {
+    dragRef.current = null;
+  }, []);
+
   return (
     <div
       className={orientation === 'vertical' ? styles.vertical : styles.horizontal}
@@ -52,6 +59,7 @@ export function DockSplitter({ orientation, onDragStart, onDrag, label }: DockSp
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
+      onLostPointerCapture={handleLostCapture}
     />
   );
 }

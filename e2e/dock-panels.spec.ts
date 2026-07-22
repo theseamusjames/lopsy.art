@@ -209,6 +209,28 @@ test.describe('dockable panels', () => {
     expect(await getRightDockTabs(page)).toEqual([['layers']]);
   });
 
+  test('tabs are keyboard-navigable with arrow keys (WAI-ARIA tabs pattern)', async ({ page }) => {
+    // Merge color + layers into one 2-tab group so there's something to arrow through.
+    const layersBox = await page.locator('section[aria-label="Layers"]').boundingBox();
+    await dragFromTo(page, await tabCenter(page, 'color'), {
+      x: layersBox!.x + layersBox!.width / 2,
+      y: layersBox!.y + layersBox!.height / 2,
+    });
+    expect(await getRightDockTabs(page)).toEqual([['layers', 'color']]);
+
+    // The active (color) tab is the roving-tabindex stop; focus it and arrow left.
+    const colorTab = page.locator('[data-dock-tab="color"]');
+    await colorTab.focus();
+    await expect(colorTab).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('ArrowLeft');
+
+    const layersTab = page.locator('[data-dock-tab="layers"]');
+    await expect(layersTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('section[aria-label="Layers"]')).toBeVisible();
+    // Focus follows the selection.
+    await expect(layersTab).toBeFocused();
+  });
+
   test('escape cancels an in-progress tab drag', async ({ page }) => {
     const from = await tabCenter(page, 'color');
     const canvasBox = await page.locator('[data-testid="canvas-container"]').boundingBox();
