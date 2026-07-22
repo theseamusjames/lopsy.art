@@ -208,6 +208,62 @@ test('panel visible with channel rows — screenshot', async ({ page }) => {
   await expect(page.locator('[data-testid="channel-row-rgb"]')).toBeVisible();
 });
 
+test('channel thumbnails render content for a filled layer (#683 GPU downscale)', async ({ page }) => {
+  // Regression test for #683 — the panel used to do a full-resolution GPU
+  // readback per channel and CPU-downscale. It now renders through the
+  // channel_extract shader into a small GPU texture and reads back only
+  // the thumbnail. This test just verifies the wiring: the visible
+  // thumbnails paint non-empty pixels for a red-fill layer.
+  await drawRect(page, 20, 20, 300, 200, { r: 220, g: 60, b: 20 });
+  await page.waitForTimeout(400);
+
+  // Every channel row has a canvas.
+  const canvases = page.locator('[data-testid="channels-list"] canvas');
+  await expect(canvases).toHaveCount(5);
+
+  // The RGB row's canvas must have any non-transparent pixel — the red fill.
+  const rgbHasContent = await page.locator('[data-testid="channel-row-rgb"] canvas').evaluate(
+    (canvas: HTMLCanvasElement) => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return false;
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i]! > 0) return true;
+      }
+      return false;
+    },
+  );
+  expect(rgbHasContent).toBe(true);
+
+  // The Red channel thumb is grayscale of the red channel — it should be
+  // brighter (higher R value) than the Blue channel thumb where the fill is
+  // mostly zero.
+  const meanBrightness = async (channel: 'r' | 'g' | 'b' | 'a') => {
+    return page.locator(`[data-testid="channel-row-${channel}"] canvas`).evaluate(
+      (canvas: HTMLCanvasElement) => {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return 0;
+        const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let sum = 0;
+        let count = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          // Only sample pixels that were painted (alpha > 0 in the source
+          // means the fill covers this thumbnail texel).
+          if (data[i + 3]! > 0) {
+            sum += data[i]!;
+            count++;
+          }
+        }
+        return count === 0 ? 0 : sum / count;
+      },
+    );
+  };
+
+  const rBright = await meanBrightness('r');
+  const bBright = await meanBrightness('b');
+  expect(rBright).toBeGreaterThan(bBright);
+});
+
 test('panel with one channel toggled off — screenshot', async ({ page }) => {
   await drawRect(page, 50, 50, 200, 150, { r: 200, g: 80, b: 40 });
   await page.waitForTimeout(300);

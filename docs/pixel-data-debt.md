@@ -127,7 +127,6 @@ budget.
 
 | File                                                       | Issue | What it does                                  |
 |------------------------------------------------------------|-------|-----------------------------------------------|
-| `src/panels/ChannelsPanel/channel-extract.ts`              | #440  | R/G/B/A channel preview generation            |
 | `src/tools/crop/perspective-crop.ts`                       | #441  | Projective warp + bilinear interp             |
 | `src/tools/liquify/liquify.ts`                             | #443  | Displacement-map liquify CPU pipeline         |
 | `src/tools/quick-select/quick-select-interaction.ts`       | tbd   | GPU pixel readback into mask                  |
