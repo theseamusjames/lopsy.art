@@ -784,40 +784,115 @@ pub fn read_layer_thumbnail(engine: &Engine, layer_id: &str, max_size: u32) -> V
 }
 
 /// Read the composited document (all layers flattened) as a thumbnail.
-/// Reads the composite FBO which holds the document at native resolution
-/// before viewport transform, then downscales to max_size.
+///
+/// Downscales on the GPU via the blit shader with LINEAR filtering, then
+/// reads back only the thumbnail-sized result. Previously this read back
+/// the full composite (`doc_w * doc_h * 4` bytes — ~67 MB at 4K) and then
+/// ran a single-threaded CPU rescale over every pixel to produce a
+/// fixed-size ~240 px minimap. The Navigator panel calls this on a 200 ms
+/// interval whenever it's open, so the readback ran five times a second
+/// even with the app idle. See issue #681.
+///
 /// Returns 8-byte header [width_u32_le, height_u32_le] + RGBA pixels.
 #[wasm_bindgen(js_name = "readCompositeThumbnail")]
 pub fn read_composite_thumbnail(engine: &Engine, max_size: u32) -> Vec<u8> {
+    use web_sys::WebGl2RenderingContext;
+
     let w = engine.inner.doc_width;
     let h = engine.inner.doc_height;
     if w == 0 || h == 0 { return Vec::new(); }
 
-    // Bind composite FBO and read its pixels
-    engine.inner.fbo_pool.bind(&engine.inner.gl, engine.inner.composite_fbo);
-    let pixels = match engine.inner.texture_pool.read_rgba(
-        &engine.inner.gl, 0, 0, w, h,
-    ) {
-        Ok(p) => p,
-        Err(_) => {
-            engine.inner.fbo_pool.unbind(&engine.inner.gl);
-            return Vec::new();
-        }
+    let src_tex = match engine.inner.texture_pool.get(engine.inner.composite_texture).cloned() {
+        Some(t) => t,
+        None => return Vec::new(),
     };
-    engine.inner.fbo_pool.unbind(&engine.inner.gl);
 
     let (tw, th) = if w <= max_size && h <= max_size {
         (w, h)
     } else {
         let scale = (max_size as f64) / (w.max(h) as f64);
-        (((w as f64 * scale).round() as u32).max(1), ((h as f64 * scale).round() as u32).max(1))
+        (((w as f64 * scale).round() as u32).max(1),
+         ((h as f64 * scale).round() as u32).max(1))
     };
 
-    let thumb = if tw == w && th == h {
-        pixels
-    } else {
-        lopsy_core::pixel_buffer::scale_pixel_data(&pixels, w, h, tw, th)
+    let gl = &engine.inner.gl;
+
+    // Small RGBA8 texture for the thumbnail.
+    let thumb_tex = match gl.create_texture() {
+        Some(t) => t,
+        None => return Vec::new(),
     };
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&thumb_tex));
+    let _ = gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+        WebGl2RenderingContext::TEXTURE_2D, 0,
+        WebGl2RenderingContext::RGBA8 as i32,
+        tw as i32, th as i32, 0,
+        WebGl2RenderingContext::RGBA,
+        WebGl2RenderingContext::UNSIGNED_BYTE,
+        None,
+    );
+    // LINEAR filtering on the SOURCE texture is what gives us the downscale
+    // for free — the sampler averages source texels into each destination
+    // texel as the fullscreen quad is rasterized.
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+        WebGl2RenderingContext::LINEAR as i32);
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+        WebGl2RenderingContext::LINEAR as i32);
+
+    let fbo = match gl.create_framebuffer() {
+        Some(f) => f,
+        None => { gl.delete_texture(Some(&thumb_tex)); return Vec::new(); }
+    };
+    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+    gl.framebuffer_texture_2d(
+        WebGl2RenderingContext::FRAMEBUFFER,
+        WebGl2RenderingContext::COLOR_ATTACHMENT0,
+        WebGl2RenderingContext::TEXTURE_2D,
+        Some(&thumb_tex), 0,
+    );
+    gl.viewport(0, 0, tw as i32, th as i32);
+
+    // The composite texture is set to NEAREST by default; flip it to LINEAR
+    // for the downscale, then restore. Doing this per-call avoids permanently
+    // changing filter state that the compositor might depend on.
+    gl.use_program(Some(&engine.inner.shaders.blit.program));
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+        WebGl2RenderingContext::LINEAR as i32);
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+        WebGl2RenderingContext::LINEAR as i32);
+    if let Some(loc) = engine.inner.shaders.blit.location(gl, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+    engine.inner.draw_fullscreen_quad();
+
+    let count = (tw * th * 4) as usize;
+    let mut thumb = vec![0u8; count];
+    let _ = gl.read_pixels_with_opt_u8_array(
+        0, 0, tw as i32, th as i32,
+        WebGl2RenderingContext::RGBA,
+        WebGl2RenderingContext::UNSIGNED_BYTE,
+        Some(&mut thumb),
+    );
+
+    // Restore NEAREST filtering on the composite texture so the compositor's
+    // final blit doesn't accidentally sample bilinearly.
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+        WebGl2RenderingContext::NEAREST as i32);
+    gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+        WebGl2RenderingContext::NEAREST as i32);
+
+    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+    gl.delete_framebuffer(Some(&fbo));
+    gl.delete_texture(Some(&thumb_tex));
 
     let mut result = Vec::with_capacity(8 + thumb.len());
     result.extend_from_slice(&tw.to_le_bytes());
