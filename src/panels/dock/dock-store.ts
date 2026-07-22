@@ -76,8 +76,20 @@ function createInitialLayout(): DockLayout {
   return createDefaultLayout();
 }
 
+// null until the first publish, so the initial reconcile always fires even
+// when the booted layout is empty (ui-store's own guess may differ).
+let lastVisibleKey: string | null = null;
+
 function syncVisiblePanelsMirror(layout: DockLayout): void {
-  publishVisiblePanels(new Set(panelsInLayout(layout)));
+  const panels = panelsInLayout(layout);
+  // Geometry drags (move/resize a window, drag a splitter) commit a new
+  // layout every pointer frame but never change *which* panels are open.
+  // Skip the publish when the set is unchanged so visiblePanels subscribers
+  // (PanelToolbar) don't re-render 60×/sec during a drag.
+  const key = [...panels].sort().join(',');
+  if (key === lastVisibleKey) return;
+  lastVisibleKey = key;
+  publishVisiblePanels(new Set(panels));
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
