@@ -108,6 +108,25 @@ export function withMoveGesture(
   };
 }
 
+/**
+ * Decide which gesture variant a down handler's freshly-returned state
+ * should carry. Paint tools always get the paint variant (it is the
+ * dispatcher, not the handler, that knows whether the stroke went down
+ * the GPU path). Every other tool keeps whatever variant its handler
+ * already chose — `handleMoveDown` packs the marquee and quick-mask
+ * snapshots inline on the `move` variant, and blanket-wrapping it in the
+ * generic `tool` gesture silently discarded them, leaving the selection
+ * marquee pinned in place while the pixels moved under it.
+ */
+export function resolveDownGesture(
+  state: InteractionState,
+  opts: { isPaintTool: boolean; usedGpuStroke: boolean },
+): InteractionState {
+  if (opts.isPaintTool) return withPaintGesture(state, opts.usedGpuStroke);
+  if (state.gesture.kind !== 'idle') return state;
+  return withToolGesture(state);
+}
+
 export const GESTURE_IDLE: CanvasGesture = { kind: 'idle' };
 
 /**

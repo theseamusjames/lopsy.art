@@ -32,6 +32,7 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   'src/app/editor-store.test.ts': 5,
   'src/app/tool-settings-store.test.ts': 5,
+  'src/app/interactions/interaction-types.test.ts': 1,
   'src/app/interactions/move-handlers.test.ts': 1,
   'src/app/interactions/quick-mask-move.test.ts': 2,
   'src/app/interactions/transform-handlers.test.ts': 1,

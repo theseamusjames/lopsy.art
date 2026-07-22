@@ -28,8 +28,7 @@ import type {
 import {
   gestureUsedGpuStroke,
   INITIAL_INTERACTION_STATE,
-  withPaintGesture,
-  withToolGesture,
+  resolveDownGesture,
 } from './interactions/interaction-types';
 import { handleTransformDown, flushSelectionTransform } from './interactions/transform-handlers';
 import {
@@ -309,9 +308,10 @@ export function useCanvasInteraction(
       const handler = toolHandlers[activeTool];
       const newState = handler?.down?.(finalCtx);
       if (newState) {
-        stateRef.current = isPaintTool
-          ? withPaintGesture(newState, !!useGpuStroke)
-          : withToolGesture(newState);
+        stateRef.current = resolveDownGesture(newState, {
+          isPaintTool,
+          usedGpuStroke: !!useGpuStroke,
+        });
       }
     },
     [screenToCanvas, containerRef, buildContext, cancelHoldTimer],

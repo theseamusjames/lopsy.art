@@ -3,6 +3,8 @@ import {
   gestureUsedGpuStroke,
   withPaintGesture,
   withToolGesture,
+  withMoveGesture,
+  resolveDownGesture,
   GESTURE_IDLE,
   INITIAL_INTERACTION_STATE,
   type CanvasGesture,
@@ -201,6 +203,60 @@ describe('withToolGesture', () => {
     expect(input.gesture).toBe(GESTURE_IDLE);
     expect(output).not.toBe(input);
     expect(output.gesture).not.toBe(input.gesture);
+  });
+});
+
+describe('resolveDownGesture', () => {
+  const marqueeMask = new Uint8ClampedArray([1, 2, 3, 4]);
+  const makeMoveState = () =>
+    withMoveGesture(makeBaseState({ tool: 'move' }), {
+      originalMask: marqueeMask,
+      originalBounds: { x: 10, y: 20, width: 30, height: 40 },
+    });
+
+  it('wraps paint-tool state in the paint variant', () => {
+    const output = resolveDownGesture(makeBaseState(), { isPaintTool: true, usedGpuStroke: true });
+    expect(output.gesture).toEqual({ kind: 'paint', usedGpuStroke: true });
+  });
+
+  it('wraps a gesture-less non-paint tool in the generic tool variant', () => {
+    const output = resolveDownGesture(makeBaseState({ tool: 'fill' }), {
+      isPaintTool: false,
+      usedGpuStroke: false,
+    });
+    expect(output.gesture).toEqual({ kind: 'tool' });
+  });
+
+  it('keeps the move variant its handler already chose', () => {
+    const input = makeMoveState();
+    const output = resolveDownGesture(input, { isPaintTool: false, usedGpuStroke: false });
+    expect(output.gesture.kind).toBe('move');
+  });
+
+  it('preserves the marquee snapshot the move handler packed inline', () => {
+    const input = makeMoveState();
+    const output = resolveDownGesture(input, { isPaintTool: false, usedGpuStroke: false });
+    if (output.gesture.kind !== 'move') {
+      throw new Error('expected the move gesture to survive dispatch');
+    }
+    // Dropping these left the marquee pinned in place while the floated
+    // pixels moved under it — handleMoveMove needs originalBounds to
+    // re-derive the selection rectangle on every pointer-move.
+    expect(output.gesture.originalBounds).toEqual({ x: 10, y: 20, width: 30, height: 40 });
+    expect(output.gesture.originalMask).toBe(marqueeMask);
+  });
+
+  it('keeps other handler-chosen variants intact', () => {
+    const input = makeBaseState({ gesture: makeTransformGesture(), tool: 'move' });
+    const output = resolveDownGesture(input, { isPaintTool: false, usedGpuStroke: false });
+    expect(output.gesture.kind).toBe('transform');
+  });
+
+  it('does not mutate the input state', () => {
+    const input = Object.freeze(makeBaseState());
+    const output = resolveDownGesture(input, { isPaintTool: true, usedGpuStroke: false });
+    expect(input.gesture).toBe(GESTURE_IDLE);
+    expect(output).not.toBe(input);
   });
 });
 
