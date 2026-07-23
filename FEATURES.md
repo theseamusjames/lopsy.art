@@ -179,8 +179,9 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Font weight**: the dropdown lists exactly the weights the selected family ships, labelled Thin (100) / ExtraLight (200) / Light (300) / Regular (400) / Medium (500) / SemiBold (600) / Bold (700) / ExtraBold (800) / Black (900) / UltraBlack (1000). Families outside the catalog fall back to Regular + Bold. Switching to a family that lacks the current weight snaps to the numerically nearest one it does have.
 - **Font style**: normal or italic
 - **Text align**: left, center, right, justify
-- **Line height**: stored per text layer (fixed at 1.4× the font size); not exposed as an options-bar control
-- **Letter spacing**: stored per text layer (default 0; respected by the path-bound layout) but not exposed as an options-bar control
+- **Line height**: stored per text layer (default 1.4× the font size). Not in the options bar, but adjustable in the **Text panel** (0.5× – 4×).
+- **Letter spacing**: stored per text layer (default 0). Not in the options bar, but adjustable in the **Text panel** (−20 – 200 px); applied in the WASM engine (cosmic-text has no native tracking) and respected by the path-bound layout.
+- **Paragraph spacing**: extra space between paragraphs, stored per text layer (default 0). Text-panel only (0 – 200 px), also applied in the engine.
 - **Underline (`U`)**: toggle a horizontal stroke 10% of the font size below the baseline, 8% of font-size thick
 - **Strikethrough (`S`)**: toggle a horizontal stroke 32% of the font size above the baseline, 8% of font-size thick
 - **Mode**: point text (no wrap) or area text (fixed width with wrapping)
@@ -196,8 +197,10 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 **Editing keys** (active while a text layer is being edited)
 - **Shift+Enter** or **Tab**: commit the edit and exit text editing (plain Enter inserts a newline). Tab also swallows the browser's default focus change so the next single-key shortcut isn't captured by a newly-focused element.
 - **Escape**: cancel the edit. If the layer was newly created in this editing session, it is removed entirely; otherwise the layer keeps its prior text.
-- **Cmd/Ctrl + A**: jumps the cursor to the end of the buffer (simplified select-all — no highlighted-selection support).
-- Arrow keys, Home / End, Backspace / Delete behave as standard text-input keys against the editing buffer.
+- **Caret movement**: ←/→ move one character; **⌥←/→** jump by word (Unicode letter/number/underscore runs); **⌘←/→** and **Home/End** jump to line start/end; **↑/↓** move a line at a time, preserving a *goal column* across short lines via engine-provided caret geometry (on the first/last line they snap to the line boundary).
+- **Selection**: hold **Shift** with any caret-movement key to extend a highlighted selection; **⌘/Ctrl+A** selects all (a real range, not just a caret jump). On the canvas, a plain click places the caret and begins a **drag-select**, **Shift+click** extends the selection, and **double-click** selects the word under the pointer. A click **inside** the text repositions the caret; a click **outside** commits the edit.
+- **Clipboard** (system clipboard): **⌘/Ctrl+C** copies the selection, **⌘/Ctrl+X** cuts it, and **⌘/Ctrl+V** pastes plain text into the buffer (replacing any selection). Image paste is suppressed while a text layer is being edited.
+- **Backspace / Delete** remove the selection if there is one, otherwise the character before/after the caret.
 
 ---
 
@@ -698,16 +701,16 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 
 ## Panel Docking & Layout
 
-Seven panels — **Navigator, Info, Color, Layers, Channels, History, Paths** — live in a docking system rather than a fixed sidebar. Each is a tab that can be docked to any workspace edge, split alongside another panel, grouped into tabs, or floated as its own window. (The Reference Image drawer, layer-effects drawer, and Adjustments panel are *not* part of this system — they remain free-floating drawers.)
+Eight panels — **Navigator, Info, Color, Layers, Channels, History, Paths, Text** — live in a docking system rather than a fixed sidebar. Each is a tab that can be docked to any workspace edge, split alongside another panel, grouped into tabs, or floated as its own window. (The Reference Image drawer, layer-effects drawer, and Adjustments panel are *not* part of this system — they remain free-floating drawers.)
 
 ### Panel Toolbar
 - A vertical rail on the far right with one icon per dockable panel, plus a **Reference** button for the reference-image drawer. An icon is highlighted while its panel is somewhere in the layout.
 - Clicking an icon does one of three things depending on the panel's current state: **absent** → add it at its default spot; **present but not the active tab of its group** → bring that tab forward; **present and already active** → close it.
 - Closing a panel is toolbar-only — tabs have no close (`×`) button.
-- Panels re-added from the toolbar land in the **right dock**, inserted so the vertical order stays canonical (Navigator, Info, Color, Channels, History, Paths, then Layers at the bottom, mirroring the pre-dock sidebar).
+- Panels re-added from the toolbar land in the **right dock**, inserted so the vertical order stays canonical (Navigator, Info, Color, Text, Channels, History, Paths, then Layers at the bottom, mirroring the pre-dock sidebar).
 
 ### Default Layout
-- A **Color/Info** tab group above a **Layers/Channels** tab group in the right dock (50 / 50 split), with **Color** and **Layers** as the active tabs; the other three panels (Navigator, History, Paths) start closed.
+- A **Color/Info** tab group above a **Layers/Channels** tab group in the right dock (50 / 50 split), with **Color** and **Layers** as the active tabs; the other four panels (Navigator, History, Paths, Text) start closed.
 - Default dock thickness: left 280 px, right 312 px, top 220 px, bottom 220 px.
 - On a **coarse-pointer device** (touch), a first run starts with *no* panels open so the canvas gets the whole screen.
 
@@ -785,6 +788,19 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 - **Canvas W / H**: document dimensions.
 - **Layer X / Y / W / H**: the active layer's origin and (when applicable) its raster width and height.
 - **Selection X / Y / W / H**: the active marquee's bounding box, only shown when a selection is active. When a selection is active, the Cursor X / Y readout switches to the selection's top-left so the values stay coherent during transform / move operations.
+
+---
+
+## Text Panel
+
+A dockable typography panel (a superset of the text options bar) for styling the active/selected committed text layer. Grouped into four sections:
+
+- **Font**: the same searchable font browser as the options bar, a **weight** dropdown (only the weights the family ships), a **style** dropdown (Normal / Italic), and a row of **recent fonts** used this session (session-only, click to re-apply).
+- **Character**: **Size** (1 – 500 px), **Line height** (0.5 – 4×, step 0.05, default 1.4), **Letter spacing** (−20 – 200 px, step 0.5, default 0).
+- **Paragraph**: an **alignment** button group (left / center / right / justify) and **Paragraph spacing** (0 – 200 px, default 0).
+- **Decoration**: **underline (U)** and **strikethrough (S)** toggles.
+
+Panel edits and options-bar edits share the same apply path (`apply-text-setting.ts`): changing a control updates the tool default *and*, when a committed text layer is active, re-styles that layer and records one history entry per edit (slider drags coalesce into a single entry). Letter spacing and paragraph spacing are applied inside the WASM engine because cosmic-text implements neither.
 
 ---
 
