@@ -63,10 +63,21 @@ test.describe('Status-bar zoom indicator', () => {
     expect(midZoom).toBeGreaterThan(1.4);
     expect(midZoom).toBeLessThan(1.8);
 
-    // Drag left far beyond min — should clamp to 10%.
+    // Drag left past the min — should clamp to 10%. The scrub is
+    // measured from the pointer-down x, and the zoom label sits ~25px
+    // from the left edge; Firefox clamps pointer clientX to the
+    // viewport, so a leftward drag can never be wider than that. Start
+    // from a low zoom so dragging to x=0 overshoots the 10% floor in
+    // every browser rather than relying on off-screen coordinates.
+    await page.evaluate(() => {
+      const s = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { setZoom: (z: number) => void };
+      };
+      s.getState().setZoom(0.15);
+    });
     await page.mouse.move(startX, y);
     await page.mouse.down();
-    await page.mouse.move(startX - 500, y, { steps: 10 });
+    await page.mouse.move(0, y, { steps: 10 });
     const lowZoom = await page.evaluate(() => (window as unknown as { __editorStore: { getState: () => { viewport: { zoom: number } } } }).__editorStore.getState().viewport.zoom);
     await page.mouse.up();
     expect(lowZoom).toBeCloseTo(0.1, 2);
