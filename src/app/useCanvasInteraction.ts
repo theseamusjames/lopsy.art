@@ -66,6 +66,8 @@ export interface ToolEvent {
   readonly altKey: boolean;
   readonly metaKey: boolean;
   readonly ctrlKey: boolean;
+  /** Click count (MouseEvent.detail); 2 for a double-click. */
+  readonly detail?: number;
 }
 
 /** Finalize a deferred stroke from a previous mouseup. */
@@ -127,6 +129,7 @@ export function useCanvasInteraction(
     (e: ToolEvent, canvasPos: Point, layerPos: Point, activeLayerId: string, activeLayer: Layer): InteractionContext => ({
       canvasPos, layerPos,
       shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
+      clickDetail: e.detail,
       clientX: e.clientX, clientY: e.clientY,
       activeLayerId, activeLayer,
       screenToCanvas, containerRef,

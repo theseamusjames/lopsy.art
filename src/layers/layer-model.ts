@@ -59,6 +59,7 @@ export function createTextLayer(params: {
     color: params.color ?? { r: 0, g: 0, b: 0, a: 1 },
     lineHeight: 1.4,
     letterSpacing: 0,
+    paragraphSpacing: 0,
     textAlign: 'left',
     width: null,
     underline: false,

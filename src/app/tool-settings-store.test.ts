@@ -122,6 +122,46 @@ describe('opacity setters — issue #250 (percent vs normalised footgun)', () =>
   });
 });
 
+describe('recent fonts', () => {
+  beforeEach(() => {
+    useToolSettingsStore.setState({ recentFonts: [] });
+  });
+
+  it('prepends and de-duplicates recent fonts', () => {
+    const { addRecentFont } = useToolSettingsStore.getState();
+    addRecentFont('Inter');
+    addRecentFont('Roboto');
+    addRecentFont('Inter'); // moves Inter to the front
+    expect(useToolSettingsStore.getState().recentFonts).toEqual(['Inter', 'Roboto']);
+  });
+
+  it('caps the list at 8 entries', () => {
+    const { addRecentFont } = useToolSettingsStore.getState();
+    for (let i = 0; i < 12; i++) addRecentFont(`Font ${i}`);
+    const recent = useToolSettingsStore.getState().recentFonts;
+    expect(recent).toHaveLength(8);
+    expect(recent[0]).toBe('Font 11'); // most recent first
+  });
+
+  it('ignores blank font names', () => {
+    useToolSettingsStore.getState().addRecentFont('   ');
+    expect(useToolSettingsStore.getState().recentFonts).toEqual([]);
+  });
+});
+
+describe('text spacing settings clamp (panel controls)', () => {
+  it('clamps lineHeight, letterSpacing, and paragraphSpacing', () => {
+    const s = useToolSettingsStore.getState();
+    s.setTextSetting('lineHeight', 99);
+    s.setTextSetting('letterSpacing', -999);
+    s.setTextSetting('paragraphSpacing', -5);
+    const text = useToolSettingsStore.getState().settings.text;
+    expect(text.lineHeight).toBe(4);
+    expect(text.letterSpacing).toBe(-20);
+    expect(text.paragraphSpacing).toBe(0);
+  });
+});
+
 describe('per-tool slice: wand (#453)', () => {
   it('exposes wand settings under settings.wand with the legacy defaults', () => {
     const { wand } = useToolSettingsStore.getState().settings;
@@ -625,6 +665,9 @@ describe('per-tool slice: text (#453)', () => {
     useToolSettingsStore.getState().setTextSetting('align', 'left');
     useToolSettingsStore.getState().setTextSetting('underline', false);
     useToolSettingsStore.getState().setTextSetting('strikethrough', false);
+    useToolSettingsStore.getState().setTextSetting('lineHeight', 1.4);
+    useToolSettingsStore.getState().setTextSetting('letterSpacing', 0);
+    useToolSettingsStore.getState().setTextSetting('paragraphSpacing', 0);
     const { text } = useToolSettingsStore.getState().settings;
     expect(text).toEqual({
       content: 'Text',
@@ -635,6 +678,9 @@ describe('per-tool slice: text (#453)', () => {
       align: 'left',
       underline: false,
       strikethrough: false,
+      lineHeight: 1.4,
+      letterSpacing: 0,
+      paragraphSpacing: 0,
     });
   });
 

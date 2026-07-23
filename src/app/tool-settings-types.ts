@@ -47,6 +47,7 @@ export interface ToolSettings {
   foregroundColor: Color;
   backgroundColor: Color;
   recentColors: readonly Color[];
+  recentFonts: readonly string[];
   brushTextures: BrushTextureData[];
   presets: BrushPreset[];
   activePresetId: string | null;
@@ -92,6 +93,7 @@ export interface ToolSettings {
   swapColors: () => void;
   resetColors: () => void;
   addRecentColor: (color: Color) => void;
+  addRecentFont: (family: string) => void;
   addSubBrush: (sub: SubBrush) => void;
   removeSubBrush: (index: number) => void;
   updateSubBrush: (index: number, patch: Partial<SubBrush>) => void;

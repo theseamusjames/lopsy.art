@@ -13,6 +13,13 @@ export interface TextEditingState {
   bounds: { x: number; y: number; width: number | null; height: number | null };
   text: string;
   cursorPos: number;
+  /**
+   * The other end of an active selection (the fixed anchor; `cursorPos` is the
+   * moving end). `null` when there is no selection. The selected range is
+   * `[min(anchor, cursorPos), max(anchor, cursorPos))`. Offsets are UTF-16
+   * string indices, matching `cursorPos`.
+   */
+  selectionAnchor: number | null;
   isNew: boolean;
   originalVisible: boolean;
 }
@@ -272,6 +279,11 @@ interface UIState {
   textDrag: TextDragState | null;
   startTextEditing: (state: TextEditingState) => void;
   updateTextEditingText: (text: string, cursorPos: number) => void;
+  updateTextEditingSelection: (
+    text: string,
+    cursorPos: number,
+    selectionAnchor: number | null,
+  ) => void;
   updateTextEditingBounds: (bounds: TextEditingState['bounds']) => void;
   commitTextEditing: () => void;
   cancelTextEditing: () => void;
@@ -479,9 +491,18 @@ export const useUIStore = create<UIState>((set, get) => ({
   textDrag: null,
   startTextEditing: (state) => set({ textEditing: state }),
   updateTextEditingText: (text, cursorPos) =>
-    set((s) => s.textEditing ? { textEditing: { ...s.textEditing, text, cursorPos } } : {}),
+    set((s) => s.textEditing
+      ? { textEditing: { ...s.textEditing, text, cursorPos, selectionAnchor: null } }
+      : {}),
+  updateTextEditingSelection: (text, cursorPos, selectionAnchor) =>
+    set((s) => s.textEditing
+      ? { textEditing: { ...s.textEditing, text, cursorPos, selectionAnchor } }
+      : {}),
   updateTextEditingBounds: (bounds) =>
-    set((s) => s.textEditing ? { textEditing: { ...s.textEditing, bounds } } : {}),
+    // Moving/resizing the box drops any active selection.
+    set((s) => s.textEditing
+      ? { textEditing: { ...s.textEditing, bounds, selectionAnchor: null } }
+      : {}),
   commitTextEditing: () => set({ textEditing: null }),
   cancelTextEditing: () => set({ textEditing: null }),
   setTextDrag: (drag) => set({ textDrag: drag }),

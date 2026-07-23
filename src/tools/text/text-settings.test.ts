@@ -16,6 +16,9 @@ describe('text-settings clamps and defaults (#453)', () => {
       align: 'left',
       underline: false,
       strikethrough: false,
+      lineHeight: 1.4,
+      letterSpacing: 0,
+      paragraphSpacing: 0,
     } satisfies TextSettings);
   });
 
@@ -26,6 +29,24 @@ describe('text-settings clamps and defaults (#453)', () => {
     expect(clampTextSetting('fontSize', 24)).toBe(24);
     expect(clampTextSetting('fontSize', 500)).toBe(500);
     expect(clampTextSetting('fontSize', 1)).toBe(1);
+  });
+
+  it('clamps lineHeight into [0.5, 4]', () => {
+    expect(clampTextSetting('lineHeight', 0)).toBe(0.5);
+    expect(clampTextSetting('lineHeight', 10)).toBe(4);
+    expect(clampTextSetting('lineHeight', 1.4)).toBe(1.4);
+  });
+
+  it('clamps letterSpacing into [-20, 200]', () => {
+    expect(clampTextSetting('letterSpacing', -100)).toBe(-20);
+    expect(clampTextSetting('letterSpacing', 9999)).toBe(200);
+    expect(clampTextSetting('letterSpacing', 3)).toBe(3);
+  });
+
+  it('clamps paragraphSpacing into [0, 200]', () => {
+    expect(clampTextSetting('paragraphSpacing', -5)).toBe(0);
+    expect(clampTextSetting('paragraphSpacing', 9999)).toBe(200);
+    expect(clampTextSetting('paragraphSpacing', 12)).toBe(12);
   });
 
   it('does not round fontSize — preserves fractional sizes', () => {

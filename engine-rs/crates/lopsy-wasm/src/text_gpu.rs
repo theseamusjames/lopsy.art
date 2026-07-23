@@ -19,6 +19,68 @@ pub struct TextLayerState {
     pub rendered_pixels: Option<Vec<u8>>,
     pub underline: bool,
     pub strikethrough: bool,
+    /// Raw text string, kept to map global byte offsets ↔ buffer lines.
+    pub text: String,
+    /// Extra px inserted between adjacent glyphs on a visual line (tracking).
+    /// cosmic-text has no native letter spacing, so it is applied post-layout.
+    pub letter_spacing: f32,
+    /// Extra px inserted below each hard paragraph break (`\n`).
+    pub paragraph_spacing: f32,
+    /// Font size in px (cached for empty-line caret height and alignment math).
+    pub font_size: f32,
+    /// Area width for wrapped text, or None for point text.
+    pub area_width: Option<f32>,
+    /// Text alignment, needed for letter-spacing compensation on empty lines.
+    pub text_align: String,
+}
+
+/// A single laid-out glyph with letter/paragraph spacing applied, in logical
+/// layout space. `global_start`/`global_end` are UTF-8 byte offsets into the
+/// whole text string (not the per-buffer-line offsets cosmic-text reports).
+struct AdjGlyph {
+    global_start: usize,
+    global_end: usize,
+    x: f32,
+    w: f32,
+    line_i: usize,
+    line_top: f32,
+    line_height: f32,
+}
+
+/// A visual line (one cosmic-text LayoutRun) with spacing applied. Kept even
+/// when it has no glyphs so an empty line still has a caret position.
+struct AdjLine {
+    line_i: usize,
+    line_top: f32,
+    line_height: f32,
+    /// x where a caret before the first glyph / on an empty line sits.
+    start_x: f32,
+}
+
+/// Fully adjusted layout used by every geometry consumer (caret, hit-test,
+/// selection, measurement) so rendering and interaction always agree.
+struct AdjLayout {
+    /// All glyphs in visual order across every line.
+    glyphs: Vec<AdjGlyph>,
+    /// One entry per visual line, in order.
+    lines: Vec<AdjLine>,
+    /// Global byte offset of the first char of each buffer line.
+    line_byte_base: Vec<usize>,
+}
+
+/// Horizontal compensation applied to a whole visual line so letter spacing
+/// does not break center/right alignment. Spacing is added between glyphs
+/// (n-1 gaps), growing the line rightward, so centered/right lines shift left.
+fn line_x_comp(letter_spacing: f32, n_glyphs: usize, align: &str) -> f32 {
+    if letter_spacing == 0.0 || n_glyphs < 2 {
+        return 0.0;
+    }
+    let added = letter_spacing * (n_glyphs - 1) as f32;
+    match align {
+        "center" => -added / 2.0,
+        "right" => -added,
+        _ => 0.0,
+    }
 }
 
 pub struct TextRendererState {
@@ -151,6 +213,8 @@ impl TextRendererState {
             [0.0, 0.0, 0.0, 1.0]
         };
         let line_height = v["lineHeight"].as_f64().unwrap_or(1.4) as f32;
+        let letter_spacing = v["letterSpacing"].as_f64().unwrap_or(0.0) as f32;
+        let paragraph_spacing = v["paragraphSpacing"].as_f64().unwrap_or(0.0) as f32;
         let area_width = v["areaWidth"].as_f64().map(|w| w as f32);
         let underline = v["underline"].as_bool().unwrap_or(false);
         let strikethrough = v["strikethrough"].as_bool().unwrap_or(false);
@@ -205,37 +269,253 @@ impl TextRendererState {
                 rendered_pixels: None,
                 underline,
                 strikethrough,
+                text: text.to_string(),
+                letter_spacing,
+                paragraph_spacing,
+                font_size,
+                area_width,
+                text_align: text_align_val.to_string(),
             },
         );
 
         Ok(())
     }
 
+    /// Global UTF-8 byte offset of the start of each buffer line, i.e. the
+    /// cumulative sum of each line's content length + 1 for its `\n` separator.
+    /// Matches the JS string layout where lines are joined by single `\n`.
+    fn line_byte_base(buffer: &Buffer) -> Vec<usize> {
+        let mut base = Vec::with_capacity(buffer.lines.len());
+        let mut acc = 0usize;
+        for line in buffer.lines.iter() {
+            base.push(acc);
+            acc += line.text().len() + 1;
+        }
+        base
+    }
+
+    /// Build the fully adjusted layout (letter + paragraph spacing applied) that
+    /// all geometry consumers share. Returns None if the layer is missing.
+    fn build_adj_layout(state: &TextLayerState) -> AdjLayout {
+        let buffer = &state.buffer;
+        let ls = state.letter_spacing;
+        let para = state.paragraph_spacing;
+        let align = state.text_align.as_str();
+        let line_byte_base = Self::line_byte_base(buffer);
+
+        // Empty-line caret x by alignment (area text only; point text sits at 0).
+        let empty_start_x = |_line_i: usize| -> f32 {
+            match (align, state.area_width) {
+                ("center", Some(w)) => w / 2.0,
+                ("right", Some(w)) => w,
+                _ => 0.0,
+            }
+        };
+
+        let mut glyphs: Vec<AdjGlyph> = Vec::new();
+        let mut lines: Vec<AdjLine> = Vec::new();
+
+        for run in buffer.layout_runs() {
+            let line_i = run.line_i;
+            let base = line_byte_base.get(line_i).copied().unwrap_or(0);
+            let para_y = para * line_i as f32;
+            let line_top = run.line_top + para_y;
+            let line_height = run.line_height;
+            let n = run.glyphs.len();
+            let comp = line_x_comp(ls, n, align);
+
+            let start_x = if n > 0 {
+                run.glyphs[0].x + comp
+            } else {
+                empty_start_x(line_i)
+            };
+            lines.push(AdjLine { line_i, line_top, line_height, start_x });
+
+            for (i, glyph) in run.glyphs.iter().enumerate() {
+                let x = glyph.x + comp + ls * i as f32;
+                glyphs.push(AdjGlyph {
+                    global_start: base + glyph.start,
+                    global_end: base + glyph.end,
+                    x,
+                    w: glyph.w,
+                    line_i,
+                    line_top,
+                    line_height,
+                });
+            }
+        }
+
+        AdjLayout { glyphs, lines, line_byte_base }
+    }
+
+    /// Map a global byte offset to its buffer-line index (largest line whose
+    /// base is <= offset). Returns 0 for an empty buffer.
+    fn line_for_offset(line_byte_base: &[usize], offset: usize) -> usize {
+        let mut line_i = 0;
+        for (i, &base) in line_byte_base.iter().enumerate() {
+            if base <= offset {
+                line_i = i;
+            } else {
+                break;
+            }
+        }
+        line_i
+    }
+
+    /// Layout-space caret rectangle for a global byte offset: `[x, top, height]`.
+    /// Returns None only if the layer is missing.
+    pub fn text_cursor_rect(&self, layer_id: &str, offset: usize) -> Option<[f32; 3]> {
+        let state = self.text_layers.get(layer_id)?;
+        let layout = Self::build_adj_layout(state);
+
+        // Empty text: caret at the origin, one line tall.
+        if layout.lines.is_empty() {
+            return Some([0.0, 0.0, state.buffer.metrics().line_height]);
+        }
+
+        let line_i = Self::line_for_offset(&layout.line_byte_base, offset);
+
+        // First glyph on this line whose cluster ends past the cursor → caret at
+        // its left edge. Restricting to `line_i` keeps a caret sitting in a `\n`
+        // gap on the end of the earlier line rather than the start of the next.
+        for g in layout.glyphs.iter().filter(|g| g.line_i == line_i) {
+            if offset < g.global_end {
+                return Some([g.x, g.line_top, g.line_height]);
+            }
+        }
+        // Past every glyph on the line → caret after the last one.
+        if let Some(g) = layout.glyphs.iter().filter(|g| g.line_i == line_i).last() {
+            return Some([g.x + g.w, g.line_top, g.line_height]);
+        }
+        // Empty line: use its recorded start.
+        if let Some(l) = layout.lines.iter().find(|l| l.line_i == line_i) {
+            return Some([l.start_x, l.line_top, l.line_height]);
+        }
+        // Fallback: last line's geometry.
+        let last = layout.lines.last().unwrap();
+        Some([last.start_x, last.line_top, last.line_height])
+    }
+
+    /// Map a layout-space point to the nearest global byte offset, or None if the
+    /// layer is missing. Clamps to the closest line by y and the closest glyph
+    /// boundary by x within that line.
+    pub fn text_hit_position(&self, layer_id: &str, x: f32, y: f32) -> Option<usize> {
+        let state = self.text_layers.get(layer_id)?;
+        let layout = Self::build_adj_layout(state);
+        if layout.lines.is_empty() {
+            return Some(0);
+        }
+
+        // Pick the visual line whose vertical band contains y, else the nearest.
+        let mut best_line = 0usize;
+        let mut best_dist = f32::INFINITY;
+        for (idx, l) in layout.lines.iter().enumerate() {
+            let dist = if y < l.line_top {
+                l.line_top - y
+            } else if y > l.line_top + l.line_height {
+                y - (l.line_top + l.line_height)
+            } else {
+                0.0
+            };
+            if dist < best_dist {
+                best_dist = dist;
+                best_line = idx;
+            }
+        }
+        let target_line_i = layout.lines[best_line].line_i;
+
+        // Nearest glyph boundary on that line by x.
+        let line_glyphs: Vec<&AdjGlyph> =
+            layout.glyphs.iter().filter(|g| g.line_i == target_line_i).collect();
+        if line_glyphs.is_empty() {
+            // Empty line — caret goes to the line start offset.
+            return Some(layout.line_byte_base.get(target_line_i).copied().unwrap_or(0));
+        }
+
+        for g in &line_glyphs {
+            // Left half of the glyph → before it; right half → after it.
+            if x < g.x + g.w / 2.0 {
+                return Some(g.global_start);
+            }
+        }
+        // Past the last glyph → end of the last cluster on the line.
+        Some(line_glyphs.last().unwrap().global_end)
+    }
+
+    /// Highlight rectangles for a selection `[start, end)` as a flat array of
+    /// `[x, top, w, height, ...]`, one rect per visual line the range covers.
+    pub fn text_selection_rects(&self, layer_id: &str, start: usize, end: usize) -> Vec<f32> {
+        let (start, end) = (start.min(end), start.max(end));
+        let mut out: Vec<f32> = Vec::new();
+        let state = match self.text_layers.get(layer_id) {
+            Some(s) => s,
+            None => return out,
+        };
+        if start == end {
+            return out;
+        }
+        let layout = Self::build_adj_layout(state);
+
+        for line in &layout.lines {
+            let line_glyphs: Vec<&AdjGlyph> =
+                layout.glyphs.iter().filter(|g| g.line_i == line.line_i).collect();
+
+            // Collect the adjusted x-extent of glyphs whose cluster overlaps
+            // [start, end). A cluster overlaps when start < g.global_end and
+            // end > g.global_start.
+            let mut lo = f32::INFINITY;
+            let mut hi = f32::NEG_INFINITY;
+            for g in &line_glyphs {
+                if start < g.global_end && end > g.global_start {
+                    lo = lo.min(g.x);
+                    hi = hi.max(g.x + g.w);
+                }
+            }
+
+            if hi > lo {
+                out.extend_from_slice(&[lo, line.line_top, hi - lo, line.line_height]);
+                continue;
+            }
+
+            // Empty line inside the selected range → thin caret-width marker.
+            let base = layout.line_byte_base.get(line.line_i).copied().unwrap_or(0);
+            let line_len = state
+                .buffer
+                .lines
+                .get(line.line_i)
+                .map(|l| l.text().len())
+                .unwrap_or(0);
+            let line_start = base;
+            let line_end = base + line_len;
+            if line_glyphs.is_empty() && start <= line_start && end > line_end {
+                out.extend_from_slice(&[line.start_x, line.line_top, 4.0, line.line_height]);
+            }
+        }
+
+        out
+    }
+
     /// Returns [x, y, width, height] bounding box from the Buffer's layout runs.
     /// x and y are the top-left offset from the text origin (0,0).
     /// Returns [0, 0, 0, 0] if the layer doesn't exist or has no visible glyphs.
     pub fn measure_text_bounds(&mut self, layer_id: &str) -> [f64; 4] {
-        let state = match self.text_layers.get_mut(layer_id) {
+        let state = match self.text_layers.get(layer_id) {
             Some(s) => s,
             None => return [0.0, 0.0, 0.0, 0.0],
         };
+        let layout = Self::build_adj_layout(state);
 
         let mut min_x = f32::INFINITY;
         let mut min_y = f32::INFINITY;
         let mut max_x = f32::NEG_INFINITY;
         let mut max_y = f32::NEG_INFINITY;
 
-        for run in state.buffer.layout_runs() {
-            for glyph in run.glyphs.iter() {
-                let gx = glyph.x;
-                let gy = run.line_y - state.buffer.metrics().font_size;
-                let gw = glyph.w;
-                let gh = state.buffer.metrics().line_height;
-                if gx < min_x { min_x = gx; }
-                if gy < min_y { min_y = gy; }
-                if gx + gw > max_x { max_x = gx + gw; }
-                if gy + gh > max_y { max_y = gy + gh; }
-            }
+        for g in &layout.glyphs {
+            let gy = g.line_top;
+            if g.x < min_x { min_x = g.x; }
+            if gy < min_y { min_y = gy; }
+            if g.x + g.w > max_x { max_x = g.x + g.w; }
+            if gy + g.line_height > max_y { max_y = gy + g.line_height; }
         }
 
         if !min_x.is_finite() {
@@ -250,23 +530,24 @@ impl TextRendererState {
         ]
     }
 
-    /// Returns per-glyph positions as a flat array of [x, y, w, h, cluster_index] tuples.
+    /// Returns per-glyph positions as a flat array of [x, y, w, h, global_offset]
+    /// tuples, with letter/paragraph spacing applied. `global_offset` is the
+    /// UTF-8 byte offset of the glyph's cluster in the whole text string.
     /// Empty if the layer doesn't exist.
     pub fn get_glyph_positions(&mut self, layer_id: &str) -> Vec<f64> {
-        let state = match self.text_layers.get_mut(layer_id) {
+        let state = match self.text_layers.get(layer_id) {
             Some(s) => s,
             None => return Vec::new(),
         };
+        let layout = Self::build_adj_layout(state);
 
         let mut result = Vec::new();
-        for run in state.buffer.layout_runs() {
-            for glyph in run.glyphs.iter() {
-                result.push(glyph.x as f64);
-                result.push((run.line_y - state.buffer.metrics().font_size) as f64);
-                result.push(glyph.w as f64);
-                result.push(state.buffer.metrics().line_height as f64);
-                result.push(glyph.start as f64);
-            }
+        for g in &layout.glyphs {
+            result.push(g.x as f64);
+            result.push(g.line_top as f64);
+            result.push(g.w as f64);
+            result.push(g.line_height as f64);
+            result.push(g.global_start as f64);
         }
         result
     }
@@ -340,13 +621,23 @@ impl TextRendererState {
             /// Font size in pixels.
             font_size: f32,
         }
+        let ls = state.letter_spacing;
+        let para = state.paragraph_spacing;
+        let align = state.text_align.clone();
         let mut glyph_layouts: Vec<GlyphLayout> = Vec::new();
         let mut run_infos: Vec<RunInfo> = Vec::new();
         for run in state.buffer.layout_runs() {
             let mut run_x_start = i32::MAX;
             let mut run_x_end = i32::MIN;
-            for glyph in run.glyphs.iter() {
-                let phys = glyph.physical((0.0, run.line_y), 1.0);
+            // Letter/paragraph spacing applied post-layout (cosmic-text lacks both):
+            // shift each glyph right by comp + letter_spacing*index and every run
+            // down by paragraph_spacing per hard line break.
+            let comp = line_x_comp(ls, run.glyphs.len(), &align);
+            let para_y = para * run.line_i as f32;
+            let baseline_y = run.line_y + para_y;
+            for (i, glyph) in run.glyphs.iter().enumerate() {
+                let extra_x = comp + ls * i as f32;
+                let phys = glyph.physical((extra_x, baseline_y), 1.0);
                 let gx_start = phys.x;
                 let gx_end = phys.x + glyph.w.ceil() as i32;
                 if gx_start < run_x_start { run_x_start = gx_start; }
@@ -361,7 +652,7 @@ impl TextRendererState {
                 run_infos.push(RunInfo {
                     x_start: run_x_start,
                     x_end: run_x_end,
-                    baseline_y: run.line_y.round() as i32,
+                    baseline_y: baseline_y.round() as i32,
                     font_size: state.buffer.metrics().font_size,
                 });
             }
@@ -610,6 +901,125 @@ mod tests {
         let positions = renderer.get_glyph_positions("layer1");
         // Each glyph is 5 values. "ABC" = at least 3 glyphs.
         assert!(positions.len() >= 15, "expected ≥15 values for 3 glyphs, got {}", positions.len());
+    }
+
+    fn spacing_props(text: &str, letter_spacing: f64, paragraph_spacing: f64, align: &str) -> String {
+        format!(
+            r#"{{"text":"{text}","fontFamily":"sans-serif","fontSize":20,"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":{letter_spacing},"paragraphSpacing":{paragraph_spacing},"textAlign":"{align}","areaWidth":null}}"#
+        )
+    }
+
+    #[test]
+    fn test_glyph_positions_global_offset_multiline() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("l", &basic_props("Hi\\nyo")).expect("ok");
+        let positions = renderer.get_glyph_positions("l");
+        // Collect the global offsets (5th of each 5-tuple).
+        let offsets: Vec<usize> = positions.chunks(5).map(|c| c[4] as usize).collect();
+        // "Hi\nyo": H=0,i=1 then y=3,o=4 (newline occupies offset 2). The second
+        // line's glyphs must carry global offsets >= 3, not line-local 0/1.
+        assert!(offsets.iter().any(|&o| o >= 3), "expected a global offset ≥3 for line 2, got {:?}", offsets);
+    }
+
+    #[test]
+    fn test_hit_position_single_line() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("l", &basic_props("Hello")).expect("ok");
+        // Far left → start.
+        assert_eq!(renderer.text_hit_position("l", -100.0, 5.0), Some(0));
+        // Far right → end.
+        assert_eq!(renderer.text_hit_position("l", 10000.0, 5.0), Some(5));
+    }
+
+    #[test]
+    fn test_hit_position_multiline_second_line() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("l", &basic_props("Hello\\nWorld")).expect("ok");
+        // A click well below the first line, at far left, lands at the start of
+        // the second line → global offset 6 ("Hello" = 5 + newline).
+        let pos = renderer.text_hit_position("l", -100.0, 40.0).unwrap();
+        assert_eq!(pos, 6, "expected start of line 2 (offset 6), got {pos}");
+    }
+
+    #[test]
+    fn test_cursor_rect_second_line_below_first() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("l", &basic_props("Hello\\nWorld")).expect("ok");
+        let top1 = renderer.text_cursor_rect("l", 0).unwrap()[1];
+        // Offset 6 = start of "World" on line 2.
+        let rect2 = renderer.text_cursor_rect("l", 6).unwrap();
+        assert!(rect2[1] > top1, "line 2 caret top ({}) should be below line 1 ({top1})", rect2[1]);
+        assert!(rect2[0] < 1.0, "line 2 start caret x should be ~0, got {}", rect2[0]);
+    }
+
+    #[test]
+    fn test_cursor_rect_end_of_first_line_stays_on_first_line() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("l", &basic_props("Hello\\nWorld")).expect("ok");
+        // Offset 5 = end of "Hello", before the '\n'. Must render on line 1, not
+        // jump to the start of line 2 (regression guard for the cluster bug).
+        let top_start = renderer.text_cursor_rect("l", 0).unwrap()[1];
+        let rect_end = renderer.text_cursor_rect("l", 5).unwrap();
+        assert_eq!(rect_end[1], top_start, "offset 5 should stay on line 1");
+        assert!(rect_end[0] > 1.0, "offset 5 caret should be past line start");
+    }
+
+    #[test]
+    fn test_cursor_rect_empty_leading_line() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("l", &basic_props("\\nHi")).expect("ok");
+        // Offset 0 sits on the empty first line: x≈0, height = line height.
+        let rect = renderer.text_cursor_rect("l", 0).unwrap();
+        assert!(rect[0].abs() < 1.0, "empty-line caret x should be ~0, got {}", rect[0]);
+        assert!(rect[2] > 0.0, "caret height should be positive, got {}", rect[2]);
+    }
+
+    #[test]
+    fn test_selection_rects_single_line() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("l", &basic_props("Hello")).expect("ok");
+        let rects = renderer.text_selection_rects("l", 0, 5);
+        assert_eq!(rects.len(), 4, "single-line selection = one rect (4 values)");
+        assert!(rects[2] > 0.0, "selection width should be positive");
+    }
+
+    #[test]
+    fn test_selection_rects_cross_line() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("l", &basic_props("Hello\\nWorld")).expect("ok");
+        // Select from offset 2 to offset 9 (spans the newline) → two rects.
+        let rects = renderer.text_selection_rects("l", 2, 9);
+        assert_eq!(rects.len(), 8, "cross-line selection = two rects (8 values), got {:?}", rects);
+        // Second rect's top must be below the first.
+        assert!(rects[5] > rects[1], "second selection rect should be lower");
+    }
+
+    #[test]
+    fn test_selection_rects_empty_is_empty() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("l", &basic_props("Hello")).expect("ok");
+        assert!(renderer.text_selection_rects("l", 3, 3).is_empty());
+    }
+
+    #[test]
+    fn test_letter_spacing_widens_bounds() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("plain", &spacing_props("Hello", 0.0, 0.0, "left")).expect("ok");
+        let plain = renderer.measure_text_bounds("plain")[2];
+        renderer.set_text_content("wide", &spacing_props("Hello", 8.0, 0.0, "left")).expect("ok");
+        let wide = renderer.measure_text_bounds("wide")[2];
+        // 5 glyphs, 4 gaps × 8px ≈ 32px wider.
+        assert!(wide > plain + 20.0, "letter spacing should widen bounds: plain={plain} wide={wide}");
+    }
+
+    #[test]
+    fn test_paragraph_spacing_lowers_second_line() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("tight", &spacing_props("A\\nB", 0.0, 0.0, "left")).expect("ok");
+        let tight_top = renderer.text_cursor_rect("tight", 2).unwrap()[1];
+        renderer.set_text_content("loose", &spacing_props("A\\nB", 0.0, 40.0, "left")).expect("ok");
+        let loose_top = renderer.text_cursor_rect("loose", 2).unwrap()[1];
+        assert!(loose_top >= tight_top + 35.0, "paragraph spacing should lower line 2: tight={tight_top} loose={loose_top}");
     }
 
     fn props_with_decorations(text: &str, underline: bool, strikethrough: bool) -> String {

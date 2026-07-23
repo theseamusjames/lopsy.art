@@ -37,6 +37,7 @@ export type { ToolSettings } from './tool-settings-types';
 export { abrBrushToPreset } from '../tools/brush/builtin-presets';
 
 const MAX_RECENT_COLORS = 28;
+const MAX_RECENT_FONTS = 8;
 
 // Opacity setters in this store take **percent** (1–100), not normalised
 // 0–1. Callers reaching for normalised opacity (which is what colours and
@@ -96,6 +97,7 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     { r: 255, g: 130, b: 0,   a: 1 },
     { r: 0,   g: 200, b: 200, a: 1 },
   ],
+  recentFonts: [],
   brushTextures: BUILTIN_TEXTURES,
   presets: BUILTIN_PRESETS,
   activePresetId: 'builtin-hard-round',
@@ -304,6 +306,13 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
     set((state) => {
       const filtered = state.recentColors.filter((c) => !colorEquals(c, color));
       return { recentColors: [color, ...filtered].slice(0, MAX_RECENT_COLORS) };
+    }),
+  addRecentFont: (family) =>
+    set((state) => {
+      const name = family.trim();
+      if (!name) return {};
+      const filtered = state.recentFonts.filter((f) => f !== name);
+      return { recentFonts: [name, ...filtered].slice(0, MAX_RECENT_FONTS) };
     }),
 
   addSubBrush: (sub) => set((s) => ({ activeSubBrushes: [...s.activeSubBrushes, sub] })),

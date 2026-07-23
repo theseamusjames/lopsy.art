@@ -4,12 +4,16 @@ const setTextLayerContent = vi.fn();
 const renderTextLayer = vi.fn((..._args: unknown[]): Float32Array => new Float32Array(0));
 const getRenderedTextPixels = vi.fn((..._args: unknown[]): Uint8Array => new Uint8Array(0));
 const uploadLayerPixels = vi.fn();
+const textHitPosition = vi.fn((..._args: unknown[]): number => 0);
+const getLayerTextureDimensions = vi.fn((..._args: unknown[]): Uint32Array => new Uint32Array([200, 40]));
 
 vi.mock('../../engine-wasm/wasm-bridge', () => ({
   setTextLayerContent: (...args: unknown[]) => setTextLayerContent(...args),
   renderTextLayer: (...args: unknown[]) => renderTextLayer(...args),
   getRenderedTextPixels: (...args: unknown[]) => getRenderedTextPixels(...args),
   uploadLayerPixels: (...args: unknown[]) => uploadLayerPixels(...args),
+  textHitPosition: (...args: unknown[]) => textHitPosition(...args),
+  getLayerTextureDimensions: (...args: unknown[]) => getLayerTextureDimensions(...args),
 }));
 
 let engine: { __engine: string } | null = { __engine: 'mock' };
@@ -28,6 +32,9 @@ const uiState = {
   textEditing: null as TextEditingState | null,
   commitTextEditing: vi.fn(() => { uiState.textEditing = null; }),
   startTextEditing: vi.fn((s: TextEditingState) => { uiState.textEditing = s; }),
+  updateTextEditingSelection: vi.fn((text: string, cursorPos: number, selectionAnchor: number | null) => {
+    if (uiState.textEditing) uiState.textEditing = { ...uiState.textEditing, text, cursorPos, selectionAnchor };
+  }),
   setTextDrag: vi.fn(),
 };
 vi.mock('../../app/ui-store', () => ({
@@ -61,9 +68,13 @@ const ts = {
       align: 'left' as 'left' | 'center' | 'right' | 'justify',
       underline: false,
       strikethrough: false,
+      lineHeight: 1.4,
+      letterSpacing: 0,
+      paragraphSpacing: 0,
     },
   },
   addRecentColor: vi.fn(),
+  addRecentFont: vi.fn(),
   setTextSetting: vi.fn(),
   setForegroundColor: vi.fn(),
 };
@@ -76,6 +87,7 @@ import {
   handleTextMove,
   handleTextUp,
   commitTextEditing,
+  resetTextInteractionState,
 } from './text-interaction';
 import { DEFAULT_EFFECTS } from '../../layers/layer-model';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
@@ -103,6 +115,7 @@ function makeTextLayer(overrides: Partial<TextLayer> = {}): TextLayer {
     color: { r: 10, g: 20, b: 30, a: 1 },
     lineHeight: 1.4,
     letterSpacing: 0,
+    paragraphSpacing: 0,
     textAlign: 'left',
     width: null,
     underline: false,
@@ -153,6 +166,7 @@ function editingState(overrides: Partial<TextEditingState> = {}): TextEditingSta
     bounds: { x: 30, y: 40, width: null, height: null },
     text: 'New text',
     cursorPos: 8,
+    selectionAnchor: null,
     isNew: false,
     originalVisible: true,
     ...overrides,
@@ -168,9 +182,15 @@ beforeEach(() => {
   getRenderedTextPixels.mockReturnValue(new Uint8Array(0));
   uploadLayerPixels.mockClear();
   clearJsPixelData.mockClear();
+  textHitPosition.mockReset();
+  textHitPosition.mockReturnValue(0);
+  getLayerTextureDimensions.mockReset();
+  getLayerTextureDimensions.mockReturnValue(new Uint32Array([200, 40]));
+  resetTextInteractionState();
   uiState.textEditing = null;
   uiState.commitTextEditing.mockClear();
   uiState.startTextEditing.mockClear();
+  uiState.updateTextEditingSelection.mockClear();
   uiState.setTextDrag.mockClear();
   editorState.document = { width: 400, height: 300, layers: [] };
   editorState.pushHistory.mockClear();
@@ -180,6 +200,7 @@ beforeEach(() => {
   editorState.setActiveLayer.mockClear();
   editorState.addTextLayer.mockClear();
   ts.addRecentColor.mockClear();
+  ts.addRecentFont.mockClear();
   ts.setTextSetting.mockClear();
   ts.setForegroundColor.mockClear();
   ts.foregroundColor = { r: 255, g: 128, b: 0, a: 1 };
@@ -192,6 +213,9 @@ beforeEach(() => {
     align: 'left',
     underline: false,
     strikethrough: false,
+    lineHeight: 1.4,
+    letterSpacing: 0,
+    paragraphSpacing: 0,
   };
 });
 
@@ -364,6 +388,7 @@ describe('text up', () => {
       bounds: { x: 40, y: 40, width: null, height: null },
       text: '',
       cursorPos: 0,
+      selectionAnchor: null,
       isNew: true,
       originalVisible: true,
     });
@@ -535,5 +560,62 @@ describe('commitTextEditing', () => {
     commitTextEditing();
     expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
     expect(uiState.commitTextEditing).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('text down — caret + selection while editing', () => {
+  // A wide, tall editing layer so clicks land inside its estimated box.
+  const editLayer = () => makeTextLayer({ id: 'text-1', text: 'Hello World', x: 30, y: 40, fontSize: 24 });
+
+  function startEditing(cursorPos = 11, selectionAnchor: number | null = null) {
+    editorState.document.layers = [editLayer()];
+    uiState.textEditing = editingState({ text: 'Hello World', cursorPos, selectionAnchor });
+  }
+
+  it('places the caret on a click inside the edited text (no commit)', () => {
+    startEditing();
+    textHitPosition.mockReturnValue(6); // byte offset 6 → "World"
+    handleTextDown(makeCtx({ canvasPos: { x: 80, y: 50 } }));
+    expect(uiState.commitTextEditing).not.toHaveBeenCalled();
+    expect(uiState.updateTextEditingSelection).toHaveBeenCalledWith('Hello World', 6, null);
+  });
+
+  it('commits when the click is outside the edited text', () => {
+    startEditing();
+    handleTextDown(makeCtx({ canvasPos: { x: 5000, y: 5000 } }));
+    expect(uiState.commitTextEditing).toHaveBeenCalled();
+  });
+
+  it('shift-click extends the selection from the existing cursor', () => {
+    startEditing(2, null);
+    textHitPosition.mockReturnValue(7);
+    handleTextDown(makeCtx({ canvasPos: { x: 90, y: 50 }, shiftKey: true }));
+    expect(uiState.updateTextEditingSelection).toHaveBeenCalledWith('Hello World', 7, 2);
+  });
+
+  it('double-click selects the word under the caret', () => {
+    startEditing();
+    textHitPosition.mockReturnValue(7); // inside "World" [6, 11)
+    handleTextDown(makeCtx({ canvasPos: { x: 90, y: 50 }, clickDetail: 2 }));
+    expect(uiState.updateTextEditingSelection).toHaveBeenCalledWith('Hello World', 11, 6);
+  });
+
+  it('drag after a caret click extends the selection', () => {
+    startEditing();
+    textHitPosition.mockReturnValue(0);
+    const state = handleTextDown(makeCtx({ canvasPos: { x: 30, y: 50 } }))!;
+    expect(state.drawing).toBe(true);
+    textHitPosition.mockReturnValue(5);
+    handleTextMove(state, { x: 70, y: 50 });
+    expect(uiState.updateTextEditingSelection).toHaveBeenLastCalledWith('Hello World', 5, 0);
+  });
+
+  it('drag-select up does not create a new text layer', () => {
+    startEditing();
+    textHitPosition.mockReturnValue(0);
+    const state = handleTextDown(makeCtx({ canvasPos: { x: 30, y: 50 } }))!;
+    handleTextMove(state, { x: 70, y: 50 });
+    handleTextUp(state, { x: 70, y: 50 });
+    expect(editorState.addTextLayer).not.toHaveBeenCalled();
   });
 });

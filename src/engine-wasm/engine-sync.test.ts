@@ -473,6 +473,7 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
     bounds: { x, y, width: 200, height: null },
     text,
     cursorPos: text.length,
+    selectionAnchor: null,
     isNew: false,
     originalVisible: true,
   });
@@ -493,6 +494,9 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
       white,
       false,
       false,
+      1.4,
+      0,
+      0,
       onPos,
     );
   };

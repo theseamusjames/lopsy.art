@@ -14,7 +14,9 @@ import { hitTestTextLayer } from '../../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './render-guides';
 import { renderTiltShiftOverlay } from './render-tilt-shift-overlay';
 import { contextOptions } from '../../engine/color-space';
-import { getLayerTextureDimensions, getGlyphPositions } from '../../engine-wasm/wasm-bridge';
+import { getLayerTextureDimensions, textCursorRect, textSelectionRects } from '../../engine-wasm/wasm-bridge';
+import { utf16ToUtf8 } from '../../engine-wasm/text-offset';
+import type { CursorRect } from './render-text-overlay';
 import { PAINT_TOOLS } from '../../tools/tool-registry';
 import type { TextLayer } from '../../types';
 
@@ -137,17 +139,27 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
   }
   if (textEditing && !editingLayerIsPathText) {
     const text = toolState.settings.text;
-    const glyphPositions = Array.from(getGlyphPositions(engine, textEditing.layerId)) as number[];
+    const cursorByte = utf16ToUtf8(textEditing.text, textEditing.cursorPos);
+    const rect = textCursorRect(engine, textEditing.layerId, cursorByte);
+    const cursorRect: CursorRect | null = rect.length >= 3 ? [rect[0]!, rect[1]!, rect[2]!] : null;
+
+    let selectionRects: number[] = [];
+    if (textEditing.selectionAnchor !== null && textEditing.selectionAnchor !== textEditing.cursorPos) {
+      const a = utf16ToUtf8(textEditing.text, textEditing.selectionAnchor);
+      const b = cursorByte;
+      selectionRects = Array.from(textSelectionRects(engine, textEditing.layerId, Math.min(a, b), Math.max(a, b)));
+    }
+
     renderTextEditOverlay(overlayCtx, textEditing, {
       fontSize: text.fontSize,
       fontFamily: text.fontFamily,
       fontWeight: text.fontWeight,
       fontStyle: text.fontStyle,
       color: toolState.foregroundColor,
-      lineHeight: 1.4,
-      letterSpacing: 0,
+      lineHeight: text.lineHeight,
+      letterSpacing: text.letterSpacing,
       textAlign: text.align,
-    }, viewport.zoom, antPhase, glyphPositions);
+    }, viewport.zoom, antPhase, cursorRect, selectionRects);
   }
 
   const brushCursorInfo = getBrushCursorInfo(activeTool);

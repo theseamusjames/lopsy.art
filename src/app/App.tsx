@@ -10,6 +10,7 @@ import { HistoryPanel } from '../panels/HistoryPanel/HistoryPanel';
 import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
 import { AdjustmentsPanel } from '../panels/AdjustmentsPanel/AdjustmentsPanel';
 import { PathsPanel } from '../panels/PathsPanel/PathsPanel';
+import { TextPanel } from '../panels/TextPanel/TextPanel';
 import { NavigatorPanel } from '../panels/NavigatorPanel/NavigatorPanel';
 import { ChannelsPanel } from '../panels/ChannelsPanel/ChannelsPanel';
 import { ReferenceImagePanel } from '../panels/ReferenceImagePanel/ReferenceImagePanel';
@@ -182,6 +183,8 @@ export function App() {
         return <HistoryPanel />;
       case 'paths':
         return <PathsPanel />;
+      case 'text':
+        return <TextPanel />;
       case 'layers':
         return <LayerPanel onSelectLayer={handleSelectLayer} />;
       default:

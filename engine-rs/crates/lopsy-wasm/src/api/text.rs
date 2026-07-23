@@ -66,11 +66,59 @@ pub fn get_rendered_text_pixels(engine: &mut Engine, layer_id: &str) -> Vec<u8> 
     }
 }
 
-/// Returns per-glyph positions as a flat f64 array of [x, y, w, h, cluster]... tuples.
+/// Returns per-glyph positions as a flat f64 array of [x, y, w, h, global_offset]
+/// tuples, where `global_offset` is the UTF-8 byte offset of the glyph's cluster
+/// in the whole text string.
 #[wasm_bindgen(js_name = "getGlyphPositions")]
 pub fn get_glyph_positions(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
     let tr = ensure_text_renderer(engine);
     tr.get_glyph_positions(layer_id)
+}
+
+/// Map a layout-space point to the nearest global UTF-8 byte offset in the text.
+/// Returns -1 if the layer has no text state.
+#[wasm_bindgen(js_name = "textHitPosition")]
+pub fn text_hit_position(engine: &mut Engine, layer_id: &str, x: f64, y: f64) -> i32 {
+    match &engine.inner.text_renderer {
+        Some(tr) => tr
+            .text_hit_position(layer_id, x as f32, y as f32)
+            .map(|p| p as i32)
+            .unwrap_or(-1),
+        None => -1,
+    }
+}
+
+/// Layout-space caret rectangle `[x, top, height]` for a global UTF-8 byte
+/// offset. Returns an empty array if the layer has no text state.
+#[wasm_bindgen(js_name = "textCursorRect")]
+pub fn text_cursor_rect(engine: &mut Engine, layer_id: &str, offset: u32) -> Vec<f64> {
+    match &engine.inner.text_renderer {
+        Some(tr) => match tr.text_cursor_rect(layer_id, offset as usize) {
+            Some(r) => vec![r[0] as f64, r[1] as f64, r[2] as f64],
+            None => vec![],
+        },
+        None => vec![],
+    }
+}
+
+/// Selection highlight rectangles as a flat array of `[x, top, w, height, ...]`,
+/// one rect per visual line the `[start, end)` byte range covers. Offsets are
+/// global UTF-8 byte offsets.
+#[wasm_bindgen(js_name = "textSelectionRects")]
+pub fn text_selection_rects(
+    engine: &mut Engine,
+    layer_id: &str,
+    start: u32,
+    end: u32,
+) -> Vec<f64> {
+    match &engine.inner.text_renderer {
+        Some(tr) => tr
+            .text_selection_rects(layer_id, start as usize, end as usize)
+            .into_iter()
+            .map(|v| v as f64)
+            .collect(),
+        None => vec![],
+    }
 }
 
 /// Remove all engine state for a deleted text layer.

@@ -112,6 +112,7 @@ function deserializeLayer(s: SerializedLayer): Layer {
       color: (s.color as Color) ?? { r: 0, g: 0, b: 0, a: 1 },
       lineHeight: s.lineHeight ?? 1.4,
       letterSpacing: s.letterSpacing ?? 0,
+      paragraphSpacing: s.paragraphSpacing ?? 0,
       textAlign: (s.textAlign as TextLayer['textAlign']) ?? 'left',
       width: s.textWidth ?? null,
       underline: s.underline ?? false,

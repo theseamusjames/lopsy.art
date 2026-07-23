@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
@@ -12,7 +12,14 @@ import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob } from './paste-or-open';
 import { describeError, notifyError } from './notifications-store';
-import { processTextKey } from '../tools/text/text-input';
+import {
+  processTextKey,
+  moveVertical,
+  deleteSelection,
+  selectionRange,
+  type TextEditState,
+} from '../tools/text/text-input';
+import { makeTextGeometry } from '../tools/text/text-geometry';
 import { commitTextEditing } from '../tools/text/text-interaction';
 import { POINTER_IDLE, POINTER_SPACE_HELD, type PointerMode } from './pointer-mode';
 
@@ -22,6 +29,9 @@ import { POINTER_IDLE, POINTER_SPACE_HELD, type PointerMode } from './pointer-mo
 let fallbackPasteTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function scheduleFallbackPaste(): void {
+  // Never fall back to an image paste while editing text — the text paste is
+  // handled by the paste event (or the keydown path) instead.
+  if (useUIStore.getState().textEditing) return;
   cancelFallbackPaste();
   fallbackPasteTimer = setTimeout(() => {
     fallbackPasteTimer = null;
@@ -80,6 +90,9 @@ export function useKeyboardShortcuts({
   const viewport = useEditorStore((s) => s.viewport);
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
+  // Goal column for vertical caret moves; survives effect re-runs, transient UI
+  // state so it lives outside Zustand to avoid re-renders on every arrow press.
+  const preferredXRef = useRef<number | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -98,6 +111,7 @@ export function useKeyboardShortcuts({
       if (textEditing) {
         if (e.key === 'Escape') {
           e.preventDefault();
+          preferredXRef.current = null;
           const uiState = useUIStore.getState();
           const editorState = useEditorStore.getState();
           if (textEditing.isNew) {
@@ -114,19 +128,67 @@ export function useKeyboardShortcuts({
         // outlive the commit and route subsequent letters into the text buffer.
         if ((e.key === 'Enter' && e.shiftKey) || e.key === 'Tab') {
           e.preventDefault();
+          preferredXRef.current = null;
           commitTextEditing();
           return;
         }
 
-        const metaKey = e.metaKey || e.ctrlKey;
-        const result = processTextKey(
-          { text: textEditing.text, cursorPos: textEditing.cursorPos },
-          e.key,
-          metaKey,
-        );
+        const meta = e.metaKey || e.ctrlKey;
+        const state: TextEditState = {
+          text: textEditing.text,
+          cursorPos: textEditing.cursorPos,
+          selectionAnchor: textEditing.selectionAnchor,
+          preferredX: preferredXRef.current,
+        };
+
+        // Clipboard: copy/cut go to the system clipboard; paste is handled by
+        // the native paste event (Cmd+V is intentionally not prevented here).
+        if (meta && (e.key === 'c' || e.key === 'C')) {
+          e.preventDefault();
+          preferredXRef.current = null;
+          const range = selectionRange(state);
+          if (range) {
+            navigator.clipboard.writeText(state.text.slice(range[0], range[1])).catch(() => {});
+          }
+          return;
+        }
+        if (meta && (e.key === 'x' || e.key === 'X')) {
+          e.preventDefault();
+          preferredXRef.current = null;
+          const range = selectionRange(state);
+          if (range) {
+            navigator.clipboard.writeText(state.text.slice(range[0], range[1])).catch(() => {});
+            const next = deleteSelection(state);
+            useUIStore.getState().updateTextEditingSelection(next.text, next.cursorPos, next.selectionAnchor);
+            useEditorStore.getState().notifyRender();
+          }
+          return;
+        }
+        if (meta && (e.key === 'v' || e.key === 'V')) {
+          // Let the browser's paste event fire (see handlePaste below).
+          preferredXRef.current = null;
+          return;
+        }
+
+        // Vertical caret movement needs engine geometry.
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const engine = getEngine();
+          if (engine) {
+            const geometry = makeTextGeometry(engine, textEditing.layerId, textEditing.text);
+            const next = moveVertical(state, e.key === 'ArrowUp' ? 'up' : 'down', geometry, e.shiftKey);
+            preferredXRef.current = next.preferredX;
+            useUIStore.getState().updateTextEditingSelection(next.text, next.cursorPos, next.selectionAnchor);
+            useEditorStore.getState().notifyRender();
+          }
+          return;
+        }
+
+        const result = processTextKey(state, e.key, { meta, shift: e.shiftKey, alt: e.altKey });
         if (result) {
           e.preventDefault();
-          useUIStore.getState().updateTextEditingText(result.text, result.cursorPos);
+          preferredXRef.current = null;
+          useUIStore.getState().updateTextEditingSelection(result.text, result.cursorPos, result.selectionAnchor);
           useEditorStore.getState().notifyRender();
         }
         return;
@@ -197,6 +259,25 @@ export function useKeyboardShortcuts({
 
       // Cancel the fallback timer — the paste event fired as expected.
       cancelFallbackPaste();
+
+      // While editing text, paste plain text into the buffer (replacing any
+      // selection) and never fall through to the image-paste path.
+      const activeTextEdit = useUIStore.getState().textEditing;
+      if (activeTextEdit) {
+        e.preventDefault();
+        preferredXRef.current = null;
+        const raw = e.clipboardData?.getData('text/plain') ?? '';
+        if (raw) {
+          const normalized = raw.replace(/\r\n?/g, '\n');
+          const { text, cursorPos, selectionAnchor } = activeTextEdit;
+          const start = selectionAnchor !== null ? Math.min(selectionAnchor, cursorPos) : cursorPos;
+          const end = selectionAnchor !== null ? Math.max(selectionAnchor, cursorPos) : cursorPos;
+          const newText = text.slice(0, start) + normalized + text.slice(end);
+          useUIStore.getState().updateTextEditingSelection(newText, start + normalized.length, null);
+          useEditorStore.getState().notifyRender();
+        }
+        return;
+      }
 
       const files = e.clipboardData?.files;
       if (files && files.length > 0) {

@@ -1,11 +1,14 @@
 import type { TextEditingState, TextDragState } from '../ui-store';
-import { wrapText, alignLineX, buildFontString } from '../../tools/text/text';
 import type { TextStyle } from '../../tools/text/text';
 import type { TextLayer } from '../../types';
 
 const BORDER_COLOR = '#2196F3';
 const CURSOR_COLOR = '#2196F3';
 const HOVER_COLOR = 'rgba(33,150,243,0.6)';
+const SELECTION_COLOR = 'rgba(33,150,243,0.3)';
+
+/** Caret geometry in engine layout space: `[x, top, height]`. */
+export type CursorRect = readonly [number, number, number];
 
 /**
  * Render a subtle bounding box around a text layer to indicate it's clickable.
@@ -49,10 +52,11 @@ export function renderTextDragOverlay(
 }
 
 /**
- * Render the text editing chrome: bounding box border and blinking cursor.
- * The actual text is rendered by the GPU engine via the layer's pixel data
- * (updated in real-time by syncTextEditingPixels) so the preview matches
- * the committed result exactly.
+ * Render the text editing chrome: area border, selection highlight, and the
+ * blinking caret. All glyph geometry (`cursorRect`, `selectionRects`) comes
+ * from the engine in layout space relative to the text origin, which maps to
+ * document space by adding `bounds.x`/`bounds.y`. The text itself is rendered
+ * by the GPU engine (via syncTextLayers) so the preview matches the commit.
  */
 export function renderTextEditOverlay(
   ctx: CanvasRenderingContext2D,
@@ -60,11 +64,12 @@ export function renderTextEditOverlay(
   style: TextStyle,
   zoom: number,
   cursorBlinkPhase: number,
-  glyphPositions?: number[],
+  cursorRect: CursorRect | null,
+  selectionRects: readonly number[],
 ): void {
-  const { bounds, text, cursorPos } = editing;
+  const { bounds } = editing;
 
-  // Draw text area border (only for area text)
+  // Draw text area border (only for area text).
   if (bounds.width !== null) {
     ctx.save();
     ctx.strokeStyle = BORDER_COLOR;
@@ -74,86 +79,37 @@ export function renderTextEditOverlay(
     ctx.restore();
   }
 
-  // Render cursor (blinking)
-  const showCursor = cursorBlinkPhase % 60 < 30;
-  if (showCursor) {
+  // Selection highlight — one rect per visual line, [x, top, w, h, ...].
+  if (selectionRects.length >= 4) {
     ctx.save();
-    const font = buildFontString(style);
-    ctx.font = font;
-    ctx.textBaseline = 'top';
-
-    const measureWidth = (t: string): number => ctx.measureText(t).width;
-    const lines = wrapText(text, bounds.width, measureWidth);
-    const lineH = style.fontSize * style.lineHeight;
-
-    let charsSoFar = 0;
-    let cursorLine = 0;
-    let cursorLineOffset = 0;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]!;
-      const lineLen = line.length;
-      if (charsSoFar + lineLen >= cursorPos) {
-        cursorLine = i;
-        cursorLineOffset = cursorPos - charsSoFar;
-        break;
-      }
-      charsSoFar += lineLen;
-      const nextCharInText = text[charsSoFar];
-      if (nextCharInText === '\n') {
-        charsSoFar += 1;
-      }
-      if (charsSoFar >= cursorPos) {
-        cursorLine = i + 1;
-        cursorLineOffset = 0;
-        break;
-      }
+    ctx.fillStyle = SELECTION_COLOR;
+    for (let i = 0; i + 3 < selectionRects.length; i += 4) {
+      ctx.fillRect(
+        bounds.x + selectionRects[i]!,
+        bounds.y + selectionRects[i + 1]!,
+        selectionRects[i + 2]!,
+        selectionRects[i + 3]!,
+      );
     }
-
-    const cursorY = bounds.y + cursorLine * lineH;
-
-    // Use engine glyph positions for accurate cursor X (matches swash rendering metrics).
-    // Falls back to canvas measureText if positions unavailable (e.g. empty text).
-    let cursorX: number;
-    if (glyphPositions && glyphPositions.length >= 5) {
-      // Glyph data: [x, y, w, h, cluster, ...] — 5 values per glyph
-      // x,y are layout-space coords relative to bounds.x/y; cluster is byte offset
-      const lineGlyphs: { x: number; w: number; cluster: number }[] = [];
-      for (let i = 0; i + 4 < glyphPositions.length; i += 5) {
-        const gy = glyphPositions[i + 1]!;
-        if (Math.abs(gy - cursorLine * lineH) < lineH * 0.75) {
-          lineGlyphs.push({
-            x: glyphPositions[i]!,
-            w: glyphPositions[i + 2]!,
-            cluster: glyphPositions[i + 4]!,
-          });
-        }
-      }
-      const glyphsBefore = lineGlyphs.filter((g) => g.cluster < cursorPos);
-      if (glyphsBefore.length > 0) {
-        const last = glyphsBefore.reduce((max, g) => g.x > max.x ? g : max);
-        cursorX = bounds.x + last.x + last.w;
-      } else {
-        // Cursor before first glyph on this line — use leftmost glyph x or alignment
-        const first = lineGlyphs.length > 0
-          ? lineGlyphs.reduce((min, g) => g.x < min.x ? g : min)
-          : null;
-        cursorX = bounds.x + (first?.x ?? alignLineX(0, bounds.width, style.textAlign));
-      }
-    } else {
-      const lineText = lines[cursorLine] ?? '';
-      const textBeforeCursor = lineText.slice(0, cursorLineOffset);
-      cursorX = bounds.x + measureWidth(textBeforeCursor) +
-        alignLineX(measureWidth(lineText), bounds.width, style.textAlign);
-    }
-
-    ctx.strokeStyle = CURSOR_COLOR;
-    ctx.lineWidth = 1.5 / zoom;
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.moveTo(cursorX, cursorY);
-    ctx.lineTo(cursorX, cursorY + lineH);
-    ctx.stroke();
     ctx.restore();
   }
+
+  // Blinking caret.
+  const showCursor = cursorBlinkPhase % 60 < 30;
+  if (!showCursor) return;
+
+  // Fall back to the bounds origin when the engine has no geometry yet
+  // (e.g. empty text before the first layout).
+  const [cx, cTop, cHeight] = cursorRect
+    ?? [0, 0, style.fontSize * style.lineHeight];
+
+  ctx.save();
+  ctx.strokeStyle = CURSOR_COLOR;
+  ctx.lineWidth = 1.5 / zoom;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(bounds.x + cx, bounds.y + cTop);
+  ctx.lineTo(bounds.x + cx, bounds.y + cTop + cHeight);
+  ctx.stroke();
+  ctx.restore();
 }

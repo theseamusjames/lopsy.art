@@ -29,6 +29,12 @@ export interface TextSettings {
   align: TextAlign;
   underline: boolean;
   strikethrough: boolean;
+  /** Line-height multiplier of the font size (e.g. 1.4). */
+  lineHeight: number;
+  /** Extra px inserted between glyphs (tracking); may be negative. */
+  letterSpacing: number;
+  /** Extra px inserted below each hard paragraph break. */
+  paragraphSpacing: number;
 }
 
 export const DEFAULT_TEXT_SETTINGS: TextSettings = {
@@ -40,6 +46,9 @@ export const DEFAULT_TEXT_SETTINGS: TextSettings = {
   align: 'left',
   underline: false,
   strikethrough: false,
+  lineHeight: 1.4,
+  letterSpacing: 0,
+  paragraphSpacing: 0,
 };
 
 export function clampTextSetting<K extends keyof TextSettings>(
@@ -49,6 +58,18 @@ export function clampTextSetting<K extends keyof TextSettings>(
   if (key === 'fontSize') {
     const n = value as number;
     return Math.max(1, Math.min(500, n)) as TextSettings[K];
+  }
+  if (key === 'lineHeight') {
+    const n = value as number;
+    return Math.max(0.5, Math.min(4, n)) as TextSettings[K];
+  }
+  if (key === 'letterSpacing') {
+    const n = value as number;
+    return Math.max(-20, Math.min(200, n)) as TextSettings[K];
+  }
+  if (key === 'paragraphSpacing') {
+    const n = value as number;
+    return Math.max(0, Math.min(200, n)) as TextSettings[K];
   }
   return value;
 }
