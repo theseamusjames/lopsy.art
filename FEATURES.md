@@ -154,6 +154,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Output**: pixels or path
 - **Fill color**: any color or none
 - **Stroke color**: any color or none
+- **Fill / Stroke swatches**: each is a small swatch in the options bar. **Click** opens an inline color popover (with a "Remove fill" / "Remove stroke" button that sets it back to none); **double-click** instead pushes that color into the foreground swatch and reveals the Color panel — opening it if it was closed, bringing its tab forward if it was a background tab, and raising its window if it was a buried floating panel. When a fill or stroke is set to none the swatch is replaced by a `—` button that re-adds a color (opaque white for fill, opaque black for stroke) and opens the popover.
 - **Stroke width**: 1 - 50 px
 - **Polygon sides**: 3 - 64
 - **Corner radius**: 0 - 200 px
@@ -174,8 +175,8 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 
 ### Text Tool
 - **Font size**: 1 - 500
-- **Font family**: Inter, Arial, Helvetica, Georgia, Times New Roman, Courier New, JetBrains Mono, Verdana, Trebuchet MS, Impact, Comic Sans MS, Palatino, Garamond, Brush Script
-- **Font weight**: normal (400) or bold (700)
+- **Font family**: chosen from a searchable **font browser** (see below) covering 1,954 families — 14 system faces (Inter, Arial, Helvetica, Georgia, Times New Roman, Courier New, JetBrains Mono, Verdana, Trebuchet MS, Impact, Comic Sans MS, Palatino, Garamond, Brush Script MT) plus 1,940 Google Fonts.
+- **Font weight**: the dropdown lists exactly the weights the selected family ships, labelled Thin (100) / ExtraLight (200) / Light (300) / Regular (400) / Medium (500) / SemiBold (600) / Bold (700) / ExtraBold (800) / Black (900) / UltraBlack (1000). Families outside the catalog fall back to Regular + Bold. Switching to a family that lacks the current weight snaps to the numerically nearest one it does have.
 - **Font style**: normal or italic
 - **Text align**: left, center, right, justify
 - **Line height**: stored per text layer (fixed at 1.4× the font size); not exposed as an options-bar control
@@ -184,6 +185,13 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Strikethrough (`S`)**: toggle a horizontal stroke 32% of the font size above the baseline, 8% of font-size thick
 - **Mode**: point text (no wrap) or area text (fixed width with wrapping)
 - **Bind to path**: a Path dropdown in the text options bar lists every stored path. Once bound, glyphs are placed one by one along the path's arc-length and rotated to match the local Bezier tangent (works on both open and closed paths). Live editing (typing) re-flows the type along the curve in real time, and editing the path's anchors invalidates the cached layout so the text follows. Selecting "None" unbinds and restores the layer's pre-bind position.
+
+**Font browser** (the Font control in the text options bar)
+- Opens as a portalled dropdown anchored under the trigger button (repositioned to stay on screen near the viewport edges), with a **search box** focused automatically on open — typing filters the whole catalog by substring, case-insensitive.
+- Fonts are grouped under **Sans Serif / Serif / Display / Handwriting / Monospace** headers, each showing the count in that category; families are sorted alphabetically inside a group.
+- The list is **virtualized** (48 px rows, only the visible window rendered) so a ~2,000-entry catalog scrolls without jank. Each row shows a pre-rendered 48 px PNG preview of the family (served from jsDelivr), falling back to the family name in plain text when the catalog has no preview or the image fails to load.
+- **Keyboard**: ↑ / ↓ move the highlight (skipping category headers and auto-scrolling it into view), Enter picks the highlighted family, Escape closes and returns focus to the trigger. Clicking outside also closes it.
+- **Loading is on demand**: picking a Google family injects its `css2` stylesheet for DOM previews *and* fetches the binary for the selected weight into the WASM engine's font database so the canvas renders the real face. The binary comes from the exact TTF path baked into the generated catalog (jsDelivr → `google/fonts` repo), falling back to the css2 API's latin-subset WOFF2 (decoded in the engine) and finally to the bundled Inter if every fetch fails. Fetched binaries are cached per family+weight, so switching back is instant.
 
 **Editing keys** (active while a text layer is being edited)
 - **Shift+Enter** or **Tab**: commit the edit and exit text editing (plain Enter inserts a newline). Tab also swallows the browser's default focus change so the next single-key shortcut isn't captured by a newly-focused element.
@@ -538,8 +546,8 @@ Lopsy has **no** Adjustment-layer or Fill-layer type. Adjustments are non-destru
 - **Plain click**: selects only the clicked layer (standard behavior)
 - **Cmd/Ctrl+click**: toggles a layer in/out of the current multi-selection without changing which layer is "active"
 - **Shift+click**: selects the contiguous range from the active layer to the clicked layer
-- **Cmd/Ctrl+A** (Layers panel focused): selects every layer in the document
-- **Delete / Backspace** (Layers panel focused): removes every selected layer
+- **Cmd/Ctrl+A**: selects every layer in the document (the root group is excluded). The handler fires when focus is inside the Layers panel **or when nothing is focused at all** (`document.body`), which is the normal state while drawing. Because the global Edit shortcut for the same chord is a separate `document` listener, in that focus-less case `⌘A` runs **both** actions at once — it selects all layers *and* runs Select All on the canvas. Only a text input swallows the chord. (Matched lower-case only, so `⇧⌘A` is not the same binding.)
+- **Delete / Backspace** (Layers panel focused): removes every selected layer. The global Delete handler is not suppressed, so this also runs the canvas delete on the active layer in the same keystroke — clearing the selected pixels if a marquee is active, or removing the active layer if not. Two history entries can result from one press.
 - Selected layers can be grouped or reordered together; the active layer remains the target for tool operations
 
 ### Clipboard
@@ -622,17 +630,16 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 ### UI
 - **Foreground / background color**: with swap and reset
 - **Recent colors**: up to 28
-- **Sidebar collapsed**: on/off
-- **Panel visibility**: togglable per panel (color, layers, etc.)
+- **Panel visibility**: togglable per panel from the panel toolbar — see [Panel Docking & Layout](#panel-docking--layout). There is no separate sidebar-collapse toggle, and individual panels no longer collapse to a header; they are sized by their dock, split, or floating window instead.
 - **Mask edit mode**: on/off
-- **Draggable modals & panels**: filter dialogs, pattern fill, layer effects, adjustments, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked)
+- **Draggable modals & drawers**: filter dialogs, pattern fill, layer effects, adjustments, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked). Dockable panels use the docking system's own drag instead. The effects and reference drawers sit immediately to the left of the right dock and shift as that dock is resized.
 - **Filter / pattern preview overlay**: when live preview is enabled the dim backdrop is removed and pointer-events on the overlay are disabled so the canvas is fully visible while the modal stays interactive
 
 ### Global UI Conventions
 - **Slider double-click → reset**: every numeric slider in the UI (brush size, opacity, hardness, adjustment sliders, filter sliders, etc.) snaps back to its default value on double-click. The numeric text input inside the slider is exempt so double-clicks there select the value for editing instead.
 - **Slider arrow-key step**: with a slider's numeric input focused, **↑ / ↓** increment / decrement the value by one step (log-scaled sliders like Levels gamma step proportionally), clamped to the slider's min / max. Enter blurs the input to commit.
 - **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the status bar resets the viewport zoom to 100% (1×).
-- **Color swatch double-click**: double-clicking the foreground or background swatch in the Color panel both selects that swatch and auto-expands the Color panel (useful when the panel is collapsed). Recent-color swatches behave the same way.
+- **Color swatch selection**: clicking the foreground or background swatch in the Color panel makes it the one the picker, hex field, and RGBA sliders edit; clicking a recent-color swatch applies that color to whichever swatch is currently active. (The old double-click-to-expand behavior went away with panel collapsing.)
 - **Layer name double-click → rename**: double-clicking a layer row's name turns it into an inline text input; Enter commits, Escape cancels.
 
 ### Canvas Right-Click Context Menu
@@ -689,6 +696,58 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 
 ---
 
+## Panel Docking & Layout
+
+Seven panels — **Navigator, Info, Color, Layers, Channels, History, Paths** — live in a docking system rather than a fixed sidebar. Each is a tab that can be docked to any workspace edge, split alongside another panel, grouped into tabs, or floated as its own window. (The Reference Image drawer, layer-effects drawer, and Adjustments panel are *not* part of this system — they remain free-floating drawers.)
+
+### Panel Toolbar
+- A vertical rail on the far right with one icon per dockable panel, plus a **Reference** button for the reference-image drawer. An icon is highlighted while its panel is somewhere in the layout.
+- Clicking an icon does one of three things depending on the panel's current state: **absent** → add it at its default spot; **present but not the active tab of its group** → bring that tab forward; **present and already active** → close it.
+- Closing a panel is toolbar-only — tabs have no close (`×`) button.
+- Panels re-added from the toolbar land in the **right dock**, inserted so the vertical order stays canonical (Navigator, Info, Color, Channels, History, Paths, then Layers at the bottom, mirroring the pre-dock sidebar).
+
+### Default Layout
+- **Color above Layers** in the right dock (35% / 65% split); the other five panels start closed.
+- Default dock thickness: left 280 px, right 312 px, top 220 px, bottom 220 px.
+- On a **coarse-pointer device** (touch), a first run starts with *no* panels open so the canvas gets the whole screen.
+
+### Dragging & Drop Targets
+Dragging starts on a tab (or a floating window's tab bar) after **5 px** of pointer movement; a ghost chip follows the cursor and a translucent indicator previews exactly where the panel will land.
+
+- **Workspace edge** — release within **28 px** of the host's left/right/top/bottom edge to dock there. The panel is appended to that dock's stack: left/right docks stack vertically, top/bottom docks stack horizontally.
+- **Center of an existing panel** — release over the middle region (28% inset from each side, capped at 56 px) to join it as a **tab**. Groups hold at most **3 tabs**; dropping on a full group's center falls through to a side split instead.
+- **Edge band of an existing panel** — release near one of its four sides to **split** that space 50/50, with the dropped panel on the side you aimed at.
+- **Open space** — release a *tab* anywhere else to **float** it in a new window, sized from the group it came from (capped at 420 × 480). A whole floating window released over open space simply stays where it was dragged.
+- **Escape** during a drag cancels it; a dragged floating window snaps back to where it started.
+- Self-drops are no-ops: dropping a tab on its own group's center just activates it, and a lone tab can't split its own group.
+- Dragging a floating window whose group is a single tab moves the **whole window**; with 2–3 tabs, dragging a tab extracts just that panel and dragging the empty part of the tab bar moves the window.
+
+### Tab Keyboard Navigation
+Tab strips follow the WAI-ARIA tabs pattern, so a group's tabs are reachable without a pointer:
+
+- **Left/Up** and **Right/Down** move to the previous/next tab and wrap around at either end; **Home** / **End** jump to the first / last tab.
+- Selection *follows focus* — arrowing onto a tab activates its panel immediately, no Enter or Space needed.
+- Roving tabindex: only the active tab is in the Tab order, so a single <kbd>Tab</kbd> press enters the strip and the next one leaves it for the panel body.
+- Each tab is wired to its panel with `aria-controls` / `role="tabpanel"` so screen readers announce the pairing.
+
+### Floating Windows
+- Dragged by the tab bar, resized from **all eight** edges and corners (minimum 200 × 140).
+- Clicking anywhere in a window raises it above the others.
+- A floating window dropped onto a docked target docks all of its tabs at once; dropped onto another floating window it merges as tabs (still subject to the 3-tab cap).
+- If the browser window shrinks, stray floating panels are pulled back inside the workspace automatically.
+
+### Resizing
+- **Dock splitters** sit between each dock and the canvas: drag to set that dock's thickness, clamped to **160 – 800 px**.
+- **Split dividers** inside a dock redistribute space between panes (each pane keeps at least ~90 px).
+- The canvas fills whatever space the docks leave.
+
+### Persistence
+- The full layout — dock trees, tab groups, active tabs, split fractions, dock sizes, and floating window rects — is written to `localStorage` under `dock:layout:v1`, debounced ~400 ms and flushed on page unload.
+- Persisted layouts are re-validated on load: unknown panel ids, duplicated panels, out-of-range sizes, and malformed nodes are dropped or clamped, and a layout that can't be repaired falls back to the default. If `localStorage` is unavailable the app still works — the layout just doesn't survive a reload.
+- **Known gap**: the store exposes a `resetLayout` action that restores the default arrangement, but nothing in the UI calls it yet — there is currently no "Reset Panel Layout" menu item or button.
+
+---
+
 ## Paths Panel
 
 - Named stored paths
@@ -704,7 +763,6 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 - **Viewport indicator**: a translucent rectangle showing the current viewport bounds inside the document; click anywhere on the minimap to recenter the viewport, or drag the indicator rectangle to pan
 - **Zoom slider**: log-scaled, mapping slider position to `64^(value/100)` so the full 0.01× – 64× zoom range is reachable without coarse jumps
 - **Zoom readout**: displays the current zoom as a percentage
-- Collapsible; collapsed state persists in localStorage
 
 ---
 
@@ -712,11 +770,10 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 
 A per-layer view of the active layer's RGBA channels, modeled on Photoshop's Channels palette.
 
-- **Rows**: RGB (composite), Red, Green, Blue, Alpha. Each row has a colored swatch dot, a label, and (when expanded) a live grayscale thumbnail of that channel sampled from the active layer's GPU texture.
+- **Rows**: RGB (composite), Red, Green, Blue, Alpha. Each row has a colored swatch dot, a label, and a live grayscale thumbnail of that channel sampled from the active layer's GPU texture.
 - **Active channel**: clicking a row marks that channel as the active view — used by tools like the eyedropper / curves to operate on a single channel.
 - **Per-channel visibility**: each non-composite row has an eye/eye-off toggle that hides or shows that channel in the composite output. The composite RGB row reflects the current visibility mask of R / G / B.
 - **Thumbnails**: extracted on the JS side from the layer's RGBA bytes (red, green, blue, or alpha mapped into a grayscale image) and re-rendered whenever the layer's pixel-data version increments, so the panel stays in sync with painting.
-- Collapsible; collapsed state persists in localStorage.
 
 ---
 
@@ -728,7 +785,6 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 - **Canvas W / H**: document dimensions.
 - **Layer X / Y / W / H**: the active layer's origin and (when applicable) its raster width and height.
 - **Selection X / Y / W / H**: the active marquee's bounding box, only shown when a selection is active. When a selection is active, the Cursor X / Y readout switches to the selection's top-left so the values stay coherent during transform / move operations.
-- Collapsible; the collapsed view drops Canvas / Selection rows and keeps the most-load-bearing layer fields.
 
 ---
 
@@ -752,10 +808,15 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 
 ## History
 
-- Undo/redo with labeled snapshots (the 50 most recent states are kept)
+- Undo/redo with labeled snapshots (the 50 most recent states are kept — each push keeps the last 49 plus the new one, and the oldest silently falls off)
 - **Undo** (`⌘Z`) / **Redo** (`⇧⌘Z`) from the Edit menu or keyboard
-- History panel lists every snapshot with its label; clicking a row jumps the document to that state
 - RLE-compressed GPU texture snapshots; metadata-only snapshots for lightweight operations (visibility toggles, blend-mode changes, etc.) so the history list stays cheap even after long sessions
+
+### History Panel
+- Rows are numbered from **0 — "Original"**, the state before the first recorded edit; every later row shows the label of the action that produced it (`Brush`, `Merge Down`, `Clear Selection`, …).
+- The row matching the current state is highlighted. Clicking any row jumps there by replaying `undo`/`redo` one step at a time until it is reached — so it is a fast scrub through history, not a random-access restore.
+- **Undone steps stay in the list** below the current position, dimmed as future states, and clicking one redoes forward into it. They are discarded the moment a new edit is pushed (the redo stack is cleared on every push).
+- The list auto-scrolls to the newest entry as you work, and shows a plain **"No history"** placeholder until the first snapshot is recorded.
 
 ---
 
@@ -772,7 +833,11 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 
 ### Open / Save
 - **New** (`⌘N`, menu-only accelerator): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
-- **Open…** (`⌘O`, menu-only accelerator): open a PNG/JPEG/GIF (first frame)/BMP/WebP/PSD/DNG/RAF/.lopsy from disk (the picker auto-routes by extension via a shared `classifyOpenFile` helper). The same routing backs the pre-document flow — the New Document modal's "Open file" button and drag-and-drop onto a fresh app accept the same formats, including `.lopsy` project files.
+- **Open…** (`⌘O`, menu-only accelerator): open a PNG/JPEG/GIF (first frame)/BMP/WebP/PSD/DNG/RAF/.lopsy from disk. The picker lists every supported extension explicitly rather than `image/*` — mixing the two makes Chrome on macOS collapse the dialog down to a single filter.
+- **Two routing paths, not one.** The File-menu picker routes inline **by extension** (`.lopsy` → project loader, `.psd` → PSD importer, `.dng` / `.raf` → the Rust RAW decoders, anything else → browser `<img>` decode). The pre-document flow — the New Document modal's "Open file" button and drag-and-drop — instead uses the shared `classifyOpenFile` helper, which checks the same four extensions but falls back to the **MIME type** (`image/*`) rather than attempting a decode. The practical difference is at the edges: a file with an image MIME type but an odd extension opens on drop and fails from the menu picker, while an unrecognized file dropped on the canvas is silently ignored (the New Document modal's button surfaces a friendly error instead).
+- **Drag-and-drop is always live**, not just before a document exists — the drop target is the whole app shell as well as the canvas. Dropping an image onto an open document adds it as a layer (see Paste / Drop behavior); dropping a `.psd`, `.dng`, `.raf`, or `.lopsy` **replaces** the open document.
+- **Unsaved-changes guard**: **New**, **Open…**, and **Open Project…** check the document's dirty flag and put up a browser `confirm()` — "You have unsaved changes. Are you sure you want to continue?" — before discarding work. Closing or reloading the tab triggers the browser's own `beforeunload` warning. The drop path performs **no** such check: a `.psd` or `.lopsy` dropped onto a dirty document replaces it immediately.
+- The dirty flag is cleared by **Save Project** and by **PSD import** — and also by any **export**, since the shared download helper marks the document clean. Exporting a PNG therefore silences the unsaved-changes warnings even though nothing was saved to a project file.
 - **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust). Both **RGB** and **CMYK** color modes are accepted at 8-bit and 16-bit depth — CMYK files are converted to RGB on import (naive `(1−C)(1−K)` channel math) for both the per-layer and merged-composite paths. Other color modes (grayscale, indexed, Lab, etc.) are rejected with an unsupported-color-mode error.
 - **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant)
 
@@ -790,9 +855,12 @@ Opened from File → Export… The `⌥⇧⌘E` shown next to the menu item is a
   - **Regular** — 8-bit PNG via `canvas.toBlob`
   - **High** — 16-bit PNG via the Rust engine, preserving FP16 precision for wide-gamut workflows
 - **Filename**: editable text field; the document name is used by default and the format-appropriate extension (`.png`, `.jpg`, `.webp`, `.bmp`) is appended automatically
-- **Enter** confirms; **Escape** cancels
+- A live pixel-dimension readout (`W × H px`) sits under the preview
+- **Enter** confirms; **Escape** cancels (the handler is on the dialog, so it responds once focus is inside it)
 
 **Color-managed output**: when the document is in a wide-gamut working space (Display P3), exports carry the correct color metadata so other apps interpret the pixels faithfully — PNG and JPEG are tagged with a colorimetrically-correct Display P3 ICC profile (Bradford-adapted colorants, true piecewise-sRGB transfer curve), PSD embeds the matching working-space profile, and BMP (which cannot carry a profile) is converted P3 → sRGB before encoding. sRGB documents keep their historical sRGB tagging unchanged. WebP is tagged by its own encoder.
+
+**Embedded credit**: PNG exports carry a `Software: Lopsy` text chunk plus a `Comment` of "Made with Lopsy — http://lopsy.art"; JPEG exports carry the same note as a JPEG comment segment. WebP and BMP carry no note.
 
 ### Quick Export PNG (`⇧⌘E`)
 One-shot PNG export through the GPU compositor — no dialog, no preview, uses the document name as the filename and quality 92. (The `⇧⌘E` shown in the menu is a display-only accelerator, not wired to a global key handler.)
