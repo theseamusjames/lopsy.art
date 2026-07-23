@@ -337,7 +337,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   visiblePanels: new Set(
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
       ? []
-      : ['color', 'layers'],
+      : ['color', 'info', 'layers', 'channels'],
   ),
   cursorPosition: { x: 0, y: 0 },
   cursorOnCanvas: false,

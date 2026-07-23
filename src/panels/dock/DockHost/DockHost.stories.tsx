@@ -68,7 +68,7 @@ export const WithFloatingWindow: Story = {
   render: () => {
     const layout: DockLayout = {
       ...createDefaultLayout(),
-      floating: [{ id: 'w1', tabs: ['channels'], activeTab: 'channels', x: 220, y: 90, width: 260, height: 240 }],
+      floating: [{ id: 'w1', tabs: ['history'], activeTab: 'history', x: 220, y: 90, width: 260, height: 240 }],
     };
     return <WithLayout layout={layout} />;
   },

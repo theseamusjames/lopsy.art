@@ -63,11 +63,15 @@ test.describe('dockable panels', () => {
     await createDocument(page, 400, 300, false);
   });
 
-  test('default layout: color above layers on the right dock', async ({ page }) => {
+  test('default layout: color+info above layers+channels on the right dock', async ({ page }) => {
     await expect(page.locator('[data-testid="dock-right"]')).toBeVisible();
+    // Color and Layers are the active tabs of their respective groups.
     await expect(page.locator('section[aria-label="Color"]')).toBeVisible();
     await expect(page.locator('section[aria-label="Layers"]')).toBeVisible();
-    expect(await getRightDockTabs(page)).toEqual([['color'], ['layers']]);
+    expect(await getRightDockTabs(page)).toEqual([
+      ['color', 'info'],
+      ['layers', 'channels'],
+    ]);
     await page.screenshot({ path: 'e2e/screenshots/dock-default-layout.png' });
   });
 
@@ -80,8 +84,10 @@ test.describe('dockable panels', () => {
       y: layersBox!.y + layersBox!.height / 2,
     });
 
-    expect(await getRightDockTabs(page)).toEqual([['layers', 'color']]);
-    // The dragged tab lands active; both tab buttons live in one tab bar now.
+    // Color joins the layers+channels group as a tab; its old sibling (info)
+    // is left behind as a lone group.
+    expect(await getRightDockTabs(page)).toEqual([['info'], ['layers', 'channels', 'color']]);
+    // The dragged tab lands active; the tab buttons live in one tab bar now.
     const bar = page.locator('[data-testid="dock-tabbar-color"]');
     await expect(bar.locator('[data-dock-tab="layers"]')).toBeVisible();
     await expect(bar.locator('[data-dock-tab="color"]')).toBeVisible();
@@ -96,10 +102,6 @@ test.describe('dockable panels', () => {
   });
 
   test('a group refuses a fourth tab', async ({ page }) => {
-    // Open History and Paths, then merge everything into the layers group.
-    await page.locator('[role="toolbar"][aria-label="Panel visibility"] button[aria-label="History"]').click();
-    await page.locator('[role="toolbar"][aria-label="Panel visibility"] button[aria-label="Paths"]').click();
-
     const layersCenter = async () => {
       const box = await page.locator('[data-dock-group]').filter({
         has: page.locator('[data-dock-tab="layers"]'),
@@ -108,11 +110,14 @@ test.describe('dockable panels', () => {
       return { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 };
     };
 
+    // Merge Color into the layers+channels group → three tabs (the cap).
     await dragFromTo(page, await tabCenter(page, 'color'), await layersCenter());
-    await dragFromTo(page, await tabCenter(page, 'history'), await layersCenter());
-    expect(await getRightDockTabs(page)).toEqual([['paths'], ['layers', 'color', 'history']]);
+    const full = (await getRightDockTabs(page)).find((tabs) => tabs.includes('layers'));
+    expect(full).toEqual(['layers', 'channels', 'color']);
 
-    // Paths cannot join: the center zone degrades to a side split.
+    // Open Paths and try to drop it into the now-full group — it cannot join;
+    // the center zone degrades to a side split instead.
+    await page.locator('[role="toolbar"][aria-label="Panel visibility"] button[aria-label="Paths"]').click();
     await dragFromTo(page, await tabCenter(page, 'paths'), await layersCenter());
     const groups = await getRightDockTabs(page);
     const fullGroup = groups.find((tabs) => tabs.includes('layers'));
@@ -135,7 +140,7 @@ test.describe('dockable panels', () => {
     await expect(floating).toBeVisible();
     await expect(floating.locator('section[aria-label="Color"]')).toBeVisible();
     expect((await getDockLayout(page)).floating).toHaveLength(1);
-    expect(await getRightDockTabs(page)).toEqual([['layers']]);
+    expect(await getRightDockTabs(page)).toEqual([['info'], ['layers', 'channels']]);
     await page.screenshot({ path: 'e2e/screenshots/dock-floating-panel.png' });
 
     // Drag the floating window by its tab to the left edge of the dock host.
@@ -155,25 +160,26 @@ test.describe('dockable panels', () => {
     await page.screenshot({ path: 'e2e/screenshots/dock-left-edge-docked.png' });
   });
 
-  test('splitting a group by dropping on its edge', async ({ page }) => {
-    // Drop Color on the left half of the Layers group → side-by-side split.
+  test('dropping a tab on the bottom third reorders it below the group', async ({ page }) => {
+    // Convention: the tab bar sits at the top, so only the bottom band reorders
+    // a dropped tab below the group instead of combining it as a tab.
     const layersGroup = page.locator('[data-dock-group]').filter({
       has: page.locator('[data-dock-tab="layers"]'),
     });
     const box = await layersGroup.boundingBox();
     expect(box).not.toBeNull();
     await dragFromTo(page, await tabCenter(page, 'color'), {
-      x: box!.x + 12,
-      y: box!.y + box!.height / 2,
+      x: box!.x + box!.width / 2,
+      y: box!.y + box!.height * 0.9,
     });
 
-    // Right dock now holds a row split: color | layers.
+    // Color lands as its own group below layers+channels; info is left behind.
+    expect(await getRightDockTabs(page)).toEqual([['info'], ['layers', 'channels'], ['color']]);
     const layout = await getDockLayout(page);
-    const right = layout.docks.right as { kind: string; direction?: string; children?: { tabs?: string[] }[] };
+    const right = layout.docks.right as { kind: string; direction?: string };
     expect(right.kind).toBe('split');
-    expect(right.direction).toBe('row');
-    expect(right.children?.map((c) => c.tabs)).toEqual([['color'], ['layers']]);
-    await page.screenshot({ path: 'e2e/screenshots/dock-side-split.png' });
+    expect(right.direction).toBe('column');
+    await page.screenshot({ path: 'e2e/screenshots/dock-reorder-below.png' });
   });
 
   test('the dock edge splitter resizes the right dock', async ({ page }) => {
@@ -206,29 +212,22 @@ test.describe('dockable panels', () => {
 
     await expect(page.locator('[data-testid="floating-panel-color"]')).toBeVisible();
     expect((await getDockLayout(page)).floating).toHaveLength(1);
-    expect(await getRightDockTabs(page)).toEqual([['layers']]);
+    expect(await getRightDockTabs(page)).toEqual([['info'], ['layers', 'channels']]);
   });
 
   test('tabs are keyboard-navigable with arrow keys (WAI-ARIA tabs pattern)', async ({ page }) => {
-    // Merge color + layers into one 2-tab group so there's something to arrow through.
-    const layersBox = await page.locator('section[aria-label="Layers"]').boundingBox();
-    await dragFromTo(page, await tabCenter(page, 'color'), {
-      x: layersBox!.x + layersBox!.width / 2,
-      y: layersBox!.y + layersBox!.height / 2,
-    });
-    expect(await getRightDockTabs(page)).toEqual([['layers', 'color']]);
-
-    // The active (color) tab is the roving-tabindex stop; focus it and arrow left.
-    const colorTab = page.locator('[data-dock-tab="color"]');
-    await colorTab.focus();
-    await expect(colorTab).toHaveAttribute('aria-selected', 'true');
-    await page.keyboard.press('ArrowLeft');
-
+    // The default layers+channels group already has two tabs to arrow through.
+    // Layers is the active (roving-tabindex) stop; focus it and arrow right.
     const layersTab = page.locator('[data-dock-tab="layers"]');
+    await layersTab.focus();
     await expect(layersTab).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('section[aria-label="Layers"]')).toBeVisible();
+    await page.keyboard.press('ArrowRight');
+
+    const channelsTab = page.locator('[data-dock-tab="channels"]');
+    await expect(channelsTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('section[aria-label="Channels"]')).toBeVisible();
     // Focus follows the selection.
-    await expect(layersTab).toBeFocused();
+    await expect(channelsTab).toBeFocused();
   });
 
   test('escape cancels an in-progress tab drag', async ({ page }) => {
@@ -242,7 +241,10 @@ test.describe('dockable panels', () => {
     await expect(page.locator('[data-testid="dock-drag-ghost"]')).toHaveCount(0);
     await page.mouse.up();
 
-    expect(await getRightDockTabs(page)).toEqual([['color'], ['layers']]);
+    expect(await getRightDockTabs(page)).toEqual([
+      ['color', 'info'],
+      ['layers', 'channels'],
+    ]);
     expect((await getDockLayout(page)).floating).toHaveLength(0);
   });
 });

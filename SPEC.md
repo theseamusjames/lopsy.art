@@ -439,13 +439,13 @@ Single letter to select tool (e.g., `V` move, `B` brush, `E` eraser, `G` gradien
 
 ### Panels — Dockable System
 - Panels (Navigator, Info, Color, Layers, Channels, History, Paths) live in a
-  docking system rather than a fixed sidebar. Default layout: Color above
-  Layers docked to the right edge.
+  docking system rather than a fixed sidebar. Default layout: a Color/Info tab
+  group above a Layers/Channels tab group, docked to the right edge.
 - Every panel can be moved independently by dragging its tab.
-- Panels dock to the left/right/top/bottom edges of the workspace, or to any
-  side of another panel (splitting the space alongside it).
-- Dropping a panel onto the center of another combines them into a tabbed
-  group — max 3 tabs per group.
+- Panels dock to the left/right/top/bottom edges of the workspace.
+- Dropping a panel over the upper part of another combines them into a tabbed
+  group (max 3 tabs); dropping over the bottom third instead places it below the
+  target in the stack.
 - Panels can float as draggable, resizable windows; docks and splits are
   resizable via dividers. Panel content fills the panel.
 - The layout persists across sessions; the panel toolbar (right rail)
