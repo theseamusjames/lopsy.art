@@ -8,6 +8,7 @@ function makeEditingState(overrides?: Partial<TextEditingState>): TextEditingSta
     bounds: { x: 100, y: 200, width: null, height: null },
     text: '',
     cursorPos: 0,
+    selectionAnchor: null,
     isNew: true,
     originalVisible: true,
     ...overrides,
@@ -40,6 +41,26 @@ describe('ui-store text editing', () => {
   it('updateTextEditingText is a no-op when not editing', () => {
     useUIStore.getState().updateTextEditingText('Hello', 5);
     expect(useUIStore.getState().textEditing).toBeNull();
+  });
+
+  it('updateTextEditingText clears any active selection anchor', () => {
+    useUIStore.getState().startTextEditing(makeEditingState({ text: 'Hello', cursorPos: 5, selectionAnchor: 0 }));
+    useUIStore.getState().updateTextEditingText('Hello!', 6);
+    expect(useUIStore.getState().textEditing!.selectionAnchor).toBeNull();
+  });
+
+  it('updateTextEditingSelection sets text, cursor, and anchor', () => {
+    useUIStore.getState().startTextEditing(makeEditingState({ text: 'Hello' }));
+    useUIStore.getState().updateTextEditingSelection('Hello', 5, 1);
+    const editing = useUIStore.getState().textEditing!;
+    expect(editing.cursorPos).toBe(5);
+    expect(editing.selectionAnchor).toBe(1);
+  });
+
+  it('updateTextEditingBounds clears the selection anchor', () => {
+    useUIStore.getState().startTextEditing(makeEditingState({ text: 'Hello', cursorPos: 5, selectionAnchor: 0 }));
+    useUIStore.getState().updateTextEditingBounds({ x: 0, y: 0, width: 100, height: 50 });
+    expect(useUIStore.getState().textEditing!.selectionAnchor).toBeNull();
   });
 
   it('updateTextEditingBounds updates bounds', () => {

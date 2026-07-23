@@ -45,6 +45,7 @@ const baseTextLayer: TextLayer = {
   color: { r: 255, g: 255, b: 255, a: 1 },
   lineHeight: 1.4,
   letterSpacing: 0,
+  paragraphSpacing: 0,
   textAlign: 'left',
   width: null,
   underline: false,

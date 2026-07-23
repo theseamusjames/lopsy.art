@@ -42,6 +42,7 @@ export interface TextLayer extends LayerBase {
   readonly color: Color;
   readonly lineHeight: number;
   readonly letterSpacing: number;
+  readonly paragraphSpacing: number;
   readonly textAlign: TextAlign;
   readonly width: number | null; // null = point text, number = area text
   readonly underline: boolean;

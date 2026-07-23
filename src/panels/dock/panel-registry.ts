@@ -1,4 +1,4 @@
-import { Columns3, History, Info, Layers, Map, Palette, Spline } from 'lucide-react';
+import { Columns3, History, Info, Layers, Map, Palette, Spline, Type } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /** Panels that participate in the docking system. */
@@ -9,7 +9,8 @@ export type DockablePanelId =
   | 'layers'
   | 'channels'
   | 'history'
-  | 'paths';
+  | 'paths'
+  | 'text';
 
 export interface DockPanelMeta {
   id: DockablePanelId;
@@ -26,6 +27,7 @@ export const DOCK_PANELS: readonly DockPanelMeta[] = [
   { id: 'channels', title: 'Channels', icon: Columns3 },
   { id: 'history', title: 'History', icon: History },
   { id: 'paths', title: 'Paths', icon: Spline },
+  { id: 'text', title: 'Text', icon: Type },
 ];
 
 export const DOCK_PANEL_IDS: readonly string[] = DOCK_PANELS.map((p) => p.id);
@@ -38,6 +40,7 @@ export const DOCK_STACK_ORDER: readonly string[] = [
   'navigator',
   'info',
   'color',
+  'text',
   'channels',
   'history',
   'paths',

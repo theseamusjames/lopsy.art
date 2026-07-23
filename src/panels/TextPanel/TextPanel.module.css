@@ -1,0 +1,110 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-1) 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sectionTitle {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
+.row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.select {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
+.recentFonts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.recentFont {
+  font-family: var(--recent-font), sans-serif;
+  font-size: var(--font-size-sm);
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+}
+
+.recentFont:hover {
+  border-color: var(--color-text-secondary);
+}
+
+.alignGroup,
+.decorationGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.alignBtn,
+.decorationBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.alignBtn:hover,
+.decorationBtn:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
+}
+
+.alignBtnActive,
+.decorationBtnActive {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.underlineIcon {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  text-decoration: underline;
+  line-height: 1;
+}
+
+.strikethroughIcon {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  text-decoration: line-through;
+  line-height: 1;
+}

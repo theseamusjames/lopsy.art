@@ -244,6 +244,8 @@ export interface InteractionContext {
   activeLayer: Layer;
   clientX: number;
   clientY: number;
+  /** Click count (MouseEvent.detail); 2 for a double-click. */
+  clickDetail?: number;
   screenToCanvas?: (sx: number, sy: number) => Point;
   containerRef?: MutableRefObject<HTMLDivElement | null>;
   stateRef: MutableRefObject<InteractionState>;

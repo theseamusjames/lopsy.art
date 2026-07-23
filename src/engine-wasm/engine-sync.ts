@@ -94,6 +94,7 @@ import {
   renderTextLayer,
   getRenderedTextPixels,
   uploadLayerPixels,
+  removeTextLayerState,
 } from './wasm-bridge';
 import type { PathAnchor, TextEditingState, ChannelVisibility } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
@@ -868,6 +869,9 @@ export function syncTextLayers(
   color: Color,
   underline: boolean,
   strikethrough: boolean,
+  lineHeight: number,
+  letterSpacing: number,
+  paragraphSpacing: number,
   onPositionChange: (layerId: string, x: number, y: number) => void,
 ): void {
   const tracked = getTracked(engine);
@@ -897,8 +901,9 @@ export function syncTextLayers(
     fontWeight,
     fontStyle,
     color: [color.r / 255, color.g / 255, color.b / 255, color.a],
-    lineHeight: 1.4,
-    letterSpacing: 0,
+    lineHeight,
+    letterSpacing,
+    paragraphSpacing,
     textAlign,
     areaWidth: bounds.width ?? null,
     underline,
@@ -929,16 +934,9 @@ export function syncTextLayers(
   tracked.editingTextKey = cacheKey;
 }
 
-/**
- * Re-render a committed text layer from its stored properties using the WASM
- * text engine and upload the result. Used when a text layer loses its path
- * binding and needs its texture restored outside of editing mode.
- */
-export function rerenderCommittedTextLayer(
-  engine: Engine,
-  layer: TextLayer,
-): { x: number; y: number } | null {
-  const propsJson = JSON.stringify({
+/** Serialize a committed text layer's properties into the engine props JSON. */
+function textLayerPropsJson(layer: TextLayer): string {
+  return JSON.stringify({
     text: layer.text,
     fontFamily: layer.fontFamily,
     fontSize: layer.fontSize,
@@ -947,13 +945,26 @@ export function rerenderCommittedTextLayer(
     color: [layer.color.r / 255, layer.color.g / 255, layer.color.b / 255, layer.color.a],
     lineHeight: layer.lineHeight,
     letterSpacing: layer.letterSpacing,
+    paragraphSpacing: layer.paragraphSpacing,
     textAlign: layer.textAlign,
     areaWidth: layer.width ?? null,
     underline: layer.underline,
     strikethrough: layer.strikethrough,
   });
+}
 
-  setTextLayerContent(engine, layer.id, propsJson);
+/**
+ * Re-render a committed text layer from its stored properties using the WASM
+ * text engine and upload the result. `layer.x`/`layer.y` are treated as the
+ * text anchor (layout origin in document space); the rendered texture is placed
+ * at `anchor + renderOffset`. Used when a text layer loses its path binding and
+ * its anchor (prePathX/Y) needs restoring.
+ */
+export function rerenderCommittedTextLayer(
+  engine: Engine,
+  layer: TextLayer,
+): { x: number; y: number } | null {
+  setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
   const boundsResult = renderTextLayer(engine, layer.id);
   if (boundsResult.length !== 4) return null;
 
@@ -969,4 +980,75 @@ export function rerenderCommittedTextLayer(
   const y = layer.y + offsetY;
   uploadLayerPixels(engine, layer.id, pixels, width, height, x, y);
   return { x, y };
+}
+
+/**
+ * Re-render a committed text layer after a property change (font size, spacing,
+ * decoration, …) while keeping the text visually anchored.
+ *
+ * A committed layer stores its *texture top-left* in `x`/`y`, which equals
+ * `anchor + oldRenderOffset`. Naively re-uploading at `x + newRenderOffset`
+ * would bake the offset in again and drift the text up-left on every edit.
+ * Instead we recover the anchor from the old content's render offset, then
+ * place the new texture at `anchor + newRenderOffset`.
+ */
+export function rerenderCommittedTextLayerAnchored(
+  engine: Engine,
+  oldLayer: TextLayer,
+  newLayer: TextLayer,
+): { x: number; y: number; anchorX: number; anchorY: number } | null {
+  // Recover the anchor from the current (old) content's render offset.
+  setTextLayerContent(engine, oldLayer.id, textLayerPropsJson(oldLayer));
+  const oldBounds = renderTextLayer(engine, oldLayer.id);
+  const anchorX = oldBounds.length === 4 ? oldLayer.x - oldBounds[2]! : oldLayer.x;
+  const anchorY = oldBounds.length === 4 ? oldLayer.y - oldBounds[3]! : oldLayer.y;
+
+  const pos = placeTextLayerAtAnchor(engine, newLayer, anchorX, anchorY);
+  if (!pos) return null;
+  return { x: pos.x, y: pos.y, anchorX, anchorY };
+}
+
+/**
+ * Render a text layer's current content and upload the texture so its layout
+ * origin lands at document (`anchorX`, `anchorY`). Use this to refresh a layer
+ * (e.g. after a font binary finishes downloading) while keeping it anchored.
+ */
+export function placeTextLayerAtAnchor(
+  engine: Engine,
+  layer: TextLayer,
+  anchorX: number,
+  anchorY: number,
+): { x: number; y: number } | null {
+  setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
+  const bounds = renderTextLayer(engine, layer.id);
+  if (bounds.length !== 4) return null;
+
+  const pixels = getRenderedTextPixels(engine, layer.id);
+  if (pixels.length === 0) return null;
+
+  const x = anchorX + bounds[2]!;
+  const y = anchorY + bounds[3]!;
+  uploadLayerPixels(engine, layer.id, pixels, bounds[0]!, bounds[1]!, x, y);
+  return { x, y };
+}
+
+/**
+ * Drop the cached key for the active editing text layer so the next frame's
+ * syncTextLayers re-renders it. Needed when the rendered output changes without
+ * a props change — e.g. a web font binary finishing its download.
+ */
+export function invalidateEditingTextCache(engine: Engine): void {
+  const tracked = getTracked(engine);
+  tracked.editingTextKey = null;
+}
+
+/**
+ * Drop the engine's cached layout for a text layer, forcing the next
+ * setTextLayerContent to re-shape from scratch. The engine dedups layout by a
+ * hash of the props JSON, so an identical re-render skips re-shaping — but the
+ * font's *availability* can change without the props changing (a web font
+ * finishing its download), so a forced re-shape is needed to pick it up.
+ */
+export function resetTextLayerLayout(engine: Engine, layerId: string): void {
+  removeTextLayerState(engine, layerId);
 }

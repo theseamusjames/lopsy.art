@@ -176,6 +176,9 @@ function renderFrameGpu(
       toolState.foregroundColor,
       toolState.settings.text.underline,
       toolState.settings.text.strikethrough,
+      toolState.settings.text.lineHeight,
+      toolState.settings.text.letterSpacing,
+      toolState.settings.text.paragraphSpacing,
       (layerId, x, y) => {
         const layer = layers.find((l) => l.id === layerId);
         if (layer && (layer.x !== x || layer.y !== y)) {

@@ -152,6 +152,12 @@ test.describe('Google Font rendering', () => {
       .click();
     await page.waitForTimeout(100);
 
+    // Add a fresh layer so the Inter text layer is no longer the active layer —
+    // otherwise changing the font would (correctly) apply to that committed
+    // text layer, which this test does not want.
+    await page.locator('[aria-label="Add Layer"]').click();
+    await page.waitForTimeout(100);
+
     // Step 3: Change the active font to Pacifico using the FontPicker UI.
     // Pacifico is a single-weight handwriting/script font (very different from
     // Inter's geometric sans-serif glyphs) with a stable TTF on jsDelivr.
@@ -199,5 +205,47 @@ test.describe('Google Font rendering', () => {
     // (A 5× ratio would indicate stale GPU content, not font rendering.)
     const ratio = Math.max(interCount, pacificoCount) / Math.min(interCount, pacificoCount);
     expect(ratio).toBeLessThan(5);
+  });
+
+  test('changing a committed layer font re-renders once the web font downloads', async ({ page }) => {
+    // Commit "LOPSY" in the default Inter font; the layer stays selected.
+    await clickAtDoc(page, 200, 150);
+    await page.keyboard.type('LOPSY');
+    await page.keyboard.press('Shift+Enter');
+    await page.waitForTimeout(300);
+
+    const layers = await getTextLayers(page);
+    expect(layers.length).toBe(1);
+    const layerId = layers[0]!.id;
+    const interCount = await countOpaquePixels(page, layerId);
+    expect(interCount).toBeGreaterThan(50);
+
+    // Change the committed layer's font to a fresh Google font (not editing).
+    await selectFont(page, 'Pacifico');
+    await waitForFontInEngine(page, 'Pacifico');
+
+    // The reported bug: the committed layer stuck on the Inter fallback until the
+    // size was nudged. The async font-load refresh must re-render the SAME layer
+    // to Pacifico on its own — poll until its glyph pixels change.
+    await page.waitForFunction(
+      async ({ id, baseline }: { id: string; baseline: number }) => {
+        const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
+          (layerId?: string) => Promise<{ width: number; pixels: number[] } | null>;
+        const result = await readFn(id);
+        if (!result || result.width === 0) return false;
+        let count = 0;
+        for (let i = 3; i < result.pixels.length; i += 4) {
+          if ((result.pixels[i] ?? 0) > 10) count++;
+        }
+        return count !== baseline;
+      },
+      { id: layerId, baseline: interCount },
+      { timeout: 15000 },
+    );
+
+    const pacificoCount = await countOpaquePixels(page, layerId);
+    expect(pacificoCount).toBeGreaterThan(50);
+    // Same layer, no size change — the glyphs are now Pacifico, not Inter.
+    expect(pacificoCount).not.toBe(interCount);
   });
 });

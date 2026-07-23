@@ -92,30 +92,36 @@ async function fetchFontFromCssApi(family: string, weight: number): Promise<Arra
  *    the WASM decoder reconstructs it (both TrueType and CFF outlines).
  *
  * Falls back silently — if all fetches fail the engine uses its bundled Inter.
+ *
+ * Resolves `true` when the font binary had to be freshly fetched and loaded
+ * (so callers should re-render text that uses it), and `false` when it was
+ * already available in the engine or could not be loaded.
  */
-export function loadFontBinaryToEngine(family: string, weight: number): void {
+export function loadFontBinaryToEngine(family: string, weight: number): Promise<boolean> {
   const cacheKey = `${family}:${weight}`;
   if (binaryCache.has(cacheKey)) {
     const engine = getEngine();
-    if (!engine) return;
-    loadFontData(engine, new Uint8Array(binaryCache.get(cacheKey)!));
-    return;
+    if (engine) loadFontData(engine, new Uint8Array(binaryCache.get(cacheKey)!));
+    // Already loaded — the caller's immediate render already uses this font.
+    return Promise.resolve(false);
   }
 
-  void (async () => {
+  return (async () => {
     try {
       const buf = await fetchTtfFromGithub(family, weight)
         ?? await fetchFontFromCssApi(family, weight);
 
-      if (!buf) return;
+      if (!buf) return false;
 
       binaryCache.set(cacheKey, buf);
 
       const engine = getEngine();
-      if (!engine) return;
+      if (!engine) return false;
       loadFontData(engine, new Uint8Array(buf));
+      return true;
     } catch {
       // All fetches failed — engine uses Inter fallback.
+      return false;
     }
   })();
 }

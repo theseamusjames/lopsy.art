@@ -5,9 +5,15 @@ import { useUIStore } from '../../ui-store';
 import { Slider } from '../../../components/Slider/Slider';
 import { FontPicker } from '../../../components/FontPicker/FontPicker';
 import { fontsByFamily } from '../../../utils/font-catalog';
-import { extractFamilyName, loadGoogleFont, loadFontBinaryToEngine } from '../../../utils/font-loader';
+import { extractFamilyName } from '../../../utils/font-loader';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { rerenderCommittedTextLayer, invalidatePathTextCache } from '../../../engine-wasm/engine-sync';
+import {
+  applyTextSetting,
+  applyTextFontFamily,
+  applyTextWeight,
+  beginTextLayerHistory,
+} from '../../../tools/text/apply-text-setting';
 import type { TextLayer, FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
 import decorationStyles from './TextOptions.module.css';
@@ -33,7 +39,6 @@ export function TextOptions() {
   const textAlign = useToolSettingsStore((s) => s.settings.text.align);
   const textUnderline = useToolSettingsStore((s) => s.settings.text.underline);
   const textStrikethrough = useToolSettingsStore((s) => s.settings.text.strikethrough);
-  const setTextSetting = useToolSettingsStore((s) => s.setTextSetting);
 
   const fontEntry = useMemo(() => {
     const family = extractFamilyName(textFontFamily);
@@ -87,50 +92,22 @@ export function TextOptions() {
     [editingLayerId, editingLayer, updateTextLayerProperties],
   );
 
-  const handleFontChange = useCallback(
-    (value: string) => {
-      setTextSetting('fontFamily', value);
-      const family = extractFamilyName(value);
-      const entry = fontsByFamily.get(family);
-      if (entry) {
-        if (!entry.weights.includes(textFontWeight)) {
-          const nearest = entry.weights.reduce((prev, curr) =>
-            Math.abs(curr - textFontWeight) < Math.abs(prev - textFontWeight) ? curr : prev,
-          );
-          setTextSetting('fontWeight', nearest);
-        }
-        if (entry.source === 'google') {
-          loadGoogleFont(family, entry.weights);
-          // Load binary for the currently selected weight so the engine can
-          // render this font natively. Other weights load on-demand below.
-          const targetWeight = entry.weights.includes(textFontWeight)
-            ? textFontWeight
-            : entry.weights.reduce((prev, curr) =>
-                Math.abs(curr - textFontWeight) < Math.abs(prev - textFontWeight) ? curr : prev,
-              );
-          loadFontBinaryToEngine(family, targetWeight);
-        }
-      }
-    },
-    [textFontWeight, setTextSetting],
-  );
-
   return (
     <>
-      <Slider label="Size" value={textFontSize} min={1} max={500} onChange={(v) => setTextSetting('fontSize', v)} />
+      <Slider
+        label="Size"
+        value={textFontSize}
+        min={1}
+        max={500}
+        onDragStart={beginTextLayerHistory}
+        onChange={(v) => applyTextSetting('fontSize', v)}
+      />
       <label className={styles.label} id="text-font-label">Font</label>
-      <FontPicker value={textFontFamily} onChange={handleFontChange} />
+      <FontPicker value={textFontFamily} onChange={applyTextFontFamily} />
       <select
         className={styles.select}
         value={textFontWeight}
-        onChange={(e) => {
-          const w = Number(e.target.value);
-          setTextSetting('fontWeight', w);
-          if (fontEntry?.source === 'google') {
-            const family = extractFamilyName(textFontFamily);
-            loadFontBinaryToEngine(family, w);
-          }
-        }}
+        onChange={(e) => applyTextWeight(Number(e.target.value))}
         aria-label="Font weight"
       >
         {availableWeights.map((w) => (
@@ -140,7 +117,7 @@ export function TextOptions() {
       <select
         className={styles.select}
         value={textFontStyle}
-        onChange={(e) => setTextSetting('fontStyle', e.target.value as FontStyle)}
+        onChange={(e) => { beginTextLayerHistory(); applyTextSetting('fontStyle', e.target.value as FontStyle); }}
         aria-label="Font style"
       >
         <option value="normal">Normal</option>
@@ -150,7 +127,7 @@ export function TextOptions() {
       <select
         className={styles.select}
         value={textAlign}
-        onChange={(e) => setTextSetting('align', e.target.value as TextAlign)}
+        onChange={(e) => { beginTextLayerHistory(); applyTextSetting('align', e.target.value as TextAlign); }}
         aria-labelledby="text-align-label"
       >
         <option value="left">Left</option>
@@ -161,7 +138,7 @@ export function TextOptions() {
       <div className={decorationStyles.decorationGroup}>
         <button
           className={`${decorationStyles.decorationBtn} ${textUnderline ? decorationStyles.decorationBtnActive : ''}`}
-          onClick={() => setTextSetting('underline', !textUnderline)}
+          onClick={() => { beginTextLayerHistory(); applyTextSetting('underline', !textUnderline); }}
           aria-label="Toggle underline"
           aria-pressed={textUnderline}
           title="Underline"
@@ -170,7 +147,7 @@ export function TextOptions() {
         </button>
         <button
           className={`${decorationStyles.decorationBtn} ${textStrikethrough ? decorationStyles.decorationBtnActive : ''}`}
-          onClick={() => setTextSetting('strikethrough', !textStrikethrough)}
+          onClick={() => { beginTextLayerHistory(); applyTextSetting('strikethrough', !textStrikethrough); }}
           aria-label="Toggle strikethrough"
           aria-pressed={textStrikethrough}
           title="Strikethrough"
