@@ -24,9 +24,8 @@ export interface DropZones {
 
 /** Pointer distance from a host edge that triggers edge docking. */
 export const EDGE_DOCK_BAND = 28;
-/** Fraction of a group's size treated as edge bands around the center zone. */
-const CENTER_INSET_RATIO = 0.28;
-const CENTER_INSET_MAX = 56;
+/** Height fraction at the bottom of a group that reorders below it. */
+const BELOW_BAND_RATIO = 1 / 3;
 
 function contains(rect: Rect, x: number, y: number): boolean {
   return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
@@ -46,14 +45,15 @@ function nearestSide(x: number, y: number, rect: Rect): DockSide {
   return best;
 }
 
-/** Which region of a group rect the pointer is over. */
-export function groupRegionAt(x: number, y: number, rect: Rect): 'center' | DockSide {
-  const insetX = Math.min(CENTER_INSET_MAX, rect.width * CENTER_INSET_RATIO);
-  const insetY = Math.min(CENTER_INSET_MAX, rect.height * CENTER_INSET_RATIO);
-  const inCenterX = x >= rect.x + insetX && x < rect.x + rect.width - insetX;
-  const inCenterY = y >= rect.y + insetY && y < rect.y + rect.height - insetY;
-  if (inCenterX && inCenterY) return 'center';
-  return nearestSide(x, y, rect);
+/**
+ * Which region of a group rect the pointer is over. By convention a panel's
+ * tab bar sits at its top, so dropping over the upper portion combines the
+ * dragged panel into the group as a tab ('center'); only the bottom band
+ * reorders it below the group in the stack ('bottom').
+ */
+export function groupRegionAt(_x: number, y: number, rect: Rect): 'center' | DockSide {
+  const belowThreshold = rect.y + rect.height * (1 - BELOW_BAND_RATIO);
+  return y >= belowThreshold ? 'bottom' : 'center';
 }
 
 /**

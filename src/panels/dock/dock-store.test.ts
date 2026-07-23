@@ -25,12 +25,12 @@ beforeEach(reset);
 describe('togglePanel', () => {
   it('adds a missing panel at its default location', () => {
     useDockStore.getState().togglePanel('history');
-    expect(visible()).toEqual(['color', 'history', 'layers']);
+    expect(visible()).toEqual(['channels', 'color', 'history', 'info', 'layers']);
   });
 
   it('removes a panel whose tab is active', () => {
     useDockStore.getState().togglePanel('color');
-    expect(visible()).toEqual(['layers']);
+    expect(visible()).toEqual(['channels', 'info', 'layers']);
   });
 
   it('activates an inactive tab instead of removing it', () => {
@@ -45,8 +45,9 @@ describe('togglePanel', () => {
 
     useDockStore.getState().togglePanel('color');
     const groups = collectGroups(useDockStore.getState().layout.docks.right);
-    expect(groups[0]?.activeTab).toBe('color');
-    expect(visible()).toEqual(['color', 'layers']);
+    const colorGroup = groups.find((g) => g.tabs.includes('color'));
+    expect(colorGroup?.activeTab).toBe('color');
+    expect(visible()).toEqual(['channels', 'color', 'info', 'layers']);
   });
 
   it('mirrors visiblePanels into ui-store on every change', () => {
@@ -54,7 +55,13 @@ describe('togglePanel', () => {
     const lastCall = setState.mock.calls[setState.mock.calls.length - 1]?.[0] as {
       visiblePanels: Set<string>;
     };
-    expect([...lastCall.visiblePanels].sort()).toEqual(['color', 'history', 'layers']);
+    expect([...lastCall.visiblePanels].sort()).toEqual([
+      'channels',
+      'color',
+      'history',
+      'info',
+      'layers',
+    ]);
   });
 });
 
@@ -76,7 +83,8 @@ describe('revealPanel', () => {
 
     useDockStore.getState().revealPanel('color');
     const groups = collectGroups(useDockStore.getState().layout.docks.right);
-    expect(groups[0]?.activeTab).toBe('color');
+    const colorGroup = groups.find((g) => g.tabs.includes('color'));
+    expect(colorGroup?.activeTab).toBe('color');
   });
 });
 
@@ -122,6 +130,6 @@ describe('drag/drop actions', () => {
   it('resetLayout restores the default arrangement', () => {
     useDockStore.getState().togglePanel('color');
     useDockStore.getState().resetLayout();
-    expect(visible()).toEqual(['color', 'layers']);
+    expect(visible()).toEqual(['channels', 'color', 'info', 'layers']);
   });
 });

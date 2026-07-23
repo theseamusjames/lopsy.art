@@ -36,11 +36,26 @@ function layoutWithRight(node: DockLayout['docks']['right']): DockLayout {
   return { ...layout, docks: { ...layout.docks, right: node } };
 }
 
+/** A right dock of two single-tab groups stacked (color over layers). */
+function stackedRight(): DockLayout {
+  return layoutWithRight({
+    kind: 'split',
+    id: 'stack-root',
+    direction: 'column',
+    children: [createTabGroup(['color']), createTabGroup(['layers'])],
+    sizes: [0.5, 0.5],
+  });
+}
+
 describe('createDefaultLayout', () => {
-  it('stacks color above layers on the right', () => {
+  it('stacks color+info above layers+channels on the right', () => {
     const layout = createDefaultLayout();
     const groups = rightGroups(layout);
-    expect(groups.map((g) => g.tabs)).toEqual([['color'], ['layers']]);
+    expect(groups.map((g) => g.tabs)).toEqual([
+      ['color', 'info'],
+      ['layers', 'channels'],
+    ]);
+    expect(groups.map((g) => g.activeTab)).toEqual(['color', 'layers']);
     expect(layout.docks.left).toBeNull();
     expect(layout.floating).toEqual([]);
   });
@@ -53,7 +68,13 @@ describe('panelsInLayout / finders', () => {
       kind: 'float',
       rect: { x: 10, y: 10, width: 300, height: 300 },
     });
-    expect(panelsInLayout(layout).sort()).toEqual(['color', 'history', 'layers']);
+    expect(panelsInLayout(layout).sort()).toEqual([
+      'channels',
+      'color',
+      'history',
+      'info',
+      'layers',
+    ]);
 
     const colorGroup = rightGroups(layout).find((g) => g.tabs.includes('color'));
     expect(findPanelGroupId(layout, 'color')).toBe(colorGroup?.id);
@@ -76,7 +97,7 @@ describe('removePanel', () => {
   });
 
   it('dissolves an empty group and collapses the parent split', () => {
-    const layout = createDefaultLayout();
+    const layout = stackedRight();
     const next = removePanel(layout, 'color');
     expect(next.docks.right?.kind).toBe('tabs');
     expect(panelsInLayout(next)).toEqual(['layers']);
@@ -108,13 +129,17 @@ describe('insertNode', () => {
   });
 
   it('appends to an existing dock stack on edge drop', () => {
-    const layout = insertNode(createDefaultLayout(), createTabGroup(['info']), {
+    const layout = insertNode(createDefaultLayout(), createTabGroup(['history']), {
       kind: 'edge',
       side: 'right',
     });
     const root = layout.docks.right as SplitNode;
     expect(root.children).toHaveLength(3);
-    expect(rightGroups(layout).map((g) => g.tabs)).toEqual([['color'], ['layers'], ['info']]);
+    expect(rightGroups(layout).map((g) => g.tabs)).toEqual([
+      ['color', 'info'],
+      ['layers', 'channels'],
+      ['history'],
+    ]);
     expect(root.sizes.reduce((a, b) => a + b, 0)).toBeCloseTo(1);
   });
 
@@ -137,7 +162,7 @@ describe('insertNode', () => {
       region: 'center',
     });
     const group = rightGroups(next).find((g) => g.id === colorGroupId);
-    expect(group?.tabs).toEqual(['color', 'history']);
+    expect(group?.tabs).toEqual(['color', 'info', 'history']);
     expect(group?.activeTab).toBe('history');
   });
 
@@ -177,7 +202,11 @@ describe('insertNode', () => {
     const root = next.docks.right as SplitNode;
     expect(root.direction).toBe('column');
     expect(root.children.every((c) => c.kind === 'tabs')).toBe(true);
-    expect(collectGroups(root).map((g) => g.tabs)).toEqual([['color'], ['history'], ['layers']]);
+    expect(collectGroups(root).map((g) => g.tabs)).toEqual([
+      ['color', 'info'],
+      ['history'],
+      ['layers', 'channels'],
+    ]);
   });
 
   it('creates a floating window with min-size clamping', () => {
@@ -194,7 +223,7 @@ describe('insertNode', () => {
 
 describe('movePanel', () => {
   it('moves a docked panel into a floating window', () => {
-    const layout = createDefaultLayout();
+    const layout = stackedRight();
     const next = movePanel(layout, 'color', {
       kind: 'float',
       rect: { x: 40, y: 40, width: 320, height: 400 },
@@ -205,7 +234,7 @@ describe('movePanel', () => {
   });
 
   it('merges a panel into another group as a tab', () => {
-    const layout = createDefaultLayout();
+    const layout = stackedRight();
     const layersGroupId = findPanelGroupId(layout, 'layers') ?? '';
     const next = movePanel(layout, 'color', {
       kind: 'group',
@@ -284,7 +313,7 @@ describe('movePanel', () => {
 
 describe('dockFloatingWindow', () => {
   function floatingLayout(tabs: string[]): DockLayout {
-    let layout = createDefaultLayout();
+    let layout = stackedRight();
     for (const tab of tabs) {
       layout = removePanel(layout, tab);
     }
@@ -444,12 +473,20 @@ describe('addPanelToDefaultLocation', () => {
 
   it('inserts by canonical order into the right stack', () => {
     const next = addPanelToDefaultLocation(createDefaultLayout(), 'history', ORDER);
-    expect(rightGroups(next).map((g) => g.tabs)).toEqual([['color'], ['history'], ['layers']]);
+    expect(rightGroups(next).map((g) => g.tabs)).toEqual([
+      ['color', 'info'],
+      ['history'],
+      ['layers', 'channels'],
+    ]);
   });
 
   it('places navigator before color', () => {
     const next = addPanelToDefaultLocation(createDefaultLayout(), 'navigator', ORDER);
-    expect(rightGroups(next).map((g) => g.tabs)).toEqual([['navigator'], ['color'], ['layers']]);
+    expect(rightGroups(next).map((g) => g.tabs)).toEqual([
+      ['navigator'],
+      ['color', 'info'],
+      ['layers', 'channels'],
+    ]);
   });
 
   it('is a no-op when the panel is already present', () => {

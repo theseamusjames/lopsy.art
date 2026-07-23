@@ -9,16 +9,19 @@ function zones(partial?: Partial<DropZones>): DropZones {
 }
 
 describe('groupRegionAt', () => {
+  // y spans 100..300; the bottom third (>= ~233) reorders below, the rest combines.
   const rect = { x: 100, y: 100, width: 200, height: 200 };
 
-  it('detects the center', () => {
-    expect(groupRegionAt(200, 200, rect)).toBe('center');
+  it('combines as a tab anywhere in the upper portion', () => {
+    expect(groupRegionAt(200, 110, rect)).toBe('center'); // near the top
+    expect(groupRegionAt(200, 200, rect)).toBe('center'); // middle
+    expect(groupRegionAt(110, 200, rect)).toBe('center'); // left of middle
+    expect(groupRegionAt(290, 200, rect)).toBe('center'); // right of middle
+    expect(groupRegionAt(200, 233, rect)).toBe('center'); // just above the band
   });
 
-  it('detects each edge band', () => {
-    expect(groupRegionAt(110, 200, rect)).toBe('left');
-    expect(groupRegionAt(290, 200, rect)).toBe('right');
-    expect(groupRegionAt(200, 110, rect)).toBe('top');
+  it('reorders below only in the bottom band', () => {
+    expect(groupRegionAt(200, 234, rect)).toBe('bottom');
     expect(groupRegionAt(200, 290, rect)).toBe('bottom');
   });
 });
@@ -91,7 +94,7 @@ describe('resolveDropTarget', () => {
       ],
     });
     const target = resolveDropTarget(1195, 400, z);
-    expect(target).toEqual({ kind: 'group', groupId: 'g1', region: 'right' });
+    expect(target).toEqual({ kind: 'group', groupId: 'g1', region: 'center' });
   });
 
   it('merges into a floating window anywhere over it, unless full', () => {

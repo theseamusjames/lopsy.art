@@ -707,7 +707,7 @@ Seven panels — **Navigator, Info, Color, Layers, Channels, History, Paths** �
 - Panels re-added from the toolbar land in the **right dock**, inserted so the vertical order stays canonical (Navigator, Info, Color, Channels, History, Paths, then Layers at the bottom, mirroring the pre-dock sidebar).
 
 ### Default Layout
-- **Color above Layers** in the right dock (35% / 65% split); the other five panels start closed.
+- A **Color/Info** tab group above a **Layers/Channels** tab group in the right dock (50 / 50 split), with **Color** and **Layers** as the active tabs; the other three panels (Navigator, History, Paths) start closed.
 - Default dock thickness: left 280 px, right 312 px, top 220 px, bottom 220 px.
 - On a **coarse-pointer device** (touch), a first run starts with *no* panels open so the canvas gets the whole screen.
 
@@ -715,11 +715,11 @@ Seven panels — **Navigator, Info, Color, Layers, Channels, History, Paths** �
 Dragging starts on a tab (or a floating window's tab bar) after **5 px** of pointer movement; a ghost chip follows the cursor and a translucent indicator previews exactly where the panel will land.
 
 - **Workspace edge** — release within **28 px** of the host's left/right/top/bottom edge to dock there. The panel is appended to that dock's stack: left/right docks stack vertically, top/bottom docks stack horizontally.
-- **Center of an existing panel** — release over the middle region (28% inset from each side, capped at 56 px) to join it as a **tab**. Groups hold at most **3 tabs**; dropping on a full group's center falls through to a side split instead.
-- **Edge band of an existing panel** — release near one of its four sides to **split** that space 50/50, with the dropped panel on the side you aimed at.
+- **Upper portion of an existing panel** — release over the top two-thirds of a group (where its tab bar sits, by convention) to join it as a **tab**. Groups hold at most **3 tabs**; dropping on a full group falls through to a side split instead.
+- **Bottom third of an existing panel** — release over the bottom third to drop the panel as a new group **below** the target in the stack (reordering) rather than combining.
 - **Open space** — release a *tab* anywhere else to **float** it in a new window, sized from the group it came from (capped at 420 × 480). A whole floating window released over open space simply stays where it was dragged.
 - **Escape** during a drag cancels it; a dragged floating window snaps back to where it started.
-- Self-drops are no-ops: dropping a tab on its own group's center just activates it, and a lone tab can't split its own group.
+- Self-drops are no-ops: dropping a tab back on its own group just activates it, and a lone tab can't split its own group.
 - Dragging a floating window whose group is a single tab moves the **whole window**; with 2–3 tabs, dragging a tab extracts just that panel and dragging the empty part of the tab bar moves the window.
 
 ### Tab Keyboard Navigation

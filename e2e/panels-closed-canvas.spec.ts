@@ -21,18 +21,22 @@ test.describe('#669 canvas visible after closing all side panels', () => {
     await drawRect(page, 50, 50, 200, 150, { r: 255, g: 0, b: 0 });
     await page.waitForTimeout(200);
 
-    // Toggle off every side panel via the PanelToolbar buttons — this
-    // is what the user does; we don't reach into the store.
+    // Toggle off every side panel via the PanelToolbar buttons — this is what
+    // the user does; we don't reach into the store. Panels sharing a tab group
+    // need two clicks (activate the tab, then close it), so keep clicking each
+    // button until its panel leaves the visible set.
     const panels = ['Navigator', 'Info', 'Color', 'Layers', 'Channels', 'History', 'Paths'];
     for (const label of panels) {
-      const isActive = await page.evaluate((id) => {
-        const store = (window as unknown as Record<string, unknown>).__uiStore as {
-          getState: () => { visiblePanels: Set<string> };
-        };
-        return store.getState().visiblePanels.has(id);
-      }, label.toLowerCase());
-      if (isActive) {
-        const btn = page.locator(`[role="toolbar"][aria-label="Panel visibility"] button[aria-label="${label}"]`);
+      const id = label.toLowerCase();
+      const btn = page.locator(`[role="toolbar"][aria-label="Panel visibility"] button[aria-label="${label}"]`);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const isVisible = await page.evaluate((pid) => {
+          const store = (window as unknown as Record<string, unknown>).__uiStore as {
+            getState: () => { visiblePanels: Set<string> };
+          };
+          return store.getState().visiblePanels.has(pid);
+        }, id);
+        if (!isVisible) break;
         await btn.click();
         await page.waitForTimeout(80);
       }

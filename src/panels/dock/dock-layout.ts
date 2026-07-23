@@ -100,7 +100,7 @@ export function emptyLayout(): DockLayout {
   };
 }
 
-/** Mirrors the pre-dock sidebar: Color above Layers on the right edge. */
+/** Color+Info stacked over Layers+Channels on the right edge. */
 export function createDefaultLayout(): DockLayout {
   const layout = emptyLayout();
   return {
@@ -111,8 +111,8 @@ export function createDefaultLayout(): DockLayout {
         kind: 'split',
         id: newNodeId(),
         direction: 'column',
-        children: [createTabGroup(['color']), createTabGroup(['layers'])],
-        sizes: [0.35, 0.65],
+        children: [createTabGroup(['color', 'info']), createTabGroup(['layers', 'channels'])],
+        sizes: [0.5, 0.5],
       },
     },
   };

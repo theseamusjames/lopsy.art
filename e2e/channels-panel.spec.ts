@@ -6,19 +6,15 @@ import { createDocument, waitForStore, drawRect } from './helpers';
 // ---------------------------------------------------------------------------
 
 async function openChannelsPanel(page: Parameters<typeof test>[1]['page']): Promise<void> {
-  // Click the Channels panel toggle button in the PanelToolbar
+  // Channels ships as an inactive tab in the default layout, and DockTabs only
+  // renders the active tab's section — so activate it via the toolbar button
+  // unless it's already the visible tab.
+  const section = page.locator('section[aria-label="Channels"]');
+  if (await section.isVisible()) return;
   const btn = page.locator('[role="toolbar"][aria-label="Panel visibility"] button[aria-label="Channels"]');
   await btn.waitFor({ state: 'visible' });
-  const isActive = await page.evaluate(() => {
-    const store = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { visiblePanels: Set<string> };
-    };
-    return store.getState().visiblePanels.has('channels');
-  });
-  if (!isActive) {
-    await btn.click();
-    await page.waitForTimeout(100);
-  }
+  await btn.click();
+  await section.waitFor({ state: 'visible' });
 }
 
 async function getChannelVisibility(
