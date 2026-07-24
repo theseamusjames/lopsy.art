@@ -110,7 +110,7 @@ async function getTextLayers(page: Page) {
             type: string;
             name: string;
             visible: boolean;
-            textProps?: { fontFamily?: string };
+            fontFamily?: string;
           }>;
         };
       };
@@ -120,7 +120,7 @@ async function getTextLayers(page: Page) {
       .map((l) => ({
         id: l.id,
         name: l.name,
-        fontFamily: l.textProps?.fontFamily ?? 'unknown',
+        fontFamily: l.fontFamily ?? 'unknown',
       }));
   });
 }
@@ -137,50 +137,37 @@ test.describe('WOFF2 TrueType font rendering', () => {
   });
 
   test('Bebas Neue (TrueType WOFF2) renders distinct glyphs, not Inter fallback', async ({ page }) => {
-    // Type with Inter first as baseline
-    await clickAtDoc(page, 300, 100);
+    // Create one committed text layer in Inter and measure its footprint.
+    // (Since #690, picking a font in the options bar re-styles the selected
+    // committed text layer in place, so we compare the same layer before and
+    // after the font swap rather than juggling two layers — two layers would
+    // both end up Bebas once the font is applied to the active one.)
+    await clickAtDoc(page, 300, 200);
     await page.keyboard.type('HELLO');
-    await page.keyboard.press('Shift+Enter');
+    await page.keyboard.press('Shift+Enter'); // commit; layer stays active
     await page.waitForTimeout(300);
 
     const interLayers = await getTextLayers(page);
     expect(interLayers.length).toBe(1);
-    const interLayerId = interLayers[0]!.id;
+    const layerId = interLayers[0]!.id;
 
-    // Hide Inter layer
-    await page.locator(`[data-layer-id="${interLayerId}"]`)
-      .locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]')
-      .click();
-    await page.waitForTimeout(100);
+    const interCount = await countOpaquePixels(page, layerId);
+    expect(interCount).toBeGreaterThan(50);
 
-    // Select Bebas Neue — a TrueType font that requires WOFF2 glyf transform decoding
+    // Swap the committed, still-active layer to Bebas Neue — a TrueType font that
+    // requires WOFF2 glyf-transform decoding.
     await selectFont(page, 'Bebas Neue');
     await waitForFontInEngine(page, 'Bebas Neue');
+    await page.waitForTimeout(600); // allow the async post-load re-render
 
-    // Create text with Bebas Neue
-    await clickAtDoc(page, 300, 200);
-    await page.keyboard.type('HELLO');
-    await page.keyboard.press('Shift+Enter');
-    await page.waitForTimeout(300);
-
-    const allLayers = await getTextLayers(page);
-    expect(allLayers.length).toBe(2);
-    const bebasLayer = allLayers.find((l) => l.id !== interLayerId);
-    expect(bebasLayer).toBeDefined();
-
-    // Show both for screenshot
-    await page.locator(`[data-layer-id="${interLayerId}"]`)
-      .locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]')
-      .click();
-    await page.waitForTimeout(100);
+    // The layer's font family must have actually switched to Bebas Neue.
+    const afterLayers = await getTextLayers(page);
+    expect(afterLayers.length).toBe(1);
+    expect(afterLayers[0]!.fontFamily).toContain('Bebas Neue');
 
     await page.screenshot({ path: 'e2e/screenshots/woff2-bebas-neue-vs-inter.png' });
 
-    // Both must have rendered content
-    const interCount = await countOpaquePixels(page, interLayerId);
-    const bebasCount = await countOpaquePixels(page, bebasLayer!.id);
-
-    expect(interCount).toBeGreaterThan(50);
+    const bebasCount = await countOpaquePixels(page, layerId);
     expect(bebasCount).toBeGreaterThan(50);
 
     // Bebas Neue is a condensed display font — its pixel footprint should differ
