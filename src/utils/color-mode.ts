@@ -1,6 +1,6 @@
 import type { Color } from '../types/color';
 import type { DocumentColorMode } from '../types/color-mode';
-import { labToEncodedBytes, rgbToLab } from './color-spaces';
+import { labToEncodedBytes, rgbToLab, rgbToCmyk } from './color-spaces';
 
 const MODE_LABELS: Record<DocumentColorMode, string> = {
   rgb: 'RGB',
@@ -74,6 +74,12 @@ export function encodeColorForEngine(color: Color, mode: DocumentColorMode): Col
   if (mode === 'lab') {
     const { r, g, b } = labToEncodedBytes(rgbToLab(color));
     return { r, g, b, a: color.a };
+  }
+  if (mode === 'cmyk') {
+    // Ink channels: R=C, G=M, B=Y, and the alpha slot carries K.
+    const { c, m, y, k } = rgbToCmyk(color);
+    const ink = (v: number) => Math.round((v / 100) * 255);
+    return { r: ink(c), g: ink(m), b: ink(y), a: k / 100 };
   }
   return color;
 }

@@ -6,7 +6,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use lopsy_core::{lab, quantize};
+use lopsy_core::{cmyk, lab, quantize};
 
 use crate::{compositor, filter_gpu, layer_manager};
 use crate::Engine;
@@ -80,6 +80,40 @@ pub fn convert_layer_to_lab(engine: &mut Engine, layer_id: &str) -> Result<(), J
 #[wasm_bindgen(js_name = "convertLayerFromLab")]
 pub fn convert_layer_from_lab(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
     transform_layer_pixels(engine, layer_id, lab::lab_pixels_to_srgb)
+}
+
+/// Encode a layer's sRGB pixels as CMYK ink channels (R=C, G=M, B=Y, A=K).
+///
+/// CMYK documents are flattened and opaque, so the alpha channel is free to
+/// carry black ink. Any partially transparent source pixel is composited onto
+/// white paper first, since ink has no notion of transparency.
+#[wasm_bindgen(js_name = "convertLayerToCmyk")]
+pub fn convert_layer_to_cmyk(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
+    transform_layer_pixels(engine, layer_id, |pixels| {
+        for px in pixels.chunks_exact_mut(4) {
+            let a = px[3] as u32;
+            let over_white = |v: u8| (((v as u32 * a) + 255 * (255 - a)) / 255) as u8;
+            let (c, m, y, k) = cmyk::srgb_to_cmyk(over_white(px[0]), over_white(px[1]), over_white(px[2]));
+            px[0] = c;
+            px[1] = m;
+            px[2] = y;
+            px[3] = k;
+        }
+    })
+}
+
+/// Decode a layer's CMYK ink channels back to opaque sRGB.
+#[wasm_bindgen(js_name = "convertLayerFromCmyk")]
+pub fn convert_layer_from_cmyk(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
+    transform_layer_pixels(engine, layer_id, |pixels| {
+        for px in pixels.chunks_exact_mut(4) {
+            let (r, g, b) = cmyk::cmyk_to_srgb(px[0], px[1], px[2], px[3]);
+            px[0] = r;
+            px[1] = g;
+            px[2] = b;
+            px[3] = 255;
+        }
+    })
 }
 
 /// Build an indexed palette from the flattened document.

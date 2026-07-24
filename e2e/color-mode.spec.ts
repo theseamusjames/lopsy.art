@@ -402,4 +402,85 @@ test.describe('Document color mode', () => {
     expect(sliderLabels).not.toContain('R');
     expect(sliderLabels).not.toContain('G');
   });
+
+  test('CMYK conversion stores ink channels and renders through the ink model', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 160, 160, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    await drawRect(page, 30, 30, 90, 90, { r: 220, g: 70, b: 60 });
+    const before = await readCompositedAtDoc(page, 70, 70);
+
+    await selectColorMode(page, 'CMYK Color');
+    expect(await getColorMode(page)).toBe('cmyk');
+
+    // The ink round trip is near-identity for in-gamut sRGB, so the picture
+    // survives; what changes is that the pixels are now ink amounts.
+    const after = await readCompositedAtDoc(page, 70, 70);
+    expect(Math.abs(after.r - before.r)).toBeLessThanOrEqual(4);
+    expect(Math.abs(after.g - before.g)).toBeLessThanOrEqual(4);
+    expect(Math.abs(after.b - before.b)).toBeLessThanOrEqual(4);
+
+    // Red ink is C=0, M=high, Y=high — the texture holds that, not sRGB.
+    const raw = await page.evaluate(async () => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { activeLayerId: string | null } };
+      };
+      const read = (window as unknown as Record<string, unknown>).__readLayerPixels as
+        (id?: string) => Promise<{ width: number; height: number; pixels: number[] }>;
+      const result = await read(store.getState().document.activeLayerId ?? undefined);
+      const idx = (Math.floor(result.height / 2) * result.width + Math.floor(result.width / 2)) * 4;
+      return {
+        c: result.pixels[idx] ?? 0,
+        m: result.pixels[idx + 1] ?? 0,
+        y: result.pixels[idx + 2] ?? 0,
+        k: result.pixels[idx + 3] ?? 0,
+      };
+    });
+    expect(raw.c).toBeLessThan(30);
+    expect(raw.m).toBeGreaterThan(120);
+    expect(raw.y).toBeGreaterThan(120);
+
+    await undo(page);
+    expect(await getColorMode(page)).toBe('rgb');
+    const restored = await readCompositedAtDoc(page, 70, 70);
+    expect(Math.abs(restored.r - before.r)).toBeLessThanOrEqual(2);
+  });
+
+  test('CMYK is a flat ink surface — layers are refused, and leaving decodes back', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 120, 120, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    await drawRect(page, 20, 20, 70, 70, { r: 60, g: 140, b: 200 });
+    const before = await readCompositedAtDoc(page, 50, 50);
+
+    await selectColorMode(page, 'CMYK Color');
+    const flattened = (await getEditorState(page)).document.layers.length;
+    await addLayer(page);
+    expect((await getEditorState(page)).document.layers.length).toBe(flattened);
+
+    await selectColorMode(page, 'RGB Color');
+    expect(await getColorMode(page)).toBe('rgb');
+    const after = await readCompositedAtDoc(page, 50, 50);
+    expect(Math.abs(after.r - before.r)).toBeLessThanOrEqual(4);
+    expect(Math.abs(after.g - before.g)).toBeLessThanOrEqual(4);
+    expect(Math.abs(after.b - before.b)).toBeLessThanOrEqual(4);
+  });
+
+  test('CMYK mode shows C/M/Y/K sliders', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 120, 120, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    await selectColorMode(page, 'CMYK Color');
+    await openColorPanel(page);
+
+    const labels = await page.locator('[class*="sliders"] span[class*="label"]').allTextContents();
+    expect(labels).toEqual(expect.arrayContaining(['C', 'M', 'Y', 'K']));
+    expect(labels).not.toContain('R');
+  });
 });

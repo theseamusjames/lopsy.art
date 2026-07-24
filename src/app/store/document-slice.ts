@@ -36,7 +36,7 @@ import { computeConvertColorMode, layersWithPixels, paletteFromBytes, paletteToB
 import { colorModeLabel, convertColorToDocMode } from '../../utils/color-mode';
 import { getColorModeCapabilities } from '../../utils/color-mode-capabilities';
 import { notifyInfo } from '../notifications-store';
-import { convertLayerToGrayscale, quantizeCompositeToPalette, applyPaletteToLayer, convertLayerToLab, convertLayerFromLab } from '../../engine-wasm/wasm-bridge';
+import { convertLayerToGrayscale, quantizeCompositeToPalette, applyPaletteToLayer, convertLayerToLab, convertLayerFromLab, convertLayerToCmyk, convertLayerFromCmyk } from '../../engine-wasm/wasm-bridge';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { computeAlignLayer } from './actions/align-layer';
 import { computeFitLayer } from './actions/fit-layer';
@@ -744,14 +744,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     flushLayerSync(s);
     s.pushHistory(`Convert to ${colorModeLabel(newMode)}`);
 
-    // Indexed is a single flat palette-constrained surface, so the layer stack
-    // collapses before quantizing. This runs under the snapshot above, making
+    // Indexed and CMYK are single flat surfaces (a palette, and ink channels
+    // that spend alpha on black), so the layer stack collapses first. This runs under the snapshot above, making
     // flatten + convert one undo step. Flattening goes through the export
     // compositor, which already decodes native modes — so the flattened layer
     // is plain sRGB and must not be decoded again below.
     let doc = s.document;
-    let pixelsAreEncoded = doc.colorMode === 'lab';
-    if (newMode === 'indexed') {
+    let pixelsAreEncoded = doc.colorMode === 'lab' || doc.colorMode === 'cmyk';
+    if (newMode === 'indexed' || newMode === 'cmyk') {
       const flattened = computeFlattenImage(doc, resolveAllPixelData(doc.layerOrder, doc.layers));
       if (flattened?.document) {
         applyActionResult(set, flattened);
@@ -779,9 +779,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       for (const id of layersWithPixels(doc)) {
         // Decode out of the old mode before encoding into the new one, so a
         // bake never runs on values from the previous color space.
-        if (pixelsAreEncoded) convertLayerFromLab(engine, id);
+        if (pixelsAreEncoded) {
+          if (doc.colorMode === 'lab') convertLayerFromLab(engine, id);
+          if (doc.colorMode === 'cmyk') convertLayerFromCmyk(engine, id);
+        }
         if (newMode === 'grayscale') convertLayerToGrayscale(engine, id);
         if (newMode === 'lab') convertLayerToLab(engine, id);
+        if (newMode === 'cmyk') convertLayerToCmyk(engine, id);
         if (paletteBytes) applyPaletteToLayer(engine, id, paletteBytes, options?.dither ?? false);
         // GPU is now source of truth — drop stale JS pixel data.
         invalidateBitmapCache(id);

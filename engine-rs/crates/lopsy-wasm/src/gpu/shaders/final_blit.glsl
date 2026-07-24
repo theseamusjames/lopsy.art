@@ -44,6 +44,13 @@ float linearToSrgb(float v) {
     return v <= 0.0031308 ? v * 12.92 : 1.055 * pow(v, 1.0 / 2.4) - 0.055;
 }
 
+// CMYK stores ink amounts (R=C, G=M, B=Y, A=K). Naive ink-on-white model,
+// matching lopsy-core/src/cmyk.rs — no ICC profile, so this is an
+// approximation of print, not a colorimetric match.
+vec3 cmykToSrgb(vec4 ink) {
+    return (1.0 - ink.rgb) * (1.0 - ink.a);
+}
+
 vec3 labToSrgb(vec3 encoded) {
     float L = encoded.r * 255.0 / 2.55;
     float a = encoded.g * 255.0 - 128.0;
@@ -89,6 +96,10 @@ void main() {
     // before the RGB-assuming steps below (channel mask, checkerboard, dither).
     if (u_docColorMode == 1) {
         color.rgb = labToSrgb(color.rgb);
+    } else if (u_docColorMode == 2) {
+        // Ink documents are opaque: alpha carried K, so it must not survive
+        // into the transparency checker below.
+        color = vec4(cmykToSrgb(color), 1.0);
     }
 
     color = vec4(color.rgb * u_channelMask.rgb, color.a * u_channelMask.a);

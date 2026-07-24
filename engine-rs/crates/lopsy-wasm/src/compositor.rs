@@ -461,6 +461,7 @@ fn blend_onto_composite(
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
     }
     if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     // Explicit viewport: earlier passes (e.g. render_layer_plus_stroke) may
@@ -546,6 +547,7 @@ fn blend_onto_target(
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
     }
     if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
@@ -597,6 +599,7 @@ fn render_mask_overlay(
     if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 1); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
     if let Some(loc) = shader.location(&engine.gl, "u_wrapLayer") { engine.gl.uniform1i(Some(&loc), 0); }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
@@ -649,6 +652,7 @@ fn render_quick_mask_overlay(engine: &mut EngineInner) {
     if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 1); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
     if let Some(loc) = shader.location(&engine.gl, "u_wrapLayer") { engine.gl.uniform1i(Some(&loc), 0); }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
@@ -701,6 +705,7 @@ fn blend_effect_onto_composite(engine: &mut EngineInner) {
     if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
     if let Some(loc) = shader.location(&engine.gl, "u_wrapLayer") { engine.gl.uniform1i(Some(&loc), 0); }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
@@ -1419,8 +1424,18 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
 /// In-place decode of a composited RGBA8 buffer out of a native color mode.
 /// Mode 0 (RGB, grayscale, indexed) already holds sRGB and is left alone.
 pub fn decode_native_color_mode(doc_color_mode: u32, pixels: &mut [u8]) {
-    if doc_color_mode == 1 {
-        lopsy_core::lab::lab_pixels_to_srgb(pixels);
+    match doc_color_mode {
+        1 => lopsy_core::lab::lab_pixels_to_srgb(pixels),
+        2 => {
+            for px in pixels.chunks_exact_mut(4) {
+                let (r, g, b) = lopsy_core::cmyk::cmyk_to_srgb(px[0], px[1], px[2], px[3]);
+                px[0] = r;
+                px[1] = g;
+                px[2] = b;
+                px[3] = 255;
+            }
+        }
+        _ => {}
     }
 }
 
