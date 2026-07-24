@@ -166,7 +166,10 @@ export interface EditorState {
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
-  convertColorMode: (newMode: import('../../types').DocumentColorMode) => void;
+  convertColorMode: (
+    newMode: DocumentColorMode,
+    options?: import('./actions/convert-color-mode').IndexedConversionOptions,
+  ) => void;
 
   // Viewport
   setZoom: (zoom: number) => void;

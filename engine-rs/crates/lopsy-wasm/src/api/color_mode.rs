@@ -6,7 +6,9 @@
 
 use wasm_bindgen::prelude::*;
 
-use crate::filter_gpu;
+use lopsy_core::quantize;
+
+use crate::{compositor, filter_gpu, layer_manager};
 use crate::Engine;
 
 /// Rec. 709 luma weights, applied to the stored (gamma-encoded) values so the
@@ -39,4 +41,61 @@ pub fn convert_layer_to_grayscale(engine: &mut Engine, layer_id: &str) {
             }
         },
     );
+}
+
+/// Build an indexed palette from the flattened document.
+///
+/// Returns `max_colors * 4` bytes at most (RGBA per entry) — fewer when the
+/// image holds fewer distinct colors, since padding the palette would invent
+/// entries the document never used.
+#[wasm_bindgen(js_name = "quantizeCompositeToPalette")]
+pub fn quantize_composite_to_palette(
+    engine: &mut Engine,
+    max_colors: u32,
+) -> Result<Vec<u8>, JsError> {
+    let composite = compositor::composite_for_export(&mut engine.inner)
+        .map_err(|e| JsError::new(&e))?;
+    let palette = quantize::median_cut(&composite, max_colors as usize);
+    Ok(palette.into_iter().flatten().collect())
+}
+
+/// Snap a layer's pixels to `palette` (RGBA entries, 4 bytes each), optionally
+/// diffusing quantization error with Floyd–Steinberg.
+///
+/// This is a CPU round trip rather than a shader pass because nearest-palette
+/// search and error diffusion are both sequential over the palette/neighbours.
+#[wasm_bindgen(js_name = "applyPaletteToLayer")]
+pub fn apply_palette_to_layer(
+    engine: &mut Engine,
+    layer_id: &str,
+    palette: &[u8],
+    dither: bool,
+) -> Result<(), JsError> {
+    if palette.len() < 4 {
+        return Ok(());
+    }
+    let entries: Vec<[u8; 4]> = palette
+        .chunks_exact(4)
+        .map(|c| [c[0], c[1], c[2], c[3]])
+        .collect();
+
+    let (width, height) = engine
+        .inner
+        .layer_textures
+        .get(layer_id)
+        .and_then(|&tex| engine.inner.texture_pool.get_size(tex))
+        .ok_or_else(|| JsError::new("Layer has no texture"))?;
+    let mut pixels = layer_manager::read_pixels(&engine.inner, layer_id)
+        .map_err(|e| JsError::new(&e))?;
+
+    if dither {
+        quantize::apply_palette_dithered(&mut pixels, width as usize, height as usize, &entries);
+    } else {
+        quantize::apply_palette(&mut pixels, &entries);
+    }
+
+    layer_manager::upload_pixels(&mut engine.inner, layer_id, &pixels, width, height, 0, 0)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.mark_layer_dirty(layer_id);
+    Ok(())
 }

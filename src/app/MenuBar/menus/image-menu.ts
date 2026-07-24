@@ -218,11 +218,16 @@ const MODE_MENU_ITEMS: readonly { mode: DocumentColorMode; label: string }[] = [
 function createModeSubmenu(
   colorMode: DocumentColorMode,
   convertColorMode: (mode: DocumentColorMode) => void,
+  showDialog: (id: ImageDialogId) => void,
 ): MenuItem[] {
   return MODE_MENU_ITEMS.map(({ mode, label }) => ({
-    label,
+    // Indexed needs palette size and dithering up front, so it opens a dialog
+    // instead of converting on click.
+    label: mode === 'indexed' ? `${label}...` : label,
     checked: colorMode === mode,
-    action: () => convertColorMode(mode),
+    action: mode === 'indexed'
+      ? () => showDialog('convert-to-indexed')
+      : () => convertColorMode(mode),
   }));
 }
 
@@ -234,7 +239,7 @@ export function createImageMenu(
   return {
   label: 'Image',
   items: [
-    { label: 'Mode', submenu: createModeSubmenu(colorMode, convertColorMode) },
+    { label: 'Mode', submenu: createModeSubmenu(colorMode, convertColorMode, showDialog) },
     { separator: true, label: '' },
     { label: 'Canvas Size...', action: () => showDialog('canvas-size') },
     { label: 'Image Size...', action: () => showDialog('image-size') },

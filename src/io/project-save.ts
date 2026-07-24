@@ -38,6 +38,8 @@ export interface LopsyManifest {
   readonly activeLayerId: string | null;
   /** Document color mode. Absent in files saved before color modes existed → treated as 'rgb'. */
   readonly colorMode?: DocumentColorMode;
+  /** Palette for indexed-mode documents. Absent in every other mode. */
+  readonly indexedPalette?: readonly { r: number; g: number; b: number; a: number }[];
   /** Stored vector paths (Paths panel). Absent in files saved before these were serialized. */
   readonly paths?: readonly StoredPath[];
   /** Canvas guides. Absent in files saved before these were serialized. */
@@ -267,6 +269,7 @@ export async function saveProject(): Promise<void> {
       rootGroupId: doc.rootGroupId ?? null,
       activeLayerId: doc.activeLayerId ?? null,
       colorMode: doc.colorMode,
+      indexedPalette: doc.indexedPalette,
       paths: state.paths,
       guides: useUIStore.getState().guides,
     };

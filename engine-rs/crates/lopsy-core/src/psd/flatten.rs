@@ -1,6 +1,6 @@
 use crate::blend::blend_colors;
 use crate::color::{srgb_to_linear, linear_to_srgb, Color};
-use super::types::{PsdColorMode, PsdDocument, PsdDepth, GroupKind};
+use super::types::{PsdDocument, PsdDepth, GroupKind};
 
 /// Deinterleaved channel planes for the PSD merged composite.
 pub struct ChannelPlanes {
@@ -179,6 +179,7 @@ fn linear_to_srgb_f32(c: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::types::PsdColorMode;
     use crate::color::BlendMode;
     use super::super::types::{PsdDocument, PsdLayer, PsdRect, PsdDepth, GroupKind, PsdSourceKind};
 

@@ -73,3 +73,30 @@ export function layersNeedingPixelBake(doc: DocumentState, mode: DocumentColorMo
   if (mode === 'rgb') return [];
   return doc.layers.filter((l) => l.type !== 'group').map((l) => l.id);
 }
+
+/** Options the Indexed conversion dialog collects before the bake runs. */
+export interface IndexedConversionOptions {
+  readonly maxColors: number;
+  readonly dither: boolean;
+}
+
+/** Unpack the engine's flat RGBA palette bytes into document palette entries. */
+export function paletteFromBytes(bytes: Uint8Array): Color[] {
+  const palette: Color[] = [];
+  for (let i = 0; i + 3 < bytes.length; i += 4) {
+    palette.push({ r: bytes[i]!, g: bytes[i + 1]!, b: bytes[i + 2]!, a: bytes[i + 3]! / 255 });
+  }
+  return palette;
+}
+
+/** Pack document palette entries back into the engine's flat RGBA bytes. */
+export function paletteToBytes(palette: readonly Color[]): Uint8Array {
+  const bytes = new Uint8Array(palette.length * 4);
+  palette.forEach((c, i) => {
+    bytes[i * 4] = c.r;
+    bytes[i * 4 + 1] = c.g;
+    bytes[i * 4 + 2] = c.b;
+    bytes[i * 4 + 3] = Math.round(c.a * 255);
+  });
+  return bytes;
+}

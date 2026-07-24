@@ -14,6 +14,7 @@ import {
   getEditorState,
   getRootGroupId,
   openGroupEffectsPanel,
+  addLayer,
 } from './helpers';
 
 interface PixelSnap {
@@ -70,6 +71,17 @@ async function openImageModeSubmenu(page: Page): Promise<void> {
 async function selectColorMode(page: Page, label: string): Promise<void> {
   await openImageModeSubmenu(page);
   await page.click(`[role="menuitem"]:has-text("${label}")`);
+}
+
+/** Drive Image > Mode > Indexed Color... through its conversion dialog. */
+async function convertToIndexed(page: Page, colors: number, dither = false): Promise<void> {
+  await selectColorMode(page, 'Indexed Color');
+  const dialog = page.locator('[role="dialog"][aria-label="Indexed Color"]');
+  await expect(dialog).toBeVisible();
+  await dialog.locator('#indexed-colors').fill(String(colors));
+  if (dither) await dialog.locator('input[type="checkbox"]').check();
+  await dialog.locator('button:has-text("Convert")').click();
+  await expect(dialog).toHaveCount(0);
 }
 
 async function getColorMode(page: Page): Promise<string> {
@@ -234,5 +246,61 @@ test.describe('Document color mode', () => {
 
     expect(await getColorMode(page)).toBe('grayscale');
     await expect(page.locator('[aria-label="Status bar"]')).toContainText('Grayscale');
+  });
+
+  test('Indexed conversion flattens, builds a palette, and constrains painting to it', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 200, 200, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    await drawRect(page, 20, 20, 60, 60, { r: 255, g: 0, b: 0 });
+    await drawRect(page, 110, 20, 60, 60, { r: 0, g: 0, b: 255 });
+
+    await convertToIndexed(page, 4);
+
+    const state = await getEditorState(page);
+    const doc = state.document as { colorMode: string; indexedPalette?: unknown[] };
+    expect(doc.colorMode).toBe('indexed');
+    expect(doc.indexedPalette?.length).toBeGreaterThan(0);
+    expect(doc.indexedPalette?.length).toBeLessThanOrEqual(4);
+
+    // Flattened to a single pixel layer (plus the root group).
+    const rasterCount = (state.document as { layers: { type: string }[] }).layers
+      .filter((l) => l.type !== 'group').length;
+    expect(rasterCount).toBe(1);
+
+    // Every composited pixel now comes from the palette.
+    const palette = (doc.indexedPalette ?? []) as { r: number; g: number; b: number }[];
+    for (const [x, y] of [[50, 50], [140, 50], [180, 180]] as const) {
+      const px = await readCompositedAtDoc(page, x, y);
+      const hit = palette.some((p) => Math.abs(p.r - px.r) <= 2 && Math.abs(p.g - px.g) <= 2 && Math.abs(p.b - px.b) <= 2);
+      expect(hit, `pixel (${x},${y}) rgb(${px.r},${px.g},${px.b}) is not a palette color`).toBe(true);
+    }
+
+    await expect(page.getByTestId('indexed-palette')).toBeVisible();
+  });
+
+  test('Indexed mode refuses new layers and undo restores the layer stack', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 120, 120, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    await addLayer(page);
+    const beforeLayers = (await getEditorState(page)).document.layers.length;
+
+    await convertToIndexed(page, 16);
+    const flattened = (await getEditorState(page)).document.layers.length;
+    expect(flattened).toBeLessThan(beforeLayers);
+
+    await addLayer(page);
+    expect((await getEditorState(page)).document.layers.length).toBe(flattened);
+
+    // Flatten + convert is a single undo step.
+    await undo(page);
+    const restored = await getEditorState(page);
+    expect((restored.document as { colorMode: string }).colorMode).toBe('rgb');
+    expect(restored.document.layers.length).toBe(beforeLayers);
   });
 });

@@ -29,6 +29,26 @@ export function toGrayscaleColor(color: Color): Color {
 }
 
 /**
+ * Nearest palette entry by squared distance in RGB, mirroring the engine's
+ * `nearest_palette_index`. Returns the input unchanged for an empty palette.
+ */
+export function snapToPalette(color: Color, palette: readonly Color[]): Color {
+  let best: Color | undefined;
+  let bestDist = Infinity;
+  for (const entry of palette) {
+    const dr = entry.r - color.r;
+    const dg = entry.g - color.g;
+    const db = entry.b - color.b;
+    const dist = dr * dr + dg * dg + db * db;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = entry;
+    }
+  }
+  return best ? { ...best, a: color.a } : color;
+}
+
+/**
  * Snap a color to the value space of the document's color mode before it is
  * handed to the engine at a paint entry point.
  */
@@ -37,7 +57,7 @@ export function convertColorToDocMode(
   mode: DocumentColorMode,
   palette?: readonly Color[],
 ): Color {
-  void palette;
   if (mode === 'grayscale') return toGrayscaleColor(color);
+  if (mode === 'indexed' && palette && palette.length > 0) return snapToPalette(color, palette);
   return color;
 }

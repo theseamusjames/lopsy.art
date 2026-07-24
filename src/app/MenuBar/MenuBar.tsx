@@ -37,6 +37,7 @@ import type { ExportOptions } from './export-logic';
 import { getMenus, type MenuItem, type ImageDialogId, type HelpDialogId, type SelectDialogId } from './menus';
 import { CanvasSizeModal } from '../../components/CanvasSizeModal/CanvasSizeModal';
 import { ImageSizeModal } from '../../components/ImageSizeModal/ImageSizeModal';
+import { IndexedColorModal } from '../../components/IndexedColorModal/IndexedColorModal';
 import { KeyboardShortcutsModal } from '../../components/KeyboardShortcutsModal/KeyboardShortcutsModal';
 import { AboutModal } from '../../components/AboutModal/AboutModal';
 import { useEditorStore } from '../editor-store';
@@ -396,6 +397,9 @@ export function MenuBar() {
       )}
       {imageDialog === 'image-size' && (
         <ImageSizeModal onClose={() => setImageDialog(null)} />
+      )}
+      {imageDialog === 'convert-to-indexed' && (
+        <IndexedColorModal onClose={() => setImageDialog(null)} />
       )}
       {helpDialog === 'keyboard-shortcuts' && (
         <KeyboardShortcutsModal onClose={() => setHelpDialog(null)} />

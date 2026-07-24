@@ -7,7 +7,7 @@ import { IconButton } from '../../components/IconButton/IconButton';
 import { rgbToHex6, hexToRgb } from '../../utils/color';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { useEditorStore } from '../../app/editor-store';
-import { toGrayscaleColor } from '../../utils/color-mode';
+import { convertColorToDocMode } from '../../utils/color-mode';
 import type { Color } from '../../types';
 import styles from './ColorPanel.module.css';
 
@@ -28,17 +28,19 @@ export function ColorPanel() {
   const onBackgroundChange = useToolSettingsStore((s) => s.setBackgroundColor);
   const onSwap = useToolSettingsStore((s) => s.swapColors);
   const colorMode = useEditorStore((s) => s.document.colorMode);
+  const indexedPalette = useEditorStore((s) => s.document.indexedPalette);
   const [hexInput, setHexInput] = useState(colorToHex(foregroundColor));
   const [editingBg, setEditingBg] = useState(false);
 
   const isGrayscale = colorMode === 'grayscale';
+  const isIndexed = colorMode === 'indexed';
   const activeColor = editingBg ? backgroundColor : foregroundColor;
   const setActiveColor = editingBg ? onBackgroundChange : onForegroundChange;
   // In grayscale documents the picker can only express neutral values, so
   // clamp every path that writes a color (hex, sliders, recent swatches).
   const onActiveChange = useCallback(
-    (c: Color) => setActiveColor(isGrayscale ? toGrayscaleColor(c) : c),
-    [setActiveColor, isGrayscale],
+    (c: Color) => setActiveColor(convertColorToDocMode(c, colorMode, indexedPalette)),
+    [setActiveColor, colorMode, indexedPalette],
   );
 
   useEffect(() => {
@@ -128,7 +130,23 @@ export function ColorPanel() {
           ))}
         </div>
       </div>
-      <ColorPicker color={activeColor} onChange={handlePickerChange} grayscale={isGrayscale} />
+      {isIndexed ? (
+        <div className={styles.palette} role="listbox" aria-label="Document palette" data-testid="indexed-palette">
+          {(indexedPalette ?? []).map((color, i) => (
+            <ColorSwatch
+              key={i}
+              color={color}
+              size="sm"
+              isActive={
+                color.r === activeColor.r && color.g === activeColor.g && color.b === activeColor.b
+              }
+              onClick={() => handleRecentClick(color)}
+            />
+          ))}
+        </div>
+      ) : (
+        <ColorPicker color={activeColor} onChange={handlePickerChange} grayscale={isGrayscale} />
+      )}
       <div className={styles.hexRow}>
         <span className={styles.hexLabel} aria-hidden="true">#</span>
         <input

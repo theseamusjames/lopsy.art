@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { colorModeLabel, convertColorToDocMode, toGrayscaleColor, luminance8 } from './color-mode';
+import { colorModeLabel, convertColorToDocMode, toGrayscaleColor, luminance8, snapToPalette } from './color-mode';
 import type { Color } from '../types/color';
 import type { DocumentColorMode } from '../types/color-mode';
 
@@ -54,5 +54,37 @@ describe('convertColorToDocMode', () => {
     for (const mode of ['rgb', 'indexed', 'lab', 'cmyk'] as DocumentColorMode[]) {
       expect(convertColorToDocMode(color, mode)).toEqual(color);
     }
+  });
+});
+
+describe('snapToPalette', () => {
+  const palette: Color[] = [
+    { r: 0, g: 0, b: 0, a: 1 },
+    { r: 255, g: 0, b: 0, a: 1 },
+    { r: 0, g: 255, b: 0, a: 1 },
+  ];
+
+  it('picks the nearest entry by RGB distance', () => {
+    expect(snapToPalette({ r: 200, g: 20, b: 20, a: 1 }, palette)).toMatchObject({ r: 255, g: 0, b: 0 });
+    expect(snapToPalette({ r: 10, g: 10, b: 10, a: 1 }, palette)).toMatchObject({ r: 0, g: 0, b: 0 });
+  });
+
+  it('keeps the input alpha rather than the palette entry alpha', () => {
+    expect(snapToPalette({ r: 250, g: 0, b: 0, a: 0.25 }, palette).a).toBe(0.25);
+  });
+
+  it('returns the color unchanged for an empty palette', () => {
+    const c: Color = { r: 12, g: 34, b: 56, a: 1 };
+    expect(snapToPalette(c, [])).toEqual(c);
+  });
+
+  it('is applied by convertColorToDocMode in indexed mode', () => {
+    const out = convertColorToDocMode({ r: 250, g: 5, b: 5, a: 1 }, 'indexed', palette);
+    expect(out).toMatchObject({ r: 255, g: 0, b: 0 });
+  });
+
+  it('leaves indexed colors alone when the document has no palette yet', () => {
+    const c: Color = { r: 12, g: 34, b: 56, a: 1 };
+    expect(convertColorToDocMode(c, 'indexed')).toEqual(c);
   });
 });

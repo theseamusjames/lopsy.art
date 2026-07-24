@@ -49,6 +49,21 @@
   margin-bottom: -1px;
 }
 
+/* Indexed documents replace the continuous picker with the document palette.
+   Height is capped so a 256-entry palette scrolls instead of pushing the
+   sliders out of the panel. */
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.palette > * {
+  margin-right: -1px;
+  margin-bottom: -1px;
+}
+
 .hexRow {
   display: flex;
   align-items: center;
