@@ -4,6 +4,7 @@ import type { Point } from '../../types';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
+import { toDocumentColor } from '../../app/document-color';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { syncLayerAfterFullSize } from '../../app/sync-layer-after-full-size';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -108,13 +109,16 @@ export function handleGradientMove(state: InteractionState, layerLocalPos: Point
   const engine = getEngine();
   if (!engine) return;
 
-  const stops = toolSettings.settings.gradient.stops.map((s) => ({
-    position: reverse ? 1 - s.position : s.position,
-    r: s.color.r / 255,
-    g: s.color.g / 255,
-    b: s.color.b / 255,
-    a: s.color.a,
-  }));
+  const stops = toolSettings.settings.gradient.stops.map((s) => {
+    const c = toDocumentColor(s.color);
+    return {
+      position: reverse ? 1 - s.position : s.position,
+      r: c.r / 255,
+      g: c.g / 255,
+      b: c.b / 255,
+      a: c.a,
+    };
+  });
   if (reverse) stops.reverse();
   const stopsJson = JSON.stringify(stops);
 

@@ -1,6 +1,7 @@
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
+import { toDocumentColor } from '../document-color';
 import { interpolatePoints, resetScatterSpacingRemainder } from '../../tools/brush/brush';
 import type { InteractionContext, InteractionState } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
@@ -287,7 +288,7 @@ export function handlePaintDown(
     y: (storedCenter?.y ?? doc.height / 2) - activeLayer.y,
   };
 
-  const strokeColor = useToolSettingsStore.getState().foregroundColor;
+  const strokeColor = toDocumentColor(useToolSettingsStore.getState().foregroundColor);
 
   const state: InteractionState = {
     drawing: true,

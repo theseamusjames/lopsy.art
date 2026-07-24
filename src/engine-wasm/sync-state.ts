@@ -16,6 +16,9 @@ export interface TrackedState {
   docWidth: number;
   docHeight: number;
   bgColor: string;
+  /** Last engine color mode pushed (0 = RGB, 1 = Lab, 2 = CMYK). -1 = unknown
+   *  (first frame / after reset), forces a push. */
+  docColorMode: number;
   viewportZoom: number;
   viewportPanX: number;
   viewportPanY: number;
@@ -130,6 +133,7 @@ function createTrackedState(): TrackedState {
     docWidth: 0,
     docHeight: 0,
     bgColor: '',
+    docColorMode: -1,
     viewportZoom: 0,
     viewportPanX: 0,
     viewportPanY: 0,

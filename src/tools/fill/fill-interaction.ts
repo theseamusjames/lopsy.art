@@ -2,6 +2,7 @@ import type { InteractionContext } from '../../app/interactions/interaction-type
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
+import { toDocumentColor } from '../../app/document-color';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -73,7 +74,7 @@ export function handleFillDown(ctx: InteractionContext): void {
   // Normal mode: fill the active layer
   editorState.pushHistory('Bucket Fill');
   const toolSettings = useToolSettingsStore.getState();
-  const color = toolSettings.foregroundColor;
+  const color = toDocumentColor(toolSettings.foregroundColor);
   toolSettings.addRecentColor(color);
   const { tolerance, contiguous } = toolSettings.settings.fill;
 

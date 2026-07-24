@@ -6,6 +6,8 @@ import { Slider } from '../../components/Slider/Slider';
 import { IconButton } from '../../components/IconButton/IconButton';
 import { rgbToHex6, hexToRgb } from '../../utils/color';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
+import { useEditorStore } from '../../app/editor-store';
+import { toGrayscaleColor } from '../../utils/color-mode';
 import type { Color } from '../../types';
 import styles from './ColorPanel.module.css';
 
@@ -25,11 +27,19 @@ export function ColorPanel() {
   const onForegroundChange = useToolSettingsStore((s) => s.setForegroundColor);
   const onBackgroundChange = useToolSettingsStore((s) => s.setBackgroundColor);
   const onSwap = useToolSettingsStore((s) => s.swapColors);
+  const colorMode = useEditorStore((s) => s.document.colorMode);
   const [hexInput, setHexInput] = useState(colorToHex(foregroundColor));
   const [editingBg, setEditingBg] = useState(false);
 
+  const isGrayscale = colorMode === 'grayscale';
   const activeColor = editingBg ? backgroundColor : foregroundColor;
-  const onActiveChange = editingBg ? onBackgroundChange : onForegroundChange;
+  const setActiveColor = editingBg ? onBackgroundChange : onForegroundChange;
+  // In grayscale documents the picker can only express neutral values, so
+  // clamp every path that writes a color (hex, sliders, recent swatches).
+  const onActiveChange = useCallback(
+    (c: Color) => setActiveColor(isGrayscale ? toGrayscaleColor(c) : c),
+    [setActiveColor, isGrayscale],
+  );
 
   useEffect(() => {
     setHexInput(colorToHex(activeColor));
@@ -118,7 +128,7 @@ export function ColorPanel() {
           ))}
         </div>
       </div>
-      <ColorPicker color={activeColor} onChange={handlePickerChange} />
+      <ColorPicker color={activeColor} onChange={handlePickerChange} grayscale={isGrayscale} />
       <div className={styles.hexRow}>
         <span className={styles.hexLabel} aria-hidden="true">#</span>
         <input
@@ -132,27 +142,39 @@ export function ColorPanel() {
         />
       </div>
       <div className={styles.sliders}>
-        <Slider
-          label="R"
-          value={activeColor.r}
-          min={0}
-          max={255}
-          onChange={(v) => updateChannel('r', v)}
-        />
-        <Slider
-          label="G"
-          value={activeColor.g}
-          min={0}
-          max={255}
-          onChange={(v) => updateChannel('g', v)}
-        />
-        <Slider
-          label="B"
-          value={activeColor.b}
-          min={0}
-          max={255}
-          onChange={(v) => updateChannel('b', v)}
-        />
+        {isGrayscale ? (
+          <Slider
+            label="K"
+            value={activeColor.r}
+            min={0}
+            max={255}
+            onChange={(v) => onActiveChange({ r: v, g: v, b: v, a: activeColor.a })}
+          />
+        ) : (
+          <>
+            <Slider
+              label="R"
+              value={activeColor.r}
+              min={0}
+              max={255}
+              onChange={(v) => updateChannel('r', v)}
+            />
+            <Slider
+              label="G"
+              value={activeColor.g}
+              min={0}
+              max={255}
+              onChange={(v) => updateChannel('g', v)}
+            />
+            <Slider
+              label="B"
+              value={activeColor.b}
+              min={0}
+              max={255}
+              onChange={(v) => updateChannel('b', v)}
+            />
+          </>
+        )}
         <Slider
           label="A"
           value={Math.round(activeColor.a * 100)}

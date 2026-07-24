@@ -22,6 +22,7 @@ function makeDoc(): DocumentState {
     activeLayerId: layers[0]!.id,
     selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
   };
 }
 
@@ -84,6 +85,7 @@ function makeGroupDoc(): DocumentState {
     activeLayerId: bg.id,
     selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
     rootGroupId: rootGroup.id,
   };
 }
@@ -116,6 +118,7 @@ function makeTwoGroupDoc(): DocumentState {
     activeLayerId: bg.id,
     selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
     rootGroupId: rootGroup.id,
   };
 }

@@ -5,6 +5,7 @@
 //! for the `Engine` wrapper struct and module declarations.
 
 pub mod adjustment;
+pub mod color_mode;
 pub mod drawing;
 pub mod fill;
 pub mod filter;

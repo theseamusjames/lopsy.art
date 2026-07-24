@@ -11,6 +11,8 @@ uniform float u_bgAlpha;
 uniform float u_seamlessEnabled;
 uniform float u_seamlessDim;
 uniform vec4 u_channelMask;
+// Document color mode: 0 = RGB (also grayscale/indexed), 1 = Lab, 2 = CMYK.
+uniform int u_docColorMode;
 out vec4 fragColor;
 
 void main() {
@@ -40,6 +42,15 @@ void main() {
     vec2 sampleUV = seamless ? fract(docUV) : docUV;
 
     vec4 color = texture(u_compositeTex, sampleUV);
+
+    // Native color modes store encoded values in the composite; decode to sRGB
+    // before the RGB-assuming steps below. Mode 0 is passthrough; the Lab and
+    // CMYK phases fill in these branches.
+    if (u_docColorMode == 1) {
+        // Lab → sRGB decode.
+    } else if (u_docColorMode == 2) {
+        // CMYK → sRGB decode.
+    }
 
     color = vec4(color.rgb * u_channelMask.rgb, color.a * u_channelMask.a);
 

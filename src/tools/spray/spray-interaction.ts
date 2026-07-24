@@ -1,5 +1,6 @@
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
+import { toDocumentColor } from '../../app/document-color';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { applyBrushDab as gpuBrushDab } from '../../engine-wasm/wasm-bridge';
 import { generateSprayDots } from './spray';
@@ -47,7 +48,7 @@ function sprayAtCurrentPosition(state: InteractionState): void {
   const { size, density, opacity: opacityPct, hardness: hardnessPct } = toolSettings.settings.spray;
   const opacity = opacityPct / 100;
   const hardness = hardnessPct / 100;
-  const color = state.strokeColor ?? toolSettings.foregroundColor;
+  const color = toDocumentColor(state.strokeColor ?? toolSettings.foregroundColor);
   const r = color.r / 255;
   const g = color.g / 255;
   const b = color.b / 255;
@@ -65,7 +66,7 @@ export function handleSprayDown(
 
   editorState.pushHistory('Spray');
 
-  const strokeColor = toolSettings.foregroundColor;
+  const strokeColor = toDocumentColor(toolSettings.foregroundColor);
   const state: InteractionState = {
     drawing: true,
     lastPoint: layerPos,
@@ -113,7 +114,7 @@ export function handleSprayMove(
   const { size, density, opacity: opacityPct, hardness: hardnessPct } = toolSettings.settings.spray;
   const opacity = opacityPct / 100;
   const hardness = hardnessPct / 100;
-  const color = state.strokeColor ?? toolSettings.foregroundColor;
+  const color = toDocumentColor(state.strokeColor ?? toolSettings.foregroundColor);
   const r = color.r / 255;
   const g = color.g / 255;
   const b = color.b / 255;

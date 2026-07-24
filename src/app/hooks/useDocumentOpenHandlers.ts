@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
+import type { DocumentColorMode } from '../../types';
 import { pasteOrOpenBlob } from '../paste-or-open';
 import { importPsdFile } from '../../io/psd';
 import { importDngFile } from '../../io/dng';
@@ -24,7 +25,7 @@ export function classifyOpenFile(file: File): OpenFileKind {
 export interface DocumentOpenHandlers {
   handleDragOver: (e: React.DragEvent) => void;
   handleDrop: (e: React.DragEvent) => void;
-  handlePreDocCreate: (width: number, height: number, background: 'white' | 'transparent') => void;
+  handlePreDocCreate: (width: number, height: number, background: 'white' | 'transparent', colorMode: DocumentColorMode) => void;
   handlePreDocOpenFile: (file: File) => void;
   handlePreDocPasteClipboard: (blob: Blob) => void;
 }
@@ -81,8 +82,8 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
   }, [closeModalOfKind]);
 
   const handlePreDocCreate = useCallback(
-    (width: number, height: number, background: 'white' | 'transparent') => {
-      useEditorStore.getState().createDocument(width, height, background === 'transparent');
+    (width: number, height: number, background: 'white' | 'transparent', colorMode: DocumentColorMode) => {
+      useEditorStore.getState().createDocument(width, height, background === 'transparent', colorMode);
       closeModal();
     },
     [closeModal],

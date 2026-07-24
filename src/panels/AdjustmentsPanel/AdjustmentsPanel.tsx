@@ -13,6 +13,7 @@ import type {
 import {
   ADJUSTMENT_NODE_LABELS,
 } from '../../filters/adjustment-node-utils';
+import { isAdjustmentAllowedInMode } from '../../utils/color-mode-capabilities';
 import { NODE_CONTROLS_MAP } from './controls/node-controls-map';
 import styles from './AdjustmentsPanel.module.css';
 
@@ -68,6 +69,7 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
   const toggleAdjustmentNode = useEditorStore((s) => s.toggleAdjustmentNode);
   const reorderAdjustmentNodes = useEditorStore((s) => s.reorderAdjustmentNodes);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
+  const colorMode = useEditorStore((s) => s.document.colorMode);
 
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null);
@@ -167,7 +169,7 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
           </button>
           {showAddMenu && (
             <div className={styles.addMenu} role="menu">
-              {ADD_MENU_TYPES.map((type) => (
+              {ADD_MENU_TYPES.filter((type) => isAdjustmentAllowedInMode(type, colorMode)).map((type) => (
                 <button
                   key={type}
                   type="button"

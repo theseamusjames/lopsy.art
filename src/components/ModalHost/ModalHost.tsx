@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
+import type { DocumentColorMode } from '../../types';
 import { pasteOrOpenBlob } from '../../app/paste-or-open';
 import { importPsdFile } from '../../io/psd';
 import { describeError, notifyError } from '../../app/notifications-store';
@@ -40,8 +41,8 @@ export function ModalHost() {
   }, [modal, closeModal]);
 
   const handleCreateDocument = useCallback(
-    (width: number, height: number, background: 'white' | 'transparent') => {
-      useEditorStore.getState().createDocument(width, height, background === 'transparent');
+    (width: number, height: number, background: 'white' | 'transparent', colorMode: DocumentColorMode) => {
+      useEditorStore.getState().createDocument(width, height, background === 'transparent', colorMode);
       closeModal();
     },
     [closeModal],

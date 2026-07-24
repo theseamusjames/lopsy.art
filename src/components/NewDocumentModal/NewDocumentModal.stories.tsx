@@ -5,7 +5,7 @@ const meta: Meta<typeof NewDocumentModal> = {
   component: NewDocumentModal,
   parameters: { layout: 'fullscreen' },
   args: {
-    onCreateDocument: (w, h, bg) => console.log('create', w, h, bg),
+    onCreateDocument: (w, h, bg, mode) => console.log('create', w, h, bg, mode),
     onOpenFile: (f) => console.log('open file', f.name),
   },
 };

@@ -1,4 +1,4 @@
-import type { Layer } from '../../../types';
+import type { Layer, DocumentColorMode } from '../../../types';
 import type { SelectionData, ActionResult } from '../types';
 import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
 import { createImageData } from '../../../engine/color-space';
@@ -8,6 +8,7 @@ export function computeCreateDocument(
   width: number,
   height: number,
   transparentBg: boolean,
+  colorMode: DocumentColorMode = 'rgb',
 ): ActionResult {
   const bgLayer = createRasterLayer({ name: 'Background', width, height });
   const pixelData = new Map<string, ImageData>();
@@ -51,6 +52,7 @@ export function computeCreateDocument(
       activeLayerId,
       selectedLayerIds: [activeLayerId],
       backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
+      colorMode,
       rootGroupId: rootGroup.id,
     },
     layerPixelData: pixelData,

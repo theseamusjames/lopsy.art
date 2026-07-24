@@ -250,6 +250,7 @@ export async function loadProject(file: File): Promise<void> {
         layerOrder: [...manifest.layerOrder],
         activeLayerId: manifest.activeLayerId,
         backgroundColor: manifest.backgroundColor,
+        colorMode: manifest.colorMode ?? 'rgb',
         rootGroupId: manifest.rootGroupId,
       },
       dirtyLayerIds: new Set<string>(),

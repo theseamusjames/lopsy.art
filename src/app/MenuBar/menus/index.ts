@@ -1,5 +1,6 @@
 import type { MenuDef } from './types';
 import type { FilterDialogId } from '../filter-actions';
+import type { DocumentColorMode } from '../../../types';
 import { fileMenu } from './file-menu';
 import { createEditMenu } from './edit-menu';
 import { createImageMenu, type ImageDialogId } from './image-menu';
@@ -20,11 +21,13 @@ export function getMenus(
   showImageDialog: (id: ImageDialogId) => void,
   showHelpDialog: (id: HelpDialogId) => void,
   showSelectDialog: (id: SelectDialogId) => void,
+  colorMode: DocumentColorMode,
+  convertColorMode: (mode: DocumentColorMode) => void,
 ): MenuDef[] {
   return [
     fileMenu,
     createEditMenu(showFilterDialog),
-    createImageMenu(showImageDialog),
+    createImageMenu(showImageDialog, colorMode, convertColorMode),
     layerMenu,
     createSelectMenu(showSelectDialog),
     createFilterMenu(showFilterDialog),

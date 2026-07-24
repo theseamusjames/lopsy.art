@@ -22,6 +22,7 @@ export function computeOpenImage(
       activeLayerId: layer.id,
       selectedLayerIds: [layer.id],
       backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
+      colorMode: 'rgb',
       rootGroupId: rootGroup.id,
     },
     layerPixelData: pixelData,

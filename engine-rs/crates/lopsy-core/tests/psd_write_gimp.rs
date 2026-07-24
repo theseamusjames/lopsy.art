@@ -100,6 +100,7 @@ fn roundtrip_with_mask() {
         width: w,
         height: h,
         depth: PsdDepth::Eight,
+        color_mode: PsdColorMode::Rgb,
         layers: vec![layer],
         icc_profile: None,
     };
@@ -140,6 +141,7 @@ fn roundtrip_all_blend_modes() {
         width: 4,
         height: 4,
         depth: PsdDepth::Eight,
+        color_mode: PsdColorMode::Rgb,
         layers,
         icc_profile: None,
     };
@@ -173,6 +175,7 @@ fn roundtrip_16bit_gradient() {
         width: w,
         height: h,
         depth: PsdDepth::Sixteen,
+        color_mode: PsdColorMode::Rgb,
         layers: vec![PsdLayer {
             source_kind: PsdSourceKind::Raster,
             name: "Gradient".to_string(),
@@ -239,6 +242,7 @@ fn build_test_doc_8bit() -> PsdDocument {
         width: w,
         height: h,
         depth: PsdDepth::Eight,
+        color_mode: PsdColorMode::Rgb,
         layers: vec![bg, red, green, group_end, gradient, group_open],
         icc_profile: None,
     }
@@ -255,6 +259,7 @@ fn build_test_doc_16bit() -> PsdDocument {
         width: w,
         height: h,
         depth: PsdDepth::Sixteen,
+        color_mode: PsdColorMode::Rgb,
         layers: vec![bg, red],
         icc_profile: None,
     }

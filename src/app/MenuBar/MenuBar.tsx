@@ -49,6 +49,7 @@ import styles from './MenuBar.module.css';
 
 export function MenuBar() {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
+  const [openSubmenu, setOpenSubmenu] = useState<number | null>(null);
   const [activeDialog, setActiveDialog] = useState<FilterDialogId | null>(null);
   const [imageDialog, setImageDialog] = useState<ImageDialogId | null>(null);
   const [helpDialog, setHelpDialog] = useState<HelpDialogId | null>(null);
@@ -87,15 +88,20 @@ export function MenuBar() {
     setSelectDialog(id);
   }, []);
 
-  const menus = getMenus(showFilterDialog, showImageDialog, showHelpDialog, showSelectDialog);
+  const colorMode = useEditorStore((s) => s.document.colorMode);
+  const convertColorMode = useEditorStore((s) => s.convertColorMode);
+
+  const menus = getMenus(showFilterDialog, showImageDialog, showHelpDialog, showSelectDialog, colorMode, convertColorMode);
 
   const handleMenuClick = useCallback((index: number) => {
+    setOpenSubmenu(null);
     setOpenMenu((prev) => (prev === index ? null : index));
   }, []);
 
   const handleMenuEnter = useCallback(
     (index: number) => {
       if (openMenu !== null) {
+        setOpenSubmenu(null);
         setOpenMenu(index);
       }
     },
@@ -105,6 +111,7 @@ export function MenuBar() {
   const handleItemClick = useCallback((item: MenuItem) => {
     if (item.disabled || !item.action) return;
     item.action();
+    setOpenSubmenu(null);
     setOpenMenu(null);
   }, []);
 
@@ -288,6 +295,47 @@ export function MenuBar() {
                 {menu.items.map((item, j) =>
                   item.separator ? (
                     <div key={j} className={styles.separator} role="separator" />
+                  ) : item.submenu ? (
+                    <div
+                      key={j}
+                      className={styles.submenuParent}
+                      onMouseEnter={() => setOpenSubmenu(j)}
+                      onMouseLeave={() => setOpenSubmenu(null)}
+                    >
+                      <button
+                        className={`${styles.dropdownItem} ${item.disabled ? styles.dropdownItemDisabled : ''}`}
+                        type="button"
+                        role="menuitem"
+                        aria-haspopup="menu"
+                        aria-expanded={openSubmenu === j}
+                        aria-disabled={item.disabled}
+                      >
+                        <span>{item.label}</span>
+                        <span className={styles.submenuArrow} aria-hidden="true">{'\u203a'}</span>
+                      </button>
+                      {openSubmenu === j && (
+                        <div className={styles.submenu} role="menu" aria-label={item.label}>
+                          {item.submenu.map((sub, k) => (
+                            <button
+                              key={k}
+                              className={`${styles.dropdownItem} ${sub.disabled ? styles.dropdownItemDisabled : ''}`}
+                              onClick={() => handleItemClick(sub)}
+                              type="button"
+                              role="menuitem"
+                              aria-disabled={sub.disabled}
+                            >
+                              <span>
+                                {sub.checked !== undefined && (
+                                  <span className={styles.checkmark} aria-hidden="true">{sub.checked ? '\u2713' : ''}</span>
+                                )}
+                                {sub.label}
+                              </span>
+                              {sub.shortcut && <span className={styles.shortcut} aria-hidden="true">{sub.shortcut}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <button
                       key={j}

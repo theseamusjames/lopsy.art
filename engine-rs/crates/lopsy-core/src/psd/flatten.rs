@@ -1,6 +1,6 @@
 use crate::blend::blend_colors;
 use crate::color::{srgb_to_linear, linear_to_srgb, Color};
-use super::types::{PsdDocument, PsdDepth, GroupKind};
+use super::types::{PsdColorMode, PsdDocument, PsdDepth, GroupKind};
 
 /// Deinterleaved channel planes for the PSD merged composite.
 pub struct ChannelPlanes {
@@ -209,6 +209,7 @@ mod tests {
             width: 2,
             height: 2,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![solid_layer_8bit(0, 0, 2, 2, 255, 0, 0, 255, BlendMode::Normal)],
             icc_profile: None,
         };
@@ -225,6 +226,7 @@ mod tests {
             width: 1,
             height: 1,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![
                 solid_layer_8bit(0, 0, 1, 1, 0, 0, 255, 255, BlendMode::Normal), // blue bg
                 solid_layer_8bit(0, 0, 1, 1, 255, 0, 0, 128, BlendMode::Normal), // red 50%
@@ -246,6 +248,7 @@ mod tests {
             width: 1,
             height: 1,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![layer],
             icc_profile: None,
         };
@@ -260,6 +263,7 @@ mod tests {
             width: 2,
             height: 2,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![solid_layer_8bit(1, 1, 1, 1, 0, 255, 0, 255, BlendMode::Normal)],
             icc_profile: None,
         };
@@ -277,6 +281,7 @@ mod tests {
             width: 1,
             height: 1,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![
                 solid_layer_8bit(0, 0, 1, 1, 255, 255, 255, 255, BlendMode::Normal),
                 solid_layer_8bit(0, 0, 1, 1, 128, 128, 128, 255, BlendMode::Multiply),

@@ -21,6 +21,7 @@ function makeDoc(layerCount: number): DocumentState {
     activeLayerId: layers[layers.length - 1]!.id,
     selectedLayerIds: [layers[layers.length - 1]!.id],
     backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    colorMode: 'rgb',
     rootGroupId: rootGroup.id,
   };
 }

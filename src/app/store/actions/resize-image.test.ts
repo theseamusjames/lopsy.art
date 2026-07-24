@@ -21,6 +21,7 @@ function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData> } {
       activeLayerId: layer.id,
       selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
     },
     pixelData,
   };
@@ -57,6 +58,7 @@ describe('computeResizeImage', () => {
       activeLayerId: layer.id,
       selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
     };
     const result = computeResizeImage(doc, new Map(), 0, 20, 20);
     const updated = result.document!.layers[0]! as RasterLayer;
@@ -77,6 +79,7 @@ describe('computeResizeImage', () => {
       activeLayerId: raster.id,
       selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
     };
     const result = computeResizeImage(doc, new Map(), 0, 20, 20);
     const updated = result.document!.layers.find((l) => l.id === textLayer.id)! as TextLayer;

@@ -12,7 +12,7 @@
 
 import type { Engine } from './wasm-bridge';
 import { getEngine } from './engine-state';
-import type { Layer } from '../types';
+import type { Layer, DocumentColorMode } from '../types';
 import type { GradientStop } from '../tools/gradient/gradient';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
@@ -22,6 +22,7 @@ import {
   setDocumentSize,
   setViewport,
   setBackgroundColor,
+  setDocumentColorMode,
   render,
   markAllDirty,
   setSelectionMask,
@@ -156,6 +157,24 @@ export function syncBackgroundColor(engine: Engine, r: number, g: number, b: num
   if (tracked.bgColor === key) return;
   setBackgroundColor(engine, r / 255, g / 255, b / 255, a);
   tracked.bgColor = key;
+}
+
+// Grayscale/Indexed are RGBA-constrained, so they render in RGB mode (0). Only
+// the native Lab (1) and CMYK (2) modes need the engine's display-decode pass.
+const ENGINE_COLOR_MODE: Record<DocumentColorMode, number> = {
+  rgb: 0,
+  grayscale: 0,
+  indexed: 0,
+  lab: 1,
+  cmyk: 2,
+};
+
+export function syncColorMode(engine: Engine, mode: DocumentColorMode): void {
+  const tracked = getTracked(engine);
+  const engineMode = ENGINE_COLOR_MODE[mode];
+  if (tracked.docColorMode === engineMode) return;
+  setDocumentColorMode(engine, engineMode);
+  tracked.docColorMode = engineMode;
 }
 
 export function syncViewport(

@@ -36,6 +36,7 @@ pub fn read_psd(data: &[u8]) -> Result<PsdDocument, PsdError> {
         width: header.width,
         height: header.height,
         depth: header.depth,
+        color_mode: header.color_mode,
         layers,
         icc_profile,
     })
@@ -48,7 +49,7 @@ struct PsdHeader {
     height: u32,
     depth: PsdDepth,
     channels: u16,
-    is_cmyk: bool,
+    color_mode: PsdColorMode,
 }
 
 struct PsdCursor<'a> {
@@ -133,11 +134,8 @@ fn read_header(c: &mut PsdCursor) -> Result<PsdHeader, PsdError> {
     let depth_bits = c.read_u16()?;
     let color_mode = c.read_u16()?;
 
-    let is_cmyk = match color_mode {
-        3 => false,
-        4 => true,
-        _ => return Err(PsdError::UnsupportedColorMode(color_mode)),
-    };
+    let color_mode = PsdColorMode::from_u16(color_mode)
+        .ok_or(PsdError::UnsupportedColorMode(color_mode))?;
 
     let depth = match depth_bits {
         8 => PsdDepth::Eight,
@@ -145,7 +143,7 @@ fn read_header(c: &mut PsdCursor) -> Result<PsdHeader, PsdError> {
         _ => return Err(PsdError::UnsupportedDepth(depth_bits)),
     };
 
-    Ok(PsdHeader { width, height, depth, channels, is_cmyk })
+    Ok(PsdHeader { width, height, depth, channels, color_mode })
 }
 
 // ─── Section 2: Color Mode Data ────────────────────────────────────────
@@ -544,7 +542,7 @@ fn read_all_layer_channels(
                         height: mh as u32,
                         depth: PsdDepth::Eight,
                         channels: 1,
-                        is_cmyk: false,
+                        color_mode: PsdColorMode::Rgb,
                     };
                     let plane = decode_channel(c, ch.data_length as usize, mw, mh, &mask_header)?;
                     mask_plane = Some(plane);
@@ -583,13 +581,16 @@ fn read_all_layer_channels(
     };
 
     let c0 = ch0_plane.as_ref().unwrap_or(&default_color);
-    let c1 = ch1_plane.as_ref().unwrap_or(&default_color);
-    let c2 = ch2_plane.as_ref().unwrap_or(&default_color);
+    // Grayscale PSDs carry a single color plane; replicating it across G and B
+    // lets the shared interleave below emit neutral R=G=B pixels.
+    let is_gray = header.color_mode == PsdColorMode::Grayscale;
+    let c1 = if is_gray { c0 } else { ch1_plane.as_ref().unwrap_or(&default_color) };
+    let c2 = if is_gray { c0 } else { ch2_plane.as_ref().unwrap_or(&default_color) };
     let a = a_plane.as_ref().unwrap_or(&default_alpha);
 
     let mut interleaved = Vec::with_capacity(pixel_count * 4 * bpc);
 
-    if header.is_cmyk {
+    if header.color_mode == PsdColorMode::Cmyk {
         let default_k = vec![0u8; pixel_count * bpc];
         let k = ch3_plane.as_ref().unwrap_or(&default_k);
         match header.depth {
@@ -815,7 +816,7 @@ fn read_merged_composite(c: &mut PsdCursor, header: &PsdHeader) -> Result<Vec<u8
 
     let mut rgba = Vec::with_capacity(pixel_count * 4 * bpc);
 
-    if header.is_cmyk {
+    if header.color_mode == PsdColorMode::Cmyk {
         // Planes: C, M, Y, K, [A]
         let has_alpha = channels >= 5;
         let c_plane = &all_planes[0..plane_size];
@@ -854,14 +855,19 @@ fn read_merged_composite(c: &mut PsdCursor, header: &PsdHeader) -> Result<Vec<u8
             }
         }
     } else {
-        // RGB planes
-        let has_alpha = channels >= 4;
+        // Grayscale: one color plane (+ optional alpha). RGB: three (+ optional alpha).
+        let color_planes = header.color_mode.color_channels() as usize;
+        let has_alpha = channels as usize >= color_planes + 1;
+        // Grayscale reuses plane 0 for all three components.
+        let g_off = if color_planes == 1 { 0 } else { plane_size };
+        let b_off = if color_planes == 1 { 0 } else { plane_size * 2 };
+        let a_off = plane_size * color_planes;
         match header.depth {
             PsdDepth::Eight => {
                 let r_plane = &all_planes[0..plane_size];
-                let g_plane = &all_planes[plane_size..plane_size * 2];
-                let b_plane = &all_planes[plane_size * 2..plane_size * 3];
-                let a_plane = if has_alpha { &all_planes[plane_size * 3..plane_size * 4] } else { &[] as &[u8] };
+                let g_plane = &all_planes[g_off..g_off + plane_size];
+                let b_plane = &all_planes[b_off..b_off + plane_size];
+                let a_plane = if has_alpha { &all_planes[a_off..a_off + plane_size] } else { &[] as &[u8] };
 
                 for i in 0..pixel_count {
                     rgba.push(r_plane[i]);
@@ -872,9 +878,9 @@ fn read_merged_composite(c: &mut PsdCursor, header: &PsdHeader) -> Result<Vec<u8
             }
             PsdDepth::Sixteen => {
                 let r_plane = &all_planes[0..plane_size];
-                let g_plane = &all_planes[plane_size..plane_size * 2];
-                let b_plane = &all_planes[plane_size * 2..plane_size * 3];
-                let a_plane = if has_alpha { &all_planes[plane_size * 3..plane_size * 4] } else { &[] as &[u8] };
+                let g_plane = &all_planes[g_off..g_off + plane_size];
+                let b_plane = &all_planes[b_off..b_off + plane_size];
+                let a_plane = if has_alpha { &all_planes[a_off..a_off + plane_size] } else { &[] as &[u8] };
 
                 for i in 0..pixel_count {
                     rgba.extend_from_slice(&r_plane[i * 2..i * 2 + 2]);
@@ -910,6 +916,7 @@ mod tests {
             width: w,
             height: h,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![PsdLayer {
                 source_kind: PsdSourceKind::Raster,
                 name: "Red".to_string(),
@@ -941,6 +948,7 @@ mod tests {
             width: w,
             height: h,
             depth: PsdDepth::Sixteen,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![PsdLayer {
                 source_kind: PsdSourceKind::Raster,
                 name: "16bit layer".to_string(),
@@ -998,12 +1006,65 @@ mod tests {
         assert_eq!(parsed_layer.pixel_data, orig_layer.pixel_data, "16-bit pixel data mismatch");
     }
 
+    /// Grayscale documents write a single color channel (header mode 1) and
+    /// must read back as neutral RGBA so the rest of the engine stays RGBA.
+    #[test]
+    fn roundtrip_grayscale_writes_one_channel_and_reads_back_neutral() {
+        let mut data = Vec::with_capacity(64);
+        for i in 0..16u8 {
+            let v = i * 16;
+            data.extend_from_slice(&[v, v, v, 255]);
+        }
+        let original = PsdDocument {
+            width: 4,
+            height: 4,
+            depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Grayscale,
+            layers: vec![PsdLayer {
+                source_kind: PsdSourceKind::Raster,
+                name: "Gray".to_string(),
+                visible: true,
+                opacity: 255,
+                blend_mode: BlendMode::Normal,
+                clip_to_below: false,
+                rect: PsdRect::from_xywh(0, 0, 4, 4),
+                pixel_data: data.clone(),
+                mask: None,
+                group_kind: GroupKind::Normal,
+                effects_json: None,
+            }],
+            icc_profile: None,
+        };
+
+        let psd_bytes = write_psd(&original);
+        // Header: channel count at offset 12, color mode at offset 24.
+        assert_eq!(u16::from_be_bytes([psd_bytes[12], psd_bytes[13]]), 1);
+        assert_eq!(u16::from_be_bytes([psd_bytes[24], psd_bytes[25]]), 1);
+
+        let parsed = read_psd(&psd_bytes).unwrap();
+        assert_eq!(parsed.color_mode, PsdColorMode::Grayscale);
+        assert_eq!(parsed.layers.len(), 1);
+        // The single gray plane is expanded back to R=G=B with alpha intact.
+        assert_eq!(parsed.layers[0].pixel_data, data);
+    }
+
+    /// An RGB document must still declare 3 channels — the grayscale path
+    /// must not change the default.
+    #[test]
+    fn roundtrip_rgb_still_writes_three_channels() {
+        let psd_bytes = write_psd(&make_doc_8bit());
+        assert_eq!(u16::from_be_bytes([psd_bytes[12], psd_bytes[13]]), 3);
+        assert_eq!(u16::from_be_bytes([psd_bytes[24], psd_bytes[25]]), 3);
+        assert_eq!(read_psd(&psd_bytes).unwrap().color_mode, PsdColorMode::Rgb);
+    }
+
     #[test]
     fn roundtrip_with_groups() {
         let doc = PsdDocument {
             width: 2,
             height: 2,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![
                 PsdLayer {
                     source_kind: PsdSourceKind::Raster,
@@ -1092,7 +1153,7 @@ mod tests {
             height: 4,
             depth: PsdDepth::Eight,
             channels: 4,
-            is_cmyk: false,
+            color_mode: PsdColorMode::Rgb,
         };
         // Only 4 bytes inflate out, but the 4x4 channel expects 16.
         let short_stream = super::super::zip_predict::zip_encode(&[10u8, 20, 30, 40]);
@@ -1113,7 +1174,7 @@ mod tests {
             height: 4,
             depth: PsdDepth::Eight,
             channels: 3,
-            is_cmyk: false,
+            color_mode: PsdColorMode::Rgb,
         };
         // 3 channels x 16 bytes expected; only 8 inflate out.
         let short_stream = super::super::zip_predict::zip_encode(&[0u8; 8]);

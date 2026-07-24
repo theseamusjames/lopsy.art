@@ -188,7 +188,10 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
   const layersJson = JSON.stringify(layerMetas);
   // Layer pixels are read from GPU textures in the working color space, so
   // wide-gamut documents embed a Display P3 ICC profile (resource 1039).
-  const psdBytes = exportPsd(engine, layersJson, allMaskData, depth, isWideGamut() ? 1 : 0);
+  // PSD header color mode: grayscale documents write a single gray channel;
+  // every other Lopsy mode round-trips as RGB.
+  const psdColorMode = useEditorStore.getState().document.colorMode === 'grayscale' ? 1 : 3;
+  const psdBytes = exportPsd(engine, layersJson, allMaskData, depth, isWideGamut() ? 1 : 0, psdColorMode);
 
   const blob = new Blob([psdBytes.slice().buffer], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
@@ -230,6 +233,8 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
     width: number;
     height: number;
     depth: number;
+    /** PSD header color mode (1 = grayscale, 3 = RGB, 4 = CMYK). */
+    colorMode?: number;
     layers: Array<{
       name: string;
       visible: boolean;
@@ -383,6 +388,9 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
       layerOrder: newLayerOrder,
       activeLayerId,
       selectedLayerIds: activeLayerId ? [activeLayerId] : [],
+      // Grayscale PSDs open as grayscale documents. RGB and CMYK sources both
+      // decode to RGB pixels on import, so they open in RGB.
+      colorMode: manifest.colorMode === 1 ? 'grayscale' : 'rgb',
     },
     dirtyLayerIds: new Set<string>(),
     isDirty: false,

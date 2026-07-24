@@ -5,7 +5,7 @@ use super::blend_keys::blend_mode_to_psd_key;
 use super::flatten::flatten_layers;
 use super::packbits::packbits_encode;
 use super::zip_predict::zip_predict_encode_16;
-use super::types::{PsdDocument, PsdDepth, PsdLayer, GroupKind};
+use super::types::{PsdDocument, PsdDepth, PsdLayer, GroupKind, PsdColorMode};
 
 /// Write a PSD file from a document descriptor.
 pub fn write_psd(doc: &PsdDocument) -> Vec<u8> {
@@ -27,13 +27,14 @@ fn write_header(out: &mut Cursor<Vec<u8>>, doc: &PsdDocument) {
     write_u16(out, 1);                         // version
     out.write_all(&[0u8; 6]).unwrap();         // reserved
     // Photoshop expects the header channel count to match the color mode
-    // (RGB = 3). The merged image section writes 3 planes. Layer transparency
-    // is handled per-layer via channel id -1, not via this header count.
-    write_u16(out, 3);                         // channels (RGB)
+    // (RGB = 3, Grayscale = 1). The merged image section writes that many
+    // planes. Layer transparency is handled per-layer via channel id -1, not
+    // via this header count.
+    write_u16(out, doc.color_mode.color_channels());
     write_u32(out, doc.height);                // rows
     write_u32(out, doc.width);                 // columns
     write_u16(out, doc.depth.bits_per_channel()); // depth
-    write_u16(out, 3);                         // color mode: RGB
+    write_u16(out, doc.color_mode.to_u16());
 }
 
 // ─── Section 2: Color Mode Data ────────────────────────────────────────
@@ -119,7 +120,7 @@ fn write_layer_info_body(out: &mut Cursor<Vec<u8>>, doc: &PsdDocument) {
 
     // Pre-compute channel data for each layer
     let channel_data: Vec<LayerChannelData> = doc.layers.iter()
-        .map(|layer| encode_layer_channels(layer, doc.depth))
+        .map(|layer| encode_layer_channels(layer, doc.depth, doc.color_mode))
         .collect();
 
     // Write layer records
@@ -360,20 +361,18 @@ struct LayerChannelData {
     channels: Vec<ChannelEncoded>,
 }
 
-fn encode_layer_channels(layer: &PsdLayer, depth: PsdDepth) -> LayerChannelData {
+fn encode_layer_channels(layer: &PsdLayer, depth: PsdDepth, color_mode: PsdColorMode) -> LayerChannelData {
     let w = layer.rect.width() as usize;
     let h = layer.rect.height() as usize;
+    let is_gray = color_mode == PsdColorMode::Grayscale;
 
     // Group markers and empty layers have no pixel data
     if w == 0 || h == 0 || layer.group_kind == GroupKind::GroupEnd {
-        return LayerChannelData {
-            channels: vec![
-                ChannelEncoded { id: -1, compression: 0, data: Vec::new() },
-                ChannelEncoded { id: 0, compression: 0, data: Vec::new() },
-                ChannelEncoded { id: 1, compression: 0, data: Vec::new() },
-                ChannelEncoded { id: 2, compression: 0, data: Vec::new() },
-            ],
-        };
+        let mut channels = vec![ChannelEncoded { id: -1, compression: 0, data: Vec::new() }];
+        for id in 0..color_mode.color_channels() as i16 {
+            channels.push(ChannelEncoded { id, compression: 0, data: Vec::new() });
+        }
+        return LayerChannelData { channels };
     }
 
     // Deinterleave RGBA into separate channel planes
@@ -381,10 +380,13 @@ fn encode_layer_channels(layer: &PsdLayer, depth: PsdDepth) -> LayerChannelData 
 
     let mut channels = Vec::with_capacity(5);
 
-    // Photoshop expects R, G, B, then transparency
+    // Photoshop expects the color channels in order, then transparency.
+    // Grayscale documents hold R=G=B, so the red plane is the gray plane.
     channels.push(encode_channel_plane(0, &r_plane, w, h, depth));
-    channels.push(encode_channel_plane(1, &g_plane, w, h, depth));
-    channels.push(encode_channel_plane(2, &b_plane, w, h, depth));
+    if !is_gray {
+        channels.push(encode_channel_plane(1, &g_plane, w, h, depth));
+        channels.push(encode_channel_plane(2, &b_plane, w, h, depth));
+    }
     channels.push(encode_channel_plane(-1, &a_plane, w, h, depth));
 
     // Layer mask channel (id = -2) if present
@@ -493,9 +495,13 @@ fn write_merged_composite(out: &mut Cursor<Vec<u8>>, doc: &PsdDocument) {
             // PackBits compression (type 1)
             write_u16(out, 1);
 
-            // Merged composite has 3 planes (R, G, B) for RGB mode.
-            // Alpha is not stored in the merged image.
-            let channel_planes = [&planes.r, &planes.g, &planes.b];
+            // Merged composite has one plane per color channel (RGB = 3,
+            // Grayscale = 1). Alpha is not stored in the merged image.
+            let channel_planes: Vec<&Vec<u8>> = if doc.color_mode == PsdColorMode::Grayscale {
+                vec![&planes.r]
+            } else {
+                vec![&planes.r, &planes.g, &planes.b]
+            };
             let mut all_byte_counts: Vec<Vec<u16>> = Vec::new();
             let mut all_compressed: Vec<Vec<Vec<u8>>> = Vec::new();
 
@@ -531,8 +537,10 @@ fn write_merged_composite(out: &mut Cursor<Vec<u8>>, doc: &PsdDocument) {
             write_u16(out, 0);
 
             out.write_all(&planes.r).unwrap();
-            out.write_all(&planes.g).unwrap();
-            out.write_all(&planes.b).unwrap();
+            if doc.color_mode != PsdColorMode::Grayscale {
+                out.write_all(&planes.g).unwrap();
+                out.write_all(&planes.b).unwrap();
+            }
         }
     }
 }
@@ -620,6 +628,7 @@ mod tests {
             width: 4,
             height: 4,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![make_red_layer(4, 4)],
             icc_profile: None,
         };
@@ -640,6 +649,7 @@ mod tests {
             width: 10,
             height: 10,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![make_red_layer(10, 10)],
             icc_profile: None,
         };
@@ -664,6 +674,7 @@ mod tests {
             width: 2,
             height: 2,
             depth: PsdDepth::Sixteen,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![layer],
             icc_profile: None,
         };
@@ -705,6 +716,7 @@ mod tests {
             width: 4,
             height: 4,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![group_end, child, group_open],
             icc_profile: None,
         };
@@ -726,6 +738,7 @@ mod tests {
             width: 4,
             height: 4,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![layer],
             icc_profile: None,
         };
@@ -755,6 +768,7 @@ mod tests {
             width: 4,
             height: 4,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![make_red_layer(4, 4)],
             icc_profile: Some(p3.clone()),
         };
@@ -769,6 +783,7 @@ mod tests {
             width: 4,
             height: 4,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![make_red_layer(4, 4)],
             icc_profile: None,
         };

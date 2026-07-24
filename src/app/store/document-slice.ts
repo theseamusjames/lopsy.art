@@ -1,4 +1,4 @@
-import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
+import type { BlendMode, LayerEffects, Layer, Rect, DocumentColorMode } from '../../types';
 import type { AdjustmentNodeType, AdjustmentNode } from '../../types/adjustment-nodes';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
@@ -31,6 +31,10 @@ import { resolveRasterTextBounds } from './actions/resolve-raster-text-bounds';
 import { computeCropCanvas } from './actions/crop-canvas';
 import { computeResizeCanvas } from './actions/resize-canvas';
 import { computeResizeImage } from './actions/resize-image';
+import { computeConvertColorMode, layersNeedingPixelBake } from './actions/convert-color-mode';
+import { colorModeLabel, convertColorToDocMode } from '../../utils/color-mode';
+import { convertLayerToGrayscale } from '../../engine-wasm/wasm-bridge';
+import { useToolSettingsStore } from '../tool-settings-store';
 import { computeAlignLayer } from './actions/align-layer';
 import { computeFitLayer } from './actions/fit-layer';
 import { computeAddLayerMask } from './actions/add-layer-mask';
@@ -162,6 +166,7 @@ function createInitialDocument() {
     activeLayerId: bg.id as string | null,
     selectedLayerIds: [bg.id] as readonly string[],
     backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
+    colorMode: 'rgb' as DocumentColorMode,
     rootGroupId: rootGroup.id as string | null,
   };
 }
@@ -169,7 +174,7 @@ function createInitialDocument() {
 export interface DocumentSlice {
   document: ReturnType<typeof createInitialDocument>;
   documentReady: boolean;
-  createDocument: (width: number, height: number, transparentBg: boolean) => void;
+  createDocument: (width: number, height: number, transparentBg: boolean, colorMode?: DocumentColorMode) => void;
   openImageAsDocument: (imageData: ImageData, name: string) => void;
   addLayer: () => void;
   addTextLayer: (layer: import('../../types').TextLayer) => void;
@@ -208,6 +213,7 @@ export interface DocumentSlice {
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
+  convertColorMode: (newMode: DocumentColorMode) => void;
 
   // Multi-select
   toggleLayerSelection: (id: string) => void;
@@ -223,11 +229,11 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   document: createInitialDocument(),
   documentReady: false,
 
-  createDocument: (width, height, transparentBg) => {
+  createDocument: (width, height, transparentBg, colorMode) => {
     cancelLiquify();
     clearBitmapCache();
     clearEngine();
-    const result = computeCreateDocument(width, height, transparentBg);
+    const result = computeCreateDocument(width, height, transparentBg, colorMode);
     applyActionResult(set, result);
     // clearEngine() released the GPU clipboard texture; drop the stale JS
     // clipboard so a subsequent paste doesn't operate on a freed texture.
@@ -709,6 +715,42 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
+  },
+
+  convertColorMode: (newMode) => {
+    const s = get();
+    const result = computeConvertColorMode(s.document, newMode);
+    if (!result) return;
+
+    // Bake in-flight strokes into layer textures first, then snapshot — the
+    // conversion overwrites those textures in place, so history must capture
+    // the pre-bake pixels.
+    flushLayerSync(s);
+    const bakeIds = layersNeedingPixelBake(s.document, newMode);
+    s.pushHistory(`Convert to ${colorModeLabel(newMode)}`);
+
+    const engine = getEngine();
+    if (engine && bakeIds.length > 0) {
+      const dirtyIds = new Set(s.dirtyLayerIds);
+      for (const id of bakeIds) {
+        if (newMode === 'grayscale') convertLayerToGrayscale(engine, id);
+        // GPU is now source of truth — drop stale JS pixel data.
+        invalidateBitmapCache(id);
+        pixelDataManager.remove(id);
+        dirtyIds.add(id);
+      }
+      set({ dirtyLayerIds: dirtyIds });
+    }
+
+    applyActionResult(set, result);
+
+    // Keep the toolbox swatches in the document's value space so the next
+    // stroke's color matches what the picker shows.
+    const ts = useToolSettingsStore.getState();
+    ts.setForegroundColor(convertColorToDocMode(ts.foregroundColor, newMode));
+    ts.setBackgroundColor(convertColorToDocMode(ts.backgroundColor, newMode));
+
+    s.notifyRender();
   },
 
   toggleLayerSelection: (id) => {
