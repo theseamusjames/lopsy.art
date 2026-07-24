@@ -645,6 +645,14 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Color swatch selection**: clicking the foreground or background swatch in the Color panel makes it the one the picker, hex field, and RGBA sliders edit; clicking a recent-color swatch applies that color to whichever swatch is currently active. (The old double-click-to-expand behavior went away with panel collapsing.)
 - **Layer name double-click → rename**: double-clicking a layer row's name turns it into an inline text input; Enter commits, Escape cancels.
 
+### Notifications & Error Toasts
+Transient messages surface as toasts stacked in a fixed panel at the **top-right** of the window (max width 360px, newest appended at the bottom). The stack is announced to assistive tech via `role="status"` / `aria-live="polite"`.
+
+- **Two levels**: `error` (red left border) and `info` (accent-colored left border). No title, no icon — just the message and a dismiss control.
+- **Manual dismiss only**: toasts do **not** auto-expire on a timer; each stays until the user clicks its **×** button. Multiple messages accumulate in the stack rather than replacing one another.
+- **Error triggers** (all routed through `notifyError`): failures to open a file, open/load or save a project, import a PSD / DNG / RAF, paste an image, or export (Quick Export PNG, Export…, or Export PSD); plus lower-level guards such as "Engine not ready", "No active layer", an empty decode result, and WebGL context init / restore failures. Messages that wrap an exception append a human-readable cause.
+- **Info trigger**: importing a PSD whose unsupported layer types were rasterized posts an info toast noting the pixels are preserved but no longer editable as their original type.
+
 ### Canvas Right-Click Context Menu
 Right-clicking the canvas opens a small menu with:
 - **Define Brush Preset** — only shown when a marquee selection is active. Captures the selected pixels of the active layer as a new brush tip and opens the Brushes modal with the new preset selected. Same code path as Edit → "Define Brush from Selection".
