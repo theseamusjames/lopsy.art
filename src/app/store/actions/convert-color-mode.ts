@@ -1,7 +1,7 @@
 import type { DocumentState, DocumentColorMode, Color, Layer, LayerEffects } from '../../../types';
 import type { ActionResult } from '../types';
 import { convertColorToDocMode } from '../../../utils/color-mode';
-import { isAdjustmentAllowedInMode } from '../../../utils/color-mode-capabilities';
+import { getColorModeCapabilities, isAdjustmentAllowedInMode, HSL_BLEND_MODES } from '../../../utils/color-mode-capabilities';
 
 function convertEffects(effects: LayerEffects, mode: DocumentColorMode): LayerEffects {
   const c = (color: Color): Color => convertColorToDocMode(color, mode);
@@ -22,9 +22,16 @@ function convertEffects(effects: LayerEffects, mode: DocumentColorMode): LayerEf
  * that would otherwise reintroduce chroma the bake just removed.
  */
 function convertLayerDescriptor(layer: Layer, mode: DocumentColorMode): Layer {
-  const withEffects = layer.effects
+  const base = layer.effects
     ? { ...layer, effects: convertEffects(layer.effects, mode) }
     : { ...layer };
+
+  // HSL-decomposing blend modes have no meaning once the texture stops holding
+  // sRGB, so they fall back to Normal rather than compositing garbage.
+  const withEffects =
+    !getColorModeCapabilities(mode).hasHslBlendModes && HSL_BLEND_MODES.has(base.blendMode)
+      ? ({ ...base, blendMode: 'normal' } as Layer)
+      : base;
 
   if (withEffects.type === 'text') {
     return { ...withEffects, color: convertColorToDocMode(withEffects.color, mode) };
@@ -68,9 +75,8 @@ export function computeConvertColorMode(
   };
 }
 
-/** Raster layers whose GPU textures need a per-layer bake for this mode. */
-export function layersNeedingPixelBake(doc: DocumentState, mode: DocumentColorMode): string[] {
-  if (mode === 'rgb') return [];
+/** Every layer backed by a GPU texture — i.e. everything except groups. */
+export function layersWithPixels(doc: DocumentState): string[] {
   return doc.layers.filter((l) => l.type !== 'group').map((l) => l.id);
 }
 

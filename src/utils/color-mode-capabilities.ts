@@ -23,6 +23,12 @@ export interface ColorModeCapabilities {
   readonly hasGradients: boolean;
   /** Paint tools may anti-alias (Indexed forces hard edges). */
   readonly hasAntiAliasing: boolean;
+  /**
+   * Hue / Saturation / Color / Luminosity blend modes. These decompose RGB
+   * into HSL, which is meaningless once a texture holds encoded Lab or ink
+   * channels, so native modes drop them.
+   */
+  readonly hasHslBlendModes: boolean;
 }
 
 const RGB_CAPABILITIES: ColorModeCapabilities = {
@@ -34,6 +40,7 @@ const RGB_CAPABILITIES: ColorModeCapabilities = {
   canAddLayers: true,
   hasGradients: true,
   hasAntiAliasing: true,
+  hasHslBlendModes: true,
 };
 
 // Grayscale/Lab/CMYK keep the layer stack and gradients but drop color-space
@@ -47,6 +54,7 @@ const MONOCHROMATIC_CAPABILITIES: ColorModeCapabilities = {
   canAddLayers: true,
   hasGradients: true,
   hasAntiAliasing: true,
+  hasHslBlendModes: false,
 };
 
 // Indexed is a single flattened, palette-constrained surface: no layers, no
@@ -60,6 +68,7 @@ const INDEXED_CAPABILITIES: ColorModeCapabilities = {
   canAddLayers: false,
   hasGradients: false,
   hasAntiAliasing: false,
+  hasHslBlendModes: false,
 };
 
 const CAPABILITIES: Record<DocumentColorMode, ColorModeCapabilities> = {
@@ -73,6 +82,14 @@ const CAPABILITIES: Record<DocumentColorMode, ColorModeCapabilities> = {
 export function getColorModeCapabilities(mode: DocumentColorMode): ColorModeCapabilities {
   return CAPABILITIES[mode];
 }
+
+/** Blend modes that decompose RGB into HSL — see `hasHslBlendModes`. */
+export const HSL_BLEND_MODES: ReadonlySet<string> = new Set([
+  'hue',
+  'saturation',
+  'color',
+  'luminosity',
+]);
 
 /**
  * Adjustments that produce or manipulate chroma. They are hidden by modes

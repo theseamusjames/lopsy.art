@@ -32,11 +32,11 @@ import { resolveRasterTextBounds } from './actions/resolve-raster-text-bounds';
 import { computeCropCanvas } from './actions/crop-canvas';
 import { computeResizeCanvas } from './actions/resize-canvas';
 import { computeResizeImage } from './actions/resize-image';
-import { computeConvertColorMode, layersNeedingPixelBake, paletteFromBytes, paletteToBytes } from './actions/convert-color-mode';
+import { computeConvertColorMode, layersWithPixels, paletteFromBytes, paletteToBytes } from './actions/convert-color-mode';
 import { colorModeLabel, convertColorToDocMode } from '../../utils/color-mode';
 import { getColorModeCapabilities } from '../../utils/color-mode-capabilities';
 import { notifyInfo } from '../notifications-store';
-import { convertLayerToGrayscale, quantizeCompositeToPalette, applyPaletteToLayer } from '../../engine-wasm/wasm-bridge';
+import { convertLayerToGrayscale, quantizeCompositeToPalette, applyPaletteToLayer, convertLayerToLab, convertLayerFromLab } from '../../engine-wasm/wasm-bridge';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { computeAlignLayer } from './actions/align-layer';
 import { computeFitLayer } from './actions/fit-layer';
@@ -746,13 +746,17 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
     // Indexed is a single flat palette-constrained surface, so the layer stack
     // collapses before quantizing. This runs under the snapshot above, making
-    // flatten + convert one undo step.
+    // flatten + convert one undo step. Flattening goes through the export
+    // compositor, which already decodes native modes — so the flattened layer
+    // is plain sRGB and must not be decoded again below.
     let doc = s.document;
+    let pixelsAreEncoded = doc.colorMode === 'lab';
     if (newMode === 'indexed') {
       const flattened = computeFlattenImage(doc, resolveAllPixelData(doc.layerOrder, doc.layers));
       if (flattened?.document) {
         applyActionResult(set, flattened);
         doc = flattened.document;
+        pixelsAreEncoded = false;
       }
     }
 
@@ -762,7 +766,6 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
     const engine = getEngine();
     if (engine) {
-      const bakeIds = layersNeedingPixelBake(doc, newMode);
       const palette =
         newMode === 'indexed'
           ? paletteFromBytes(quantizeCompositeToPalette(engine, options?.maxColors ?? 256))
@@ -773,8 +776,12 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       const paletteBytes = palette ? paletteToBytes(palette) : undefined;
 
       const dirtyIds = new Set(s.dirtyLayerIds);
-      for (const id of bakeIds) {
+      for (const id of layersWithPixels(doc)) {
+        // Decode out of the old mode before encoding into the new one, so a
+        // bake never runs on values from the previous color space.
+        if (pixelsAreEncoded) convertLayerFromLab(engine, id);
         if (newMode === 'grayscale') convertLayerToGrayscale(engine, id);
+        if (newMode === 'lab') convertLayerToLab(engine, id);
         if (paletteBytes) applyPaletteToLayer(engine, id, paletteBytes, options?.dither ?? false);
         // GPU is now source of truth — drop stale JS pixel data.
         invalidateBitmapCache(id);

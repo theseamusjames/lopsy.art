@@ -15,6 +15,48 @@ uniform vec4 u_channelMask;
 uniform int u_docColorMode;
 out vec4 fragColor;
 
+// ─── Native color mode display decode ──────────────────────────────────
+// Lab documents store encoded CIELAB in the composite (L in R, a in G, b in B),
+// so the screen needs the inverse transform. These constants mirror
+// lopsy-core/src/lab.rs exactly — the CPU export path must agree with what the
+// display shows.
+const vec3 D50_WHITE = vec3(0.9642, 1.0000, 0.8249);
+const float LAB_DELTA = 6.0 / 29.0;
+
+const mat3 BRADFORD_D50_TO_D65 = mat3(
+     0.9555766, -0.0282895,  0.0122982,
+    -0.0230393,  1.0099416, -0.0204830,
+     0.0631636,  0.0210077,  1.3299098
+);
+
+const mat3 XYZ_D65_TO_SRGB = mat3(
+     3.2404542, -0.9692660,  0.0556434,
+    -1.5371385,  1.8760108, -0.2040259,
+    -0.4985314,  0.0415560,  1.0572252
+);
+
+float labFInv(float t) {
+    return t > LAB_DELTA ? t * t * t : 3.0 * LAB_DELTA * LAB_DELTA * (t - 4.0 / 29.0);
+}
+
+float linearToSrgb(float v) {
+    v = clamp(v, 0.0, 1.0);
+    return v <= 0.0031308 ? v * 12.92 : 1.055 * pow(v, 1.0 / 2.4) - 0.055;
+}
+
+vec3 labToSrgb(vec3 encoded) {
+    float L = encoded.r * 255.0 / 2.55;
+    float a = encoded.g * 255.0 - 128.0;
+    float b = encoded.b * 255.0 - 128.0;
+
+    float fy = (L + 16.0) / 116.0;
+    vec3 f = vec3(fy + a / 500.0, fy, fy - b / 200.0);
+    vec3 xyzD50 = vec3(labFInv(f.x), labFInv(f.y), labFInv(f.z)) * D50_WHITE;
+    vec3 linear = XYZ_D65_TO_SRGB * (BRADFORD_D50_TO_D65 * xyzD50);
+
+    return vec3(linearToSrgb(linear.r), linearToSrgb(linear.g), linearToSrgb(linear.b));
+}
+
 void main() {
     vec2 screenPos = vec2(v_uv.x, 1.0 - v_uv.y) * u_resolution;
 
@@ -44,12 +86,9 @@ void main() {
     vec4 color = texture(u_compositeTex, sampleUV);
 
     // Native color modes store encoded values in the composite; decode to sRGB
-    // before the RGB-assuming steps below. Mode 0 is passthrough; the Lab and
-    // CMYK phases fill in these branches.
+    // before the RGB-assuming steps below (channel mask, checkerboard, dither).
     if (u_docColorMode == 1) {
-        // Lab → sRGB decode.
-    } else if (u_docColorMode == 2) {
-        // CMYK → sRGB decode.
+        color.rgb = labToSrgb(color.rgb);
     }
 
     color = vec4(color.rgb * u_channelMask.rgb, color.a * u_channelMask.a);

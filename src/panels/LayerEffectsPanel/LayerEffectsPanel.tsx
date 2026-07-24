@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { X } from 'lucide-react';
 import { useEditorStore } from '../../app/editor-store';
+import { getColorModeCapabilities, HSL_BLEND_MODES } from '../../utils/color-mode-capabilities';
 import { useUIStore } from '../../app/ui-store';
 import { IconButton } from '../../components/IconButton/IconButton';
 import type { DragProps } from '../../app/hooks/useDraggablePanel';
@@ -51,11 +52,19 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
   const updateLayerBlendMode = useEditorStore((s) => s.updateLayerBlendMode);
   const rasterizeLayerStyle = useEditorStore((s) => s.rasterizeLayerStyle);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
+  const colorMode = useEditorStore((s) => s.document.colorMode);
 
   const [selectedEffect, setSelectedEffect] = useState<EffectKey>('dropShadow');
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
   const effects: LayerEffects | null = activeLayer?.effects ?? null;
+
+  // Modes whose textures no longer hold sRGB can't run the HSL-decomposing
+  // blend modes, so those options are dropped rather than shown as no-ops.
+  const allowHsl = getColorModeCapabilities(colorMode).hasHslBlendModes;
+  const blendModeGroups = (activeLayer?.type === 'group' ? GROUP_BLEND_MODE_GROUPS : BLEND_MODE_GROUPS)
+    .map((group) => ({ ...group, modes: group.modes.filter((m) => allowHsl || !HSL_BLEND_MODES.has(m)) }))
+    .filter((group) => group.modes.length > 0);
 
   // Live preview: update effects without creating undo entries (for slider drags)
   const updateLive = useCallback(
@@ -178,7 +187,7 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
           onChange={handleBlendModeChange}
           aria-labelledby="blend-mode-label"
         >
-          {(activeLayer.type === 'group' ? GROUP_BLEND_MODE_GROUPS : BLEND_MODE_GROUPS).map((group) => (
+          {blendModeGroups.map((group) => (
             <optgroup key={group.label} label={group.label}>
               {group.modes.map((mode) => (
                 <option key={mode} value={mode}>

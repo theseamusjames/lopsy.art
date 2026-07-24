@@ -15,6 +15,7 @@ import {
   getRootGroupId,
   openGroupEffectsPanel,
   addLayer,
+  openColorPanel,
 } from './helpers';
 
 interface PixelSnap {
@@ -302,5 +303,103 @@ test.describe('Document color mode', () => {
     const restored = await getEditorState(page);
     expect((restored.document as { colorMode: string }).colorMode).toBe('rgb');
     expect(restored.document.layers.length).toBe(beforeLayers);
+  });
+
+  test('Lab conversion preserves appearance — encoded pixels decode back to the same color', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 200, 200, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    await drawRect(page, 40, 40, 80, 80, { r: 200, g: 90, b: 40 });
+    const before = await readCompositedAtDoc(page, 80, 80);
+
+    await selectColorMode(page, 'Lab Color');
+    expect(await getColorMode(page)).toBe('lab');
+
+    // Lab contains sRGB, so the bake is appearance-preserving. What the screen
+    // shows must survive the encode + GLSL decode round trip. 8-bit a/b
+    // quantization costs a few units.
+    const after = await readCompositedAtDoc(page, 80, 80);
+    expect(Math.abs(after.r - before.r)).toBeLessThanOrEqual(6);
+    expect(Math.abs(after.g - before.g)).toBeLessThanOrEqual(6);
+    expect(Math.abs(after.b - before.b)).toBeLessThanOrEqual(6);
+
+    // The layer texture must now hold encoded Lab rather than sRGB. Sample the
+    // most common opaque pixel of the drawn layer: if the texture were still
+    // sRGB it would equal what the screen shows.
+    const raw = await page.evaluate(async () => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { activeLayerId: string | null } };
+      };
+      const read = (window as unknown as Record<string, unknown>).__readLayerPixels as
+        (id?: string) => Promise<{ width: number; height: number; pixels: number[] }>;
+      const result = await read(store.getState().document.activeLayerId ?? undefined);
+      const counts = new Map<string, number>();
+      for (let i = 0; i < result.pixels.length; i += 4) {
+        if ((result.pixels[i + 3] ?? 0) < 250) continue;
+        const key = `${result.pixels[i]},${result.pixels[i + 1]},${result.pixels[i + 2]}`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      let bestKey = '';
+      let bestCount = 0;
+      for (const [key, count] of counts) {
+        if (count > bestCount) { bestCount = count; bestKey = key; }
+      }
+      const [r, g, b] = bestKey.split(',').map(Number);
+      return { r: r ?? 0, g: g ?? 0, b: b ?? 0, count: bestCount };
+    });
+    expect(raw.count).toBeGreaterThan(0);
+    // Chroma is encoded as an offset from 128, so a/b move off neutral.
+    expect(Math.abs(raw.g - 128) + Math.abs(raw.b - 128)).toBeGreaterThan(20);
+    // And the stored triple is not the sRGB the screen shows.
+    const storedMatchesDisplay =
+      Math.abs(raw.r - after.r) <= 4 && Math.abs(raw.g - after.g) <= 4 && Math.abs(raw.b - after.b) <= 4;
+    expect(storedMatchesDisplay).toBe(false);
+
+    await undo(page);
+    const restored = await readCompositedAtDoc(page, 80, 80);
+    expect(Math.abs(restored.r - before.r)).toBeLessThanOrEqual(2);
+    expect(Math.abs(restored.g - before.g)).toBeLessThanOrEqual(2);
+  });
+
+  test('leaving Lab decodes back to sRGB rather than leaving encoded pixels', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 150, 150, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    await drawRect(page, 30, 30, 70, 70, { r: 40, g: 160, b: 210 });
+    const before = await readCompositedAtDoc(page, 60, 60);
+
+    await selectColorMode(page, 'Lab Color');
+    await selectColorMode(page, 'RGB Color');
+    expect(await getColorMode(page)).toBe('rgb');
+
+    const after = await readCompositedAtDoc(page, 60, 60);
+    expect(Math.abs(after.r - before.r)).toBeLessThanOrEqual(6);
+    expect(Math.abs(after.g - before.g)).toBeLessThanOrEqual(6);
+    expect(Math.abs(after.b - before.b)).toBeLessThanOrEqual(6);
+  });
+
+  test('Lab mode shows L/a/b sliders instead of R/G/B', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 120, 120, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    await openColorPanel(page);
+    const rgbLabels = await page.locator('[class*="sliders"] span[class*="label"]').allTextContents();
+    expect(rgbLabels).toContain('R');
+
+    await selectColorMode(page, 'Lab Color');
+    await openColorPanel(page);
+
+    const sliderLabels = await page.locator('[class*="sliders"] span[class*="label"]').allTextContents();
+    expect(sliderLabels).toContain('L');
+    expect(sliderLabels).toContain('a');
+    expect(sliderLabels).toContain('b');
+    expect(sliderLabels).not.toContain('R');
+    expect(sliderLabels).not.toContain('G');
   });
 });

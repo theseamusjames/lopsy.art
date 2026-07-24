@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeConvertColorMode, layersNeedingPixelBake } from './convert-color-mode';
+import { computeConvertColorMode, layersWithPixels } from './convert-color-mode';
 import type { DocumentState, Layer, TextLayer, GroupLayer } from '../../../types';
 import { createRasterLayer, createGroupLayer, createTextLayer } from '../../../layers/layer-model';
 
@@ -83,15 +83,16 @@ describe('computeConvertColorMode', () => {
   });
 });
 
-describe('layersNeedingPixelBake', () => {
+describe('layersWithPixels', () => {
   it('lists every pixel-backed layer but not groups', () => {
     const raster = createRasterLayer({ name: 'L', width: 10, height: 10 });
     const group = createGroupLayer({ name: 'G', children: [raster.id], adjustments: [] });
-    expect(layersNeedingPixelBake(makeDoc([raster, group]), 'grayscale')).toEqual([raster.id]);
+    expect(layersWithPixels(makeDoc([raster, group]))).toEqual([raster.id]);
   });
 
-  it('bakes nothing when returning to RGB — the pixels cannot be un-flattened', () => {
+  it('includes text layers, which own a rendered texture too', () => {
     const raster = createRasterLayer({ name: 'L', width: 10, height: 10 });
-    expect(layersNeedingPixelBake(makeDoc([raster]), 'rgb')).toEqual([]);
+    const text = createTextLayer({ name: 'T', text: 'hi' });
+    expect(layersWithPixels(makeDoc([raster, text]))).toEqual([raster.id, text.id]);
   });
 });

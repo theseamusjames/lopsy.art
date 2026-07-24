@@ -1,5 +1,6 @@
 import type { Color } from '../types/color';
 import type { DocumentColorMode } from '../types/color-mode';
+import { labToEncodedBytes, rgbToLab } from './color-spaces';
 
 const MODE_LABELS: Record<DocumentColorMode, string> = {
   rgb: 'RGB',
@@ -49,8 +50,10 @@ export function snapToPalette(color: Color, palette: readonly Color[]): Color {
 }
 
 /**
- * Snap a color to the value space of the document's color mode before it is
- * handed to the engine at a paint entry point.
+ * Constrain a color to what the document's mode can represent, as an sRGB
+ * value suitable for storing and displaying (swatches, the picker, layer
+ * descriptors). Lab and CMYK are stored as sRGB and only differ in the units
+ * the picker exposes, so they pass through unchanged.
  */
 export function convertColorToDocMode(
   color: Color,
@@ -59,5 +62,18 @@ export function convertColorToDocMode(
 ): Color {
   if (mode === 'grayscale') return toGrayscaleColor(color);
   if (mode === 'indexed' && palette && palette.length > 0) return snapToPalette(color, palette);
+  return color;
+}
+
+/**
+ * Re-express a display color in whatever a layer texture actually holds for
+ * this mode. Native modes store encoded values, so a brush dab must write the
+ * encoding rather than sRGB; every other mode's texture is already sRGB.
+ */
+export function encodeColorForEngine(color: Color, mode: DocumentColorMode): Color {
+  if (mode === 'lab') {
+    const { r, g, b } = labToEncodedBytes(rgbToLab(color));
+    return { r, g, b, a: color.a };
+  }
   return color;
 }

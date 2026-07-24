@@ -6,7 +6,7 @@
 
 use wasm_bindgen::prelude::*;
 
-use lopsy_core::quantize;
+use lopsy_core::{lab, quantize};
 
 use crate::{compositor, filter_gpu, layer_manager};
 use crate::Engine;
@@ -41,6 +41,45 @@ pub fn convert_layer_to_grayscale(engine: &mut Engine, layer_id: &str) {
             }
         },
     );
+}
+
+/// Read a layer's texture, transform it on the CPU, and upload it back.
+///
+/// Lab and CMYK conversions are matrix + transcendental math per pixel with no
+/// shared shader path, so they run in Rust rather than as a GPU pass. This is
+/// a one-time cost per mode change, not a per-frame one.
+fn transform_layer_pixels(
+    engine: &mut Engine,
+    layer_id: &str,
+    transform: impl Fn(&mut [u8]),
+) -> Result<(), JsError> {
+    let (width, height) = engine
+        .inner
+        .layer_textures
+        .get(layer_id)
+        .and_then(|&tex| engine.inner.texture_pool.get_size(tex))
+        .ok_or_else(|| JsError::new("Layer has no texture"))?;
+    let mut pixels =
+        layer_manager::read_pixels(&engine.inner, layer_id).map_err(|e| JsError::new(&e))?;
+
+    transform(&mut pixels);
+
+    layer_manager::upload_pixels(&mut engine.inner, layer_id, &pixels, width, height, 0, 0)
+        .map_err(|e| JsError::new(&e))?;
+    engine.inner.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
+/// Encode a layer's sRGB pixels as CIELAB for native Lab compositing.
+#[wasm_bindgen(js_name = "convertLayerToLab")]
+pub fn convert_layer_to_lab(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
+    transform_layer_pixels(engine, layer_id, lab::srgb_pixels_to_lab)
+}
+
+/// Decode a layer's CIELAB pixels back to sRGB when leaving Lab mode.
+#[wasm_bindgen(js_name = "convertLayerFromLab")]
+pub fn convert_layer_from_lab(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
+    transform_layer_pixels(engine, layer_id, lab::lab_pixels_to_srgb)
 }
 
 /// Build an indexed palette from the flattened document.

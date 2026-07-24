@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowUpDown } from 'lucide-react';
 import { ColorSwatch } from '../../components/ColorSwatch/ColorSwatch';
 import { ColorPicker } from '../../components/ColorPicker/ColorPicker';
@@ -8,6 +8,7 @@ import { rgbToHex6, hexToRgb } from '../../utils/color';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { useEditorStore } from '../../app/editor-store';
 import { convertColorToDocMode } from '../../utils/color-mode';
+import { rgbToLab, labToRgb, rgbToCmyk, cmykToRgb } from '../../utils/color-spaces';
 import type { Color } from '../../types';
 import styles from './ColorPanel.module.css';
 
@@ -34,8 +35,14 @@ export function ColorPanel() {
 
   const isGrayscale = colorMode === 'grayscale';
   const isIndexed = colorMode === 'indexed';
+  const isLab = colorMode === 'lab';
+  const isCmyk = colorMode === 'cmyk';
   const activeColor = editingBg ? backgroundColor : foregroundColor;
   const setActiveColor = editingBg ? onBackgroundChange : onForegroundChange;
+  // Lab and CMYK documents store sRGB but edit in their own units, so the
+  // sliders derive from the active color on every render.
+  const lab = useMemo(() => rgbToLab(activeColor), [activeColor]);
+  const cmyk = useMemo(() => rgbToCmyk(activeColor), [activeColor]);
   // In grayscale documents the picker can only express neutral values, so
   // clamp every path that writes a color (hex, sliders, recent swatches).
   const onActiveChange = useCallback(
@@ -160,7 +167,7 @@ export function ColorPanel() {
         />
       </div>
       <div className={styles.sliders}>
-        {isGrayscale ? (
+        {isGrayscale && (
           <Slider
             label="K"
             value={activeColor.r}
@@ -168,7 +175,30 @@ export function ColorPanel() {
             max={255}
             onChange={(v) => onActiveChange({ r: v, g: v, b: v, a: activeColor.a })}
           />
-        ) : (
+        )}
+        {isLab && (
+          <>
+            <Slider label="L" value={Math.round(lab.l)} min={0} max={100}
+              onChange={(v) => onActiveChange(labToRgb({ ...lab, l: v }, activeColor.a))} showValue />
+            <Slider label="a" value={Math.round(lab.a)} min={-128} max={127}
+              onChange={(v) => onActiveChange(labToRgb({ ...lab, a: v }, activeColor.a))} showValue />
+            <Slider label="b" value={Math.round(lab.b)} min={-128} max={127}
+              onChange={(v) => onActiveChange(labToRgb({ ...lab, b: v }, activeColor.a))} showValue />
+          </>
+        )}
+        {isCmyk && (
+          <>
+            <Slider label="C" value={Math.round(cmyk.c)} min={0} max={100}
+              onChange={(v) => onActiveChange(cmykToRgb({ ...cmyk, c: v }, activeColor.a))} showValue />
+            <Slider label="M" value={Math.round(cmyk.m)} min={0} max={100}
+              onChange={(v) => onActiveChange(cmykToRgb({ ...cmyk, m: v }, activeColor.a))} showValue />
+            <Slider label="Y" value={Math.round(cmyk.y)} min={0} max={100}
+              onChange={(v) => onActiveChange(cmykToRgb({ ...cmyk, y: v }, activeColor.a))} showValue />
+            <Slider label="K" value={Math.round(cmyk.k)} min={0} max={100}
+              onChange={(v) => onActiveChange(cmykToRgb({ ...cmyk, k: v }, activeColor.a))} showValue />
+          </>
+        )}
+        {!isGrayscale && !isLab && !isCmyk && (
           <>
             <Slider
               label="R"
