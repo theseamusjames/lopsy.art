@@ -2,12 +2,24 @@ import { test, expect } from './fixtures';
 import { createDocument, getEditorState, waitForStore } from './helpers';
 import { getTextEditing, selectTextTool, typeTextAt } from './text-edit-helpers';
 
-/** Dispatch a native paste event carrying plain text (headless clipboard is unreliable). */
+/**
+ * Dispatch a native paste event carrying plain text (headless clipboard is
+ * unreliable). Firefox's ClipboardEvent constructor ignores the `clipboardData`
+ * option and hands the listener an empty DataTransfer, so we attach our own
+ * clipboardData with defineProperty — that delivers the payload in every browser.
+ */
 async function pasteText(page: import('./fixtures').Page, text: string): Promise<void> {
   await page.evaluate((t) => {
-    const dt = new DataTransfer();
-    dt.setData('text/plain', t);
-    const evt = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+    const evt = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(evt, 'clipboardData', {
+      configurable: true,
+      value: {
+        getData: (type: string) => (type === 'text/plain' ? t : ''),
+        files: [] as unknown as FileList,
+        items: [] as unknown as DataTransferItemList,
+        types: ['text/plain'],
+      },
+    });
     window.dispatchEvent(evt);
   }, text);
   await page.waitForTimeout(80);
