@@ -256,6 +256,15 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
     useUIStore.getState().clearGuides();
+
+    // Match convertColorMode: the swatches must sit in the new document's
+    // value space, or a fresh Grayscale doc opens showing a saturated color.
+    if (colorMode && colorMode !== 'rgb') {
+      const ts = useToolSettingsStore.getState();
+      ts.setForegroundColor(convertColorToDocMode(ts.foregroundColor, colorMode));
+      ts.setBackgroundColor(convertColorToDocMode(ts.backgroundColor, colorMode));
+    }
+
     get().fitToView();
   },
 

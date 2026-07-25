@@ -46,3 +46,61 @@ describe('computeCreateDocument', () => {
     expect(result.selection).toEqual({ active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 });
   });
 });
+
+describe('computeCreateDocument — non-RGB modes', () => {
+  /** First pixel of the background layer. */
+  function firstPixel(result: ReturnType<typeof computeCreateDocument>): number[] {
+    const layerId = result.document!.layers[0]!.id;
+    const data = result.layerPixelData!.get(layerId)!.data;
+    return [data[0]!, data[1]!, data[2]!, data[3]!];
+  }
+
+  it('writes a white canvas as neutral bytes in grayscale', () => {
+    expect(firstPixel(computeCreateDocument(2, 2, false, 'grayscale'))).toEqual([255, 255, 255, 255]);
+  });
+
+  it('encodes a white canvas as Lab L=100 with neutral chroma', () => {
+    // Left as literal white, the a/b bytes would read as maximum chroma and
+    // the canvas would open a saturated orange-red.
+    expect(firstPixel(computeCreateDocument(2, 2, false, 'lab'))).toEqual([255, 128, 128, 255]);
+  });
+
+  it('keeps transparent Lab pixels on the neutral axis', () => {
+    expect(firstPixel(computeCreateDocument(2, 2, true, 'lab'))).toEqual([0, 128, 128, 0]);
+  });
+
+  it('encodes a white canvas as zero ink in CMYK', () => {
+    // Literal white would be 100% of every ink — a solid black canvas.
+    expect(firstPixel(computeCreateDocument(2, 2, false, 'cmyk'))).toEqual([0, 0, 0, 0]);
+  });
+
+  it('treats a transparent CMYK background as white paper, not full black ink', () => {
+    // The alpha slot carries K, so encoding transparency would mean K=100%.
+    expect(firstPixel(computeCreateDocument(2, 2, true, 'cmyk'))).toEqual([0, 0, 0, 0]);
+  });
+
+  it('creates a single flat surface for modes that cannot hold layers', () => {
+    for (const mode of ['cmyk', 'indexed'] as const) {
+      const layers = computeCreateDocument(2, 2, false, mode).document!.layers;
+      // Background + root group only — no second draw layer.
+      expect(layers.filter((l) => l.type !== 'group')).toHaveLength(1);
+    }
+  });
+
+  it('still gives layered modes a draw layer above the background', () => {
+    for (const mode of ['rgb', 'grayscale', 'lab'] as const) {
+      const layers = computeCreateDocument(2, 2, false, mode).document!.layers;
+      expect(layers.filter((l) => l.type !== 'group')).toHaveLength(2);
+    }
+  });
+
+  it('omits chroma adjustments a non-RGB document is not allowed to have', () => {
+    for (const mode of ['grayscale', 'lab', 'cmyk'] as const) {
+      const doc = computeCreateDocument(2, 2, false, mode).document!;
+      const root = doc.layers.find((l) => l.type === 'group');
+      expect(root?.type).toBe('group');
+      const types = root?.type === 'group' ? root.adjustments.map((n) => n.type) : [];
+      expect(types).not.toContain('hue-saturation');
+    }
+  });
+});

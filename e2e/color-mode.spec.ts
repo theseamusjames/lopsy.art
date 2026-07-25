@@ -16,6 +16,7 @@ import {
   openGroupEffectsPanel,
   addLayer,
   openColorPanel,
+  expectPointerReachable,
 } from './helpers';
 
 interface PixelSnap {
@@ -64,14 +65,28 @@ async function readCompositedAtDoc(
 
 async function openImageModeSubmenu(page: Page): Promise<void> {
   await page.click('nav button:has-text("Image")');
-  await page.waitForSelector('[role="menu"]', { timeout: 5_000 });
+  await expect(page.locator('[role="menu"][aria-label="Image"]')).toBeVisible();
   await page.hover('[role="menuitem"]:has-text("Mode")');
-  await page.waitForSelector('[role="menuitem"]:has-text("RGB Color")', { timeout: 5_000 });
+
+  // The flyout must be reachable, not merely mounted — it previously rendered
+  // outside the dropdown's scroll box, invisible to a user but clickable by
+  // Playwright, which scrolls the clipper before every action.
+  const submenu = page.locator('[role="menu"][aria-label="Mode"]');
+  await expectPointerReachable(submenu);
+  await expectPointerReachable(submenu.locator('[role="menuitem"]:has-text("RGB Color")'));
 }
 
 async function selectColorMode(page: Page, label: string): Promise<void> {
   await openImageModeSubmenu(page);
-  await page.click(`[role="menuitem"]:has-text("${label}")`);
+  const item = page.locator(`[role="menu"][aria-label="Mode"] [role="menuitem"]:has-text("${label}")`);
+  await expectPointerReachable(item);
+  // Raw mouse rather than locator.click(): the latter would scroll a clipping
+  // ancestor into place and hide exactly the regression this guards.
+  const box = await item.boundingBox();
+  if (!box) throw new Error(`Mode item "${label}" has no box`);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.up();
 }
 
 /** Drive Image > Mode > Indexed Color... through its conversion dialog. */
@@ -482,5 +497,33 @@ test.describe('Document color mode', () => {
     const labels = await page.locator('[class*="sliders"] span[class*="label"]').allTextContents();
     expect(labels).toEqual(expect.arrayContaining(['C', 'M', 'Y', 'K']));
     expect(labels).not.toContain('R');
+  });
+
+  test('New Document creates a usable canvas in each offered mode', async ({ page }) => {
+    // Directly-created non-RGB documents must be written already encoded: the
+    // canvas is not mounted yet at creation time, so there is no engine to bake
+    // through. Left as literal white, CMYK would open solid black and Lab a
+    // saturated orange.
+    for (const [label, mode] of [['Lab Color', 'lab'], ['CMYK Color', 'cmyk'], ['Grayscale', 'grayscale']] as const) {
+      await page.goto('/');
+      await waitForStore(page);
+      await page.waitForSelector('h2:has-text("New Document")', { timeout: 15_000 });
+
+      await page.locator('select').filter({ hasText: 'RGB Color' }).selectOption(mode);
+      await page.locator('input[type="number"]').first().fill('200');
+      await page.locator('input[type="number"]').nth(1).fill('200');
+      await page.locator('button:has-text("Create")').click();
+
+      await page.waitForSelector('[data-testid="canvas-container"]', { timeout: 15_000 });
+      await page.waitForTimeout(300);
+
+      expect(await getColorMode(page), `${label} mode`).toBe(mode);
+
+      // A blank white canvas must render white, whatever the storage encoding.
+      const px = await readCompositedAtDoc(page, 100, 100);
+      expect(px.r, `${label} canvas red`).toBeGreaterThan(240);
+      expect(px.g, `${label} canvas green`).toBeGreaterThan(240);
+      expect(px.b, `${label} canvas blue`).toBeGreaterThan(240);
+    }
   });
 });

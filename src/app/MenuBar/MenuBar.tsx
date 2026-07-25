@@ -51,6 +51,7 @@ import styles from './MenuBar.module.css';
 export function MenuBar() {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const [openSubmenu, setOpenSubmenu] = useState<number | null>(null);
+  const [submenuPos, setSubmenuPos] = useState({ x: 0, y: 0 });
   const [activeDialog, setActiveDialog] = useState<FilterDialogId | null>(null);
   const [imageDialog, setImageDialog] = useState<ImageDialogId | null>(null);
   const [helpDialog, setHelpDialog] = useState<HelpDialogId | null>(null);
@@ -108,6 +109,16 @@ export function MenuBar() {
     },
     [openMenu],
   );
+
+  // Dropdowns scroll (the Filter menu is far taller than a short viewport),
+  // and a scroll container clips absolutely-positioned descendants at its
+  // padding box. Position the flyout against the viewport instead, measuring
+  // the parent row so it still lines up with the item that opened it.
+  const handleSubmenuEnter = useCallback((index: number, parent: HTMLElement) => {
+    const rect = parent.getBoundingClientRect();
+    setSubmenuPos({ x: rect.right, y: rect.top });
+    setOpenSubmenu(index);
+  }, []);
 
   const handleItemClick = useCallback((item: MenuItem) => {
     if (item.disabled || !item.action) return;
@@ -300,7 +311,7 @@ export function MenuBar() {
                     <div
                       key={j}
                       className={styles.submenuParent}
-                      onMouseEnter={() => setOpenSubmenu(j)}
+                      onMouseEnter={(e) => handleSubmenuEnter(j, e.currentTarget)}
                       onMouseLeave={() => setOpenSubmenu(null)}
                     >
                       <button
@@ -315,7 +326,12 @@ export function MenuBar() {
                         <span className={styles.submenuArrow} aria-hidden="true">{'\u203a'}</span>
                       </button>
                       {openSubmenu === j && (
-                        <div className={styles.submenu} role="menu" aria-label={item.label}>
+                        <div
+                          className={styles.submenu}
+                          role="menu"
+                          aria-label={item.label}
+                          style={{ '--submenu-x': `${submenuPos.x}px`, '--submenu-y': `${submenuPos.y}px` } as React.CSSProperties}
+                        >
                           {item.submenu.map((sub, k) => (
                             <button
                               key={k}

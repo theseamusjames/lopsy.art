@@ -305,6 +305,7 @@ them instead.
 | `addLayer(page)` | Clicks `[aria-label="Add Layer"]`. |
 | `setActiveLayer(page, id)` | Clicks `[data-layer-id="${id}"]`. |
 | `undo(page)` / `redo(page)` | Sends `Control+z` / `Control+Shift+z`. |
+| `expectPointerReachable(locator)` | Asserts an element is genuinely reachable by a mouse, not just mounted. Use for flyouts/popovers/tooltips — see the pitfall below. |
 
 ### Useful selectors
 
@@ -363,6 +364,26 @@ texture. Consequences:
 in one `page.evaluate` call and call `updateLayerPixelData` exactly
 once. See `paintThreeBlocks` in `pixelate-filter.spec.ts` for the
 canonical pattern.
+
+### 1b. `toBeVisible()` does not mean a user can see it
+
+Playwright's "visible" is a non-empty bounding box plus `visibility`/`display`
+— it ignores clipping by an ancestor's `overflow`. Worse, every action
+(`click`, `hover`) first runs `scrollIntoViewIfNeeded`, which scrolls the
+clipping ancestor and *manufactures* reachability no real mouse has.
+
+That combination shipped a broken Image > Mode submenu with 15 green tests:
+the flyout rendered at `left: 100%` inside a dropdown that had
+`overflow-y: auto` (which makes `overflow-x` compute to `auto` too), so it was
+clipped entirely out of view — yet `waitForSelector` passed and `page.click`
+scrolled it into reach.
+
+**Fix:** for anything positioned outside its parent, call
+`expectPointerReachable(locator)` *before* any action touches it. It combines
+`toBeInViewport({ ratio: 1 })` (which honours ancestor clip rects and does not
+scroll) with an `elementFromPoint` hit test at the element's own centre and
+corners. Then drive the click with `page.mouse` rather than `locator.click()`,
+so the test cannot scroll its way out of the bug.
 
 ### 2. Brush strokes live in a deferred GPU texture
 

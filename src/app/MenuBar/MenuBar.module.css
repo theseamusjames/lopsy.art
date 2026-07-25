@@ -118,10 +118,13 @@
   color: white;
 }
 
+/* Fixed rather than absolute: the parent dropdown scrolls, and a scroll
+   container clips absolutely-positioned descendants at its padding box.
+   Coordinates are measured from the parent row on hover. */
 .submenu {
-  position: absolute;
-  top: calc(var(--space-1) * -1);
-  left: 100%;
+  position: fixed;
+  top: var(--submenu-y);
+  left: var(--submenu-x);
   min-width: 180px;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
