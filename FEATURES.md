@@ -413,6 +413,15 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 
 ## Filters (Destructive, GPU-Accelerated)
 
+### Filter Dialog (shared)
+
+Most filters open the same generic **Filter Dialog** — a 380 px floating modal built from a per-filter parameter list. Numeric params render as sliders; a param with a small fixed value set renders as an inline **segmented toggle** instead (e.g. Add Noise's Mode and Distribution, Emboss's Type). Params flagged doc-scaled raise their slider ceiling to `1.5 × longest-document-side` (capped 5000 px). Even a zero-parameter filter (Find Edges) opens the dialog — just the Preview toggle and Apply / Cancel. The same dialog machinery also backs the Select menu's **Grow / Shrink / Feather** commands. Pattern Fill and Color LUT are the exceptions: each has its own dedicated dialog (pattern-thumbnail grid, LUT preset picker + `.cube` import).
+
+- **Preview** checkbox (off by default): enabling it renders the filter live on the canvas *and* turns the modal's dark backdrop fully transparent and click-through, so the whole image stays visible while you tune — only the dialog itself remains interactive. Slider changes are debounced ~150 ms before the preview re-renders. Confirming with Preview on commits the exact previewed pixels.
+- **Regenerate** button (randomized filters only) — see the Regenerate note under Render.
+- **Enter** applies the filter; **Escape** cancels. Cancelling (or closing while a preview is live) discards the preview and restores the layer.
+- **Draggable**: the title-bar header (cursor: grab) drags the dialog anywhere on screen, so it can be moved clear of the region being previewed.
+
 ### Blur
 - **Gaussian Blur**: radius 1 - 400 px
 - **Box Blur**: radius 1 - 100 px (auto-scales with document size)
@@ -433,7 +442,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Threshold**: level 0 - 255
 
 ### Noise
-- **Add Noise**: amount 1 - 100 (default 25), Mode: Color / Mono (monochromatic)
+- **Add Noise**: amount 1 - 100 (default 25), Mode: Color / Mono (monochromatic), Distribution: Uniform / Gaussian (Uniform is the classic evenly-spread noise; Gaussian clusters values near zero for a finer, film/sensor-grain look)
 
 Add Noise runs through the standard generic filter dialog with live preview and the **Regenerate** button (see the Regenerate note under Render) — each regenerate draws a fresh random seed so users can spin through noise patterns before committing. (The former standalone "Fill with Noise" filter was just Add Noise at maximum amount and has been removed.)
 
