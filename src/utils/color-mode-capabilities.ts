@@ -43,7 +43,7 @@ const RGB_CAPABILITIES: ColorModeCapabilities = {
   hasHslBlendModes: true,
 };
 
-// Grayscale and Lab keep the layer stack and gradients but drop color-space
+// Grayscale, Lab and CMYK keep the layer stack and gradients but drop color-space
 // controls that are meaningless without independent chroma channels.
 const MONOCHROMATIC_CAPABILITIES: ColorModeCapabilities = {
   hasColorAdjustments: false,
@@ -52,21 +52,6 @@ const MONOCHROMATIC_CAPABILITIES: ColorModeCapabilities = {
   hasLevelChannels: false,
   hasLayers: true,
   canAddLayers: true,
-  hasGradients: true,
-  hasAntiAliasing: true,
-  hasHslBlendModes: false,
-};
-
-// CMYK spends the alpha channel on black ink, leaving nothing to composite
-// with, so an ink document is a single flat surface. Layers in CMYK need a
-// second texture per layer to carry alpha — see the color mode docs.
-const CMYK_CAPABILITIES: ColorModeCapabilities = {
-  hasColorAdjustments: false,
-  hasSaturation: false,
-  hasCurveChannels: false,
-  hasLevelChannels: false,
-  hasLayers: false,
-  canAddLayers: false,
   hasGradients: true,
   hasAntiAliasing: true,
   hasHslBlendModes: false,
@@ -90,7 +75,7 @@ const CAPABILITIES: Record<DocumentColorMode, ColorModeCapabilities> = {
   rgb: RGB_CAPABILITIES,
   grayscale: MONOCHROMATIC_CAPABILITIES,
   lab: MONOCHROMATIC_CAPABILITIES,
-  cmyk: CMYK_CAPABILITIES,
+  cmyk: MONOCHROMATIC_CAPABILITIES,
   indexed: INDEXED_CAPABILITIES,
 };
 

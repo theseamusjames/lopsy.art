@@ -82,38 +82,20 @@ pub fn convert_layer_from_lab(engine: &mut Engine, layer_id: &str) -> Result<(),
     transform_layer_pixels(engine, layer_id, lab::lab_pixels_to_srgb)
 }
 
-/// Encode a layer's sRGB pixels as CMYK ink channels (R=C, G=M, B=Y, A=K).
+/// Clamp a layer to the colors the CMYK ink model can reproduce.
 ///
-/// CMYK documents are flattened and opaque, so the alpha channel is free to
-/// carry black ink. Any partially transparent source pixel is composited onto
-/// white paper first, since ink has no notion of transparency.
-#[wasm_bindgen(js_name = "convertLayerToCmyk")]
-pub fn convert_layer_to_cmyk(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
-    transform_layer_pixels(engine, layer_id, |pixels| {
-        for px in pixels.chunks_exact_mut(4) {
-            let a = px[3] as u32;
-            let over_white = |v: u8| (((v as u32 * a) + 255 * (255 - a)) / 255) as u8;
-            let (c, m, y, k) = cmyk::srgb_to_cmyk(over_white(px[0]), over_white(px[1]), over_white(px[2]));
-            px[0] = c;
-            px[1] = m;
-            px[2] = y;
-            px[3] = k;
-        }
-    })
-}
-
-/// Decode a layer's CMYK ink channels back to opaque sRGB.
-#[wasm_bindgen(js_name = "convertLayerFromCmyk")]
-pub fn convert_layer_from_cmyk(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
-    transform_layer_pixels(engine, layer_id, |pixels| {
-        for px in pixels.chunks_exact_mut(4) {
-            let (r, g, b) = cmyk::cmyk_to_srgb(px[0], px[1], px[2], px[3]);
-            px[0] = r;
-            px[1] = g;
-            px[2] = b;
-            px[3] = 255;
-        }
-    })
+/// CMYK documents are backed by sRGB, not ink channels: the paint pipeline owns
+/// the alpha channel (dabs write coverage there and premultiply by it), so
+/// there is no fourth channel free for black ink. Storing K in alpha made every
+/// stroke render as 100% K — solid black.
+///
+/// With the current non-ICC ink model this bake is a no-op in practice: the
+/// sRGB -> CMYK -> sRGB round trip is exactly lossless across the whole cube,
+/// so there is no gamut to clip. It is the hook a real profile-based transform
+/// (with ink limits, which genuinely do clip) will replace.
+#[wasm_bindgen(js_name = "bakeCmykGamut")]
+pub fn bake_cmyk_gamut(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
+    transform_layer_pixels(engine, layer_id, cmyk::bake_cmyk_gamut)
 }
 
 /// Build an indexed palette from the flattened document.

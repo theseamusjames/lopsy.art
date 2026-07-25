@@ -20,8 +20,8 @@ describe('getColorModeCapabilities', () => {
     }
   });
 
-  it('keeps the layer stack in grayscale and lab', () => {
-    for (const mode of ['grayscale', 'lab'] as DocumentColorMode[]) {
+  it('keeps the layer stack in grayscale, lab and cmyk', () => {
+    for (const mode of ['grayscale', 'lab', 'cmyk'] as DocumentColorMode[]) {
       const caps = getColorModeCapabilities(mode);
       expect(caps.hasLayers).toBe(true);
       expect(caps.canAddLayers).toBe(true);
@@ -29,14 +29,6 @@ describe('getColorModeCapabilities', () => {
     }
   });
 
-  it('makes CMYK a flat surface — ink spends the alpha channel on black', () => {
-    const caps = getColorModeCapabilities('cmyk');
-    expect(caps.hasLayers).toBe(false);
-    expect(caps.canAddLayers).toBe(false);
-    // Painting still works; there is just nowhere to composite a second layer.
-    expect(caps.hasGradients).toBe(true);
-    expect(caps.hasAntiAliasing).toBe(true);
-  });
 
   it('locks indexed mode down to a flat palette-constrained surface', () => {
     const caps = getColorModeCapabilities('indexed');

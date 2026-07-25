@@ -287,9 +287,8 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
                 <input
                   type="radio"
                   name="bg"
-                  checked={background === 'transparent' && colorMode !== 'cmyk'}
+                  checked={background === 'transparent'}
                   onChange={() => setBackground('transparent')}
-                  disabled={colorMode === 'cmyk'}
                 />
                 <span className={`${styles.bgSwatch} ${styles.bgSwatchTransparent}`} />
                 Transparent

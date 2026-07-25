@@ -14,18 +14,13 @@ const TRANSPARENT = { r: 0, g: 0, b: 0, a: 0 } as const;
  *
  * A new document is created before the canvas mounts, so there is no engine to
  * bake through — the initial pixels have to be written already encoded. Left as
- * literal white, a CMYK document would read as full ink (solid black) and a Lab
- * one as maximum chroma.
+ * literal white, a Lab document would read as maximum chroma rather than white.
  */
 function initialFillBytes(
   colorMode: DocumentColorMode,
   transparentBg: boolean,
 ): [number, number, number, number] {
-  // CMYK spends the alpha channel on black ink, so it has no transparency to
-  // offer — an empty ink document is white paper. Encoding transparent black
-  // here would instead read as 100% K, i.e. a solid black canvas.
-  const wantsTransparent = transparentBg && colorMode !== 'cmyk';
-  const base = wantsTransparent ? TRANSPARENT : WHITE;
+  const base = transparentBg ? TRANSPARENT : WHITE;
   const encoded = encodeColorForEngine(convertColorToDocMode(base, colorMode), colorMode);
   return [encoded.r, encoded.g, encoded.b, Math.round(encoded.a * 255)];
 }

@@ -69,26 +69,18 @@ describe('computeCreateDocument — non-RGB modes', () => {
     expect(firstPixel(computeCreateDocument(2, 2, true, 'lab'))).toEqual([0, 128, 128, 0]);
   });
 
-  it('encodes a white canvas as zero ink in CMYK', () => {
-    // Literal white would be 100% of every ink — a solid black canvas.
-    expect(firstPixel(computeCreateDocument(2, 2, false, 'cmyk'))).toEqual([0, 0, 0, 0]);
-  });
-
-  it('treats a transparent CMYK background as white paper, not full black ink', () => {
-    // The alpha slot carries K, so encoding transparency would mean K=100%.
-    expect(firstPixel(computeCreateDocument(2, 2, true, 'cmyk'))).toEqual([0, 0, 0, 0]);
+  it('leaves a CMYK canvas as plain white — the mode is sRGB-backed', () => {
+    expect(firstPixel(computeCreateDocument(2, 2, false, 'cmyk'))).toEqual([255, 255, 255, 255]);
   });
 
   it('creates a single flat surface for modes that cannot hold layers', () => {
-    for (const mode of ['cmyk', 'indexed'] as const) {
-      const layers = computeCreateDocument(2, 2, false, mode).document!.layers;
-      // Background + root group only — no second draw layer.
-      expect(layers.filter((l) => l.type !== 'group')).toHaveLength(1);
-    }
+    const layers = computeCreateDocument(2, 2, false, 'indexed').document!.layers;
+    // Background + root group only — no second draw layer.
+    expect(layers.filter((l) => l.type !== 'group')).toHaveLength(1);
   });
 
   it('still gives layered modes a draw layer above the background', () => {
-    for (const mode of ['rgb', 'grayscale', 'lab'] as const) {
+    for (const mode of ['rgb', 'grayscale', 'lab', 'cmyk'] as const) {
       const layers = computeCreateDocument(2, 2, false, mode).document!.layers;
       expect(layers.filter((l) => l.type !== 'group')).toHaveLength(2);
     }

@@ -159,14 +159,14 @@ export function syncBackgroundColor(engine: Engine, r: number, g: number, b: num
   tracked.bgColor = key;
 }
 
-// Grayscale/Indexed are RGBA-constrained, so they render in RGB mode (0). Only
-// the native Lab (1) and CMYK (2) modes need the engine's display-decode pass.
+// Every mode but Lab is backed by sRGB pixels and renders unchanged (0). Lab
+// alone stores encoded values that need the engine's display-decode pass.
 const ENGINE_COLOR_MODE: Record<DocumentColorMode, number> = {
   rgb: 0,
   grayscale: 0,
   indexed: 0,
   lab: 1,
-  cmyk: 2,
+  cmyk: 0,
 };
 
 export function syncColorMode(engine: Engine, mode: DocumentColorMode): void {

@@ -27,8 +27,6 @@ uniform sampler2D u_maskTex;    // layer mask texture
 uniform int u_hasMask;          // 1 if layer mask is active
 uniform vec2 u_maskSize;        // mask texture size in pixels
 uniform int u_maskOverlay;      // 1 = render mask as blue overlay (edit mode)
-// Document color mode: 0 = RGB-like, 1 = Lab, 2 = CMYK (alpha channel holds K).
-uniform int u_docColorMode;
 // Optional brush texture (modulates stroke alpha during composite)
 uniform sampler2D u_brushTexture;
 uniform int u_hasBrushTexture;
@@ -167,22 +165,6 @@ void main() {
     // Apply color overlay inline — avoids the scratch buffer feedback loop
     if (u_overlayEnabled == 1) {
         src.rgb = mix(src.rgb, u_overlayColor, u_overlayOpacity);
-    }
-
-    // Ink documents use all four channels for ink (R=C, G=M, B=Y, A=K), so
-    // coverage can't come from a channel — it comes from layer opacity and the
-    // mask. Partial coverage lerps ink amounts toward the paper below.
-    if (u_docColorMode == 2) {
-        float coverage = u_opacity;
-        if (u_hasMask == 1) {
-            vec2 inkMaskUV = (docPos - effectiveOffset) / u_maskSize;
-            bool inMask = inkMaskUV.x >= 0.0 && inkMaskUV.x <= 1.0
-                && inkMaskUV.y >= 0.0 && inkMaskUV.y <= 1.0;
-            coverage *= inMask ? texture(u_maskTex, inkMaskUV).r : 0.0;
-        }
-        if (coverage < 0.001) { fragColor = dst; return; }
-        fragColor = mix(dst, src, coverage);
-        return;
     }
 
     // Apply layer mask: multiply source alpha by mask value.
