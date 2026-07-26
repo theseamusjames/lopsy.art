@@ -303,6 +303,7 @@ Paste takes one of two routes depending on where the image came from.
 ### Eyedropper
 - Click (or click-drag) to set the foreground color from the composited pixel under the cursor — samples the on-screen result, not just the active layer.
 - **Sample size**: point, 3×3, and 5×5 area-averaging modes are implemented in the sampling logic, but the live canvas eyedropper currently always samples a single pixel — there is no options-bar control to switch sample size yet.
+- In **Lab** documents the sample is decoded to sRGB *before* averaging, since the Lab transform is non-linear and averaging encoded values would not match what is under the cursor. The picked value lands in the foreground swatch **as sampled** — it is not snapped to the mode there — but painting with it is constrained on the way to the texture, so eyedropping a stray color in a Grayscale or Indexed document still paints a legal one (see Color Modes).
 
 ### Fill (Paint Bucket)
 - **Tolerance**: 0 - 255 (default 32)
@@ -369,6 +370,8 @@ Layer effects can be attached to **group** layers, not just leaf layers. New gro
 ## Image Adjustments (Non-Destructive)
 
 The Adjustments panel is a reorderable, stackable list of adjustment **nodes** attached to a group layer (the root group acts as the document-level adjustment stack when no group is active). Each node has its own enable toggle, expand/collapse state, and per-type controls. The panel is resizable from its bottom-left corner.
+
+The Add menu is filtered by the document's color mode: outside RGB, the chroma-producing types (Hue/Saturation, Color Balance, Channel Mixer, Photo Filter, Gradient Map, Black & White, Saturation) are hidden, and Curves shows only the composite curve instead of its R/G/B tabs. See Color Modes.
 
 Per-node controls (header):
 - **Eye** icon — enable / disable this node without removing it
@@ -501,6 +504,8 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 | HSL | Hue, Saturation, Color, Luminosity |
 | Group-only | Pass Through |
 
+The four **HSL** modes are RGB-only: they decompose RGB into HSL, so every other color mode drops them from the dropdown and coerces any layer already using one to Normal on conversion (see Color Modes).
+
 ### Pass Through (group blend mode)
 
 - Available exclusively on **group** layers. New groups default to **Normal** (isolated) compositing — children pre-composite into a group buffer first, then the group's opacity/effects apply to the combined result, so lowering a group's opacity scales the composited result rather than attenuating each child individually (this diverges from Photoshop, which defaults groups to Pass Through). Pass Through stays as an explicit, user-selectable mode for layouts that genuinely need it.
@@ -533,7 +538,7 @@ Lopsy has **no** Adjustment-layer or Fill-layer type. Adjustments are non-destru
 - **Color tag**: optional swatch (red, orange, yellow, green, blue, purple, gray, or none) shown as a vertical bar on the left edge of the layer row. Set via the layer row's right-click context menu; useful for visually grouping/organizing layers in a deep stack.
 
 ### Layer Operations
-- **New Layer** (`⇧⌘N`, menu-only accelerator — see Single-Key Shortcuts note): appends a blank raster layer above the active one
+- **New Layer** (`⇧⌘N`, menu-only accelerator — see Single-Key Shortcuts note): appends a blank raster layer above the active one. Refused in **Indexed** color mode (the document is a single flat surface) with an info toast pointing at converting back to RGB. The same guard covers **Group Layers** and **Duplicate Layer**, but *not* text layers — clicking with the Text tool in an Indexed document still adds one.
 - **Duplicate Layer** (`⌘J`, menu-only accelerator): clones the active layer in place
 - **Group Layers** (`⌘G`, menu-only accelerator): wraps the currently-selected layers in a new group
 - **Merge Down** (`⌘E`): composites the active layer into the layer below (the only layer-menu accelerator actually wired to a key handler)
@@ -653,6 +658,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the status bar resets the viewport zoom to 100% (1×).
 - **Color swatch selection**: clicking the foreground or background swatch in the Color panel makes it the one the picker, hex field, and RGBA sliders edit; clicking a recent-color swatch applies that color to whichever swatch is currently active. (The old double-click-to-expand behavior went away with panel collapsing.)
 - **Layer name double-click → rename**: double-clicking a layer row's name turns it into an inline text input; Enter commits, Escape cancels.
+- **Menu submenus**: a menu item can carry a nested submenu, marked with a `›` arrow and opened by **hovering** the parent row (Image → Mode is the only one today). The flyout is positioned against the viewport rather than nested inside the dropdown — long menus like Filter set `overflow-y: auto`, which per CSS Overflow 3 forces the horizontal axis to `auto` too and would otherwise clip a `left: 100%` child at the padding box.
 
 ### Notifications & Error Toasts
 Transient messages surface as toasts stacked in a fixed panel at the **top-right** of the window (max width 360px, newest appended at the bottom). The stack is announced to assistive tech via `role="status"` / `aria-live="polite"`.
@@ -839,6 +845,48 @@ Panel edits and options-bar edits share the same apply path (`apply-text-setting
 
 ---
 
+## Color Modes
+
+**Image → Mode** sets a document-level color mode, Photoshop-style: **RGB Color**, **Grayscale**, **Indexed Color…**, **CMYK Color**, **Lab Color**. The current mode carries a checkmark. Only Indexed opens a dialog (it needs a palette size up front); the rest convert on click. Any mode other than RGB also shows its name in the **status bar**, left of the color-space readout.
+
+A single capability table (`getColorModeCapabilities()`) is the source of truth for what each mode permits, so panels, menus, and tools agree instead of each running its own ad-hoc check.
+
+| Mode | Layers | Chroma adjustments | R/G/B curve tabs | HSL blend modes | Color panel shows |
+|------|--------|--------------------|------------------|-----------------|-------------------|
+| RGB | yes | yes | yes | yes | HSV picker + R/G/B/A sliders |
+| Grayscale | yes | no | no | no | value ramp + **K** slider (0 – 255) |
+| Indexed | **no** — single flat surface | no | no | no | the document palette as a swatch grid |
+| CMYK | yes | no | no | no | **C/M/Y/K** sliders (0 – 100 each) |
+| Lab | yes | no | no | no | **L** (0 – 100) + **a** / **b** (−128 – 127) sliders |
+
+The hex field stays available in every mode.
+
+### Converting between modes
+
+A conversion snapshots history *before* it bakes, so the whole thing — including Indexed's flatten — is **one undo step**. In-flight strokes are flushed into their layer textures first, so nothing half-painted survives in the old space. Alongside the pixels:
+
+- **Text and shape colors, and all five effect colors** (stroke, drop shadow, outer glow, inner glow, color overlay) go through the same constraint the pixels do — a grayscale document is not left with a colored drop shadow.
+- **Chroma-producing adjustment nodes are stripped** from group stacks: Hue/Saturation, Color Balance, Channel Mixer, Photo Filter, Gradient Map, Black & White, plus Saturation. Otherwise a Color Balance node would simply reintroduce the color the bake just removed. The same nodes disappear from the Adjustments panel's Add menu.
+- **Hue / Saturation / Color / Luminosity blend modes coerce to Normal** and drop out of the blend-mode dropdown in every mode but RGB — they decompose RGB into HSL, which is meaningless once a texture holds something else.
+- The **foreground and background swatches** are re-expressed in the new mode's value space, so the next stroke matches what the picker shows.
+
+Every paint entry point — brush/pencil/eraser, spray, fill, gradient (per stop), shape (fill and stroke), and text — routes its color through a shared `toDocumentColor()`. The mode's constraint therefore holds even for colors that arrived from a brush preset, the eyedropper, or tool settings saved under a previous mode.
+
+### Per-mode notes
+
+- **Grayscale** — pixels are baked on the GPU to Rec. 709 luma (`0.2126 R + 0.7152 G + 0.0722 B`). The bake covers the **whole layer even under an active selection**: a mode change must not leave part of a layer in the old space. The picker collapses from the HSV square to a black→white value ramp.
+- **Indexed** — flattens the document, then builds a palette of at most **256 colors** via a median-cut quantizer and snaps every pixel to the nearest entry. The dialog collects **Colors** (2 – 256, default 256) and a **Dither (Floyd–Steinberg)** checkbox (off by default), warns up front when more than one layer will be flattened, and takes **Enter** to convert / **Escape** to cancel. Palette building subsamples on a fixed stride above 262,144 pixels so a 4K canvas stays bounded — the snap itself still visits every pixel. The palette is stored on the document, shown in the Color panel as a swatch grid, and persisted in the `.lopsy` manifest. **Adding a layer is refused** while Indexed is active, with an info toast: *"Indexed mode does not support layers. Convert to RGB first."*
+- **Lab** — the only mode whose layer textures hold something other than sRGB. Pixels are stored as encoded CIELAB (L in R, a in G, b in B), and the engine decodes for display (`u_docColorMode == 1` in `final_blit.glsl`), for the export composite, and for the eyedropper — which decodes *before* averaging its sample square, since the transform is non-linear. The panel's L/a/b sliders drive a TypeScript mirror of the Rust math, used for single colors only so the two can't drift on bulk pixel work. Stored 8-bit, matching Photoshop's 8-bit Lab; a/b quantization costs a few sRGB units at saturated gamut corners.
+- **CMYK** — sRGB-backed. The C/M/Y/K sliders are a unit system over sRGB rather than stored ink, and **a CMYK document does not yet render any differently from an RGB one**. The naive ink model is a bijection with sRGB — its round trip is lossless across the whole cube — so there is no gamut to clip; a real difference needs profile-based conversion with ink limits. Native ink storage is blocked on the paint pipeline owning the alpha channel (dabs write coverage there and premultiply by it), leaving no fourth channel free for black.
+
+### Declared but not enforced
+
+The capability table also declares that Indexed has no gradients and no anti-aliasing, and that the non-RGB modes hide the Levels R/G/B channel tabs. Nothing reads those three flags. In practice: the **Gradient tool still works in an Indexed document** (each stop snaps to the palette, but the GPU interpolates freely *between* snapped stops), paint tools still anti-alias, and the Levels editor never had per-channel tabs to hide in the first place. The layer guard has a matching hole — it covers New Layer, Group, and Duplicate, but not the Text tool, so an Indexed document can still gain a second layer.
+
+More generally, the palette snap runs **only at conversion time**. Pixels painted afterwards are constrained just at the *color* level (via `toDocumentColor`), not per-pixel, so anti-aliased edges, gradient interpolation, and soft brushes all put off-palette pixels into an Indexed document as you keep working in it.
+
+---
+
 ## History
 
 - Undo/redo with labeled snapshots (the 50 most recent states are kept — each push keeps the last 49 plus the new one, and the oldest silently falls off)
@@ -858,6 +906,7 @@ Panel edits and options-bar edits share the same apply path (`apply-text-setting
 - **Name**: configurable (default "Untitled")
 - **Dimensions**: width x height
 - **Background**: solid color or transparent
+- **Color mode**: RGB (default), Grayscale, Indexed, Lab, or CMYK — see Color Modes
 - Entirely client-side, no backend
 
 ---
@@ -865,17 +914,17 @@ Panel edits and options-bar edits share the same apply path (`apply-text-setting
 ## File I/O & Export
 
 ### Open / Save
-- **New** (`⌘N`, menu-only accelerator): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
+- **New** (`⌘N`, menu-only accelerator): blank document with width/height/background prompt, plus a **Color Mode** dropdown offering RGB Color / Grayscale / CMYK Color / Lab Color. Indexed is deliberately absent — as in Photoshop it is conversion-only, since a meaningful palette has to be quantized from existing pixels. The initial fill is written already encoded for the chosen mode — a new document is created before the canvas mounts, so there is no engine to bake through, and a literal white buffer would open as maximum chroma in Lab. The default adjustment-node set is filtered to what the mode allows, so a new Grayscale document does not ship with chroma nodes, and the toolbox swatches are normalized into the mode's value space the same way a conversion does. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
 - **Open…** (`⌘O`, menu-only accelerator): open a PNG/JPEG/GIF (first frame)/BMP/WebP/PSD/DNG/RAF/.lopsy from disk. The picker lists every supported extension explicitly rather than `image/*` — mixing the two makes Chrome on macOS collapse the dialog down to a single filter.
 - **Two routing paths, not one.** The File-menu picker routes inline **by extension** (`.lopsy` → project loader, `.psd` → PSD importer, `.dng` / `.raf` → the Rust RAW decoders, anything else → browser `<img>` decode). The pre-document flow — the New Document modal's "Open file" button and drag-and-drop — instead uses the shared `classifyOpenFile` helper, which checks the same four extensions but falls back to the **MIME type** (`image/*`) rather than attempting a decode. The practical difference is at the edges: a file with an image MIME type but an odd extension opens on drop and fails from the menu picker, while an unrecognized file dropped on the canvas is silently ignored (the New Document modal's button surfaces a friendly error instead).
 - **Drag-and-drop is always live**, not just before a document exists — the drop target is the whole app shell as well as the canvas. Dropping an image onto an open document adds it as a layer (see Paste / Drop behavior); dropping a `.psd`, `.dng`, `.raf`, or `.lopsy` **replaces** the open document.
 - **Unsaved-changes guard**: **New**, **Open…**, and **Open Project…** check the document's dirty flag and put up a browser `confirm()` — "You have unsaved changes. Are you sure you want to continue?" — before discarding work. Closing or reloading the tab triggers the browser's own `beforeunload` warning. The drop path performs **no** such check: a `.psd` or `.lopsy` dropped onto a dirty document replaces it immediately.
 - The dirty flag is cleared by **Save Project** and by **PSD import** — and also by any **export**, since the shared download helper marks the document clean. Exporting a PNG therefore silences the unsaved-changes warnings even though nothing was saved to a project file.
-- **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust). Both **RGB** and **CMYK** color modes are accepted at 8-bit and 16-bit depth — CMYK files are converted to RGB on import (naive `(1−C)(1−K)` channel math) for both the per-layer and merged-composite paths. Other color modes (grayscale, indexed, Lab, etc.) are rejected with an unsupported-color-mode error.
-- **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant)
+- **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust). **Grayscale**, **RGB**, and **CMYK** files are accepted at 8-bit and 16-bit depth. Grayscale files carry a single color plane, which is replicated across G and B on import, and the document opens *in* Grayscale mode; CMYK files are converted to RGB (naive `(1−C)(1−K)` channel math) for both the per-layer and merged-composite paths and open as RGB. Remaining color modes (indexed, Lab, duotone, …) are rejected with an unsupported-color-mode error.
+- **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant). A Grayscale document writes header mode 1 with one color channel per layer; **every other mode — including Lab and CMYK — is written as RGB**.
 
 ### Native Project Format (.lopsy)
-- **Save Project** (`⌘S`, menu-only accelerator): writes the full editor state to a `.lopsy` file and triggers a browser download. Round-trips every layer (raster pixels, text, shape, group), masks, blend modes, opacity, position, clip-to-below, layer effects, color tags, group adjustment node stacks, the active layer, the document's name / size / background, and the workspace's stored vector paths (Paths panel) and canvas guides. (Files saved before paths/guides were serialized simply omit those fields and load with an empty path/guide set.)
+- **Save Project** (`⌘S`, menu-only accelerator): writes the full editor state to a `.lopsy` file and triggers a browser download. Round-trips every layer (raster pixels, text, shape, group), masks, blend modes, opacity, position, clip-to-below, layer effects, color tags, group adjustment node stacks, the active layer, the document's name / size / background / **color mode** (plus the **Indexed palette** when there is one), and the workspace's stored vector paths (Paths panel) and canvas guides. (Files saved before paths/guides were serialized simply omit those fields and load with an empty path/guide set; likewise the color mode is an optional manifest field, so projects saved before color modes existed load as RGB.)
 - **Open Project…**: file picker filtered to `.lopsy`. Restores all of the above; pixel data is gzip-compressed inside the file.
 - **Format**: binary container — `LOPSY\0` magic + uint16 version + uint32 manifest-length + UTF-8 JSON manifest + per-layer gzipped RGBA blobs + per-mask raw byte blobs (referenced from the manifest by index). Entirely client-side; no server round-trip.
 
