@@ -392,6 +392,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     if let Some(loc) = shader.location(&engine.gl, "u_seamlessEnabled") { engine.gl.uniform1f(Some(&loc), if engine.seamless_pattern { 1.0 } else { 0.0 }); }
     if let Some(loc) = shader.location(&engine.gl, "u_seamlessDim") { engine.gl.uniform1f(Some(&loc), if engine.seamless_dim { 1.0 } else { 0.0 }); }
     if let Some(loc) = shader.location(&engine.gl, "u_channelMask") { engine.gl.uniform4f(Some(&loc), engine.channel_mask[0], engine.channel_mask[1], engine.channel_mask[2], engine.channel_mask[3]); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
 
     engine.draw_fullscreen_quad();
 
@@ -1405,10 +1406,22 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
         if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, tex_handle, tw, th, stroke, *layer_x, *layer_y); } }
     }
 
-    let pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, doc_w, doc_h)?;
+    let mut pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, doc_w, doc_h)?;
 
     engine.fbo_pool.unbind(&engine.gl);
+    // Native modes composite in their own space; every consumer of this buffer
+    // (PNG/JPEG encode, eyedropper, e2e pixel probes) expects sRGB, so decode
+    // here with the same math final_blit.glsl uses for the screen.
+    decode_native_color_mode(engine.doc_color_mode, &mut pixels);
     Ok(pixels)
+}
+
+/// In-place decode of a composited RGBA8 buffer out of a native color mode.
+/// Mode 0 (RGB, grayscale, indexed) already holds sRGB and is left alone.
+pub fn decode_native_color_mode(doc_color_mode: u32, pixels: &mut [u8]) {
+    if doc_color_mode == 1 {
+        lopsy_core::lab::lab_pixels_to_srgb(pixels);
+    }
 }
 
 /// Composite for export at 16-bit precision — same pipeline as
@@ -1534,7 +1547,24 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
 
     apply_image_adjustments(engine);
 
-    let pixels = engine.texture_pool.read_rgba_u16(&engine.gl, 0, 0, doc_w, doc_h)?;
+    let mut pixels = engine.texture_pool.read_rgba_u16(&engine.gl, 0, 0, doc_w, doc_h)?;
+    // Lab is stored 8-bit-encoded even in a 16-bit texture, so decoding steps
+    // down to bytes and back; the extra precision is in the alpha/geometry, not
+    // the encoded Lab channels.
+    if engine.doc_color_mode == 1 {
+        for px in pixels.chunks_exact_mut(4) {
+            let mut rgba8 = [
+                (px[0] >> 8) as u8,
+                (px[1] >> 8) as u8,
+                (px[2] >> 8) as u8,
+                (px[3] >> 8) as u8,
+            ];
+            lopsy_core::lab::lab_pixels_to_srgb(&mut rgba8);
+            px[0] = u16::from(rgba8[0]) * 257;
+            px[1] = u16::from(rgba8[1]) * 257;
+            px[2] = u16::from(rgba8[2]) * 257;
+        }
+    }
 
     engine.fbo_pool.unbind(&engine.gl);
     Ok(pixels)

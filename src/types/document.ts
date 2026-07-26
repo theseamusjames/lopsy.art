@@ -1,4 +1,5 @@
 import type { Color } from './color';
+import type { DocumentColorMode } from './color-mode';
 import type { Layer } from './layers';
 import type { Rect } from './geometry';
 
@@ -13,6 +14,9 @@ export interface DocumentState {
   /** Full set of selected layer IDs. Always includes activeLayerId when non-null. */
   readonly selectedLayerIds: readonly string[];
   readonly backgroundColor: Color;
+  readonly colorMode: DocumentColorMode;
+  /** Palette for `indexed` mode (≤256 entries). Absent in other modes. */
+  readonly indexedPalette?: readonly Color[];
   readonly rootGroupId?: string | null;
 }
 

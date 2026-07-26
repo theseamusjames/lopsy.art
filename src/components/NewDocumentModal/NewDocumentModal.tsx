@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
+import type { DocumentColorMode } from '../../types';
 import styles from './NewDocumentModal.module.css';
 
 type Unit = 'px' | 'in';
@@ -44,7 +45,12 @@ function toPixels(value: number, unit: Unit, dpi: number): number {
 }
 
 interface NewDocumentModalProps {
-  onCreateDocument: (width: number, height: number, background: BackgroundType) => void;
+  onCreateDocument: (
+    width: number,
+    height: number,
+    background: BackgroundType,
+    colorMode: DocumentColorMode,
+  ) => void;
   onOpenFile: (file: File) => void;
   onPasteClipboard?: (blob: Blob) => void;
   onCancel?: () => void;
@@ -56,6 +62,7 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
   const [unit, setUnit] = useState<Unit>('px');
   const [dpi, setDpi] = useState('72');
   const [background, setBackground] = useState<BackgroundType>('white');
+  const [colorMode, setColorMode] = useState<DocumentColorMode>('rgb');
   const [activePreset, setActivePreset] = useState<number | 'clipboard' | null>(0);
   const [clipboardImage, setClipboardImage] = useState<ClipboardImageInfo | null>(null);
   const tip = useMemo(() => TIPS[Math.floor(Math.random() * TIPS.length)], []);
@@ -132,8 +139,8 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
     const dpiNum = parseInt(dpi, 10) || 72;
     const pxW = Math.max(1, Math.min(16384, toPixels(wNum, unit, dpiNum)));
     const pxH = Math.max(1, Math.min(16384, toPixels(hNum, unit, dpiNum)));
-    onCreateDocument(pxW, pxH, background);
-  }, [width, height, unit, dpi, background, onCreateDocument, activePreset, clipboardImage, onPasteClipboard]);
+    onCreateDocument(pxW, pxH, background, colorMode);
+  }, [width, height, unit, dpi, background, colorMode, onCreateDocument, activePreset, clipboardImage, onPasteClipboard]);
 
   const handleOpenFile = useCallback(() => {
     const input = document.createElement('input');
@@ -247,6 +254,22 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
                 </div>
               </div>
             )}
+
+            <div className={styles.dpiRow}>
+              <div className={styles.field}>
+                <label className={styles.fieldLabel}>Color Mode</label>
+                <select
+                  className={styles.unitSelect}
+                  value={colorMode}
+                  onChange={(e) => setColorMode(e.target.value as DocumentColorMode)}
+                >
+                  <option value="rgb">RGB Color</option>
+                  <option value="grayscale">Grayscale</option>
+                  <option value="cmyk">CMYK Color</option>
+                  <option value="lab">Lab Color</option>
+                </select>
+              </div>
+            </div>
 
             <div className={styles.bgRow}>
               <span className={styles.fieldLabel}>Background</span>

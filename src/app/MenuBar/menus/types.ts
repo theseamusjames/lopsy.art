@@ -5,6 +5,8 @@ export interface MenuItem {
   disabled?: boolean;
   separator?: boolean;
   checked?: boolean;
+  /** Nested items rendered as a hover flyout to the right of this item. */
+  submenu?: MenuItem[];
 }
 
 export interface MenuDef {

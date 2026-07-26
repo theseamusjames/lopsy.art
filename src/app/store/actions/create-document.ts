@@ -1,23 +1,48 @@
-import type { Layer } from '../../../types';
+import type { Layer, DocumentColorMode } from '../../../types';
 import type { SelectionData, ActionResult } from '../types';
 import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
 import { createImageData } from '../../../engine/color-space';
 import { createDefaultAdjustments } from '../../../filters/adjustment-node-utils';
+import { convertColorToDocMode, encodeColorForEngine } from '../../../utils/color-mode';
+import { getColorModeCapabilities, isAdjustmentAllowedInMode } from '../../../utils/color-mode-capabilities';
+
+const WHITE = { r: 255, g: 255, b: 255, a: 1 } as const;
+const TRANSPARENT = { r: 0, g: 0, b: 0, a: 0 } as const;
+
+/**
+ * The bytes a blank canvas needs in this mode's value space.
+ *
+ * A new document is created before the canvas mounts, so there is no engine to
+ * bake through — the initial pixels have to be written already encoded. Left as
+ * literal white, a Lab document would read as maximum chroma rather than white.
+ */
+function initialFillBytes(
+  colorMode: DocumentColorMode,
+  transparentBg: boolean,
+): [number, number, number, number] {
+  const base = transparentBg ? TRANSPARENT : WHITE;
+  const encoded = encodeColorForEngine(convertColorToDocMode(base, colorMode), colorMode);
+  return [encoded.r, encoded.g, encoded.b, Math.round(encoded.a * 255)];
+}
 
 export function computeCreateDocument(
   width: number,
   height: number,
   transparentBg: boolean,
+  colorMode: DocumentColorMode = 'rgb',
 ): ActionResult {
   const bgLayer = createRasterLayer({ name: 'Background', width, height });
   const pixelData = new Map<string, ImageData>();
   const imgData = createImageData(width, height);
-  if (!transparentBg) {
+
+  const [fr, fg, fb, fa] = initialFillBytes(colorMode, transparentBg);
+  // An all-zero buffer is already correct, so skip the fill when nothing differs.
+  if (fr !== 0 || fg !== 0 || fb !== 0 || fa !== 0) {
     for (let i = 0; i < imgData.data.length; i += 4) {
-      imgData.data[i] = 255;
-      imgData.data[i + 1] = 255;
-      imgData.data[i + 2] = 255;
-      imgData.data[i + 3] = 255;
+      imgData.data[i] = fr;
+      imgData.data[i + 1] = fg;
+      imgData.data[i + 2] = fb;
+      imgData.data[i + 3] = fa;
     }
   }
   pixelData.set(bgLayer.id, imgData);
@@ -27,7 +52,9 @@ export function computeCreateDocument(
   const layerOrder = [bgLayer.id];
   let activeLayerId = bgLayer.id;
 
-  if (!transparentBg) {
+  // Flat modes (Indexed, CMYK) are a single surface — converting an existing
+  // document flattens it, so creating one must not start with a second layer.
+  if (!transparentBg && getColorModeCapabilities(colorMode).canAddLayers) {
     const drawLayer = createRasterLayer({ name: 'Layer 1', width, height });
     layers.push(drawLayer);
     layerOrder.push(drawLayer.id);
@@ -35,7 +62,12 @@ export function computeCreateDocument(
     activeLayerId = drawLayer.id;
   }
 
-  const rootGroup = createGroupLayer({ name: 'Project', children: childIds, adjustments: createDefaultAdjustments() });
+  // The default node set includes chroma adjustments, which a non-RGB document
+  // must not ship with — they would reintroduce the color the mode excludes.
+  const adjustments = createDefaultAdjustments().filter((n) =>
+    isAdjustmentAllowedInMode(n.type, colorMode),
+  );
+  const rootGroup = createGroupLayer({ name: 'Project', children: childIds, adjustments });
   layers.push(rootGroup);
   layerOrder.push(rootGroup.id);
 
@@ -51,6 +83,7 @@ export function computeCreateDocument(
       activeLayerId,
       selectedLayerIds: [activeLayerId],
       backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
+      colorMode,
       rootGroupId: rootGroup.id,
     },
     layerPixelData: pixelData,

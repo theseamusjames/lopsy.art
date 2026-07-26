@@ -117,12 +117,51 @@ pub struct PsdLayer {
     pub effects_json: Option<String>,
 }
 
+/// PSD header color mode. Values match the on-disk field. Lopsy decodes
+/// `Grayscale` (expanded to R=G=B), `Rgb`, and `Cmyk` (converted to RGB).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PsdColorMode {
+    Grayscale,
+    #[default]
+    Rgb,
+    Cmyk,
+}
+
+impl PsdColorMode {
+    pub fn from_u16(value: u16) -> Option<Self> {
+        match value {
+            1 => Some(Self::Grayscale),
+            3 => Some(Self::Rgb),
+            4 => Some(Self::Cmyk),
+            _ => None,
+        }
+    }
+
+    pub fn to_u16(self) -> u16 {
+        match self {
+            Self::Grayscale => 1,
+            Self::Rgb => 3,
+            Self::Cmyk => 4,
+        }
+    }
+
+    /// Color channels stored per pixel, excluding alpha.
+    pub fn color_channels(self) -> u16 {
+        match self {
+            Self::Grayscale => 1,
+            Self::Rgb => 3,
+            Self::Cmyk => 4,
+        }
+    }
+}
+
 /// A PSD document ready to be written or just read.
 #[derive(Debug, Clone)]
 pub struct PsdDocument {
     pub width: u32,
     pub height: u32,
     pub depth: PsdDepth,
+    pub color_mode: PsdColorMode,
     pub layers: Vec<PsdLayer>,
     pub icc_profile: Option<Vec<u8>>,
 }

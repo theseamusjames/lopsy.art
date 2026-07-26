@@ -7,6 +7,7 @@ import { describeError, notifyError } from './notifications-store';
 import {
   syncDocumentSize,
   syncBackgroundColor,
+  syncColorMode,
   syncViewport,
   syncLayers,
   syncSelection,
@@ -151,6 +152,7 @@ function renderFrameGpu(
   const textEditing = uiState.textEditing;
 
   syncDocumentSize(engine, doc.width, doc.height);
+  syncColorMode(engine, doc.colorMode);
   syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
   syncViewport(engine, viewport.zoom, viewport.panX, viewport.panY, screenW, screenH);
   // syncLayers must run before syncTextLayers so any new text layer's GPU texture

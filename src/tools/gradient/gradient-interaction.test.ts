@@ -41,6 +41,8 @@ vi.mock('../../app/sync-layer-after-full-size', () => ({
 const editorState = {
   pushHistory: vi.fn(),
   notifyRender: vi.fn(),
+  // Paint entry points snap colors to the document's color mode.
+  document: { colorMode: 'rgb' as const },
 };
 vi.mock('../../app/editor-store', () => ({
   useEditorStore: { getState: () => editorState },

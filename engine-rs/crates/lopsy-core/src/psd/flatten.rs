@@ -179,6 +179,7 @@ fn linear_to_srgb_f32(c: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::types::PsdColorMode;
     use crate::color::BlendMode;
     use super::super::types::{PsdDocument, PsdLayer, PsdRect, PsdDepth, GroupKind, PsdSourceKind};
 
@@ -209,6 +210,7 @@ mod tests {
             width: 2,
             height: 2,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![solid_layer_8bit(0, 0, 2, 2, 255, 0, 0, 255, BlendMode::Normal)],
             icc_profile: None,
         };
@@ -225,6 +227,7 @@ mod tests {
             width: 1,
             height: 1,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![
                 solid_layer_8bit(0, 0, 1, 1, 0, 0, 255, 255, BlendMode::Normal), // blue bg
                 solid_layer_8bit(0, 0, 1, 1, 255, 0, 0, 128, BlendMode::Normal), // red 50%
@@ -246,6 +249,7 @@ mod tests {
             width: 1,
             height: 1,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![layer],
             icc_profile: None,
         };
@@ -260,6 +264,7 @@ mod tests {
             width: 2,
             height: 2,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![solid_layer_8bit(1, 1, 1, 1, 0, 255, 0, 255, BlendMode::Normal)],
             icc_profile: None,
         };
@@ -277,6 +282,7 @@ mod tests {
             width: 1,
             height: 1,
             depth: PsdDepth::Eight,
+            color_mode: PsdColorMode::Rgb,
             layers: vec![
                 solid_layer_8bit(0, 0, 1, 1, 255, 255, 255, 255, BlendMode::Normal),
                 solid_layer_8bit(0, 0, 1, 1, 128, 128, 128, 255, BlendMode::Multiply),

@@ -8,9 +8,12 @@ interface ColorPickerProps {
   color: Color;
   onChange: (color: Color) => void;
   compact?: boolean;
+  /** Grayscale documents have no chroma to pick — swap the hue/SV surfaces
+   *  for a single black-to-white value ramp. */
+  grayscale?: boolean;
 }
 
-export function ColorPicker({ color, onChange, compact = false }: ColorPickerProps) {
+export function ColorPicker({ color, onChange, compact = false, grayscale = false }: ColorPickerProps) {
   const svCanvasRef = useRef<HTMLCanvasElement>(null);
   const svContainerRef = useRef<HTMLDivElement>(null);
   const hueCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -19,10 +22,13 @@ export function ColorPicker({ color, onChange, compact = false }: ColorPickerPro
   const alphaContainerRef = useRef<HTMLDivElement>(null);
   const spectrumCanvasRef = useRef<HTMLCanvasElement>(null);
   const spectrumContainerRef = useRef<HTMLDivElement>(null);
+  const valueCanvasRef = useRef<HTMLCanvasElement>(null);
+  const valueContainerRef = useRef<HTMLDivElement>(null);
   const isDraggingSV = useRef(false);
   const isDraggingHue = useRef(false);
   const isDraggingAlpha = useRef(false);
   const isDraggingSpectrum = useRef(false);
+  const isDraggingValue = useRef(false);
   const hsvRef = useRef(rgbToHsv(color));
 
   // Keep HSV in sync with external color changes
@@ -168,32 +174,62 @@ export function ColorPicker({ color, onChange, compact = false }: ColorPickerPro
     ctx.fillRect(0, 0, width, height);
   }, []);
 
+  // Draw the grayscale value ramp (black → white)
+  const drawValueRamp = useCallback(() => {
+    const canvas = valueCanvasRef.current;
+    const container = valueContainerRef.current;
+    if (!canvas || !container) return;
+
+    const rect = container.getBoundingClientRect();
+    const width = Math.round(rect.width);
+    const height = Math.round(rect.height);
+    if (width === 0 || height === 0) return;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d', contextOptions);
+    if (!ctx) return;
+
+    const grad = ctx.createLinearGradient(0, 0, width, 0);
+    grad.addColorStop(0, '#000000');
+    grad.addColorStop(1, '#ffffff');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  }, []);
+
   // Initial draws and redraw on color change or compact toggle
   useEffect(() => {
     drawSV();
     drawHue();
     drawAlpha();
     drawSpectrum();
-  }, [color, compact, drawSV, drawHue, drawAlpha, drawSpectrum]);
+    drawValueRamp();
+  }, [color, compact, grayscale, drawSV, drawHue, drawAlpha, drawSpectrum, drawValueRamp]);
 
   // Resize observer for canvases — re-create when compact changes
   useEffect(() => {
-    const containers = [svContainerRef.current, hueContainerRef.current, alphaContainerRef.current, spectrumContainerRef.current].filter(
-      (c): c is HTMLDivElement => c !== null,
-    );
+    const containers = [
+      svContainerRef.current,
+      hueContainerRef.current,
+      alphaContainerRef.current,
+      spectrumContainerRef.current,
+      valueContainerRef.current,
+    ].filter((c): c is HTMLDivElement => c !== null);
 
     const observer = new ResizeObserver(() => {
       drawSV();
       drawHue();
       drawAlpha();
       drawSpectrum();
+      drawValueRamp();
     });
 
     for (const c of containers) {
       observer.observe(c);
     }
     return () => observer.disconnect();
-  }, [compact, drawSV, drawHue, drawAlpha, drawSpectrum]);
+  }, [compact, grayscale, drawSV, drawHue, drawAlpha, drawSpectrum, drawValueRamp]);
 
   const emitColor = useCallback(
     (hsv: { h: number; s: number; v: number }) => {
@@ -295,6 +331,28 @@ export function ColorPicker({ color, onChange, compact = false }: ColorPickerPro
     [handleSpectrumInteraction],
   );
 
+  // Value-ramp interaction (grayscale documents) — emits a neutral R=G=B color
+  const handleValueInteraction = useCallback(
+    (clientX: number) => {
+      const container = valueContainerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const v = Math.round(x * 255);
+      onChange({ r: v, g: v, b: v, a: color.a });
+    },
+    [onChange, color.a],
+  );
+
+  const handleValueDown = useCallback(
+    (e: React.MouseEvent) => {
+      isDraggingValue.current = true;
+      handleValueInteraction(e.clientX);
+      e.preventDefault();
+    },
+    [handleValueInteraction],
+  );
+
   // Global mouse move / up
   useEffect(() => {
     const handleMove = (e: MouseEvent) => {
@@ -306,6 +364,8 @@ export function ColorPicker({ color, onChange, compact = false }: ColorPickerPro
         handleAlphaInteraction(e.clientX);
       } else if (isDraggingSpectrum.current) {
         handleSpectrumInteraction(e.clientX);
+      } else if (isDraggingValue.current) {
+        handleValueInteraction(e.clientX);
       }
     };
 
@@ -314,6 +374,7 @@ export function ColorPicker({ color, onChange, compact = false }: ColorPickerPro
       isDraggingHue.current = false;
       isDraggingAlpha.current = false;
       isDraggingSpectrum.current = false;
+      isDraggingValue.current = false;
     };
 
     window.addEventListener('mousemove', handleMove);
@@ -322,13 +383,32 @@ export function ColorPicker({ color, onChange, compact = false }: ColorPickerPro
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
     };
-  }, [handleSVInteraction, handleHueInteraction, handleAlphaInteraction, handleSpectrumInteraction]);
+  }, [handleSVInteraction, handleHueInteraction, handleAlphaInteraction, handleSpectrumInteraction, handleValueInteraction]);
 
   const hsv = hsvRef.current;
   const svCursorX = `${hsv.s}%`;
   const svCursorY = `${100 - hsv.v}%`;
   const hueCursorX = `${(hsv.h / 360) * 100}%`;
   const alphaCursorX = `${color.a * 100}%`;
+
+  const valueCursorX = `${(color.r / 255) * 100}%`;
+
+  if (grayscale) {
+    return (
+      <div className={styles.picker} role="group" aria-label="Color picker">
+        <div ref={valueContainerRef} className={styles.hueBar} onMouseDown={handleValueDown} role="slider" aria-label="Brightness" aria-valuemin={0} aria-valuemax={255} aria-valuenow={color.r} tabIndex={0}>
+          <canvas ref={valueCanvasRef} aria-hidden="true" />
+          <div className={styles.hueCursor} style={{ '--cursor-x': valueCursorX } as React.CSSProperties} />
+        </div>
+        {!compact && (
+          <div ref={alphaContainerRef} className={styles.alphaBar} onMouseDown={handleAlphaDown} role="slider" aria-label="Opacity" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(color.a * 100)} tabIndex={0}>
+            <canvas ref={alphaCanvasRef} aria-hidden="true" />
+            <div className={styles.alphaCursor} style={{ '--cursor-x': alphaCursorX } as React.CSSProperties} />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.picker} role="group" aria-label="Color picker">

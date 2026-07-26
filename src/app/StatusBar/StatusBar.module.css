@@ -27,6 +27,11 @@
   color: var(--color-text-primary);
 }
 
+.colorMode {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-ui);
+}
+
 .spacer {
   flex: 1;
 }

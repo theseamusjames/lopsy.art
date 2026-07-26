@@ -10,6 +10,8 @@ import {
 } from '../../../filters/curves';
 import type { CurvesNode } from '../../../types/adjustment-nodes';
 import type { NodeControlProps } from './types';
+import { useEditorStore } from '../../../app/editor-store';
+import { getColorModeCapabilities } from '../../../utils/color-mode-capabilities';
 import styles from '../AdjustmentsPanel.module.css';
 
 const CHANNEL_COLORS: Record<CurveChannel, string> = {
@@ -34,12 +36,16 @@ const CHANNEL_LABELS: Record<CurveChannel, string> = {
 };
 
 export function CurvesControls({ node, onChange }: NodeControlProps<CurvesNode>) {
-  const [channel, setChannel] = useState<CurveChannel>('rgb');
+  const [selectedChannel, setChannel] = useState<CurveChannel>('rgb');
   const histogram = useGroupHistogram(false);
+  const colorMode = useEditorStore((s) => s.document.colorMode);
+  // Modes without independent chroma channels expose only the composite curve.
+  const hasChannels = getColorModeCapabilities(colorMode).hasCurveChannels;
+  const channel: CurveChannel = hasChannels ? selectedChannel : 'rgb';
   const curves: Curves = node.curves;
   const points = curves[channel];
   const isIdentity = isIdentityCurve(points);
-  const channels: CurveChannel[] = ['rgb', 'r', 'g', 'b'];
+  const channels: CurveChannel[] = hasChannels ? ['rgb', 'r', 'g', 'b'] : ['rgb'];
 
   const handleCurveChange = (ch: CurveChannel, pts: CurvePoint[]) => {
     onChange({ curves: { ...curves, [ch]: pts } });

@@ -1,4 +1,4 @@
-import type { BlendMode, LayerEffects, Layer, Rect } from '../../types';
+import type { BlendMode, LayerEffects, Layer, Rect, DocumentColorMode } from '../../types';
 import type { AdjustmentNodeType, AdjustmentNode } from '../../types/adjustment-nodes';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
@@ -13,6 +13,7 @@ import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, rem
 import { invalidateBitmapCache, clearBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import type { ActionResult, SliceCreator, SparseLayerEntry } from './types';
+import type { IndexedConversionOptions } from './actions/convert-color-mode';
 import { useUIStore } from '../ui-store';
 import { cancelLiquify } from '../MenuBar/liquify-actions';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
@@ -31,6 +32,12 @@ import { resolveRasterTextBounds } from './actions/resolve-raster-text-bounds';
 import { computeCropCanvas } from './actions/crop-canvas';
 import { computeResizeCanvas } from './actions/resize-canvas';
 import { computeResizeImage } from './actions/resize-image';
+import { computeConvertColorMode, layersWithPixels, paletteFromBytes, paletteToBytes } from './actions/convert-color-mode';
+import { colorModeLabel, convertColorToDocMode } from '../../utils/color-mode';
+import { getColorModeCapabilities } from '../../utils/color-mode-capabilities';
+import { notifyInfo } from '../notifications-store';
+import { convertLayerToGrayscale, quantizeCompositeToPalette, applyPaletteToLayer, convertLayerToLab, convertLayerFromLab, bakeCmykGamut } from '../../engine-wasm/wasm-bridge';
+import { useToolSettingsStore } from '../tool-settings-store';
 import { computeAlignLayer } from './actions/align-layer';
 import { computeFitLayer } from './actions/fit-layer';
 import { computeAddLayerMask } from './actions/add-layer-mask';
@@ -141,6 +148,17 @@ function syncPixelDataToGpu(
   });
 }
 
+/**
+ * Indexed documents are a single flattened, palette-constrained surface
+ * (Photoshop parity), so every layer-creating action is refused while that
+ * mode is active. Returns true when the action may proceed.
+ */
+function allowLayerCreation(doc: { readonly colorMode: DocumentColorMode }): boolean {
+  if (getColorModeCapabilities(doc.colorMode).canAddLayers) return true;
+  notifyInfo(`${colorModeLabel(doc.colorMode)} mode does not support layers. Convert to RGB first.`);
+  return false;
+}
+
 function createInitialDocument() {
   const bg = createRasterLayer({ name: 'Background', width: 800, height: 600 });
   const rootGroup = createGroupLayer({ name: 'Project', children: [bg.id], adjustments: createDefaultAdjustments() });
@@ -162,6 +180,7 @@ function createInitialDocument() {
     activeLayerId: bg.id as string | null,
     selectedLayerIds: [bg.id] as readonly string[],
     backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
+    colorMode: 'rgb' as DocumentColorMode,
     rootGroupId: rootGroup.id as string | null,
   };
 }
@@ -169,7 +188,7 @@ function createInitialDocument() {
 export interface DocumentSlice {
   document: ReturnType<typeof createInitialDocument>;
   documentReady: boolean;
-  createDocument: (width: number, height: number, transparentBg: boolean) => void;
+  createDocument: (width: number, height: number, transparentBg: boolean, colorMode?: DocumentColorMode) => void;
   openImageAsDocument: (imageData: ImageData, name: string) => void;
   addLayer: () => void;
   addTextLayer: (layer: import('../../types').TextLayer) => void;
@@ -208,6 +227,7 @@ export interface DocumentSlice {
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
+  convertColorMode: (newMode: DocumentColorMode, options?: IndexedConversionOptions) => void;
 
   // Multi-select
   toggleLayerSelection: (id: string) => void;
@@ -223,11 +243,11 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   document: createInitialDocument(),
   documentReady: false,
 
-  createDocument: (width, height, transparentBg) => {
+  createDocument: (width, height, transparentBg, colorMode) => {
     cancelLiquify();
     clearBitmapCache();
     clearEngine();
-    const result = computeCreateDocument(width, height, transparentBg);
+    const result = computeCreateDocument(width, height, transparentBg, colorMode);
     applyActionResult(set, result);
     // clearEngine() released the GPU clipboard texture; drop the stale JS
     // clipboard so a subsequent paste doesn't operate on a freed texture.
@@ -236,6 +256,15 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
     useUIStore.getState().clearGuides();
+
+    // Match convertColorMode: the swatches must sit in the new document's
+    // value space, or a fresh Grayscale doc opens showing a saturated color.
+    if (colorMode && colorMode !== 'rgb') {
+      const ts = useToolSettingsStore.getState();
+      ts.setForegroundColor(convertColorToDocMode(ts.foregroundColor, colorMode));
+      ts.setBackgroundColor(convertColorToDocMode(ts.backgroundColor, colorMode));
+    }
+
     get().fitToView();
   },
 
@@ -256,6 +285,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   addLayer: () => {
     finalizePendingStrokeGlobal();
     const s = get();
+    if (!allowLayerCreation(s.document)) return;
     const result = computeAddLayer(s.document);
     if (!result) return;
     s.pushHistoryMetadata('Add Layer');
@@ -345,6 +375,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   // No history — group creation is cheap; undo would be confusing with empty groups
   addGroup: (name) => {
     const doc = get().document;
+    if (!allowLayerCreation(doc)) return;
     const group = createGroupLayer({ name: name ?? 'Group' });
     let layers = [...doc.layers, group];
     const targetGroupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
@@ -514,6 +545,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   duplicateLayer: () => {
     const s = get();
+    if (!allowLayerCreation(s.document)) return;
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
     const result = computeDuplicateLayer(
       s.document,
@@ -709,6 +741,76 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
+  },
+
+  convertColorMode: (newMode, options) => {
+    const s = get();
+    if (s.document.colorMode === newMode) return;
+
+    // Bake in-flight strokes into layer textures first, then snapshot — the
+    // conversion overwrites those textures in place, so history must capture
+    // the pre-bake pixels.
+    flushLayerSync(s);
+    s.pushHistory(`Convert to ${colorModeLabel(newMode)}`);
+
+    // Indexed is a single flat palette-constrained surface, so the layer stack
+    // collapses before quantizing. This runs under the snapshot above, making
+    // flatten + convert one undo step. Flattening goes through the export
+    // compositor, which already decodes native modes — so the flattened layer
+    // is plain sRGB and must not be decoded again below.
+    let doc = s.document;
+    let pixelsAreEncoded = doc.colorMode === 'lab';
+    if (newMode === 'indexed') {
+      const flattened = computeFlattenImage(doc, resolveAllPixelData(doc.layerOrder, doc.layers));
+      if (flattened?.document) {
+        applyActionResult(set, flattened);
+        doc = flattened.document;
+        pixelsAreEncoded = false;
+      }
+    }
+
+    const result = computeConvertColorMode(doc, newMode);
+    if (!result?.document) return;
+    let nextDocument = result.document;
+
+    const engine = getEngine();
+    if (engine) {
+      const palette =
+        newMode === 'indexed'
+          ? paletteFromBytes(quantizeCompositeToPalette(engine, options?.maxColors ?? 256))
+          : undefined;
+      if (palette) {
+        nextDocument = { ...nextDocument, indexedPalette: palette };
+      }
+      const paletteBytes = palette ? paletteToBytes(palette) : undefined;
+
+      const dirtyIds = new Set(s.dirtyLayerIds);
+      for (const id of layersWithPixels(doc)) {
+        // Decode out of the old mode before encoding into the new one, so a
+        // bake never runs on values from the previous color space.
+        if (pixelsAreEncoded) convertLayerFromLab(engine, id);
+        if (newMode === 'grayscale') convertLayerToGrayscale(engine, id);
+        if (newMode === 'lab') convertLayerToLab(engine, id);
+        if (newMode === 'cmyk') bakeCmykGamut(engine, id);
+        if (paletteBytes) applyPaletteToLayer(engine, id, paletteBytes, options?.dither ?? false);
+        // GPU is now source of truth — drop stale JS pixel data.
+        invalidateBitmapCache(id);
+        pixelDataManager.remove(id);
+        dirtyIds.add(id);
+      }
+      set({ dirtyLayerIds: dirtyIds });
+    }
+
+    applyActionResult(set, { ...result, document: nextDocument });
+
+    // Keep the toolbox swatches in the document's value space so the next
+    // stroke's color matches what the picker shows.
+    const ts = useToolSettingsStore.getState();
+    const palette = nextDocument.indexedPalette;
+    ts.setForegroundColor(convertColorToDocMode(ts.foregroundColor, newMode, palette));
+    ts.setBackgroundColor(convertColorToDocMode(ts.backgroundColor, newMode, palette));
+
+    s.notifyRender();
   },
 
   toggleLayerSelection: (id) => {

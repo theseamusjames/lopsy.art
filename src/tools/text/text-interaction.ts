@@ -4,6 +4,7 @@ import type { Point, TextLayer } from '../../types';
 import { useUIStore, type TextEditingState } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
+import { toDocumentColor } from '../../app/document-color';
 import { hitTestTextLayer } from './text-hit-test';
 import { createTextLayer } from '../../layers/layer-model';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
@@ -103,7 +104,7 @@ export function commitTextEditing(): void {
   }
 
   const toolSettings = useToolSettingsStore.getState();
-  const textColor = toolSettings.foregroundColor;
+  const textColor = toDocumentColor(toolSettings.foregroundColor);
 
   const areaWidth = editing.bounds.width;
   let finalX = editing.bounds.x;
@@ -402,7 +403,7 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
   const uiState = useUIStore.getState();
   const editorState = useEditorStore.getState();
   const toolSettings = useToolSettingsStore.getState();
-  const textColor = toolSettings.foregroundColor;
+  const textColor = toDocumentColor(toolSettings.foregroundColor);
 
   uiState.setTextDrag(null);
 

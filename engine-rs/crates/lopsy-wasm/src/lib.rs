@@ -66,6 +66,13 @@ pub fn set_background_color(engine: &mut Engine, r: f32, g: f32, b: f32, a: f32)
     engine.inner.set_background_color(r, g, b, a);
 }
 
+/// Set the document color mode: 0 = RGB (incl. grayscale/indexed), 1 = Lab,
+/// 2 = CMYK. Mode 0 renders unchanged; Lab/CMYK add a display-decode pass.
+#[wasm_bindgen(js_name = "setDocumentColorMode")]
+pub fn set_document_color_mode(engine: &mut Engine, mode: u32) {
+    engine.inner.set_document_color_mode(mode);
+}
+
 #[wasm_bindgen(js_name = "clearAllLayers")]
 pub fn clear_all_layers(engine: &mut Engine) {
     engine.inner.clear_all_layers();

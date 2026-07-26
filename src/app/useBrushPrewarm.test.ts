@@ -104,6 +104,7 @@ describe('runBrushPrewarm', () => {
         width: 800,
         height: 600,
         backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+        colorMode: 'rgb',
         layers: [baseRaster],
         layerOrder: [baseRaster.id],
         activeLayerId: baseRaster.id,

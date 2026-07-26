@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { BlendMode, DocumentState, LayerEffects, Rect, TextLayer, ViewportState } from '../../types';
+import type { BlendMode, DocumentColorMode, DocumentState, LayerEffects, Rect, TextLayer, ViewportState } from '../../types';
 import type { StoredPath } from '../../types/paths';
 import type { PathAnchor } from '../../tools/path/path';
 import type { AlignEdge } from '../../tools/move/move';
@@ -92,7 +92,7 @@ export interface EditorState {
   updatePathAnchors: (id: string, anchors: readonly PathAnchor[], closed: boolean) => void;
 
   // Document creation
-  createDocument: (width: number, height: number, transparentBg: boolean) => void;
+  createDocument: (width: number, height: number, transparentBg: boolean, colorMode?: DocumentColorMode) => void;
   openImageAsDocument: (imageData: ImageData, name: string) => void;
 
   // Document mutations
@@ -166,6 +166,10 @@ export interface EditorState {
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
+  convertColorMode: (
+    newMode: DocumentColorMode,
+    options?: import('./actions/convert-color-mode').IndexedConversionOptions,
+  ) => void;
 
   // Viewport
   setZoom: (zoom: number) => void;

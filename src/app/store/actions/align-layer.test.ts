@@ -27,6 +27,7 @@ function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData>; sel
       activeLayerId: layer.id,
       selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
     },
     pixelData,
     selection: { active: false, bounds: null, mask: null, maskWidth: 0, maskHeight: 0 },
@@ -76,6 +77,7 @@ describe('computeAlignLayer', () => {
       layers: [group, child], layerOrder: [group.id, child.id],
       activeLayerId: group.id, selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
     };
 
     const result = computeAlignLayer(doc, pixelData, NO_SELECTION, 0, 'left')!;

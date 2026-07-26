@@ -3,6 +3,7 @@ import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { canvasColorSpace } from '../../engine/color-space';
 import { getWasmMemoryBytes } from '../../engine-wasm/wasm-bridge';
+import { colorModeLabel } from '../../utils/color-mode';
 import styles from './StatusBar.module.css';
 
 const colorSpaceLabel = canvasColorSpace === 'display-p3' ? 'Display P3' : 'sRGB';
@@ -22,6 +23,7 @@ export function StatusBar() {
   const zoom = useEditorStore((s) => s.viewport.zoom);
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
+  const colorMode = useEditorStore((s) => s.document.colorMode);
   const cursorX = useUIStore((s) => s.cursorPosition.x);
   const cursorY = useUIStore((s) => s.cursorPosition.y);
   const [memoryUsage, setMemoryUsage] = useState('');
@@ -137,6 +139,12 @@ export function StatusBar() {
       {memoryUsage && (
         <>
           <span className={styles.item}>{memoryUsage}</span>
+          <span className={styles.divider} />
+        </>
+      )}
+      {colorMode !== 'rgb' && (
+        <>
+          <span className={`${styles.item} ${styles.colorMode}`}>{colorModeLabel(colorMode)}</span>
           <span className={styles.divider} />
         </>
       )}

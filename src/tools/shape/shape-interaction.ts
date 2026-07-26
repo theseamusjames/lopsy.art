@@ -4,6 +4,7 @@ import type { Point, Layer } from '../../types';
 import { useUIStore, type ShapeSizeClick } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
+import { toDocumentColor } from '../../app/document-color';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
@@ -111,8 +112,8 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point, m
   const engine = getEngine();
   if (!engine) return;
 
-  const fillColor = shape.fillColor;
-  const strokeColor = shape.strokeColor;
+  const fillColor = shape.fillColor ? toDocumentColor(shape.fillColor) : null;
+  const strokeColor = shape.strokeColor ? toDocumentColor(shape.strokeColor) : null;
   gpuRenderShape(
     engine, state.layerId,
     shapeModeToU32(shape.mode),
@@ -150,8 +151,8 @@ export function confirmShapeSize(width: number, height: number, click: ShapeSize
   const cx = click.center.x + click.layerX;
   const cy = click.center.y + click.layerY;
 
-  const fillColor = shape.fillColor;
-  const strokeColor = shape.strokeColor;
+  const fillColor = shape.fillColor ? toDocumentColor(shape.fillColor) : null;
+  const strokeColor = shape.strokeColor ? toDocumentColor(shape.strokeColor) : null;
   gpuRenderShapeExpanded(
     engine, click.layerId,
     shapeModeToU32(shape.mode),
@@ -200,8 +201,8 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point, met
     const { width: docW, height: docH } = useEditorStore.getState().document;
     if (docCx - rx - sw < 0 || docCy - ry - sw < 0
         || docCx + rx + sw > docW || docCy + ry + sw > docH) {
-      const fillColor = shape.fillColor;
-      const strokeColor = shape.strokeColor;
+      const fillColor = shape.fillColor ? toDocumentColor(shape.fillColor) : null;
+      const strokeColor = shape.strokeColor ? toDocumentColor(shape.strokeColor) : null;
       gpuRenderShapeExpanded(
         engine, state.layerId,
         shapeModeToU32(shape.mode),

@@ -74,11 +74,16 @@ pub fn sample_color(engine: &Engine, x: f64, y: f64, sample_size: u32) -> Vec<u8
     // Read from composite FBO
     engine.inner.fbo_pool.bind(gl, engine.inner.composite_fbo);
 
-    let pixels = engine.inner.texture_pool.read_rgba(
+    let mut pixels = engine.inner.texture_pool.read_rgba(
         gl, ix - half, iy - half, sample_size, sample_size,
     ).unwrap_or_else(|_| vec![0u8; (sample_size * sample_size * 4) as usize]);
 
     engine.inner.fbo_pool.unbind(gl);
+
+    // Decode before averaging: the transform out of a native mode is
+    // non-linear, so averaging encoded values would not match what the
+    // user sees under the cursor.
+    crate::compositor::decode_native_color_mode(engine.inner.doc_color_mode, &mut pixels);
 
     // Average the sampled pixels
     let count = (sample_size * sample_size) as usize;

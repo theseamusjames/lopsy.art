@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 // ---------------------------------------------------------------------------
 // Store access — typed wrapper to avoid repeating the cast boilerplate
@@ -889,4 +889,36 @@ export async function getRootGroupId(page: Page): Promise<string> {
     };
     return store.getState().document.rootGroupId;
   });
+}
+
+/**
+ * Assert an element is actually reachable by a real pointer.
+ *
+ * `toBeVisible()` only checks for a non-empty box and `visibility`, so it
+ * passes for an element clipped away by an ancestor's `overflow`. Worse, any
+ * Playwright action (`click`, `hover`) first runs `scrollIntoViewIfNeeded`,
+ * which scrolls the clipping ancestor and manufactures reachability a user
+ * never has — so this must be called BEFORE acting on the element.
+ *
+ * Use it for anything that escapes its parent: flyouts, popovers, tooltips.
+ */
+export async function expectPointerReachable(locator: Locator): Promise<void> {
+  await expect(locator).toBeVisible();
+  // Honours ancestor clip rects, and does not scroll to satisfy itself.
+  await expect(locator).toBeInViewport({ ratio: 1 });
+
+  const isHitTarget = await locator.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return false;
+    const probes: [number, number][] = [
+      [r.left + r.width / 2, r.top + r.height / 2],
+      [r.left + 2, r.top + 2],
+      [r.right - 2, r.bottom - 2],
+    ];
+    return probes.every(([x, y]) => {
+      const hit = document.elementFromPoint(x, y);
+      return !!hit && (hit === el || el.contains(hit));
+    });
+  });
+  expect(isHitTarget, 'element is rendered but not the hit target at its own centre/corners').toBe(true);
 }

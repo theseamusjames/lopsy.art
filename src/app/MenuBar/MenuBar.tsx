@@ -37,6 +37,7 @@ import type { ExportOptions } from './export-logic';
 import { getMenus, type MenuItem, type ImageDialogId, type HelpDialogId, type SelectDialogId } from './menus';
 import { CanvasSizeModal } from '../../components/CanvasSizeModal/CanvasSizeModal';
 import { ImageSizeModal } from '../../components/ImageSizeModal/ImageSizeModal';
+import { IndexedColorModal } from '../../components/IndexedColorModal/IndexedColorModal';
 import { KeyboardShortcutsModal } from '../../components/KeyboardShortcutsModal/KeyboardShortcutsModal';
 import { AboutModal } from '../../components/AboutModal/AboutModal';
 import { useEditorStore } from '../editor-store';
@@ -49,6 +50,8 @@ import styles from './MenuBar.module.css';
 
 export function MenuBar() {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
+  const [openSubmenu, setOpenSubmenu] = useState<number | null>(null);
+  const [submenuPos, setSubmenuPos] = useState({ x: 0, y: 0 });
   const [activeDialog, setActiveDialog] = useState<FilterDialogId | null>(null);
   const [imageDialog, setImageDialog] = useState<ImageDialogId | null>(null);
   const [helpDialog, setHelpDialog] = useState<HelpDialogId | null>(null);
@@ -87,24 +90,40 @@ export function MenuBar() {
     setSelectDialog(id);
   }, []);
 
-  const menus = getMenus(showFilterDialog, showImageDialog, showHelpDialog, showSelectDialog);
+  const colorMode = useEditorStore((s) => s.document.colorMode);
+  const convertColorMode = useEditorStore((s) => s.convertColorMode);
+
+  const menus = getMenus(showFilterDialog, showImageDialog, showHelpDialog, showSelectDialog, colorMode, convertColorMode);
 
   const handleMenuClick = useCallback((index: number) => {
+    setOpenSubmenu(null);
     setOpenMenu((prev) => (prev === index ? null : index));
   }, []);
 
   const handleMenuEnter = useCallback(
     (index: number) => {
       if (openMenu !== null) {
+        setOpenSubmenu(null);
         setOpenMenu(index);
       }
     },
     [openMenu],
   );
 
+  // Dropdowns scroll (the Filter menu is far taller than a short viewport),
+  // and a scroll container clips absolutely-positioned descendants at its
+  // padding box. Position the flyout against the viewport instead, measuring
+  // the parent row so it still lines up with the item that opened it.
+  const handleSubmenuEnter = useCallback((index: number, parent: HTMLElement) => {
+    const rect = parent.getBoundingClientRect();
+    setSubmenuPos({ x: rect.right, y: rect.top });
+    setOpenSubmenu(index);
+  }, []);
+
   const handleItemClick = useCallback((item: MenuItem) => {
     if (item.disabled || !item.action) return;
     item.action();
+    setOpenSubmenu(null);
     setOpenMenu(null);
   }, []);
 
@@ -288,6 +307,52 @@ export function MenuBar() {
                 {menu.items.map((item, j) =>
                   item.separator ? (
                     <div key={j} className={styles.separator} role="separator" />
+                  ) : item.submenu ? (
+                    <div
+                      key={j}
+                      className={styles.submenuParent}
+                      onMouseEnter={(e) => handleSubmenuEnter(j, e.currentTarget)}
+                      onMouseLeave={() => setOpenSubmenu(null)}
+                    >
+                      <button
+                        className={`${styles.dropdownItem} ${item.disabled ? styles.dropdownItemDisabled : ''}`}
+                        type="button"
+                        role="menuitem"
+                        aria-haspopup="menu"
+                        aria-expanded={openSubmenu === j}
+                        aria-disabled={item.disabled}
+                      >
+                        <span>{item.label}</span>
+                        <span className={styles.submenuArrow} aria-hidden="true">{'\u203a'}</span>
+                      </button>
+                      {openSubmenu === j && (
+                        <div
+                          className={styles.submenu}
+                          role="menu"
+                          aria-label={item.label}
+                          style={{ '--submenu-x': `${submenuPos.x}px`, '--submenu-y': `${submenuPos.y}px` } as React.CSSProperties}
+                        >
+                          {item.submenu.map((sub, k) => (
+                            <button
+                              key={k}
+                              className={`${styles.dropdownItem} ${sub.disabled ? styles.dropdownItemDisabled : ''}`}
+                              onClick={() => handleItemClick(sub)}
+                              type="button"
+                              role="menuitem"
+                              aria-disabled={sub.disabled}
+                            >
+                              <span>
+                                {sub.checked !== undefined && (
+                                  <span className={styles.checkmark} aria-hidden="true">{sub.checked ? '\u2713' : ''}</span>
+                                )}
+                                {sub.label}
+                              </span>
+                              {sub.shortcut && <span className={styles.shortcut} aria-hidden="true">{sub.shortcut}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <button
                       key={j}
@@ -348,6 +413,9 @@ export function MenuBar() {
       )}
       {imageDialog === 'image-size' && (
         <ImageSizeModal onClose={() => setImageDialog(null)} />
+      )}
+      {imageDialog === 'convert-to-indexed' && (
+        <IndexedColorModal onClose={() => setImageDialog(null)} />
       )}
       {helpDialog === 'keyboard-shortcuts' && (
         <KeyboardShortcutsModal onClose={() => setHelpDialog(null)} />

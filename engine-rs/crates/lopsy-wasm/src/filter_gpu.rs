@@ -104,6 +104,28 @@ pub fn apply_filter(
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
     set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
 ) {
+    apply_filter_inner(engine, layer_id, get_shader, set_uniforms, true);
+}
+
+/// Like `apply_filter`, but always transforms the whole layer even when a
+/// selection is active. Document-wide operations (color mode conversion) must
+/// not leave part of a layer in the old color space.
+pub fn apply_filter_full_layer(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
+    set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
+) {
+    apply_filter_inner(engine, layer_id, get_shader, set_uniforms, false);
+}
+
+fn apply_filter_inner(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
+    set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
+    respect_selection: bool,
+) {
     // Scratch FBOs are sized to the document. If the layer texture is
     // smaller (e.g. a tiny ellipse on a large canvas), pass-2 sampling
     // would read garbage from the scratch's unwritten region, destroying
@@ -111,7 +133,7 @@ pub fn apply_filter(
     // guarantees the scratch and layer dimensions match.
     let _ = engine.ensure_layer_full_size(layer_id);
 
-    let has_selection = engine.selection_mask_texture.is_some();
+    let has_selection = respect_selection && engine.selection_mask_texture.is_some();
 
     // If there's a selection, save the original layer to scratch B first
     if has_selection {

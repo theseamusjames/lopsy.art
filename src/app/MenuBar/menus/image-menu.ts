@@ -8,9 +8,9 @@ import {
 import { readLayerAsImageData } from '../../../engine-wasm/gpu-pixel-access';
 import { pixelDataManager } from '../../../engine/pixel-data-manager';
 import { computeAutoTone, computeAutoContrast, computeAutoColor } from '../../../filters/auto-enhance';
-import type { Layer, GroupLayer } from '../../../types';
+import type { Layer, GroupLayer, DocumentColorMode } from '../../../types';
 import type { AdjustmentNode } from '../../../types/adjustment-nodes';
-import type { MenuDef } from './types';
+import type { MenuDef, MenuItem } from './types';
 
 export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
   const state = useEditorStore.getState();
@@ -205,12 +205,42 @@ export function applyAutoColor(): void {
   addAdjustmentAndCommit(node, 'Auto Color');
 }
 
-export type ImageDialogId = 'canvas-size' | 'image-size';
+export type ImageDialogId = 'canvas-size' | 'image-size' | 'convert-to-indexed';
 
-export function createImageMenu(showDialog: (id: ImageDialogId) => void): MenuDef {
+const MODE_MENU_ITEMS: readonly { mode: DocumentColorMode; label: string }[] = [
+  { mode: 'rgb', label: 'RGB Color' },
+  { mode: 'grayscale', label: 'Grayscale' },
+  { mode: 'indexed', label: 'Indexed Color' },
+  { mode: 'cmyk', label: 'CMYK Color' },
+  { mode: 'lab', label: 'Lab Color' },
+];
+
+function createModeSubmenu(
+  colorMode: DocumentColorMode,
+  convertColorMode: (mode: DocumentColorMode) => void,
+  showDialog: (id: ImageDialogId) => void,
+): MenuItem[] {
+  return MODE_MENU_ITEMS.map(({ mode, label }) => ({
+    // Indexed needs palette size and dithering up front, so it opens a dialog
+    // instead of converting on click.
+    label: mode === 'indexed' ? `${label}...` : label,
+    checked: colorMode === mode,
+    action: mode === 'indexed'
+      ? () => showDialog('convert-to-indexed')
+      : () => convertColorMode(mode),
+  }));
+}
+
+export function createImageMenu(
+  showDialog: (id: ImageDialogId) => void,
+  colorMode: DocumentColorMode,
+  convertColorMode: (mode: DocumentColorMode) => void,
+): MenuDef {
   return {
   label: 'Image',
   items: [
+    { label: 'Mode', submenu: createModeSubmenu(colorMode, convertColorMode, showDialog) },
+    { separator: true, label: '' },
     { label: 'Canvas Size...', action: () => showDialog('canvas-size') },
     { label: 'Image Size...', action: () => showDialog('image-size') },
     { separator: true, label: '' },

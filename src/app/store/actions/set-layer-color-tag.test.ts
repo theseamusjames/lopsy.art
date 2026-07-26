@@ -32,6 +32,7 @@ function makeDoc(): DocumentState {
     activeLayerId: layer.id,
     selectedLayerIds: [layer.id],
     backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    colorMode: 'rgb',
   };
 }
 
@@ -84,6 +85,7 @@ describe('setLayerColorTag', () => {
       activeLayerId: layer1.id,
       selectedLayerIds: [layer1.id],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
     };
 
     const result = setLayerColorTag(doc, layer1.id, 'purple');

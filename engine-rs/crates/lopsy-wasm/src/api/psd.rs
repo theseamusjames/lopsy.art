@@ -37,6 +37,7 @@ pub fn export_psd(
     mask_data: &[u8],
     depth: u8,
     color_space: u8,
+    color_mode: u8,
 ) -> Result<Vec<u8>, JsError> {
     use lopsy_core::psd::types::*;
     use lopsy_core::psd::writer::write_psd;
@@ -187,10 +188,16 @@ pub fn export_psd(
         _ => None,
     };
 
+    // Unknown values fall back to RGB — an unwritable mode must not fail the
+    // export, it just round-trips as RGB.
+    let psd_color_mode =
+        PsdColorMode::from_u16(color_mode as u16).unwrap_or(PsdColorMode::Rgb);
+
     let doc = PsdDocument {
         width: engine.inner.doc_width,
         height: engine.inner.doc_height,
         depth: psd_depth,
+        color_mode: psd_color_mode,
         layers: psd_layers,
         icc_profile,
     };
@@ -238,6 +245,8 @@ pub fn parse_psd(data: &[u8]) -> Result<String, JsError> {
         width: u32,
         height: u32,
         depth: u8,
+        /// On-disk PSD color mode (1 = grayscale, 3 = RGB, 4 = CMYK).
+        color_mode: u8,
         layers: Vec<LayerInfo>,
     }
 
@@ -282,6 +291,7 @@ pub fn parse_psd(data: &[u8]) -> Result<String, JsError> {
         width: doc.width,
         height: doc.height,
         depth: doc.depth.bits_per_channel() as u8,
+        color_mode: doc.color_mode.to_u16() as u8,
         layers,
     };
 

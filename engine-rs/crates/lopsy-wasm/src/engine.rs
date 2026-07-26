@@ -158,6 +158,11 @@ pub struct EngineInner {
     pub doc_width: u32,
     pub doc_height: u32,
     pub bg_color: [f32; 4],
+    /// Document color mode: 0 = RGB (also grayscale/indexed, which are
+    /// RGBA-constrained), 1 = Lab, 2 = CMYK. Drives the display-decode branch
+    /// in blend/final_blit shaders. Native Lab/CMYK phases give it teeth;
+    /// mode 0 is passthrough.
+    pub doc_color_mode: u32,
     pub needs_recomposite: bool,
     // Brush state
     pub stroke_textures: HashMap<String, TextureHandle>,
@@ -345,6 +350,7 @@ impl EngineInner {
             doc_width: doc_w,
             doc_height: doc_h,
             bg_color: [1.0, 1.0, 1.0, 1.0],
+            doc_color_mode: 0,
             needs_recomposite: true,
             stroke_textures: HashMap::new(),
             stroke_opacity: HashMap::new(),
@@ -474,6 +480,14 @@ impl EngineInner {
 
     pub fn set_background_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
         self.bg_color = [r, g, b, a];
+        self.needs_recomposite = true;
+    }
+
+    pub fn set_document_color_mode(&mut self, mode: u32) {
+        if self.doc_color_mode == mode {
+            return;
+        }
+        self.doc_color_mode = mode;
         self.needs_recomposite = true;
     }
 

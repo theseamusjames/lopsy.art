@@ -24,6 +24,7 @@ function makeDoc(layerCount: number): { doc: DocumentState; pixelData: Map<strin
       activeLayerId: layers[layers.length - 1]!.id,
       selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
     },
     pixelData,
   };
@@ -76,6 +77,7 @@ describe('computeRemoveLayer', () => {
       activeLayerId: sibling.id,
       selectedLayerIds: [],
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
     };
 
     const result = computeRemoveLayer(doc, new Map(), new Map(), group.id)!;
