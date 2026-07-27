@@ -369,46 +369,62 @@ Layer effects can be attached to **group** layers, not just leaf layers. New gro
 
 ## Image Adjustments (Non-Destructive)
 
-The Adjustments panel is a reorderable, stackable list of adjustment **nodes** attached to a group layer (the root group acts as the document-level adjustment stack when no group is active). Each node has its own enable toggle, expand/collapse state, and per-type controls. The panel is resizable from its bottom-left corner.
+The Adjustments panel is a reorderable, stackable list of adjustment **nodes** attached to a group layer. It shares the floating **effects drawer** with the Layer Effects panel rather than being one of the dockable panels: the drawer shows the adjustment list when the active layer is a **group**, and the layer-effects list for every other layer type. Layer → **Adjustment Layer…** selects the document's root group, which is the route to the document-level stack. The drawer is dragged by its header (the offset resets when it closes) and resized from the native grip in its bottom-right corner — 420 px wide by default, minimum 280 × 200 px, maximum height 80vh. Because it is anchored to the inner edge of the right dock, it tracks the dock's width as that is resized.
 
-The Add menu is filtered by the document's color mode: outside RGB, the chroma-producing types (Hue/Saturation, Color Balance, Channel Mixer, Photo Filter, Gradient Map, Black & White, Saturation) are hidden, and Curves shows only the composite curve instead of its R/G/B tabs. See Color Modes.
+The Add menu is filtered by the document's color mode: outside RGB, the chroma-producing types (Hue / Saturation, Color Balance, Channel Mixer, Photo Filter, Gradient Map, Black & White, Saturation & Vibrance) are hidden, and Curves shows only the composite curve instead of its R/G/B tabs. The filter applies to the **Add menu only** — a node that is already on the stack keeps its full controls whatever the mode. See Color Modes.
 
 Per-node controls (header):
 - **Eye** icon — enable / disable this node without removing it
 - **Trash** — remove
-- **Chevron** — expand / collapse the node's body
+- **Chevron** — expand / collapse the node's body. Expansion is **exclusive**: only one node is open at a time, and opening a second collapses the first. The open-node state is panel-local, so closing the drawer forgets which node was expanded.
 - Drag the header (grip) to reorder; sliders inside the body don't trigger the reorder drag
 - New nodes auto-expand on creation
 
-Available node types (Add menu):
+Panel footer: **Add Adjustment** opens the type menu, and the eye button beside it is a **group-wide bypass** that mutes the entire stack in one click without changing any individual node's enabled state — the whole group is skipped before it reaches the engine, so a bypassed stack costs nothing to render. The bypass is per-group and is saved in the `.lopsy` project, so a document reopens with the same groups muted. An empty stack reads *"No adjustments yet. Add one below."*
+
+Available node types (Add menu — labels as they appear in the menu and node headers):
 - **Exposure** — stops, -5 to +5 (multiplier = 2^value)
 - **Contrast** — -100 to +100
-- **Highlights / Shadows** — Highlights -100 to +100, Shadows -100 to +100, Whites -100 to +100, Blacks -100 to +100
-- **Saturation** — Saturation -100 to +200, Vibrance -100 to +200 (the -100 floor is full desaturation; the cap extrapolates past 1× saturation distance from gray and only clips at the gamut edge)
+- **Highlights & Shadows** — Highlights -100 to +100, Shadows -100 to +100, Whites -100 to +100, Blacks -100 to +100
+- **Saturation & Vibrance** — Saturation -100 to +200, Vibrance -100 to +200 (the -100 floor is full desaturation; the cap extrapolates past 1× saturation distance from gray and only clips at the gamut edge)
 - **Vignette** — 0 to 100 (now correctly piped through the per-group adjustment pipeline)
 - **Curves** — per-channel tone curves (RGB master + R / G / B), evaluated as
   monotone cubic Hermite splines. Master applies to every channel first,
-  then per-channel curves remap their own value. Edited via the
-  `CurveEditor` (drag points, click to add, double-click or yank to remove).
-  Runs as a single 256×1 RGBA LUT texture sampled in the GPU adjustments
-  shader; identity curves bypass the lookup.
-  - **Histogram background**: the active layer's R / G / B histograms render behind the curve as colored channel shading (red/green/blue translucent fills on per-channel tabs, neutral gray on the RGB master). Sampled live from the GPU via the shared `useGroupHistogram` hook so the histogram tracks paint operations in real time.
+  then per-channel curves remap their own value. Runs as a single 256×1 RGBA
+  LUT texture sampled in the GPU adjustments shader; identity curves bypass
+  the lookup.
+  - **Editing** (`CurveEditor`): click empty space to add a point — the new point is picked up for dragging in the same gesture; drag to move; double-click a point to remove it; or *yank* it out by dragging it clear of the top or bottom edge. The two **endpoints are pinned** to x=0 and x=1 — they move vertically only and cannot be removed. The canvas draws quarter gridlines plus a diagonal identity reference, and the curve itself is plotted from the same 256-entry LUT the GPU samples, so the preview cannot drift from the render. A hint line under the canvas reads *"Click to add a point · Drag to move · Double-click to remove"*.
+  - **Reset** button, one per channel — resets only the channel whose tab is active, and is disabled while that channel is already identity.
+  - **Histogram background**: R / G / B histograms render behind the curve. On the **RGB master** tab all three draw as translucent red / green / blue fills composited additively, so overlapping ranges read brighter; on a **per-channel** tab the selected channel is drawn in its own color and the other two are muted to dark gray.
 - **Levels** — Photoshop-style visual editor with a layered RGB histogram and handle-driven controls (no sliders). Per-channel input/output remap with RGB master + R / G / B tabs:
   - **Input black / gamma / white**: three rectangular handles below the histogram strip drive Input Black, Gamma (0.1 – 10, log scale), and Input White. Drag the handles directly; numeric readouts update live.
-  - **Output black / white**: two handles on a gradient bar drive Output Black and Output White.
-  - **Histogram visualization**: R, G, and B histograms render layered as distinct shades of gray with additive ("lighter") compositing, so common ranges read brighter; histogram is sampled live from the active layer's GPU pixels and refreshes as paint operations advance. RGB tab shows all three layers; per-channel tabs focus the active channel and mute the others.
+  - **Output black / white**: two handles on a gradient bar drive Output Black and Output White. Handles cannot cross: input black stays at least 1/255 below input white, and output black cannot pass output white.
+  - **Readouts** sit under each axis — input/output black and white in 0 – 255, gamma to two decimals.
+  - **Histogram visualization**: R, G, and B histograms render layered as distinct shades of gray with additive ("lighter") compositing, so common ranges read brighter. RGB tab shows all three layers; per-channel tabs draw the active channel in its own color and mute the others. With nothing readable yet the strip prints *"No image data"*.
+  - **Reset** button — unlike Curves' per-channel reset, this one restores **all four channels** at once, and is disabled only while every channel is already identity.
   - Master is applied first, then per-channel levels. Compiled to a 256×1 LUT and shares the GPU adjustments path with Curves; identity levels bypass the lookup.
+  - Note that Levels keeps its R / G / B tabs in **every** color mode — the capability flag meant to hide them outside RGB has no consumer (see Color Modes → Declared but not enforced), so Levels and Curves disagree here.
 - **Invert** — single toggle (no numeric controls); inverts RGB at composite time.
 - **Hue / Saturation** — Hue -180° to +180°, Saturation -100 to +100, Lightness -100 to +100. Operates per-pixel in HSL space.
-- **Color Balance** — tone-range tabs (Shadows, Midtones, Highlights) each with Cyan ↔ Red, Magenta ↔ Green, and Yellow ↔ Blue sliders (-100 to +100). Per-pixel weighting determines how much each tonal range contributes to the shift.
-- **Photo Filter** — Color (color picker), Density 0 - 100, Preserve Luminosity (checkbox). Blends a tinted overlay over the pixel; when Preserve Luminosity is on, the tinted result is re-luminance-matched to the source.
-- **Black & White** — six channel sliders (Reds, Yellows, Greens, Cyans, Blues, Magentas), each -200 to +300, controlling how strongly that hue contributes to the monochrome output luminance.
-- **Channel Mixer** — output-channel tabs (R / G / B) each with Red, Green, Blue (-200 to +200), and Constant (-200 to +200) sliders. Lets a single output channel be remixed as a linear combination of the source channels plus a bias.
-- **Gradient Map** — visual gradient editor (shared `GradientEditor` component) with draggable rectangular stop handles on a live gradient bar; clicking an empty spot on the handle row inserts a new stop at that position. The selected stop drives a full `ColorPicker` (HSV square + hue strip + RGB/HSV/hex fields). A minimum of 2 stops is enforced. The stop list is compiled into a 256×1 RGBA LUT at sync time and applied as a luminance-indexed lookup in the GPU adjustments shader.
+- **Color Balance** — tone-range tabs (Shadows, Midtones, Highlights) each with Cyan — Red, Magenta — Green, and Yellow — Blue sliders (-100 to +100). Per-pixel weighting determines how much each tonal range contributes to the shift. The selected tab is view state, not node state: it always opens on **Midtones**, so re-expanding a node does not return to the range you were last editing.
+- **Photo Filter** — a "Filter color" swatch (native color input, default warm amber `#ffa000`), Density 0 - 100 (default 25), and Preserve Luminosity (checkbox, **on** by default). Blends a tinted overlay over the pixel; when Preserve Luminosity is on, the tinted result is re-luminance-matched to the source.
+- **Black & White** — six channel sliders (Reds, Yellows, Greens, Cyans, Blues, Magentas), each -200 to +300, controlling how strongly that hue contributes to the monochrome output luminance. A new node starts at Photoshop's classic mix — Reds 40, Yellows 60, Greens 40, Cyans 60, Blues 20, Magentas 80 — and those are also the per-slider double-click reset targets.
+- **Channel Mixer** — color-coded output-channel tabs (R / G / B) each with Red, Green, Blue (-200 to +200), and Constant (-200 to +200) sliders. Lets a single output channel be remixed as a linear combination of the source channels plus a bias. A new node opens on the Red output at identity (Red 100, others 0); each slider's double-click reset target is 100 for the source channel matching the active output tab and 0 for the rest, so a double-click restores identity rather than zeroing the channel.
+- **Gradient Map** — visual gradient editor (shared `GradientEditor` component) with draggable rectangular stop handles on a live gradient bar; clicking an empty spot on the handle row inserts a new stop at that position. The selected stop drives a full `ColorPicker` (HSV square + hue strip + RGB/HSV/hex fields), with a readout showing *Stop N of M* and its position as a percentage, plus a trash button that deletes it. A minimum of 2 stops is enforced — the delete button greys out at two. New nodes start black → white. The stop list is compiled into a 256×1 RGBA LUT at sync time and applied as a luminance-indexed lookup in the GPU adjustments shader.
+
+**Histogram sourcing** (shared by the Curves and Levels editors via the `useGroupHistogram` hook): the histogram is not the active *layer* — it aggregates every **visible, non-group child of the active group** (falling back to the root group's children), read back from their GPU textures. Pixels with alpha below 8 are skipped so the transparent parts of a half-painted layer don't swamp the zero bin, and large layers are stride-sampled to roughly 50,000 pixels each. The vertical scale is the 99.5th percentile of the non-empty bins rather than the maximum, so one flat-fill spike can't flatten everything else. It refreshes when pixels change — paint operations show up live — but **deliberately not when an adjustment changes**, so what you see behind the curve is always the source distribution, never the graded result. If the textures aren't readable yet it retries for a few frames before falling back to the empty state.
 
 All 14 adjustment types now have first-class UI controls and are fully GPU-accelerated. Internally the node list compiles down to the legacy flat `ImageAdjustments` shape so the GPU compositor's adjustment pass is unchanged.
 
-**Default adjustment stack on new documents**: every freshly created document (and every image opened or flattened) seeds the root group with four identity-state adjustment nodes — Levels, Curves, Exposure, and Hue/Saturation — so users can grade an image without first hunting through the Add menu. Identity nodes are bypassed in the GPU pipeline so there is no performance cost until a slider is moved.
+**How a stack of nodes composes.** That flattening step is worth understanding, because it decides what happens when the same type appears twice:
+- **Additive types accumulate.** Exposure, Contrast, Highlights & Shadows, Saturation & Vibrance, Vignette, Hue / Saturation, and Color Balance sum their values across every enabled node — two `+1` Exposure nodes equal one at `+2`.
+- **Curves, Levels, Photo Filter, Black & White, and Gradient Map are last-enabled-wins.** A second node of one of these types replaces the first outright rather than chaining with it; stacking two Curves nodes does not apply one curve after the other.
+- **Channel Mixer composes across output channels but not within one.** Each node writes only the output channel on its active tab, so three nodes (one on R, one on G, one on B) combine into a full mixer matrix, while two nodes on the same output tab collapse to the last one.
+- **Invert toggles.** Each enabled Invert node flips the flag, so a second one cancels the first and the composite comes out uninverted.
+- **Order matters only for the last-wins types.** Addition is commutative, so dragging an Exposure node above or below a Contrast node changes nothing; reordering is meaningful when two nodes compete for the same slot.
+- Disabled nodes drop out of the aggregation entirely rather than contributing an identity value.
+
+**Default adjustment stack on new documents**: every freshly created document (and every image opened or flattened) seeds the root group with four identity-state adjustment nodes — Levels, Curves, Exposure, and Hue / Saturation — so users can grade an image without first hunting through the Add menu. Identity nodes are bypassed in the GPU pipeline so there is no performance cost until a slider is moved. New Document filters that set against the chosen color mode, so a new Grayscale, Lab, or CMYK document gets three nodes rather than four (Hue / Saturation is dropped).
 
 **Adjustment Layer… menu (Layer menu)**: a one-click entry that selects the document's root group, opens the effects/adjustments drawer, and shows a brief explanatory info modal — designed to onboard new users to Lopsy's adjustment-node model (Photoshop puts each adjustment on its own layer; Lopsy stacks them inside the group's adjustment list).
 
@@ -881,7 +897,9 @@ Every paint entry point — brush/pencil/eraser, spray, fill, gradient (per stop
 
 ### Declared but not enforced
 
-The capability table also declares that Indexed has no gradients and no anti-aliasing, and that the non-RGB modes hide the Levels R/G/B channel tabs. Nothing reads those three flags. In practice: the **Gradient tool still works in an Indexed document** (each stop snaps to the palette, but the GPU interpolates freely *between* snapped stops), paint tools still anti-alias, and the Levels editor never had per-channel tabs to hide in the first place. The layer guard has a matching hole — it covers New Layer, Group, and Duplicate, but not the Text tool, so an Indexed document can still gain a second layer.
+The capability table also declares that Indexed has no gradients and no anti-aliasing, and that the non-RGB modes hide the Levels R/G/B channel tabs. Nothing reads those three flags. In practice: the **Gradient tool still works in an Indexed document** (each stop snaps to the palette, but the GPU interpolates freely *between* snapped stops), paint tools still anti-alias, and the **Levels editor still shows its R / G / B tabs in every mode** — it never consults the capability table at all, so a Grayscale or Lab document can still be given a per-channel Levels remap even though the adjacent Curves editor correctly collapses to the composite curve alone. The layer guard has a matching hole — it covers New Layer, Group, and Duplicate, but not the Text tool, so an Indexed document can still gain a second layer.
+
+The chroma-node filter has a hole of the same shape. **New Document** filters the default node set against the chosen mode, and converting a document strips the chroma nodes it no longer allows — but **Flatten Image** re-seeds the root group with the unfiltered default set while keeping the document's mode. Flattening a Grayscale, Lab, or CMYK document therefore gives it a fresh **Hue / Saturation** node, one the mode's own Add menu would refuse to offer. It arrives at identity, so nothing changes until a slider moves, but its controls are live.
 
 More generally, the palette snap runs **only at conversion time**. Pixels painted afterwards are constrained just at the *color* level (via `toDocumentColor`), not per-pixel, so anti-aliased edges, gradient interpolation, and soft brushes all put off-palette pixels into an Indexed document as you keep working in it.
 
