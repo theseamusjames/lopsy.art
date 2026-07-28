@@ -4,7 +4,12 @@
 
 ### Brush
 
-The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Everything else (preset gallery, brush-tip import, dynamics, texture) lives in the **Brushes modal** opened from the toolbar.
+The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Everything else (preset gallery, brush-tip import, dynamics, texture) lives in the **Brushes modal**.
+
+**The Brushes modal.** Opened by clicking the brush-tip thumbnail at the left of the Brush options bar — note that button only renders while a preset is active, so deleting the active preset removes this entry point (the canvas right-click **Define Brush Preset** is the only other way in, and it needs a selection). The modal is a fixed 640 × 600 centered dialog, draggable by its title bar, closed with the ✕ (there is no Escape-to-close and no backdrop — the canvas stays fully interactive behind it). Its body is a **vertical five-tab rail** on the left — **Presets, Shape, Dynamics, Texture, Sub-Brushes** — with the active tab's controls to the right. Two things sit outside the tabs and are visible from every one of them:
+
+- **Live stroke preview** — a canvas strip below the tab area that redraws a cubic-Bézier S-stroke through the *whole* current parameter set: size, spacing, hardness, opacity, scatter, angle, tip bitmap, all four jitters, speed-size, taper, and the texture with its blend mode and scale. Updates are debounced ~200 ms, and the randomization uses a fixed xorshift seed so the preview is stable between redraws rather than reshuffling on every keystroke. Velocity is simulated as slow at both ends and fastest mid-stroke, so Speed Size is visible here.
+- **Footer** — **Export** (opens the Export Brushes modal, below) and **Save Current**, which prompts for a name and snapshots the live brush — tip, size, hardness, spacing, scatter, angle, opacity, fade, taper, all four jitters, the speed-size settings, and any sub-brushes — as a new custom preset, which it then makes active. Texture is deliberately *not* captured.
 
 **Core parameters**
 - **Size**: 1 - 2000 px (auto-scaled by document size)
@@ -17,37 +22,51 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Angle**: 0 - 360 degrees (set via the modal's angle dial)
 - **Symmetry**: horizontal, vertical, both (4-way), or radial (2 - 32 segments). The horizontal/vertical toggles and the **Radial Symmetry** control (with its segment-count number input) all live in the Brush options bar; see the Symmetry section for full behavior.
 
-**Dynamics** (Brushes modal → Dynamics section). Per-dab randomization is performed GPU-side, seeded by each dab's center position so strokes are deterministic for a given path.
-- **Size Jitter**: 0 - 100% — per-dab size randomization
-- **Hardness Jitter**: 0 - 100% — per-dab hardness randomization (varies the softness of each dab's falloff)
+**Shape tab** (Brushes modal). Holds the Size / Spacing / Hardness / Opacity / Taper sliders, an angle dial, and its own copy of the preset grid.
+- **The Shape tab's grid changes the tip only.** Clicking a preset here swaps the brush's bitmap and leaves every other parameter — size, spacing, jitters, sub-brushes — exactly as you set it. That is the opposite of the **Presets** tab, where clicking applies the entire preset and overwrites the current settings. Use Shape to audition tips without losing a brush you've dialed in.
+- **Angle dial**: a 64 px circle; press anywhere inside it and drag to set the angle from the pointer's bearing relative to the center, rounded to whole degrees, with the value shown numerically beside it. It is exposed as a `slider` role and is keyboard-focusable.
+- **Dab preview**: a static single-dab render sits next to the dial, showing the current tip at the current size, hardness, opacity, and angle.
+- Slider drag ranges are pinned shorter than their true maxima — Size drags to 300 and Taper to 1000 — while each slider's numeric input still accepts anything up to the document-scaled maximum.
+
+**Dynamics** (Brushes modal → Dynamics tab). Scatter also lives on this tab.
+
+The four jitters are **not implemented the same way**, and the difference shows up in the stroke. **Angle Jitter** and **Opacity Jitter** are applied **GPU-side**, hashed from each dab's center position (`dabHash(u_center, …)` in `brush_dab_footer.glsl`) — every dab is randomized independently, and because the hash is purely positional the result is **deterministic**: the same path re-painted produces the same variation. **Size Jitter** and **Hardness Jitter** are applied **CPU-side** before the dab is emitted (`advanceJitterWalk`, `paint-handlers.ts`), and they are a smooth **random walk along the stroke** rather than per-dab noise — a new target is drawn every 30 – 120 px of travel for size and every 80 – 280 px for hardness, and the value smoothsteps toward it in between. Those targets come from `Math.random()`, so these two are **not** deterministic: the same path painted twice varies. (The GPU's own size-jitter uniform is passed 0 on this path, so the jitter is never applied twice.)
+
+- **Size Jitter**: 0 - 100% — how far the size walk may dip below the base size
+- **Hardness Jitter**: 0 - 100% — how far the hardness walk may dip (varies the softness of the dab falloff)
 - **Angle Jitter**: 0 - 100% — per-dab rotation randomization (most visible with non-circular tips)
 - **Opacity Jitter**: 0 - 100% — per-dab transparency randomization
-- **Speed Size**: stroke velocity modulates brush size. A `Faster is` toggle picks the direction (`Thinner`: faster strokes shrink toward 1 px, range 0 – 100%; `Wider`: faster strokes grow up to 3× the base size, range 0 – 300%). A `Sensitivity` toggle (Low / Med / High) tunes how aggressively the velocity-to-size mapping responds to small velocity changes. Velocity is exponentially smoothed (α=0.3) so the size doesn't twitch from noisy pointer deltas.
+- **Speed Size**: stroke velocity modulates brush size. A `Faster is` toggle picks the direction (`Thinner`: faster strokes shrink toward 1 px, range 0 – 100%; `Wider`: faster strokes grow up to 3× the base size, range 0 – 300%; switching back to `Thinner` clamps a value above 100 down to 100). Raw velocity is normalized against a 5 px/ms ceiling and clamped to 1, then averaged over a sliding window — and **that window length is what the `Sensitivity` toggle sets**: Low = 6 samples, Med = 3, High = 2, so Low is the most damped and High the twitchiest. The resulting size *scale* is then eased toward its target by a further 0.25 blend per dab, which is what keeps the width from stepping visibly.
 
-**Texture** (Brushes modal → Texture section)
-- **Built-in textures**: Noise, Canvas, Grain (128×128 grayscale tiles generated procedurally) — `No Texture` disables texturing
-- **Import custom texture**: load any grayscale image (PNG/JPG/WebP) as a brush texture; imported textures show up in the dropdown next to the built-ins and can be deleted again from the same row
-- **Texture blend mode**: Multiply, Subtract, or Overlay (against the brush color)
+**Texture** (Brushes modal → Texture tab). The tab shows a texture dropdown and an Import button; the blend-mode dropdown and the Scale slider appear **only once a texture is selected**.
+- **Built-in textures**: Noise, Canvas, Grain (128×128 grayscale tiles generated procedurally from seamless value noise) — `No Texture` disables texturing
+- **Import custom texture**: accepts any image the browser can decode (the picker is `image/*`, not just grayscale files) and converts it to a grayscale tile with Rec.601 luma weights. Imported textures join the dropdown next to the built-ins; the **Delete** button appears only while an imported texture is selected, so built-ins can't be removed.
+- **Texture blend mode**: Multiply, Subtract, or Overlay. The texture modulates the **dab's alpha (coverage)** — with the color channels carried along premultiplied — rather than blending against the brush color: Multiply scales coverage by the tile value, Subtract by its inverse, Overlay applies the standard overlay curve to coverage.
 - **Scale**: 10 - 300% (tile size relative to the source tile)
-- Texture tiles in document space so adjacent strokes line up across the same pattern grid
+- **Each stroke gets its own tile grid.** The tiling is anchored at the stroke's **first dab** and rotated by a fresh random angle chosen when the stroke begins (`begin_stroke`, seeded from the layer id XOR the current time). Adjacent strokes therefore deliberately do *not* line up on a shared pattern grid — that is what stops a textured brush from showing an obvious repeating lattice across a filled area. The trade-off is that a texture pass is not reproducible: the same stroke re-painted gets a different rotation.
+- **Texture is not part of a preset.** `Save Current` doesn't record it, and selecting any preset **resets the texture to none** (blend mode back to Multiply, scale back to 100%). Pick the preset first, then the texture.
 
-**Sub-brushes** (Brushes modal → Sub-brushes section). Each sub-brush emits an additional dab co-located with every primary dab, so a single stroke can layer multiple textures, sizes, and rotations at once. A tip can carry any number of sub-brushes; each sub-brush picks its own tip from the same preset grid as the primary brush.
+**Sub-brushes** (Brushes modal → Sub-Brushes tab). Each sub-brush emits an additional dab co-located with every primary dab, so a single stroke can layer multiple textures, sizes, and rotations at once. A tip can carry any number of sub-brushes (there is no cap); each sub-brush picks its own tip from the same preset grid as the primary brush, and each gets its own **Remove** button. **Add Sub-Brush** appends one with no tip, Size Ratio 50%, Hardness 100, Opacity Ratio 50%, and Angle Offset and all three jitters at 0.
 - **Size Ratio**: 10 - 200% (sub-brush size relative to the primary brush)
 - **Hardness**: 0 - 100% (independent hardness for the sub-brush)
 - **Opacity Ratio**: 1 - 100% of the primary brush opacity
 - **Angle Offset**: 0 - 360° relative to the primary brush angle
 - **Size / Angle / Opacity Jitter**: 0 - 100% per-dab randomization, independent from the primary brush's dynamics
 
-**Tips & presets** (Brushes modal — left panel)
+**Tips & presets** (Brushes modal → Presets tab)
 - **Tip kinds**: procedural circle (no bitmap), **alpha tip** (1 byte/pixel grayscale, brush color tints the dab), or **color tip** (4 byte/pixel RGBA, color comes from the bitmap itself). Color-tip dabs use premultiplied-alpha "over" compositing so overlapping rotated dabs layer correctly.
 - **Custom brush tips**: import grayscale bitmaps as alpha tips. PNG/JPG/WebP supported.
-- **Brush from Selection** (Edit menu → "Define Brush from Selection"): captures the current marquee selection as a new brush tip. Two variants:
+- **Brush from Selection** — **Edit → Define Brush…** (alpha) and **Edit → Define Color Brush…** (RGBA), both disabled without an active selection. Each prompts for a name, then adds the tip as a custom preset and makes it active, sized to the longer edge of the captured bitmap. Two variants:
   - **Grayscale (alpha) capture**: inverts the source so dark pixels paint opaquely (Photoshop convention) and the selection mask crops to the marquee bounds.
   - **Color capture**: preserves full RGBA so the tip stamps the original colors of the selection (useful for stamp-pattern brushes).
-- **ABR import**: Adobe Brush file support — drops every brush in the file into the preset grid as new tips.
-- **Preset import / export**: dumps the user's custom presets to `lopsy-brushes.json` (Base64-encoded bitmap data plus every dynamic / sub-brush parameter); the same file can be re-imported on any machine to restore the preset library.
-- **Built-in presets** (loaded from the Rust engine; current set): Hard Round, Soft Round, Airbrush, Square, Cross Hatch, Diamond, Star, Slash, Chalk, Spray, Leaf. All built-in presets ship with spacing standardized to 1% of brush size so they paint smooth strokes by default.
-- **Delete**: removes the active preset (only enabled for user-imported custom presets, never built-ins)
+  - The canvas right-click **Define Brush Preset** is a *separate* path with different behavior — it skips the name prompt (the tip is always called "Custom Brush") and opens the Brushes modal afterwards.
+- **ABR import**: Adobe Brush file support — drops every brush in the file into the preset grid as new tips. Parsing runs in a Web Worker, so a large `.abr` doesn't stall the UI.
+- **Import** (Presets tab): one button handling both formats — `.abr` brush files and `.json` preset libraries.
+- **Export** (footer) opens a dedicated **Export Brushes** modal: a checkbox gallery of every preset with **Select All** / **Select None**, a live "*N* selected" count, and an Export button disabled at zero selection. Note it starts with **everything selected, built-ins included** — this is a "choose what to ship" dialog, not a custom-presets-only dump. The selection is written to `lopsy-brushes.json` as `{version: 1, presets: […]}` with Base64-encoded bitmap data plus every dynamic / sub-brush parameter. Re-importing on any machine restores them; imported presets always come back flagged custom, so a re-imported built-in becomes deletable.
+- **Built-in presets** come from two independent sources that share one grid:
+  - **11 procedural presets defined in TypeScript** — Hard Round, Soft Round, Airbrush, Square, Cross Hatch, Diamond, Star, Slash, Chalk, Spray, Leaf — whose tips are generated in code at startup. All ship with spacing standardized to 1% of brush size so they paint smooth strokes by default.
+  - **9 bitmap tips embedded in the Rust engine** — Bubbles, Caligraphic Angle, Caligraphic Rounded, Calligraphic Split, Light Offset, Oblong, Smooth, Star, Triangle. Every PNG in `engine-rs/brushes/` is compiled into the WASM binary by `build.rs` (`include_bytes!`), so adding a file there is all it takes to ship a new tip. They load asynchronously once the engine is up and are appended to the grid, decoded to alpha with the same dark-pixels-paint-opaquely inversion, at size 30 / hardness 100 / spacing 1.
+- **Delete**: removes the active preset, after a confirm prompt. Only enabled for custom presets (imported or user-saved), never built-ins.
 
 **Shape-aware hardness**
 - Tip hardness is implemented as an inner-glow falloff: the tip alpha is inverted, Gaussian-blurred, normalized, then multiplied back in as an opacity mask. This preserves the tip silhouette while softening edges — corners and straight edges soften proportionally to their distance from the interior, so non-circular tips (Square, Star, Slash, Leaf) don't degenerate into circular blobs when hardness is reduced.
@@ -665,7 +684,7 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Recent colors**: up to 28
 - **Panel visibility**: togglable per panel from the panel toolbar — see [Panel Docking & Layout](#panel-docking--layout). There is no separate sidebar-collapse toggle, and individual panels no longer collapse to a header; they are sized by their dock, split, or floating window instead.
 - **Mask edit mode**: on/off
-- **Draggable modals & drawers**: filter dialogs, pattern fill, layer effects, adjustments, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked). Dockable panels use the docking system's own drag instead. The effects and reference drawers sit immediately to the left of the right dock and shift as that dock is resized.
+- **Draggable modals & drawers**: filter dialogs, pattern fill, layer effects, adjustments, the Brushes modal, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked). Dockable panels use the docking system's own drag instead. The effects and reference drawers sit immediately to the left of the right dock and shift as that dock is resized.
 - **Filter / pattern preview overlay**: when live preview is enabled the dim backdrop is removed and pointer-events on the overlay are disabled so the canvas is fully visible while the modal stays interactive
 
 ### Global UI Conventions
@@ -686,7 +705,7 @@ Transient messages surface as toasts stacked in a fixed panel at the **top-right
 
 ### Canvas Right-Click Context Menu
 Right-clicking the canvas opens a small menu with:
-- **Define Brush Preset** — only shown when a marquee selection is active. Captures the selected pixels of the active layer as a new brush tip and opens the Brushes modal with the new preset selected. Same code path as Edit → "Define Brush from Selection".
+- **Define Brush Preset** — only shown when a marquee selection is active. Captures the selected pixels of the active layer as a new brush tip and opens the Brushes modal with the new preset selected. This is a **separate implementation** from Edit → Define Brush…, not a shared one: it names the tip "Custom Brush" without prompting and opens the modal, where the Edit-menu version prompts for a name and leaves the modal closed.
 - **Deselect** — clears the active marquee selection (disabled when there is none).
 - **Select All** — selects every pixel in the document (equivalent to ⌘A).
 
