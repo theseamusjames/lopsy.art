@@ -680,8 +680,8 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Wrap**: a second options-bar checkbox next to Dim pattern (also only visible while Show Seamless Pattern is on, default off). When enabled, layer compositing wraps modularly at the document edges — content dragged off one side reappears on the opposite side, so a tile can be edited across its own seam. The wrap happens in the blend shader, which shifts each layer's source offset per axis to whichever tile center is nearest the fragment; the layer texture itself is never rewritten, so repeated moves keep sampling the original pixels instead of compounding an already-wrapped result.
 
 ### UI
-- **Foreground / background color**: with swap and reset
-- **Recent colors**: up to 28
+- **Foreground / background color**: live in the [Color panel](#color-panel) only — not in the toolbox. Swap has an icon button (and `X`); reset to black/white is keyboard-only (`D`), with no button anywhere.
+- **Recent colors**: capped at 28, and seeded full with a 28-swatch starter palette — see [Recent colors](#recent-colors)
 - **Panel visibility**: togglable per panel from the panel toolbar — see [Panel Docking & Layout](#panel-docking--layout). There is no separate sidebar-collapse toggle, and individual panels no longer collapse to a header; they are sized by their dock, split, or floating window instead.
 - **Mask edit mode**: on/off
 - **Draggable modals & drawers**: filter dialogs, pattern fill, layer effects, adjustments, the Brushes modal, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked). Dockable panels use the docking system's own drag instead. The effects and reference drawers sit immediately to the left of the right dock and shift as that dock is resized.
@@ -877,6 +877,47 @@ Panel edits and options-bar edits share the same apply path (`apply-text-setting
 - **Color spaces**: sRGB, Display P3, Rec. 2020, Linear sRGB
 - **FP16 / wide gamut**: RGBA16F textures when GPU supports `EXT_color_buffer_float`
 - **EDR passthrough**: unclamped values for extended dynamic range displays
+
+### Color Panel
+
+The only surface that edits the foreground and background colors directly — there are **no foreground/background swatches in the toolbox**. With the panel closed, the swatches can still be changed by the eyedropper, the `X` / `D` shortcuts, a double-click on a shape's fill/stroke swatch, or clicking an existing text layer with the Text tool (which adopts that layer's color).
+
+- **Swatch stack**: a 32px square holding the **foreground** swatch (24px, top-left, drawn over) and the **background** swatch (16px, bottom-right, behind) — the overlapping Photoshop arrangement. Clicking either one makes it the *active* swatch, marked with an accent border plus a 1px accent ring. Active-swatch choice is panel-local React state, so it is not persisted and reverts to the foreground whenever the panel remounts.
+- **Swap** sits beside the stack as an icon button (`ArrowUpDown`, labelled *Swap Colors (X)*). **There is no reset button** — restoring black/white is keyboard-only, via `D`.
+- **Every swatch in the panel is a real `<button>`** with `aria-label="Color: rgb(r, g, b)"`, painted over an 8px conic-gradient checkerboard so partial alpha reads visually. The label reports RGB only; alpha is not announced.
+- The active swatch is what the picker, the hex field, and the sliders all read and write — the panel has a single editing target rather than separate controls per swatch.
+
+### Color Picker (shared component)
+
+Used by the Color panel, the Gradient modal, Gradient Map stops, the shape fill/stroke popover, and the guide-color picker. Every surface is a `<canvas>` redrawn on color change and on resize (via `ResizeObserver`), allocated with the app's wide-gamut `contextOptions`.
+
+- **SV square**: white → full-hue horizontally, transparent → black vertically. Drag sets saturation from x and brightness from `1 - y`, both clamped to the box.
+- **Hue bar**: 0 – 360° across the six primaries.
+- **Alpha bar**: 0 – 100% over the current color, quantized to two decimals (`round(x * 100) / 100`).
+- **Hue is preserved through neutrals**: when the incoming color has `r === g === b` the picker keeps the hue it already had instead of letting the RGB→HSV round-trip collapse it to 0. Dragging brightness down to black and back up returns the same hue rather than snapping to red.
+- **Grayscale documents** get a different picker entirely: the SV square and hue bar are replaced by a single black → white value ramp that emits a neutral `r = g = b`, with the alpha bar below it.
+- **Indexed documents** replace the picker with the **document palette** as a swatch grid (up to 256 entries, capped at 160px tall and scrolling so it can't push the sliders out of the panel). The entry matching the active color gets the accent ring — matched on RGB only, so alpha is ignored for that highlight.
+
+### Hex field and sliders
+
+- **Hex**: a 6-character monospace input rendered uppercase, prefixed by a static `#`. Commits on **Enter** or blur; unparseable input silently reverts to the current color. The parser also accepts 3- and 8-digit forms, but `maxLength={6}` puts the 8-digit RGBA form out of reach here, and the commit deliberately **keeps the swatch's existing alpha** rather than taking one from the hex.
+- **Sliders follow the document color mode**: RGB → **R / G / B** 0 – 255; Grayscale → a single **K** 0 – 255; Lab → **L** 0 – 100 and **a** / **b** −128 – 127; CMYK → **C / M / Y / K** 0 – 100. The **Alpha** slider (0 – 100) is always present, in every mode including Indexed.
+- Indexed documents keep the ordinary **R / G / B sliders and hex field** even though the picker is gone, so an arbitrary color can still be typed — it just snaps to the nearest palette entry on the way in.
+- The Lab and CMYK sliders hold no state of their own: they are derived from the active sRGB color on every render and converted straight back on change, so a long series of small drags can round-trip a unit or two away from where it started.
+- **Every write path is funnelled through `convertColorToDocMode`** — the picker, the hex field, each slider, and the recent/palette swatches alike. Grayscale clamps to luminance and Indexed snaps to the palette; Lab and CMYK pass through untouched, since those modes are sRGB-backed in the swatch model (see [Color Modes](#color-modes)).
+
+### Recent colors
+
+- A wrapping strip of 16px swatches at the top-right of the panel, capped at **28**. Clicking one applies it to whichever swatch is currently active.
+- The store **ships all 28 slots pre-filled** with a fixed starter palette (neutrals, saturated primaries, pastels, earth tones), so the strip is never empty and adding a color always evicts the oldest.
+- "Recent" means *painted with*, not *picked*: entries are appended when a stroke, path stroke, fill, spray, text commit, or shape lands — the shape tool pushes fill and stroke separately, and the gradient tool pushes **both** the foreground and background color on commit. **Choosing a color in the Color panel does not record it, and neither does the eyedropper.**
+- Re-using a color moves it back to the front rather than duplicating it. The dedupe compares **alpha too**, so the same RGB at two different opacities occupies two separate slots.
+
+### Gaps in the picker
+
+- **It is mouse-only.** Every surface binds `mousedown` plus window-level `mousemove` / `mouseup`, with no pointer or touch events — so the picker cannot be operated by touch or stylus at all, even though the app ships a touch-first default layout (no panels open on a coarse-pointer device) and supports pinch-zoom on canvas.
+- **The surfaces are focusable but keyboard-inoperable.** The SV square, hue bar, alpha bar, and value ramp each carry `role="slider"` and `tabIndex={0}` with full ARIA value attributes, but no key handler is attached — tabbing to one and pressing an arrow key does nothing.
+- **`compact` is dead code.** The prop switches the picker to a single spectrum bar that can only pick at 100% saturation and 100% brightness (no SV square, no alpha), but no call site passes it, so that branch is unreachable in the app.
 
 ---
 
