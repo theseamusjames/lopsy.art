@@ -805,6 +805,11 @@ export function flushLayerSync(state: {
  * Re-render path-text layers (TextLayer.pathId is set) using Canvas2D composition.
  * Called each frame; only uploads when the layer's content key has changed
  * (text, font, color, or the path's anchors).
+ *
+ * `onPositionChange` is invoked with the top-left offset of the rendered
+ * texture in document space so the caller can align the Zustand layer.x/y
+ * with the compact texture. Without this the bounded texture would render
+ * at the layer's stale position and appear offset.
  */
 export function syncPathTextLayers(
   engine: Engine,
@@ -812,7 +817,8 @@ export function syncPathTextLayers(
   paths: readonly StoredPath[],
   docWidth: number,
   docHeight: number,
-  textEditing?: TextEditingState | null,
+  textEditing: TextEditingState | null,
+  onPositionChange: (layerId: string, x: number, y: number) => void,
 ): void {
   const tracked = getTracked(engine);
   if (!tracked.pathTextKeys) {
@@ -861,9 +867,11 @@ export function syncPathTextLayers(
     const result = renderTextOnPath(layerWithLiveText, path.anchors, path.closed, docWidth, docHeight);
     if (result) {
       uploadLayerPixels(engine, layer.id, result.pixels, result.width, result.height, result.x, result.y);
+      onPositionChange(layer.id, result.x, result.y);
     } else {
-      // Empty result — clear the layer texture
+      // Empty result — clear the layer texture and park it at the origin.
       uploadLayerPixels(engine, layer.id, new Uint8Array(4), 1, 1, 0, 0);
+      onPositionChange(layer.id, 0, 0);
     }
     tracked.pathTextKeys.set(layer.id, key);
   }

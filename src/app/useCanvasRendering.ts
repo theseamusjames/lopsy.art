@@ -195,12 +195,20 @@ function renderFrameGpu(
     (l): l is import('../types').TextLayer => l.type === 'text' && !!(l as import('../types').TextLayer).pathId,
   );
   if (textLayersWithPath.length > 0) {
-    syncPathTextLayers(engine, textLayersWithPath, editorState.paths, doc.width, doc.height, textEditing);
-    for (const tl of textLayersWithPath) {
-      if (tl.x !== 0 || tl.y !== 0) {
-        editorState.updateTextLayerProperties(tl.id, { x: 0, y: 0 });
-      }
-    }
+    syncPathTextLayers(
+      engine,
+      textLayersWithPath,
+      editorState.paths,
+      doc.width,
+      doc.height,
+      textEditing,
+      (layerId, x, y) => {
+        const layer = textLayersWithPath.find((l) => l.id === layerId);
+        if (layer && (layer.x !== x || layer.y !== y)) {
+          editorState.updateTextLayerProperties(layerId, { x, y });
+        }
+      },
+    );
   }
 
   syncSelection(engine, selection);
