@@ -284,15 +284,125 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 
 ## Transform
 
-- **Modes**: free, skew, distort, perspective
-- **Scale**: X and Y independently
-- **Rotation**: arbitrary angle
-- **Translation**: X and Y
-- **Skew**: X and Y
-- **Corner manipulation**: 4-point distort/perspective
-- **Quick transforms**: flip horizontal, flip vertical, rotate 90 CW, rotate 90 CCW
-- **Cmd/Meta+drag a rotation handle**: snaps rotation to 15° increments (the same snap kicks in automatically when grid + snap-to-grid are enabled)
-- **Cmd/Meta+drag a scale handle**: constrains the scale to a uniform aspect ratio
+Transform is **selection-bound** — there is no separate transform tool and no
+"free transform the whole layer" mode. The handles are drawn on top of the
+marching ants, and Escape or `⌘D` tears both down together.
+
+Seeding a transform is an explicit step that individual call sites opt into,
+*not* something `setSelection` does on its own. Committing a marquee, lasso,
+wand or quick-select drag seeds one, as do loading a layer's alpha,
+converting a layer mask to a marquee, arrow-key nudging a selection, and the
+Select menu's Grow / Shrink / Feather dialog. **Select All (`⌘A`) and Invert
+Selection do not** — they call `setSelection` alone, so a fresh `⌘A` selects
+the document without putting any handles on screen.
+
+### Who responds to the handles
+
+- **Move tool** — the only tool that transforms *pixels* through the handles.
+- **Selection tools** (rectangular/elliptical marquee, lasso, magnetic lasso,
+  wand) — grabbing a handle scales the **selection outline only**, leaving
+  pixels untouched. Only the 8 scale handles respond; rotation handles are
+  ignored, so a drag on one falls through and starts a brand-new selection.
+  The rebuilt mask is a rectangle or an ellipse depending on which marquee
+  tool is active, and the rebuild is coalesced to one allocation + GPU upload
+  per animation frame (a full-document mask on a 4K canvas is ~16 MB, so a
+  raw pointer-event-rate rebuild would thrash).
+- **Every other tool** (fill, eyedropper, text, …) ignores the handles
+  entirely and dispatches to its own handler. This is deliberate: at low zoom
+  over a small selection the handle hit-radius can cover the whole selection
+  and would otherwise swallow every click (#222).
+
+### Handles
+
+- **12 handles**: 8 scale (4 corners + 4 edge midpoints) and 4 rotation
+  handles, each sitting 20 document-px diagonally outside its corner and
+  tethered to it by a line. Rotation handles are hit-tested **first**, so they
+  win where the two overlap.
+- **Hit radius** is `8 / zoom` in document space — constant in screen terms.
+  For the Move tool it is additionally clamped to at most 80% of the
+  selection's smaller half-extent (and at least 1 px) so a click near the
+  middle of a small selection can't register as a handle grab.
+- **Cursors**: `nwse-resize` / `nesw-resize` on the corners, `ns-resize` /
+  `ew-resize` on the edge midpoints, `crosshair` on the rotation handles.
+- **Drawing**: a blue (`#00aaff`) quad through the four corners, white filled
+  squares (6 px) on the scale handles, white filled circles (5 px radius) on
+  the rotation handles. All sizes divide by zoom, so the chrome stays the same
+  on-screen size at any magnification.
+- The **marching ants follow translate, rotate, and scale** but *not* skew and
+  *not* the distort/perspective corner offsets — in those three modes the
+  handle box deforms while the ants outline does not.
+
+### Modes
+
+Free / Skew / Distort / Perspective, selected from a segmented button group in
+the Move tool's options bar (visible only while a selection is active).
+**Switching mode commits the in-flight transform and resets to identity** on
+the current selection bounds — a rotation cannot be carried into Distort, it
+gets baked first.
+
+- **Free** — scale from the 8 scale handles, rotate from the 4 rotation
+  handles.
+- **Skew** — edge and corner handles skew instead of scaling, clamped to
+  **±60°** on each axis. `left`/`right` produce vertical skew; `top`, `bottom`
+  **and all four corners** produce horizontal skew only. The edge opposite the
+  one being dragged is pinned via a translate compensation.
+- **Distort** — a corner handle moves that corner alone; an edge handle
+  translates both corners of that edge together. No clamping, so corners may
+  cross over each other.
+- **Perspective** — dragging a corner moves it *and mirrors the other corner
+  of the same horizontal edge* (one `+dx`, the other `−dx`, both `+dy`) while
+  the opposite edge stays fixed, giving the trapezoid / vanishing-point
+  effect. Edge handles behave as they do in Distort.
+- In Distort and Perspective the corner geometry is built from the corner
+  offsets alone, so the **rotation handles have no visible effect** in those
+  two modes.
+
+### Scale, rotate, and modifiers
+
+- **Scale** pins the opposite edge or corner: the box grows by the drag delta
+  and the center moves by half of it. The drag delta is un-rotated into the
+  box's own axes first, so scaling behaves correctly on an already-rotated
+  selection. Scale is floored at **0.01** per axis (and has no ceiling), so a
+  handle cannot be dragged through the far edge to flip content — use the flip
+  buttons for that.
+- **`Cmd`/`Meta` + drag a scale handle** forces `scaleX == scaleY` by
+  **averaging the two axis scales**. On a corner handle that reads as the
+  expected uniform scale; on an *edge* handle only one axis was driven by the
+  drag, so averaging applies half the drag's magnitude to both axes.
+- **Rotation** is measured from the center of the current (scaled, translated)
+  bounds. **`Cmd`/`Meta` + drag a rotation handle** snaps to 15° increments
+  (`π/12`); enabling grid + snap-to-grid applies the same snap automatically
+  without the modifier.
+- Grid + snap-to-grid *also* snaps the pointer position to grid cells while
+  dragging a **scale** handle — a separate effect from the 15° rotation snap.
+- Only `metaKey` is read — this is Cmd on macOS and the Windows/Super key
+  elsewhere, **not** Ctrl.
+
+### Commit lifecycle
+
+- Grabbing a handle pushes a single **"Transform"** history entry, then floats
+  the selected pixels into a GPU texture and composites them live each frame —
+  as an inverse affine matrix in Free/Skew, or as a 4-corner homography in
+  Distort/Perspective.
+- **Releasing the mouse does not commit.** The GPU float is deliberately kept
+  alive so a follow-up grab re-derives from the *original* floated pixels;
+  successive scale/rotate drags therefore do not compound resampling loss.
+- The float is dropped — baking the result into the layer texture — on
+  **Escape**, **`⌘D`**, or **selecting a different layer** in the Layers panel.
+- The selection mask is not recomputed during the drag; it is rebuilt from the
+  committed pixel alpha afterwards, which keeps it from drifting away from
+  what the GPU actually rendered.
+- Floating a **text** layer expands the buffer to the layer's diagonal so
+  rotation doesn't clip the glyphs.
+
+### Quick transforms
+
+- **Flip Horizontal / Flip Vertical** (options bar, next to the mode buttons)
+  apply instantly to the selected content: float → composite the flip matrix →
+  drop → re-select from the committed alpha. They require an active selection.
+- **Rotate 90° CW / CCW** sit in the Move tool's own options-bar group and are
+  **dual-purpose** — with a selection active they rotate the selected content,
+  with no selection they rotate the entire active layer.
 
 ---
 
@@ -308,7 +418,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Fit** (options-bar button): scales the active raster layer so its longest side matches the canvas — preserving aspect ratio — and centers it on the artboard. Useful for bringing an oversized pasted/dropped image into view; reuses the GPU `scaleLayerTexture` path so no pixel data round-trips through JS.
 - **Alt/Option+drag (no active marquee)**: duplicates the active layer in place, then moves the new copy — leaves the original layer untouched.
 - **Alt/Option+drag (with an active marquee)**: copies the selected pixels of the active layer into a floating duplicate and moves that copy, leaving the original pixels under the selection intact (Photoshop-style "alt-drag the selection").
-- **Cmd/Meta+drag (transform handles)**: constrains aspect ratio when scaling and snaps rotation to 15° increments. Grid + snap-to-grid also forces snapping automatically during the transform.
+- **Cmd/Meta+drag (transform handles)**: forces a uniform scale (by averaging the two axis scales) and snaps rotation to 15° increments. Grid + snap-to-grid applies the same rotation snap automatically, and additionally snaps the pointer to grid cells while scaling. The Move tool is the only tool whose handle drags transform pixels — see [Transform](#transform).
 
 ### Paste / Drop behavior
 
