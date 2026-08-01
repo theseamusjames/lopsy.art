@@ -930,10 +930,21 @@ Tab strips follow the WAI-ARIA tabs pattern, so a group's tabs are reachable wit
 
 ## Navigator Panel
 
-- Live thumbnail of the composited canvas (refreshed by copying the main WebGL canvas; throttled to ~5 Hz so it stays cheap during heavy strokes)
-- **Viewport indicator**: a translucent rectangle showing the current viewport bounds inside the document; click anywhere on the minimap to recenter the viewport, or drag the indicator rectangle to pan
-- **Zoom slider**: log-scaled, mapping slider position to `64^(value/100)` so the full 0.01× – 64× zoom range is reachable without coarse jumps
-- **Zoom readout**: displays the current zoom as a percentage
+### Minimap Thumbnail
+- A live thumbnail of the **composited document**, sized to the panel's width with the document's aspect ratio preserved and capped at **300 px tall**.
+- The image is produced by the engine, not by copying the on-screen canvas: `readCompositeThumbnail` downscales the composite texture **on the GPU** (blit shader, LINEAR filtering) into a small RGBA8 texture and reads back only that, returning an 8-byte header (`width`, `height` as u32 LE) followed by RGBA pixels, which the panel unpacks and `putImageData`s onto a 2D canvas. Only the thumbnail-sized result crosses the GPU boundary, so the cost is independent of document size — a full-composite readback would be ~67 MB per tick at 4K. The composite texture is flipped to LINEAR filtering for the downscale and restored to NEAREST afterwards so the compositor's final blit never samples bilinearly.
+- **Refresh cadence**: a 200 ms interval (5 Hz), but ticks are **skipped entirely while any pointer gesture is in progress**. The readback stalls the GPU pipeline, so painting, panning, moving, transforming, marquee-dragging, gradients, crop, mesh warp, and tilt-shift all suppress it. When the gesture ends, one **catch-up tick** fires on the next event-loop turn so the thumbnail reflects the final pixels without waiting out the interval.
+
+### Viewport Indicator
+- A translucent blue rectangle (`rgba(74, 158, 255, …)`) showing the visible viewport bounds within the document.
+- **Click or drag anywhere on the minimap** to recenter the viewport on that point — pointer-down recenters immediately and captures the pointer, so a drag scrubs the view continuously. The indicator itself is **not** a draggable object: it is `pointer-events: none`, so there is no separate "grab the rectangle" affordance and no way to drag it relative to where you grabbed it. The minimap shows a crosshair cursor.
+- The rectangle is floored at **4 px** in each axis so it stays visible when zoomed far out, and the computed rect is not clamped to the thumbnail — the wrapper's `overflow: hidden` is what keeps it from escaping.
+
+### Zoom Slider
+- **Range: 10 % – 600 %**, not the full canvas zoom range. The slider is log-scaled as `0.1 × 60^(position/100)` over a 0–100 track (step 0.5).
+- Because the viewport itself allows 0.01× – 64×, the slider **cannot reach most of that range**: its reported position clamps to the 0.1× – 6× window, so at any zoom above 600 % (or below 10 %) the handle pins to the end of the track while the readout keeps showing the true zoom.
+- **Double-click the slider** to snap back to 100 %.
+- **Zoom readout**: the current zoom as a rounded percentage.
 
 ---
 
