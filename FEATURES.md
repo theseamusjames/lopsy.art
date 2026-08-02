@@ -4,7 +4,12 @@
 
 ### Brush
 
-The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Everything else (preset gallery, brush-tip import, dynamics, texture) lives in the **Brushes modal** opened from the toolbar.
+The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Everything else (preset gallery, brush-tip import, dynamics, texture) lives in the **Brushes modal**.
+
+**The Brushes modal.** Opened by clicking the brush-tip thumbnail at the left of the Brush options bar — note that button only renders while a preset is active, so deleting the active preset removes this entry point (the canvas right-click **Define Brush Preset** is the only other way in, and it needs a selection). The modal is a fixed 640 × 600 centered dialog, draggable by its title bar, closed with the ✕ (there is no Escape-to-close and no backdrop — the canvas stays fully interactive behind it). Its body is a **vertical five-tab rail** on the left — **Presets, Shape, Dynamics, Texture, Sub-Brushes** — with the active tab's controls to the right. Two things sit outside the tabs and are visible from every one of them:
+
+- **Live stroke preview** — a canvas strip below the tab area that redraws a cubic-Bézier S-stroke through the *whole* current parameter set: size, spacing, hardness, opacity, scatter, angle, tip bitmap, all four jitters, speed-size, taper, and the texture with its blend mode and scale. Updates are debounced ~200 ms, and the randomization uses a fixed xorshift seed so the preview is stable between redraws rather than reshuffling on every keystroke. Velocity is simulated as slow at both ends and fastest mid-stroke, so Speed Size is visible here.
+- **Footer** — **Export** (opens the Export Brushes modal, below) and **Save Current**, which prompts for a name and snapshots the live brush — tip, size, hardness, spacing, scatter, angle, opacity, fade, taper, all four jitters, the speed-size settings, and any sub-brushes — as a new custom preset, which it then makes active. Texture is deliberately *not* captured.
 
 **Core parameters**
 - **Size**: 1 - 2000 px (auto-scaled by document size)
@@ -17,37 +22,51 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Angle**: 0 - 360 degrees (set via the modal's angle dial)
 - **Symmetry**: horizontal, vertical, both (4-way), or radial (2 - 32 segments). The horizontal/vertical toggles and the **Radial Symmetry** control (with its segment-count number input) all live in the Brush options bar; see the Symmetry section for full behavior.
 
-**Dynamics** (Brushes modal → Dynamics section). Per-dab randomization is performed GPU-side, seeded by each dab's center position so strokes are deterministic for a given path.
-- **Size Jitter**: 0 - 100% — per-dab size randomization
-- **Hardness Jitter**: 0 - 100% — per-dab hardness randomization (varies the softness of each dab's falloff)
+**Shape tab** (Brushes modal). Holds the Size / Spacing / Hardness / Opacity / Taper sliders, an angle dial, and its own copy of the preset grid.
+- **The Shape tab's grid changes the tip only.** Clicking a preset here swaps the brush's bitmap and leaves every other parameter — size, spacing, jitters, sub-brushes — exactly as you set it. That is the opposite of the **Presets** tab, where clicking applies the entire preset and overwrites the current settings. Use Shape to audition tips without losing a brush you've dialed in.
+- **Angle dial**: a 64 px circle; press anywhere inside it and drag to set the angle from the pointer's bearing relative to the center, rounded to whole degrees, with the value shown numerically beside it. It is exposed as a `slider` role and is keyboard-focusable.
+- **Dab preview**: a static single-dab render sits next to the dial, showing the current tip at the current size, hardness, opacity, and angle.
+- Slider drag ranges are pinned shorter than their true maxima — Size drags to 300 and Taper to 1000 — while each slider's numeric input still accepts anything up to the document-scaled maximum.
+
+**Dynamics** (Brushes modal → Dynamics tab). Scatter also lives on this tab.
+
+The four jitters are **not implemented the same way**, and the difference shows up in the stroke. **Angle Jitter** and **Opacity Jitter** are applied **GPU-side**, hashed from each dab's center position (`dabHash(u_center, …)` in `brush_dab_footer.glsl`) — every dab is randomized independently, and because the hash is purely positional the result is **deterministic**: the same path re-painted produces the same variation. **Size Jitter** and **Hardness Jitter** are applied **CPU-side** before the dab is emitted (`advanceJitterWalk`, `paint-handlers.ts`), and they are a smooth **random walk along the stroke** rather than per-dab noise — a new target is drawn every 30 – 120 px of travel for size and every 80 – 280 px for hardness, and the value smoothsteps toward it in between. Those targets come from `Math.random()`, so these two are **not** deterministic: the same path painted twice varies. (The GPU's own size-jitter uniform is passed 0 on this path, so the jitter is never applied twice.)
+
+- **Size Jitter**: 0 - 100% — how far the size walk may dip below the base size
+- **Hardness Jitter**: 0 - 100% — how far the hardness walk may dip (varies the softness of the dab falloff)
 - **Angle Jitter**: 0 - 100% — per-dab rotation randomization (most visible with non-circular tips)
 - **Opacity Jitter**: 0 - 100% — per-dab transparency randomization
-- **Speed Size**: stroke velocity modulates brush size. A `Faster is` toggle picks the direction (`Thinner`: faster strokes shrink toward 1 px, range 0 – 100%; `Wider`: faster strokes grow up to 3× the base size, range 0 – 300%). A `Sensitivity` toggle (Low / Med / High) tunes how aggressively the velocity-to-size mapping responds to small velocity changes. Velocity is exponentially smoothed (α=0.3) so the size doesn't twitch from noisy pointer deltas.
+- **Speed Size**: stroke velocity modulates brush size. A `Faster is` toggle picks the direction (`Thinner`: faster strokes shrink toward 1 px, range 0 – 100%; `Wider`: faster strokes grow up to 3× the base size, range 0 – 300%; switching back to `Thinner` clamps a value above 100 down to 100). Raw velocity is normalized against a 5 px/ms ceiling and clamped to 1, then averaged over a sliding window — and **that window length is what the `Sensitivity` toggle sets**: Low = 6 samples, Med = 3, High = 2, so Low is the most damped and High the twitchiest. The resulting size *scale* is then eased toward its target by a further 0.25 blend per dab, which is what keeps the width from stepping visibly.
 
-**Texture** (Brushes modal → Texture section)
-- **Built-in textures**: Noise, Canvas, Grain (128×128 grayscale tiles generated procedurally) — `No Texture` disables texturing
-- **Import custom texture**: load any grayscale image (PNG/JPG/WebP) as a brush texture; imported textures show up in the dropdown next to the built-ins and can be deleted again from the same row
-- **Texture blend mode**: Multiply, Subtract, or Overlay (against the brush color)
+**Texture** (Brushes modal → Texture tab). The tab shows a texture dropdown and an Import button; the blend-mode dropdown and the Scale slider appear **only once a texture is selected**.
+- **Built-in textures**: Noise, Canvas, Grain (128×128 grayscale tiles generated procedurally from seamless value noise) — `No Texture` disables texturing
+- **Import custom texture**: accepts any image the browser can decode (the picker is `image/*`, not just grayscale files) and converts it to a grayscale tile with Rec.601 luma weights. Imported textures join the dropdown next to the built-ins; the **Delete** button appears only while an imported texture is selected, so built-ins can't be removed.
+- **Texture blend mode**: Multiply, Subtract, or Overlay. The texture modulates the **dab's alpha (coverage)** — with the color channels carried along premultiplied — rather than blending against the brush color: Multiply scales coverage by the tile value, Subtract by its inverse, Overlay applies the standard overlay curve to coverage.
 - **Scale**: 10 - 300% (tile size relative to the source tile)
-- Texture tiles in document space so adjacent strokes line up across the same pattern grid
+- **Each stroke gets its own tile grid.** The tiling is anchored at the stroke's **first dab** and rotated by a fresh random angle chosen when the stroke begins (`begin_stroke`, seeded from the layer id XOR the current time). Adjacent strokes therefore deliberately do *not* line up on a shared pattern grid — that is what stops a textured brush from showing an obvious repeating lattice across a filled area. The trade-off is that a texture pass is not reproducible: the same stroke re-painted gets a different rotation.
+- **Texture is not part of a preset.** `Save Current` doesn't record it, and selecting any preset **resets the texture to none** (blend mode back to Multiply, scale back to 100%). Pick the preset first, then the texture.
 
-**Sub-brushes** (Brushes modal → Sub-brushes section). Each sub-brush emits an additional dab co-located with every primary dab, so a single stroke can layer multiple textures, sizes, and rotations at once. A tip can carry any number of sub-brushes; each sub-brush picks its own tip from the same preset grid as the primary brush.
+**Sub-brushes** (Brushes modal → Sub-Brushes tab). Each sub-brush emits an additional dab co-located with every primary dab, so a single stroke can layer multiple textures, sizes, and rotations at once. A tip can carry any number of sub-brushes (there is no cap); each sub-brush picks its own tip from the same preset grid as the primary brush, and each gets its own **Remove** button. **Add Sub-Brush** appends one with no tip, Size Ratio 50%, Hardness 100, Opacity Ratio 50%, and Angle Offset and all three jitters at 0.
 - **Size Ratio**: 10 - 200% (sub-brush size relative to the primary brush)
 - **Hardness**: 0 - 100% (independent hardness for the sub-brush)
 - **Opacity Ratio**: 1 - 100% of the primary brush opacity
 - **Angle Offset**: 0 - 360° relative to the primary brush angle
 - **Size / Angle / Opacity Jitter**: 0 - 100% per-dab randomization, independent from the primary brush's dynamics
 
-**Tips & presets** (Brushes modal — left panel)
+**Tips & presets** (Brushes modal → Presets tab)
 - **Tip kinds**: procedural circle (no bitmap), **alpha tip** (1 byte/pixel grayscale, brush color tints the dab), or **color tip** (4 byte/pixel RGBA, color comes from the bitmap itself). Color-tip dabs use premultiplied-alpha "over" compositing so overlapping rotated dabs layer correctly.
 - **Custom brush tips**: import grayscale bitmaps as alpha tips. PNG/JPG/WebP supported.
-- **Brush from Selection** (Edit menu → "Define Brush from Selection"): captures the current marquee selection as a new brush tip. Two variants:
+- **Brush from Selection** — **Edit → Define Brush…** (alpha) and **Edit → Define Color Brush…** (RGBA), both disabled without an active selection. Each prompts for a name, then adds the tip as a custom preset and makes it active, sized to the longer edge of the captured bitmap. Two variants:
   - **Grayscale (alpha) capture**: inverts the source so dark pixels paint opaquely (Photoshop convention) and the selection mask crops to the marquee bounds.
   - **Color capture**: preserves full RGBA so the tip stamps the original colors of the selection (useful for stamp-pattern brushes).
-- **ABR import**: Adobe Brush file support — drops every brush in the file into the preset grid as new tips.
-- **Preset import / export**: dumps the user's custom presets to `lopsy-brushes.json` (Base64-encoded bitmap data plus every dynamic / sub-brush parameter); the same file can be re-imported on any machine to restore the preset library.
-- **Built-in presets** (loaded from the Rust engine; current set): Hard Round, Soft Round, Airbrush, Square, Cross Hatch, Diamond, Star, Slash, Chalk, Spray, Leaf. All built-in presets ship with spacing standardized to 1% of brush size so they paint smooth strokes by default.
-- **Delete**: removes the active preset (only enabled for user-imported custom presets, never built-ins)
+  - The canvas right-click **Define Brush Preset** is a *separate* path with different behavior — it skips the name prompt (the tip is always called "Custom Brush") and opens the Brushes modal afterwards.
+- **ABR import**: Adobe Brush file support — drops every brush in the file into the preset grid as new tips. Parsing runs in a Web Worker, so a large `.abr` doesn't stall the UI.
+- **Import** (Presets tab): one button handling both formats — `.abr` brush files and `.json` preset libraries.
+- **Export** (footer) opens a dedicated **Export Brushes** modal: a checkbox gallery of every preset with **Select All** / **Select None**, a live "*N* selected" count, and an Export button disabled at zero selection. Note it starts with **everything selected, built-ins included** — this is a "choose what to ship" dialog, not a custom-presets-only dump. The selection is written to `lopsy-brushes.json` as `{version: 1, presets: […]}` with Base64-encoded bitmap data plus every dynamic / sub-brush parameter. Re-importing on any machine restores them; imported presets always come back flagged custom, so a re-imported built-in becomes deletable.
+- **Built-in presets** come from two independent sources that share one grid:
+  - **11 procedural presets defined in TypeScript** — Hard Round, Soft Round, Airbrush, Square, Cross Hatch, Diamond, Star, Slash, Chalk, Spray, Leaf — whose tips are generated in code at startup. All ship with spacing standardized to 1% of brush size so they paint smooth strokes by default.
+  - **9 bitmap tips embedded in the Rust engine** — Bubbles, Caligraphic Angle, Caligraphic Rounded, Calligraphic Split, Light Offset, Oblong, Smooth, Star, Triangle. Every PNG in `engine-rs/brushes/` is compiled into the WASM binary by `build.rs` (`include_bytes!`), so adding a file there is all it takes to ship a new tip. They load asynchronously once the engine is up and are appended to the grid, decoded to alpha with the same dark-pixels-paint-opaquely inversion, at size 30 / hardness 100 / spacing 1.
+- **Delete**: removes the active preset, after a confirm prompt. Only enabled for custom presets (imported or user-saved), never built-ins.
 
 **Shape-aware hardness**
 - Tip hardness is implemented as an inner-glow falloff: the tip alpha is inverted, Gaussian-blurred, normalized, then multiplied back in as an opacity mask. This preserves the tip silhouette while softening edges — corners and straight edges soften proportionally to their distance from the interior, so non-circular tips (Square, Star, Slash, Leaf) don't degenerate into circular blobs when hardness is reduced.
@@ -179,8 +198,9 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Font weight**: the dropdown lists exactly the weights the selected family ships, labelled Thin (100) / ExtraLight (200) / Light (300) / Regular (400) / Medium (500) / SemiBold (600) / Bold (700) / ExtraBold (800) / Black (900) / UltraBlack (1000). Families outside the catalog fall back to Regular + Bold. Switching to a family that lacks the current weight snaps to the numerically nearest one it does have.
 - **Font style**: normal or italic
 - **Text align**: left, center, right, justify
-- **Line height**: stored per text layer (fixed at 1.4× the font size); not exposed as an options-bar control
-- **Letter spacing**: stored per text layer (default 0; respected by the path-bound layout) but not exposed as an options-bar control
+- **Line height**: stored per text layer (default 1.4× the font size). Not in the options bar, but adjustable in the **Text panel** (0.5× – 4×).
+- **Letter spacing**: stored per text layer (default 0). Not in the options bar, but adjustable in the **Text panel** (−20 – 200 px); applied in the WASM engine (cosmic-text has no native tracking) and respected by the path-bound layout.
+- **Paragraph spacing**: extra space between paragraphs, stored per text layer (default 0). Text-panel only (0 – 200 px), also applied in the engine.
 - **Underline (`U`)**: toggle a horizontal stroke 10% of the font size below the baseline, 8% of font-size thick
 - **Strikethrough (`S`)**: toggle a horizontal stroke 32% of the font size above the baseline, 8% of font-size thick
 - **Mode**: point text (no wrap) or area text (fixed width with wrapping)
@@ -196,8 +216,10 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 **Editing keys** (active while a text layer is being edited)
 - **Shift+Enter** or **Tab**: commit the edit and exit text editing (plain Enter inserts a newline). Tab also swallows the browser's default focus change so the next single-key shortcut isn't captured by a newly-focused element.
 - **Escape**: cancel the edit. If the layer was newly created in this editing session, it is removed entirely; otherwise the layer keeps its prior text.
-- **Cmd/Ctrl + A**: jumps the cursor to the end of the buffer (simplified select-all — no highlighted-selection support).
-- Arrow keys, Home / End, Backspace / Delete behave as standard text-input keys against the editing buffer.
+- **Caret movement**: ←/→ move one character; **⌥←/→** jump by word (Unicode letter/number/underscore runs); **⌘←/→** and **Home/End** jump to line start/end; **↑/↓** move a line at a time, preserving a *goal column* across short lines via engine-provided caret geometry (on the first/last line they snap to the line boundary).
+- **Selection**: hold **Shift** with any caret-movement key to extend a highlighted selection; **⌘/Ctrl+A** selects all (a real range, not just a caret jump). On the canvas, a plain click places the caret and begins a **drag-select**, **Shift+click** extends the selection, and **double-click** selects the word under the pointer. A click **inside** the text repositions the caret; a click **outside** commits the edit.
+- **Clipboard** (system clipboard): **⌘/Ctrl+C** copies the selection, **⌘/Ctrl+X** cuts it, and **⌘/Ctrl+V** pastes plain text into the buffer (replacing any selection). Image paste is suppressed while a text layer is being edited.
+- **Backspace / Delete** remove the selection if there is one, otherwise the character before/after the caret.
 
 ---
 
@@ -262,15 +284,125 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 
 ## Transform
 
-- **Modes**: free, skew, distort, perspective
-- **Scale**: X and Y independently
-- **Rotation**: arbitrary angle
-- **Translation**: X and Y
-- **Skew**: X and Y
-- **Corner manipulation**: 4-point distort/perspective
-- **Quick transforms**: flip horizontal, flip vertical, rotate 90 CW, rotate 90 CCW
-- **Cmd/Meta+drag a rotation handle**: snaps rotation to 15° increments (the same snap kicks in automatically when grid + snap-to-grid are enabled)
-- **Cmd/Meta+drag a scale handle**: constrains the scale to a uniform aspect ratio
+Transform is **selection-bound** — there is no separate transform tool and no
+"free transform the whole layer" mode. The handles are drawn on top of the
+marching ants, and Escape or `⌘D` tears both down together.
+
+Seeding a transform is an explicit step that individual call sites opt into,
+*not* something `setSelection` does on its own. Committing a marquee, lasso,
+wand or quick-select drag seeds one, as do loading a layer's alpha,
+converting a layer mask to a marquee, arrow-key nudging a selection, and the
+Select menu's Grow / Shrink / Feather dialog. **Select All (`⌘A`) and Invert
+Selection do not** — they call `setSelection` alone, so a fresh `⌘A` selects
+the document without putting any handles on screen.
+
+### Who responds to the handles
+
+- **Move tool** — the only tool that transforms *pixels* through the handles.
+- **Selection tools** (rectangular/elliptical marquee, lasso, magnetic lasso,
+  wand) — grabbing a handle scales the **selection outline only**, leaving
+  pixels untouched. Only the 8 scale handles respond; rotation handles are
+  ignored, so a drag on one falls through and starts a brand-new selection.
+  The rebuilt mask is a rectangle or an ellipse depending on which marquee
+  tool is active, and the rebuild is coalesced to one allocation + GPU upload
+  per animation frame (a full-document mask on a 4K canvas is ~16 MB, so a
+  raw pointer-event-rate rebuild would thrash).
+- **Every other tool** (fill, eyedropper, text, …) ignores the handles
+  entirely and dispatches to its own handler. This is deliberate: at low zoom
+  over a small selection the handle hit-radius can cover the whole selection
+  and would otherwise swallow every click (#222).
+
+### Handles
+
+- **12 handles**: 8 scale (4 corners + 4 edge midpoints) and 4 rotation
+  handles, each sitting 20 document-px diagonally outside its corner and
+  tethered to it by a line. Rotation handles are hit-tested **first**, so they
+  win where the two overlap.
+- **Hit radius** is `8 / zoom` in document space — constant in screen terms.
+  For the Move tool it is additionally clamped to at most 80% of the
+  selection's smaller half-extent (and at least 1 px) so a click near the
+  middle of a small selection can't register as a handle grab.
+- **Cursors**: `nwse-resize` / `nesw-resize` on the corners, `ns-resize` /
+  `ew-resize` on the edge midpoints, `crosshair` on the rotation handles.
+- **Drawing**: a blue (`#00aaff`) quad through the four corners, white filled
+  squares (6 px) on the scale handles, white filled circles (5 px radius) on
+  the rotation handles. All sizes divide by zoom, so the chrome stays the same
+  on-screen size at any magnification.
+- The **marching ants follow translate, rotate, and scale** but *not* skew and
+  *not* the distort/perspective corner offsets — in those three modes the
+  handle box deforms while the ants outline does not.
+
+### Modes
+
+Free / Skew / Distort / Perspective, selected from a segmented button group in
+the Move tool's options bar (visible only while a selection is active).
+**Switching mode commits the in-flight transform and resets to identity** on
+the current selection bounds — a rotation cannot be carried into Distort, it
+gets baked first.
+
+- **Free** — scale from the 8 scale handles, rotate from the 4 rotation
+  handles.
+- **Skew** — edge and corner handles skew instead of scaling, clamped to
+  **±60°** on each axis. `left`/`right` produce vertical skew; `top`, `bottom`
+  **and all four corners** produce horizontal skew only. The edge opposite the
+  one being dragged is pinned via a translate compensation.
+- **Distort** — a corner handle moves that corner alone; an edge handle
+  translates both corners of that edge together. No clamping, so corners may
+  cross over each other.
+- **Perspective** — dragging a corner moves it *and mirrors the other corner
+  of the same horizontal edge* (one `+dx`, the other `−dx`, both `+dy`) while
+  the opposite edge stays fixed, giving the trapezoid / vanishing-point
+  effect. Edge handles behave as they do in Distort.
+- In Distort and Perspective the corner geometry is built from the corner
+  offsets alone, so the **rotation handles have no visible effect** in those
+  two modes.
+
+### Scale, rotate, and modifiers
+
+- **Scale** pins the opposite edge or corner: the box grows by the drag delta
+  and the center moves by half of it. The drag delta is un-rotated into the
+  box's own axes first, so scaling behaves correctly on an already-rotated
+  selection. Scale is floored at **0.01** per axis (and has no ceiling), so a
+  handle cannot be dragged through the far edge to flip content — use the flip
+  buttons for that.
+- **`Cmd`/`Meta` + drag a scale handle** forces `scaleX == scaleY` by
+  **averaging the two axis scales**. On a corner handle that reads as the
+  expected uniform scale; on an *edge* handle only one axis was driven by the
+  drag, so averaging applies half the drag's magnitude to both axes.
+- **Rotation** is measured from the center of the current (scaled, translated)
+  bounds. **`Cmd`/`Meta` + drag a rotation handle** snaps to 15° increments
+  (`π/12`); enabling grid + snap-to-grid applies the same snap automatically
+  without the modifier.
+- Grid + snap-to-grid *also* snaps the pointer position to grid cells while
+  dragging a **scale** handle — a separate effect from the 15° rotation snap.
+- Only `metaKey` is read — this is Cmd on macOS and the Windows/Super key
+  elsewhere, **not** Ctrl.
+
+### Commit lifecycle
+
+- Grabbing a handle pushes a single **"Transform"** history entry, then floats
+  the selected pixels into a GPU texture and composites them live each frame —
+  as an inverse affine matrix in Free/Skew, or as a 4-corner homography in
+  Distort/Perspective.
+- **Releasing the mouse does not commit.** The GPU float is deliberately kept
+  alive so a follow-up grab re-derives from the *original* floated pixels;
+  successive scale/rotate drags therefore do not compound resampling loss.
+- The float is dropped — baking the result into the layer texture — on
+  **Escape**, **`⌘D`**, or **selecting a different layer** in the Layers panel.
+- The selection mask is not recomputed during the drag; it is rebuilt from the
+  committed pixel alpha afterwards, which keeps it from drifting away from
+  what the GPU actually rendered.
+- Floating a **text** layer expands the buffer to the layer's diagonal so
+  rotation doesn't clip the glyphs.
+
+### Quick transforms
+
+- **Flip Horizontal / Flip Vertical** (options bar, next to the mode buttons)
+  apply instantly to the selected content: float → composite the flip matrix →
+  drop → re-select from the committed alpha. They require an active selection.
+- **Rotate 90° CW / CCW** sit in the Move tool's own options-bar group and are
+  **dual-purpose** — with a selection active they rotate the selected content,
+  with no selection they rotate the entire active layer.
 
 ---
 
@@ -286,7 +418,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Fit** (options-bar button): scales the active raster layer so its longest side matches the canvas — preserving aspect ratio — and centers it on the artboard. Useful for bringing an oversized pasted/dropped image into view; reuses the GPU `scaleLayerTexture` path so no pixel data round-trips through JS.
 - **Alt/Option+drag (no active marquee)**: duplicates the active layer in place, then moves the new copy — leaves the original layer untouched.
 - **Alt/Option+drag (with an active marquee)**: copies the selected pixels of the active layer into a floating duplicate and moves that copy, leaving the original pixels under the selection intact (Photoshop-style "alt-drag the selection").
-- **Cmd/Meta+drag (transform handles)**: constrains aspect ratio when scaling and snaps rotation to 15° increments. Grid + snap-to-grid also forces snapping automatically during the transform.
+- **Cmd/Meta+drag (transform handles)**: forces a uniform scale (by averaging the two axis scales) and snaps rotation to 15° increments. Grid + snap-to-grid applies the same rotation snap automatically, and additionally snaps the pointer to grid cells while scaling. The Move tool is the only tool whose handle drags transform pixels — see [Transform](#transform).
 
 ### Paste / Drop behavior
 
@@ -300,6 +432,7 @@ Paste takes one of two routes depending on where the image came from.
 ### Eyedropper
 - Click (or click-drag) to set the foreground color from the composited pixel under the cursor — samples the on-screen result, not just the active layer.
 - **Sample size**: point, 3×3, and 5×5 area-averaging modes are implemented in the sampling logic, but the live canvas eyedropper currently always samples a single pixel — there is no options-bar control to switch sample size yet.
+- In **Lab** documents the sample is decoded to sRGB *before* averaging, since the Lab transform is non-linear and averaging encoded values would not match what is under the cursor. The picked value lands in the foreground swatch **as sampled** — it is not snapped to the mode there — but painting with it is constrained on the way to the texture, so eyedropping a stray color in a Grayscale or Indexed document still paints a legal one (see Color Modes).
 
 ### Fill (Paint Bucket)
 - **Tolerance**: 0 - 255 (default 32)
@@ -365,50 +498,77 @@ Layer effects can be attached to **group** layers, not just leaf layers. New gro
 
 ## Image Adjustments (Non-Destructive)
 
-The Adjustments panel is a reorderable, stackable list of adjustment **nodes** attached to a group layer (the root group acts as the document-level adjustment stack when no group is active). Each node has its own enable toggle, expand/collapse state, and per-type controls. The panel is resizable from its bottom-left corner.
+The Adjustments panel is a reorderable, stackable list of adjustment **nodes** attached to a group layer. It shares the floating **effects drawer** with the Layer Effects panel rather than being one of the dockable panels: the drawer shows the adjustment list when the active layer is a **group**, and the layer-effects list for every other layer type. Layer → **Adjustment Layer…** selects the document's root group, which is the route to the document-level stack. The drawer is dragged by its header (the offset resets when it closes) and resized from the native grip in its bottom-right corner — 420 px wide by default, minimum 280 × 200 px, maximum height 80vh. Because it is anchored to the inner edge of the right dock, it tracks the dock's width as that is resized.
+
+The Add menu is filtered by the document's color mode: outside RGB, the chroma-producing types (Hue / Saturation, Color Balance, Channel Mixer, Photo Filter, Gradient Map, Black & White, Saturation & Vibrance) are hidden, and Curves shows only the composite curve instead of its R/G/B tabs. The filter applies to the **Add menu only** — a node that is already on the stack keeps its full controls whatever the mode. See Color Modes.
 
 Per-node controls (header):
 - **Eye** icon — enable / disable this node without removing it
 - **Trash** — remove
-- **Chevron** — expand / collapse the node's body
+- **Chevron** — expand / collapse the node's body. Expansion is **exclusive**: only one node is open at a time, and opening a second collapses the first. The open-node state is panel-local, so closing the drawer forgets which node was expanded.
 - Drag the header (grip) to reorder; sliders inside the body don't trigger the reorder drag
 - New nodes auto-expand on creation
 
-Available node types (Add menu):
+Panel footer: **Add Adjustment** opens the type menu, and the eye button beside it is a **group-wide bypass** that mutes the entire stack in one click without changing any individual node's enabled state — the whole group is skipped before it reaches the engine, so a bypassed stack costs nothing to render. The bypass is per-group and is saved in the `.lopsy` project, so a document reopens with the same groups muted. An empty stack reads *"No adjustments yet. Add one below."*
+
+Available node types (Add menu — labels as they appear in the menu and node headers):
 - **Exposure** — stops, -5 to +5 (multiplier = 2^value)
 - **Contrast** — -100 to +100
-- **Highlights / Shadows** — Highlights -100 to +100, Shadows -100 to +100, Whites -100 to +100, Blacks -100 to +100
-- **Saturation** — Saturation -100 to +200, Vibrance -100 to +200 (the -100 floor is full desaturation; the cap extrapolates past 1× saturation distance from gray and only clips at the gamut edge)
+- **Highlights & Shadows** — Highlights -100 to +100, Shadows -100 to +100, Whites -100 to +100, Blacks -100 to +100
+- **Saturation & Vibrance** — Saturation -100 to +200, Vibrance -100 to +200 (the -100 floor is full desaturation; the cap extrapolates past 1× saturation distance from gray and only clips at the gamut edge)
 - **Vignette** — 0 to 100 (now correctly piped through the per-group adjustment pipeline)
 - **Curves** — per-channel tone curves (RGB master + R / G / B), evaluated as
   monotone cubic Hermite splines. Master applies to every channel first,
-  then per-channel curves remap their own value. Edited via the
-  `CurveEditor` (drag points, click to add, double-click or yank to remove).
-  Runs as a single 256×1 RGBA LUT texture sampled in the GPU adjustments
-  shader; identity curves bypass the lookup.
-  - **Histogram background**: the active layer's R / G / B histograms render behind the curve as colored channel shading (red/green/blue translucent fills on per-channel tabs, neutral gray on the RGB master). Sampled live from the GPU via the shared `useGroupHistogram` hook so the histogram tracks paint operations in real time.
+  then per-channel curves remap their own value. Runs as a single 256×1 RGBA
+  LUT texture sampled in the GPU adjustments shader; identity curves bypass
+  the lookup.
+  - **Editing** (`CurveEditor`): click empty space to add a point — the new point is picked up for dragging in the same gesture; drag to move; double-click a point to remove it; or *yank* it out by dragging it clear of the top or bottom edge. The two **endpoints are pinned** to x=0 and x=1 — they move vertically only and cannot be removed. The canvas draws quarter gridlines plus a diagonal identity reference, and the curve itself is plotted from the same 256-entry LUT the GPU samples, so the preview cannot drift from the render. A hint line under the canvas reads *"Click to add a point · Drag to move · Double-click to remove"*.
+  - **Reset** button, one per channel — resets only the channel whose tab is active, and is disabled while that channel is already identity.
+  - **Histogram background**: R / G / B histograms render behind the curve. On the **RGB master** tab all three draw as translucent red / green / blue fills composited additively, so overlapping ranges read brighter; on a **per-channel** tab the selected channel is drawn in its own color and the other two are muted to dark gray.
 - **Levels** — Photoshop-style visual editor with a layered RGB histogram and handle-driven controls (no sliders). Per-channel input/output remap with RGB master + R / G / B tabs:
   - **Input black / gamma / white**: three rectangular handles below the histogram strip drive Input Black, Gamma (0.1 – 10, log scale), and Input White. Drag the handles directly; numeric readouts update live.
-  - **Output black / white**: two handles on a gradient bar drive Output Black and Output White.
-  - **Histogram visualization**: R, G, and B histograms render layered as distinct shades of gray with additive ("lighter") compositing, so common ranges read brighter; histogram is sampled live from the active layer's GPU pixels and refreshes as paint operations advance. RGB tab shows all three layers; per-channel tabs focus the active channel and mute the others.
+  - **Output black / white**: two handles on a gradient bar drive Output Black and Output White. Handles cannot cross: input black stays at least 1/255 below input white, and output black cannot pass output white.
+  - **Readouts** sit under each axis — input/output black and white in 0 – 255, gamma to two decimals.
+  - **Histogram visualization**: R, G, and B histograms render layered as distinct shades of gray with additive ("lighter") compositing, so common ranges read brighter. RGB tab shows all three layers; per-channel tabs draw the active channel in its own color and mute the others. With nothing readable yet the strip prints *"No image data"*.
+  - **Reset** button — unlike Curves' per-channel reset, this one restores **all four channels** at once, and is disabled only while every channel is already identity.
   - Master is applied first, then per-channel levels. Compiled to a 256×1 LUT and shares the GPU adjustments path with Curves; identity levels bypass the lookup.
+  - Note that Levels keeps its R / G / B tabs in **every** color mode — the capability flag meant to hide them outside RGB has no consumer (see Color Modes → Declared but not enforced), so Levels and Curves disagree here.
 - **Invert** — single toggle (no numeric controls); inverts RGB at composite time.
 - **Hue / Saturation** — Hue -180° to +180°, Saturation -100 to +100, Lightness -100 to +100. Operates per-pixel in HSL space.
-- **Color Balance** — tone-range tabs (Shadows, Midtones, Highlights) each with Cyan ↔ Red, Magenta ↔ Green, and Yellow ↔ Blue sliders (-100 to +100). Per-pixel weighting determines how much each tonal range contributes to the shift.
-- **Photo Filter** — Color (color picker), Density 0 - 100, Preserve Luminosity (checkbox). Blends a tinted overlay over the pixel; when Preserve Luminosity is on, the tinted result is re-luminance-matched to the source.
-- **Black & White** — six channel sliders (Reds, Yellows, Greens, Cyans, Blues, Magentas), each -200 to +300, controlling how strongly that hue contributes to the monochrome output luminance.
-- **Channel Mixer** — output-channel tabs (R / G / B) each with Red, Green, Blue (-200 to +200), and Constant (-200 to +200) sliders. Lets a single output channel be remixed as a linear combination of the source channels plus a bias.
-- **Gradient Map** — visual gradient editor (shared `GradientEditor` component) with draggable rectangular stop handles on a live gradient bar; clicking an empty spot on the handle row inserts a new stop at that position. The selected stop drives a full `ColorPicker` (HSV square + hue strip + RGB/HSV/hex fields). A minimum of 2 stops is enforced. The stop list is compiled into a 256×1 RGBA LUT at sync time and applied as a luminance-indexed lookup in the GPU adjustments shader.
+- **Color Balance** — tone-range tabs (Shadows, Midtones, Highlights) each with Cyan — Red, Magenta — Green, and Yellow — Blue sliders (-100 to +100). Per-pixel weighting determines how much each tonal range contributes to the shift. The selected tab is view state, not node state: it always opens on **Midtones**, so re-expanding a node does not return to the range you were last editing.
+- **Photo Filter** — a "Filter color" swatch (native color input, default warm amber `#ffa000`), Density 0 - 100 (default 25), and Preserve Luminosity (checkbox, **on** by default). Blends a tinted overlay over the pixel; when Preserve Luminosity is on, the tinted result is re-luminance-matched to the source.
+- **Black & White** — six channel sliders (Reds, Yellows, Greens, Cyans, Blues, Magentas), each -200 to +300, controlling how strongly that hue contributes to the monochrome output luminance. A new node starts at Photoshop's classic mix — Reds 40, Yellows 60, Greens 40, Cyans 60, Blues 20, Magentas 80 — and those are also the per-slider double-click reset targets.
+- **Channel Mixer** — color-coded output-channel tabs (R / G / B) each with Red, Green, Blue (-200 to +200), and Constant (-200 to +200) sliders. Lets a single output channel be remixed as a linear combination of the source channels plus a bias. A new node opens on the Red output at identity (Red 100, others 0); each slider's double-click reset target is 100 for the source channel matching the active output tab and 0 for the rest, so a double-click restores identity rather than zeroing the channel.
+- **Gradient Map** — visual gradient editor (shared `GradientEditor` component) with draggable rectangular stop handles on a live gradient bar; clicking an empty spot on the handle row inserts a new stop at that position. The selected stop drives a full `ColorPicker` (HSV square + hue strip + RGB/HSV/hex fields), with a readout showing *Stop N of M* and its position as a percentage, plus a trash button that deletes it. A minimum of 2 stops is enforced — the delete button greys out at two. New nodes start black → white. The stop list is compiled into a 256×1 RGBA LUT at sync time and applied as a luminance-indexed lookup in the GPU adjustments shader.
+
+**Histogram sourcing** (shared by the Curves and Levels editors via the `useGroupHistogram` hook): the histogram is not the active *layer* — it aggregates every **visible, non-group child of the active group** (falling back to the root group's children), read back from their GPU textures. Pixels with alpha below 8 are skipped so the transparent parts of a half-painted layer don't swamp the zero bin, and large layers are stride-sampled to roughly 50,000 pixels each. The vertical scale is the 99.5th percentile of the non-empty bins rather than the maximum, so one flat-fill spike can't flatten everything else. It refreshes when pixels change — paint operations show up live — but **deliberately not when an adjustment changes**, so what you see behind the curve is always the source distribution, never the graded result. If the textures aren't readable yet it retries for a few frames before falling back to the empty state.
 
 All 14 adjustment types now have first-class UI controls and are fully GPU-accelerated. Internally the node list compiles down to the legacy flat `ImageAdjustments` shape so the GPU compositor's adjustment pass is unchanged.
 
-**Default adjustment stack on new documents**: every freshly created document (and every image opened or flattened) seeds the root group with four identity-state adjustment nodes — Levels, Curves, Exposure, and Hue/Saturation — so users can grade an image without first hunting through the Add menu. Identity nodes are bypassed in the GPU pipeline so there is no performance cost until a slider is moved.
+**How a stack of nodes composes.** That flattening step is worth understanding, because it decides what happens when the same type appears twice:
+- **Additive types accumulate.** Exposure, Contrast, Highlights & Shadows, Saturation & Vibrance, Vignette, Hue / Saturation, and Color Balance sum their values across every enabled node — two `+1` Exposure nodes equal one at `+2`.
+- **Curves, Levels, Photo Filter, Black & White, and Gradient Map are last-enabled-wins.** A second node of one of these types replaces the first outright rather than chaining with it; stacking two Curves nodes does not apply one curve after the other.
+- **Channel Mixer composes across output channels but not within one.** Each node writes only the output channel on its active tab, so three nodes (one on R, one on G, one on B) combine into a full mixer matrix, while two nodes on the same output tab collapse to the last one.
+- **Invert toggles.** Each enabled Invert node flips the flag, so a second one cancels the first and the composite comes out uninverted.
+- **Order matters only for the last-wins types.** Addition is commutative, so dragging an Exposure node above or below a Contrast node changes nothing; reordering is meaningful when two nodes compete for the same slot.
+- Disabled nodes drop out of the aggregation entirely rather than contributing an identity value.
+
+**Default adjustment stack on new documents**: every freshly created document (and every image opened or flattened) seeds the root group with four identity-state adjustment nodes — Levels, Curves, Exposure, and Hue / Saturation — so users can grade an image without first hunting through the Add menu. Identity nodes are bypassed in the GPU pipeline so there is no performance cost until a slider is moved. New Document filters that set against the chosen color mode, so a new Grayscale, Lab, or CMYK document gets three nodes rather than four (Hue / Saturation is dropped).
 
 **Adjustment Layer… menu (Layer menu)**: a one-click entry that selects the document's root group, opens the effects/adjustments drawer, and shows a brief explanatory info modal — designed to onboard new users to Lopsy's adjustment-node model (Photoshop puts each adjustment on its own layer; Lopsy stacks them inside the group's adjustment list).
 
 ---
 
 ## Filters (Destructive, GPU-Accelerated)
+
+### Filter Dialog (shared)
+
+Most filters open the same generic **Filter Dialog** — a 380 px floating modal built from a per-filter parameter list. Numeric params render as sliders; a param with a small fixed value set renders as an inline **segmented toggle** instead (e.g. Add Noise's Mode and Distribution, Emboss's Type). Params flagged doc-scaled raise their slider ceiling to `1.5 × longest-document-side` (capped 5000 px). Even a zero-parameter filter (Find Edges) opens the dialog — just the Preview toggle and Apply / Cancel. The same dialog machinery also backs the Select menu's **Grow / Shrink / Feather** commands. Pattern Fill and Color LUT are the exceptions: each has its own dedicated dialog (pattern-thumbnail grid, LUT preset picker + `.cube` import).
+
+- **Preview** checkbox (off by default): enabling it renders the filter live on the canvas *and* turns the modal's dark backdrop fully transparent and click-through, so the whole image stays visible while you tune — only the dialog itself remains interactive. Slider changes are debounced ~150 ms before the preview re-renders. Confirming with Preview on commits the exact previewed pixels.
+- **Regenerate** button (randomized filters only) — see the Regenerate note under Render.
+- **Enter** applies the filter; **Escape** cancels. Cancelling (or closing while a preview is live) discards the preview and restores the layer.
+- **Draggable**: the title-bar header (cursor: grab) drags the dialog anywhere on screen, so it can be moved clear of the region being previewed.
 
 ### Blur
 - **Gaussian Blur**: radius 1 - 400 px
@@ -430,7 +590,7 @@ All 14 adjustment types now have first-class UI controls and are fully GPU-accel
 - **Threshold**: level 0 - 255
 
 ### Noise
-- **Add Noise**: amount 1 - 100 (default 25), Mode: Color / Mono (monochromatic)
+- **Add Noise**: amount 1 - 100 (default 25), Mode: Color / Mono (monochromatic), Distribution: Uniform / Gaussian (Uniform is the classic evenly-spread noise; Gaussian clusters values near zero for a finer, film/sensor-grain look)
 
 Add Noise runs through the standard generic filter dialog with live preview and the **Regenerate** button (see the Regenerate note under Render) — each regenerate draws a fresh random seed so users can spin through noise patterns before committing. (The former standalone "Fill with Noise" filter was just Add Noise at maximum amount and has been removed.)
 
@@ -489,6 +649,8 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 | HSL | Hue, Saturation, Color, Luminosity |
 | Group-only | Pass Through |
 
+The four **HSL** modes are RGB-only: they decompose RGB into HSL, so every other color mode drops them from the dropdown and coerces any layer already using one to Normal on conversion (see Color Modes).
+
 ### Pass Through (group blend mode)
 
 - Available exclusively on **group** layers. New groups default to **Normal** (isolated) compositing — children pre-composite into a group buffer first, then the group's opacity/effects apply to the combined result, so lowering a group's opacity scales the composited result rather than attenuating each child individually (this diverges from Photoshop, which defaults groups to Pass Through). Pass Through stays as an explicit, user-selectable mode for layouts that genuinely need it.
@@ -521,26 +683,69 @@ Lopsy has **no** Adjustment-layer or Fill-layer type. Adjustments are non-destru
 - **Color tag**: optional swatch (red, orange, yellow, green, blue, purple, gray, or none) shown as a vertical bar on the left edge of the layer row. Set via the layer row's right-click context menu; useful for visually grouping/organizing layers in a deep stack.
 
 ### Layer Operations
-- **New Layer** (`⇧⌘N`, menu-only accelerator — see Single-Key Shortcuts note): appends a blank raster layer above the active one
+- **New Layer** (`⇧⌘N`, menu-only accelerator — see Single-Key Shortcuts note): appends a blank raster layer above the active one. Refused in **Indexed** color mode (the document is a single flat surface) with an info toast pointing at converting back to RGB. The same guard covers **Group Layers** and **Duplicate Layer**, but *not* text layers — clicking with the Text tool in an Indexed document still adds one.
 - **Duplicate Layer** (`⌘J`, menu-only accelerator): clones the active layer in place
 - **Group Layers** (`⌘G`, menu-only accelerator): wraps the currently-selected layers in a new group
 - **Merge Down** (`⌘E`): composites the active layer into the layer below (the only layer-menu accelerator actually wired to a key handler)
 - **Flatten Image**: composites every visible layer into a single raster layer
 - **Rasterize Layer**: bakes a **text** layer's current visual into pixels in place, reading the engine's current x/y/w/h so the result lands at the visible position even after GPU texture expansion from upstream paint ops. The button appears in the Layers panel toolbar only while a text layer is active — there is currently no rasterize entry point for shape or group layers.
 - **Rasterize Layer Style**: bakes a layer's effects (drop shadow, glow, stroke, color overlay) into the layer's pixels and clears the effect descriptors
-- Reorder (drag)
-- Move to group (reparent)
-- Rename
+- Reorder (drag) and move to group (reparent) — both are the same gesture on the row's drag grip; see Reordering & Drag-and-Drop below
+- Rename — double-click the layer's name in its row (see Row Layout)
 - Align (left, center-h, right, top, center-v, bottom) — works on **group** layers too: a group has no pixels of its own, so it aligns by the combined content bounds of its descendants and shifts the group plus every child together (matching how dragging a group with the Move tool behaves)
 - Add/remove/toggle mask — works on raster, text, shape, and **group** layers; group masks are sampled at composite time so the entire group is masked as a single unit (with the group's own opacity and blend mode applied on top)
-- **Cmd/Ctrl+click a layer thumbnail**: loads that layer's alpha as a marquee selection (non-transparent pixels become the selection)
+- **Cmd/Ctrl+click a layer thumbnail**: loads that layer's alpha as a marquee selection — each pixel's alpha becomes the selection mask value (anything below 1 is dropped), so a soft edge yields a feathered selection rather than a hard one. Any live GPU float is committed first and the layer's JS pixel cache is cleared, so the selection reflects the finished pixels. It also **seeds a transform state** from the resulting bounds and schedules a prefloat, meaning the selection comes up ready to scale/rotate. **Group rows have no thumbnail** (they show a collapse chevron in that slot), so there is no way to load a group's combined alpha this way.
 - **Click a layer's mask thumbnail**: always enters mask edit mode (focus switches to the mask reliably; no toggle behavior).
-- **Set layer color tag**: right-click a layer row to open a context menu with the 7 tag colors plus "None" to clear.
+- **Set layer color tag**: right-click a layer row to open a context menu with the 7 tag colors plus "None" to clear. The menu is a `role="menu"` popup at the pointer with a swatch grid, a divider, and a **Cancel** item; any mousedown elsewhere or Escape closes it. Right-clicking the **root group** row opens nothing.
 
 ### Layers Panel Row Layout
-- Each layer row shows (left to right): the visibility eye, the layer thumbnail (plus mask thumbnail if a mask is present), the layer name, an **Effects button**, and the lock toggle on the far right.
-- **Effects button**: opens that layer's effects/adjustments drawer. The icon turns green when the layer has at least one active effect or adjustment node, so it's possible to spot effected layers at a glance from anywhere in the stack.
-- **Color tag bar**: optional swatch (set via right-click → color tag) appears as a vertical bar on the left edge of the row.
+
+Rows are listed **top layer first** (the display list walks the layer order in reverse) and each is a fixed **36 px** tall. Nesting is shown by indentation only — **8 px of left padding per depth level** — and a layer inside a collapsed group is omitted from the list entirely, at any depth.
+
+Controls in a row, left to right:
+
+1. **Color tag bar** — an optional vertical bar on the row's left edge, present only when a tag is set (red, orange, yellow, green, blue, purple, gray).
+2. **Drag grip** — a `GripVertical` handle, `cursor: grab` (`grabbing` while dragging). This is the **only** place a reorder drag can start; dragging the row body does nothing. Absent on the root group.
+3. **Thumbnail** *(non-group layers)* — a 24 px canvas. **Group rows show a collapse chevron here instead**, followed by a folder icon; groups therefore have no thumbnail at all.
+4. **Name** — double-click to rename in place. Enter commits (via blur), Escape cancels, and a blank or whitespace-only value is discarded, keeping the previous name.
+5. **Opacity readout** — the layer's opacity as a rounded percentage, rendered as a button. Clicking it toggles a **slider row open beneath the layer** (0–100, one per row at a time); clicking again closes it. Pointer-down on the slider pushes a single "Change Opacity" history entry, so a whole drag is one undo step. Absent on the root group.
+6. **Visibility eye** — toggles the layer on/off. Note this sits **near the end of the row, after the opacity readout** — not at the left edge. Absent on the root group.
+7. **Effects button** — opens that layer's effects/adjustments drawer (see below).
+8. **Lock toggle** — the far-right control; locked rows are also styled as locked.
+
+The **root group row** is deliberately stripped down: no grip, no opacity readout, no visibility eye, and no context menu — only the effects button and the lock toggle remain.
+
+- **Effects button**: a three-way toggle — if the drawer is already open on this layer it closes; otherwise the row's layer is made active and the drawer opens. Its icon turns **green** (`#4caf50`) to flag decorated layers at a glance. The test is `enabled` for the five effects, but for groups it is simply "has any adjustment node at all" — a group whose nodes are **all disabled still shows green**. (`hasEnabledNodes` exists in `adjustment-node-utils.ts` for exactly this check but has no callers.)
+- **Row states**: the active layer takes an accent tint; other multi-selected layers get a 50 % blend of that tint so the two are distinguishable.
+
+#### Mask Sub-Row
+A layer with a mask gets its **own row beneath the layer row** (indented, on a tertiary background) — the mask thumbnail is not inline in the layer row. It holds:
+
+- A **20 px mask thumbnail**, outlined in the accent color while mask edit mode is active on that layer and dimmed to 40 % when the mask is disabled. Clicking it selects the layer and enters mask edit mode. Unlike the layer thumbnail — which the engine downscales on the GPU (`readLayerThumbnail`, retried for up to 10 animation frames while the texture warms up, and subscribed to that one layer's pixel version so a brush dab doesn't trigger a full readback) — the mask thumbnail is drawn by a **CPU nearest-neighbour loop** over the mask array, with no store subscription.
+- A **"Mask"** label.
+- **Convert mask to selection** — turns the mask into a marquee (seeding a transform state from its bounds, like the alpha-selection route above) and leaves mask edit mode. It converts **inverted**: the selection value is `255 − mask`, so the region the mask *hides* becomes the selection and the visible region is excluded. Since a freshly added mask is filled with 255 (fully visible), the computed mask is empty, no bounds are found, and the button changes nothing but the mask edit mode — it produces a selection only once something has been painted **black** into the mask.
+- **Delete mask** — removes the mask and exits mask edit mode.
+
+### Reordering & Drag-and-Drop
+
+Dragging a row's grip starts a pointer-driven reorder; there is no HTML5 drag-and-drop and no keyboard equivalent. The dragged row fades to 40 % opacity, and the drop target is previewed live:
+
+- **Between rows** — the pointer's position within the row it is over picks a gap: above the row in the top half, below it in the bottom half. The gap is drawn as a **2 px accent line** on the neighbouring row's edge.
+- **Into a group** — hovering the **middle half (25 %–75 %) of a group row** targets the group itself instead of a gap, drawn as a **2 px accent outline plus a tinted background** on that row. This is offered only when the move is legal (`canMoveToGroup` rejects dropping a group into itself or its own descendant).
+- Dropping in the **same place** (the gap immediately above or below the row's original position) is a no-op, as is a drop onto a group the layer is already in.
+
+Reparenting is inferred from the gap's neighbour rather than from indentation: the item **below** the gap decides which group the drop lands in, which is what stops a layer from being sucked into a group when it is dropped at that group's lower boundary. If that neighbour resolves to a different parent than the dragged layer's — and the move is legal — the layer is reparented; otherwise the drop is a plain reorder within the current parent.
+
+### Layers Panel Toolbar
+
+A row of icon buttons pinned below the list. Three entries are **conditional**, so the toolbar's contents change with selection:
+
+- **Add Layer** and **New Group** — always present.
+- **Group Layers** — appears only once **two or more** non-root layers are selected.
+- **Duplicate Layer** — always present, disabled when there is no active layer or the root group is active.
+- **Add Mask** — appears only when the active layer has **no** mask yet.
+- **Rasterize Layer** — appears only when the active layer is a **text** layer (see Layer Operations).
+- **Delete Layer** — pushed to the far right by a spacer. Deletes every selected non-root layer, and is disabled when the document is down to its last layer or nothing deletable is selected.
 
 ### Multi-Select in the Layers Panel
 - **Plain click**: selects only the clicked layer (standard behavior)
@@ -628,11 +833,11 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Wrap**: a second options-bar checkbox next to Dim pattern (also only visible while Show Seamless Pattern is on, default off). When enabled, layer compositing wraps modularly at the document edges — content dragged off one side reappears on the opposite side, so a tile can be edited across its own seam. The wrap happens in the blend shader, which shifts each layer's source offset per axis to whichever tile center is nearest the fragment; the layer texture itself is never rewritten, so repeated moves keep sampling the original pixels instead of compounding an already-wrapped result.
 
 ### UI
-- **Foreground / background color**: with swap and reset
-- **Recent colors**: up to 28
+- **Foreground / background color**: live in the [Color panel](#color-panel) only — not in the toolbox. Swap has an icon button (and `X`); reset to black/white is keyboard-only (`D`), with no button anywhere.
+- **Recent colors**: capped at 28, and seeded full with a 28-swatch starter palette — see [Recent colors](#recent-colors)
 - **Panel visibility**: togglable per panel from the panel toolbar — see [Panel Docking & Layout](#panel-docking--layout). There is no separate sidebar-collapse toggle, and individual panels no longer collapse to a header; they are sized by their dock, split, or floating window instead.
 - **Mask edit mode**: on/off
-- **Draggable modals & drawers**: filter dialogs, pattern fill, layer effects, adjustments, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked). Dockable panels use the docking system's own drag instead. The effects and reference drawers sit immediately to the left of the right dock and shift as that dock is resized.
+- **Draggable modals & drawers**: filter dialogs, pattern fill, layer effects, adjustments, the Brushes modal, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked). Dockable panels use the docking system's own drag instead. The effects and reference drawers sit immediately to the left of the right dock and shift as that dock is resized.
 - **Filter / pattern preview overlay**: when live preview is enabled the dim backdrop is removed and pointer-events on the overlay are disabled so the canvas is fully visible while the modal stays interactive
 
 ### Global UI Conventions
@@ -641,10 +846,19 @@ All three operations are fully undoable, read pixels from the GPU via `readLayer
 - **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the status bar resets the viewport zoom to 100% (1×).
 - **Color swatch selection**: clicking the foreground or background swatch in the Color panel makes it the one the picker, hex field, and RGBA sliders edit; clicking a recent-color swatch applies that color to whichever swatch is currently active. (The old double-click-to-expand behavior went away with panel collapsing.)
 - **Layer name double-click → rename**: double-clicking a layer row's name turns it into an inline text input; Enter commits, Escape cancels.
+- **Menu submenus**: a menu item can carry a nested submenu, marked with a `›` arrow and opened by **hovering** the parent row (Image → Mode is the only one today). The flyout is positioned against the viewport rather than nested inside the dropdown — long menus like Filter set `overflow-y: auto`, which per CSS Overflow 3 forces the horizontal axis to `auto` too and would otherwise clip a `left: 100%` child at the padding box.
+
+### Notifications & Error Toasts
+Transient messages surface as toasts stacked in a fixed panel at the **top-right** of the window (max width 360px, newest appended at the bottom). The stack is announced to assistive tech via `role="status"` / `aria-live="polite"`.
+
+- **Two levels**: `error` (red left border) and `info` (accent-colored left border). No title, no icon — just the message and a dismiss control.
+- **Manual dismiss only**: toasts do **not** auto-expire on a timer; each stays until the user clicks its **×** button. Multiple messages accumulate in the stack rather than replacing one another.
+- **Error triggers** (all routed through `notifyError`): failures to open a file, open/load or save a project, import a PSD / DNG / RAF, paste an image, or export (Quick Export PNG, Export…, or Export PSD); plus lower-level guards such as "Engine not ready", "No active layer", an empty decode result, and WebGL context init / restore failures. Messages that wrap an exception append a human-readable cause.
+- **Info trigger**: importing a PSD whose unsupported layer types were rasterized posts an info toast noting the pixels are preserved but no longer editable as their original type.
 
 ### Canvas Right-Click Context Menu
 Right-clicking the canvas opens a small menu with:
-- **Define Brush Preset** — only shown when a marquee selection is active. Captures the selected pixels of the active layer as a new brush tip and opens the Brushes modal with the new preset selected. Same code path as Edit → "Define Brush from Selection".
+- **Define Brush Preset** — only shown when a marquee selection is active. Captures the selected pixels of the active layer as a new brush tip and opens the Brushes modal with the new preset selected. This is a **separate implementation** from Edit → Define Brush…, not a shared one: it names the tip "Custom Brush" without prompting and opens the modal, where the Edit-menu version prompts for a name and leaves the modal closed.
 - **Deselect** — clears the active marquee selection (disabled when there is none).
 - **Select All** — selects every pixel in the document (equivalent to ⌘A).
 
@@ -698,16 +912,16 @@ A floating, draggable, resizable modal (toggled from the toolbar) for keeping re
 
 ## Panel Docking & Layout
 
-Seven panels — **Navigator, Info, Color, Layers, Channels, History, Paths** — live in a docking system rather than a fixed sidebar. Each is a tab that can be docked to any workspace edge, split alongside another panel, grouped into tabs, or floated as its own window. (The Reference Image drawer, layer-effects drawer, and Adjustments panel are *not* part of this system — they remain free-floating drawers.)
+Eight panels — **Navigator, Info, Color, Layers, Channels, History, Paths, Text** — live in a docking system rather than a fixed sidebar. Each is a tab that can be docked to any workspace edge, split alongside another panel, grouped into tabs, or floated as its own window. (The Reference Image drawer, layer-effects drawer, and Adjustments panel are *not* part of this system — they remain free-floating drawers.)
 
 ### Panel Toolbar
 - A vertical rail on the far right with one icon per dockable panel, plus a **Reference** button for the reference-image drawer. An icon is highlighted while its panel is somewhere in the layout.
 - Clicking an icon does one of three things depending on the panel's current state: **absent** → add it at its default spot; **present but not the active tab of its group** → bring that tab forward; **present and already active** → close it.
 - Closing a panel is toolbar-only — tabs have no close (`×`) button.
-- Panels re-added from the toolbar land in the **right dock**, inserted so the vertical order stays canonical (Navigator, Info, Color, Channels, History, Paths, then Layers at the bottom, mirroring the pre-dock sidebar).
+- Panels re-added from the toolbar land in the **right dock**, inserted so the vertical order stays canonical (Navigator, Info, Color, Text, Channels, History, Paths, then Layers at the bottom, mirroring the pre-dock sidebar).
 
 ### Default Layout
-- A **Color/Info** tab group above a **Layers/Channels** tab group in the right dock (50 / 50 split), with **Color** and **Layers** as the active tabs; the other three panels (Navigator, History, Paths) start closed.
+- A **Color/Info** tab group above a **Layers/Channels** tab group in the right dock (50 / 50 split), with **Color** and **Layers** as the active tabs; the other four panels (Navigator, History, Paths, Text) start closed.
 - Default dock thickness: left 280 px, right 312 px, top 220 px, bottom 220 px.
 - On a **coarse-pointer device** (touch), a first run starts with *no* panels open so the canvas gets the whole screen.
 
@@ -759,10 +973,21 @@ Tab strips follow the WAI-ARIA tabs pattern, so a group's tabs are reachable wit
 
 ## Navigator Panel
 
-- Live thumbnail of the composited canvas (refreshed by copying the main WebGL canvas; throttled to ~5 Hz so it stays cheap during heavy strokes)
-- **Viewport indicator**: a translucent rectangle showing the current viewport bounds inside the document; click anywhere on the minimap to recenter the viewport, or drag the indicator rectangle to pan
-- **Zoom slider**: log-scaled, mapping slider position to `64^(value/100)` so the full 0.01× – 64× zoom range is reachable without coarse jumps
-- **Zoom readout**: displays the current zoom as a percentage
+### Minimap Thumbnail
+- A live thumbnail of the **composited document**, sized to the panel's width with the document's aspect ratio preserved and capped at **300 px tall**.
+- The image is produced by the engine, not by copying the on-screen canvas: `readCompositeThumbnail` downscales the composite texture **on the GPU** (blit shader, LINEAR filtering) into a small RGBA8 texture and reads back only that, returning an 8-byte header (`width`, `height` as u32 LE) followed by RGBA pixels, which the panel unpacks and `putImageData`s onto a 2D canvas. Only the thumbnail-sized result crosses the GPU boundary, so the cost is independent of document size — a full-composite readback would be ~67 MB per tick at 4K. The composite texture is flipped to LINEAR filtering for the downscale and restored to NEAREST afterwards so the compositor's final blit never samples bilinearly.
+- **Refresh cadence**: a 200 ms interval (5 Hz), but ticks are **skipped entirely while any pointer gesture is in progress**. The readback stalls the GPU pipeline, so painting, panning, moving, transforming, marquee-dragging, gradients, crop, mesh warp, and tilt-shift all suppress it. When the gesture ends, one **catch-up tick** fires on the next event-loop turn so the thumbnail reflects the final pixels without waiting out the interval.
+
+### Viewport Indicator
+- A translucent blue rectangle (`rgba(74, 158, 255, …)`) showing the visible viewport bounds within the document.
+- **Click or drag anywhere on the minimap** to recenter the viewport on that point — pointer-down recenters immediately and captures the pointer, so a drag scrubs the view continuously. The indicator itself is **not** a draggable object: it is `pointer-events: none`, so there is no separate "grab the rectangle" affordance and no way to drag it relative to where you grabbed it. The minimap shows a crosshair cursor.
+- The rectangle is floored at **4 px** in each axis so it stays visible when zoomed far out, and the computed rect is not clamped to the thumbnail — the wrapper's `overflow: hidden` is what keeps it from escaping.
+
+### Zoom Slider
+- **Range: 10 % – 600 %**, not the full canvas zoom range. The slider is log-scaled as `0.1 × 60^(position/100)` over a 0–100 track (step 0.5).
+- Because the viewport itself allows 0.01× – 64×, the slider **cannot reach most of that range**: its reported position clamps to the 0.1× – 6× window, so at any zoom above 600 % (or below 10 %) the handle pins to the end of the track while the readout keeps showing the true zoom.
+- **Double-click the slider** to snap back to 100 %.
+- **Zoom readout**: the current zoom as a rounded percentage.
 
 ---
 
@@ -788,6 +1013,19 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 
 ---
 
+## Text Panel
+
+A dockable typography panel (a superset of the text options bar) for styling the active/selected committed text layer. Grouped into four sections:
+
+- **Font**: the same searchable font browser as the options bar, a **weight** dropdown (only the weights the family ships), a **style** dropdown (Normal / Italic), and a row of **recent fonts** used this session (session-only, click to re-apply).
+- **Character**: **Size** (1 – 500 px), **Line height** (0.5 – 4×, step 0.05, default 1.4), **Letter spacing** (−20 – 200 px, step 0.5, default 0).
+- **Paragraph**: an **alignment** button group (left / center / right / justify) and **Paragraph spacing** (0 – 200 px, default 0).
+- **Decoration**: **underline (U)** and **strikethrough (S)** toggles.
+
+Panel edits and options-bar edits share the same apply path (`apply-text-setting.ts`): changing a control updates the tool default *and*, when a committed text layer is active, re-styles that layer and records one history entry per edit (slider drags coalesce into a single entry). Letter spacing and paragraph spacing are applied inside the WASM engine because cosmic-text implements neither.
+
+---
+
 ## Symmetry
 
 - **Axes**: horizontal, vertical, both (4-way), or radial. Radial symmetry mirrors each dab into **2 - 32 evenly-rotated copies** around the center (kaleidoscope-style) and takes precedence over the horizontal/vertical mirrors when its segment count is ≥ 2.
@@ -803,6 +1041,91 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 - **Color spaces**: sRGB, Display P3, Rec. 2020, Linear sRGB
 - **FP16 / wide gamut**: RGBA16F textures when GPU supports `EXT_color_buffer_float`
 - **EDR passthrough**: unclamped values for extended dynamic range displays
+
+### Color Panel
+
+The only surface that edits the foreground and background colors directly — there are **no foreground/background swatches in the toolbox**. With the panel closed, the swatches can still be changed by the eyedropper, the `X` / `D` shortcuts, a double-click on a shape's fill/stroke swatch, or clicking an existing text layer with the Text tool (which adopts that layer's color).
+
+- **Swatch stack**: a 32px square holding the **foreground** swatch (24px, top-left, drawn over) and the **background** swatch (16px, bottom-right, behind) — the overlapping Photoshop arrangement. Clicking either one makes it the *active* swatch, marked with an accent border plus a 1px accent ring. Active-swatch choice is panel-local React state, so it is not persisted and reverts to the foreground whenever the panel remounts.
+- **Swap** sits beside the stack as an icon button (`ArrowUpDown`, labelled *Swap Colors (X)*). **There is no reset button** — restoring black/white is keyboard-only, via `D`.
+- **Every swatch in the panel is a real `<button>`** with `aria-label="Color: rgb(r, g, b)"`, painted over an 8px conic-gradient checkerboard so partial alpha reads visually. The label reports RGB only; alpha is not announced.
+- The active swatch is what the picker, the hex field, and the sliders all read and write — the panel has a single editing target rather than separate controls per swatch.
+
+### Color Picker (shared component)
+
+Used by the Color panel, the Gradient modal, Gradient Map stops, the shape fill/stroke popover, and the guide-color picker. Every surface is a `<canvas>` redrawn on color change and on resize (via `ResizeObserver`), allocated with the app's wide-gamut `contextOptions`.
+
+- **SV square**: white → full-hue horizontally, transparent → black vertically. Drag sets saturation from x and brightness from `1 - y`, both clamped to the box.
+- **Hue bar**: 0 – 360° across the six primaries.
+- **Alpha bar**: 0 – 100% over the current color, quantized to two decimals (`round(x * 100) / 100`).
+- **Hue is preserved through neutrals**: when the incoming color has `r === g === b` the picker keeps the hue it already had instead of letting the RGB→HSV round-trip collapse it to 0. Dragging brightness down to black and back up returns the same hue rather than snapping to red.
+- **Grayscale documents** get a different picker entirely: the SV square and hue bar are replaced by a single black → white value ramp that emits a neutral `r = g = b`, with the alpha bar below it.
+- **Indexed documents** replace the picker with the **document palette** as a swatch grid (up to 256 entries, capped at 160px tall and scrolling so it can't push the sliders out of the panel). The entry matching the active color gets the accent ring — matched on RGB only, so alpha is ignored for that highlight.
+
+### Hex field and sliders
+
+- **Hex**: a 6-character monospace input rendered uppercase, prefixed by a static `#`. Commits on **Enter** or blur; unparseable input silently reverts to the current color. The parser also accepts 3- and 8-digit forms, but `maxLength={6}` puts the 8-digit RGBA form out of reach here, and the commit deliberately **keeps the swatch's existing alpha** rather than taking one from the hex.
+- **Sliders follow the document color mode**: RGB → **R / G / B** 0 – 255; Grayscale → a single **K** 0 – 255; Lab → **L** 0 – 100 and **a** / **b** −128 – 127; CMYK → **C / M / Y / K** 0 – 100. The **Alpha** slider (0 – 100) is always present, in every mode including Indexed.
+- Indexed documents keep the ordinary **R / G / B sliders and hex field** even though the picker is gone, so an arbitrary color can still be typed — it just snaps to the nearest palette entry on the way in.
+- The Lab and CMYK sliders hold no state of their own: they are derived from the active sRGB color on every render and converted straight back on change, so a long series of small drags can round-trip a unit or two away from where it started.
+- **Every write path is funnelled through `convertColorToDocMode`** — the picker, the hex field, each slider, and the recent/palette swatches alike. Grayscale clamps to luminance and Indexed snaps to the palette; Lab and CMYK pass through untouched, since those modes are sRGB-backed in the swatch model (see [Color Modes](#color-modes)).
+
+### Recent colors
+
+- A wrapping strip of 16px swatches at the top-right of the panel, capped at **28**. Clicking one applies it to whichever swatch is currently active.
+- The store **ships all 28 slots pre-filled** with a fixed starter palette (neutrals, saturated primaries, pastels, earth tones), so the strip is never empty and adding a color always evicts the oldest.
+- "Recent" means *painted with*, not *picked*: entries are appended when a stroke, path stroke, fill, spray, text commit, or shape lands — the shape tool pushes fill and stroke separately, and the gradient tool pushes **both** the foreground and background color on commit. **Choosing a color in the Color panel does not record it, and neither does the eyedropper.**
+- Re-using a color moves it back to the front rather than duplicating it. The dedupe compares **alpha too**, so the same RGB at two different opacities occupies two separate slots.
+
+### Gaps in the picker
+
+- **It is mouse-only.** Every surface binds `mousedown` plus window-level `mousemove` / `mouseup`, with no pointer or touch events — so the picker cannot be operated by touch or stylus at all, even though the app ships a touch-first default layout (no panels open on a coarse-pointer device) and supports pinch-zoom on canvas.
+- **The surfaces are focusable but keyboard-inoperable.** The SV square, hue bar, alpha bar, and value ramp each carry `role="slider"` and `tabIndex={0}` with full ARIA value attributes, but no key handler is attached — tabbing to one and pressing an arrow key does nothing.
+- **`compact` is dead code.** The prop switches the picker to a single spectrum bar that can only pick at 100% saturation and 100% brightness (no SV square, no alpha), but no call site passes it, so that branch is unreachable in the app.
+
+---
+
+## Color Modes
+
+**Image → Mode** sets a document-level color mode, Photoshop-style: **RGB Color**, **Grayscale**, **Indexed Color…**, **CMYK Color**, **Lab Color**. The current mode carries a checkmark. Only Indexed opens a dialog (it needs a palette size up front); the rest convert on click. Any mode other than RGB also shows its name in the **status bar**, left of the color-space readout.
+
+A single capability table (`getColorModeCapabilities()`) is the source of truth for what each mode permits, so panels, menus, and tools agree instead of each running its own ad-hoc check.
+
+| Mode | Layers | Chroma adjustments | R/G/B curve tabs | HSL blend modes | Color panel shows |
+|------|--------|--------------------|------------------|-----------------|-------------------|
+| RGB | yes | yes | yes | yes | HSV picker + R/G/B/A sliders |
+| Grayscale | yes | no | no | no | value ramp + **K** slider (0 – 255) |
+| Indexed | **no** — single flat surface | no | no | no | the document palette as a swatch grid |
+| CMYK | yes | no | no | no | **C/M/Y/K** sliders (0 – 100 each) |
+| Lab | yes | no | no | no | **L** (0 – 100) + **a** / **b** (−128 – 127) sliders |
+
+The hex field stays available in every mode.
+
+### Converting between modes
+
+A conversion snapshots history *before* it bakes, so the whole thing — including Indexed's flatten — is **one undo step**. In-flight strokes are flushed into their layer textures first, so nothing half-painted survives in the old space. Alongside the pixels:
+
+- **Text and shape colors, and all five effect colors** (stroke, drop shadow, outer glow, inner glow, color overlay) go through the same constraint the pixels do — a grayscale document is not left with a colored drop shadow.
+- **Chroma-producing adjustment nodes are stripped** from group stacks: Hue/Saturation, Color Balance, Channel Mixer, Photo Filter, Gradient Map, Black & White, plus Saturation. Otherwise a Color Balance node would simply reintroduce the color the bake just removed. The same nodes disappear from the Adjustments panel's Add menu.
+- **Hue / Saturation / Color / Luminosity blend modes coerce to Normal** and drop out of the blend-mode dropdown in every mode but RGB — they decompose RGB into HSL, which is meaningless once a texture holds something else.
+- The **foreground and background swatches** are re-expressed in the new mode's value space, so the next stroke matches what the picker shows.
+
+Every paint entry point — brush/pencil/eraser, spray, fill, gradient (per stop), shape (fill and stroke), and text — routes its color through a shared `toDocumentColor()`. The mode's constraint therefore holds even for colors that arrived from a brush preset, the eyedropper, or tool settings saved under a previous mode.
+
+### Per-mode notes
+
+- **Grayscale** — pixels are baked on the GPU to Rec. 709 luma (`0.2126 R + 0.7152 G + 0.0722 B`). The bake covers the **whole layer even under an active selection**: a mode change must not leave part of a layer in the old space. The picker collapses from the HSV square to a black→white value ramp.
+- **Indexed** — flattens the document, then builds a palette of at most **256 colors** via a median-cut quantizer and snaps every pixel to the nearest entry. The dialog collects **Colors** (2 – 256, default 256) and a **Dither (Floyd–Steinberg)** checkbox (off by default), warns up front when more than one layer will be flattened, and takes **Enter** to convert / **Escape** to cancel. Palette building subsamples on a fixed stride above 262,144 pixels so a 4K canvas stays bounded — the snap itself still visits every pixel. The palette is stored on the document, shown in the Color panel as a swatch grid, and persisted in the `.lopsy` manifest. **Adding a layer is refused** while Indexed is active, with an info toast: *"Indexed mode does not support layers. Convert to RGB first."*
+- **Lab** — the only mode whose layer textures hold something other than sRGB. Pixels are stored as encoded CIELAB (L in R, a in G, b in B), and the engine decodes for display (`u_docColorMode == 1` in `final_blit.glsl`), for the export composite, and for the eyedropper — which decodes *before* averaging its sample square, since the transform is non-linear. The panel's L/a/b sliders drive a TypeScript mirror of the Rust math, used for single colors only so the two can't drift on bulk pixel work. Stored 8-bit, matching Photoshop's 8-bit Lab; a/b quantization costs a few sRGB units at saturated gamut corners.
+- **CMYK** — sRGB-backed. The C/M/Y/K sliders are a unit system over sRGB rather than stored ink, and **a CMYK document does not yet render any differently from an RGB one**. The naive ink model is a bijection with sRGB — its round trip is lossless across the whole cube — so there is no gamut to clip; a real difference needs profile-based conversion with ink limits. Native ink storage is blocked on the paint pipeline owning the alpha channel (dabs write coverage there and premultiply by it), leaving no fourth channel free for black.
+
+### Declared but not enforced
+
+The capability table also declares that Indexed has no gradients and no anti-aliasing, and that the non-RGB modes hide the Levels R/G/B channel tabs. Nothing reads those three flags. In practice: the **Gradient tool still works in an Indexed document** (each stop snaps to the palette, but the GPU interpolates freely *between* snapped stops), paint tools still anti-alias, and the **Levels editor still shows its R / G / B tabs in every mode** — it never consults the capability table at all, so a Grayscale or Lab document can still be given a per-channel Levels remap even though the adjacent Curves editor correctly collapses to the composite curve alone. The layer guard has a matching hole — it covers New Layer, Group, and Duplicate, but not the Text tool, so an Indexed document can still gain a second layer.
+
+The chroma-node filter has a hole of the same shape. **New Document** filters the default node set against the chosen mode, and converting a document strips the chroma nodes it no longer allows — but **Flatten Image** re-seeds the root group with the unfiltered default set while keeping the document's mode. Flattening a Grayscale, Lab, or CMYK document therefore gives it a fresh **Hue / Saturation** node, one the mode's own Add menu would refuse to offer. It arrives at identity, so nothing changes until a slider moves, but its controls are live.
+
+More generally, the palette snap runs **only at conversion time**. Pixels painted afterwards are constrained just at the *color* level (via `toDocumentColor`), not per-pixel, so anti-aliased edges, gradient interpolation, and soft brushes all put off-palette pixels into an Indexed document as you keep working in it.
 
 ---
 
@@ -825,6 +1148,7 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 - **Name**: configurable (default "Untitled")
 - **Dimensions**: width x height
 - **Background**: solid color or transparent
+- **Color mode**: RGB (default), Grayscale, Indexed, Lab, or CMYK — see Color Modes
 - Entirely client-side, no backend
 
 ---
@@ -832,17 +1156,17 @@ A compact heads-up readout that mirrors what Photoshop's Info panel surfaces.
 ## File I/O & Export
 
 ### Open / Save
-- **New** (`⌘N`, menu-only accelerator): blank document with width/height/background prompt. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
+- **New** (`⌘N`, menu-only accelerator): blank document with width/height/background prompt, plus a **Color Mode** dropdown offering RGB Color / Grayscale / CMYK Color / Lab Color. Indexed is deliberately absent — as in Photoshop it is conversion-only, since a meaningful palette has to be quantized from existing pixels. The initial fill is written already encoded for the chosen mode — a new document is created before the canvas mounts, so there is no engine to bake through, and a literal white buffer would open as maximum chroma in Lab. The default adjustment-node set is filtered to what the mode allows, so a new Grayscale document does not ship with chroma nodes, and the toolbox swatches are normalized into the mode's value space the same way a conversion does. Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
 - **Open…** (`⌘O`, menu-only accelerator): open a PNG/JPEG/GIF (first frame)/BMP/WebP/PSD/DNG/RAF/.lopsy from disk. The picker lists every supported extension explicitly rather than `image/*` — mixing the two makes Chrome on macOS collapse the dialog down to a single filter.
 - **Two routing paths, not one.** The File-menu picker routes inline **by extension** (`.lopsy` → project loader, `.psd` → PSD importer, `.dng` / `.raf` → the Rust RAW decoders, anything else → browser `<img>` decode). The pre-document flow — the New Document modal's "Open file" button and drag-and-drop — instead uses the shared `classifyOpenFile` helper, which checks the same four extensions but falls back to the **MIME type** (`image/*`) rather than attempting a decode. The practical difference is at the edges: a file with an image MIME type but an odd extension opens on drop and fails from the menu picker, while an unrecognized file dropped on the canvas is silently ignored (the New Document modal's button surfaces a friendly error instead).
 - **Drag-and-drop is always live**, not just before a document exists — the drop target is the whole app shell as well as the canvas. Dropping an image onto an open document adds it as a layer (see Paste / Drop behavior); dropping a `.psd`, `.dng`, `.raf`, or `.lopsy` **replaces** the open document.
 - **Unsaved-changes guard**: **New**, **Open…**, and **Open Project…** check the document's dirty flag and put up a browser `confirm()` — "You have unsaved changes. Are you sure you want to continue?" — before discarding work. Closing or reloading the tab triggers the browser's own `beforeunload` warning. The drop path performs **no** such check: a `.psd` or `.lopsy` dropped onto a dirty document replaces it immediately.
 - The dirty flag is cleared by **Save Project** and by **PSD import** — and also by any **export**, since the shared download helper marks the document clean. Exporting a PNG therefore silences the unsaved-changes warnings even though nothing was saved to a project file.
-- **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust). Both **RGB** and **CMYK** color modes are accepted at 8-bit and 16-bit depth — CMYK files are converted to RGB on import (naive `(1−C)(1−K)` channel math) for both the per-layer and merged-composite paths. Other color modes (grayscale, indexed, Lab, etc.) are rejected with an unsupported-color-mode error.
-- **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant)
+- **Open PSD**: rebuilds layers, masks, blend modes, and effects from the PSD reader (Rust). **Grayscale**, **RGB**, and **CMYK** files are accepted at 8-bit and 16-bit depth. Grayscale files carry a single color plane, which is replicated across G and B on import, and the document opens *in* Grayscale mode; CMYK files are converted to RGB (naive `(1−C)(1−K)` channel math) for both the per-layer and merged-composite paths and open as RGB. Remaining color modes (indexed, Lab, duotone, …) are rejected with an unsupported-color-mode error.
+- **Export PSD** (File menu): serialises the current document via the PSD writer at 16-bit precision (pass-through groups are written as `normal` since PSD has no pass-through discriminant). A Grayscale document writes header mode 1 with one color channel per layer; **every other mode — including Lab and CMYK — is written as RGB**.
 
 ### Native Project Format (.lopsy)
-- **Save Project** (`⌘S`, menu-only accelerator): writes the full editor state to a `.lopsy` file and triggers a browser download. Round-trips every layer (raster pixels, text, shape, group), masks, blend modes, opacity, position, clip-to-below, layer effects, color tags, group adjustment node stacks, the active layer, the document's name / size / background, and the workspace's stored vector paths (Paths panel) and canvas guides. (Files saved before paths/guides were serialized simply omit those fields and load with an empty path/guide set.)
+- **Save Project** (`⌘S`, menu-only accelerator): writes the full editor state to a `.lopsy` file and triggers a browser download. Round-trips every layer (raster pixels, text, shape, group), masks, blend modes, opacity, position, clip-to-below, layer effects, color tags, group adjustment node stacks, the active layer, the document's name / size / background / **color mode** (plus the **Indexed palette** when there is one), and the workspace's stored vector paths (Paths panel) and canvas guides. (Files saved before paths/guides were serialized simply omit those fields and load with an empty path/guide set; likewise the color mode is an optional manifest field, so projects saved before color modes existed load as RGB.)
 - **Open Project…**: file picker filtered to `.lopsy`. Restores all of the above; pixel data is gzip-compressed inside the file.
 - **Format**: binary container — `LOPSY\0` magic + uint16 version + uint32 manifest-length + UTF-8 JSON manifest + per-layer gzipped RGBA blobs + per-mask raw byte blobs (referenced from the manifest by index). Entirely client-side; no server round-trip.
 
