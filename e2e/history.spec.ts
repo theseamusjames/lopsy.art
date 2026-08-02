@@ -163,6 +163,9 @@ test.describe('History - Multi-Step Operations', () => {
     await expect
       .poll(async () => (await getPixelAt(page, 10, 10, bgId)).r, {
         message: 'redo of the bg paint should restore the red rect',
+        // Under a software GPU with the full suite competing for CPU, the
+        // texture readback can lag well past the 5s poll default.
+        timeout: 30000,
       })
       .toBe(255);
 
@@ -173,6 +176,7 @@ test.describe('History - Multi-Step Operations', () => {
     await expect
       .poll(async () => (await getPixelAt(page, 60, 60, topId)).g, {
         message: 'redo of the top paint should restore the green rect',
+        timeout: 30000,
       })
       .toBe(255);
   });
