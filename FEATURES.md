@@ -690,19 +690,62 @@ Lopsy has **no** Adjustment-layer or Fill-layer type. Adjustments are non-destru
 - **Flatten Image**: composites every visible layer into a single raster layer
 - **Rasterize Layer**: bakes a **text** layer's current visual into pixels in place, reading the engine's current x/y/w/h so the result lands at the visible position even after GPU texture expansion from upstream paint ops. The button appears in the Layers panel toolbar only while a text layer is active — there is currently no rasterize entry point for shape or group layers.
 - **Rasterize Layer Style**: bakes a layer's effects (drop shadow, glow, stroke, color overlay) into the layer's pixels and clears the effect descriptors
-- Reorder (drag)
-- Move to group (reparent)
-- Rename
+- Reorder (drag) and move to group (reparent) — both are the same gesture on the row's drag grip; see Reordering & Drag-and-Drop below
+- Rename — double-click the layer's name in its row (see Row Layout)
 - Align (left, center-h, right, top, center-v, bottom) — works on **group** layers too: a group has no pixels of its own, so it aligns by the combined content bounds of its descendants and shifts the group plus every child together (matching how dragging a group with the Move tool behaves)
 - Add/remove/toggle mask — works on raster, text, shape, and **group** layers; group masks are sampled at composite time so the entire group is masked as a single unit (with the group's own opacity and blend mode applied on top)
-- **Cmd/Ctrl+click a layer thumbnail**: loads that layer's alpha as a marquee selection (non-transparent pixels become the selection)
+- **Cmd/Ctrl+click a layer thumbnail**: loads that layer's alpha as a marquee selection — each pixel's alpha becomes the selection mask value (anything below 1 is dropped), so a soft edge yields a feathered selection rather than a hard one. Any live GPU float is committed first and the layer's JS pixel cache is cleared, so the selection reflects the finished pixels. It also **seeds a transform state** from the resulting bounds and schedules a prefloat, meaning the selection comes up ready to scale/rotate. **Group rows have no thumbnail** (they show a collapse chevron in that slot), so there is no way to load a group's combined alpha this way.
 - **Click a layer's mask thumbnail**: always enters mask edit mode (focus switches to the mask reliably; no toggle behavior).
-- **Set layer color tag**: right-click a layer row to open a context menu with the 7 tag colors plus "None" to clear.
+- **Set layer color tag**: right-click a layer row to open a context menu with the 7 tag colors plus "None" to clear. The menu is a `role="menu"` popup at the pointer with a swatch grid, a divider, and a **Cancel** item; any mousedown elsewhere or Escape closes it. Right-clicking the **root group** row opens nothing.
 
 ### Layers Panel Row Layout
-- Each layer row shows (left to right): the visibility eye, the layer thumbnail (plus mask thumbnail if a mask is present), the layer name, an **Effects button**, and the lock toggle on the far right.
-- **Effects button**: opens that layer's effects/adjustments drawer. The icon turns green when the layer has at least one active effect or adjustment node, so it's possible to spot effected layers at a glance from anywhere in the stack.
-- **Color tag bar**: optional swatch (set via right-click → color tag) appears as a vertical bar on the left edge of the row.
+
+Rows are listed **top layer first** (the display list walks the layer order in reverse) and each is a fixed **36 px** tall. Nesting is shown by indentation only — **8 px of left padding per depth level** — and a layer inside a collapsed group is omitted from the list entirely, at any depth.
+
+Controls in a row, left to right:
+
+1. **Color tag bar** — an optional vertical bar on the row's left edge, present only when a tag is set (red, orange, yellow, green, blue, purple, gray).
+2. **Drag grip** — a `GripVertical` handle, `cursor: grab` (`grabbing` while dragging). This is the **only** place a reorder drag can start; dragging the row body does nothing. Absent on the root group.
+3. **Thumbnail** *(non-group layers)* — a 24 px canvas. **Group rows show a collapse chevron here instead**, followed by a folder icon; groups therefore have no thumbnail at all.
+4. **Name** — double-click to rename in place. Enter commits (via blur), Escape cancels, and a blank or whitespace-only value is discarded, keeping the previous name.
+5. **Opacity readout** — the layer's opacity as a rounded percentage, rendered as a button. Clicking it toggles a **slider row open beneath the layer** (0–100, one per row at a time); clicking again closes it. Pointer-down on the slider pushes a single "Change Opacity" history entry, so a whole drag is one undo step. Absent on the root group.
+6. **Visibility eye** — toggles the layer on/off. Note this sits **near the end of the row, after the opacity readout** — not at the left edge. Absent on the root group.
+7. **Effects button** — opens that layer's effects/adjustments drawer (see below).
+8. **Lock toggle** — the far-right control; locked rows are also styled as locked.
+
+The **root group row** is deliberately stripped down: no grip, no opacity readout, no visibility eye, and no context menu — only the effects button and the lock toggle remain.
+
+- **Effects button**: a three-way toggle — if the drawer is already open on this layer it closes; otherwise the row's layer is made active and the drawer opens. Its icon turns **green** (`#4caf50`) to flag decorated layers at a glance. The test is `enabled` for the five effects, but for groups it is simply "has any adjustment node at all" — a group whose nodes are **all disabled still shows green**. (`hasEnabledNodes` exists in `adjustment-node-utils.ts` for exactly this check but has no callers.)
+- **Row states**: the active layer takes an accent tint; other multi-selected layers get a 50 % blend of that tint so the two are distinguishable.
+
+#### Mask Sub-Row
+A layer with a mask gets its **own row beneath the layer row** (indented, on a tertiary background) — the mask thumbnail is not inline in the layer row. It holds:
+
+- A **20 px mask thumbnail**, outlined in the accent color while mask edit mode is active on that layer and dimmed to 40 % when the mask is disabled. Clicking it selects the layer and enters mask edit mode. Unlike the layer thumbnail — which the engine downscales on the GPU (`readLayerThumbnail`, retried for up to 10 animation frames while the texture warms up, and subscribed to that one layer's pixel version so a brush dab doesn't trigger a full readback) — the mask thumbnail is drawn by a **CPU nearest-neighbour loop** over the mask array, with no store subscription.
+- A **"Mask"** label.
+- **Convert mask to selection** — turns the mask into a marquee (seeding a transform state from its bounds, like the alpha-selection route above) and leaves mask edit mode. It converts **inverted**: the selection value is `255 − mask`, so the region the mask *hides* becomes the selection and the visible region is excluded. Since a freshly added mask is filled with 255 (fully visible), the computed mask is empty, no bounds are found, and the button changes nothing but the mask edit mode — it produces a selection only once something has been painted **black** into the mask.
+- **Delete mask** — removes the mask and exits mask edit mode.
+
+### Reordering & Drag-and-Drop
+
+Dragging a row's grip starts a pointer-driven reorder; there is no HTML5 drag-and-drop and no keyboard equivalent. The dragged row fades to 40 % opacity, and the drop target is previewed live:
+
+- **Between rows** — the pointer's position within the row it is over picks a gap: above the row in the top half, below it in the bottom half. The gap is drawn as a **2 px accent line** on the neighbouring row's edge.
+- **Into a group** — hovering the **middle half (25 %–75 %) of a group row** targets the group itself instead of a gap, drawn as a **2 px accent outline plus a tinted background** on that row. This is offered only when the move is legal (`canMoveToGroup` rejects dropping a group into itself or its own descendant).
+- Dropping in the **same place** (the gap immediately above or below the row's original position) is a no-op, as is a drop onto a group the layer is already in.
+
+Reparenting is inferred from the gap's neighbour rather than from indentation: the item **below** the gap decides which group the drop lands in, which is what stops a layer from being sucked into a group when it is dropped at that group's lower boundary. If that neighbour resolves to a different parent than the dragged layer's — and the move is legal — the layer is reparented; otherwise the drop is a plain reorder within the current parent.
+
+### Layers Panel Toolbar
+
+A row of icon buttons pinned below the list. Three entries are **conditional**, so the toolbar's contents change with selection:
+
+- **Add Layer** and **New Group** — always present.
+- **Group Layers** — appears only once **two or more** non-root layers are selected.
+- **Duplicate Layer** — always present, disabled when there is no active layer or the root group is active.
+- **Add Mask** — appears only when the active layer has **no** mask yet.
+- **Rasterize Layer** — appears only when the active layer is a **text** layer (see Layer Operations).
+- **Delete Layer** — pushed to the far right by a spacer. Deletes every selected non-root layer, and is disabled when the document is down to its last layer or nothing deletable is selected.
 
 ### Multi-Select in the Layers Panel
 - **Plain click**: selects only the clicked layer (standard behavior)
