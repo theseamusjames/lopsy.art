@@ -388,15 +388,136 @@ test.describe('Dimension preservation', () => {
     expect(dims!.height).toBe(32);
   });
 
-  test('large pasted image dimensions are preserved', async ({ page }) => {
+  test('oversized pasted image is fit to the canvas', async ({ page }) => {
     await createDocument(page, 200, 200);
 
-    // Paste a larger image — layer size should match the source, not the canvas.
-    // Read dimensions in the same JS task as the paste, before auto-select
-    // expands the buffer.
+    // Issue #697: an image larger than the canvas used to keep its source
+    // dimensions, which clipped the auto-selection to the visible canvas
+    // and broke resize/move via the transform handles. The paste now shrinks
+    // to fit the canvas (longest side matches, aspect ratio preserved) so
+    // the whole image is on the artboard and the transform handles cover it.
     const dims = await pasteAndReadDimensions(page, 1024, 768, { r: 200, g: 100, b: 50, a: 255 }, 'Copied File');
     expect(dims).not.toBeNull();
-    expect(dims!.width).toBe(1024);
-    expect(dims!.height).toBe(768);
+    // 1024/768 aspect at 200x200 canvas → width 200, height 150.
+    expect(dims!.width).toBe(200);
+    expect(dims!.height).toBe(150);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Oversized paste — resize + undo/redo (issue #697)
+// ---------------------------------------------------------------------------
+
+test.describe('Oversized paste flow', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+  });
+
+  test('paste of oversized image activates Move, fits to canvas, selects full layer, and survives undo/redo', async ({ page }) => {
+    await createDocument(page, 200, 200);
+    const before = await getEditorState(page);
+    const initialUndoLen = before.undoStackLength;
+
+    // Read the fit-sized dimensions in the same JS task as the paste, before
+    // the auto-select rAF fires and floatSelection expands the layer texture
+    // (see engine-rs `expand_layer_to_doc_size`).
+    const dims = await pasteAndReadDimensions(page, 1024, 768, { r: 20, g: 90, b: 220, a: 255 }, 'Copied File');
+    expect(dims).not.toBeNull();
+    // 1024/768 aspect at 200x200 canvas → width 200, height 150.
+    expect(dims!.width).toBe(200);
+    expect(dims!.height).toBe(150);
+
+    // Wait for the deferred selectLayerAlpha rAF to run.
+    await page.waitForFunction(() => {
+      const s = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { selection: { active: boolean } };
+      };
+      return s.getState().selection.active;
+    });
+
+    const afterPaste = await page.evaluate(() => {
+      const ed = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: {
+            width: number;
+            height: number;
+            layers: Array<{ id: string; name: string; type: string }>;
+            activeLayerId: string;
+          };
+          selection: {
+            active: boolean;
+            bounds: { x: number; y: number; width: number; height: number } | null;
+          };
+          undoStack: unknown[];
+        };
+      };
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { activeTool: string; transform: unknown };
+      };
+      const s = ed.getState();
+      const pasted = s.document.layers.find((l) => l.name === 'Pasted Layer')!;
+      return {
+        activeTool: ui.getState().activeTool,
+        hasTransform: ui.getState().transform !== null,
+        pastedId: pasted.id,
+        docWidth: s.document.width,
+        docHeight: s.document.height,
+        selection: s.selection,
+        undoLen: s.undoStack.length,
+      };
+    });
+
+    // 1) Move tool is active after paste (issue #697: previously the tool
+    //    was whatever was active before, so the transform handles didn't
+    //    respond to clicks).
+    expect(afterPaste.activeTool).toBe('move');
+    // 2) Transform state exists so the resize/move handles are drawn.
+    expect(afterPaste.hasTransform).toBe(true);
+    // 3) Selection is active and covers a non-empty region on the canvas.
+    //    Before the fix the selection was clipped to the visible canvas of
+    //    the oversized paste — its width/height matched the canvas, not
+    //    the pasted image. After fitting, the selection matches the fit
+    //    dimensions instead.
+    expect(afterPaste.selection.active).toBe(true);
+    expect(afterPaste.selection.bounds).not.toBeNull();
+    const sb = afterPaste.selection.bounds!;
+    expect(sb.width).toBe(200);
+    expect(sb.height).toBe(150);
+    expect(sb.x).toBeGreaterThanOrEqual(0);
+    expect(sb.y).toBeGreaterThanOrEqual(0);
+    expect(sb.x + sb.width).toBeLessThanOrEqual(afterPaste.docWidth);
+    expect(sb.y + sb.height).toBeLessThanOrEqual(afterPaste.docHeight);
+    // 4) Exactly one history entry (Paste) was pushed — the fit is a
+    //    side-effect of paste, not a second undoable step, so a single
+    //    Ctrl+Z fully reverses the operation.
+    expect(afterPaste.undoLen).toBe(initialUndoLen + 1);
+
+    // 5) Undo removes the pasted layer entirely.
+    await page.keyboard.press(`${mod}+z`);
+    await page.waitForFunction(
+      (expected) => {
+        const s = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { document: { layers: unknown[] } };
+        };
+        return s.getState().document.layers.length === expected;
+      },
+      before.document.layers.length,
+    );
+    const afterUndo = await getEditorState(page);
+    expect(afterUndo.document.layers).toHaveLength(before.document.layers.length);
+    expect(afterUndo.document.layers.find((l) => l.name === 'Pasted Layer')).toBeUndefined();
+
+    // 6) Redo brings the pasted layer back — the layer descriptor's
+    //    width/height stay within the canvas (the float that runs on
+    //    selectLayerAlpha can expand the texture to doc bounds, so we
+    //    only assert the layer isn't back at the pre-fit source size).
+    await page.keyboard.press(`${mod}+Shift+z`);
+    await waitForLayerCount(page, before.document.layers.length + 1);
+    const afterRedo = await getEditorState(page);
+    const restoredPaste = afterRedo.document.layers.find((l) => l.name === 'Pasted Layer');
+    expect(restoredPaste).toBeDefined();
+    expect(restoredPaste!.width).toBeLessThan(1024);
+    expect(restoredPaste!.height).toBeLessThan(768);
   });
 });
