@@ -486,35 +486,96 @@ Paste takes one of two routes depending on where the image came from.
 
 ## Layer Effects
 
+Five non-destructive effects — drop shadow, stroke, outer glow, inner glow, and color overlay — are rendered on the GPU during compositing and never touch the layer's pixels until the style is rasterized or the layer is merged. Every layer carries all five (`effects` is a required field on the layer model, not an optional one); they are simply disabled by default.
+
+### The Effects Drawer
+
+Effects are edited in the floating **effects drawer**, which is shared with the Adjustments panel rather than being one of the dockable panels — it is dragged by its header and resized from the native grip in its bottom-right corner. The drawer shows the **layer-effects** list for every layer type *except* groups, which get the Adjustments list instead (see Image Adjustments).
+
+- **Opening**: the effects button on a row in the Layers panel — a three-way toggle that turns green when the layer has at least one **enabled** effect (see *Layers Panel Row Layout*).
+- **Closing**: the `X` in the drawer header.
+- With no layer selected the drawer shows only its header and a **No layer selected** message.
+
+Contents, top to bottom:
+
+1. A **Blend** dropdown that sets the *layer's* blend mode — a layer property, not an effect — grouped into Normal / Darken / Lighten / Contrast / Comparative / Composite optgroups. Group layers get an extra **Pass Through** group at the top. In color modes without HSL blend support the Hue / Saturation / Color / Luminosity entries are dropped from the list rather than shown as no-ops.
+2. A fixed five-row list — Drop Shadow, Stroke, Outer Glow, Inner Glow, Color Overlay. Each row has a checkbox that enables the effect and a label that selects it for editing. The order is fixed; effects cannot be reordered.
+3. The selected effect's property form.
+4. **Rasterize Layer Style**, disabled until at least one effect is enabled.
+
+### Shared behavior
+
+- **Render order is fixed** and unrelated to the list order: outer glow → drop shadow → the layer itself (color overlay applied inline to its RGB) → inner glow → stroke. Outer glow is drawn *before* the drop shadow, so an overlapping shadow sits on top of the glow.
+- **Colors use the browser's native color input**, not Lopsy's shared color picker. The swatch round-trips through 6-digit hex, so an effect color's **alpha is preserved but cannot be edited from the panel** — it stays at whatever the effect already held.
+- **Size-like sliders auto-scale with the document**: the maximum is `max(base, min(5000, round(1.5 × longest side)))`, while the *drag* range is pinned to a usable window so precise tuning stays practical on large canvases. The text field accepts the full scaled maximum.
+- **History is coarse.** Toggling pushes `Enable <Effect>` / `Disable <Effect>`; starting a slider drag pushes `Edit <Effect>` so undo returns to the pre-drag value; the Blend dropdown pushes `Change Blend Mode`. Color swatches and the stroke Position buttons push nothing at all (see *Gaps*).
+
 ### Drop Shadow
-- **Color**: RGBA
-- **Offset X/Y**: pixels
-- **Blur**: radius
-- **Spread**: radius
-- **Opacity**: 0 - 1
+Defaults: disabled, black at 75% color alpha, offset 4 / 4, blur 8, spread 0, opacity 0.75.
+
+- **Color**: RGB from the swatch; the stored alpha multiplies into the result.
+- **Offset X / Y**: ± the document-scaled maximum (base 100 px); slider drag pinned to ±200 px.
+- **Blur**: 0 to the document-scaled maximum (base 100 px), slider drag capped at 200 px. Implemented as a separable Gaussian blur of the layer's alpha silhouette at radius `ceil(blur)` — **but the radius is clamped to 63 px**, so values beyond 63 look identical.
+- **Spread**: 0 – document-scaled maximum (base 100 px), drag capped at 200. **Not a radius** — it is a gamma curve on the blurred alpha (`alpha^(1 − spread/100)`, applied only above 0.5), which chokes the falloff toward a harder edge. At high spread almost any non-zero alpha saturates to fully opaque.
+- **Opacity**: 0 – 100% in the UI, stored 0 – 1.
+
+Final shadow alpha is `silhouette × color alpha × opacity`. Because the default color alpha is 0.75 and alpha is not editable from the panel, a default drop shadow tops out at **75% opacity even with the Opacity slider at 100**.
+
+The shadow is **knocked out beneath the layer's own opaque pixels only when Blur is 0**. With any blur the knockout pass is skipped, so a blurred shadow renders at full strength behind the layer — visible through a semi-transparent layer, hidden by an opaque one.
 
 ### Outer Glow
-- **Color**: RGBA
-- **Size**: radius
-- **Spread**: radius
-- **Opacity**: 0 - 1
+Defaults: disabled, pale yellow (255, 255, 100) at full alpha, size 10, spread 0, opacity 0.75.
+
+- **Color**: RGB from the swatch; stored alpha multiplies into the result.
+- **Size**: 0 – document-scaled maximum (base 100 px), drag capped at 200 px. Drives the Gaussian blur radius `ceil(size)`, **clamped to 63 px** like the shadow. Below radius 2 the blur is skipped entirely and the glow is a single pass.
+- **Spread**: same range, and the same `alpha^(1 − spread/100)` gamma curve as the shadow, not a radius.
+- **Opacity**: 0 – 100% in the UI, stored 0 – 1.
+
+The blurred silhouette is masked by the inverse of the layer's alpha, so the glow appears only outside the layer's own coverage.
 
 ### Inner Glow
-- **Color**: RGBA
-- **Size**: radius
-- **Spread**: radius
-- **Opacity**: 0 - 1
+Same controls, ranges, and defaults as Outer Glow — the two share one form and one shader, distinguished by a mode flag. The *inverted* layer alpha is blurred and then masked **by** the layer's alpha, so the glow reads inward from the edges.
 
 ### Stroke (Outline)
-- **Color**: RGBA
-- **Width**: pixels
-- **Position**: outside, inside, center
+Defaults: disabled, black at full alpha, width 2, position `outside`.
+
+- **Color**: RGB from the swatch; stored alpha multiplies into the result. The effect's own opacity is fixed at 1.0 by the engine bridge, so with the default opaque color the stroke is always fully opaque.
+- **Width**: 1 to the document-scaled maximum (base 50 px), slider drag capped at 100 px. For `outside` and `inside` the stroke extends the full width from the edge; for `center` it extends half the width to each side.
+- **Position**: buttons rendered in the order **outside / center / inside**.
+
+The stroke is a **hard, aliased outline**: the shader classifies each pixel as opaque or not at an alpha threshold of 0.5 and paints stroke pixels at full color, so edges on anti-aliased or soft-edged content come out jagged rather than smooth.
+
+Two implementations run depending on width. At an effective half-width of **10 px or less** a brute-force per-pixel distance search runs in a single pass; above that the engine switches to a separable dilation of the alpha at radius `ceil(half-width)`. A `center` stroke on the dilation path is drawn as two passes — the outside half, then the inside half — each composited separately.
 
 ### Color Overlay
-- **Color**: RGBA
+Defaults: disabled, red (255, 0, 0) at full alpha.
+
+- **Color**: the RGB that replaces the layer's color.
+
+Color overlay is applied **inline during the layer's blend pass** rather than as a separate effect pass, and its mix factor is hard-wired to 1.0 by the engine bridge. The result is an all-or-nothing recolor: the layer's RGB is replaced outright while its alpha is preserved, so the shape and soft edges survive but the original color does not. There is no opacity control, and **the alpha stored on the overlay color is inert** — it is sent to the engine but never read. To get a partial tint, lower the *layer's* opacity or use a blend mode instead.
 
 ### Effects on Groups
-Layer effects can be attached to **group** layers, not just leaf layers. New groups default to **Normal** (isolated) compositing, so the children pre-composite into a group buffer and the effects (drop shadow, glow, stroke, color overlay) attach to that combined surface — effects render around the group as a whole rather than around each child individually. When a group is switched to **Pass Through** the compositor still allocates an intermediate buffer for the same reason, so effects work in either mode.
+The engine fully supports effects on **group** layers: a group with enabled effects pre-composites its children into a scratch buffer and the effects attach to that combined surface, so they render around the group as a whole rather than around each child. Enabled effects (like an enabled mask or a non-empty enabled adjustment stack) also **override Pass Through** — the group is composited as isolated regardless of its blend mode, because a pass-through group has no combined surface for the effect to attach to.
+
+**There is currently no UI to author group effects.** Selecting a group and opening the drawer shows the Adjustments panel, never the layer-effects list, and the effects panel is the only thing in the app that writes effect values. Group effects therefore only arrive via a loaded `.lopsy` project, a Lopsy-written PSD, or a color-mode conversion of values that were already there.
+
+### Rasterize Layer Style
+Bakes the enabled effects into the layer's pixels and clears them. Available from the drawer button (disabled when nothing is enabled). The layer is re-rendered with its effects on the GPU and the result replaces its texture, which means:
+
+- The layer is repositioned to the document origin and resized to the **full document size**, since effects like shadows and glows extend beyond the original bounds. Sparse layers are re-cropped to their content afterward.
+- A **text layer becomes a raster layer**, losing editability.
+- All five effects reset to their disabled defaults.
+- Pushes one `Rasterize Layer Style` history entry.
+
+**Merge Down** performs the same bake implicitly: if either the top or bottom layer has enabled effects, each is rasterized with its effects and repositioned to full document size before the merge.
+
+### Gaps
+- **Effect colors and stroke position are not undoable.** Only the enable checkboxes and slider drags push history entries. Changing any of the five color swatches, or switching the stroke between outside/center/inside, mutates the document with no history entry — undo jumps past the change to whatever was recorded before it.
+- The effect list is **keyboard-inoperable**: it is a `listbox`/`option` structure with no `tabIndex` and no key handler, so the five effects can only be selected with a pointer. This is the same shape as the Brushes-modal tab rail, the color picker's slider surfaces, and the Layers-panel drag grip.
+- The **"Enable this effect to edit its properties" hint is unreachable**. It renders only when the effect object is missing, but every layer always carries all five effects, so the form is shown whether or not the effect is enabled — editing a disabled effect's sliders is possible and has no visible result.
+- The panel's live-preview and committed update paths are **identical code** — both skip history — despite comments describing them as different.
+- `color_overlay.glsl` is compiled at startup but never used; the overlay is applied inside the blend shader instead.
+- The stroke shader's 64-ray marching branch for half-widths above 20 px is **unreachable** — the engine routes anything above a half-width of 10 px to the dilation path before the shader is reached.
 
 ---
 
