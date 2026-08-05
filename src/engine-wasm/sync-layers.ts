@@ -342,10 +342,21 @@ export function syncLayers(
     const data = pixelDataManager.get(layer.id);
     const sparseEntry = pixelDataManager.getSparse(layer.id);
     const isDirty = dirtyLayerIds.has(layer.id);
+    // Treat isDirty as "invalidate the tracked version" rather than "force
+    // upload". Otherwise a sticky dirty flag (dirtyLayerIds is only cleared
+    // by pushHistory / undo / redo) makes the ref-diff below unconditional,
+    // and every rendered frame re-uploads the full layer buffer even when
+    // the data reference hasn't changed. Once the tracked version is stale,
+    // the ref-diff drives exactly one upload per new data reference. See
+    // issue #700.
+    if (isDirty) {
+      tracked.pixelDataVersions.delete(layer.id);
+      tracked.sparseVersions.delete(layer.id);
+    }
     const pixelChanged = tracked.pixelDataVersions.get(layer.id) !== data;
     const sparseChanged = tracked.sparseVersions.get(layer.id) !== sparseEntry;
 
-    if (data && (pixelChanged || isDirty)) {
+    if (data && pixelChanged) {
       // On upload failure, leave the tracked version stale so the next
       // frame retries instead of rendering a stale texture forever — but
       // stop attempting once the same payload has failed repeatedly.
@@ -360,7 +371,7 @@ export function syncLayers(
           recordUploadFailure(tracked, `${layer.id}:pixels`, data, 'uploadLayerPixels', layer.id, e);
         }
       }
-    } else if (!data && sparseEntry && (sparseChanged || isDirty)) {
+    } else if (!data && sparseEntry && sparseChanged) {
       if (shouldAttemptUpload(tracked, `${layer.id}:sparse`, sparseEntry)) {
         try {
           const indices = new Uint32Array(sparseEntry.sparse.indices);
@@ -386,14 +397,21 @@ export function syncLayers(
       }
     } else if (!data && !sparseEntry) {
       // No JS data — GPU texture is source of truth (GPU paint or undo restore).
-      // Only clear the GPU texture if we previously had JS data AND the layer is dirty
-      // (meaning JS data was explicitly removed, not just never set).
-      if (isDirty && (tracked.pixelDataVersions.get(layer.id) !== undefined || tracked.sparseVersions.get(layer.id) !== undefined)) {
-        // JS data was cleared but layer is dirty — GPU already has the correct data
-        // from uploadCompressed or GPU stroke. Just update tracking.
-        tracked.pixelDataVersions.set(layer.id, undefined);
-        tracked.sparseVersions.set(layer.id, undefined);
-      }
+      // isDirty already cleared tracked pixel/sparse versions above; nothing
+      // more to do here. Previously this branch re-set the tracked entries
+      // to undefined so a subsequent frame with the same missing-data state
+      // wouldn't re-enter; deletion has the same effect for the ref-diff.
+    }
+
+    // Drop the dirty flag for this layer once we've processed it — see the
+    // isDirty gate above. Without this the sticky set (only cleared by
+    // pushHistory / undo / redo) would force us to invalidate + re-upload
+    // on every rendered frame, which at 4K works out to 67 MB/frame per
+    // layer across the WASM bridge (issue #700). Mutating the caller's Set
+    // is fine: dirtyLayerIds is not React-selected, only engine-sync reads
+    // it, and syncLayers is the sole consumer per frame.
+    if (isDirty) {
+      dirtyLayerIds.delete(layer.id);
     }
 
     // Upload mask — only when the JS-side data reference actually changes,
