@@ -278,6 +278,7 @@ export function syncLayers(
       tracked.maskDataRefs.delete(id);
       tracked.pixelDataVersions.delete(id);
       tracked.sparseVersions.delete(id);
+      tracked.processedDirty.delete(id);
       tracked.pathTextKeys?.delete(id);
       tracked.uploadFailures.delete(`${id}:pixels`);
       tracked.uploadFailures.delete(`${id}:sparse`);
@@ -342,16 +343,32 @@ export function syncLayers(
     const data = pixelDataManager.get(layer.id);
     const sparseEntry = pixelDataManager.getSparse(layer.id);
     const isDirty = dirtyLayerIds.has(layer.id);
-    // Treat isDirty as "invalidate the tracked version" rather than "force
-    // upload". Otherwise a sticky dirty flag (dirtyLayerIds is only cleared
-    // by pushHistory / undo / redo) makes the ref-diff below unconditional,
-    // and every rendered frame re-uploads the full layer buffer even when
-    // the data reference hasn't changed. Once the tracked version is stale,
-    // the ref-diff drives exactly one upload per new data reference. See
-    // issue #700.
+    // Treat isDirty as "invalidate the tracked version once" rather than
+    // "force upload". A sticky dirty flag (dirtyLayerIds is only cleared by
+    // pushHistory / undo / redo) would otherwise make the ref-diff below
+    // unconditional, re-uploading the full layer buffer every rendered frame
+    // even when the data reference hasn't changed — 67 MB/frame per layer at
+    // 4096×4096 (issue #700). Invalidate the tracked version on the first
+    // frame of a dirty episode so the ref-diff drives exactly one upload;
+    // later frames leave it alone, and a genuinely new data reference still
+    // re-uploads via the ref-diff.
+    //
+    // The "already reconciled" bookkeeping lives in tracked.processedDirty
+    // (engine-sync's private per-engine state) — NOT by deleting from the
+    // caller's dirtyLayerIds Set. That Set is the store's own object, shared
+    // by reference with pushHistory / undo / redo, which read it to decide
+    // which layers need a fresh GPU history snapshot. Clearing it here made
+    // just-edited layers look clean to pushHistory, so its snapshotGpuLayers
+    // reused a stale texture handle and undo/redo restored the wrong pixels
+    // (issue #704).
     if (isDirty) {
-      tracked.pixelDataVersions.delete(layer.id);
-      tracked.sparseVersions.delete(layer.id);
+      if (!tracked.processedDirty.has(layer.id)) {
+        tracked.pixelDataVersions.delete(layer.id);
+        tracked.sparseVersions.delete(layer.id);
+        tracked.processedDirty.add(layer.id);
+      }
+    } else {
+      tracked.processedDirty.delete(layer.id);
     }
     const pixelChanged = tracked.pixelDataVersions.get(layer.id) !== data;
     const sparseChanged = tracked.sparseVersions.get(layer.id) !== sparseEntry;
@@ -397,21 +414,10 @@ export function syncLayers(
       }
     } else if (!data && !sparseEntry) {
       // No JS data — GPU texture is source of truth (GPU paint or undo restore).
-      // isDirty already cleared tracked pixel/sparse versions above; nothing
-      // more to do here. Previously this branch re-set the tracked entries
-      // to undefined so a subsequent frame with the same missing-data state
-      // wouldn't re-enter; deletion has the same effect for the ref-diff.
-    }
-
-    // Drop the dirty flag for this layer once we've processed it — see the
-    // isDirty gate above. Without this the sticky set (only cleared by
-    // pushHistory / undo / redo) would force us to invalidate + re-upload
-    // on every rendered frame, which at 4K works out to 67 MB/frame per
-    // layer across the WASM bridge (issue #700). Mutating the caller's Set
-    // is fine: dirtyLayerIds is not React-selected, only engine-sync reads
-    // it, and syncLayers is the sole consumer per frame.
-    if (isDirty) {
-      dirtyLayerIds.delete(layer.id);
+      // On the first dirty frame the isDirty gate above already dropped the
+      // tracked pixel/sparse versions; nothing more to do here. The dirty flag
+      // is deliberately left on the store's Set so pushHistory still sees this
+      // layer as changed and captures a fresh GPU snapshot for undo (#704).
     }
 
     // Upload mask — only when the JS-side data reference actually changes,

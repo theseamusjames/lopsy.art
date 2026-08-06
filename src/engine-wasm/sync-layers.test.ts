@@ -291,6 +291,7 @@ describe('syncLayers — tracked-state cleanup on layer removal', () => {
     expect(tracked.layerPassThroughOpacity.has('r1')).toBe(true);
     expect(tracked.masksOnEngine.has('r1')).toBe(true);
     expect(tracked.maskDataRefs.has('r1')).toBe(true);
+    expect(tracked.processedDirty.has('r1')).toBe(true);
 
     // Seed pathTextKeys directly so the invariant covers it even though
     // we don't have a path-text layer in this fixture.
@@ -310,6 +311,7 @@ describe('syncLayers — tracked-state cleanup on layer removal', () => {
     expect(tracked.maskDataRefs.has('r1')).toBe(false);
     expect(tracked.pixelDataVersions.has('r1')).toBe(false);
     expect(tracked.sparseVersions.has('r1')).toBe(false);
+    expect(tracked.processedDirty.has('r1')).toBe(false);
     expect(tracked.pathTextKeys?.has('r1')).toBe(false);
   });
 });
@@ -617,6 +619,29 @@ describe('syncLayers — sticky dirtyLayerIds (#700)', () => {
     imageData.data.fill(200);
     syncLayers(engine, [layer], [layer.id], new Set([layer.id]));
     expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not mutate the caller dirtyLayerIds Set (#704)', async () => {
+    // Regression: syncLayers used to delete each processed id from the passed
+    // Set to stop sticky re-uploads. But that Set is the store's own object,
+    // shared by reference with pushHistory / undo / redo — emptying it during
+    // rendering made just-edited layers look clean to pushHistory, which then
+    // reused a stale GPU snapshot handle and broke undo/redo. The dirty flag
+    // must survive the render so history snapshots the right texture.
+    const { pixelDataManager } = await import('../engine/pixel-data-manager');
+    const engine = makeFakeEngine();
+    const layer: RasterLayer = { ...baseRasterLayer, id: 'sticky' };
+    pixelDataManager.setDense(layer.id, makeImageData(0, 16 * 16 * 4, 16, 16));
+
+    const dirty = new Set([layer.id]);
+    for (let i = 0; i < 3; i++) {
+      syncLayers(engine, [layer], [layer.id], dirty);
+    }
+
+    // Still exactly one upload (perf win preserved) ...
+    expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(1);
+    // ... and the caller's Set is untouched, so pushHistory still sees it dirty.
+    expect(dirty.has(layer.id)).toBe(true);
   });
 });
 
