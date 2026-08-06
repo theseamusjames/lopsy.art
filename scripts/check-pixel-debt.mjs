@@ -50,7 +50,7 @@ const ALLOWLIST = {
   'src/app/store/actions/resize-image.test.ts': 1,
   'src/app/store/clipboard-image-match.test.ts': 1,
   'src/engine-wasm/engine-sync.test.ts': 3,
-  'src/engine-wasm/sync-layers.test.ts': 7,            // +1: shared mask fixture for upload-retry-cap tests
+  'src/engine-wasm/sync-layers.test.ts': 8,            // +1: shared sticky-dirty fixture buffer for #700 regression tests
   'src/engine/pixel-data-manager.test.ts': 2,
   'src/engine/pixel-data.test.ts': 1,
   'src/filters/auto-enhance.test.ts': 1,

@@ -14,6 +14,7 @@ import {
   setSelectionMask,
   readQuickMaskPixels,
   uploadQuickMaskPixels,
+  cropLayerToContent as cropLayerToContentGpu,
 } from '../../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import type {
@@ -291,12 +292,48 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   }
 
   // Crop the layer to content bounds before moving so that only opaque
-  // pixels are repositioned — transparent areas should stay behind.
-  editorState.expandLayerForEditing(activeLayerId);
-  editorState.cropLayerToContent(activeLayerId);
-  const croppedLayer = useEditorStore.getState().document.layers.find(
-    (l) => l.id === activeLayerId,
-  );
+  // pixels are repositioned — transparent areas should stay behind. Use
+  // the GPU-side crop rather than expandLayerForEditing + cropLayerToContent,
+  // which used to force a full JS-side GPU→CPU readback + CPU alpha scan +
+  // 67 MB ImageData allocation on the pointer-down that begins the drag
+  // (issue #701). The WASM path crops the actual GPU texture in place and
+  // returns the new bounds so the Zustand layer can be aligned to match.
+  // Raster-only: text/shape/group layers have no crop-to-content concept
+  // and their GPU textures aren't managed the same way.
+  let croppedX = activeLayer.x;
+  let croppedY = activeLayer.y;
+  const engineForCrop = getEngine();
+  if (engineForCrop && activeLayer.type === 'raster') {
+    const bounds = cropLayerToContentGpu(engineForCrop, activeLayerId);
+    if (bounds.length === 4 && (bounds[2] ?? 0) > 0) {
+      const newX = bounds[0]!;
+      const newY = bounds[1]!;
+      const newW = bounds[2]!;
+      const newH = bounds[3]!;
+      const boundsChanged =
+        newX !== activeLayer.x || newY !== activeLayer.y ||
+        newW !== (activeLayer.width ?? 0) || newH !== (activeLayer.height ?? 0);
+      if (boundsChanged) {
+        useEditorStore.setState((s) => ({
+          document: {
+            ...s.document,
+            layers: s.document.layers.map((l) =>
+              l.id === activeLayerId
+                ? { ...l, x: newX, y: newY, width: newW, height: newH }
+                : l,
+            ),
+          },
+          renderVersion: s.renderVersion + 1,
+        }));
+        // The GPU texture is now the smaller cropped version. Any cached JS
+        // pixel data has stale dimensions; drop it so syncLayers doesn't
+        // re-expand the texture to the old size on the next frame.
+        clearJsPixelData(activeLayerId);
+      }
+      croppedX = newX;
+      croppedY = newY;
+    }
+  }
 
   const baseWholeLayer: InteractionState = {
     drawing: true,
@@ -304,8 +341,8 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     layerId: activeLayerId,
     tool: 'move',
     startPoint: canvasPos,
-    layerStartX: croppedLayer?.x ?? activeLayer.x,
-    layerStartY: croppedLayer?.y ?? activeLayer.y,
+    layerStartX: croppedX,
+    layerStartY: croppedY,
     ...DEFAULT_TRANSFORM_FIELDS,
   };
   // Whole-layer move (no marquee): the move gesture still owns its

@@ -504,6 +504,122 @@ describe('buildPassThroughOpacityMap', () => {
   });
 });
 
+describe('syncLayers — sticky dirtyLayerIds (#700)', () => {
+  // A layer flagged in dirtyLayerIds should upload once per new pixel-data
+  // reference. Previously the `|| isDirty` short-circuit in the pixel and
+  // sparse upload branches unconditionally bypassed the tracked-version
+  // ref-diff, so a sticky dirty flag (dirtyLayerIds is only cleared by
+  // pushHistory / undo / redo) drove a full-layer re-upload every frame.
+  // At 4096×4096 that's 67 MB across the WASM bridge per frame per layer.
+
+  // Shared fixture (pixel-debt budget): one backing buffer, one sparse
+  // indices Uint32Array. Tests that need a distinct "new reference" get a
+  // subarray view rather than allocating another buffer.
+  const stickyBuffer = new Uint8ClampedArray(16 * 16 * 4);
+  const stickyIndices = new Uint32Array([0]);
+
+  const makeImageData = (offset: number, length: number, width: number, height: number): ImageData => ({
+    data: stickyBuffer.subarray(offset, offset + length),
+    width,
+    height,
+  } as ImageData);
+
+  beforeEach(async () => {
+    const { pixelDataManager } = await import('../engine/pixel-data-manager');
+    pixelDataManager.dropLayer('sticky');
+    stickyBuffer.fill(0);
+    vi.mocked(bridge.uploadLayerPixels).mockReset();
+    vi.mocked(bridge.uploadLayerSparsePixels).mockReset();
+    vi.mocked(bridge.addLayer).mockReset();
+    vi.mocked(bridge.updateLayer).mockReset();
+  });
+
+  afterEach(async () => {
+    const { pixelDataManager } = await import('../engine/pixel-data-manager');
+    pixelDataManager.dropLayer('sticky');
+    vi.mocked(bridge.uploadLayerPixels).mockReset();
+    vi.mocked(bridge.uploadLayerSparsePixels).mockReset();
+  });
+
+  it('uploads dense pixel data exactly once across N frames with a sticky dirty flag', async () => {
+    const { pixelDataManager } = await import('../engine/pixel-data-manager');
+    const engine = makeFakeEngine();
+    const layer: RasterLayer = { ...baseRasterLayer, id: 'sticky' };
+
+    pixelDataManager.setDense(layer.id, makeImageData(0, 16 * 16 * 4, 16, 16));
+
+    // Constant dirty set across five frames — same layer, same data ref.
+    const dirty = new Set([layer.id]);
+    for (let i = 0; i < 5; i++) {
+      syncLayers(engine, [layer], [layer.id], dirty);
+    }
+
+    expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(1);
+  });
+
+  it('uploads sparse pixel data exactly once across N frames with a sticky dirty flag', async () => {
+    const { pixelDataManager } = await import('../engine/pixel-data-manager');
+    const engine = makeFakeEngine();
+    const layer: RasterLayer = { ...baseRasterLayer, id: 'sticky' };
+
+    pixelDataManager.setSparse(layer.id, {
+      offsetX: 0,
+      offsetY: 0,
+      sparse: {
+        width: 4,
+        height: 4,
+        count: 1,
+        indices: stickyIndices,
+        rgba: stickyBuffer.subarray(0, 4),
+      },
+    });
+
+    const dirty = new Set([layer.id]);
+    for (let i = 0; i < 5; i++) {
+      syncLayers(engine, [layer], [layer.id], dirty);
+    }
+
+    expect(vi.mocked(bridge.uploadLayerSparsePixels)).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-uploads dense data when the ImageData reference actually changes', async () => {
+    const { pixelDataManager } = await import('../engine/pixel-data-manager');
+    const engine = makeFakeEngine();
+    const layer: RasterLayer = { ...baseRasterLayer, id: 'sticky' };
+
+    const first = makeImageData(0, 16 * 16 * 4, 16, 16);
+    pixelDataManager.setDense(layer.id, first);
+    const dirty = new Set([layer.id]);
+    syncLayers(engine, [layer], [layer.id], dirty);
+
+    // Same backing buffer, different ImageData reference (subarray view over
+    // a different offset). syncLayers ref-diffs on the ImageData object.
+    const second = makeImageData(4, 16 * 16 * 4, 16, 16);
+    pixelDataManager.setDense(layer.id, second);
+    syncLayers(engine, [layer], [layer.id], dirty);
+
+    expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(2);
+  });
+
+  it('still uploads on the first dirty frame (dirty ⇒ invalidate, not skip)', async () => {
+    const { pixelDataManager } = await import('../engine/pixel-data-manager');
+    const engine = makeFakeEngine();
+    const layer: RasterLayer = { ...baseRasterLayer, id: 'sticky' };
+
+    // First: sync layer with clean state so tracked version is set.
+    const imageData = makeImageData(0, 16 * 16 * 4, 16, 16);
+    pixelDataManager.setDense(layer.id, imageData);
+    syncLayers(engine, [layer], [layer.id], new Set());
+    expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(1);
+
+    // Second: someone edits the same buffer in place (data ref stable) and
+    // flags dirty. The dirty flag alone must still drive an upload.
+    imageData.data.fill(200);
+    syncLayers(engine, [layer], [layer.id], new Set([layer.id]));
+    expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('syncLayers — bounded retries for failing uploads (#595 follow-up)', () => {
   // A failed upload leaves tracked versions stale so the next frame retries.
   // Without a cap, a permanent failure (GPU OOM, detached buffer) retries —

@@ -33,6 +33,10 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
   setSelectionMask: vi.fn(),
   readQuickMaskPixels: vi.fn(() => new Uint8Array(8)),
   uploadQuickMaskPixels: vi.fn(),
+  cropLayerToContent: vi.fn(() => new Float64Array([0, 0, 0, 0])),
+  // Spy so the handleMoveDown regression test can assert it is NEVER called
+  // (issue #701). The GPU-side crop replaces the JS-side readback path.
+  readLayerPixels: vi.fn(() => new Uint8Array()),
 }));
 
 const engine: { __engine: string } | null = { __engine: 'mock' };
@@ -68,10 +72,24 @@ const editorState = {
   setSelection: vi.fn(),
   setSelectionBounds: vi.fn(),
   notifyRender: vi.fn(),
+  pushHistory: vi.fn(),
+  pushPrebuiltSnapshot: vi.fn(),
+  duplicateLayer: vi.fn(),
+  updateLayerPosition: vi.fn(),
+  expandLayerForEditing: vi.fn(),
+  cropLayerToContent: vi.fn(),
 };
 
 vi.mock('../editor-store', () => ({
-  useEditorStore: { getState: () => editorState },
+  useEditorStore: {
+    getState: () => editorState,
+    setState: (updater: unknown) => {
+      const next = typeof updater === 'function'
+        ? (updater as (s: typeof editorState) => Partial<typeof editorState>)(editorState)
+        : updater as Partial<typeof editorState>;
+      Object.assign(editorState, next);
+    },
+  },
 }));
 
 const uiState = {
@@ -90,12 +108,17 @@ vi.mock('../ui-store', () => ({
 }));
 
 import {
+  handleMoveDown,
   handleMoveMove,
   handleMoveUp,
   flushQuickMaskDrag,
 } from './move-handlers';
-import type { InteractionState, FloatingSelection, PersistentTransform } from './interaction-types';
+import type { InteractionState, FloatingSelection, PersistentTransform, InteractionContext, LastPaintPoint } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
+import * as bridge from '../../engine-wasm/wasm-bridge';
+import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { DEFAULT_EFFECTS } from '../../layers/layer-model';
+import type { Layer, RasterLayer, Point } from '../../types';
 
 function makeMoveState(overrides: Partial<InteractionState> = {}): InteractionState {
   const mask = new Uint8ClampedArray(DOC_W * DOC_H);
@@ -256,5 +279,129 @@ describe('handleMoveMove (quick-mask + marquee move)', () => {
     handleMoveMove(state, { x: 3, y: 3 }, floatRef);
     tickFrame();
     expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('handleMoveDown — whole-layer move grab (issue #701)', () => {
+  // The whole-layer move grab used to call `editorState.expandLayerForEditing`
+  // and `editorState.cropLayerToContent` on pointer-down. Those two together
+  // did a full GPU→CPU readback (`readLayerPixels`) plus a JS-side ImageData
+  // allocation (67 MB at 4096×4096) plus a CPU alpha scan — all on the frame
+  // the user starts dragging. The fix routes the crop through the WASM
+  // `cropLayerToContent`, which crops the GPU texture in place and returns
+  // the new bounds. No JS readback, no ImageData allocation, no CPU scan.
+
+  const makeContext = (
+    activeLayer: Layer,
+    { altKey = false }: { altKey?: boolean } = {},
+  ): InteractionContext => {
+    const canvasPos: Point = { x: 10, y: 10 };
+    return {
+      canvasPos,
+      layerPos: canvasPos,
+      shiftKey: false,
+      altKey,
+      metaKey: false,
+      activeLayer,
+      activeLayerId: activeLayer.id,
+      clientX: 10,
+      clientY: 10,
+      stateRef: { current: { drawing: false, tool: 'move' } as InteractionState },
+      floatingSelectionRef: { current: null },
+      persistentTransformRef: { current: null },
+      stampSourceRef: { current: null },
+      stampOffsetRef: { current: null },
+      lastPaintPointRef: { current: null as LastPaintPoint | null },
+    };
+  };
+
+  const baseRaster: RasterLayer = {
+    id: 'raster-1',
+    name: 'Raster',
+    type: 'raster',
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    x: 0,
+    y: 0,
+    width: DOC_W,
+    height: DOC_H,
+    clipToBelow: false,
+    effects: DEFAULT_EFFECTS,
+    mask: null,
+  };
+
+  beforeEach(() => {
+    editorState.document.layers = [baseRaster];
+    editorState.selection = {
+      active: false,
+      mask: null,
+      bounds: null,
+      maskWidth: 0,
+      maskHeight: 0,
+    };
+    editorState.pushHistory.mockClear();
+    editorState.expandLayerForEditing.mockClear();
+    editorState.cropLayerToContent.mockClear();
+    uiState.maskMode = 'off';
+    vi.mocked(bridge.cropLayerToContent).mockReset();
+    vi.mocked(bridge.readLayerPixels).mockClear();
+    vi.mocked(clearJsPixelData).mockClear();
+  });
+
+  it('routes the pre-move crop through the WASM cropLayerToContent (not the JS expand + CPU scan)', () => {
+    vi.mocked(bridge.cropLayerToContent).mockReturnValue(new Float64Array([2, 3, 20, 15]));
+    handleMoveDown(makeContext(baseRaster));
+
+    expect(vi.mocked(bridge.cropLayerToContent)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(bridge.cropLayerToContent).mock.calls[0]![1]).toBe(baseRaster.id);
+
+    // The JS-side CPU-scan path must not run — that's the whole point.
+    expect(editorState.expandLayerForEditing).not.toHaveBeenCalled();
+    expect(editorState.cropLayerToContent).not.toHaveBeenCalled();
+  });
+
+  it('never triggers a JS-side readLayerPixels for the whole-layer grab', () => {
+    vi.mocked(bridge.cropLayerToContent).mockReturnValue(new Float64Array([0, 0, DOC_W, DOC_H]));
+    handleMoveDown(makeContext(baseRaster));
+
+    // The 67 MB readback the issue is about lived behind
+    // readLayerAsImageData → readLayerPixels. Neither belongs on this path.
+    expect(vi.mocked(bridge.readLayerPixels)).not.toHaveBeenCalled();
+  });
+
+  it('updates layer bounds from the GPU crop result and clears stale JS pixel data', () => {
+    vi.mocked(bridge.cropLayerToContent).mockReturnValue(new Float64Array([4, 5, 12, 8]));
+    handleMoveDown(makeContext(baseRaster));
+
+    const updated = editorState.document.layers[0] as RasterLayer;
+    expect(updated.x).toBe(4);
+    expect(updated.y).toBe(5);
+    expect(updated.width).toBe(12);
+    expect(updated.height).toBe(8);
+    expect(vi.mocked(clearJsPixelData)).toHaveBeenCalledWith(baseRaster.id);
+  });
+
+  it('leaves layer bounds untouched when the GPU crop reports the same bounds', () => {
+    vi.mocked(bridge.cropLayerToContent).mockReturnValue(new Float64Array([0, 0, DOC_W, DOC_H]));
+    handleMoveDown(makeContext(baseRaster));
+
+    const updated = editorState.document.layers[0] as RasterLayer;
+    expect(updated.x).toBe(0);
+    expect(updated.y).toBe(0);
+    expect(updated.width).toBe(DOC_W);
+    expect(updated.height).toBe(DOC_H);
+    // Bounds unchanged ⇒ no need to drop cached JS pixel data.
+    expect(vi.mocked(clearJsPixelData)).not.toHaveBeenCalled();
+  });
+
+  it('does not crop non-raster layers (text/shape/group have no crop-to-content concept)', () => {
+    const shape: Layer = { ...baseRaster, id: 'shape-1', type: 'shape' } as unknown as Layer;
+    editorState.document.layers = [shape];
+    vi.mocked(bridge.cropLayerToContent).mockReturnValue(new Float64Array([0, 0, 10, 10]));
+    handleMoveDown(makeContext(shape));
+
+    expect(vi.mocked(bridge.cropLayerToContent)).not.toHaveBeenCalled();
   });
 });
