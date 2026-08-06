@@ -898,15 +898,31 @@ Every tool shortcut (`B`, `E`, `J`, …) and the non-tool single-key actions (`X
 
 ## Reference Image Drawer
 
-A floating, draggable, resizable modal (toggled from the toolbar) for keeping reference images alongside the canvas.
+A floating, draggable, resizable drawer (toggled by the **Reference** button on the panel toolbar) for keeping reference images alongside the canvas. It is *not* part of the docking system — it floats over the workspace, parked against the left edge of the right dock and tracking that dock's width as the dock is resized. Default size **300 × 300**, minimum **200 × 200**. Below a **600 px** viewport width the whole sidebar area is hidden, so the drawer is unavailable on narrow screens.
 
-- Load reference images via file picker or drag-and-drop onto the drawer
-- **Multiple images**: thumbnail strip with add/remove, click to switch between references
-- **Zoom**: mouse-wheel zoom with cursor-centered scaling (0.05x – 20x)
-- **Pan**: click and drag inside the preview to reposition
-- **Per-image view state**: zoom, pan, opacity, and horizontal/vertical flip are tracked independently for each loaded image
-- **Drag the header bar** to reposition the drawer; **bottom-right resize handle** to resize
-- Images are pure client-side blob URLs — no upload, no backend
+**Loading images**
+- **Empty state**: a dashed drop zone reading "Drop an image here or click to browse". Click it to open the file picker, or drag image files onto it.
+- The file picker accepts `image/*` and is **multi-select** — every chosen file is appended in order and the last one becomes the active reference.
+- Non-image files are filtered out and any file the browser can't decode is skipped **silently** (no toast, no placeholder row).
+- Once at least one image is loaded, the **+** tile at the end of the thumbnail strip is the way to add more.
+- **Known gap — drag-and-drop only works in the empty state.** The drop handlers live on the drop zone, and the drop zone is replaced by the viewer as soon as an image loads. Dropping a file on a loaded drawer therefore bubbles to the app-level drop handler and **opens that file as a document / import** (PSD, DNG, `.lopsy`, or a plain image) instead of adding a reference.
+
+**Viewing**
+- **Auto-fit on load**: each newly added image is scaled with `min(containerW / w, containerH / h, 1)` and centered — it fits the drawer, but is never *upscaled* past 100 %. Switching to an image that has no stored view state fits it the same way.
+- **Zoom**: mouse wheel, **1.07× per notch**, anchored on the cursor so the point under the pointer stays put, clamped to **0.05× – 20×**. The wheel event is stopped at the drawer, so scrolling over a reference never zooms the canvas underneath.
+- **Pan**: click and drag anywhere in the preview (cursor turns from grab to grabbing). Pointer-downs that land on a button, input, or slider are ignored so controls still work.
+- **Opacity**: a **number field (0 – 100)**, not a slider; typed values are clamped to that range.
+- **Flip horizontal / vertical**: mirrors via a negative scale plus a compensating translate, so the image flips **in place** rather than sliding out of view.
+- **Per-image view state**: zoom, pan, opacity, and both flips are tracked independently per image (keyed by image id), so switching references restores each one's framing.
+- **Thumbnail strip**: 40 × 40 cover-cropped tiles, active tile outlined in the accent color, strip scrolls horizontally. Click a tile to switch. The **trash** button removes the *active* image (revoking its blob URL) and clamps the selection to the nearest remaining image; removing the last one returns the drawer to the drop zone.
+- **Known gap**: thumbnails are click-only `<img>` elements with no `tabIndex` and no key handler, so the strip can't be reached or operated from the keyboard.
+
+**Window chrome**
+- **Drag to reposition**: the drag handler is on the whole drawer, but the preview, controls bar, thumbnail strip, and drop zone all stop the event, and inputs/buttons/labels are excluded — so in practice the **header bar** (and the thin border gutter) is what you grab.
+- The drag is **unclamped**: unlike floating dock panels, nothing pulls the drawer back if you drag it off-screen.
+- **Bottom-right resize handle** sets the drawer's width/height directly on the element (minimum 200 px each).
+- **Closing discards everything.** The drawer is conditionally mounted, so toggling it off unmounts the panel: loaded images, their view states, the dragged position, and the resized dimensions are all gone on reopen, and the blob URLs of any images that weren't explicitly removed are never revoked.
+- Images are pure client-side blob URLs — no upload, no backend.
 
 ---
 
@@ -964,10 +980,26 @@ Tab strips follow the WAI-ARIA tabs pattern, so a group's tabs are reachable wit
 
 ## Paths Panel
 
-- Named stored paths
-- Operations: add, remove, select, rename, update anchors
-- Stroke path to pixels
-- Convert path to selection
+A flat list of the document's stored vector paths plus a three-button toolbar. It is a *consumer* of paths — nothing in the panel creates one.
+
+**Where stored paths come from**
+- The **Path / Pen tool**, when an in-progress anchor list is committed.
+- The **Shape tool with Output = path**: finishing the drag rasterizes nothing — the raster preview drawn during the drag is rolled back with an `undo()` and a closed path is added instead. Ellipses become 4-anchor Bezier ellipses; every other mode (including a 4-sided "rectangle") becomes a straight-sided polygon, so **corner radius is not carried into path output**. A drag smaller than 1 px in both axes is discarded.
+- **Select → Selection to Path**.
+- **Boolean path operations** (Unite / Subtract / Intersect / Exclude), which consume both source paths and add the result.
+
+Every new path is auto-named `Path 1`, `Path 2`, … from a counter that **never resets** — it keeps climbing for the life of the page, so opening a second document continues the numbering rather than restarting at 1.
+
+**The list**
+- Click a row to select it; **clicking the selected row again deselects it**, which disables all three toolbar buttons.
+- Empty state reads "No paths".
+- **Known gap — rows are keyboard-focusable but not keyboard-operable.** Each row is a `role="option"` with `tabIndex={0}` and no key handler, so Tab reaches a path but Enter / Space can't select it. (Same pattern as the Brushes modal tab rail, the color picker sliders, the layer-row drag grip, and the layer-effects list.)
+- **Known gap**: the store exposes `renamePath`, but nothing in the UI calls it — there is no rename affordance (no double-click, no context menu), so path names are whatever the counter assigned.
+
+**Toolbar** (all three disabled until a path is selected)
+- **Stroke Path** opens the **Stroke Path modal** rather than stroking immediately: a **Width** number field pre-filled from the Path tool's current stroke width and auto-selected on open (clamped and rounded to **1 – 50 px** on confirm), and a read-only **Color** row showing the **foreground color** swatch — the color is not editable here. `Enter` or **Stroke** rasterizes onto the **active layer**; `Escape`, **Cancel**, or a click on the backdrop dismisses it.
+- **Path to Selection** rasterizes the path's Bezier outline into a full-document mask on a 2D canvas and installs it as the selection. Notes: it needs **≥ 2 anchors**; the mask keeps the fill's **anti-aliased edges** (alpha is copied straight into the mask, so the selection has soft borders); an **open path is implicitly closed** before filling, so converting one selects the chord-closed region; and the resulting selection's bounds are the **whole document**, not the path's bounding box.
+- **Delete Path** removes the selected path and clears the selection.
 
 ---
 
@@ -995,10 +1027,13 @@ Tab strips follow the WAI-ARIA tabs pattern, so a group's tabs are reachable wit
 
 A per-layer view of the active layer's RGBA channels, modeled on Photoshop's Channels palette.
 
-- **Rows**: RGB (composite), Red, Green, Blue, Alpha. Each row has a colored swatch dot, a label, and a live grayscale thumbnail of that channel sampled from the active layer's GPU texture.
-- **Active channel**: clicking a row marks that channel as the active view — used by tools like the eyedropper / curves to operate on a single channel.
-- **Per-channel visibility**: each non-composite row has an eye/eye-off toggle that hides or shows that channel in the composite output. The composite RGB row reflects the current visibility mask of R / G / B.
-- **Thumbnails**: extracted on the JS side from the layer's RGBA bytes (red, green, blue, or alpha mapped into a grayscale image) and re-rendered whenever the layer's pixel-data version increments, so the panel stays in sync with painting.
+- **Rows**: RGB (composite), Red, Green, Blue, Alpha. Each row has a colored swatch dot, a label, a live thumbnail, and — on the four single-channel rows — an eye toggle. A row whose channel is hidden is dimmed. With no active layer the rows still render, minus their thumbnails.
+- **Per-channel visibility**: the eye toggles feed a `vec4` channel mask that is applied in **`final_blit.glsl`**, the very last step that puts the composite on screen (`rgb *= mask.rgb`, `a *= mask.a`). Two consequences: hiding a channel **zeroes** it rather than isolating it (hide Red and you see the cyan-ish remainder, not a red separation), and because it lands after compositing it is a **view-only** filter — export, flatten, layer thumbnails, and saved projects are unaffected. Hiding **Alpha** multiplies the whole composite's alpha by 0, which blanks the on-screen document to the transparency checkerboard.
+- **Thumbnails**: **40 × 20**, produced on the **GPU**. `readChannelThumbnail` / `readLayerThumbnail` blit the active layer's texture down into a small RGBA8 texture and read back only that, returning an 8-byte header (`width`, `height` as u32 LE) followed by RGBA pixels; the panel unpacks it into `ImageData` and letterboxes it into the 40 × 20 canvas when the aspect doesn't match. The CPU per-pixel extraction loop this replaced moved ~67 MB **per channel** per update on a 4K layer (#683). Reads are retried on up to **10** animation frames while the engine is still warming up, then give up and leave the tile blank.
+- Thumbnails re-render whenever the layer's pixel-data version increments, so the panel tracks painting live.
+- Rows are keyboard-operable: `tabIndex={0}` plus an Enter / Space handler (unlike the Paths and layer-effects lists).
+- **Known gap — the active channel does nothing.** Clicking a row sets `activeChannel` in the UI store and highlights that row, but **nothing reads it**: it has no consumers outside the panel, so it does not scope the eyedropper, curves, filters, or painting to a single channel. It is a selection highlight only.
+- **Known gap**: the RGB composite row's thumbnail is a plain layer thumbnail — it does **not** reflect the R / G / B visibility toggles, because the channel mask is applied at the screen blit and the thumbnail path samples the layer texture directly.
 
 ---
 
