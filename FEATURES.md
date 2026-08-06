@@ -227,7 +227,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 
 ### Rectangular Marquee
 - **Aspect ratio lock**: width/height constraint
-- **Feather**: 0 - 250 px (soft edge applied after the marquee is committed; three-pass separable box blur on the GPU approximating Gaussian falloff)
+- **Feather**: 0 - 250 px (soft edge applied after the marquee is committed). The blur is a **two-pass separable Gaussian on the GPU** — one horizontal and one vertical pass over normalized weights `exp(-i² / 2σ²)` with `σ = radius / 2` — not a box blur. **The engine clamps the radius to 63 px**, because the blur shader carries a fixed `u_weights[64]` array, so every slider value from 63 to 250 produces an identical result.
 - **Cmd/Meta+drag**: holding meta while dragging temporarily forces a 1:1 (square) aspect ratio for the duration of the press, regardless of the persistent aspect-ratio toggle. Releasing meta returns to the unconstrained or persistently-locked behavior immediately.
 
 ### Elliptical Marquee
@@ -259,8 +259,8 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - Paint over the canvas to grow (or shrink) the selection: each pointer-move samples the seed color under the cursor and runs a flood-fill region-grow constrained by the brush radius, the tolerance, and the edge strength. Strokes accumulate across many sample points so dragging across a region progressively absorbs it. The pre-stroke mask is preserved so a single undo restores the prior selection.
 
 ### Selection Operations
-- Add, subtract, intersect (combine modes)
-- Invert selection (`⇧⌘I`)
+- **Combine modes are per-tool, not global.** There is no shared add / subtract / intersect mode switch. Only two tools combine with an existing selection: the **Magic Wand** (Shift+click adds, Alt/Option+click subtracts) and **Quick Selection** (its own add / subtract Mode control). The marquee, lasso, and magnetic lasso tools always replace the selection — they read no Shift or Alt modifier for combining. The underlying mask combiner also implements an **intersect** mode, but no caller ever requests it, so intersect is unreachable from the UI.
+- Invert selection (`⇧⌘I`) — inverts every mask value (`255 − v`, so partial coverage inverts to its complement rather than snapping) and sets the reported selection bounds to the **whole document**, since an inverted selection almost always touches the canvas edges.
 - Select all (`⌘A`)
 - Deselect (`⌘D`)
 - **Move the selection outline**: with a rectangular or elliptical marquee tool active, press-drag from *inside* an existing selection to translate the selection mask itself — the marching-ants outline moves while the underlying pixels stay put (any active floating selection is dropped first). Arrow keys nudge the same marquee bounds.
@@ -270,15 +270,32 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Selection → Path**: traces the selection mask with marching squares, simplifies the contour with Douglas-Peucker, and fits smooth cubic Bezier anchors using Catmull-Rom tangents. The result is added to the Paths panel as a new path. Disabled when nothing is selected.
 - **Grow…**: expands the selection by an integer pixel amount (1 - 100 px)
 - **Shrink…**: contracts the selection (1 - 100 px)
-- **Feather…**: softens the selection edge with a Gaussian-approximation blur (radius 1 - 250 px)
+- Grow and Shrink are **CPU-side binary morphology**, unlike Feather: each finds the pixels on the mask border (any non-zero pixel with a strictly-zero 4-neighbour) and paints a disc of the given radius through them, writing a hard 255 for Grow and a hard 0 for Shrink. Two consequences: any partial coverage inside that disc is flattened to fully-selected or fully-unselected, so growing and then shrinking by the same amount does **not** restore a feathered edge; and because "selected" means non-zero, Grow measures from the outermost fringe of a feathered selection rather than from its 50 % line.
+- **Feather…**: softens the selection edge, running the same two-pass GPU Gaussian as the marquee's own Feather slider. The dialog offers radius 1 - 250 px but the engine clamps it to **63 px**, so values above 63 all land on the same result.
+
+### Marching Ants (selection outline)
+
+The outline is drawn on the 2D overlay canvas, not by the GPU compositor.
+
+- **The ants trace the 50 % contour.** Edge extraction thresholds the mask at **128**, so a selection is outlined where it crosses half coverage. A soft selection whose values are all below 128 — a heavily feathered edge, or the selection returned by exiting a quick mask that was painted at low opacity — is fully active and does constrain painting, but draws **no ants at all**. The absence of an outline is not proof of an empty selection.
+- Edge segments are chained into connected polylines by matching shared endpoints, so the dash pattern flows continuously around each contour instead of restarting on every one-pixel segment.
+- Each contour is stroked twice: a solid black under-stroke, then a white dashed over-stroke on top, so the outline stays legible over any background. Line width is `1.5 / zoom` and the dash is `8 / zoom` on/off, both zoom-compensated so the ants keep a constant on-screen size. The dash offset cycles over a 120-frame period.
+- Contours are cached against the mask buffer's identity and retraced only when the mask itself is replaced, and the edge scan is clipped to the selection's bounding box (expanded 1 px) rather than the whole canvas — without that clip a live drag on a large document collapses to a few frames per second.
+- **While a new marquee is being dragged out the ants are drawn straight from the rectangle or ellipse geometry**, bypassing the mask, the contour tracer, and the GPU bridge entirely; the real mask is only built on release. Dragging an *existing* marquee to a new position instead reuses the traced contours and offsets them through a translate-only transform, so that gesture never retraces either.
+- The ants animate on an **overlay-only frame path** that redraws the 2D overlay without recompositing any layer, so an idle selection does not cost a full GPU recomposite every frame.
+- When a transform is active the outline is drawn through the transform matrix — see the Transform section for which handles it does and does not follow.
 
 ### Quick Mask Mode
-- Shortcut: `Q` (toggle)
-- Paints the active selection as a translucent red overlay on the canvas; brush, pencil, and eraser then edit the selection mask directly
-- White paint adds to the selection, black (or the eraser) subtracts; intermediate gray values produce partial selection coverage
-- Exiting Quick Mask reads the painted mask back from the GPU and replaces the selection (with feather applied if a feather radius is set on the marquee)
+- Shortcut: `Q` (toggle). There is also a dedicated toggle button in its own group at the bottom of the toolbox, labelled *Enter Quick Mask (Q)* / *Exit Quick Mask (Q)* and highlighted while the mode is on.
+- **Entering** clears the active selection and blits the selection mask GPU-to-GPU into a separate quick-mask texture. With no selection active it starts all-zero — nothing selected.
+- **The overlay is blue, and it covers the *unselected* region** — not a red overlay of the selection. Coverage is `(1 − mask) × 0.5`, so fully-unselected areas are tinted `rgb(0, 99, 255)` at 50 % and fully-selected areas are left untouched. It shares the shader branch used by layer-mask edit mode, which is why the two look alike.
+- Brush, pencil, and eraser edit the selection mask directly. **The foreground color is reduced to a binary decision**: Rec. 709 luminance ≥ 128 adds to the selection, below 128 subtracts. A mid-gray therefore does not paint partial coverage — it just picks a side. Partial coverage comes from brush hardness and opacity, which shape the dab with a quadratic `1 − t²` falloff plus a 1 px smoothstep edge. The eraser ignores the color and always subtracts.
+- **Adding and subtracting are not symmetric.** Adding takes `max(existing, dabStrength)`, so opacity acts as a ceiling — repeated passes at 50 % opacity never push that area past 50 %. Subtracting multiplies by `(1 − dabStrength)`, so repeated passes compound and do drive the mask to zero.
 - Works regardless of the active layer — painting only affects the selection mask, not pixels
 - **Fill (paint bucket) and Gradient tools route into the quick mask** instead of the active layer while quick mask is on, so smooth selection falloffs (linear or radial gradients) and bucket fills of the selection mask are first-class operations. Quick mask mode takes precedence over layer-mask edit mode if both are somehow active.
+- **The Move tool moves painted mask content.** With a marquee active in quick mask, dragging translates both the marquee and the quick-mask pixels inside it: the pixels under the marquee's original position are cleared and the moved content is max-blended into its new position, so it adds to rather than replaces whatever it lands on. Mask content outside the marquee stays put, and the layer texture is never touched.
+- **Exiting** reads the quick-mask texture back from the GPU and installs it as the selection. Bounds are computed from any non-zero pixel, so a soft-edged mask reports bounds covering its entire falloff. No feather is applied on the way out — the marquee's Feather slider has no effect on a quick-mask selection.
+- **Quick-mask strokes are not undoable.** Painting pushes a *Quick Mask Paint* / *Quick Mask Erase* entry into history, but a history snapshot stores the document, the selection, and layer textures — the quick-mask texture is not among them. Undoing one of these entries restores nothing visible and the painted mask survives; the entry still consumes an undo step.
 
 ---
 
