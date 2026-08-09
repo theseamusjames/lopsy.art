@@ -12,7 +12,7 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Footer** — **Export** (opens the Export Brushes modal, below) and **Save Current**, which prompts for a name and snapshots the live brush — tip, size, hardness, spacing, scatter, angle, opacity, fade, taper, all four jitters, the speed-size settings, and any sub-brushes — as a new custom preset, which it then makes active. Texture is deliberately *not* captured.
 
 **Core parameters**
-- **Size**: 1 - 2000 px (auto-scaled by document size)
+- **Size**: 1 - 2000 px (auto-scaled by document size). **The two places that edit this number do not share a ceiling**: the Brushes modal's Shape tab runs to `max(2000, 1.5 × longest-document-side)` while the **options-bar** Size slider stops at `max(200, …)` — both write the same `settings.brush.size`. A size dialed above 200 in the modal survives (sliders clamp on interaction, not on render) until you next touch the options-bar slider, which clamps it back down to its own maximum.
 - **Opacity**: 1 - 100%
 - **Hardness**: 0 - 100%
 - **Fade**: 0 - 2000 px (opacity fade-out distance, exposed on the options bar)
@@ -92,7 +92,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 ### Dodge / Burn
 - **Mode**: dodge or burn
 - **Exposure**: 1 - 100%
-- **Size**: 1 - 200 px (base range; auto-scaled by document size)
+- **Size**: 1 - 200 px (base range; auto-scaled by document size). **This is the Brush's size setting, not a separate one** — the Dodge options bar binds `settings.brush.size` directly, so resizing here (by slider or by `[` / `]`) resizes the Brush too, and vice versa. Exposure and Mode are the only settings Dodge/Burn owns.
 - **Shift+click**: applies dodge/burn along a straight line from the previous stroke endpoint
 
 ### Sponge
@@ -101,6 +101,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **Size**: 1 px – document-scaled max (default cap 200 px)
 - Shortcut: `Y`
 - Converts each affected pixel to HSL, shifts the saturation channel by the configured delta with a Gaussian falloff (1.0 at the dab center, 0 at the edge), and writes back to RGB. Internal hardness is fixed at 0.5; dab spacing is 25% of the brush size.
+- **`[` / `]` do not resize the Sponge** — the size shortcut has no branch for this tool, so its Size is slider-only (see [Single-Key Shortcuts](#single-key-shortcuts)).
 - **Shift+click**: applies the sponge along a straight line from the previous stroke endpoint
 
 ### Clone Stamp
@@ -133,6 +134,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - Shortcut: `J`
 - Holding the cursor still keeps emitting dots at ~6 Hz so paint accumulates over time, mimicking an airbrush. Dragging spreads dots along the path with automatic spacing scaled to brush size.
 - **No shift+click straight line**: unlike the other paint tools, the spray handler never reads the shift key, so shift+click sprays a normal dab at the click point. A shift-hold line preview *is* drawn (see below) even though clicking will not follow it.
+- **No size cursor and no `[` / `]`**: Spray is the one painting tool left out of both size affordances. It is absent from the brush-cursor tool set, so it falls through to a plain crosshair with no ring showing the dab footprint, and absent from the size-shortcut branches, so the brackets do nothing. Both gaps bite hardest here, since Spray has the widest size range of any tool (base cap 500 px).
 
 ### Straight-Line Strokes (shared across paint tools)
 
@@ -256,6 +258,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Tolerance**: 0 - 255 (per-channel color distance threshold; default 32)
 - **Edge Strength**: 0 - 100 (Sobel gradient threshold — higher values stop the grow at stronger edges; default 50)
 - **Mode**: add or subtract
+- **`[` / `]` do not resize the Quick Selection brush**, and arrow keys do not nudge the selection while this tool is active — it is missing from both handlers' tool lists (see [Single-Key Shortcuts](#single-key-shortcuts) and [Move](#move)).
 - Paint over the canvas to grow (or shrink) the selection: each pointer-move samples the seed color under the cursor and runs a flood-fill region-grow constrained by the brush radius, the tolerance, and the edge strength. Strokes accumulate across many sample points so dragging across a region progressively absorbs it. The pre-stroke mask is preserved so a single undo restores the prior selection.
 
 ### Selection Operations
@@ -427,7 +430,7 @@ gets baked first.
 
 ### Move
 - Drag to reposition layers
-- Arrow key nudge — 1 px by default; when grid + snap-to-grid is enabled, each key press nudges by exactly one grid cell. Arrow keys also nudge the active marquee bounds when a selection tool is active.
+- Arrow key nudge — 1 px by default; when grid + snap-to-grid is enabled, each key press nudges by exactly one grid cell. Arrow keys also nudge the active marquee bounds when a selection tool is active — but the responding set is an explicit list of **five** tools (rectangular marquee, elliptical marquee, lasso, magnetic lasso, magic wand). **Quick Selection is not in it**, so arrow keys do not nudge a selection while that tool is active; switch to any other selection tool and the same selection nudges fine. Under every other tool the arrow keys fall through untouched.
 - Snap to grid
 - Snap to guides
 - **Snap to layers** (View menu → "Snap to Layers"): while dragging, the moving layer's left/right/top/bottom edges and X/Y centers attract to the matching edges and centers of every other visible layer within a 5 px threshold. Magenta alignment guides span the document while a snap is engaged and clear on mouse-up.
@@ -467,6 +470,8 @@ Paste takes one of two routes depending on where the image came from.
 - **Reverse**: on/off (default off)
 - There is no dither, opacity, or blend-mode option, and — unlike Fill (`G`) and every neighbouring tool — **the gradient tool has no keyboard shortcut**; it is reachable only from the toolbox.
 - **Cmd/Meta+drag**: snaps the gradient angle to 15° increments while dragging (handy for aligning a gradient to a horizontal, vertical, or 45° axis without having to drag a perfectly straight line). Note this reads `metaKey` only, with no Ctrl fallback, so on Windows/Linux the snap is effectively unreachable.
+  - **The snap is linear-only in effect.** It rotates the endpoint about the drag origin while *preserving its distance*, and a radial gradient consumes nothing but `radius = |end − start|` — so in radial mode Cmd changes the rendered result not at all. The on-canvas guide line is drawn from the snapped endpoint either way, so holding Cmd during a radial drag visibly rotates the guide while the gradient underneath stays put.
+  - If a symmetry mode is active, pressing Cmd *before* the pointer goes down never starts a gradient at all — the canvas intercepts Cmd+click to reposition the symmetry center (see [Symmetry](#symmetry)). Start the drag first, then hold Cmd.
 - **Shift** does nothing in this tool, despite being the angle-constraint convention in Photoshop / GIMP / Figma / Krita.
 - **Mask edit mode**: when the active layer's mask is being edited, gradient drags paint into the mask texture instead of the layer pixels.
 - **Quick Mask mode**: when Quick Mask is active, gradient drags paint into the GPU quick-mask texture in document space — produces smooth selection falloffs.
@@ -872,6 +877,7 @@ All three are undoable and auto-switch the target group from pass-through to nor
 - **Slider double-click → reset**: every numeric slider in the UI (brush size, opacity, hardness, adjustment sliders, filter sliders, etc.) snaps back to its default value on double-click. The numeric text input inside the slider is exempt so double-clicks there select the value for editing instead.
 - **Slider arrow-key step**: with a slider's numeric input focused, **↑ / ↓** increment / decrement the value by one step (log-scaled sliders like Levels gamma step proportionally), clamped to the slider's min / max. Enter blurs the input to commit.
 - **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the status bar resets the viewport zoom to 100% (1×).
+- **Canvas cursor by tool**: exactly **seven** tools hide the system cursor and draw a size ring on the overlay instead — brush, pencil, eraser, clone stamp, healing brush, dodge/burn, and sponge. The ring is a circle for all of them **except the pencil, which draws a square** to match its hard-edged square dab. **Only the Brush's ring reflects the tip**: the custom tip bitmap and the Angle rotation are passed through for `brush` and hard-coded to none/0° for the other six, so a rotated star tip still shows a plain circle under, say, the eraser. Clone stamp and healing brush replace the ring with the live source preview once a source is set. Every remaining tool gets a standard cursor — move and text have their own, and everything else (including **Spray**) falls through to a crosshair. Liquify draws its own ring from the Liquify brush size while its modal is open.
 - **Color swatch selection**: clicking the foreground or background swatch in the Color panel makes it the one the picker, hex field, and RGBA sliders edit; clicking a recent-color swatch applies that color to whichever swatch is currently active. (The old double-click-to-expand behavior went away with panel collapsing.)
 - **Layer name double-click → rename**: double-clicking a layer row's name turns it into an inline text input; Enter commits, Escape cancels.
 - **Menu submenus**: a menu item can carry a nested submenu, marked with a `›` arrow and opened by **hovering** the parent row (Image → Mode is the only one today). The flyout is positioned against the viewport rather than nested inside the dropdown — long menus like Filter set `overflow-y: auto`, which per CSS Overflow 3 forces the horizontal axis to `auto` too and would otherwise clip a `left: 100%` child at the padding box.
@@ -898,7 +904,9 @@ In addition to per-tool toolbox shortcuts (`B`, `E`, `J`, `Y`, `R`, `S`, `H`, `O
 - **`X`** — swap foreground and background colors
 - **`D`** — reset foreground/background to the defaults (black / white)
 - **`Q`** — toggle Quick Mask mode
-- **`[` / `]`** — decrement / increment the active tool's size by 1 (works for brush, dodge & burn, smudge, pencil, eraser, clone stamp, healing brush, pen-tool stroke width, and shape-tool stroke width — the bracket maps to whichever size slider the current tool exposes)
+- **`[` / `]`** — decrement / increment the active tool's size by 1. The handler is an explicit tool list, **not** a lookup of "whichever size slider the tool exposes": brush **and dodge & burn** (both write the shared `brush.size`), smudge, pencil, eraser, clone stamp, healing brush, pen-tool stroke width, and shape-tool stroke width. **Three tools ship a Size slider that the brackets ignore** — Sponge, Spray, and Quick Selection; their size is slider-only.
+  - **The brackets are not bound by the slider's ceiling.** They write straight through the store clamp — **1 – 5000 px** for every pixel-size setting (1 – 50 for the pen/shape stroke widths) — without consulting the options bar's document-scaled maximum. On a small document, where the Brush Size slider stops at 200, holding `]` walks the size well past the visible end of the slider, all the way to 5000.
+  - The handler reports the key as handled for *every* tool, so `[` / `]` are swallowed even when the active tool has no size to change.
 - **`Shift`** (held, paint tool, after a stroke on the active layer) — previews the straight-line stroke as a hairline from the last stroke endpoint to the cursor; shift+click commits it. Adding **Cmd/Meta** snaps to 15° and turns the preview blue. See Straight-Line Strokes.
 - **`Space+drag`** / **middle-click drag** — temporary pan from any tool
 - **`Cmd/Ctrl+scroll`** — zoom in / out (anchored to the viewport center, not the cursor); plain scroll pans. **Two-finger pinch** on touch devices zooms and pans together.
