@@ -69,6 +69,7 @@ export function commitCurrentPath(): void {
       : null,
   }));
 
+  editorState.pushHistoryMetadata('Add Path');
   editorState.addPath(docAnchors, draft.closed);
   uiState.clearPath();
 }

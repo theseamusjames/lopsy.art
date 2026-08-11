@@ -4,6 +4,7 @@ import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { isPanning, POINTER_IDLE, type PointerMode } from '../pointer-mode';
 import { RULER_SIZE } from '../rendering/ruler-constants';
+import { snapGuideToFraction } from '../rendering/guide-snap';
 import { updatePaintLinePreview } from '../interactions/paint-line-preview';
 
 interface Point {
@@ -244,9 +245,17 @@ export function useCanvasPointerHandlers({
           if (guideId) {
             useUIStore.getState().removeGuide(guideId);
           } else if (isOnHorizontalRuler) {
-            deps.addGuide('vertical', canvasPos.x);
+            const doc = useEditorStore.getState().document;
+            const pos = e.metaKey || e.ctrlKey
+              ? snapGuideToFraction(canvasPos.x, doc.width)
+              : canvasPos.x;
+            deps.addGuide('vertical', pos);
           } else {
-            deps.addGuide('horizontal', canvasPos.y);
+            const doc = useEditorStore.getState().document;
+            const pos = e.metaKey || e.ctrlKey
+              ? snapGuideToFraction(canvasPos.y, doc.height)
+              : canvasPos.y;
+            deps.addGuide('horizontal', pos);
           }
           deps.setRulerHover(null);
           return;
@@ -309,12 +318,17 @@ export function useCanvasPointerHandlers({
       if (deps.showRulers && deps.showGuides && !panning && inside) {
         const isOnHorizontalRuler = screenY < RULER_SIZE && screenX > RULER_SIZE;
         const isOnVerticalRuler = screenX < RULER_SIZE && screenY > RULER_SIZE;
+        const snap = e.metaKey || e.ctrlKey;
 
         if (isOnHorizontalRuler) {
-          deps.setRulerHover({ orientation: 'vertical', position: canvasPos.x, screenX, screenY });
+          const doc = useEditorStore.getState().document;
+          const pos = snap ? snapGuideToFraction(canvasPos.x, doc.width) : canvasPos.x;
+          deps.setRulerHover({ orientation: 'vertical', position: pos, screenX, screenY });
           return;
         } else if (isOnVerticalRuler) {
-          deps.setRulerHover({ orientation: 'horizontal', position: canvasPos.y, screenX, screenY });
+          const doc = useEditorStore.getState().document;
+          const pos = snap ? snapGuideToFraction(canvasPos.y, doc.height) : canvasPos.y;
+          deps.setRulerHover({ orientation: 'horizontal', position: pos, screenX, screenY });
           return;
         } else {
           deps.setRulerHover(null);

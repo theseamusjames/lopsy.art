@@ -22,6 +22,7 @@ import type {
   InteractionContext,
   FloatingSelection,
   PersistentTransform,
+  SiblingMoveTarget,
 } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
@@ -300,39 +301,20 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // returns the new bounds so the Zustand layer can be aligned to match.
   // Raster-only: text/shape/group layers have no crop-to-content concept
   // and their GPU textures aren't managed the same way.
-  let croppedX = activeLayer.x;
-  let croppedY = activeLayer.y;
-  const engineForCrop = getEngine();
-  if (engineForCrop && activeLayer.type === 'raster') {
-    const bounds = cropLayerToContentGpu(engineForCrop, activeLayerId);
-    if (bounds.length === 4 && (bounds[2] ?? 0) > 0) {
-      const newX = bounds[0]!;
-      const newY = bounds[1]!;
-      const newW = bounds[2]!;
-      const newH = bounds[3]!;
-      const boundsChanged =
-        newX !== activeLayer.x || newY !== activeLayer.y ||
-        newW !== (activeLayer.width ?? 0) || newH !== (activeLayer.height ?? 0);
-      if (boundsChanged) {
-        useEditorStore.setState((s) => ({
-          document: {
-            ...s.document,
-            layers: s.document.layers.map((l) =>
-              l.id === activeLayerId
-                ? { ...l, x: newX, y: newY, width: newW, height: newH }
-                : l,
-            ),
-          },
-          renderVersion: s.renderVersion + 1,
-        }));
-        // The GPU texture is now the smaller cropped version. Any cached JS
-        // pixel data has stale dimensions; drop it so syncLayers doesn't
-        // re-expand the texture to the old size on the next frame.
-        clearJsPixelData(activeLayerId);
-      }
-      croppedX = newX;
-      croppedY = newY;
-    }
+  const { x: croppedX, y: croppedY } = cropLayerAndReadPosition(activeLayer, activeLayerId);
+
+  // Multi-layer move (issue #707): when several layers are selected, drag
+  // the active one and translate every other selected layer by the same
+  // delta. Each sibling captures its starting position (after crop) so we
+  // can apply identical deltas without re-reading the document each move.
+  const selectedIds = editorState.document.selectedLayerIds ?? [];
+  const siblings: SiblingMoveTarget[] = [];
+  for (const sid of selectedIds) {
+    if (sid === activeLayerId) continue;
+    const layer = useEditorStore.getState().document.layers.find((l) => l.id === sid);
+    if (!layer || layer.locked) continue;
+    const { x, y } = cropLayerAndReadPosition(layer, sid);
+    siblings.push({ id: sid, startX: x, startY: y });
   }
 
   const baseWholeLayer: InteractionState = {
@@ -349,7 +331,45 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // "no snapshot needed" state so consumers can pattern-match on
   // `state.gesture.kind === 'move'` regardless of whether pixels or a
   // marquee are being translated.
-  return withMoveGesture(baseWholeLayer, {});
+  return withMoveGesture(baseWholeLayer, { siblings });
+}
+
+function cropLayerAndReadPosition(
+  layer: { id: string; type: string; x: number; y: number },
+  layerId: string,
+): { x: number; y: number } {
+  let x = layer.x;
+  let y = layer.y;
+  const engine = getEngine();
+  if (!engine || layer.type !== 'raster') return { x, y };
+  const bounds = cropLayerToContentGpu(engine, layerId);
+  if (bounds.length !== 4 || (bounds[2] ?? 0) <= 0) return { x, y };
+  const newX = bounds[0]!;
+  const newY = bounds[1]!;
+  const newW = bounds[2]!;
+  const newH = bounds[3]!;
+  const width = (layer as { width?: number | null }).width ?? 0;
+  const height = (layer as { height?: number | null }).height ?? 0;
+  const boundsChanged =
+    newX !== layer.x || newY !== layer.y ||
+    newW !== width || newH !== height;
+  if (boundsChanged) {
+    useEditorStore.setState((s) => ({
+      document: {
+        ...s.document,
+        layers: s.document.layers.map((l) =>
+          l.id === layerId
+            ? { ...l, x: newX, y: newY, width: newW, height: newH }
+            : l,
+        ),
+      },
+      renderVersion: s.renderVersion + 1,
+    }));
+    clearJsPixelData(layerId);
+  }
+  x = newX;
+  y = newY;
+  return { x, y };
 }
 
 export function handleMoveMove(
@@ -469,11 +489,12 @@ export function handleMoveMove(
       newX = snapped.x;
       newY = snapped.y;
     }
+    const siblingIds = new Set<string>(move?.siblings?.map((s) => s.id) ?? []);
     if (uiState.snapToLayers) {
       const edState = useEditorStore.getState();
       const movingLayer = edState.document.layers.find((l) => l.id === state.layerId);
       const otherLayers = edState.document.layers.filter(
-        (l) => l.id !== state.layerId && l.visible,
+        (l) => l.id !== state.layerId && !siblingIds.has(l.id) && l.visible,
       );
       const movingWidth = movingLayer && movingLayer.type !== 'group' ? (movingLayer.width ?? 0) : 0;
       const movingHeight = movingLayer && movingLayer.type !== 'group' ? ((movingLayer as { height?: number }).height ?? 0) : 0;
@@ -495,11 +516,18 @@ export function handleMoveMove(
     } else {
       uiState.clearSnapLines();
     }
-    useEditorStore.getState().updateLayerPosition(
-      state.layerId!,
-      newX,
-      newY,
-    );
+    // Compute the actual delta applied to the active layer (may differ
+    // from dragDx/Dy after snap) and use it for the siblings so they stay
+    // rigidly in-formation with the active one.
+    const appliedDx = newX - state.layerStartX;
+    const appliedDy = newY - state.layerStartY;
+    const editor = useEditorStore.getState();
+    editor.updateLayerPosition(state.layerId!, newX, newY);
+    if (move?.siblings) {
+      for (const sib of move.siblings) {
+        editor.updateLayerPosition(sib.id, sib.startX + appliedDx, sib.startY + appliedDy);
+      }
+    }
   }
 }
 
@@ -704,5 +732,15 @@ export function handleNudgeMove(
     editor.notifyRender();
   } else {
     editor.updateLayerPosition(activeId, layer.x + dx, layer.y + dy);
+    // Multi-layer nudge (issue #707) — every other selected, unlocked
+    // layer shifts by the same delta so keyboard nudging matches the
+    // drag semantics.
+    const selectedIds = editor.document.selectedLayerIds ?? [];
+    for (const sid of selectedIds) {
+      if (sid === activeId) continue;
+      const l = editor.document.layers.find((x) => x.id === sid);
+      if (!l || l.locked) continue;
+      editor.updateLayerPosition(sid, l.x + dx, l.y + dy);
+    }
   }
 }

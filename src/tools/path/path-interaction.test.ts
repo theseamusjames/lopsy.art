@@ -26,6 +26,7 @@ const editorState = {
   }),
   selectPath: vi.fn((id: string | null) => { editorState.selectedPathId = id; }),
   notifyRender: vi.fn(),
+  pushHistoryMetadata: vi.fn(),
 };
 vi.mock('../../app/editor-store', () => ({
   useEditorStore: { getState: () => editorState },
@@ -116,6 +117,7 @@ beforeEach(() => {
   editorState.viewport = { zoom: 1 };
   editorState.updatePathAnchors.mockClear();
   editorState.selectPath.mockClear();
+  editorState.pushHistoryMetadata.mockClear();
   uiState.pathDraft = null;
   uiState.addPathAnchor.mockClear();
   uiState.updateLastPathAnchor.mockClear();

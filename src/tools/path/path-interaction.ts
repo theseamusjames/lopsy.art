@@ -20,6 +20,7 @@ function toggleAnchorSpline(
 
   const anchor = path.anchors[anchorIdx]!;
   if (anchor.handleIn || anchor.handleOut) {
+    editorState.pushHistoryMetadata('Straighten Path Anchor');
     const updated = [...path.anchors];
     updated[anchorIdx] = { point: anchor.point, handleIn: null, handleOut: null };
     editorState.updatePathAnchors(selectedPathId, updated, path.closed);
@@ -46,6 +47,9 @@ export function handlePathDown(ctx: InteractionContext): InteractionState | unde
     // Check handle hit first (handles are smaller targets drawn on top)
     const handleHit = hitTestHandle(path.anchors, canvasPos, hitThreshold);
     if (handleHit) {
+      // Snapshot the pre-drag path so undo restores the anchor + handle
+      // positions from before this handle drag (issue #706).
+      editorState.pushHistoryMetadata('Edit Path Handle');
       uiState.setDraggingHandle(handleHit);
       uiState.setEditingAnchorIndex(handleHit.anchorIndex);
       return {
@@ -72,6 +76,10 @@ export function handlePathDown(ctx: InteractionContext): InteractionState | unde
 
       if (shouldConvert) {
         toggleAnchorSpline(anchorIdx, selectedPathId);
+      } else {
+        // Snapshot for the anchor drag / convert-to-spline about to begin
+        // so undo restores the pre-drag anchor positions (issue #706).
+        editorState.pushHistoryMetadata('Move Path Anchor');
       }
       uiState.setConvertingAnchorToSpline(shouldConvert);
       uiState.setEditingAnchorIndex(anchorIdx);
@@ -89,6 +97,7 @@ export function handlePathDown(ctx: InteractionContext): InteractionState | unde
 
     const segIdx = hitTestSegment(path.anchors, path.closed, canvasPos, hitThreshold);
     if (segIdx >= 0) {
+      editorState.pushHistoryMetadata('Split Path Segment');
       const newAnchors = splitSegmentAt(path.anchors, segIdx);
       editorState.updatePathAnchors(selectedPathId, newAnchors, path.closed);
       editorState.notifyRender();

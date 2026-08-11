@@ -244,6 +244,77 @@ describe('adjustment node actions — dynamic AdjustmentNode list on groups', ()
     expect(group2.adjustments[0]?.enabled).toBe(true);
   });
 
+  describe('paths in undo history (issue #706)', () => {
+    beforeEach(() => {
+      // createDocument doesn't reset the paths slice, so leftover paths
+      // from a prior test would offset the indexing here. Reset explicitly.
+      useEditorStore.setState({ paths: [], selectedPathId: null });
+    });
+
+    it('undo restores paths after an anchor was moved', () => {
+      const state = useEditorStore.getState();
+      // Seed a stored path.
+      state.addPath([
+        { point: { x: 0, y: 0 }, handleIn: null, handleOut: null },
+        { point: { x: 10, y: 10 }, handleIn: null, handleOut: null },
+      ], false);
+      const pathId = useEditorStore.getState().paths[0]!.id;
+
+      // Push metadata history for the anchor drag, then mutate.
+      state.pushHistoryMetadata('Move Path Anchor');
+      state.updatePathAnchors(pathId, [
+        { point: { x: 0, y: 0 }, handleIn: null, handleOut: null },
+        { point: { x: 100, y: 100 }, handleIn: null, handleOut: null },
+      ], false);
+
+      expect(useEditorStore.getState().paths[0]!.anchors[1]!.point).toEqual({ x: 100, y: 100 });
+
+      // Undo should roll the anchor back to (10, 10) — path anchors are
+      // captured in the history snapshot alongside document state.
+      useEditorStore.getState().undo();
+      expect(useEditorStore.getState().paths[0]!.anchors[1]!.point).toEqual({ x: 10, y: 10 });
+
+      // Redo should reapply the change.
+      useEditorStore.getState().redo();
+      expect(useEditorStore.getState().paths[0]!.anchors[1]!.point).toEqual({ x: 100, y: 100 });
+    });
+
+    it('undo restores paths after a path was added', () => {
+      const state = useEditorStore.getState();
+      state.pushHistoryMetadata('Add Path');
+      state.addPath([
+        { point: { x: 5, y: 5 }, handleIn: null, handleOut: null },
+        { point: { x: 15, y: 15 }, handleIn: null, handleOut: null },
+      ], false);
+
+      expect(useEditorStore.getState().paths).toHaveLength(1);
+
+      useEditorStore.getState().undo();
+      expect(useEditorStore.getState().paths).toHaveLength(0);
+
+      useEditorStore.getState().redo();
+      expect(useEditorStore.getState().paths).toHaveLength(1);
+    });
+
+    it('selectedPathId is restored through undo/redo', () => {
+      const state = useEditorStore.getState();
+      state.addPath([
+        { point: { x: 0, y: 0 }, handleIn: null, handleOut: null },
+        { point: { x: 10, y: 10 }, handleIn: null, handleOut: null },
+      ], false);
+      const pathId = useEditorStore.getState().paths[0]!.id;
+      // addPath auto-selects the new path.
+      expect(useEditorStore.getState().selectedPathId).toBe(pathId);
+
+      state.pushHistoryMetadata('Deselect Path');
+      state.selectPath(null);
+      expect(useEditorStore.getState().selectedPathId).toBeNull();
+
+      useEditorStore.getState().undo();
+      expect(useEditorStore.getState().selectedPathId).toBe(pathId);
+    });
+  });
+
   it('reorderAdjustmentNodes reorders nodes to the requested sequence', () => {
     const state = useEditorStore.getState();
     state.addGroup('Test Group');

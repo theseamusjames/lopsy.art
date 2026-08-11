@@ -61,7 +61,13 @@ const DOC_W = 32;
 const DOC_H = 32;
 
 const editorState = {
-  document: { width: DOC_W, height: DOC_H, layers: [] as unknown[] },
+  document: {
+    width: DOC_W,
+    height: DOC_H,
+    layers: [] as unknown[],
+    activeLayerId: null as string | null,
+    selectedLayerIds: [] as string[],
+  },
   selection: {
     active: false,
     mask: null as Uint8ClampedArray | null,
@@ -403,5 +409,95 @@ describe('handleMoveDown — whole-layer move grab (issue #701)', () => {
     handleMoveDown(makeContext(shape));
 
     expect(vi.mocked(bridge.cropLayerToContent)).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleMoveDown / handleMoveMove — multi-layer move (issue #707)', () => {
+  const baseRaster: RasterLayer = {
+    id: 'raster-1',
+    name: 'Raster',
+    type: 'raster',
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    x: 0,
+    y: 0,
+    width: DOC_W,
+    height: DOC_H,
+    clipToBelow: false,
+    effects: DEFAULT_EFFECTS,
+    mask: null,
+  };
+
+  const sibling: RasterLayer = { ...baseRaster, id: 'raster-2', x: 50, y: 40 };
+  const lockedSibling: RasterLayer = { ...baseRaster, id: 'raster-3', x: 90, y: 90, locked: true };
+
+  const makeContext = (activeLayer: Layer): InteractionContext => {
+    const canvasPos: Point = { x: 10, y: 10 };
+    return {
+      canvasPos,
+      layerPos: canvasPos,
+      shiftKey: false,
+      altKey: false,
+      metaKey: false,
+      activeLayer,
+      activeLayerId: activeLayer.id,
+      clientX: 10,
+      clientY: 10,
+      stateRef: { current: { drawing: false, tool: 'move' } as InteractionState },
+      floatingSelectionRef: { current: null },
+      persistentTransformRef: { current: null },
+      stampSourceRef: { current: null },
+      stampOffsetRef: { current: null },
+      lastPaintPointRef: { current: null as LastPaintPoint | null },
+    };
+  };
+
+  beforeEach(() => {
+    editorState.document.layers = [baseRaster, sibling, lockedSibling];
+    editorState.document.activeLayerId = baseRaster.id;
+    editorState.document.selectedLayerIds = [baseRaster.id, sibling.id, lockedSibling.id];
+    editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
+    editorState.pushHistory.mockClear();
+    editorState.updateLayerPosition.mockClear();
+    uiState.maskMode = 'off';
+    uiState.showGrid = false;
+    uiState.snapToGrid = false;
+    uiState.snapToLayers = false;
+    vi.mocked(bridge.cropLayerToContent).mockReset();
+    vi.mocked(bridge.cropLayerToContent).mockImplementation((_engine: unknown, id: string) => {
+      const layer = editorState.document.layers.find((l) => (l as Layer).id === id) as Layer | undefined;
+      if (!layer) return new Float64Array([0, 0, 0, 0]);
+      const w = layer.type === 'raster' ? (layer.width ?? 0) : 0;
+      const h = layer.type === 'raster' ? ((layer as { height?: number }).height ?? 0) : 0;
+      return new Float64Array([layer.x, layer.y, w, h]);
+    });
+  });
+
+  it('captures sibling starting positions for every other selected, unlocked layer', () => {
+    const state = handleMoveDown(makeContext(baseRaster));
+    expect(state.gesture.kind).toBe('move');
+    if (state.gesture.kind !== 'move') return;
+    // Locked sibling is excluded — moving a locked layer would be surprising.
+    expect(state.gesture.siblings).toEqual([{ id: 'raster-2', startX: 50, startY: 40 }]);
+  });
+
+  it('applies the same delta to the active layer and every sibling on move', () => {
+    const state = handleMoveDown(makeContext(baseRaster));
+    // Simulate a drag of (+8, +6) from the start point (10, 10).
+    handleMoveMove(state, { x: 18, y: 16 }, makeFloatRef());
+
+    expect(editorState.updateLayerPosition).toHaveBeenCalledWith('raster-1', 8, 6);
+    expect(editorState.updateLayerPosition).toHaveBeenCalledWith('raster-2', 58, 46);
+    // Locked layer never moves.
+    expect(editorState.updateLayerPosition).not.toHaveBeenCalledWith('raster-3', expect.anything(), expect.anything());
+  });
+
+  it('single-layer selection does not populate siblings', () => {
+    editorState.document.selectedLayerIds = [baseRaster.id];
+    const state = handleMoveDown(makeContext(baseRaster));
+    if (state.gesture.kind !== 'move') throw new Error('expected move gesture');
+    expect(state.gesture.siblings).toEqual([]);
   });
 });
