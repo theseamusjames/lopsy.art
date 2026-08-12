@@ -5,6 +5,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { readCompositeThumbnail } from '../../engine-wasm/wasm-bridge';
 import { computeViewportRect, thumbnailPointToDocPoint, docPointToPan } from './navigator-math';
 import { createNavigatorScheduler } from './navigator-scheduler';
+import { getCompositeInputVersion } from './composite-dirty';
 import styles from './NavigatorPanel.module.css';
 
 const THUMBNAIL_UPDATE_INTERVAL_MS = 200;
@@ -76,6 +77,7 @@ export function NavigatorPanel() {
     const scheduler = createNavigatorScheduler({
       read: update,
       intervalMs: THUMBNAIL_UPDATE_INTERVAL_MS,
+      getContentVersion: getCompositeInputVersion,
     });
     const unsubscribe = useUIStore.subscribe((state, prev) => {
       if (state.isInteracting !== prev.isInteracting) {

@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useEditorStore } from '../../app/editor-store';
-import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
+import { readLayerThumbnail } from '../../engine-wasm/gpu-pixel-access';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { computeHistogram, EMPTY_HISTOGRAM, type Histogram } from './histogram-compute';
 
+// A 256×256 thumbnail is 65,536 samples — comfortably above the 50k
+// SAMPLE_TARGET the histogram compute pass strides down to — and is a
+// ~256× reduction in bridge traffic vs. the full-resolution readback
+// this hook used to run (#712).
+const HISTOGRAM_THUMB_SIZE = 256;
+
 export function useGroupHistogram(skip: boolean): Histogram {
-  const pixelVersion = useSyncExternalStore(
-    pixelDataManager.subscribe.bind(pixelDataManager),
-    () => pixelDataManager.version(),
-  );
   const activeGroupChildren = useEditorStore((s) => {
     const id = s.document.activeLayerId;
     const layers = s.document.layers;
@@ -18,10 +20,23 @@ export function useGroupHistogram(skip: boolean): Histogram {
     return root?.type === 'group' ? root.children : [];
   });
 
+  // Subscribe to a snapshot built from only the per-layer versions of the
+  // active group's children — so a mutation to a layer outside the group
+  // doesn't re-run the histogram. The global `pixelDataManager.version()`
+  // (previously used here) bumps on every layer's every mutation.
+  const childVersionKey = useSyncExternalStore(
+    pixelDataManager.subscribe.bind(pixelDataManager),
+    () => {
+      let key = '';
+      for (const id of activeGroupChildren) key += id + ':' + pixelDataManager.versionOf(id) + ',';
+      return key;
+    },
+  );
+
   // Use a ref for the layers array so adjustment-only changes (which create
   // a new layers array without changing pixel content) don't trigger a
   // histogram recomputation. The histogram shows SOURCE pixel distribution,
-  // which only changes when pixelVersion or group children change.
+  // which only changes when a child layer's pixels or membership change.
   const layersRef = useRef(useEditorStore.getState().document.layers);
   useEffect(() => {
     return useEditorStore.subscribe((s) => { layersRef.current = s.document.layers; });
@@ -44,7 +59,12 @@ export function useGroupHistogram(skip: boolean): Histogram {
         const layer = layers.find((l) => l.id === id);
         if (!layer || !layer.visible) continue;
         if (layer.type === 'group') continue;
-        const img = readLayerAsImageData(id);
+        // GPU-downscaled read: LINEAR-filtered on the GPU, which yields a
+        // slightly smoothed histogram vs. a strided sample of the full
+        // texture. For a tonal-distribution preview behind Curves/Levels
+        // that trade is fine, and it drops idle bridge traffic from
+        // ~268 MB/read at 4K down to ~0.26 MB.
+        const img = readLayerThumbnail(id, HISTOGRAM_THUMB_SIZE);
         if (img) images.push(img);
       }
       if (images.length === 0) {
@@ -64,7 +84,7 @@ export function useGroupHistogram(skip: boolean): Histogram {
       cancelled = true;
       cancelAnimationFrame(rafId);
     };
-  }, [skip, childKey, pixelVersion, activeGroupChildren]);
+  }, [skip, childKey, childVersionKey, activeGroupChildren]);
 
   return histogram;
 }

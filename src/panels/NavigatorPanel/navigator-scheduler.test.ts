@@ -103,4 +103,73 @@ describe('createNavigatorScheduler', () => {
     vi.advanceTimersByTime(1000);
     expect(read).not.toHaveBeenCalled();
   });
+
+  it('skips ticks when the content version has not advanced — #711', () => {
+    const read = vi.fn();
+    let version = 0;
+    const sched = createNavigatorScheduler({
+      read,
+      intervalMs: 200,
+      getContentVersion: () => version,
+    });
+
+    // First tick fires (initial paint — sentinel differs from every version).
+    vi.advanceTimersByTime(200);
+    expect(read).toHaveBeenCalledTimes(1);
+
+    // Ten more ticks with no version change — no reads.
+    vi.advanceTimersByTime(2000);
+    expect(read).toHaveBeenCalledTimes(1);
+
+    // Bump the version — the next tick reads.
+    version++;
+    vi.advanceTimersByTime(200);
+    expect(read).toHaveBeenCalledTimes(2);
+
+    // And keeps skipping once quiet.
+    vi.advanceTimersByTime(2000);
+    expect(read).toHaveBeenCalledTimes(2);
+
+    sched.stop();
+  });
+
+  it('catch-up read fires unconditionally even when content version is unchanged — #711', () => {
+    const read = vi.fn();
+    let version = 0;
+    const sched = createNavigatorScheduler({
+      read,
+      intervalMs: 200,
+      getContentVersion: () => version,
+    });
+
+    // Initial tick to record the version.
+    vi.advanceTimersByTime(200);
+    expect(read).toHaveBeenCalledTimes(1);
+
+    // Interaction with no doc change (e.g. adjustment-slider drag on a
+    // UI-store field the content-version tracker doesn't observe).
+    sched.setInteracting(true);
+    vi.advanceTimersByTime(1000);
+    expect(read).toHaveBeenCalledTimes(1);
+
+    sched.setInteracting(false);
+    vi.advanceTimersByTime(0); // catch-up
+    expect(read).toHaveBeenCalledTimes(2);
+
+    // Idle again: version still matches, so no polling.
+    vi.advanceTimersByTime(2000);
+    expect(read).toHaveBeenCalledTimes(2);
+
+    sched.stop();
+  });
+
+  it('polls unconditionally when getContentVersion is not provided (legacy)', () => {
+    const read = vi.fn();
+    const sched = createNavigatorScheduler({ read, intervalMs: 200 });
+
+    vi.advanceTimersByTime(600);
+    expect(read).toHaveBeenCalledTimes(3);
+
+    sched.stop();
+  });
 });

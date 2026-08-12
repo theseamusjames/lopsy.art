@@ -6,13 +6,8 @@ import { createRasterLayer, createTextLayer } from '../../../layers/layer-model'
 import type { DocumentState } from '../../../types';
 import type { TextLayer } from '../../../types/layers';
 
-function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData> } {
+function makeDoc(): { doc: DocumentState } {
   const layer = createRasterLayer({ name: 'Background', width: 4, height: 4 });
-  const pixelData = new Map<string, ImageData>();
-  const imgData = new ImageData(4, 4);
-  imgData.data[0] = 255;
-  imgData.data[3] = 255;
-  pixelData.set(layer.id, imgData);
   return {
     doc: {
       id: 'doc-1',
@@ -26,21 +21,20 @@ function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData> } {
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
       colorMode: 'rgb',
     },
-    pixelData,
   };
 }
 
 describe('computeResizeCanvas', () => {
   it('updates document dimensions', () => {
-    const { doc, pixelData } = makeDoc();
-    const result = computeResizeCanvas(doc, pixelData, 0, 8, 6, 0, 0);
+    const { doc } = makeDoc();
+    const result = computeResizeCanvas(doc, 0, 8, 6, 0, 0);
     expect(result.document!.width).toBe(8);
     expect(result.document!.height).toBe(6);
   });
 
   it('clears JS pixel data (GPU is source of truth)', () => {
-    const { doc, pixelData } = makeDoc();
-    const result = computeResizeCanvas(doc, pixelData, 0, 8, 4, 0.5, 0);
+    const { doc } = makeDoc();
+    const result = computeResizeCanvas(doc, 0, 8, 4, 0.5, 0);
     expect(result.layerPixelData!.size).toBe(0);
   });
 
@@ -57,14 +51,14 @@ describe('computeResizeCanvas', () => {
       colorMode: 'rgb',
     };
     // Resize to 8x8, anchor top-left (0,0) → offsetX = 0, offsetY = 0
-    const r1 = computeResizeCanvas(doc, new Map(), 0, 8, 8, 0, 0);
+    const r1 = computeResizeCanvas(doc, 0, 8, 8, 0, 0);
     const t1 = r1.document!.layers.find((l) => l.id === textLayer.id)! as TextLayer;
     expect(t1.type).toBe('text');
     expect(t1.x).toBe(1); // no shift when anchor is top-left
     expect(t1.y).toBe(1);
 
     // Resize to 8x8, anchor center (0.5,0.5) → offsetX = 2, offsetY = 2
-    const r2 = computeResizeCanvas(doc, new Map(), 0, 8, 8, 0.5, 0.5);
+    const r2 = computeResizeCanvas(doc, 0, 8, 8, 0.5, 0.5);
     const t2 = r2.document!.layers.find((l) => l.id === textLayer.id)! as TextLayer;
     expect(t2.type).toBe('text');
     expect(t2.x).toBe(3); // 1 + 2

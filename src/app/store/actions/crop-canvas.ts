@@ -5,7 +5,6 @@ import { mapLayersForTransform } from './_helpers/layer-transform';
 
 export function computeCropCanvas(
   doc: DocumentState,
-  _layerPixelData: Map<string, ImageData>,
   renderVersion: number,
   rect: Rect,
 ): ActionResult | undefined {
