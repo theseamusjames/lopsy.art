@@ -127,7 +127,10 @@ test.describe('#707 — move tool translates every selected layer', () => {
     // the store rather than the layer panel because layer creation +
     // multi-select via panel clicks is verbose; the move-tool interaction we
     // care about still runs through the real pointer path below.
-    await page.evaluate(() => {
+    // createDocument seeds more than one raster and addLayer appends another,
+    // so identify the two target layers by id — reading them back positionally
+    // (raster[0]/raster[1]) would pick up an unrelated middle layer.
+    const { aId, bId } = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           addLayer: () => void;
@@ -161,19 +164,28 @@ test.describe('#707 — move tool translates every selected layer', () => {
           },
         };
       });
+      return { aId: a.id, bId: b.id };
     });
 
     // Move tool.
     await page.keyboard.press('v');
     await page.waitForTimeout(100);
 
-    const posBefore = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { layers: Array<{ id: string; type: string; x: number; y: number }> } };
-      };
-      const rasters = store.getState().document.layers.filter((l) => l.type === 'raster');
-      return { a: { x: rasters[0]!.x, y: rasters[0]!.y }, b: { x: rasters[1]!.x, y: rasters[1]!.y } };
-    });
+    const readPositions = (): Promise<{ a: { x: number; y: number }; b: { x: number; y: number } }> =>
+      page.evaluate(
+        ({ aId, bId }) => {
+          const store = (window as unknown as Record<string, unknown>).__editorStore as {
+            getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } };
+          };
+          const layers = store.getState().document.layers;
+          const a = layers.find((l) => l.id === aId)!;
+          const b = layers.find((l) => l.id === bId)!;
+          return { a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y } };
+        },
+        { aId, bId },
+      );
+
+    const posBefore = await readPositions();
 
     // Drag on the active (first) raster — from (70,70) to (100,90) in doc space.
     const start = await docToScreen(page, 70, 70);
@@ -184,13 +196,7 @@ test.describe('#707 — move tool translates every selected layer', () => {
     await page.mouse.up();
     await page.waitForTimeout(150);
 
-    const posAfter = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { document: { layers: Array<{ id: string; type: string; x: number; y: number }> } };
-      };
-      const rasters = store.getState().document.layers.filter((l) => l.type === 'raster');
-      return { a: { x: rasters[0]!.x, y: rasters[0]!.y }, b: { x: rasters[1]!.x, y: rasters[1]!.y } };
-    });
+    const posAfter = await readPositions();
 
     // Both layers should have shifted by roughly the same (dx, dy).
     const dxA = posAfter.a.x - posBefore.a.x;
@@ -231,11 +237,20 @@ test.describe('#708 — Cmd-hover on the ruler snaps guides to fractional stops'
     });
 
     // Pick a doc-X close to (but not exactly on) 1/3 of the 400px width so we
-    // can verify the snap. 1/3 * 400 ≈ 133.33 → rounded to 133.
-    const nearOneThird = await docToScreen(page, 130, 5);
-    // The ruler sits above the canvas — screenY 5 lands on it. Cmd+click.
+    // can verify the snap. 1/3 * 400 ≈ 133.33 → rounded to 133. The guide is
+    // only created when the pointer-down lands on the ruler band itself
+    // (screenY < RULER_SIZE), so click the top ruler strip at the screen-x
+    // that maps to doc-x≈130 — not at docToScreen(130, 5), which is a point
+    // inside the canvas, well below the ruler.
+    const xForDocX = (await docToScreen(page, 130, 0)).x;
+    const containerTop = await page.evaluate(() => {
+      const container = document.querySelector('[data-testid="canvas-container"]');
+      return container ? container.getBoundingClientRect().top : 0;
+    });
+    // RULER_SIZE is 20; +6 keeps the click comfortably inside the horizontal ruler.
+    const rulerY = containerTop + 6;
     await page.keyboard.down('Meta');
-    await page.mouse.click(nearOneThird.x, nearOneThird.y);
+    await page.mouse.click(xForDocX, rulerY);
     await page.keyboard.up('Meta');
     await page.waitForTimeout(150);
 
