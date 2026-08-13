@@ -42,6 +42,15 @@ export interface TrackedState {
   maskDataRefs: Map<string, Uint8ClampedArray>;
   pixelDataVersions: Map<string, ImageData | undefined>;
   sparseVersions: Map<string, SparseLayerEntry | undefined>;
+  /** Layer ids whose current dirtyLayerIds episode has already been reconciled
+   *  into the GPU this session. A layer stays in the store's dirtyLayerIds
+   *  until pushHistory / undo / redo clears it, so the flag is sticky across
+   *  many rendered frames. This set lets syncLayers invalidate the tracked
+   *  pixel/sparse version exactly once per episode (driving one upload via the
+   *  ref-diff) instead of every frame — without mutating the store's
+   *  dirtyLayerIds Set, which pushHistory / undo / redo read to decide which
+   *  layers need a fresh GPU history snapshot. See #700 (perf) and #704 (undo). */
+  processedDirty: Set<string>;
   layerOrder: string;
   selectionActive: boolean;
   selectionMask: Uint8ClampedArray | null;
@@ -148,6 +157,7 @@ function createTrackedState(): TrackedState {
     maskDataRefs: new Map(),
     pixelDataVersions: new Map(),
     sparseVersions: new Map(),
+    processedDirty: new Set(),
     layerOrder: '',
     selectionActive: false,
     selectionMask: null,
