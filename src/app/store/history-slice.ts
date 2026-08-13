@@ -4,10 +4,12 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import {
   endStroke, getLayerTextureDimensions, uploadLayerPixels,
   snapshotLayerGpu, restoreFromGpuSnapshot, releaseGpuSnapshot,
+  hasFloat, dropFloat,
 } from '../../engine-wasm/wasm-bridge';
 import { resetTrackedState, flushLayerSync, syncLayers } from '../../engine-wasm/engine-sync';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
+import { cancelPrefloat } from '../interactions/prefloat';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -150,6 +152,16 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
 
   undo: () => {
     finalizePendingStrokeGlobal();
+    // Drop any active float (and cancel a scheduled prefloat) before
+    // restoring. A leftover float leaves `float_layer_id` set on the engine,
+    // which makes `update_layer` preserve the float's expanded x/y/w/h in the
+    // layer descriptor. After a restore that shrinks the layer texture back to
+    // its pre-float dimensions, the mismatched descriptor renders the layer
+    // stretched at (0, 0, doc.w, doc.h) instead of at its original position
+    // (issue #706).
+    cancelPrefloat();
+    const eng0 = getEngine();
+    if (eng0 && hasFloat(eng0)) dropFloat(eng0);
     flushPendingSnapshots();
 
     const state = get();
@@ -218,6 +230,11 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   },
 
   redo: () => {
+    // Same reasoning as undo: a stale float would preserve expanded dims in
+    // the engine's layer descriptor and misplace the restored texture.
+    cancelPrefloat();
+    const eng0 = getEngine();
+    if (eng0 && hasFloat(eng0)) dropFloat(eng0);
     flushPendingSnapshots();
     const state = get();
     if (state.redoStack.length === 0) return;
