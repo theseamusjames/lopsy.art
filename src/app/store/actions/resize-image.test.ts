@@ -6,10 +6,8 @@ import { createRasterLayer, createTextLayer } from '../../../layers/layer-model'
 import type { DocumentState } from '../../../types';
 import type { RasterLayer, TextLayer } from '../../../types/layers';
 
-function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData> } {
+function makeDoc(): { doc: DocumentState } {
   const layer = { ...createRasterLayer({ name: 'Background', width: 10, height: 10 }), x: 2, y: 4 };
-  const pixelData = new Map<string, ImageData>();
-  pixelData.set(layer.id, new ImageData(10, 10));
   return {
     doc: {
       id: 'doc-1',
@@ -23,14 +21,13 @@ function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData> } {
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
       colorMode: 'rgb',
     },
-    pixelData,
   };
 }
 
 describe('computeResizeImage', () => {
   it('scales document and all layer dimensions', () => {
-    const { doc, pixelData } = makeDoc();
-    const result = computeResizeImage(doc, pixelData, 0, 20, 20);
+    const { doc } = makeDoc();
+    const result = computeResizeImage(doc, 0, 20, 20);
     expect(result.document!.width).toBe(20);
     expect(result.document!.height).toBe(20);
     const layer = result.document!.layers[0]! as RasterLayer;
@@ -39,8 +36,8 @@ describe('computeResizeImage', () => {
   });
 
   it('scales layer positions', () => {
-    const { doc, pixelData } = makeDoc();
-    const result = computeResizeImage(doc, pixelData, 0, 20, 20);
+    const { doc } = makeDoc();
+    const result = computeResizeImage(doc, 0, 20, 20);
     const layer = result.document!.layers[0]!;
     // scaleX = 2, scaleY = 2
     expect(layer.x).toBe(4); // 2 * 2
@@ -60,7 +57,7 @@ describe('computeResizeImage', () => {
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
       colorMode: 'rgb',
     };
-    const result = computeResizeImage(doc, new Map(), 0, 20, 20);
+    const result = computeResizeImage(doc, 0, 20, 20);
     const updated = result.document!.layers[0]! as RasterLayer;
     // scaleX = scaleY = 1/3
     expect(updated.width).toBe(10); // round(30 / 3)
@@ -81,7 +78,7 @@ describe('computeResizeImage', () => {
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
       colorMode: 'rgb',
     };
-    const result = computeResizeImage(doc, new Map(), 0, 20, 20);
+    const result = computeResizeImage(doc, 0, 20, 20);
     const updated = result.document!.layers.find((l) => l.id === textLayer.id)! as TextLayer;
     expect(updated.type).toBe('text');
     expect(updated.x).toBe(8); // 4 * 2

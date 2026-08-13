@@ -6,7 +6,6 @@ import { mapLayersForTransform } from './_helpers/layer-transform';
 
 export function computeResizeImage(
   doc: DocumentState,
-  _layerPixelData: Map<string, ImageData>,
   renderVersion: number,
   newWidth: number,
   newHeight: number,

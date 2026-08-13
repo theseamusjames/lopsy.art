@@ -2,11 +2,15 @@
  * Schedules thumbnail readbacks for the Navigator panel.
  *
  * The thumbnail update calls into the WASM engine to read back the composite
- * texture, which stalls the GPU pipeline. Doing that during any active
- * pointer gesture ties up the GPU and causes the drag to lag (issue #380,
- * broadened by #682 from paint strokes to every pointer gesture). The
- * scheduler skips ticks while an interaction is in progress and fires one
- * catch-up tick when the interaction ends so the user sees the result.
+ * texture, which stalls the GPU pipeline. Two gates keep the cost in check:
+ *
+ * 1. `isInteracting` — skip ticks while any pointer gesture is in progress
+ *    (drag, pan, pinch/zoom, wheel), broadened from paint strokes by #682.
+ *    Fires one catch-up tick when the interaction ends.
+ * 2. `getContentVersion` — skip ticks when the composite has not changed
+ *    since the last successful read (#711). Zoom, pan, and pure idle all
+ *    leave this counter untouched, so the readback stops during navigation
+ *    and while the document sits unmodified.
  */
 
 export interface SchedulerHooks {
@@ -14,6 +18,10 @@ export interface SchedulerHooks {
   read: () => void;
   /** Polling interval in ms when no interaction is active. */
   intervalMs: number;
+  /** Monotonically-increasing version of composite-affecting state.
+   *  When provided, ticks are skipped unless this value has advanced since
+   *  the last read. Omit to poll unconditionally each tick. */
+  getContentVersion?: () => number;
   /** Inject timer functions for tests. */
   setInterval?: (fn: () => void, ms: number) => unknown;
   clearInterval?: (id: unknown) => void;
@@ -39,10 +47,24 @@ export function createNavigatorScheduler(hooks: SchedulerHooks): NavigatorSchedu
 
   let interacting = false;
   let catchUpId: unknown = null;
+  // Sentinel that never equals a real version — forces the first tick to
+  // fire so the initial thumbnail paints even on a doc that never mutates.
+  let lastReadVersion: number | null = null;
+
+  const readAndRecord = (): void => {
+    if (hooks.getContentVersion) {
+      lastReadVersion = hooks.getContentVersion();
+    }
+    hooks.read();
+  };
 
   const tick = (): void => {
     if (interacting) return;
-    hooks.read();
+    if (hooks.getContentVersion) {
+      const v = hooks.getContentVersion();
+      if (v === lastReadVersion) return;
+    }
+    readAndRecord();
   };
 
   const intervalId = setI(tick, hooks.intervalMs);
@@ -53,11 +75,14 @@ export function createNavigatorScheduler(hooks: SchedulerHooks): NavigatorSchedu
     interacting = next;
     if (wasInteracting && !next) {
       // Interaction just ended — schedule one catch-up read so the thumbnail
-      // reflects the final pixels without waiting up to intervalMs.
+      // reflects the final pixels without waiting up to intervalMs. This
+      // runs unconditionally (bypasses the content-version gate) because
+      // some interactions — image-adjustment sliders, mask-mode toggle —
+      // change composite inputs the version tracker does not observe.
       if (catchUpId !== null) clearT(catchUpId);
       catchUpId = setT(() => {
         catchUpId = null;
-        if (!interacting) hooks.read();
+        if (!interacting) readAndRecord();
       }, 0);
     }
   };

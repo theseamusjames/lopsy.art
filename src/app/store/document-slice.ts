@@ -703,11 +703,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const y2 = Math.min(doc.height, Math.round(rect.y + rect.height));
     if (x2 - x1 <= 0 || y2 - y1 <= 0) return;
     s.pushHistory('Crop Canvas');
-    const result = computeCropCanvas(
-      doc,
-      resolveAllPixelData(doc.layerOrder, doc.layers),
-      s.renderVersion, rect,
-    );
+    // computeCropCanvas is GPU-only (cropLayerTexture per raster layer); no
+    // JS pixel data is read or written, so we don't resolve it (#710).
+    const result = computeCropCanvas(doc, s.renderVersion, rect);
     if (!result) return;
     applyActionResult(set, result);
     if (result.layerPixelData && result.document) {
@@ -718,9 +716,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   resizeCanvas: (newWidth, newHeight, anchorX, anchorY) => {
     const s = get();
     s.pushHistory('Resize Canvas');
+    // GPU-only (resizeCanvasTexture per raster layer); no JS readback needed (#710).
     const result = computeResizeCanvas(
       s.document,
-      resolveAllPixelData(s.document.layerOrder, s.document.layers),
       s.renderVersion, newWidth, newHeight, anchorX, anchorY,
     );
     applyActionResult(set, result);
@@ -732,9 +730,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   resizeImage: (newWidth, newHeight) => {
     const s = get();
     s.pushHistory('Resize Image');
+    // GPU-only (scaleLayerTexture per raster layer); no JS readback needed (#710).
     const result = computeResizeImage(
       s.document,
-      resolveAllPixelData(s.document.layerOrder, s.document.layers),
       s.renderVersion, newWidth, newHeight,
     );
     applyActionResult(set, result);

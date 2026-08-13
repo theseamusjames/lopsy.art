@@ -405,6 +405,12 @@ export function useCanvasPointerHandlers({
   // check so we pick the event up regardless of whether the canvas
   // container was mounted before this hook ran.
   useEffect(() => {
+    // Wheel events are discrete, not pointer-tracked, so we detect the end
+    // of a scroll burst with a trailing timeout. Without this, panels that
+    // key off `isInteracting` (NavigatorPanel — #711) miss the two most
+    // common navigation gestures.
+    let wheelEndTimer: ReturnType<typeof setTimeout> | null = null;
+    const WHEEL_END_MS = 150;
     const onWheel = (e: WheelEvent) => {
       const el = containerRef.current;
       if (!el) return;
@@ -420,9 +426,28 @@ export function useCanvasPointerHandlers({
         const vp = useEditorStore.getState().viewport;
         setPan(vp.panX - e.deltaX, vp.panY - e.deltaY);
       }
+      if (!useUIStore.getState().isInteracting) {
+        useUIStore.getState().setIsInteracting(true);
+      }
+      if (wheelEndTimer !== null) clearTimeout(wheelEndTimer);
+      wheelEndTimer = setTimeout(() => {
+        wheelEndTimer = null;
+        // Same check as finishPointer: don't clear if any other interaction
+        // is still running (e.g. a paint stroke that started before the
+        // wheel burst ended).
+        const stillGesturing = gestureRef.current.active;
+        const stillPanning = depsRef.current.pointerMode.kind === 'panning';
+        const stillTool = toolPointerIdRef.current !== null;
+        if (!stillGesturing && !stillPanning && !stillTool) {
+          useUIStore.getState().setIsInteracting(false);
+        }
+      }, WHEEL_END_MS);
     };
     window.addEventListener('wheel', onWheel, { passive: false });
-    return () => window.removeEventListener('wheel', onWheel);
+    return () => {
+      window.removeEventListener('wheel', onWheel);
+      if (wheelEndTimer !== null) clearTimeout(wheelEndTimer);
+    };
   }, [containerRef, setZoom, setPan]);
 
   return {};
