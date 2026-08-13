@@ -191,7 +191,8 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   }
 
   // Option+drag with no selection: duplicate layer first, then move the copy
-  if (altKey && !(sel.active && sel.mask)) {
+  const didDuplicate = altKey && !(sel.active && sel.mask);
+  if (didDuplicate) {
     editorState.duplicateLayer();
     const newState = useEditorStore.getState();
     activeLayerId = newState.document.activeLayerId ?? activeLayerId;
@@ -307,7 +308,13 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // the active one and translate every other selected layer by the same
   // delta. Each sibling captures its starting position (after crop) so we
   // can apply identical deltas without re-reading the document each move.
-  const selectedIds = editorState.document.selectedLayerIds ?? [];
+  //
+  // Skip this for an option-drag duplicate: duplicateLayer makes the new copy
+  // active but leaves the pre-duplicate selection (the originals) in
+  // selectedLayerIds, so treating those as siblings would drag the originals
+  // along with the copy (regresses option-drag-duplicate and
+  // delete-inverted-selection).
+  const selectedIds = didDuplicate ? [] : (editorState.document.selectedLayerIds ?? []);
   const siblings: SiblingMoveTarget[] = [];
   for (const sid of selectedIds) {
     if (sid === activeLayerId) continue;
