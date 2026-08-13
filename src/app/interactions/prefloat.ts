@@ -54,6 +54,8 @@ function executePrefloat(layerId: string, mask: Uint8ClampedArray, bounds: Rect)
     selection: state.selection,
     gpuSnapshots,
     label: 'Move',
+    paths: state.paths,
+    selectedPathId: state.selectedPathId,
   };
 
   // Now float the selection

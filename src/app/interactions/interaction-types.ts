@@ -14,6 +14,14 @@ import type { TransformHandle, TransformState } from '../../tools/transform/tran
  * narrow on `kind` and drop the `!` non-null assertions that the old
  * bag-of-flags shape forced (see transform-handlers.ts).
  */
+/** Per-layer starting position captured at move-drag start for each
+ *  additional selected layer beyond the active one (issue #707). */
+export interface SiblingMoveTarget {
+  readonly id: string;
+  readonly startX: number;
+  readonly startY: number;
+}
+
 export type CanvasGesture =
   | { kind: 'idle' }
   | { kind: 'paint'; usedGpuStroke: boolean }
@@ -33,6 +41,10 @@ export type CanvasGesture =
       quickMaskOriginalPixels: Uint8Array | null;
       quickMaskOriginalWidth: number;
       quickMaskOriginalHeight: number;
+      /** Other selected layers to translate alongside the active one when
+       *  the user drags with multiple layers selected (issue #707). Empty
+       *  for single-layer moves; only populated on whole-layer moves. */
+      siblings: readonly SiblingMoveTarget[];
     }
   | { kind: 'tool' }
   | { kind: 'liquify'; lastPoint: Point }
@@ -93,6 +105,7 @@ export function withMoveGesture(
     quickMaskOriginalPixels?: Uint8Array | null;
     quickMaskOriginalWidth?: number;
     quickMaskOriginalHeight?: number;
+    siblings?: readonly SiblingMoveTarget[];
   },
 ): InteractionState {
   return {
@@ -104,6 +117,7 @@ export function withMoveGesture(
       quickMaskOriginalPixels: payload.quickMaskOriginalPixels ?? null,
       quickMaskOriginalWidth: payload.quickMaskOriginalWidth ?? 0,
       quickMaskOriginalHeight: payload.quickMaskOriginalHeight ?? 0,
+      siblings: payload.siblings ?? [],
     },
   };
 }
