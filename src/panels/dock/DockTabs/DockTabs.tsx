@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useDockStore } from '../dock-store';
 import { getPanelTitle } from '../panel-registry';
@@ -22,7 +22,9 @@ export function DockTabs({ groupId, tabs, activeTab, renderPanel, variant = 'doc
   const activateTab = useDockStore((s) => s.activateTab);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // useLayoutEffect so the group element is registered before ancestor
+  // measurements run (useDockedPanelAnchor in App reads it on first mount).
+  useLayoutEffect(() => {
     const el = rootRef.current;
     if (!el) return;
     registerGroupElement(groupId, el);

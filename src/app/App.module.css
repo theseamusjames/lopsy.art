@@ -110,6 +110,7 @@
 }
 
 .effectsDrawer {
+  top: var(--effects-drawer-top, 0px);
   width: 420px;
   min-width: 280px;
   min-height: 200px;

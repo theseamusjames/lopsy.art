@@ -323,12 +323,12 @@ export function useCanvasPointerHandlers({
         if (isOnHorizontalRuler) {
           const doc = useEditorStore.getState().document;
           const pos = snap ? snapGuideToFraction(canvasPos.x, doc.width) : canvasPos.x;
-          deps.setRulerHover({ orientation: 'vertical', position: pos, screenX, screenY });
+          deps.setRulerHover({ orientation: 'vertical', position: pos, screenX, screenY, snap });
           return;
         } else if (isOnVerticalRuler) {
           const doc = useEditorStore.getState().document;
           const pos = snap ? snapGuideToFraction(canvasPos.y, doc.height) : canvasPos.y;
-          deps.setRulerHover({ orientation: 'horizontal', position: pos, screenX, screenY });
+          deps.setRulerHover({ orientation: 'horizontal', position: pos, screenX, screenY, snap });
           return;
         } else {
           deps.setRulerHover(null);

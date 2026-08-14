@@ -41,6 +41,7 @@ import { useCanvasPointerHandlers } from './hooks/useCanvasPointerHandlers';
 import { useAppEffects } from './hooks/useAppEffects';
 import { useDocumentOpenHandlers } from './hooks/useDocumentOpenHandlers';
 import { useDraggablePanel } from './hooks/useDraggablePanel';
+import { useDockedPanelAnchor } from './hooks/useDockedPanelAnchor';
 import styles from './App.module.css';
 
 // Isolated component for canvas rendering — prevents renderVersion and
@@ -91,6 +92,11 @@ export function App() {
   // The floating drawers sit immediately left of the right dock; this width
   // feeds a CSS custom property so they track dock resizing.
   const rightDockWidth = useDockStore((s) => (s.layout.docks.right ? s.layout.dockSizes.right : 0));
+
+  // Effects drawer anchors to the top edge of the Layers panel wherever the
+  // user has docked it. Null when Layers is floating or not mounted — the
+  // drawer falls back to the top of the sidebar area in that case.
+  const layersPanelTop = useDockedPanelAnchor('layers');
 
   const { offset: drawerOffset, reset: resetDrawerOffset, dragProps: drawerDragProps } = useDraggablePanel();
   useEffect(() => {
@@ -257,7 +263,11 @@ export function App() {
             <div
               className={styles.effectsDrawer}
               data-testid="effects-drawer"
-              style={{ '--drag-x': `${drawerOffset.x}px`, '--drag-y': `${drawerOffset.y}px` } as React.CSSProperties}
+              style={{
+                '--drag-x': `${drawerOffset.x}px`,
+                '--drag-y': `${drawerOffset.y}px`,
+                '--effects-drawer-top': layersPanelTop !== null ? `${layersPanelTop}px` : '0px',
+              } as React.CSSProperties}
             >
               {activeLayerId && layers.find((l) => l.id === activeLayerId)?.type === 'group'
                 ? <AdjustmentsPanel showHeader dragProps={drawerDragProps} />
