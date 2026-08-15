@@ -133,7 +133,7 @@ describe('createNavigatorScheduler', () => {
     sched.stop();
   });
 
-  it('catch-up read fires unconditionally even when content version is unchanged — #711', () => {
+  it('catch-up respects the content-version gate — does not read when nothing changed (#723)', () => {
     const read = vi.fn();
     let version = 0;
     const sched = createNavigatorScheduler({
@@ -146,18 +146,21 @@ describe('createNavigatorScheduler', () => {
     vi.advanceTimersByTime(200);
     expect(read).toHaveBeenCalledTimes(1);
 
-    // Interaction with no doc change (e.g. adjustment-slider drag on a
-    // UI-store field the content-version tracker doesn't observe).
+    // Interaction with no observable composite change (e.g. wheel burst
+    // that only pans the viewport). Content version unchanged.
     sched.setInteracting(true);
     vi.advanceTimersByTime(1000);
     expect(read).toHaveBeenCalledTimes(1);
 
     sched.setInteracting(false);
-    vi.advanceTimersByTime(0); // catch-up
-    expect(read).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(0); // catch-up runs through tick()
+    expect(read).toHaveBeenCalledTimes(1);
 
-    // Idle again: version still matches, so no polling.
-    vi.advanceTimersByTime(2000);
+    // If something did change during the gesture, the next catch-up fires.
+    version++;
+    sched.setInteracting(true);
+    sched.setInteracting(false);
+    vi.advanceTimersByTime(0);
     expect(read).toHaveBeenCalledTimes(2);
 
     sched.stop();

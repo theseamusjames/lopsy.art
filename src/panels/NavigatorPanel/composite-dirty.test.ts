@@ -2,6 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { getCompositeInputVersion } from './composite-dirty';
 import { useEditorStore } from '../../app/editor-store';
+import { useUIStore } from '../../app/ui-store';
+import { DEFAULT_ADJUSTMENTS } from '../../filters/image-adjustments';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 
 describe('composite-dirty (getCompositeInputVersion)', () => {
@@ -30,5 +32,45 @@ describe('composite-dirty (getCompositeInputVersion)', () => {
     useEditorStore.getState().setPan(-30, 200);
 
     expect(getCompositeInputVersion()).toBe(before);
+  });
+
+  it('bumps when a Channels-panel eye icon toggles channel visibility (#723)', () => {
+    // Prime the tracker so subscriptions are installed.
+    getCompositeInputVersion();
+    const before = getCompositeInputVersion();
+
+    useUIStore.getState().toggleChannelVisibility('r');
+    expect(getCompositeInputVersion()).toBeGreaterThan(before);
+
+    const afterOne = getCompositeInputVersion();
+    useUIStore.getState().toggleChannelVisibility('r');
+    expect(getCompositeInputVersion()).toBeGreaterThan(afterOne);
+  });
+
+  it('bumps when maskMode changes (layerMask overlay / quickMask) (#723)', () => {
+    getCompositeInputVersion();
+    // Reset to a known baseline mode.
+    useUIStore.setState({ maskMode: 'off' });
+    const before = getCompositeInputVersion();
+
+    useUIStore.setState({ maskMode: 'layerMask' });
+    expect(getCompositeInputVersion()).toBeGreaterThan(before);
+
+    const afterOne = getCompositeInputVersion();
+    useUIStore.setState({ maskMode: 'quickMask' });
+    expect(getCompositeInputVersion()).toBeGreaterThan(afterOne);
+  });
+
+  it('bumps when image adjustments change (#723)', () => {
+    getCompositeInputVersion();
+    useUIStore.getState().setAdjustments({ ...DEFAULT_ADJUSTMENTS });
+    const before = getCompositeInputVersion();
+
+    useUIStore.getState().setAdjustments({ ...DEFAULT_ADJUSTMENTS, exposure: 0.5 });
+    expect(getCompositeInputVersion()).toBeGreaterThan(before);
+
+    const afterOne = getCompositeInputVersion();
+    useUIStore.getState().setAdjustmentsEnabled(false);
+    expect(getCompositeInputVersion()).toBeGreaterThan(afterOne);
   });
 });

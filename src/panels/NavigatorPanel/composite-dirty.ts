@@ -10,20 +10,22 @@
  * every 200 ms forever, stalling the GPU pipeline five times per second on
  * a document that has not changed a single pixel.
  *
- * Two signals compose here:
+ * Signals composed here:
  *   - `pixelDataManager.version()` — bumps on every pixel edit.
  *   - `useEditorStore.getState().document` reference identity — a new
  *     reference on any layer property change (visibility, opacity, blend,
  *     effects, mask, order, position, add/remove), document resize,
  *     background, colorMode, and adjustment-node edits.
- *
- * UI-store fields that also affect the composite (image adjustments,
- * channel visibility, mask edit mode) are not explicitly tracked here —
- * they are always changed via a pointer gesture, so the scheduler's
- * `isInteracting` catch-up fires the next read regardless.
+ *   - `useUIStore` fields that reach the compositor: `channelVisibility`
+ *     (Channels panel eye icons), `maskMode` (layerMask overlay,
+ *     quickMask), and image `adjustments` / `adjustmentsEnabled`. These
+ *     can be changed via panel clicks that never go through the canvas
+ *     pointer path, so the scheduler's `isInteracting` catch-up does not
+ *     cover them (#723).
  */
 
 import { useEditorStore } from '../../app/editor-store';
+import { useUIStore } from '../../app/ui-store';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 
 let version = 0;
@@ -37,6 +39,26 @@ function ensureSubscribed(): void {
   useEditorStore.subscribe((state) => {
     if (state.document !== prevDoc) {
       prevDoc = state.document;
+      version++;
+    }
+  });
+
+  const uiInitial = useUIStore.getState();
+  let prevChannels = uiInitial.channelVisibility;
+  let prevMaskMode = uiInitial.maskMode;
+  let prevAdjustments = uiInitial.adjustments;
+  let prevAdjustmentsEnabled = uiInitial.adjustmentsEnabled;
+  useUIStore.subscribe((state) => {
+    if (
+      state.channelVisibility !== prevChannels ||
+      state.maskMode !== prevMaskMode ||
+      state.adjustments !== prevAdjustments ||
+      state.adjustmentsEnabled !== prevAdjustmentsEnabled
+    ) {
+      prevChannels = state.channelVisibility;
+      prevMaskMode = state.maskMode;
+      prevAdjustments = state.adjustments;
+      prevAdjustmentsEnabled = state.adjustmentsEnabled;
       version++;
     }
   });

@@ -244,14 +244,18 @@ export function useCanvasInteraction(
 
         // Only expand the active layer's pixel data for tools that actually
         // read/write it via JS. Tools like text, crop, path, eyedropper,
-        // and selection tools don't need pixel data and expanding would
-        // destructively change layer bounds before pushHistory captures
-        // them — causing undo to restore the wrong positions.
+        // fill, and selection tools don't need pixel data and expanding
+        // would destructively change layer bounds before pushHistory
+        // captures them — causing undo to restore the wrong positions.
         // Move is excluded: selection moves use the float system (GPU-only)
         // and non-selection moves call expandLayerForEditing in the handler.
+        // Fill is excluded: handleFillDown chooses between two GPU fast
+        // paths (empty layer, non-contiguous) and a JS path that sources
+        // its own pixels via readLayerPixelsForFill — none of them read
+        // from the painting canvas.
         // Quick Mask Mode paints on the quick mask buffer (not the layer), so
         // no pixel data expansion is needed — same as non-paint tools.
-        const needsPixelData = (isPaintTool && !isQuickMaskMode) || activeTool === 'fill';
+        const needsPixelData = isPaintTool && !isQuickMaskMode;
         if (needsPixelData) {
           const imageData = editorState.expandLayerForEditing(activeLayerId);
           expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;

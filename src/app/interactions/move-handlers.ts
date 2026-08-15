@@ -142,6 +142,16 @@ export function flushQuickMaskDrag(): void {
   }
 }
 
+/**
+ * Whole-layer moves (no selection, no option-drag) defer their 'Move'
+ * history entry to the first pointer-move that actually shifts the layer
+ * — a bare click on the move tool used to record a no-op Move entry that
+ * later corrupted undo state on longer histories (#721). This holds the
+ * label between down and the first move that consumes it; the flag is
+ * always cleared in handleMoveUp.
+ */
+let pendingWholeLayerMoveLabel: string | null = null;
+
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
@@ -159,8 +169,15 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   const prebuilt = !altKey && sel.active && sel.mask
     ? consumePrefloat(activeLayerId, sel.mask)
     : null;
+  const isWholeLayerMove = !prebuilt && !altKey && !(sel.active && sel.mask) && !isQuickMaskMode;
+  pendingWholeLayerMoveLabel = null;
   if (prebuilt) {
     editorState.pushPrebuiltSnapshot(prebuilt.snapshot);
+  } else if (isWholeLayerMove) {
+    // Defer: only push history if the pointer actually moves. Bare
+    // click-releases on the move tool must not record a Move entry (#721).
+    cancelPrefloat();
+    pendingWholeLayerMoveLabel = 'Move';
   } else {
     cancelPrefloat();
     editorState.pushHistory(altKey && !(sel.active && sel.mask) ? 'Duplicate Layer' : 'Move');
@@ -486,7 +503,14 @@ export function handleMoveMove(
       useUIStore.getState().setTransform(createTransformState(newBounds));
     }
   } else {
-    // No selection: just move the layer position
+    // No selection: just move the layer position. Skip entirely if the
+    // pointer hasn't shifted yet — that keeps a click-and-release from
+    // pushing history / mutating the layer (#721).
+    if (dragDx === 0 && dragDy === 0) return;
+    if (pendingWholeLayerMoveLabel !== null) {
+      useEditorStore.getState().pushHistory(pendingWholeLayerMoveLabel);
+      pendingWholeLayerMoveLabel = null;
+    }
     let newX = state.layerStartX + dragDx;
     let newY = state.layerStartY + dragDy;
     const uiState = useUIStore.getState();
@@ -545,6 +569,9 @@ export function handleMoveUp(
   _persistentTransformRef: MutableRefObject<PersistentTransform | null>,
 ): void {
   useUIStore.getState().clearSnapLines();
+  // Whole-layer down never followed by a move → no history entry, no state
+  // change. Clear the pending label so a subsequent gesture starts fresh.
+  pendingWholeLayerMoveLabel = null;
 
   // Flush any pending quick-mask translate so the final drop position is
   // materialized on the GPU before we clear the drag target.
