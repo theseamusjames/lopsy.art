@@ -472,6 +472,11 @@ test.describe('Composition 1: Painted Landscape', () => {
     // =====================================================================
     // PHASE 9: CLONE STAMP — Duplicate a mountain feature
     // =====================================================================
+    // The effects drawer opened while building layers earlier now anchors to
+    // the Layers panel (PR #719) and floats over the mid-canvas clone target,
+    // so its blend-mode <select> would swallow the stamp stroke. Close it so
+    // the stroke reaches the canvas.
+    await closeEffectsPanel(page);
     await page.keyboard.press('s');
     expect(await getActiveTool(page)).toBe('stamp');
 
