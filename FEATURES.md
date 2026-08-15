@@ -511,6 +511,7 @@ Effects are edited in the floating **effects drawer**, which is shared with the 
 
 - **Opening**: the effects button on a row in the Layers panel — a three-way toggle that turns green when the layer has at least one **enabled** effect (see *Layers Panel Row Layout*).
 - **Closing**: the `X` in the drawer header.
+- **Where it sits**: just outside the right dock horizontally (it reads the dock's live width, so dragging the dock's splitter slides the drawer with it), and vertically its **top edge lines up with the top of whichever dock group currently holds the Layers panel** — move Layers into a lower split or a different tab group and the drawer follows it down instead of staying pinned to the top of the sidebar. The anchor is re-measured on dock-layout changes and window resizes, and falls back to the top of the sidebar area whenever Layers is floating, closed, or not yet mounted. Header-dragging offsets the drawer from that anchor; the offset is cleared when the drawer closes.
 - With no layer selected the drawer shows only its header and a **No layer selected** message.
 
 Contents, top to bottom:
@@ -933,6 +934,7 @@ All three are undoable and auto-switch the target group from pass-through to nor
 - **Click a guide on the ruler to remove it**: clicking the ruler within ±1 px of an existing guide's position deletes that guide rather than adding another.
 - **Cmd/Ctrl while clicking the ruler — snap the new guide to a layout fraction.** Holding Cmd (or Ctrl) quantizes the guide to the nearest fraction of the document's **width** for a vertical guide, or **height** for a horizontal one. The stops are the reduced fractions with denominators **2, 3, 4, 6, 8, and 16**, plus both edges — **21 positions**: `0, 1/16, 1/8, 1/6, 3/16, 1/4, 5/16, 1/3, 3/8, 7/16, 1/2, 9/16, 5/8, 2/3, 11/16, 3/4, 13/16, 5/6, 7/8, 15/16, 1`. Fifths, sevenths, ninths, elevenths, and thirteenths are deliberately left out so they don't crowd the stops a layout actually reaches for. The snapped position is rounded to a whole pixel.
   - **The hover preview honors the same modifier**, so the ruler's guide preview jumps to the snapped position before the click commits it — press or release Cmd while hovering to see where the guide will land.
+  - **The hover tooltip switches to the fraction itself.** With Cmd held, the readout beside the ruler preview stops showing a pixel position and names the stop instead — `1/2`, `3/8`, `2/3` — with the two ends rendered as `0/1` and `1/1` so they read as part of the same series. Release Cmd and it returns to the rounded pixel value. The label is re-derived from the resulting position rather than carried down from the stop that was chosen (it takes the first table entry within ±0.5 px, scanning low to high), so on a document smaller than ~46 px along the snapped axis two neighbouring stops can round to the same pixel and the *lower* fraction is the one displayed. At any ordinary document size every stop labels exactly.
   - **There is no distance threshold.** The snap always takes the *nearest* stop no matter how far away it is, so while Cmd is held there is no way to place a guide at an arbitrary position — a click anywhere on the ruler lands on one of the 21 fractions. Release Cmd for free placement.
 - **Guide color**: click the **ruler corner square** (the box where the two rulers meet) to open the guide-color picker; clicking it again closes it. This is the only entry point to the picker.
 - Guide creation, removal, and the color picker all require **both** Show Rulers and Show Guides to be on — with either off, ruler clicks do nothing.
@@ -948,12 +950,34 @@ All three are undoable and auto-switch the target group from pass-through to nor
 - **Dim pattern**: an options-bar checkbox (visible whenever Show Seamless Pattern is on) dims the surrounding repeat tiles so the center document stays the focal point while still showing how it tiles. Default on.
 - **Wrap**: a second options-bar checkbox next to Dim pattern (also only visible while Show Seamless Pattern is on, default off). When enabled, layer compositing wraps modularly at the document edges — content dragged off one side reappears on the opposite side, so a tile can be edited across its own seam. The wrap happens in the blend shader, which shifts each layer's source offset per axis to whichever tile center is nearest the fragment; the layer texture itself is never rewritten, so repeated moves keep sampling the original pixels instead of compounding an already-wrapped result.
 
+### Toolbox
+
+The vertical rail down the far left of the editor body, outside the dock host, at a fixed width with its own vertical scroll when the buttons don't fit. It is the only surface that can reach every tool, and the only way to reach the four that carry no keyboard shortcut.
+
+- **All 23 registered tools get a button** — there are no flyouts, stacks, or long-press groups, so every tool is always visible rather than hidden behind a sibling. The buttons are laid out in **seven divider-separated groups**, plus an eighth holding the Quick Mask toggle:
+
+  1. Move
+  2. Rectangular Marquee · Elliptical Marquee · Lasso · Magnetic Lasso · Magic Wand · Quick Selection
+  3. Brush · Pencil · Spray · Eraser
+  4. Fill · Gradient · Clone Stamp · Healing Brush
+  5. Dodge/Burn · Sponge · Smudge · Eyedropper
+  6. Shape · Text · Pen Tool
+  7. Crop
+  8. Quick Mask toggle — not a tool but a mode; see [Quick Mask Mode](#quick-mask-mode)
+
+  The grouping is by role rather than by the registry's own order, and it is maintained by hand in the toolbox rather than derived from the tool registry.
+- **Active tool** is highlighted; clicking a button selects that tool directly (it does not route through the shortcut system).
+- **Every button is a real `<button>`** carrying the same string as both `aria-label` and native `title`, so hovering gives a tooltip and each button is its own tab stop. The rail declares `role="toolbar"` but ships **no arrow-key handler or roving tabindex**, so it does not implement the ARIA toolbar keyboard pattern — reaching the last tool means tabbing through everything before it.
+- **The shortcut letters in those labels are hard-coded literals** (`Brush (B)`, `Eraser (E)`, …), not reads of the shortcut store. Rebinding a tool in the Keyboard Shortcuts modal changes what the key does but **not what the toolbox tooltip claims** — rebind Brush to `K` and its button still advertises `(B)`. The four tools with no default key (Gradient, Elliptical Marquee, Magnetic Lasso, Quick Selection) correctly show a bare label.
+  - **Except one: the Quick Selection button advertises `(Q)`, and that is wrong.** Quick Selection has no `shortcut` in the registry and is not a customizable action, while `Q` is bound to *toggle Quick Mask* — which is the button sitting in the very next group of the same rail, labelled `Enter Quick Mask (Q)`. Two buttons in one toolbar claim the same key; pressing `Q` always toggles Quick Mask and never selects Quick Selection.
+- **No foreground / background swatches.** The toolbox stylesheet still carries `.colors` / `.colorStack` / `.foreground` / `.background` rules from an earlier layout, but nothing renders them — color editing lives in the [Color panel](#color-panel) alone.
+
 ### UI
 - **Foreground / background color**: live in the [Color panel](#color-panel) only — not in the toolbox. Swap has an icon button (and `X`); reset to black/white is keyboard-only (`D`), with no button anywhere.
 - **Recent colors**: capped at 28, and seeded full with a 28-swatch starter palette — see [Recent colors](#recent-colors)
 - **Panel visibility**: togglable per panel from the panel toolbar — see [Panel Docking & Layout](#panel-docking--layout). There is no separate sidebar-collapse toggle, and individual panels no longer collapse to a header; they are sized by their dock, split, or floating window instead.
 - **Mask edit mode**: on/off
-- **Draggable modals & drawers**: filter dialogs, pattern fill, layer effects, adjustments, the Brushes modal, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked). Dockable panels use the docking system's own drag instead. The effects and reference drawers sit immediately to the left of the right dock and shift as that dock is resized.
+- **Draggable modals & drawers**: filter dialogs, pattern fill, layer effects, adjustments, the Brushes modal, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked). Dockable panels use the docking system's own drag instead. The effects and reference drawers both sit immediately to the left of the right dock and shift as that dock is resized; vertically they differ — the **reference drawer stays pinned to the top** of the sidebar area, while the **effects drawer tracks the top edge of the Layers panel's dock group** (see [The Effects Drawer](#the-effects-drawer)).
 - **Filter / pattern preview overlay**: when live preview is enabled the dim backdrop is removed and pointer-events on the overlay are disabled so the canvas is fully visible while the modal stays interactive
 
 ### Global UI Conventions
@@ -982,7 +1006,7 @@ Right-clicking the canvas opens a small menu with:
 The menu is suppressed on coarse-pointer devices (touch) so long-press doesn't accidentally open it.
 
 ### Single-Key Shortcuts
-Nineteen tools carry a default single-letter shortcut, and that is the complete set — every tool in the registry with a `shortcut` field: `V` move, `B` brush, `N` pencil, `E` eraser, `G` fill, `I` eyedropper, `S` clone stamp, `H` healing brush, `O` dodge & burn, `Y` sponge, `R` smudge, `M` rectangular marquee, `L` lasso, `W` magic wand, `U` shape, `T` text, `C` crop, `P` path, `J` spray. (Four of the 23 registered tools carry no letter and can only be reached from the toolbox: **Gradient**, **Elliptical Marquee**, **Magnetic Lasso**, and **Quick Selection**.) On top of those, the editor ships these global keys:
+Nineteen tools carry a default single-letter shortcut, and that is the complete set — every tool in the registry with a `shortcut` field: `V` move, `B` brush, `N` pencil, `E` eraser, `G` fill, `I` eyedropper, `S` clone stamp, `H` healing brush, `O` dodge & burn, `Y` sponge, `R` smudge, `M` rectangular marquee, `L` lasso, `W` magic wand, `U` shape, `T` text, `C` crop, `P` path, `J` spray. (Four of the 23 registered tools carry no letter and can only be reached from the [toolbox](#toolbox): **Gradient**, **Elliptical Marquee**, **Magnetic Lasso**, and **Quick Selection** — note that the toolbox nevertheless labels Quick Selection `(Q)`, a key that belongs to Quick Mask.) On top of those, the editor ships these global keys:
 
 - **`X`** — swap foreground and background colors
 - **`D`** — reset foreground/background to the defaults (black / white)
@@ -1010,7 +1034,10 @@ Single-key bindings are rebindable through the **Keyboard Shortcuts modal** (Hel
 - Each editable row shows the action label and its current key. Clicking the key enters **listening mode** — the next key pressed becomes the new binding, lower-cased. Escape cancels; modifier-only presses are ignored, as is any key pressed with Cmd / Ctrl / Alt held (those combos aren't customizable).
 - **Reset**: a per-row reset button (`↺`, shown only on rows that have actually been overridden) reverts that one binding to its default; a "Reset All" button in the header clears every override at once.
 - **Persistence**: custom bindings live in `localStorage` (Zustand `persist` middleware), so they survive reloads and follow the user across sessions on the same browser.
-- The same store is the single source of truth for keyboard handling everywhere in the app — shortcuts dispatched from menus, the toolbox, and global key handlers all read through `useShortcutStore.getKey(actionId)` so a rebind takes effect immediately without a reload.
+- **A rebind takes effect immediately, with no reload** — the global single-key handler rebuilds its key → action map from the live store on every keystroke rather than caching one at startup.
+- **But the store is not what the rest of the UI displays.** `getKey(actionId)` has exactly two callers, both inside the modal itself (the conflict check and the row rendering). Nothing else in the app consults it:
+  - **Menu accelerators are hard-coded strings** in the menu definitions (`⌘Z`, `⇧⌘C`, …) and never read the store. In practice this costs nothing, since every menu accelerator is a modifier combo and modifier combos aren't customizable in the first place.
+  - **Toolbox tooltips are hard-coded too**, and those *are* single-key bindings — so the rail keeps advertising a tool's default letter after the user has rebound it. See [Toolbox](#toolbox).
 
 **What the modal does *not* cover.** The rebindable rows are a hard-coded list inside the modal, not a projection of the tool registry, so it has drifted out of step with the tools that actually ship a shortcut:
 
