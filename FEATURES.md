@@ -410,6 +410,14 @@ gets baked first.
   successive scale/rotate drags therefore do not compound resampling loss.
 - The float is dropped — baking the result into the layer texture — on
   **Escape**, **`⌘D`**, or **selecting a different layer** in the Layers panel.
+- **Undo and redo also drop the float first**, and cancel any scheduled prefloat,
+  before restoring their snapshot. This is a correctness requirement rather than
+  a convenience: while a float is live the engine keeps `float_layer_id` set, and
+  that makes the layer descriptor hold on to the float's *expanded* width and
+  height. Restoring a snapshot whose texture is back at the pre-float size would
+  then leave the descriptor mismatched, and the layer renders stretched across
+  the whole document from the origin instead of at its own position. Dropping the
+  float before the restore keeps the descriptor and the texture in agreement.
 - The selection mask is not recomputed during the drag; it is rebuilt from the
   committed pixel alpha afterwards, which keeps it from drifting away from
   what the GPU actually rendered.
@@ -442,8 +450,7 @@ gets baked first.
 - **Snap to layers** (View menu → "Snap to Layers"): while dragging, the moving layer's left/right/top/bottom edges and X/Y centers attract to the matching edges and centers of every other visible layer within a 5 px threshold. Magenta alignment guides span the document while a snap is engaged and clear on mouse-up.
 - **Align**: left, center-h, right, top, center-v, bottom
 - **Fit** (options-bar button): scales the active raster layer so its longest side matches the canvas — preserving aspect ratio — and centers it on the artboard. Reuses the GPU `scaleLayerTexture` path, so no pixel data round-trips through JS. Pasting or dropping an oversized image now runs this same fit automatically (see Paste / Drop behavior), so the button is for the cases that don't — a layer scaled up after the fact, or one that outgrew the canvas when the document was resized.
-- **Alt/Option+drag (no active marquee)**: duplicates the active layer in place, then moves the new copy — leaves the original layer untouched.
-  - **Known regression (current `main`): the original moves too.** Duplicating sets the new copy as the *active* layer but leaves `selectedLayerIds` pointing at the original, and clicking any layer sets that list to exactly `[that layer]` — so the original is still in the selection when the multi-layer sibling list is built a few lines later, and it gets dragged by the same delta as the copy. The two layers travel together and the duplicate looks like it did nothing. This affects the ordinary single-layer case, not just multi-selections. A fix is in flight; when it lands, the bullet above holds again as written.
+- **Alt/Option+drag (no active marquee)**: duplicates the active layer in place, then moves the new copy — leaves the original layer untouched. The duplicate is deliberately excluded from the multi-layer sibling capture below: `duplicateLayer` makes the copy active but leaves the *pre-duplicate* selection in `selectedLayerIds`, so treating those as move siblings would drag the originals along with the copy. An option-drag therefore always moves exactly one layer, even when several were selected before it started.
 - **Alt/Option+drag (with an active marquee)**: copies the selected pixels of the active layer into a floating duplicate and moves that copy, leaving the original pixels under the selection intact (Photoshop-style "alt-drag the selection").
 - **Cmd/Meta+drag (transform handles)**: forces a uniform scale (by averaging the two axis scales) and snaps rotation to 15° increments. Grid + snap-to-grid applies the same rotation snap automatically, and additionally snaps the pointer to grid cells while scaling. The Move tool is the only tool whose handle drags transform pixels — see [Transform](#transform).
 
@@ -900,7 +907,8 @@ All three are undoable and auto-switch the target group from pass-through to nor
 ### Viewport
 - **Zoom**: 0.01x - 64x
 - **Pan**: unlimited
-- **Fit to view**: auto-zoom with padding
+- **Fit to view**: auto-zoom with padding — the *automatic* fit, run on first mount and at the end of every document-opening path (New, Open, paste-as-document, PSD / DNG / RAF import, project load, perspective crop). Padding is `min(40, viewportW/4, viewportH/4)` per side, and the result is **capped at 1×**: a document smaller than the viewport opens at 100 %, never blown up to fill the window.
+  - **This is not the same fit as `⌘0`.** View → **Fit to Screen** (and its `⌘0` binding) uses a different formula — `min(viewportW/docW, viewportH/docH) × 0.9`, with no padding term and **no 1× cap** — so it *will* upscale. Opening a 64 × 64 document in a 1200 × 800 viewport lands at 1×; pressing `⌘0` on that same document jumps to roughly 11×. For documents larger than the viewport the two land in nearly the same place (the 0.9 factor stands in for the padding), so the divergence only shows up on small documents.
 - **Space+drag** or **middle-click drag**: temporarily pan from any tool
 - **Cmd/Ctrl+scroll**: zoom in / out (factor `1.002^-deltaY`, clamped to 0.01× – 64×); plain scroll pans. The zoom is anchored to the **viewport center**, not the cursor — the wheel handler only writes `viewport.zoom` and does not compensate pan. (The Reference Image drawer's wheel zoom *is* cursor-centered; the canvas is not.)
 - **Two-finger pinch** (touch): pinching anywhere in the viewport scales the zoom from the gesture's start distance (clamped 0.01× – 64×) and pans by the touch-midpoint delta. The gesture is picked up even when a finger lands on surrounding UI chrome rather than the canvas, and it cancels any in-flight tool stroke first so a pinch never leaves a stray mark.
@@ -974,7 +982,7 @@ Right-clicking the canvas opens a small menu with:
 The menu is suppressed on coarse-pointer devices (touch) so long-press doesn't accidentally open it.
 
 ### Single-Key Shortcuts
-In addition to per-tool toolbox shortcuts (`B`, `E`, `J`, `Y`, `R`, `S`, `H`, `O`, `G`, `I`, `V`, `M`, `L`, `W`, `T`, `N`, `U`, `P`, `C`, …) the editor ships these global keys:
+Nineteen tools carry a default single-letter shortcut, and that is the complete set — every tool in the registry with a `shortcut` field: `V` move, `B` brush, `N` pencil, `E` eraser, `G` fill, `I` eyedropper, `S` clone stamp, `H` healing brush, `O` dodge & burn, `Y` sponge, `R` smudge, `M` rectangular marquee, `L` lasso, `W` magic wand, `U` shape, `T` text, `C` crop, `P` path, `J` spray. (Four of the 23 registered tools carry no letter and can only be reached from the toolbox: **Gradient**, **Elliptical Marquee**, **Magnetic Lasso**, and **Quick Selection**.) On top of those, the editor ships these global keys:
 
 - **`X`** — swap foreground and background colors
 - **`D`** — reset foreground/background to the defaults (black / white)
@@ -997,13 +1005,24 @@ In addition to per-tool toolbox shortcuts (`B`, `E`, `J`, `Y`, `R`, `S`, `H`, `O
 - **About Lopsy**: opens the About dialog.
 
 ### Keyboard Shortcut Customization
-Every tool shortcut (`B`, `E`, `J`, …) and the non-tool single-key actions (`X` swap colors, `D` reset colors, `Q` toggle quick mask) are user-rebindable through the **Keyboard Shortcuts modal** (Help → Keyboard Shortcuts).
+Single-key bindings are rebindable through the **Keyboard Shortcuts modal** (Help → Keyboard Shortcuts). The modal is a read-out of every shortcut in the app, but only some of its rows are editable: rows carrying an action id render as a clickable key button, while the modifier-combo rows (`⌘Z`, `⌘C`, `⌘0`, `Esc`, `Enter`, `Space`, …) are fixed labels with no rebind affordance.
 
-- Each row shows the action label and its current key. Clicking a key enters **listening mode** — the next key the user presses becomes the new binding (lower-cased, single-character bindings only).
-- **Conflict detection**: if the chosen key is already bound to another action, the modal flags the conflict inline; the user can confirm the swap or pick a different key.
-- **Reset**: a per-row reset button reverts that one binding to its default; a "Reset All" button at the bottom of the modal clears every override at once.
+- Each editable row shows the action label and its current key. Clicking the key enters **listening mode** — the next key pressed becomes the new binding, lower-cased. Escape cancels; modifier-only presses are ignored, as is any key pressed with Cmd / Ctrl / Alt held (those combos aren't customizable).
+- **Reset**: a per-row reset button (`↺`, shown only on rows that have actually been overridden) reverts that one binding to its default; a "Reset All" button in the header clears every override at once.
 - **Persistence**: custom bindings live in `localStorage` (Zustand `persist` middleware), so they survive reloads and follow the user across sessions on the same browser.
 - The same store is the single source of truth for keyboard handling everywhere in the app — shortcuts dispatched from menus, the toolbox, and global key handlers all read through `useShortcutStore.getKey(actionId)` so a rebind takes effect immediately without a reload.
+
+**What the modal does *not* cover.** The rebindable rows are a hard-coded list inside the modal, not a projection of the tool registry, so it has drifted out of step with the tools that actually ship a shortcut:
+
+- **Four tools have a working default key but no row in the modal** — Healing Brush (`H`), Sponge (`Y`), Smudge (`R`), and Spray (`J`). Their keys work on the canvas; they simply cannot be rebound or even seen here.
+- **`Q` (toggle Quick Mask) has no row either.** It is a first-class customizable action in the store — it sits alongside swap-colors and reset-colors in `NON_TOOL_ACTION_IDS` — but the modal's Colors section lists only Swap Colors and Reset Colors, so there is no UI to rebind it.
+- Because conflict detection walks the modal's *own* row list, these five actions are also **invisible to the conflict check** (see below): rebinding some other tool onto `H`, `Y`, `R`, `J`, or `Q` reports no conflict at all.
+
+**Conflict detection warns, but does not prevent — and the modal keeps displaying the losing key.** When the pressed key already belongs to another *listed* action, the modal shows a banner naming it (`"E" is already used by Eraser`). That banner is purely informational: the rebind is written to the store unconditionally on the same keystroke, with no confirm step and no way to back out other than rebinding again or hitting reset. The runtime key map then resolves the collision by **dropping the other action's binding entirely** — the loser is left with no key at all, and the key it used to own does nothing. The modal, however, reads each row's key through `getKey(actionId)`, which falls back to the *default* whenever a row has no override of its own — so the displaced action still displays its original letter. Rebind Brush onto `E` and the Eraser row goes on showing **E** while pressing `E` selects the Brush.
+
+**Bindings are not restricted to single characters.** Nothing in the modal or the store checks the length of `e.key`, so a non-printing key is accepted verbatim and stored lower-cased: pressing `F1` binds the string `f1`, pressing an arrow key binds `arrowup`. These do resolve at runtime (the tool-shortcut handler looks up `e.key.toLowerCase()` the same way), and the handler runs **before** the arrow-key nudge handler — so binding a tool to an arrow key genuinely takes that arrow away from nudging. The key button renders the raw string upper-cased, giving labels like `ARROWUP`.
+
+- **Tool shortcuts fire with Shift held.** The single-key dispatcher excludes Cmd, Ctrl, and Alt but not Shift, and it lower-cases the key first — so `⇧B` selects the Brush exactly as `B` does. This overlaps the Shift-held straight-line preview: typing a tool letter while holding Shift for a line switches tools.
 
 ---
 
