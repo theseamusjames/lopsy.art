@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { DockSide } from '../dock-layout';
 import { useDockStore } from '../dock-store';
@@ -26,19 +26,24 @@ export function DockHost({ renderPanel, children }: DockHostProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const dockResizeStart = useRef(0);
 
-  useEffect(() => {
+  // useLayoutEffect so the host element is registered before ancestor
+  // useLayoutEffects run — hooks in App (e.g. useDockedPanelAnchor) can then
+  // measure the host on first mount, not one paint late.
+  useLayoutEffect(() => {
     const el = hostRef.current;
     setHostElement(el);
+    return () => setHostElement(null);
+  }, []);
+
+  useEffect(() => {
+    const el = hostRef.current;
     if (!el) return;
     const observer = new ResizeObserver(() => {
       const rect = el.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) clampToHost(rect.width, rect.height);
     });
     observer.observe(el);
-    return () => {
-      observer.disconnect();
-      setHostElement(null);
-    };
+    return () => observer.disconnect();
   }, [clampToHost]);
 
   const beginDockResize = (side: DockSide) => () => {

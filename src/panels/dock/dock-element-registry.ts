@@ -11,16 +11,37 @@ import type { DropZoneGroup, DropZones } from './drop-zones';
 const groupElements = new Map<string, HTMLElement>();
 let hostElement: HTMLElement | null = null;
 
+// Subscribers are notified when host/group elements register or unregister,
+// so hooks that measure the dock DOM (e.g. useDockedPanelAnchor) can
+// re-measure once elements become available. Registration happens later than
+// the ancestor's first useLayoutEffect when the parent conditionally renders
+// the dock (during app boot), so we can't rely on effect ordering alone.
+const listeners = new Set<() => void>();
+
+function notify(): void {
+  for (const cb of listeners) cb();
+}
+
+export function subscribeElementChanges(cb: () => void): () => void {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
+}
+
 export function registerGroupElement(groupId: string, el: HTMLElement): void {
   groupElements.set(groupId, el);
+  notify();
 }
 
 export function unregisterGroupElement(groupId: string): void {
-  groupElements.delete(groupId);
+  if (groupElements.delete(groupId)) notify();
 }
 
 export function setHostElement(el: HTMLElement | null): void {
+  if (hostElement === el) return;
   hostElement = el;
+  notify();
 }
 
 export function getHostElement(): HTMLElement | null {
@@ -94,4 +115,9 @@ export function getGroupRect(groupId: string): { width: number; height: number }
   if (!el) return null;
   const rect = el.getBoundingClientRect();
   return { width: rect.width, height: rect.height };
+}
+
+/** Live registered element for a tab group, or null if not mounted. */
+export function getGroupElement(groupId: string): HTMLElement | null {
+  return groupElements.get(groupId) ?? null;
 }

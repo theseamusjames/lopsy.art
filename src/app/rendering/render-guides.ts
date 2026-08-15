@@ -1,6 +1,7 @@
 import type { Guide, RulerHover, SnapLine } from '../ui-store';
 import type { Color } from '../../types';
 import { RULER_SIZE } from './ruler-constants';
+import { formatFractionLabel } from './guide-snap';
 
 const PLAYHEAD_HOVER_COLOR = 'rgba(255, 255, 255, 0.9)';
 const PLAYHEAD_SELECTED_COLOR = 'rgba(255, 255, 255, 1)';
@@ -138,8 +139,7 @@ export function renderGuideRulerOverlays(
         ctx.closePath();
         ctx.fill();
 
-        // Tooltip
-        drawTooltip(ctx, Math.round(rulerHover.position).toString(), screenX, RULER_SIZE + 4, canvasWidth, canvasHeight);
+        drawTooltip(ctx, formatRulerLabel(rulerHover, docWidth), screenX, RULER_SIZE + 4, canvasWidth, canvasHeight);
       }
     } else {
       const screenY = originY + rulerHover.position * zoom;
@@ -152,8 +152,7 @@ export function renderGuideRulerOverlays(
         ctx.closePath();
         ctx.fill();
 
-        // Tooltip
-        drawTooltip(ctx, Math.round(rulerHover.position).toString(), RULER_SIZE + 4, screenY, canvasWidth, canvasHeight);
+        drawTooltip(ctx, formatRulerLabel(rulerHover, docHeight), RULER_SIZE + 4, screenY, canvasWidth, canvasHeight);
       }
     }
   }
@@ -214,6 +213,14 @@ export function renderSnapLines(
   }
 
   ctx.restore();
+}
+
+function formatRulerLabel(rulerHover: RulerHover, docSize: number): string {
+  if (rulerHover.snap) {
+    const fraction = formatFractionLabel(rulerHover.position, docSize);
+    if (fraction !== null) return fraction;
+  }
+  return Math.round(rulerHover.position).toString();
 }
 
 function drawTooltip(

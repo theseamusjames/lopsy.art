@@ -48,6 +48,12 @@ export interface RulerHover {
   position: number;
   screenX: number;
   screenY: number;
+  /**
+   * True when Cmd/Ctrl is held: `position` is snapped to a fraction of
+   * the document dimension, and the ruler label should render as the
+   * fraction (e.g. "1/2") instead of a pixel value.
+   */
+  snap: boolean;
 }
 
 export interface ShapeSizeClick {
