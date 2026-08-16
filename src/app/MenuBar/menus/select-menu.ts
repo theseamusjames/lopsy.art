@@ -1,6 +1,8 @@
 import { useEditorStore } from '../../editor-store';
+import { useUIStore } from '../../ui-store';
 import { createRectSelection, invertSelection } from '../../../selection/selection';
 import { selectionToPath } from '../../../selection/selection-to-path';
+import { createTransformState } from '../../../tools/transform/transform';
 import type { MenuDef } from './types';
 
 export type SelectDialogId = 'grow' | 'shrink' | 'feather';
@@ -11,6 +13,11 @@ export function selectAll(): void {
   const rect = { x: 0, y: 0, width, height };
   const mask = createRectSelection(rect, width, height);
   state.setSelection(rect, mask, width, height);
+  // Every other setSelection call pairs with setTransform so the marquee
+  // overlay and transform handles refresh with the new bounds. Without this,
+  // Cmd+A after any prior selection (e.g. the paste's alpha-selection at a
+  // sub-canvas region) leaves the handles pinned to the stale bounds — #721.
+  useUIStore.getState().setTransform(createTransformState(rect));
 }
 
 export function invertSelectionAction(): void {
@@ -19,7 +26,9 @@ export function invertSelectionAction(): void {
   if (!sel.active || !sel.mask) return;
   const inverted = invertSelection(sel.mask);
   const { width, height } = state.document;
-  state.setSelection({ x: 0, y: 0, width, height }, inverted, sel.maskWidth, sel.maskHeight);
+  const rect = { x: 0, y: 0, width, height };
+  state.setSelection(rect, inverted, sel.maskWidth, sel.maskHeight);
+  useUIStore.getState().setTransform(createTransformState(rect));
 }
 
 export function selectionToPathAction(): void {
