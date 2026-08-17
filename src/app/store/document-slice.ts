@@ -9,7 +9,8 @@ import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
-import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState } from '../../engine-wasm/wasm-bridge';
+import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState, hasFloat, dropFloat, cropLayerTexture } from '../../engine-wasm/wasm-bridge';
+import { cancelPrefloat } from '../interactions/prefloat';
 import { invalidateBitmapCache, clearBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import type { ActionResult, SliceCreator, SparseLayerEntry } from './types';
@@ -536,6 +537,66 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   fitActiveLayerToCanvas: () => {
     finalizePendingStrokeGlobal();
+
+    // A paste + auto-fit schedules `selectLayerAlpha` on rAF; that triggers a
+    // prefloat that calls `expand_layer_to_doc_size` in the engine, which
+    // resets the engine layer descriptor to the padded origin (0, 0) with the
+    // doc-sized texture. `prefloat.ts` then calls `updateLayerPosition` to
+    // sync `layer.x`/`layer.y` but leaves `layer.width`/`layer.height` at the
+    // content dims — so the JS descriptor drifts (e.g. `(0, 0, 1024, 512)`
+    // over a 1024x1024 texture whose content actually lives at y=256..767).
+    //
+    // Under that drift, `computeFit(1024, 512, 1024, 1024)` returns
+    // `(0, 256, 1024, 512)`, the noop check fails on `y`, and
+    // `scaleLayerTexture` squashes the whole 1024x1024 texture into a
+    // 1024x512 layer — the "already fit, still distorts" bug in #721.
+    //
+    // Drop the live float (compositeFloat already merged its pixels back in
+    // prefloat), cancel any pending prefloat, then crop the expanded texture
+    // back to the content bounds so descriptor, texture, and selection all
+    // agree before we compute the fit.
+    const engine = getEngine();
+    if (engine && hasFloat(engine)) {
+      cancelPrefloat();
+      dropFloat(engine);
+      const s = get();
+      const activeId = s.document.activeLayerId;
+      const sel = s.selection;
+      if (activeId && sel.active && sel.bounds) {
+        const layer = s.document.layers.find((l) => l.id === activeId);
+        if (
+          layer &&
+          layer.type === 'raster' &&
+          (layer.x !== sel.bounds.x ||
+            layer.y !== sel.bounds.y ||
+            layer.width !== sel.bounds.width ||
+            layer.height !== sel.bounds.height)
+        ) {
+          cropLayerTexture(
+            engine,
+            activeId,
+            layer.x,
+            layer.y,
+            sel.bounds.x,
+            sel.bounds.y,
+            sel.bounds.width,
+            sel.bounds.height,
+          );
+          const cropped = { x: sel.bounds.x, y: sel.bounds.y, width: sel.bounds.width, height: sel.bounds.height };
+          set((st) => ({
+            document: {
+              ...st.document,
+              layers: st.document.layers.map((l) =>
+                l.id === activeId && l.type === 'raster'
+                  ? ({ ...l, ...cropped } as Layer)
+                  : l,
+              ),
+            },
+          }));
+        }
+      }
+    }
+
     const s = get();
     const result = computeFitLayer(s.document, s.renderVersion);
     if (!result) return;

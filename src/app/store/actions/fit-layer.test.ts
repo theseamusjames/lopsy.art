@@ -74,4 +74,30 @@ describe('computeFitLayer', () => {
     const doc = makeDoc({ layerWidth: 1024, layerHeight: 1024 });
     expect(computeFitLayer(doc, 0)).toBeUndefined();
   });
+
+  // Regression for #721: after a paste of an image bigger than the canvas,
+  // `fitPastedLayerIfOversized` places the layer at the fit position (e.g.
+  // (0, 250, 1024, 512) for a 2000x1000 paste on a 1024x1024 canvas). The
+  // fit-again call must return undefined so the user's Fit-Layer click is a
+  // true no-op instead of a second (distortion-inducing) scale pass.
+  it('returns undefined when the descriptor already matches the fit for an oversized paste', () => {
+    // 2000x1000 pasted image → auto-fit places layer at (0, 256, 1024, 512).
+    const doc = makeDoc({
+      layerWidth: 1024,
+      layerHeight: 512,
+      layerX: 0,
+      layerY: 256,
+    });
+    expect(computeFitLayer(doc, 0)).toBeUndefined();
+  });
+
+  it('returns undefined for the mirrored tall-paste case (256, 0, 512, 1024)', () => {
+    const doc = makeDoc({
+      layerWidth: 512,
+      layerHeight: 1024,
+      layerX: 256,
+      layerY: 0,
+    });
+    expect(computeFitLayer(doc, 0)).toBeUndefined();
+  });
 });
