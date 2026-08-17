@@ -179,7 +179,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Stroke width**: 1 - 50 px
 - **Polygon sides**: 3 - 64
 - **Corner radius**: 0 - 200 px
-- **Aspect ratio lock**: width/height ratio constraint
+- **Aspect ratio lock**: width/height ratio constraint — the same global setting the two marquees and Crop use, so a ratio locked for a crop still constrains shapes; see [Options Bar](#options-bar).
 - **Cmd/Meta+drag**: holding meta while dragging temporarily forces a 1:1 aspect ratio (perfect square / circle / regular polygon) regardless of the persistent aspect-ratio toggle. Releasing meta returns to the unconstrained or persistently-locked behavior.
 - **Click without dragging** (pixel output only): a click that doesn't drag past the threshold opens the **Shape Size modal** — type an exact Width and Height (1 - 16384 px) and the shape is created at the click point with those dimensions (Photoshop-style click-to-create). `Enter` confirms, `Escape` (or clicking the backdrop) cancels. In **path** output mode a no-drag click is ignored instead of opening the modal.
 
@@ -229,13 +229,13 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 ## Selection Tools
 
 ### Rectangular Marquee
-- **Aspect ratio lock**: width/height constraint
-- **Feather**: 0 - 250 px (soft edge applied after the marquee is committed). The blur is a **two-pass separable Gaussian on the GPU** — one horizontal and one vertical pass over normalized weights `exp(-i² / 2σ²)` with `σ = radius / 2` — not a box blur. **The engine clamps the radius to 63 px**, because the blur shader carries a fixed `u_weights[64]` array, so every slider value from 63 to 250 produces an identical result.
+- **Aspect ratio lock**: width/height constraint. **One global setting**, not a per-tool one — the same `W : H` and lock state drive the Elliptical Marquee, the Shape tool, and Crop; see [Options Bar](#options-bar).
+- **Feather**: 0 - 250 px (soft edge applied after the marquee is committed). **Shared** with the Elliptical Marquee and the Magic Wand — all three read the same value. The blur is a **two-pass separable Gaussian on the GPU** — one horizontal and one vertical pass over normalized weights `exp(-i² / 2σ²)` with `σ = radius / 2` — not a box blur. **The engine clamps the radius to 63 px**, because the blur shader carries a fixed `u_weights[64]` array, so every slider value from 63 to 250 produces an identical result.
 - **Cmd/Meta+drag**: holding meta while dragging temporarily forces a 1:1 (square) aspect ratio for the duration of the press, regardless of the persistent aspect-ratio toggle. Releasing meta returns to the unconstrained or persistently-locked behavior immediately.
 
 ### Elliptical Marquee
-- **Aspect ratio lock**: width/height constraint
-- **Feather**: 0 - 250 px (same GPU feather pipeline as the rectangular marquee)
+- **Aspect ratio lock**: width/height constraint — the same global setting the Rectangular Marquee, Shape tool, and Crop use.
+- **Feather**: 0 - 250 px (same GPU feather pipeline as the rectangular marquee, and the same stored value — the two marquees mount one shared options component, so they cannot hold different radii)
 - **Cmd/Meta+drag**: holding meta forces a 1:1 (circle) aspect ratio while dragging, identical to the rectangular marquee transient lock.
 
 ### Lasso (Freehand)
@@ -495,7 +495,7 @@ Paste takes one of two routes depending on where the image came from.
 
 ### Crop
 - **Modes**: Normal (rectangular) or Perspective (4-point quadrilateral correction). The mode dropdown lives in the options bar; switching to Perspective shows Apply / Cancel buttons next to the dropdown.
-- **Normal mode**: interactive drag to define crop rectangle. The options bar exposes an **Aspect Ratio** control (W : H number inputs plus a lock toggle, the shared `AspectRatioControl`); when locked, the crop rectangle is constrained to the entered ratio while dragging.
+- **Normal mode**: interactive drag to define crop rectangle. The options bar exposes an **Aspect Ratio** control (W : H number inputs plus a lock toggle); when locked, the crop rectangle is constrained to the entered ratio while dragging. The ratio and lock are **one global setting shared with the two marquees and the Shape tool**, not a crop-specific one — see [Options Bar](#options-bar).
 - **Perspective mode**: on first activation a quadrilateral is seeded over the full document. Dragging any of the four corner handles repositions that corner; on Apply, every raster layer is warped by the inverse homography (8×8 DLT solver, bilinear inverse-warp) and the document is resized to the inferred output dimensions (edge-length heuristic). Lets you rectify perspective-distorted photographs of paintings, documents, signs, etc.
 - **Edit → Crop**: when a marquee selection is active, the Edit menu's **Crop** item crops the canvas to the selection bounds in one click (equivalent to dragging out the same rectangle with the Crop tool). Disabled when nothing is selected.
 
@@ -511,6 +511,7 @@ Effects are edited in the floating **effects drawer**, which is shared with the 
 
 - **Opening**: the effects button on a row in the Layers panel — a three-way toggle that turns green when the layer has at least one **enabled** effect (see *Layers Panel Row Layout*).
 - **Closing**: the `X` in the drawer header.
+- **Where it sits**: just outside the right dock horizontally (it reads the dock's live width, so dragging the dock's splitter slides the drawer with it), and vertically its **top edge lines up with the top of whichever dock group currently holds the Layers panel** — move Layers into a lower split or a different tab group and the drawer follows it down instead of staying pinned to the top of the sidebar. The anchor is re-measured on dock-layout changes and window resizes, and falls back to the top of the sidebar area whenever Layers is floating, closed, or not yet mounted. Header-dragging offsets the drawer from that anchor; the offset is cleared when the drawer closes.
 - With no layer selected the drawer shows only its header and a **No layer selected** message.
 
 Contents, top to bottom:
@@ -919,8 +920,8 @@ All three are undoable and auto-switch the target group from pass-through to nor
 
 ### Grid
 - **Show grid**: on/off
-- **Grid size**: configurable (default 16 px)
-- **Snap to grid**: on/off (auto-enabled with grid)
+- **Grid size**: default 16 px, changed from a slider in the [options bar](#options-bar) that appears only while the grid is shown — the sole place in the app that can set it. The slider steps through a list of power-of-two stops derived from the document's longest side, so the choices differ per document and the stored size is never re-clamped when the document changes; see the options bar for the stop table and the resulting readout/needle mismatch.
+- **Snap to grid**: on/off (auto-enabled with grid). Every consumer requires **both** Snap to Grid and Show Grid, so hiding the grid silently disables snapping while leaving View → Snap to Grid checked.
 - **Cmd/Ctrl + `'`**: toggle grid visibility from anywhere in the app
 
 ### Rulers
@@ -933,6 +934,7 @@ All three are undoable and auto-switch the target group from pass-through to nor
 - **Click a guide on the ruler to remove it**: clicking the ruler within ±1 px of an existing guide's position deletes that guide rather than adding another.
 - **Cmd/Ctrl while clicking the ruler — snap the new guide to a layout fraction.** Holding Cmd (or Ctrl) quantizes the guide to the nearest fraction of the document's **width** for a vertical guide, or **height** for a horizontal one. The stops are the reduced fractions with denominators **2, 3, 4, 6, 8, and 16**, plus both edges — **21 positions**: `0, 1/16, 1/8, 1/6, 3/16, 1/4, 5/16, 1/3, 3/8, 7/16, 1/2, 9/16, 5/8, 2/3, 11/16, 3/4, 13/16, 5/6, 7/8, 15/16, 1`. Fifths, sevenths, ninths, elevenths, and thirteenths are deliberately left out so they don't crowd the stops a layout actually reaches for. The snapped position is rounded to a whole pixel.
   - **The hover preview honors the same modifier**, so the ruler's guide preview jumps to the snapped position before the click commits it — press or release Cmd while hovering to see where the guide will land.
+  - **The hover tooltip switches to the fraction itself.** With Cmd held, the readout beside the ruler preview stops showing a pixel position and names the stop instead — `1/2`, `3/8`, `2/3` — with the two ends rendered as `0/1` and `1/1` so they read as part of the same series. Release Cmd and it returns to the rounded pixel value. The label is re-derived from the resulting position rather than carried down from the stop that was chosen (it takes the first table entry within ±0.5 px, scanning low to high), so on a document smaller than ~46 px along the snapped axis two neighbouring stops can round to the same pixel and the *lower* fraction is the one displayed. At any ordinary document size every stop labels exactly.
   - **There is no distance threshold.** The snap always takes the *nearest* stop no matter how far away it is, so while Cmd is held there is no way to place a guide at an arbitrary position — a click anywhere on the ruler lands on one of the 21 fractions. Release Cmd for free placement.
 - **Guide color**: click the **ruler corner square** (the box where the two rulers meet) to open the guide-color picker; clicking it again closes it. This is the only entry point to the picker.
 - Guide creation, removal, and the color picker all require **both** Show Rulers and Show Guides to be on — with either off, ruler clicks do nothing.
@@ -948,18 +950,95 @@ All three are undoable and auto-switch the target group from pass-through to nor
 - **Dim pattern**: an options-bar checkbox (visible whenever Show Seamless Pattern is on) dims the surrounding repeat tiles so the center document stays the focal point while still showing how it tiles. Default on.
 - **Wrap**: a second options-bar checkbox next to Dim pattern (also only visible while Show Seamless Pattern is on, default off). When enabled, layer compositing wraps modularly at the document edges — content dragged off one side reappears on the opposite side, so a tile can be edited across its own seam. The wrap happens in the blend shader, which shifts each layer's source offset per axis to whichever tile center is nearest the fragment; the layer texture itself is never rewritten, so repeated moves keep sampling the original pixels instead of compounding an already-wrapped result.
 
+### Menu Bar
+
+The strip across the very top of the window — the first thing in the app shell, above the options bar — holding **nine menus in a fixed order: File, Edit, Image, Layer, Select, Filter, Path, View, Help**, with a `LOPSY` wordmark pushed to the far right (decorative and `aria-hidden`, set in **Jersey 10**, a third self-hosted face alongside Inter, used only for this wordmark and the identical one the New Document modal parks in the same corner). It is the entry point for every command that has no tool of its own, and it owns the dialogs those commands open. For the item-by-item contents of each menu, see the feature sections they belong to; this section covers the bar itself.
+
+- **Opening and switching**: click a title to open it, click the same title again to close it. Once *any* menu is open, hovering a different title switches to it immediately — but hovering does nothing while the bar is closed, so a stray pointer pass across the top of the window never opens anything. Choosing a command runs it and closes the bar, including any open submenu.
+- **Click-outside closes on press, not release** — a `mousedown` listener on the window, attached only while a menu is open, closes the bar when the press lands outside it. The submenu flyout is positioned against the viewport but is still a DOM descendant of the bar, so clicking inside it counts as inside.
+- **Dropdowns scroll rather than run off the screen**: each is capped at `calc(100vh - 40px)` with `overflow-y: auto`. The Filter menu is the one this exists for — on a short viewport it is taller than the window.
+- **Checkmarks sit in a fixed 16 px gutter** reserved for any item that declares a checked state, so a run of toggles stays aligned whether or not any of them is currently on. Only two places use them: the **View** menu's seven toggles (Show Rulers, Show Grid, Show Pixel Grid, Show Guides, Snap to Grid, Snap to Layers, Show Seamless Pattern) and the **Image → Mode** submenu. Every other item renders flush with no gutter.
+- **Accelerator labels are display-only.** The `⌘…` text on the right of a row is a static string baked into the menu definition — it is not read from the shortcut store, so it does not follow a rebind (see [Keyboard Shortcut Customization](#keyboard-shortcut-customization)), and it is `aria-hidden`, so screen readers never announce it. A listed accelerator is also not proof the key is wired: `⌘R` beside View → Show Rulers is the standing example of one that is not.
+- **Almost nothing greys out.** Exactly four items in the entire bar carry a disabled state, and all four are gated on the same condition — an active selection: Edit → **Crop**, **Define Brush…**, and **Define Color Brush…**, plus Select → **Selection → Path**. Every other command stays enabled and no-ops internally when it cannot run, so Merge Down with a single layer or Undo with an empty history look identical to the working case.
+- **Disabled items are still focusable.** They are marked with `aria-disabled` and a dim class rather than the native `disabled` attribute, so they stay in the tab order and still receive click events; the no-op is enforced by an early return in the click handler, not by the DOM.
+- **The menus are rebuilt from scratch on every render**, each definition snapshotting the stores through `getState()` rather than subscribing to them. Opening a menu is itself a state change, so checkmarks and those four disabled flags are always evaluated at the moment the dropdown appears — but they are then frozen for as long as it stays open.
+
+**Keyboard support is the gap.** The bar renders the full ARIA vocabulary — `role="menu"`, `role="menuitem"`, `aria-haspopup`, `aria-expanded` — but implements none of the matching keyboard interaction: there are no key handlers anywhere in the menu bar. Arrow keys do not move along the titles or down a dropdown, there is no typeahead, no roving tabindex, and **Escape does not close an open menu** — only a second click on the title, a click outside, or picking a command will. What does work is plain tabbing: the titles are ordinary buttons, so Tab reaches them and Enter or Space opens a dropdown, after which Tab walks its rows, disabled ones included. This is the opposite of the dock's tab strip, which does implement the full arrow / Home / End pattern (see [Tab Keyboard Navigation](#tab-keyboard-navigation)).
+
+**Submenus are mouse-only, and one command set lives behind one.** A submenu opens on hovering its parent row and closes on leaving it; there is no click affordance and no keyboard path, and the parent row has no action of its own. **Image → Mode is the app's only submenu — and it is also the only entry point to color-mode conversion**, since the Indexed dialog is opened from inside it and no mode carries a keyboard shortcut. Switching a document between RGB, Grayscale, Indexed, CMYK, and Lab therefore cannot be done without a pointing device (see [Color Modes](#color-modes)). Only one level of nesting is rendered, so a submenu row's own submenu would be ignored. The flyout's viewport-relative positioning is described under [Global UI Conventions](#global-ui-conventions).
+
+**The dialogs the bar owns.** Ten in all, mounted beside the menus and opened by menu commands: the shared [Filter Dialog](#filter-dialog-shared), Pattern Fill, Color LUT, Canvas Size, Image Size, Indexed Color, Keyboard Shortcuts, About, the [Export dialog](#export-dialog-e), and a second instance of the shared filter dialog driving Select → Grow / Shrink / Feather. Opening any of them closes the menu first. Export is reached through a module-level register/unregister callback rather than a direct import — the File menu defines the command while the bar owns the dialog state, and importing either direction would be circular.
+
+- **Grow / Shrink / Feather** each open that shared dialog with a single slider: **Amount 1 – 100 px** for Grow and Shrink, **Radius 1 – 250 px** for Feather, default 1 in both cases. Grow and shrink are CPU mask operations; **feather is the only one that goes to the GPU** — the mask is uploaded, feathered, and read back — and it silently leaves the selection untouched if the engine is not up. Whichever runs, the selection's transform box is rebuilt from the resulting bounds afterwards, and if shrinking erased the selection entirely it is cleared outright rather than left as an empty marquee.
+
+### Toolbox
+
+The vertical rail down the far left of the editor body, outside the dock host, at a fixed width with its own vertical scroll when the buttons don't fit. It is the only surface that can reach every tool, and the only way to reach the four that carry no keyboard shortcut.
+
+- **All 23 registered tools get a button** — there are no flyouts, stacks, or long-press groups, so every tool is always visible rather than hidden behind a sibling. The buttons are laid out in **seven divider-separated groups**, plus an eighth holding the Quick Mask toggle:
+
+  1. Move
+  2. Rectangular Marquee · Elliptical Marquee · Lasso · Magnetic Lasso · Magic Wand · Quick Selection
+  3. Brush · Pencil · Spray · Eraser
+  4. Fill · Gradient · Clone Stamp · Healing Brush
+  5. Dodge/Burn · Sponge · Smudge · Eyedropper
+  6. Shape · Text · Pen Tool
+  7. Crop
+  8. Quick Mask toggle — not a tool but a mode; see [Quick Mask Mode](#quick-mask-mode)
+
+  The grouping is by role rather than by the registry's own order, and it is maintained by hand in the toolbox rather than derived from the tool registry.
+- **Active tool** is highlighted; clicking a button selects that tool directly (it does not route through the shortcut system).
+- **Every button is a real `<button>`** carrying the same string as both `aria-label` and native `title`, so hovering gives a tooltip and each button is its own tab stop. The rail declares `role="toolbar"` but ships **no arrow-key handler or roving tabindex**, so it does not implement the ARIA toolbar keyboard pattern — reaching the last tool means tabbing through everything before it.
+- **The shortcut letters in those labels are hard-coded literals** (`Brush (B)`, `Eraser (E)`, …), not reads of the shortcut store. Rebinding a tool in the Keyboard Shortcuts modal changes what the key does but **not what the toolbox tooltip claims** — rebind Brush to `K` and its button still advertises `(B)`. The four tools with no default key (Gradient, Elliptical Marquee, Magnetic Lasso, Quick Selection) correctly show a bare label.
+  - **Except one: the Quick Selection button advertises `(Q)`, and that is wrong.** Quick Selection has no `shortcut` in the registry and is not a customizable action, while `Q` is bound to *toggle Quick Mask* — which is the button sitting in the very next group of the same rail, labelled `Enter Quick Mask (Q)`. Two buttons in one toolbar claim the same key; pressing `Q` always toggles Quick Mask and never selects Quick Selection.
+- **No foreground / background swatches.** The toolbox stylesheet still carries `.colors` / `.colorStack` / `.foreground` / `.background` rules from an earlier layout, but nothing renders them — color editing lives in the [Color panel](#color-panel) alone.
+
+### Options Bar
+
+The 32 px horizontal strip directly under the menu bar, sharing the app header with it and sitting above the toolbox and canvas. It is present for every tool once a document is open — there is no "no tool selected" state (the editor boots with Move active) and no toggle that hides it, though the pre-document start screen and the WebGL2 warning are separate shells that have no options bar at all. Three zones, left to right: the tool's name, that tool's own controls, and a trailing group of document-wide toggles that has nothing to do with the tool.
+
+- **The name is the registry `label`**, so the bar reads `Paint Bucket`, `Pen Tool`, and `Dodge/Burn` where the toolbox and this document often use the shorter names. The bar declares `role="toolbar"` with an `aria-label` rebuilt per tool (`Brush options`, `Crop options`), and — exactly like the [toolbox](#toolbox) rail — ships **no arrow-key handler or roving tabindex**, so the ARIA toolbar keyboard pattern is not implemented and each control is an ordinary tab stop.
+- **Which controls appear is a single registry lookup**, `toolRegistry[activeTool].optionsComponent`. 21 of the 23 tools name one (20 distinct components — the two marquees share one), and all of them are **statically imported** rather than lazy-loaded. The active set is swapped wholesale on tool change, so local state inside it — an open fill/stroke color popover, for instance — is discarded on the way out and does not reopen on the way back.
+- **Two tools have no options component at all**: **Eyedropper** and **Lasso**. The name and its separator still render, followed by empty space. For the Lasso that matches the tool, which has no parameters; for the [Eyedropper](#eyedropper) it is a gap, since the sampling logic implements 3×3 and 5×5 area modes with no control anywhere to reach them.
+- **Only the control area scrolls.** It takes the leftover width with `overflow-x: auto`, while the tool name (80 px floor) and the trailing group never shrink — so a control set too wide for the window scrolls horizontally within its own zone instead of pushing the name or the trailing toggles off the ends.
+
+**The trailing group is not tool-scoped.** It renders at the right of the bar for *every* tool, gated only on the matching view modes:
+
+- **Grid size** — appears whenever View → Show Grid is on, and this is the **only place in the app that can change the grid size**. There is no menu item and no preference for it, so the grid has to be visible to be resized.
+  - The slider is an **index into a computed list of stops**, not a pixel value. The stops are the powers of two from 2 to 1024, kept when a stop is at most **half the document's longest side** and at least **`floor(longest side ÷ 500)`** — so both the available spacings and the slider's travel change with the document. A 1000 px document offers `2, 4, 8, 16, 32, 64, 128, 256`; by 1500 px the 2 px stop is gone; at 4000 px the list is `8 … 1024`; at the 16384 px maximum only `32 … 1024` survive; and below 4 px the list would be empty, so it falls back to a single 1 px stop.
+  - **The readout can disagree with the needle.** The grid size is never re-clamped — it defaults to 16 px and nothing re-derives it when the document changes — so whenever 16 is not a stop (any document whose longest side is under 32 px, and also the 16384 px maximum) the label still reads `16px` and the grid still draws at 16 px, while the needle rests on the nearest stop instead. Touching the slider is what reconciles the two, by snapping the value onto that stop.
+- **Snap** — a checkbox mirroring View → Snap to Grid, shown under the same Show Grid condition. Turning the grid **on** force-enables snapping; turning it off leaves the flag exactly as it was. All seven places that consult it — move drags, arrow-key nudges, marquee drags, and the three transform paths — require **both** flags, so **View → Snap to Grid can sit checked while doing nothing at all**, which is the state you land in by enabling the grid and then hiding it again.
+- **Dim pattern** and **Wrap** — the two [seamless-pattern](#seamless-pattern-preview) checkboxes, shown whenever Show Seamless Pattern is on. A divider separates them from the grid controls only when both groups are present.
+
+**Settings the bar shares between tools.** Two controls read as per-tool but are backed by single global values, so setting one wherever it is convenient changes it everywhere else it appears:
+
+- **Aspect ratio** (the `W : H` inputs plus the lock toggle) is one setting stored at the top level of the tool-settings store rather than in any per-tool slice, and **four** tools mount it: the [Rectangular Marquee](#rectangular-marquee), the [Elliptical Marquee](#elliptical-marquee), the [Shape tool](#shape-tool), and [Crop](#crop). Lock 16:9 to crop a photograph, switch to the Shape tool, and rectangles come out 16:9 as well. The two inputs advertise `min="1"` but the store only floors them at **0.01**.
+- **Feather** is one `marquee.feather` value shared by the [Rectangular Marquee](#rectangular-marquee), the [Elliptical Marquee](#elliptical-marquee), and the [Magic Wand](#magic-wand). The two marquees mount the *same* options component, so they cannot hold different feather radii from one another.
+
+### Status Bar
+
+A `role="status"` footer across the bottom of the window. Left group: the zoom percentage, the cursor's document X/Y, and the document's pixel dimensions. Right group, pushed over by a flexible spacer: memory, color mode, and color space.
+
+- **The zoom readout is the bar's only interactive element**, and it carries two distinct pointer gestures.
+  - **Double-click resets to 100% *and recenters*** — it sets zoom to 1× and pan back to 0,0, so a canvas that had been scrolled away returns to the middle rather than merely changing scale.
+  - **Click-drag scrubs the zoom horizontally**, roughly 1% per pixel of travel, clamped to **10%–400%**. That is far tighter than the viewport's own 1%–6400% range, so the scrub cannot reach the zoom levels the keyboard and menu commands can. A **2 px dead zone** must be crossed before the drag counts as a scrub, which is what stops a plain click from nudging the zoom and lets the double-click through. The move and up listeners are global, and they are torn down on pointer-up, pointer-cancel, window blur, tab-hide, and unmount — so alt-tabbing mid-drag cannot leave the readout stuck following the mouse.
+  - It is marked `role="button"` with `tabIndex={0}` but has **no key handler**, so it takes focus and is announced as a button while Enter and Space do nothing. Both gestures are pointer-only.
+- **Memory** is the WASM heap plus the JS heap, refreshed on a **2 s interval** and rounded to whole MB. `performance.memory` is Chrome-only, so on Firefox and Safari the JS half reads 0 and the figure is the WASM heap alone. The readout is omitted entirely when the total comes back 0.
+- **Color mode** appears only when the document is not RGB (see [Color Modes](#color-modes)); RGB documents leave that slot empty.
+- **Color space** reads `Display P3` or `sRGB`, resolved **once at module load** by writing a P3 red into a 1×1 canvas and reading it back. It is a session-wide constant — dragging the window to a different display does not update it.
+
 ### UI
 - **Foreground / background color**: live in the [Color panel](#color-panel) only — not in the toolbox. Swap has an icon button (and `X`); reset to black/white is keyboard-only (`D`), with no button anywhere.
 - **Recent colors**: capped at 28, and seeded full with a 28-swatch starter palette — see [Recent colors](#recent-colors)
 - **Panel visibility**: togglable per panel from the panel toolbar — see [Panel Docking & Layout](#panel-docking--layout). There is no separate sidebar-collapse toggle, and individual panels no longer collapse to a header; they are sized by their dock, split, or floating window instead.
 - **Mask edit mode**: on/off
-- **Draggable modals & drawers**: filter dialogs, pattern fill, layer effects, adjustments, the Brushes modal, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked). Dockable panels use the docking system's own drag instead. The effects and reference drawers sit immediately to the left of the right dock and shift as that dock is resized.
+- **Draggable modals & drawers**: filter dialogs, pattern fill, layer effects, adjustments, the Brushes modal, and the reference image drawer can be repositioned by dragging the header bar (cursor: grab on hover; content interactions are not hijacked). Dockable panels use the docking system's own drag instead. The effects and reference drawers both sit immediately to the left of the right dock and shift as that dock is resized; vertically they differ — the **reference drawer stays pinned to the top** of the sidebar area, while the **effects drawer tracks the top edge of the Layers panel's dock group** (see [The Effects Drawer](#the-effects-drawer)).
 - **Filter / pattern preview overlay**: when live preview is enabled the dim backdrop is removed and pointer-events on the overlay are disabled so the canvas is fully visible while the modal stays interactive
 
 ### Global UI Conventions
 - **Slider double-click → reset**: every numeric slider in the UI (brush size, opacity, hardness, adjustment sliders, filter sliders, etc.) snaps back to its default value on double-click. The numeric text input inside the slider is exempt so double-clicks there select the value for editing instead.
 - **Slider arrow-key step**: with a slider's numeric input focused, **↑ / ↓** increment / decrement the value by one step (log-scaled sliders like Levels gamma step proportionally), clamped to the slider's min / max. Enter blurs the input to commit.
-- **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the status bar resets the viewport zoom to 100% (1×).
+- **Status-bar zoom double-click → 100%**: double-clicking the zoom percentage readout in the [status bar](#status-bar) resets the viewport zoom to 100% (1×) **and recenters the canvas** (pan back to 0,0). Dragging that same readout horizontally scrubs the zoom instead — see [Status Bar](#status-bar).
 - **Canvas cursor by tool**: exactly **seven** tools hide the system cursor and draw a size ring on the overlay instead — brush, pencil, eraser, clone stamp, healing brush, dodge/burn, and sponge. The ring is a circle for all of them **except the pencil, which draws a square** to match its hard-edged square dab. **Only the Brush's ring reflects the tip**: the custom tip bitmap and the Angle rotation are passed through for `brush` and hard-coded to none/0° for the other six, so a rotated star tip still shows a plain circle under, say, the eraser. Clone stamp and healing brush replace the ring with the live source preview once a source is set. Every remaining tool gets a standard cursor — move and text have their own, and everything else (including **Spray**) falls through to a crosshair. Liquify draws its own ring from the Liquify brush size while its modal is open.
 - **Color swatch selection**: clicking the foreground or background swatch in the Color panel makes it the one the picker, hex field, and RGBA sliders edit; clicking a recent-color swatch applies that color to whichever swatch is currently active. (The old double-click-to-expand behavior went away with panel collapsing.)
 - **Layer name double-click → rename**: double-clicking a layer row's name turns it into an inline text input; Enter commits, Escape cancels.
@@ -982,7 +1061,7 @@ Right-clicking the canvas opens a small menu with:
 The menu is suppressed on coarse-pointer devices (touch) so long-press doesn't accidentally open it.
 
 ### Single-Key Shortcuts
-Nineteen tools carry a default single-letter shortcut, and that is the complete set — every tool in the registry with a `shortcut` field: `V` move, `B` brush, `N` pencil, `E` eraser, `G` fill, `I` eyedropper, `S` clone stamp, `H` healing brush, `O` dodge & burn, `Y` sponge, `R` smudge, `M` rectangular marquee, `L` lasso, `W` magic wand, `U` shape, `T` text, `C` crop, `P` path, `J` spray. (Four of the 23 registered tools carry no letter and can only be reached from the toolbox: **Gradient**, **Elliptical Marquee**, **Magnetic Lasso**, and **Quick Selection**.) On top of those, the editor ships these global keys:
+Nineteen tools carry a default single-letter shortcut, and that is the complete set — every tool in the registry with a `shortcut` field: `V` move, `B` brush, `N` pencil, `E` eraser, `G` fill, `I` eyedropper, `S` clone stamp, `H` healing brush, `O` dodge & burn, `Y` sponge, `R` smudge, `M` rectangular marquee, `L` lasso, `W` magic wand, `U` shape, `T` text, `C` crop, `P` path, `J` spray. (Four of the 23 registered tools carry no letter and can only be reached from the [toolbox](#toolbox): **Gradient**, **Elliptical Marquee**, **Magnetic Lasso**, and **Quick Selection** — note that the toolbox nevertheless labels Quick Selection `(Q)`, a key that belongs to Quick Mask.) On top of those, the editor ships these global keys:
 
 - **`X`** — swap foreground and background colors
 - **`D`** — reset foreground/background to the defaults (black / white)
@@ -1010,7 +1089,10 @@ Single-key bindings are rebindable through the **Keyboard Shortcuts modal** (Hel
 - Each editable row shows the action label and its current key. Clicking the key enters **listening mode** — the next key pressed becomes the new binding, lower-cased. Escape cancels; modifier-only presses are ignored, as is any key pressed with Cmd / Ctrl / Alt held (those combos aren't customizable).
 - **Reset**: a per-row reset button (`↺`, shown only on rows that have actually been overridden) reverts that one binding to its default; a "Reset All" button in the header clears every override at once.
 - **Persistence**: custom bindings live in `localStorage` (Zustand `persist` middleware), so they survive reloads and follow the user across sessions on the same browser.
-- The same store is the single source of truth for keyboard handling everywhere in the app — shortcuts dispatched from menus, the toolbox, and global key handlers all read through `useShortcutStore.getKey(actionId)` so a rebind takes effect immediately without a reload.
+- **A rebind takes effect immediately, with no reload** — the global single-key handler rebuilds its key → action map from the live store on every keystroke rather than caching one at startup.
+- **But the store is not what the rest of the UI displays.** `getKey(actionId)` has exactly two callers, both inside the modal itself (the conflict check and the row rendering). Nothing else in the app consults it:
+  - **Menu accelerators are hard-coded strings** in the menu definitions (`⌘Z`, `⇧⌘C`, …) and never read the store. In practice this costs nothing, since every menu accelerator is a modifier combo and modifier combos aren't customizable in the first place.
+  - **Toolbox tooltips are hard-coded too**, and those *are* single-key bindings — so the rail keeps advertising a tool's default letter after the user has rebound it. See [Toolbox](#toolbox).
 
 **What the modal does *not* cover.** The rebindable rows are a hard-coded list inside the modal, not a projection of the tool registry, so it has drifted out of step with the tools that actually ship a shortcut:
 
