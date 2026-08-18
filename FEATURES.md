@@ -75,6 +75,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **Shift+click**: draws a straight line from the previous stroke endpoint to the click point (see Straight-Line Strokes below for the shared cross-tool behavior, the live preview, and the 15° snap)
 - **Hold-to-smooth**: pause the cursor mid-stroke for ~1500 ms and the recorded freehand path is auto-smoothed and re-rasterized in place. The path is first tested for straightness — if every point lies within a tolerance of the first→last line it is replaced with a perfect straight segment; the tolerance is the larger of **4 px** or **10% of the stroke length**, so long strokes with small relative wobble still snap straight. Otherwise the path is simplified with Ramer-Douglas-Peucker (9 px epsilon) and re-interpolated as a Catmull-Rom spline. Undo restores the freehand version first, then the pre-stroke state.
   - **Applies to the Brush only**, requires the GPU stroke path, and is disabled while `maskMode` is set — so it never fires when painting a layer mask or in Quick Mask.
+  - **The stroke ends the moment smoothing fires.** The interaction state is reset as part of the re-raster even though the pointer button is still held: further cursor movement paints nothing more and the eventual mouse-up is a no-op, so continuing the stroke means lifting and pressing again. The timer is also only armed once the stroke has recorded at least **3 points**.
   - **The re-raster does not carry every brush parameter.** It emits uniform dabs carrying size, hardness, opacity, color, and symmetry only: angle jitter and opacity jitter are hard-coded to zero, and taper, fade, scatter, and sub-brushes are not routed through at all. A heavily scattered / jittered / tapered / sub-brush tip therefore visibly changes character the moment hold-to-smooth fires.
 
 ### Pencil
@@ -312,10 +313,20 @@ marching ants, and Escape or `⌘D` tears both down together.
 Seeding a transform is an explicit step that individual call sites opt into,
 *not* something `setSelection` does on its own. Committing a marquee, lasso,
 wand or quick-select drag seeds one, as do loading a layer's alpha,
-converting a layer mask to a marquee, arrow-key nudging a selection, and the
-Select menu's Grow / Shrink / Feather dialog. **Select All (`⌘A`) and Invert
-Selection do not** — they call `setSelection` alone, so a fresh `⌘A` selects
-the document without putting any handles on screen.
+converting a layer mask to a marquee, arrow-key nudging a selection, the
+Select menu's Grow / Shrink / Feather dialog, and — since #728 — **Select All
+(`⌘A`) and Invert Selection (`⇧⌘I`)**. Those two used to call `setSelection`
+alone, which left the handles pinned to the *previous* selection's bounds: a
+`⌘A` after a paste's alpha-selection selected the whole document while the
+overlay still framed the pasted region. Both now pair the selection with a
+fresh full-canvas transform state.
+
+**Two selection-producing routes still seed nothing**, so they come up with
+marching ants and no handles: **exiting Quick Mask** (`Q`), which installs the
+painted mask as the selection, and the Paths panel's **Path to Selection**.
+An arrow-key nudge is the cheapest way to get handles back — it re-seeds from
+the current bounds, so the selection lands one pixel off with a full transform
+state over it.
 
 ### Who responds to the handles
 
@@ -449,7 +460,11 @@ gets baked first.
 - Snap to guides
 - **Snap to layers** (View menu → "Snap to Layers"): while dragging, the moving layer's left/right/top/bottom edges and X/Y centers attract to the matching edges and centers of every other visible layer within a 5 px threshold. Magenta alignment guides span the document while a snap is engaged and clear on mouse-up.
 - **Align**: left, center-h, right, top, center-v, bottom
-- **Fit** (options-bar button): scales the active raster layer so its longest side matches the canvas — preserving aspect ratio — and centers it on the artboard. Reuses the GPU `scaleLayerTexture` path, so no pixel data round-trips through JS. Pasting or dropping an oversized image now runs this same fit automatically (see Paste / Drop behavior), so the button is for the cases that don't — a layer scaled up after the fact, or one that outgrew the canvas when the document was resized.
+- **Fit** (options-bar button, labelled *Fit layer to canvas*): scales the active raster layer to fit inside the canvas — the scale factor is `min(canvasW / layerW, canvasH / layerH)`, so aspect ratio is preserved — and centers the result on the artboard. Reuses the GPU `scaleLayerTexture` path, so no pixel data round-trips through JS. Pasting or dropping an oversized image now runs this same fit automatically (see Paste / Drop behavior), so the button is for the cases that don't — a layer scaled up after the fact, or one that outgrew the canvas when the document was resized.
+  - **It enlarges as readily as it shrinks.** There is no 1× cap, unlike the viewport's fit-to-view and the Reference drawer's auto-fit, which both explicitly refuse to upscale. Clicking Fit on a layer smaller than the canvas resamples it *up* until one side touches the edge.
+  - **Raster only, and silent about it.** The button is never disabled, but the action bails out on a text, shape, or group layer — no toast, no history entry, no visible response at all.
+  - **A layer that already fits exactly is a true no-op.** The fit is computed first, and when it matches the layer's current x / y / width / height the action returns *before* `pushHistory`, so a second click adds nothing to the undo stack.
+  - Before computing the fit it **drops any live floating selection** (its pixels are already composited back into the layer) and crops the layer texture back to the selection bounds. A paste leaves the layer's JS descriptor drifting from its doc-sized GPU texture — the prefloat expands the texture but syncs only `x` / `y` — and without that re-crop the no-op check above missed, so Fit squashed an already-fitted paste instead of doing nothing (#728).
 - **Alt/Option+drag (no active marquee)**: duplicates the active layer in place, then moves the new copy — leaves the original layer untouched. The duplicate is deliberately excluded from the multi-layer sibling capture below: `duplicateLayer` makes the copy active but leaves the *pre-duplicate* selection in `selectedLayerIds`, so treating those as move siblings would drag the originals along with the copy. An option-drag therefore always moves exactly one layer, even when several were selected before it started.
 - **Alt/Option+drag (with an active marquee)**: copies the selected pixels of the active layer into a floating duplicate and moves that copy, leaving the original pixels under the selection intact (Photoshop-style "alt-drag the selection").
 - **Cmd/Meta+drag (transform handles)**: forces a uniform scale (by averaging the two axis scales) and snaps rotation to 15° increments. Grid + snap-to-grid applies the same rotation snap automatically, and additionally snaps the pointer to grid cells while scaling. The Move tool is the only tool whose handle drags transform pixels — see [Transform](#transform).
@@ -1084,7 +1099,7 @@ Nineteen tools carry a default single-letter shortcut, and that is the complete 
 - **About Lopsy**: opens the About dialog.
 
 ### Keyboard Shortcut Customization
-Single-key bindings are rebindable through the **Keyboard Shortcuts modal** (Help → Keyboard Shortcuts). The modal is a read-out of every shortcut in the app, but only some of its rows are editable: rows carrying an action id render as a clickable key button, while the modifier-combo rows (`⌘Z`, `⌘C`, `⌘0`, `Esc`, `Enter`, `Space`, …) are fixed labels with no rebind affordance.
+Single-key bindings are rebindable through the **Keyboard Shortcuts modal** (Help → Keyboard Shortcuts). The modal is **not** a projection of anything — it is a hand-written list of **32 rows in five sections** (Tools 15, Edit 7, View 5, Colors 2, Canvas 3), and only some of them are editable: rows carrying an action id render as a clickable key button, while the modifier-combo rows (`⌘Z`, `⌘C`, `⌘0`, `Esc`, `Enter`, `Space`, …) are fixed labels with no rebind affordance. Being hand-written, the list is incomplete on *both* sides — see below.
 
 - Each editable row shows the action label and its current key. Clicking the key enters **listening mode** — the next key pressed becomes the new binding, lower-cased. Escape cancels; modifier-only presses are ignored, as is any key pressed with Cmd / Ctrl / Alt held (those combos aren't customizable).
 - **Reset**: a per-row reset button (`↺`, shown only on rows that have actually been overridden) reverts that one binding to its default; a "Reset All" button in the header clears every override at once.
@@ -1099,6 +1114,22 @@ Single-key bindings are rebindable through the **Keyboard Shortcuts modal** (Hel
 - **Four tools have a working default key but no row in the modal** — Healing Brush (`H`), Sponge (`Y`), Smudge (`R`), and Spray (`J`). Their keys work on the canvas; they simply cannot be rebound or even seen here.
 - **`Q` (toggle Quick Mask) has no row either.** It is a first-class customizable action in the store — it sits alongside swap-colors and reset-colors in `NON_TOOL_ACTION_IDS` — but the modal's Colors section lists only Swap Colors and Reset Colors, so there is no UI to rebind it.
 - Because conflict detection walks the modal's *own* row list, these five actions are also **invisible to the conflict check** (see below): rebinding some other tool onto `H`, `Y`, `R`, `J`, or `Q` reports no conflict at all.
+
+**The fixed rows are an incomplete inventory too.** Every combo the modal lists is genuinely bound, but **nine bound combos have no row anywhere in it**:
+
+| Combo | Action | Still reachable from |
+|-------|--------|----------------------|
+| `⌘A` | Select All | Select menu |
+| `⇧⌘I` | Invert Selection | Select menu |
+| `⇧⌘C` | Copy Merged | Edit menu |
+| `⌘'` | Show / Hide Grid | View menu |
+| `⌘;` | Show / Hide Guides | View menu |
+| `⌘⇧X` | Liquify | Filter menu |
+| `⇧⌘L` | Auto Tone | Image menu |
+| `⌥⇧⌘L` | Auto Contrast | Image menu |
+| `⇧⌘B` | Auto Color | Image menu |
+
+There is no **Select** section in the modal at all, so the two selection commands have nowhere to sit; the grid and guide toggles are simply missing from the View section that does exist. All nine remain labelled in the menu bar, so the cost is discoverability rather than function — but the modal cannot be read as the app's shortcut reference. It is the mirror image of the *display-only accelerator* problem under [Single-Key Shortcuts](#single-key-shortcuts): the menu bar advertises combos that are **not** wired, while the modal omits these nine that **are**.
 
 **Conflict detection warns, but does not prevent — and the modal keeps displaying the losing key.** When the pressed key already belongs to another *listed* action, the modal shows a banner naming it (`"E" is already used by Eraser`). That banner is purely informational: the rebind is written to the store unconditionally on the same keystroke, with no confirm step and no way to back out other than rebinding again or hitting reset. The runtime key map then resolves the collision by **dropping the other action's binding entirely** — the loser is left with no key at all, and the key it used to own does nothing. The modal, however, reads each row's key through `getKey(actionId)`, which falls back to the *default* whenever a row has no override of its own — so the displaced action still displays its original letter. Rebind Brush onto `E` and the Eraser row goes on showing **E** while pressing `E` selects the Brush.
 
