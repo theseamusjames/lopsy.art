@@ -5,9 +5,6 @@
 
 import type { FontEntry } from './font-catalog';
 
-const PREVIEW_CDN_BASE =
-  'https://cdn.jsdelivr.net/gh/getstencil/GoogleWebFonts-FontFamilyPreviewImages@master/48px/compressed/';
-
 // jsDelivr CDN for the google/fonts GitHub repo (raw TTF files).
 const GOOGLE_FONTS_GH_CDN = 'https://cdn.jsdelivr.net/gh/google/fonts@main';
 
@@ -22,6 +19,19 @@ export function buildCss2StylesheetUrl(family: string, weights: readonly number[
 export function buildCss2SingleWeightUrl(family: string, weight: number): string {
   const encoded = encodeURIComponent(family);
   return `https://fonts.googleapis.com/css2?family=${encoded}:wght@${weight}&display=swap`;
+}
+
+/**
+ * Text-restricted preview URL. Google Fonts subsets the returned font to only
+ * the glyphs needed to render `text`, so the picker can render each family
+ * name in its own face without downloading full family binaries. Used by
+ * FontPicker in place of the pre-rendered PNG previews it used to fetch from
+ * a third-party mirror that has since been deleted.
+ */
+export function buildCss2PreviewUrl(family: string, text: string): string {
+  const encodedFamily = encodeURIComponent(family);
+  const encodedText = encodeURIComponent(text);
+  return `https://fonts.googleapis.com/css2?family=${encodedFamily}&text=${encodedText}&display=swap`;
 }
 
 /**
@@ -77,6 +87,3 @@ export function extractFontUrlPreferLatin(css: string): string | null {
   return extractFirstFontUrl(css);
 }
 
-export function getPreviewImageUrl(previewFile: string): string {
-  return `${PREVIEW_CDN_BASE}${previewFile}`;
-}

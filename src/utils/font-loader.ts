@@ -5,13 +5,13 @@ import { getEngine } from '../engine-wasm/engine-state';
 import {
   buildCss2StylesheetUrl,
   buildCss2SingleWeightUrl,
+  buildCss2PreviewUrl,
   extractFontUrlPreferLatin,
   resolveTtfUrl,
 } from './font-urls';
 
-export { getPreviewImageUrl } from './font-urls';
-
 const loadCache = new Map<string, Promise<void>>();
+const previewLoadCache = new Map<string, Promise<void>>();
 
 // Cache of already-fetched font binaries keyed by "family:weight".
 // Avoids re-fetching when the user switches back to a previously loaded font.
@@ -37,6 +37,39 @@ export function loadGoogleFont(family: string, weights: readonly number[]): Prom
   });
 
   loadCache.set(key, promise);
+  return promise;
+}
+
+/**
+ * Load a text-restricted subset of `family` sufficient to render `text` in the
+ * DOM. Used by the FontPicker so each row can render its family name in its
+ * own face without downloading the full family binaries. The `text` param in
+ * the css2 API subsets the returned font to only the requested glyphs, so this
+ * is orders of magnitude smaller than loadGoogleFont() and stays cheap even
+ * when hundreds of picker rows scroll past.
+ */
+export function loadGoogleFontPreview(family: string, text: string): Promise<void> {
+  const key = `${family}:${text}`;
+  const cached = previewLoadCache.get(key);
+  if (cached) return cached;
+  const fullyLoaded = loadCache.get(family);
+  if (fullyLoaded) return fullyLoaded;
+
+  const href = buildCss2PreviewUrl(family, text);
+
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+
+  const promise = new Promise<void>((resolve, reject) => {
+    link.onload = () => {
+      document.fonts.ready.then(() => resolve());
+    };
+    link.onerror = () => reject(new Error(`Failed to load font preview: ${family}`));
+    document.head.appendChild(link);
+  });
+
+  previewLoadCache.set(key, promise);
   return promise;
 }
 

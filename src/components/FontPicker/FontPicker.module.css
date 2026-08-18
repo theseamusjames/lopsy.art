@@ -96,27 +96,11 @@
   background: var(--color-bg-hover);
 }
 
-.previewImage {
-  height: 20px;
-  width: auto;
-  max-width: 200px;
-  filter: invert(1);
-  image-rendering: auto;
-  object-fit: contain;
-}
-
 .systemFontPreview {
   font-size: 22px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.fallbackText {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--color-text-secondary);
 }
 
 .groupHeader {

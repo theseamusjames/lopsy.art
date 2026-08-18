@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildCss2StylesheetUrl,
   buildCss2SingleWeightUrl,
+  buildCss2PreviewUrl,
   extractFirstFontUrl,
   extractFontUrlPreferLatin,
 } from './font-urls';
@@ -42,6 +43,32 @@ describe('buildCss2SingleWeightUrl', () => {
   it('requests exactly one weight', () => {
     expect(buildCss2SingleWeightUrl('Open Sans', 300)).toBe(
       'https://fonts.googleapis.com/css2?family=Open%20Sans:wght@300&display=swap',
+    );
+  });
+});
+
+describe('buildCss2PreviewUrl', () => {
+  // Regression for #729: the picker used to fetch pre-rendered PNGs from a
+  // third-party CDN that has since been deleted (getstencil/
+  // GoogleWebFonts-FontFamilyPreviewImages 404s), so no row showed a preview.
+  // The css2 `text=` param returns a subset of the family covering just the
+  // requested glyphs, so each row can render its name in its own face.
+  it('subsets the family to the requested preview text', () => {
+    expect(buildCss2PreviewUrl('Inter', 'Inter')).toBe(
+      'https://fonts.googleapis.com/css2?family=Inter&text=Inter&display=swap',
+    );
+  });
+
+  it('URL-encodes both the family and the preview text', () => {
+    expect(buildCss2PreviewUrl('Open Sans', 'Open Sans')).toBe(
+      'https://fonts.googleapis.com/css2?family=Open%20Sans&text=Open%20Sans&display=swap',
+    );
+  });
+
+  it('does not embed the deleted getstencil CDN path', () => {
+    expect(buildCss2PreviewUrl('Inter', 'Inter')).not.toContain('getstencil');
+    expect(buildCss2PreviewUrl('Inter', 'Inter')).not.toContain(
+      'GoogleWebFonts-FontFamilyPreviewImages',
     );
   });
 });

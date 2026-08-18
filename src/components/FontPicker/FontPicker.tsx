@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { FONT_CATALOG, fontsByFamily } from '../../utils/font-catalog';
 import type { FontEntry, FontCategory } from '../../utils/font-catalog';
-import { getPreviewImageUrl, extractFamilyName } from '../../utils/font-loader';
+import { extractFamilyName, loadGoogleFontPreview } from '../../utils/font-loader';
 import { useVirtualScroll } from './useVirtualScroll';
 import styles from './FontPicker.module.css';
 
@@ -295,7 +295,16 @@ interface FontPickerItemProps {
 }
 
 function FontPickerItem({ entry, isSelected, isHighlighted, onClick }: FontPickerItemProps) {
-  const [imgError, setImgError] = useState(false);
+  useEffect(() => {
+    if (entry.source !== 'google') return;
+    // css2 subsets the returned face to only the family-name glyphs, so this
+    // stays cheap even while many rows scroll through the virtual window.
+    // document.fonts re-renders each row in its own face once loaded.
+    loadGoogleFontPreview(entry.family, entry.family).catch(() => {
+      // If the request fails the row still reads correctly in the category
+      // fallback face — no need to signal.
+    });
+  }, [entry.family, entry.source]);
 
   const className = [
     styles.item,
@@ -305,31 +314,14 @@ function FontPickerItem({ entry, isSelected, isHighlighted, onClick }: FontPicke
     .filter(Boolean)
     .join(' ');
 
-  const showImage = entry.source === 'google' && entry.previewFile && !imgError;
-  const showSystemPreview = entry.source === 'system';
-
   return (
     <div className={className} onClick={onClick} role="option" aria-selected={isSelected}>
-      {showImage && (
-        <img
-          className={styles.previewImage}
-          src={getPreviewImageUrl(entry.previewFile!)}
-          alt={entry.family}
-          onError={() => setImgError(true)}
-          loading="lazy"
-        />
-      )}
-      {showSystemPreview && (
-        <span
-          className={styles.systemFontPreview}
-          style={{ '--preview-font': `'${entry.family}', ${entry.category}` } as React.CSSProperties}
-        >
-          {entry.family}
-        </span>
-      )}
-      {!showImage && !showSystemPreview && (
-        <span className={styles.fallbackText}>{entry.family}</span>
-      )}
+      <span
+        className={styles.systemFontPreview}
+        style={{ '--preview-font': `'${entry.family}', ${entry.category}` } as React.CSSProperties}
+      >
+        {entry.family}
+      </span>
     </div>
   );
 }
