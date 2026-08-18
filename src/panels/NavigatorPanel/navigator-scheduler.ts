@@ -74,15 +74,15 @@ export function createNavigatorScheduler(hooks: SchedulerHooks): NavigatorSchedu
     const wasInteracting = interacting;
     interacting = next;
     if (wasInteracting && !next) {
-      // Interaction just ended — schedule one catch-up read so the thumbnail
-      // reflects the final pixels without waiting up to intervalMs. This
-      // runs unconditionally (bypasses the content-version gate) because
-      // some interactions — image-adjustment sliders, mask-mode toggle —
-      // change composite inputs the version tracker does not observe.
+      // Interaction just ended — schedule one catch-up on the next
+      // event-loop turn so the thumbnail reflects the final pixels
+      // without waiting up to intervalMs. This runs through the gate so
+      // gestures that changed nothing (e.g. a wheel burst that only
+      // panned the viewport) don't re-read the composite (#723).
       if (catchUpId !== null) clearT(catchUpId);
       catchUpId = setT(() => {
         catchUpId = null;
-        if (!interacting) readAndRecord();
+        if (!interacting) tick();
       }, 0);
     }
   };

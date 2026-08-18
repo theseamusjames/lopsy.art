@@ -501,3 +501,92 @@ describe('handleMoveDown / handleMoveMove — multi-layer move (issue #707)', ()
     expect(state.gesture.siblings).toEqual([]);
   });
 });
+
+describe('handleMoveDown/Up — bare click on the move tool must not record history (#721)', () => {
+  const raster: RasterLayer = {
+    id: 'raster-1',
+    name: 'Raster',
+    type: 'raster',
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    x: 0,
+    y: 0,
+    width: DOC_W,
+    height: DOC_H,
+    clipToBelow: false,
+    effects: DEFAULT_EFFECTS,
+    mask: null,
+  };
+
+  const makeContext = (activeLayer: Layer): InteractionContext => {
+    const canvasPos: Point = { x: 10, y: 10 };
+    return {
+      canvasPos,
+      layerPos: canvasPos,
+      shiftKey: false,
+      altKey: false,
+      metaKey: false,
+      activeLayer,
+      activeLayerId: activeLayer.id,
+      clientX: 10,
+      clientY: 10,
+      stateRef: { current: { drawing: false, tool: 'move' } as InteractionState },
+      floatingSelectionRef: { current: null },
+      persistentTransformRef: { current: null },
+      stampSourceRef: { current: null },
+      stampOffsetRef: { current: null },
+      lastPaintPointRef: { current: null as LastPaintPoint | null },
+    };
+  };
+
+  beforeEach(() => {
+    editorState.document.layers = [raster];
+    editorState.document.activeLayerId = raster.id;
+    editorState.document.selectedLayerIds = [raster.id];
+    editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
+    editorState.pushHistory.mockClear();
+    editorState.updateLayerPosition.mockClear();
+    uiState.maskMode = 'off';
+    uiState.showGrid = false;
+    uiState.snapToGrid = false;
+    uiState.snapToLayers = false;
+    vi.mocked(bridge.cropLayerToContent).mockReset();
+    vi.mocked(bridge.cropLayerToContent).mockImplementation((_engine: unknown, id: string) => {
+      const layer = editorState.document.layers.find((l) => (l as Layer).id === id) as Layer | undefined;
+      if (!layer) return new Float64Array([0, 0, 0, 0]);
+      const w = layer.type === 'raster' ? (layer.width ?? 0) : 0;
+      const h = layer.type === 'raster' ? ((layer as { height?: number }).height ?? 0) : 0;
+      return new Float64Array([layer.x, layer.y, w, h]);
+    });
+  });
+
+  it('click without any pointer movement never calls pushHistory', () => {
+    const ctx = makeContext(raster);
+    const state = handleMoveDown(ctx);
+    // Pointer-up on the same coordinates — zero drag delta.
+    handleMoveUp(state, ctx.canvasPos, ctx.floatingSelectionRef, ctx.persistentTransformRef);
+
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
+    expect(editorState.updateLayerPosition).not.toHaveBeenCalled();
+  });
+
+  it('history is pushed exactly once — on the first pointer-move with a non-zero delta', () => {
+    const ctx = makeContext(raster);
+    const state = handleMoveDown(ctx);
+    // A zero-delta move (pointer jitter, no meaningful movement) must not push.
+    handleMoveMove(state, ctx.canvasPos, ctx.floatingSelectionRef);
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
+
+    // First real move — pushHistory fires now.
+    handleMoveMove(state, { x: ctx.canvasPos.x + 3, y: ctx.canvasPos.y }, ctx.floatingSelectionRef);
+    expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
+    expect(editorState.pushHistory).toHaveBeenCalledWith('Move');
+
+    // Subsequent moves do not push again — one history entry per drag.
+    handleMoveMove(state, { x: ctx.canvasPos.x + 7, y: ctx.canvasPos.y + 1 }, ctx.floatingSelectionRef);
+    handleMoveUp(state, { x: ctx.canvasPos.x + 7, y: ctx.canvasPos.y + 1 }, ctx.floatingSelectionRef, ctx.persistentTransformRef);
+    expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
+  });
+});
