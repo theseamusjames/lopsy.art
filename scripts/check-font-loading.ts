@@ -12,9 +12,12 @@
  *      catalog (single jsDelivr URL), then the css2 single-weight fallback
  *      (fetch CSS → latin-subset url() → font binary).
  *   3. Preview subset (FontPicker):       css2 with text=family, subsetted
- *      to just the family-name glyphs so each picker row renders in its own
- *      face. A non-200 here means the picker falls back to the category
- *      face for that row.
+ *      to just the family-name glyphs. At runtime the FontPicker serves
+ *      these bytes from the baked public/font-previews.bin blob and falls
+ *      back to this URL only for the handful of families that failed at
+ *      bake time; the checker still probes it so we notice if Google's
+ *      response shape drifts, which would break both the bake AND the
+ *      runtime fallback.
  *
  * Binary URLs are checked with HEAD so nothing big is downloaded — jsDelivr
  * and fonts.gstatic.com return the same status for HEAD as GET. The css2 CSS

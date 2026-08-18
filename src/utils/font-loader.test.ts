@@ -54,9 +54,11 @@ function installDocumentStub(): InstalledDocumentStub {
 
 describe('loadGoogleFontPreview', () => {
   let stub: InstalledDocumentStub;
+  const previewCalls: string[] = [];
 
   beforeEach(() => {
     stub = installDocumentStub();
+    previewCalls.length = 0;
     vi.doMock('../engine-wasm/engine-state', () => ({ getEngine: () => null }));
     vi.doMock('../engine-wasm/wasm-bridge', () => ({ loadFontData: vi.fn() }));
   });
@@ -66,32 +68,65 @@ describe('loadGoogleFontPreview', () => {
     vi.resetModules();
     vi.doUnmock('../engine-wasm/engine-state');
     vi.doUnmock('../engine-wasm/wasm-bridge');
+    vi.doUnmock('./font-previews');
+  });
+
+  it('serves in-blob families offline (no css2 stylesheet <link> is created)', async () => {
+    vi.doMock('./font-previews', () => ({
+      loadPreviewFace: (family: string) => {
+        previewCalls.push(family);
+        // Non-null result signals the blob served this family.
+        return Promise.resolve({ family } as FontFace);
+      },
+      prefetchFontPreviewsBlob: () => undefined,
+    }));
+
+    const mod = await import('./font-loader');
+    await mod.loadGoogleFontPreview('Inter', 'Inter');
+
+    expect(previewCalls).toEqual(['Inter']);
+    // The blob supplied the face — no network stylesheet was appended.
+    expect(stub.links.length).toBe(0);
   });
 
   // Regression for #729: the picker used to fetch pre-rendered PNGs from a
-  // third-party CDN that has since been deleted. loadGoogleFontPreview replaces
-  // that path by asking Google Fonts for a text-restricted subset via the
-  // css2 API, which still exists.
-  it('adds a stylesheet link pointing at the css2 text= subset endpoint', async () => {
+  // third-party CDN that has since been deleted. When a family isn't in the
+  // baked blob (e.g. the ~6 that failed at bake time) we fall back to the
+  // css2 API, so the row still renders.
+  it('falls back to the css2 text= endpoint for families not in the blob', async () => {
+    vi.doMock('./font-previews', () => ({
+      loadPreviewFace: () => Promise.resolve(null),
+      prefetchFontPreviewsBlob: () => undefined,
+    }));
+
     const mod = await import('./font-loader');
-    await mod.loadGoogleFontPreview('Inter', 'Inter');
+    await mod.loadGoogleFontPreview('Sunflower', 'Sunflower');
 
     expect(stub.links.length).toBe(1);
     expect(stub.links[0]!.rel).toBe('stylesheet');
     expect(stub.links[0]!.href).toBe(
-      'https://fonts.googleapis.com/css2?family=Inter&text=Inter&display=swap',
+      'https://fonts.googleapis.com/css2?family=Sunflower&text=Sunflower&display=swap',
     );
-    // The deleted CDN must not be reachable from the loader anymore.
+    // The deleted CDN must never appear in the fallback URL either.
     expect(stub.links[0]!.href).not.toContain('getstencil');
   });
 
-  it('dedupes repeat loads of the same family:text pair (one <link> only)', async () => {
+  it('dedupes repeat loads of the same family:text pair (blob touched once)', async () => {
+    vi.doMock('./font-previews', () => ({
+      loadPreviewFace: (family: string) => {
+        previewCalls.push(family);
+        return Promise.resolve({ family } as FontFace);
+      },
+      prefetchFontPreviewsBlob: () => undefined,
+    }));
+
     const mod = await import('./font-loader');
     await Promise.all([
       mod.loadGoogleFontPreview('Roboto', 'Roboto'),
       mod.loadGoogleFontPreview('Roboto', 'Roboto'),
     ]);
-    expect(stub.links.length).toBe(1);
+    expect(previewCalls).toEqual(['Roboto']);
+    expect(stub.links.length).toBe(0);
   });
 });
 
