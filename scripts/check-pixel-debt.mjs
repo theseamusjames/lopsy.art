@@ -50,7 +50,8 @@ const ALLOWLIST = {
   'src/app/store/actions/resize-image.test.ts': 1,
   'src/app/store/clipboard-image-match.test.ts': 1,
   'src/engine-wasm/engine-sync.test.ts': 3,
-  'src/engine-wasm/sync-layers.test.ts': 8,            // +1: shared sticky-dirty fixture buffer for #700 regression tests
+  'src/engine-wasm/sync-layers.test.ts': 11,           // +3: fixture buffers for #734 mask-readback seed tests
+  'src/engine-wasm/sync-state.test.ts': 7,             // #734 seedMaskDataRef fixtures
   'src/engine/pixel-data-manager.test.ts': 2,
   'src/engine/pixel-data.test.ts': 1,
   'src/filters/auto-enhance.test.ts': 1,
@@ -67,7 +68,7 @@ const ALLOWLIST = {
   'src/tools/crop/perspective-crop-interaction.test.ts': 1,
   'src/tools/crop/perspective-crop.test.ts': 3,             // see #441 (delete with prod file)
   'src/tools/fill/fill-interaction.test.ts': 3,
-  'src/tools/gradient/gradient-interaction.test.ts': 2,
+  'src/tools/gradient/gradient-interaction.test.ts': 3,        // #732 mask-mode fixture buffer
   'src/tools/magnetic-lasso/magnetic-lasso-strategy.test.ts': 4,
   'src/tools/magnetic-lasso/magnetic-lasso.test.ts': 2,
   'src/tools/marquee/marquee-strategy.test.ts': 8,

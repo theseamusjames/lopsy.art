@@ -11,7 +11,7 @@ import {
   readMaskTexture,
   restoreFromGpuSnapshot,
 } from '../engine-wasm/wasm-bridge';
-import { flushLayerSync, resetTrackedState, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
+import { flushLayerSync, resetTrackedState, seedMaskDataRef, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
 import { smoothStroke, HOLD_TIMEOUT_MS } from '../tools/smooth-line/smooth-line';
 import { mirrorBatchPoints } from '../tools/symmetry';
 import { useToolSettingsStore } from './tool-settings-store';
@@ -255,7 +255,10 @@ export function useCanvasInteraction(
         // from the painting canvas.
         // Quick Mask Mode paints on the quick mask buffer (not the layer), so
         // no pixel data expansion is needed — same as non-paint tools.
-        const needsPixelData = isPaintTool && !isQuickMaskMode;
+        // Layer-mask edit mode paints on the mask texture via gpuMaskDabBatch
+        // and never reads the layer's own RGBA, so expanding + uploading the
+        // full-res layer buffer is pure waste (71.64 MB / stroke at 4K, #733).
+        const needsPixelData = isPaintTool && !isQuickMaskMode && !maskEditMode;
         if (needsPixelData) {
           const imageData = editorState.expandLayerForEditing(activeLayerId);
           expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
@@ -606,7 +609,12 @@ export function useCanvasInteraction(
           if (maskData) {
             const layer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
             if (layer?.mask) {
-              useEditorStore.getState().updateLayerMaskData(state.layerId, new Uint8ClampedArray(maskData));
+              const seeded = new Uint8ClampedArray(maskData);
+              useEditorStore.getState().updateLayerMaskData(state.layerId, seeded);
+              // These bytes just came *from* the GPU — record the readback's
+              // reference as the tracked one so the next frame's syncLayers
+              // doesn't upload them straight back (#734).
+              seedMaskDataRef(engine, state.layerId, seeded);
             }
           }
         }

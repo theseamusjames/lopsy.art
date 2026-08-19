@@ -96,6 +96,10 @@ export function handleGradientUp(state: InteractionState): void {
         }));
       }
     }
+    // The per-move renders skip clearJsPixelData (#732) so thumbnails don't
+    // stall the pipeline every frame — bump once here so LayerThumbnail /
+    // ChannelsPanel refresh from the committed GPU texture.
+    clearJsPixelData(state.layerId);
   }
 }
 
@@ -165,7 +169,10 @@ export function handleGradientMove(state: InteractionState, layerLocalPos: Point
       const radius = Math.sqrt(dx * dx + dy * dy);
       gpuRenderRadialGradient(engine, state.layerId, startX, startY, radius, stopsJson);
     }
-    clearJsPixelData(state.layerId);
+    // Do not bump the pixel version per pointer-move: LayerThumbnail /
+    // ChannelsPanel subscribe to it, so a per-move bump forces a synchronous
+    // glReadPixels each frame that stalls the whole pipeline at 4K. The bump
+    // happens once from handleGradientUp when the gradient commits (#732).
   }
 
   useEditorStore.getState().notifyRender();

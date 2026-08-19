@@ -127,7 +127,10 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point, m
     shape.strokeWidth, shape.polygonSides,
     Math.min(shape.cornerRadius, Math.min(rx * 2, ry * 2) / 2),
   );
-  clearJsPixelData(state.layerId);
+  // Do not bump the pixel version per pointer-move: LayerThumbnail /
+  // ChannelsPanel subscribe to it, so a per-move bump forces a synchronous
+  // glReadPixels each frame that stalls the whole pipeline at 4K. The bump
+  // happens once from handleShapeUp when the shape commits (#732).
   useEditorStore.getState().notifyRender();
 }
 
@@ -216,6 +219,7 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point, met
       );
     }
     syncLayerBoundsFromEngine(engine, state.layerId);
+    clearJsPixelData(state.layerId);
   }
 
   if (shape.output === 'path') {

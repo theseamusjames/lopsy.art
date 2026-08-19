@@ -228,7 +228,10 @@ describe('shape move', () => {
     expect(args[15]).toBe(2); // stroke width
     expect(args[16]).toBe(5); // sides
     expect(args[17]).toBe(0); // corner radius
-    expect(clearJsPixelData).toHaveBeenCalledWith('layer-1');
+    // Issue #732 — move must NOT bump the pixel version. That triggers a
+    // full pipeline-stalling glReadPixels for every thumbnail subscriber
+    // (LayerThumbnail, ChannelsPanel) on every pointer-move.
+    expect(clearJsPixelData).not.toHaveBeenCalled();
     expect(editorState.notifyRender).toHaveBeenCalled();
   });
 
@@ -340,6 +343,8 @@ describe('shape up — committing pixels', () => {
     expect(renderShapeExpanded).not.toHaveBeenCalled();
     expect(getLayerEngineBounds).toHaveBeenCalledWith(expect.anything(), 'layer-1');
     expect(uiState.setPendingShapeClick).not.toHaveBeenCalled();
+    // Issue #732 — the pixel-version bump moved from move to up.
+    expect(clearJsPixelData).toHaveBeenCalledWith('layer-1');
   });
 
   it('re-renders expanded when the shape overflows the document bounds', () => {

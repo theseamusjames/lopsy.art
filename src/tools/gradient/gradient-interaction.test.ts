@@ -29,8 +29,9 @@ vi.mock('../../engine-wasm/engine-state', () => ({
   getEngine: () => ({ __engine: 'mock' }),
 }));
 
+const clearJsPixelData = vi.fn();
 vi.mock('../../app/store/clear-js-pixel-data', () => ({
-  clearJsPixelData: vi.fn(),
+  clearJsPixelData: (...args: unknown[]) => clearJsPixelData(...args),
 }));
 
 const syncLayerAfterFullSize = vi.fn();
@@ -154,6 +155,45 @@ describe('gradient drag lifecycle (issue #338)', () => {
     const state = handleGradientDown(makeCtx());
     handleGradientUp(state);
     expect(endGradientPreview).toHaveBeenCalledTimes(1);
+  });
+
+  // Issue #732 — the pixel-version bump moved from move to up. Bumping on
+  // every move stalls the pipeline via glReadPixels for each thumbnail
+  // subscriber; the drag preview stays visible via the GPU preview path.
+  it('does not bump the pixel version per move; bumps once on up', () => {
+    clearJsPixelData.mockClear();
+    const state = handleGradientDown(makeCtx());
+    handleGradientMove(state, { x: 50, y: 50 });
+    handleGradientMove(state, { x: 60, y: 60 });
+    handleGradientMove(state, { x: 70, y: 70 });
+    expect(clearJsPixelData).not.toHaveBeenCalled();
+    handleGradientUp(state);
+    expect(clearJsPixelData).toHaveBeenCalledTimes(1);
+    expect(clearJsPixelData).toHaveBeenCalledWith('layer-1');
+  });
+
+  it('does not bump the layer pixel version on up in mask-edit mode', () => {
+    clearJsPixelData.mockClear();
+    uiStateValues.maskEditMode = true;
+    const ctx = makeCtx();
+    (ctx.activeLayer as unknown as { mask: { data: Uint8ClampedArray; width: number; height: number } }).mask = {
+      data: new Uint8ClampedArray(4),
+      width: 2,
+      height: 2,
+    };
+    const state = handleGradientDown(ctx);
+    handleGradientMove(state, { x: 50, y: 50 });
+    handleGradientUp(state);
+    expect(clearJsPixelData).not.toHaveBeenCalled();
+  });
+
+  it('does not bump the layer pixel version on up in quick-mask mode', () => {
+    clearJsPixelData.mockClear();
+    uiStateValues.isQuickMaskMode = true;
+    const state = handleGradientDown(makeCtx());
+    handleGradientMove(state, { x: 50, y: 50 });
+    handleGradientUp(state);
+    expect(clearJsPixelData).not.toHaveBeenCalled();
   });
 
   it('clears the gradient preview line on up', () => {
