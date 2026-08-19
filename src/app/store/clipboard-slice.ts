@@ -12,7 +12,7 @@ import {
   uploadClipboardPixels,
   compositeForExport,
 } from '../../engine-wasm/wasm-bridge';
-import { pngBytesMatch, setLastCopyPngBytes, getLastCopyPngBytes } from './clipboard-image-match';
+import { decodeBlobToRgba, pixelsLikelySame } from './clipboard-image-match';
 import type { ClipboardData, SliceCreator } from './types';
 
 function writeToSystemClipboard(width: number, height: number): void {
@@ -29,12 +29,6 @@ function writeToSystemClipboard(width: number, height: number): void {
     const imageData = new ImageData(clamped, width, height);
     ctx.putImageData(imageData, 0, 0);
     canvas.convertToBlob({ type: 'image/png' }).then((blob) => {
-      // Remember exactly what bytes we handed the OS. `tryPasteInternalCopy`
-      // compares an incoming clipboard blob against this to decide whether the
-      // OS still holds our copy, without any GPU readback (#724).
-      blob.arrayBuffer().then((buf) => {
-        setLastCopyPngBytes(new Uint8Array(buf));
-      }).catch(() => {});
       if (typeof navigator.clipboard?.write !== 'function') return;
       const item = new ClipboardItem({ 'image/png': blob });
       navigator.clipboard.write([item]).catch(() => {});
@@ -237,18 +231,19 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     const engine = getEngine();
     if (!engine) return false;
 
-    // The OS clipboard delivers the exact PNG bytes we handed to
-    // `navigator.clipboard.write` when the app copied. Comparing those
-    // bytes directly avoids the ~35 MB GPU readback the old pixel-sample
-    // path used to force on every paste (#724). If the bytes don't
-    // match, the system clipboard has been replaced by another app —
-    // treat it as an external image.
-    const ownBytes = getLastCopyPngBytes();
-    if (!ownBytes) return false;
-    const incomingBuf = await blob.arrayBuffer().catch(() => null);
-    if (!incomingBuf) return false;
-    const incoming = new Uint8Array(incomingBuf);
-    if (!pngBytesMatch(ownBytes, incoming)) return false;
+    const decoded = await decodeBlobToRgba(blob);
+    if (!decoded || decoded.width !== clip.width || decoded.height !== clip.height) return false;
+
+    // read_clipboard_pixels throws when the GPU clipboard texture is gone
+    // (e.g. after the engine was reset by File > New), which also guards
+    // paste() below from operating on a released clipboard.
+    let clipPixels: Uint8Array;
+    try {
+      clipPixels = readClipboardPixels(engine);
+    } catch {
+      return false;
+    }
+    if (!pixelsLikelySame(clipPixels, decoded.data)) return false;
 
     get().paste();
     return true;
