@@ -24,6 +24,7 @@ import { loadProject } from './io/project-load';
 import { importRafFile } from './io/raf';
 import { compositeForExport, getCompositeSize } from './engine-wasm/wasm-bridge';
 import { flushLayerSync } from './engine-wasm/engine-sync';
+import { prefetchFontPreviewsBlob } from './utils/font-loader';
 import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -203,6 +204,12 @@ if ('serviceWorker' in navigator) {
 }
 
 initWasm().catch(() => {});
+
+// Kick off the font-preview blob download after the app is interactive so the
+// FontPicker's first open finds it ready.
+const idle = (window as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback
+  ?? ((cb: () => void) => setTimeout(cb, 0));
+idle(() => prefetchFontPreviewsBlob());
 
 const root = document.getElementById('root');
 if (!root) {

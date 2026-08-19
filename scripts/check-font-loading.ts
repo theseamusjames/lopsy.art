@@ -11,8 +11,13 @@
  *   2. Engine path (loadFontBinaryToEngine): the TTF path baked into the
  *      catalog (single jsDelivr URL), then the css2 single-weight fallback
  *      (fetch CSS → latin-subset url() → font binary).
- *   3. Preview image (FontPicker):        getstencil CDN PNG, or "missing"
- *      when previewFile is null (picker shows plain fallback text).
+ *   3. Preview subset (FontPicker):       css2 with text=family, subsetted
+ *      to just the family-name glyphs. At runtime the FontPicker serves
+ *      these bytes from the baked public/font-previews.bin blob and falls
+ *      back to this URL only for the handful of families that failed at
+ *      bake time; the checker still probes it so we notice if Google's
+ *      response shape drifts, which would break both the bake AND the
+ *      runtime fallback.
  *
  * Binary URLs are checked with HEAD so nothing big is downloaded — jsDelivr
  * and fonts.gstatic.com return the same status for HEAD as GET. The css2 CSS
@@ -31,9 +36,9 @@ import type { FontEntry } from '../src/utils/font-catalog';
 import {
   buildCss2StylesheetUrl,
   buildCss2SingleWeightUrl,
+  buildCss2PreviewUrl,
   extractFontUrlPreferLatin,
   resolveTtfUrl,
-  getPreviewImageUrl,
 } from '../src/utils/font-urls';
 
 const CONCURRENCY = Number(process.env.FONT_CHECK_CONCURRENCY ?? 24);
@@ -75,7 +80,7 @@ interface FontResult {
   hasItalic: boolean;
   dom: { url: string; status: number | string; ok: boolean };
   engine: EngineWeightResult[];
-  preview: { file: string | null; status: number | string | null; ok: boolean };
+  preview: { url: string; status: number | string; ok: boolean };
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -202,11 +207,9 @@ async function checkFont(entry: FontEntry, allWeights: boolean): Promise<FontRes
     engine.push(await checkEngineWeight(entry, w));
   }
 
-  let preview: FontResult['preview'] = { file: null, status: null, ok: false };
-  if (entry.previewFile) {
-    const { status } = await headBinary(getPreviewImageUrl(entry.previewFile));
-    preview = { file: entry.previewFile, status, ok: status === 200 };
-  }
+  const previewUrl = buildCss2PreviewUrl(entry.family, entry.family);
+  const previewResp = await getCss(previewUrl);
+  const preview = { url: previewUrl, status: previewResp.status, ok: previewResp.status === 200 };
 
   return {
     family: entry.family,
@@ -247,8 +250,7 @@ function summarize(results: FontResult[]): void {
   const fallbackNonLatin = results.filter((r) =>
     r.engine.some((e) => e.via === 'css-fallback' && e.fallbackChosenSubset !== null && e.fallbackChosenSubset !== 'latin'),
   );
-  const previewMissing = results.filter((r) => r.preview.file === null);
-  const previewBroken = results.filter((r) => r.preview.file !== null && !r.preview.ok);
+  const previewBroken = results.filter((r) => !r.preview.ok);
 
   const list = (rs: FontResult[], max = 25) =>
     rs.slice(0, max).map((r) => r.family).join(', ') + (rs.length > max ? `, … (+${rs.length - max})` : '');
@@ -265,9 +267,7 @@ function summarize(results: FontResult[]): void {
   if (engineViaFallback.length) console.log(`  ${list(engineViaFallback)}`);
   console.log(`\n  … of those, chosen url() is a NON-LATIN subset: ${fallbackNonLatin.length}`);
   if (fallbackNonLatin.length) console.log(`  ${list(fallbackNonLatin)}`);
-  console.log(`\nPicker preview image missing from catalog (shows plain text): ${previewMissing.length}`);
-  if (previewMissing.length) console.log(`  ${list(previewMissing)}`);
-  console.log(`\nPicker preview image in catalog but CDN request failed: ${previewBroken.length}`);
+  console.log(`\nPicker preview subset FAILURES (row falls back to category face): ${previewBroken.length}`);
   if (previewBroken.length) console.log(`  ${list(previewBroken)}`);
 }
 

@@ -92,15 +92,12 @@ async function selectFont(page: Page, fontFamily: string) {
   await searchInput.fill(fontFamily);
   await page.waitForTimeout(300);
 
-  // Google font items render a preview image (img alt=family) rather than visible text.
-  // System font items render text directly. Match by img alt first, then visible text.
-  const byImage = page.locator('[role="option"]').filter({ has: page.locator(`img[alt="${fontFamily}"]`) });
-  const byText = page.locator('[role="option"]').filter({ hasText: new RegExp(`^${fontFamily}`) });
-  // Wait for the listbox to have at least one visible option matching the search
-  await page.locator('[role="option"]').first().waitFor({ state: 'visible', timeout: 5000 });
-
-  const imageCount = await byImage.count();
-  const fontItem = imageCount > 0 ? byImage.first() : byText.first();
+  // Every row renders the family name as text (in the font's own face where
+  // it's available, or the category fallback while it's loading).
+  const fontItem = page.locator('[role="option"]')
+    .filter({ hasText: new RegExp(`^${fontFamily}`) })
+    .first();
+  await fontItem.waitFor({ state: 'visible', timeout: 5000 });
   await fontItem.click();
   await page.waitForTimeout(200);
 }
@@ -122,11 +119,6 @@ async function waitForFontInEngine(page: Page, fontFamily: string, timeoutMs = 1
 // ---------------------------------------------------------------------------
 
 test.describe('Google Font rendering', () => {
-  // Preview images from the font picker CDN may return 403. This is a CDN
-  // availability issue, not a bug — the app handles it gracefully by showing
-  // the font name as text. Allow these so they don't mask real errors.
-  test.use({ allowConsoleErrors: [/Failed to load resource.*403/] });
-
   test.beforeEach(async ({ page, isMobile }) => {
     test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
     await page.goto('/');

@@ -2,16 +2,19 @@ import type { FontCategory } from './font-catalog';
 import { fontsByFamily } from './font-catalog';
 import { loadFontData } from '../engine-wasm/wasm-bridge';
 import { getEngine } from '../engine-wasm/engine-state';
+import { loadPreviewFace } from './font-previews';
 import {
   buildCss2StylesheetUrl,
   buildCss2SingleWeightUrl,
+  buildCss2PreviewUrl,
   extractFontUrlPreferLatin,
   resolveTtfUrl,
 } from './font-urls';
 
-export { getPreviewImageUrl } from './font-urls';
+export { prefetchFontPreviewsBlob } from './font-previews';
 
 const loadCache = new Map<string, Promise<void>>();
+const previewLoadCache = new Map<string, Promise<void>>();
 
 // Cache of already-fetched font binaries keyed by "family:weight".
 // Avoids re-fetching when the user switches back to a previously loaded font.
@@ -38,6 +41,53 @@ export function loadGoogleFont(family: string, weights: readonly number[]): Prom
 
   loadCache.set(key, promise);
   return promise;
+}
+
+/**
+ * Load a preview face for `family` in the DOM — the picker uses this so each
+ * row renders its own family name in its own face.
+ *
+ * Fast path: the family's name-only WOFF2 subset lives in the baked
+ * public/font-previews.bin blob (see scripts/generate-font-previews.ts). The
+ * runtime fetches that blob once and slices per-family FontFaces out of it,
+ * so a single ~4 MB request covers ~1900 fonts and every subsequent row is
+ * offline. Slow path: for the handful of families that fail at bake time (or
+ * anything not in the catalog) we fall back to the css2 API's `text=` subset
+ * so the row still renders.
+ */
+export function loadGoogleFontPreview(family: string, text: string): Promise<void> {
+  const key = `${family}:${text}`;
+  const cached = previewLoadCache.get(key);
+  if (cached) return cached;
+  const fullyLoaded = loadCache.get(family);
+  if (fullyLoaded) return fullyLoaded;
+
+  const promise = (async () => {
+    const baked = await loadPreviewFace(family);
+    if (baked) return;
+    // Not in the baked blob — fall back to the css2 text= subset over the
+    // network so the picker row still renders in-face.
+    await loadCss2Preview(family, text);
+  })();
+
+  previewLoadCache.set(key, promise);
+  return promise;
+}
+
+function loadCss2Preview(family: string, text: string): Promise<void> {
+  const href = buildCss2PreviewUrl(family, text);
+
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+
+  return new Promise<void>((resolve, reject) => {
+    link.onload = () => {
+      document.fonts.ready.then(() => resolve());
+    };
+    link.onerror = () => reject(new Error(`Failed to load font preview: ${family}`));
+    document.head.appendChild(link);
+  });
 }
 
 /**

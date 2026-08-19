@@ -3,6 +3,133 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // The font-loader module reads from window / document / fetch. We install
 // minimal stubs before importing it and clean up after.
 
+// ---------------------------------------------------------------------------
+// loadGoogleFontPreview — minimal DOM stub so we can capture the requested
+// link href without needing a full jsdom environment.
+// ---------------------------------------------------------------------------
+
+interface FakeLink {
+  rel: string;
+  href: string;
+  onload: (() => void) | null;
+  onerror: (() => void) | null;
+}
+
+interface InstalledDocumentStub {
+  restore: () => void;
+  links: FakeLink[];
+}
+
+function installDocumentStub(): InstalledDocumentStub {
+  const links: FakeLink[] = [];
+  const previousDocument = (globalThis as { document?: unknown }).document;
+  const doc = {
+    createElement: (_tag: string): FakeLink => ({
+      rel: '',
+      href: '',
+      onload: null,
+      onerror: null,
+    }),
+    head: {
+      appendChild: (node: FakeLink) => {
+        links.push(node);
+        // Fire onload asynchronously so the loader's promise resolves.
+        queueMicrotask(() => node.onload?.());
+        return node;
+      },
+    },
+    fonts: {
+      ready: Promise.resolve(),
+    },
+  };
+  (globalThis as { document?: unknown }).document = doc;
+  return {
+    restore: () => {
+      if (previousDocument === undefined) delete (globalThis as { document?: unknown }).document;
+      else (globalThis as { document?: unknown }).document = previousDocument;
+    },
+    links,
+  };
+}
+
+describe('loadGoogleFontPreview', () => {
+  let stub: InstalledDocumentStub;
+  const previewCalls: string[] = [];
+
+  beforeEach(() => {
+    stub = installDocumentStub();
+    previewCalls.length = 0;
+    vi.doMock('../engine-wasm/engine-state', () => ({ getEngine: () => null }));
+    vi.doMock('../engine-wasm/wasm-bridge', () => ({ loadFontData: vi.fn() }));
+  });
+
+  afterEach(() => {
+    stub.restore();
+    vi.resetModules();
+    vi.doUnmock('../engine-wasm/engine-state');
+    vi.doUnmock('../engine-wasm/wasm-bridge');
+    vi.doUnmock('./font-previews');
+  });
+
+  it('serves in-blob families offline (no css2 stylesheet <link> is created)', async () => {
+    vi.doMock('./font-previews', () => ({
+      loadPreviewFace: (family: string) => {
+        previewCalls.push(family);
+        // Non-null result signals the blob served this family.
+        return Promise.resolve({ family } as FontFace);
+      },
+      prefetchFontPreviewsBlob: () => undefined,
+    }));
+
+    const mod = await import('./font-loader');
+    await mod.loadGoogleFontPreview('Inter', 'Inter');
+
+    expect(previewCalls).toEqual(['Inter']);
+    // The blob supplied the face — no network stylesheet was appended.
+    expect(stub.links.length).toBe(0);
+  });
+
+  // Regression for #729: the picker used to fetch pre-rendered PNGs from a
+  // third-party CDN that has since been deleted. When a family isn't in the
+  // baked blob (e.g. the ~6 that failed at bake time) we fall back to the
+  // css2 API, so the row still renders.
+  it('falls back to the css2 text= endpoint for families not in the blob', async () => {
+    vi.doMock('./font-previews', () => ({
+      loadPreviewFace: () => Promise.resolve(null),
+      prefetchFontPreviewsBlob: () => undefined,
+    }));
+
+    const mod = await import('./font-loader');
+    await mod.loadGoogleFontPreview('Sunflower', 'Sunflower');
+
+    expect(stub.links.length).toBe(1);
+    expect(stub.links[0]!.rel).toBe('stylesheet');
+    expect(stub.links[0]!.href).toBe(
+      'https://fonts.googleapis.com/css2?family=Sunflower&text=Sunflower&display=swap',
+    );
+    // The deleted CDN must never appear in the fallback URL either.
+    expect(stub.links[0]!.href).not.toContain('getstencil');
+  });
+
+  it('dedupes repeat loads of the same family:text pair (blob touched once)', async () => {
+    vi.doMock('./font-previews', () => ({
+      loadPreviewFace: (family: string) => {
+        previewCalls.push(family);
+        return Promise.resolve({ family } as FontFace);
+      },
+      prefetchFontPreviewsBlob: () => undefined,
+    }));
+
+    const mod = await import('./font-loader');
+    await Promise.all([
+      mod.loadGoogleFontPreview('Roboto', 'Roboto'),
+      mod.loadGoogleFontPreview('Roboto', 'Roboto'),
+    ]);
+    expect(previewCalls).toEqual(['Roboto']);
+    expect(stub.links.length).toBe(0);
+  });
+});
+
 const CYRILLIC_FIRST_CSS = `/* cyrillic-ext */
 @font-face {
   font-family: 'Google Sans';
