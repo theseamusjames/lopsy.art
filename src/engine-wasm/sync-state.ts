@@ -207,3 +207,22 @@ export function resetTrackedState(engine: Engine): void {
   trackedByEngine.set(engine, createTrackedState());
 }
 
+/**
+ * Record the mask array `syncLayers` should treat as already-uploaded.
+ *
+ * The mask upload gate is reference-equality on `layer.mask.data`. When the
+ * app reads the mask back from the GPU at stroke end (`readMaskTexture` in
+ * `useCanvasInteraction`) and writes a freshly allocated `Uint8ClampedArray`
+ * into the store via `updateLayerMaskData`, that new object identity would
+ * otherwise trip the gate on the next frame and the render loop would echo
+ * the bytes straight back to the GPU — 17.91 MB of pure re-upload per mask
+ * stroke at 4K (#734). Seeding the tracked ref with the readback's own array
+ * short-circuits that echo. Also drops any prior upload-failure entry so
+ * genuinely new data still retries cleanly.
+ */
+export function seedMaskDataRef(engine: Engine, layerId: string, data: Uint8ClampedArray): void {
+  const tracked = getTracked(engine);
+  tracked.maskDataRefs.set(layerId, data);
+  tracked.uploadFailures.delete(`${layerId}:mask`);
+}
+

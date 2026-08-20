@@ -259,6 +259,46 @@ describe('syncLayers — group mask upload', () => {
     syncLayers(engine, [group], [group.id], new Set());
     expect(vi.mocked(bridge.uploadLayerMask)).not.toHaveBeenCalled();
   });
+
+  // Issue #734 — the stroke-end readback writes a freshly allocated
+  // Uint8ClampedArray into the store. Without a seed, sync-layers sees a
+  // new reference and re-uploads bytes the GPU already holds (17.91 MB
+  // per mask stroke at 4K). seedMaskDataRef records the readback's own
+  // array so the next sync short-circuits the upload.
+  it('does not re-upload the mask when seedMaskDataRef pre-registers the readback array', async () => {
+    const { seedMaskDataRef } = await import('./sync-state');
+    const engine = makeFakeEngine();
+    const readback = new Uint8ClampedArray(64 * 64).fill(200);
+    const raster: RasterLayer = {
+      ...baseRasterLayer,
+      id: 'r1',
+      mask: { id: 'm1', enabled: true, data: readback, width: 64, height: 64 },
+    };
+
+    // Simulate the useCanvasInteraction flow: readMaskTexture returns bytes,
+    // the store stores them, and seedMaskDataRef records the reference.
+    seedMaskDataRef(engine, 'r1', readback);
+
+    syncLayers(engine, [raster], [raster.id], new Set());
+    expect(vi.mocked(bridge.uploadLayerMask)).not.toHaveBeenCalled();
+  });
+
+  it('still uploads when the mask data array is a different reference than the seed', async () => {
+    const { seedMaskDataRef } = await import('./sync-state');
+    const engine = makeFakeEngine();
+    const seeded = new Uint8ClampedArray(64 * 64).fill(100);
+    // A later paint replaces the mask data with a distinct reference.
+    const updated = new Uint8ClampedArray(64 * 64).fill(150);
+    const raster: RasterLayer = {
+      ...baseRasterLayer,
+      id: 'r1',
+      mask: { id: 'm1', enabled: true, data: updated, width: 64, height: 64 },
+    };
+
+    seedMaskDataRef(engine, 'r1', seeded);
+    syncLayers(engine, [raster], [raster.id], new Set());
+    expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledOnce();
+  });
 });
 
 describe('syncLayers — tracked-state cleanup on layer removal', () => {
