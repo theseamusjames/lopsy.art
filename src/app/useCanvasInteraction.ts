@@ -244,21 +244,23 @@ export function useCanvasInteraction(
 
         // Only expand the active layer's pixel data for tools that actually
         // read/write it via JS. Tools like text, crop, path, eyedropper,
-        // fill, and selection tools don't need pixel data and expanding
-        // would destructively change layer bounds before pushHistory
-        // captures them — causing undo to restore the wrong positions.
+        // and selection tools don't need pixel data and expanding would
+        // destructively change layer bounds before pushHistory captures
+        // them — causing undo to restore the wrong positions.
         // Move is excluded: selection moves use the float system (GPU-only)
         // and non-selection moves call expandLayerForEditing in the handler.
-        // Fill is excluded: handleFillDown chooses between two GPU fast
-        // paths (empty layer, non-contiguous) and a JS path that sources
-        // its own pixels via readLayerPixelsForFill — none of them read
-        // from the painting canvas.
+        // Fill is included: its GPU fast paths call the engine's
+        // ensure_layer_full_size internally, which resets the engine layer
+        // descriptor to a doc-sized texture at the origin. expandLayerForEditing
+        // performs the matching Zustand reconciliation (x/y AND width/height via
+        // withLayerBounds); without it the store keeps the pre-fill offset and
+        // engine-sync re-applies it, double-offsetting the filled content (#722).
         // Quick Mask Mode paints on the quick mask buffer (not the layer), so
         // no pixel data expansion is needed — same as non-paint tools.
         // Layer-mask edit mode paints on the mask texture via gpuMaskDabBatch
         // and never reads the layer's own RGBA, so expanding + uploading the
         // full-res layer buffer is pure waste (71.64 MB / stroke at 4K, #733).
-        const needsPixelData = isPaintTool && !isQuickMaskMode && !maskEditMode;
+        const needsPixelData = (isPaintTool && !isQuickMaskMode && !maskEditMode) || activeTool === 'fill';
         if (needsPixelData) {
           const imageData = editorState.expandLayerForEditing(activeLayerId);
           expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
