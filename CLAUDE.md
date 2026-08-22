@@ -175,10 +175,11 @@ Each frame: clear composite FBO → for each visible layer: render behind-effect
 
 ### Undo/Redo and GPU Textures
 
-- `pushHistory()` flushes pending JS pixel data to GPU, then snapshots each layer's GPU texture via `readLayerCompressed()`.
-- Compressed blobs use a 24-byte header: `[crop_x, crop_y, crop_w, crop_h, full_w, full_h]` (all i32 LE) + raw cropped RGBA pixels. The crop is local to the texture, not document space.
-- On restore, `uploadLayerPixelsCompressed()` reconstructs the full-size texture from the cropped blob, placing content at the correct offset. This ensures the document's layer position (set by `syncLayers`) renders correctly.
+- `pushHistory()` flushes pending JS pixel data to GPU, then snapshots each layer by **duplicating its GPU texture** — `snapshotLayerGpu()` blits into a pooled texture and returns an opaque `u32` handle. No readback, no compression. Only layers in `dirtyLayerIds` are re-snapshotted; the rest reuse the previous snapshot's handle when position and raster dimensions are unchanged.
+- On undo/redo, `restoreFromGpuSnapshot()` blits the handle back into the layer texture, re-acquiring that texture at the snapshot's size when the dimensions differ. The `EMPTY_HANDLE` sentinel (`0xFFFFFFFF`) restores as a 1x1 transparent upload.
+- Snapshot textures live in the engine (`snapshot_textures` + free list) and are freed only by `releaseGpuSnapshot()` / `clearGpuSnapshots()`. Nothing frees the handles held by the undo/redo stacks — read the "snapshot textures are never freed" note in FEATURES.md before adding another snapshot site.
 - `resetTrackedState()` is called after restore so `syncLayers` re-pushes all layer descriptors.
+- The compressed-blob path (`readLayerCompressed()` / `uploadCompressed()`) is **not** part of undo any more; its only callers are the filter and Color-LUT preview commits. Blobs open with a 24-byte geometry header `[crop_x, crop_y, crop_w, crop_h, full_w, full_h]` (all i32 LE) — the crop is local to the texture, not document space — and the u16 variant adds `flags` + `uncompressed_size` for a 32-byte header (flags 0 = raw, 1 = RLE, 2 = LZ4).
 
 ### Layer Masks
 
