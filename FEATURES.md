@@ -446,6 +446,14 @@ gets baked first.
 - **Rotate 90° CW / CCW** sit in the Move tool's own options-bar group and are
   **dual-purpose** — with a selection active they rotate the selected content,
   with no selection they rotate the entire active layer.
+  - **The whole-layer branch is raster only, and silent about it**, the same way
+    the neighbouring [Fit button](#move) is: `rotateActiveLayer` returns on a
+    text, shape, or group layer *before* `pushHistory`, so the click produces no
+    rotation, no undo step, and no feedback. The selection branch has no such
+    guard — it composites a rotation matrix through the float pipeline
+    regardless of the layer underneath. [Flip Horizontal / Vertical in the Image
+    menu](#canvas-operations) is the odd one out: it pushes history before it
+    checks anything at all.
 
 ---
 
@@ -811,8 +819,10 @@ There are exactly four layer types (`LayerType = 'raster' | 'text' | 'shape' | '
 
 - **Raster**: pixel layer
 - **Text**: live-editable text
-- **Shape**: vector shape (ellipse, polygon — see Shape Tool above)
+- **Shape**: vector shape (ellipse, polygon) — **declared and round-tripped, but never created**. See below.
 - **Group**: folder with optional per-group adjustments
+
+**Nothing in the app ever creates a shape layer.** `ShapeLayer` is constructed in exactly one place in `src/` — `project-load.ts`, deserialising a `.lopsy` file — and `shapeType` appears in only three other places: the type definition, and the two save-side ones (the serialised-layer interface and the writer that fills it). The [Shape tool](#shape-tool) does not make one: its *pixels* output rasterises straight into the **active layer** on the GPU, and its *path* output adds an entry to the [Paths panel](#paths-panel). So the only way to hold a shape layer is to open a project file that already contains one, which Lopsy itself can never have written. Several helpers still branch on the type defensively (`add-layer-mask`, `layer-model`'s width/height accessors, `convert-color-mode`, the PSD writer), and `project-save` writes out all eight shape-specific fields alongside the shared base.
 
 Lopsy has **no** Adjustment-layer or Fill-layer type. Adjustments are non-destructive **nodes** stacked on a group rather than layers of their own (see Image Adjustments), and fills are painted into a raster layer.
 
@@ -917,11 +927,160 @@ A row of icon buttons pinned below the list. Three entries are **conditional**, 
 
 ## Canvas Operations
 
-- **Crop canvas**: by rectangle
-- **Canvas Size…** (Image menu): new width/height with anchor point (extends or trims the document without resampling layer pixels)
-- **Image Size…** (Image menu): new width/height that resamples all layers
-- **Rotate Image 90° CW / 90° CCW** (Image menu): rotates the entire document (every layer, every mask, the selection, and the canvas size) about the document center
-- **Flip Horizontal / Vertical** (Image menu): mirrors the active layer along the chosen axis (operates per-layer, not document-wide, so partial-image flips are possible)
+Five commands rewrite the document's own geometry, and all five are GPU-side —
+no pixel data round-trips through JS (#710 for the three document-wide ones).
+Four of them (`crop_texture`,
+`resize_canvas_texture`, `scale_texture`, `rotate_texture_90`) allocate a fresh
+texture at the new size, blit the old content into it, release the old handle
+and swap in the new one; `flip_texture` is the exception, rendering through
+`scratch_a` and back into the *same* texture, which is why Flip alone cannot
+change a layer's dimensions. Each then drops the JS pixel cache so the GPU is
+the sole source of truth afterwards — `pixelDataManager.replace` with empty maps
+for Crop / Canvas Size / Image Size, `clearAll()` for Rotate Image, and
+`remove(activeId)` for Flip.
+
+- **Crop canvas**: by rectangle — either dragged with the [Crop tool](#crop) or
+  taken from the selection bounds via **Edit → Crop**.
+- **Canvas Size…** (Image menu): new width/height with anchor point — extends or
+  trims the document without resampling layer pixels.
+- **Image Size…** (Image menu): new width/height that resamples the document.
+- **Rotate Image 90° CW / 90° CCW** (Image menu): swaps the document dimensions
+  and rotates the raster layers about the document center.
+- **Flip Horizontal / Vertical** (Image menu): mirrors the **active layer**
+  along the chosen axis (per-layer, not document-wide, so partial-image flips
+  are possible).
+
+### What each one actually touches
+
+Only two of the four layer types are handled. `mapLayersForTransform` — the
+shared spine of Crop, Canvas Size, and Image Size — dispatches on `text` and
+`raster` and passes everything else through unchanged; `rotateImage` skips
+every non-raster layer outright.
+
+| | raster pixels | raster geometry | text | shape / group | layer mask | selection |
+|---|---|---|---|---|---|---|
+| **Crop canvas** | cropped to the rect | reset to `(0,0)` at full canvas size | translated by the crop origin | untouched | untouched | untouched by the tool; **Edit → Crop clears it** |
+| **Canvas Size** | repositioned inside a new full-canvas texture | reset to `(0,0)` at full canvas size | translated by the anchor offset | untouched | untouched | untouched |
+| **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position scaled, **font size unchanged** | untouched | untouched | untouched |
+| **Rotate Image** | rotated 90° | dimensions swapped, position rotated about the document center | **untouched** | untouched | untouched | untouched |
+| **Flip** | mirrored within the layer's own texture | untouched | mirrors the rendered glyph texture | no-op on a group's 1×1 placeholder | untouched | untouched |
+
+**Layer masks are never transformed by any of the five.** The Rust helpers
+(`crop_texture`, `resize_canvas_texture`, `scale_texture`, `rotate_texture_90`,
+`flip_texture`) all operate on `engine.layer_textures` and never look at
+`engine.layer_masks`, and on the JS side the `{...layer}` spread carries the
+same `LayerMask` object through, so `sync-layers` — which re-uploads only when
+`layer.mask.data` changes by reference — never pushes a new one. The mask keeps
+its pre-operation pixels *and* its pre-operation dimensions. `blend.glsl`
+samples it at `(docPos − layerOffset) / u_maskSize`, i.e. 1:1 document pixels
+anchored at the layer's origin, and where that UV falls outside `0…1` the mask
+is **not applied at all** — so the part of a resized or rotated layer the stale
+mask no longer covers comes back **fully unmasked** rather than hidden.
+
+**The selection is never transformed either.** None of the five reads or writes
+`state.selection`, so after a Crop-tool crop or any of the Image-menu commands
+an active marquee keeps its old document-space `bounds` and `maskData` while
+the document underneath has moved or resized. Only **Edit → Crop** tidies up
+after itself, by calling `clearSelection()` once the crop lands.
+
+### Rotate Image 90° CW / CCW
+
+- **Raster only.** The loop pushes every non-raster layer through with its
+  position and dimensions untouched, so **text layers do not rotate and do not
+  move** — they keep their old coordinates in a document whose width and height
+  have just swapped. A caption sitting near the bottom of a portrait document
+  ends up off the right edge of the resulting landscape canvas.
+- Raster layers are rotated on the GPU and repositioned about the document
+  center: clockwise sends `(x, y)` to `(docH − y − h, x)`, counter-clockwise to
+  `(y, docW − x − w)`, with width and height swapped.
+- **Known defect — the rotation does not mark its layers dirty.** Unlike Flip
+  and Rotate Layer, which both add the layer to `dirtyLayerIds`, `rotateImage`
+  writes only `document` and `renderVersion`. That is usually masked because
+  `snapshotGpuLayers` also re-snapshots any layer whose position or raster
+  dimensions changed — but a layer that is *invariant* under the rotation
+  (a square layer centred on a square document, including a full-canvas layer
+  on a square document) matches on both, so the **next** history push reuses the
+  pre-rotation snapshot handle and undoing that later action restores unrotated
+  pixels. This is the same failure mode as #704.
+
+### Flip Horizontal / Vertical
+
+- **No type guard, and history is pushed first.** `flipActiveLayer` records the
+  *Flip Horizontal* / *Flip Vertical* entry before it looks at anything, then
+  calls `flipLayer` on whatever texture the active layer owns. On a group that
+  is the 1×1 lazy placeholder, so the command adds an undo step and changes
+  nothing visible. On a text layer it mirrors the rendered glyph texture, and
+  the mirror survives until something re-renders the layer from its stored
+  string (any text property edit, a font binary finishing its download, or the
+  layer losing a path binding) — at which point the glyphs silently snap back.
+  Contrast [Rotate 90°](#quick-transforms), which bails out on any non-raster
+  layer *before* pushing history.
+- **The mirror is about the layer's own bounding box, not the document.**
+  `flip_texture` flips UVs within the existing `w × h` texture and writes back
+  into it; `x` / `y` are never touched. A layer smaller than the canvas
+  therefore flips in place rather than moving to the opposite side of the
+  document.
+
+### Canvas Size and Crop reset every raster layer to full canvas
+
+Both `resize_canvas_texture` and `crop_texture` allocate a texture at the **new
+document size**, clear it to transparent, and blit the old content in at its
+offset — and the JS side then rewrites the layer as
+`{ x: 0, y: 0, width: newW, height: newH }`. Two consequences:
+
+- **Anything outside the new bounds is gone.** Trimming with Canvas Size or
+  cropping discards the off-canvas pixels permanently; there is no equivalent of
+  Photoshop's "reveal all" to bring them back.
+- **The cropped-to-content storage invariant is discarded.** A 50 × 50 sticker
+  layer becomes a full 4096 × 4096 texture on a 4K document, for every raster
+  layer in the stack. **Image Size** deliberately does *not*
+  do this — it scales each layer's own width/height/x/y by the document factor
+  (floored at 1 px) precisely so a small layer isn't stretched to fill the
+  canvas.
+
+### The two dialogs
+
+`Canvas Size…` and `Image Size…` are the only top-level Image-menu items that
+open a dialog (Mode → *Indexed Color…* opens a third, from the submenu). The two
+share their number handling and diverge everywhere else.
+
+- Both clamp Width and Height to **1 – 16384 px** on Apply, and both fall back
+  to the *current* document dimension when a field is blank or unparseable —
+  so clearing a field and pressing Apply is a no-op on that axis rather than an
+  error.
+- Both bind Enter (apply) and Escape (cancel) with an `onKeyDown` on the dialog
+  `<div>`, which has no `tabIndex` and autofocuses nothing. React's handler only
+  sees events that bubble from inside, so the keys work once focus is in one of
+  the inputs and do nothing on a freshly opened dialog — the same focus
+  requirement the [filter dialogs](#filter-dialog-shared) have.
+- **Canvas Size** shows the current size, the two fields, and a **3 × 3 anchor
+  grid** defaulting to centre. The anchor picks where the old canvas sits inside
+  the new one: `offset = round((new − old) × anchor)` per axis.
+- **Image Size** shows a **Constrain proportions** checkbox (default on) and a
+  live percentage beside each field. The ratio it constrains to is the
+  document's ratio **as of when the dialog opened**, held constant for the
+  dialog's lifetime rather than re-derived from the current field values. The
+  percentages are read-outs only — there is no percent entry mode — and there is
+  **no resample-method choice**: `scale_texture` always switches the source
+  texture to `LINEAR` for the blit (restoring `NEAREST` afterwards), so every
+  Image Size is bilinear.
+- **Both dialogs push history unconditionally.** `resizeCanvas` and
+  `resizeImage` call `pushHistory` before they compute anything, so pressing
+  Apply without changing a number still leaves a *Resize Canvas* / *Resize
+  Image* step on the undo stack. Crop guards more carefully — `cropCanvas` rejects a
+  zero-area rectangle *before* `pushHistory`, so a degenerate drag records
+  nothing (cropping to the full document is still a real entry).
+- **Only the raster layers are resampled by Image Size.** Text layers have their
+  `x` / `y` scaled but not their font size, so type stays at its original point
+  size while the artwork around it grows or shrinks; shape and group layers are
+  not touched at all.
+
+### Crop tool commit
+
+A Normal-mode crop **commits on pointer-up** — there is no confirmation step,
+unlike Perspective mode's Apply / Cancel buttons. The drag rectangle is clamped
+to the document as it is drawn, and `handleCropUp` requires it to be more than
+1 px on *both* axes before it commits, so a stray click-drag is discarded.
 
 ---
 
