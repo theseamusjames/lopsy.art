@@ -408,8 +408,11 @@ gets baked first.
   bounds. **`Cmd`/`Meta` + drag a rotation handle** snaps to 15° increments
   (`π/12`); enabling grid + snap-to-grid applies the same snap automatically
   without the modifier.
-- Grid + snap-to-grid *also* snaps the pointer position to grid cells while
-  dragging a **scale** handle — a separate effect from the 15° rotation snap.
+- Grid + snap-to-grid *also* snaps the pointer position while dragging a
+  **scale** handle — a separate effect from the 15° rotation snap. Note that
+  this path quantizes against an *origin*-anchored lattice, not the
+  document-centered one the grid draws, so on most document sizes it does not
+  land on the visible grid lines; see [Snapping](#snapping).
 - Only `metaKey` is read — this is Cmd on macOS and the Windows/Super key
   elsewhere, **not** Ctrl.
 
@@ -1122,13 +1125,21 @@ All three are undoable and auto-switch the target group from pass-through to nor
 - **Pixel grid**: a 1-CSS-px translucent gray lattice rendered when the viewport zoom exceeds 800% (8×), so individual document pixels are visible during pixel-accurate editing. View → "Show Pixel Grid" toggles whether the lattice is drawn at all (default on).
 
 ### Grid
-- **Show grid**: on/off
+- **Show grid**: on/off, **off by default**.
+- **The lattice is centered on the document, not on its origin.** `renderGrid` grows lines outward from `(docWidth / 2, docHeight / 2)` in both directions, so a line always falls exactly on the document's midpoint and the leftover partial cell ends up at the canvas edges rather than in the middle. Lines are clipped to the document rect, so the grid never extends into the surrounding workspace. **Only two of the seven snap consumers actually use this lattice** — see [Snapping](#snapping).
+- **Major lines every 4 cells**: minor lines draw at `rgba(128, 128, 128, 0.25)` and every fourth at `0.5`, both `1 / zoom` document units wide so they stay a constant 1 screen px at any magnification.
+- **The grid is the first thing drawn on the overlay canvas**, ahead of marching ants, guides, snap lines, transform handles and the brush cursor — so it paints over the artwork but every other piece of overlay chrome paints over it.
 - **Grid size**: default 16 px, changed from a slider in the [options bar](#options-bar) that appears only while the grid is shown — the sole place in the app that can set it. The slider steps through a list of power-of-two stops derived from the document's longest side, so the choices differ per document and the stored size is never re-clamped when the document changes; see the options bar for the stop table and the resulting readout/needle mismatch.
 - **Snap to grid**: on/off (auto-enabled with grid). Every consumer requires **both** Snap to Grid and Show Grid, so hiding the grid silently disables snapping while leaving View → Snap to Grid checked.
 - **Cmd/Ctrl + `'`**: toggle grid visibility from anywhere in the app
 
 ### Rulers
 - **Show rulers**: on/off (default on), toggled from **View → Show Rulers**. (The menu lists a `⌘R` accelerator, but unlike the grid and guide toggles it is not currently wired to a global key handler.)
+- **20 px thick** (`RULER_SIZE`), one along the top and one down the left, with the corner square painted over both of them and the guide-color swatch painted over that.
+- **Tick spacing follows the zoom.** The renderer takes `50 / zoom` document pixels as a target and rounds it **down** to the nearest entry in the 1-2-5 × power-of-ten sequence (`… 1, 2, 5, 10, 20, 50, 100 …`), with a floor of 1 px — so the labelled interval changes as you zoom and always lands on a round number instead of an arbitrary one. 100 % zoom labels every 50 px, 200 % every 20, 400 % every 10, 800 % every 5. Ticks are 6 px long and drawn only on the inner edge.
+- **Labels are plain document pixels**, rounded to integers, with no unit suffix. The vertical ruler's labels are rotated a quarter turn. Positions outside the canvas are labelled with their real (negative or over-size) coordinates rather than being suppressed.
+- **A cursor indicator line tracks the pointer in each ruler** — a 1 px line at the pointer's document X in the top ruler and its Y in the left one, drawn in the **guide color** rather than a color of its own (the renderer's `#4a9eff` default is unreachable, because the overlay always passes the store's `guideColor`).
+- **The ruler palette is fixed dark** — background `#2a2a2a`, ticks `#555555`, labels `#888888`, all hard-coded in the renderer rather than read from `tokens.css`. Because this is a 2D overlay canvas and not styled DOM, the rulers stay dark when the app is switched to the light theme.
 
 ### Guides
 - **Show guides**: on/off
@@ -1143,10 +1154,36 @@ All three are undoable and auto-switch the target group from pass-through to nor
 - Guide creation, removal, and the color picker all require **both** Show Rulers and Show Guides to be on — with either off, ruler clicks do nothing.
 - **Cmd/Ctrl + `;`**: toggle guides visibility from anywhere in the app
 - **Clear Guides** (Edit menu): removes every guide currently placed on the canvas in a single action
+- **Nothing snaps to a guide.** Guides are purely visual reference lines. The [Snapping](#snapping) modes attract to the grid and to other layers; there is no snap-to-guides mode, no menu item for one, and no code path that consults `ui.guides` while dragging. A `snapToGuide(position, guides, threshold)` helper does exist in `tools/move/move.ts` and is unit-tested, but its only importer is its own test file — **no production caller**. Guides tell you where to line something up; they will not do it for you.
+- **Placed guides get a playhead triangle on the ruler**: a triangle 12 px across and 9 px deep pointing down from the top ruler for each vertical guide, and pointing right from the left ruler for each horizontal one, drawn in the guide color at 70 % alpha. It is clipped away once the guide scrolls off the visible ruler.
+- **Hovering a guide highlights its playhead only.** Moving the pointer within **±1 document pixel** of a guide's position turns that guide's ruler triangle white — the guide *line* itself does not change. The probe runs over the whole canvas, not just the rulers, so simply passing the cursor over a guide on the artwork lights up its marker on the ruler. Because the tolerance is in document space, it is worth 1 screen px at 100 % zoom and 16 at 1600 %.
+- **Guides cannot be selected.** The store carries `selectedGuideId`, and both renderers have a "selected" branch (a full-opacity line, a solid white playhead), but `selectGuide` has **no caller anywhere in `src/`** — the field is only ever written back to `null`, by `removeGuide`, `clearGuides`, and the project loader. Both selected-state branches are unreachable, so every guide draws at 70 % alpha and no playhead is ever the selected white. Dead state, the same shape as `document.backgroundColor`.
+- **With Cmd held, clicking a fraction that already carries a guide stacks a second one.** The delete probe runs *before* the snap and tests the **raw pointer position**, while the guide that gets added uses the **snapped** position. So Cmd-clicking near — but more than 1 px away from — an existing guide at, say, `1/2` finds nothing to delete and adds a duplicate at exactly the same coordinate. The two lines are indistinguishable on screen, and each needs its own click to remove.
+- **The delete probe checks both orientations.** `findGuideAtCursor` compares the pointer's document X against every *vertical* guide and its document Y against every *horizontal* one, and returns the first match in creation order — it is not scoped to the ruler being clicked. Clicking the top ruler can therefore delete a horizontal guide, in the narrow case where the ruler strip maps to within 1 px of that guide's Y.
+- **Guides are not undoable.** They live in the UI store, outside the [history system](#history) entirely: adding, removing, and Clear Guides all push nothing, and undo will not bring a cleared guide back.
+- **Every document-opening path clears them.** `createDocument` ends in `clearGuides()`, and every entry point routes through it — New Document, Open Image, paste-as-document, PSD import, DNG / RAF import, and project load. The `.lopsy` loader is the only one that puts any back, re-seeding `guides` from the manifest immediately afterwards (see [Native Project Format](#native-project-format-lopsy)).
+- **The guide color drives three overlays, not one.** Besides the guides themselves it colors the **ruler cursor indicator** lines and the **symmetry center marker** (the ringed crosshair drawn while a [symmetry](#symmetry) axis is active on a paint tool). Changing it from the ruler corner swatch repaints all three. Default is `rgb(0, 180, 255)`.
 
 ### Snapping
-- **Snap to Grid** (View menu): aligns drags to the nearest grid cell; auto-enabled whenever the grid is visible. Move-tool arrow-key nudges become one-cell hops under this mode.
-- **Snap to Layers** (View menu): while dragging with the Move tool, the layer's edges and X/Y centers attract to matching edges and centers of other visible layers within a 5 px threshold. Magenta alignment guides appear during the snap and clear on mouse-up.
+Two independent modes, both toggled from the View menu. Snap to Grid additionally has a **Snap** checkbox in the [options bar](#options-bar) beside the grid-size slider, and both flags are gated on Show Grid — see the [Grid](#grid) section.
+
+**Snap to Grid is not one behavior.** All seven consumers require `showGrid && snapToGrid`, but only one of them snaps an *angle* — the transform rotation handle, which quantizes to 15° (see [Scale, rotate, and modifiers](#scale-rotate-and-modifiers)). The other six quantize a position, and they do it in three mutually incompatible ways:
+
+- **Absolute, document-centered** (whole-layer Move drags, and both ends of a marquee drag): the position is quantized against the same center-anchored lattice the grid *draws*, so the result lands on a visible line. This path also **snaps to the canvas edges**: if the value is within half a grid cell of `0`, `docWidth`, or `docHeight`, it goes to that edge instead, so content aligns to the canvas border even where the centered lattice does not reach it. On a layer the edge test applies to its **origin**, so the "right edge" stop parks the layer's *left* edge on the canvas's right border, pushing it off-canvas.
+- **Absolute, origin-anchored** (dragging a transform **scale** handle, and dragging a **selection**-transform handle): the pointer is quantized as `round(p / gridSize) * gridSize` — a lattice anchored at the document's top-left corner, not its center. **These land on the drawn grid lines only when half the document's size is an exact multiple of the grid size.** On the default 1920 × 1080 document at the default 16 px grid, the vertical lines agree (`960 % 16 == 0`) while the horizontal ones are permanently 12 px off: the grid draws at `… 508, 524, 540, 556 …` and the snap goes to `… 512, 528, 544, 560 …`.
+- **Relative, no lattice at all** (arrow-key nudges, and dragging a **floating selection**): nothing is quantized — the *displacement* is changed to a whole number of cells. A nudge moves by `gridSize` instead of 1 px, and a floating-selection drag snaps its offset rather than its position (it calls the centered helper with no document dimensions, so the lattice collapses to one anchored at 0 and the edge snap is skipped). Either way the phase is preserved: something that started off-grid stays off-grid, just moving in grid-sized steps.
+
+Arrow-key nudging is also **not Move-tool-only** — the same `gridSize`-or-1 step drives the five selection tools (both marquees, both lassos, Magic Wand), where it nudges the selection rather than the layer.
+
+**Snap to Layers** attracts a dragged layer to the other layers in the document. The threshold is a hard-coded **5 document pixels** — not a screen distance and not configurable — so at 25 % zoom the pull is barely over one screen pixel wide, while at 800 % it is 40.
+
+- **Nine pairings per axis, per other layer**: the moving layer's left / center / right against that layer's left / center / right, and the same nine vertically. The X and Y snaps are resolved independently, and on each axis the smallest correction wins.
+- **It only runs on a whole-layer drag.** With an active selection the Move tool is dragging a *floating selection*, which takes the grid snap and nothing else. Arrow-key nudges never snap to layers either.
+- **Groups are excluded on both sides.** A group is never a candidate (`getLayerBounds` returns `null` for it), and a group being dragged is measured as 0 × 0, so its left, center, and right edges collapse onto its origin and only that one point can snap.
+- **Text layers have no vertical extent.** `TextLayer` carries no `height` field at all (see [Layer Properties](#layer-properties)), so a text layer's top, center, and bottom all collapse to its `y` — it attracts as a single horizontal line. **Point text is excluded outright**: its `width` is `null`, so with both dimensions zero it produces no bounds and never participates.
+- **Layers hidden by an ancestor group still attract.** The candidate filter tests the layer's own `visible` flag rather than the `isEffectivelyVisible` helper the compositor uses, so a layer that is invisible on canvas because its parent group is hidden still pulls the drag toward edges nothing is drawn at.
+- **Multi-selected siblings are excluded**, so dragging a set of layers together snaps the whole formation to outside layers and never to itself. The applied delta is computed after the snap and re-used for every sibling, keeping the group rigid.
+- **The magenta lines mark the target, not the mover.** Each line (`rgba(255, 0, 220, 0.85)`, 1 screen px, spanning the document) is drawn at the *candidate* edge that was matched; ties draw one line per matched edge. They are cleared on pointer-up and whenever Snap to Layers is off, but they are **not gated on Show Guides** — they appear with guides hidden.
 
 ### Seamless Pattern Preview
 - **Show Seamless Pattern** (View menu): tiles the document outside the canvas bounds so tileable textures and patterns can be previewed in context. The center tile is the actual document; surrounding tiles are repeats of the same pixels with edge wrapping (`fract(uv)`) so seams are visible immediately.
