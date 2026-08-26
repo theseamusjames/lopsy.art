@@ -1455,7 +1455,8 @@ Tab strips follow the WAI-ARIA tabs pattern, so a group's tabs are reachable wit
 - The canvas fills whatever space the docks leave.
 
 ### Persistence
-- The full layout — dock trees, tab groups, active tabs, split fractions, dock sizes, and floating window rects — is written to `localStorage` under `dock:layout:v1`, debounced ~400 ms and flushed on page unload.
+- The full layout — dock trees, tab groups, active tabs, split fractions, dock sizes, and floating window rects — is written to `localStorage` under `dock:layout:v1`, and flushed synchronously on `beforeunload`.
+- **The ~400 ms delay is a trailing throttle, not a debounce.** `schedulePersist` starts a timer on the first change and then *refuses to restart it* — later changes only swap the pending payload — so a continuous drag (a splitter, a floating window) writes the latest layout every 400 ms for as long as it lasts, rather than once when the pointer comes up. A debounce would coalesce the whole gesture into one write. Either way the final state always lands, at most 400 ms after the last change.
 - Persisted layouts are re-validated on load: unknown panel ids, duplicated panels, out-of-range sizes, and malformed nodes are dropped or clamped, and a layout that can't be repaired falls back to the default. If `localStorage` is unavailable the app still works — the layout just doesn't survive a reload.
 - **Known gap**: the store exposes a `resetLayout` action that restores the default arrangement, but nothing in the UI calls it yet — there is currently no "Reset Panel Layout" menu item or button.
 
@@ -1687,6 +1688,33 @@ More generally, the palette snap runs **only at conversion time**. Pixels painte
 - **Background**: chosen in the New Document dialog as **White** or **Transparent** — but the choice is made in *pixels*, not in a document property. White fills the `Background` layer with opaque white; Transparent leaves it empty. The document's own `backgroundColor` field is hard-coded to `rgba(0, 0, 0, 0)` at every site that creates a document (new, opened image, initial boot) and no UI writes it, so it is effectively dead state that only round-trips through `.lopsy` save/load — and the transparency checkerboard is always what sits behind the layer stack.
 - **Color mode**: RGB (default), Grayscale, Indexed, Lab, or CMYK — see Color Modes
 - Entirely client-side, no backend
+
+---
+
+## App Shell, Install & Persistence
+
+### Installable, but not offline
+- A **web app manifest** (`public/manifest.webmanifest`, linked from `index.html`) declares name and short name `Lopsy`, `display: standalone`, `start_url: /`, and background / theme colors of `#1e1e1e`, with three icon entries — 192 px, 512 px, and the 512 again marked `purpose: maskable` — alongside a separate `apple-touch-icon` link and a matching `theme-color` meta. A browser that offers installation therefore gets a standalone window with its own icon and title-bar color.
+- **Installing does not buy offline use.** `main.tsx` registers `/sw.js` on every load where `navigator.serviceWorker` exists, but `public/sw.js` is two lines — `install → skipWaiting()`, `activate → clients.claim()`. It declares **no `fetch` handler and never touches the Cache API**, so it caches nothing and contributes nothing to loading the app; its only effect is that a newly deployed worker takes control immediately instead of waiting for every tab to close. There is no build-time PWA tooling in the project (no Workbox, no `vite-plugin-pwa`), so `public/sw.js` is copied verbatim into the build and is exactly what ships.
+- **A failed registration is unhandled.** The call is a bare `navigator.serviceWorker.register('/sw.js')` with no `.catch()` — two lines below it, `initWasm().catch(() => {})` does swallow its own failure — so a refused registration (insecure origin, storage blocked, private mode) surfaces as an unhandled promise rejection in the console. Nothing else breaks, because nothing in the app depends on the worker.
+- Hosting is configured as a single-page app: `public/_redirects` maps `/* → /index.html 200`.
+- `index.html` also carries the link-preview surface — Open Graph and Twitter `summary_large_image` tags pointing at `public/og-image.jpg`, plus the page title and description.
+
+### Browser zoom and gestures are suppressed app-wide
+- `index.html` ships `maximum-scale=1.0, user-scalable=no` in its viewport meta, and `main.tsx` adds **capture-phase `window` listeners** — at capture specifically so nothing downstream can stop propagation first — that `preventDefault()` on **ctrl/meta + wheel**, on `gesturestart` / `gesturechange` / `gestureend`, and on **ctrl/meta + `+` / `-` / `=` / `0`**.
+- So the page itself never zooms or pinches: those inputs are free to drive the canvas zoom instead (see [Viewport](#viewport)). The keydown suppressor lists the four browser-zoom keys only — `⌘1` is not among them — but `handleZoomShortcut` calls `preventDefault()` for `=`, `-`, `0` **and** `1`, so every canvas zoom shortcut cancels its own default as well.
+
+### What survives a reload
+- **Exactly two things, both in `localStorage`.** The app uses no IndexedDB, no cookies, no OPFS, and no Cache API anywhere in `src/`.
+  1. **`dock:layout:v1`** — the panel layout (see [Panel Docking → Persistence](#persistence)).
+  2. **`lopsy-shortcut-customizations`** — the Zustand `persist` store behind [Keyboard Shortcut Customization](#keyboard-shortcut-customization), holding only the `customShortcuts` override map.
+- **The two are not equally careful.** The dock layout is re-validated on load and anything malformed is repaired or dropped. The shortcut store declares no `version`, no `migrate`, and no `merge`, so whatever JSON sits under its key is adopted as the override map verbatim. An override therefore outlives the action it names: seeding `{ 'ghost-tool': 'b' }` makes `buildKeyToActionMap` hand `b` to the dead id **and delete Brush's binding entirely** — `B` then selects nothing and the Brush has no key at all, with no row in the shortcuts modal to explain it, because the modal renders its own hand-written row list rather than the stored map. **Reset All** clears it.
+- **Everything else is memory-only.** Tool settings (every tool's size / opacity / hardness / mode), the foreground and background colors, the recent-colors strip, **brush presets** — both what `Save Current` snapshots and every tip imported from an `.abr` — patterns, reference images, guides, the selection, the undo history, and the viewport all reset on reload.
+- **For most of that there is no route across a reload at all.** Tool settings, brush presets, patterns, and reference images are absent from the `.lopsy` project format as well (see [Native Project Format](#native-project-format-lopsy)), so saving a project does not rescue them either. The Brushes modal's **Export** button — the `.json` preset library — is the only way to carry a custom brush from one session to the next, which is what that button is for.
+- **There is no light theme.** `.theme-light` is named in the repo's own contributor docs, but no stylesheet defines the class and nothing in the app ever sets it. The dark palette in `tokens.css` is the only one that ships, and there is no theme control anywhere in the UI.
+
+### Dev-only debug hooks
+- `main.tsx` hangs a set of `window.__*` handles for the Playwright suite — the editor, UI, tool-settings, pattern, shortcut, and dock stores, the pixel-data manager, `__readCompositedPixels` / `__readLayerPixels`, and project save / load / RAF-import helpers. The whole block sits behind `import.meta.env.DEV`, so a production build exposes none of it.
 
 ---
 
