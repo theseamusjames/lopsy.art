@@ -32,6 +32,7 @@ import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 import { expandLayerToDocSize, cropLayerToContent, hasFloat } from '../engine-wasm/wasm-bridge';
 import { invalidateCachedSnapshot } from './store/history-slice';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
+import { scheduleDeferredCrop, cancelDeferredCropIfPending } from './deferred-crop-on-switch';
 
 
 /**
@@ -64,19 +65,31 @@ function renderFrameGpu(
   if (currentActiveId !== prevActiveLayerRef.current && !hasFloat(engine)) {
     const oldId = prevActiveLayerRef.current;
     const newId = currentActiveId;
-    const storeState = useEditorStore.getState();
-    const doc = storeState.document;
+    const doc = useEditorStore.getState().document;
 
     if (oldId) {
       const oldLayer = doc.layers.find((l) => l.id === oldId);
       if (oldLayer?.type === 'raster') {
-        invalidateCachedSnapshot(oldId);
-        const result = cropLayerToContent(engine, oldId);
-        if (result.length === 4 && (result[2] ?? 0) > 0) {
+        // Crop-back-to-content is a memory optimization, not a correctness
+        // requirement — but at 4K it's a 61 MB readback + 16-million-pixel
+        // CPU alpha scan (313 ms per switch), which lands on the frame the
+        // user just clicked (#740). Defer it to an idle callback so the
+        // stall never blocks the switch, and cancel it if the user comes
+        // right back to the layer.
+        scheduleDeferredCrop(oldId, () => {
+          const eng = getEngine();
+          if (!eng) return;
+          if (useEditorStore.getState().document.activeLayerId === oldId) return;
+          if (hasFloat(eng)) return;
+          const currentOld = useEditorStore.getState().document.layers.find((l) => l.id === oldId);
+          if (!currentOld || currentOld.type !== 'raster') return;
+          invalidateCachedSnapshot(oldId);
+          const result = cropLayerToContent(eng, oldId);
+          if (result.length !== 4 || (result[2] ?? 0) <= 0) return;
           croppedLayerIds.add(oldId);
           const boundsChanged =
-            result[0] !== oldLayer.x || result[1] !== oldLayer.y ||
-            result[2] !== (oldLayer.width ?? 0) || result[3] !== (oldLayer.height ?? 0);
+            result[0] !== currentOld.x || result[1] !== currentOld.y ||
+            result[2] !== (currentOld.width ?? 0) || result[3] !== (currentOld.height ?? 0);
           useEditorStore.setState((s) => ({
             document: {
               ...s.document,
@@ -88,44 +101,40 @@ function renderFrameGpu(
             },
             renderVersion: s.renderVersion + 1,
           }));
-          // The GPU texture was cropped to content. If the bounds actually
-          // changed, cached JS pixel data has wrong dimensions; clear it so
-          // syncLayers doesn't re-expand the GPU texture to the stale size
-          // (#543). If bounds didn't change (JS-side crop already ran), the
-          // cached data (including sparse entries) is still valid.
           if (boundsChanged) {
             clearJsPixelData(oldId);
           }
-        }
+        });
       }
     }
 
-    if (newId && croppedLayerIds.has(newId)) {
-      const newLayer = doc.layers.find((l) => l.id === newId);
-      if (newLayer?.type === 'raster') {
-        const result = expandLayerToDocSize(engine, newId);
-        if (result.length === 4) {
-          const actuallyExpanded =
-            result[0] !== newLayer.x || result[1] !== newLayer.y ||
-            result[2] !== (newLayer.width ?? 0) || result[3] !== (newLayer.height ?? 0);
-          if (actuallyExpanded) {
+    if (newId) {
+      // If this layer's crop is still queued, drop it — the user is back
+      // on the layer and the crop should never run mid-edit. The layer
+      // texture is still at its expanded (doc) size, so nothing else to
+      // do here either.
+      const cropWasPending = cancelDeferredCropIfPending(newId);
+      if (!cropWasPending && croppedLayerIds.has(newId)) {
+        const newLayer = doc.layers.find((l) => l.id === newId);
+        if (newLayer?.type === 'raster') {
+          const result = expandLayerToDocSize(engine, newId);
+          if (result.length === 4) {
+            useEditorStore.setState((s) => ({
+              document: {
+                ...s.document,
+                layers: s.document.layers.map((l) =>
+                  l.id === newId
+                    ? { ...l, x: result[0]!, y: result[1]!, width: result[2]!, height: result[3]! }
+                    : l
+                ),
+              },
+              renderVersion: s.renderVersion + 1,
+            }));
+            // GPU texture was expanded. Drop cached JS pixel data so the next
+            // syncLayers doesn't overwrite the expanded texture with the
+            // smaller pre-expand snapshot.
             clearJsPixelData(newId);
           }
-          useEditorStore.setState((s) => ({
-            document: {
-              ...s.document,
-              layers: s.document.layers.map((l) =>
-                l.id === newId
-                  ? { ...l, x: result[0]!, y: result[1]!, width: result[2]!, height: result[3]! }
-                  : l
-              ),
-            },
-            renderVersion: s.renderVersion + 1,
-          }));
-          // GPU texture was expanded. Drop cached JS pixel data so the next
-          // syncLayers doesn't overwrite the expanded texture with the
-          // smaller pre-expand snapshot.
-          clearJsPixelData(newId);
         }
       }
     }

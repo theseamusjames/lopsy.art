@@ -260,7 +260,11 @@ export function useCanvasInteraction(
         // Layer-mask edit mode paints on the mask texture via gpuMaskDabBatch
         // and never reads the layer's own RGBA, so expanding + uploading the
         // full-res layer buffer is pure waste (71.64 MB / stroke at 4K, #733).
-        const needsPixelData = (isPaintTool && !isQuickMaskMode && !maskEditMode) || activeTool === 'fill';
+        // Fill is not on this list either: the fill handler owns its own
+        // doc-space coordinate math and reconciles JS bounds after the engine's
+        // ensure_layer_full_size via syncLayerAfterFullSize — no RGBA
+        // round-trip needed (#742).
+        const needsPixelData = isPaintTool && !isQuickMaskMode && !maskEditMode;
         if (needsPixelData) {
           const imageData = editorState.expandLayerForEditing(activeLayerId);
           expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;

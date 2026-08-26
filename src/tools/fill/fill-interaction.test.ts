@@ -45,6 +45,15 @@ vi.mock('../../app/store/clear-js-pixel-data', () => ({
   clearJsPixelData: (...args: unknown[]) => clearJsPixelData(...args),
 }));
 
+// #742 — every fill path reconciles JS layer bounds against the engine's
+// post-ensure_layer_full_size descriptor. That helper reads the store and
+// touches the pixel-data manager; stub it out here and record calls so
+// tests can assert the reconciliation ran.
+const syncLayerAfterFullSize = vi.fn((_engine: unknown, _id: string) => null);
+vi.mock('../../app/sync-layer-after-full-size', () => ({
+  syncLayerAfterFullSize: (engine: unknown, id: string) => syncLayerAfterFullSize(engine, id),
+}));
+
 const DOC_W = 8;
 const DOC_H = 8;
 
@@ -127,6 +136,7 @@ beforeEach(() => {
   uploadLayerMask.mockClear();
   readMaskTexture.mockReset();
   clearJsPixelData.mockClear();
+  syncLayerAfterFullSize.mockClear();
   editorState.pushHistory.mockClear();
   editorState.notifyRender.mockClear();
   editorState.updateLayerMaskData.mockClear();
@@ -218,6 +228,35 @@ describe('bucket fill — normal mode', () => {
     expect(editorState.pushHistory).toHaveBeenCalledWith('Bucket Fill');
     expect(floodFill).not.toHaveBeenCalled();
     expect(applyFillToLayer).not.toHaveBeenCalled();
+  });
+
+  // #742 — the fill's engine-side ensure_layer_full_size resets the layer
+  // descriptor to doc-sized at the origin. Without a bounds reconciliation
+  // on the JS side, the next syncLayers frame re-applies the pre-fill
+  // offset and double-offsets the result (#722 revert). Every fill path
+  // must call syncLayerAfterFullSize to keep the store in step.
+  it('reconciles bounds via syncLayerAfterFullSize after the CPU BFS path', () => {
+    handleFillDown(makeCtx());
+    expect(applyFillToLayer).toHaveBeenCalledTimes(1);
+    expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
+    expect(syncLayerAfterFullSize.mock.calls[0]![1]).toBe('layer-1');
+  });
+
+  it('reconciles bounds via syncLayerAfterFullSize on the non-contiguous GPU fast path', () => {
+    ts.settings.fill.contiguous = false;
+    handleFillDown(makeCtx());
+    expect(bucketFillByColorGpu).toHaveBeenCalledTimes(1);
+    expect(applyFillToLayer).not.toHaveBeenCalled();
+    expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
+    ts.settings.fill.contiguous = true;
+  });
+
+  it('reconciles bounds via syncLayerAfterFullSize on the empty-layer solid fast path', () => {
+    getLayerTextureDimensions.mockReturnValueOnce(new Uint32Array([1, 1]));
+    handleFillDown(makeCtx());
+    expect(bucketFillSolid).toHaveBeenCalledTimes(1);
+    expect(applyFillToLayer).not.toHaveBeenCalled();
+    expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
   });
 });
 

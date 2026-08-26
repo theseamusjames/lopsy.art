@@ -4,6 +4,7 @@ import { useUIStore } from '../../app/ui-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { toDocumentColor } from '../../app/document-color';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
+import { syncLayerAfterFullSize } from '../../app/sync-layer-after-full-size';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
@@ -109,6 +110,10 @@ export function handleFillDown(ctx: InteractionContext): void {
       color.r / 255, color.g / 255, color.b / 255, color.a,
       selMaskBytes ?? undefined, selW, selH,
     );
+    // The fill's ensure_layer_full_size may have expanded the engine's
+    // layer descriptor past the JS store's (x, y, w, h). Reconcile bounds
+    // before the next syncLayers re-pushes the stale JS values (#742).
+    syncLayerAfterFullSize(engine, activeLayerId);
     clearJsPixelData(activeLayerId);
     editorState.notifyRender();
     return;
@@ -125,6 +130,7 @@ export function handleFillDown(ctx: InteractionContext): void {
       tolerance / 255,
       selMaskBytes ?? undefined, selW, selH,
     );
+    syncLayerAfterFullSize(engine, activeLayerId);
     clearJsPixelData(activeLayerId);
     editorState.notifyRender();
     return;
@@ -152,6 +158,7 @@ export function handleFillDown(ctx: InteractionContext): void {
     color.r / 255, color.g / 255, color.b / 255, color.a,
     fillMask, docW, docH,
   );
+  syncLayerAfterFullSize(engine, activeLayerId);
   clearJsPixelData(activeLayerId);
   editorState.notifyRender();
 }
