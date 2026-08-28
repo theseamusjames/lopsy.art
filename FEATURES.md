@@ -202,13 +202,16 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Font family**: chosen from a searchable **font browser** (see below) covering 1,954 families — 14 system faces (Inter, Arial, Helvetica, Georgia, Times New Roman, Courier New, JetBrains Mono, Verdana, Trebuchet MS, Impact, Comic Sans MS, Palatino, Garamond, Brush Script MT) plus 1,940 Google Fonts.
 - **Font weight**: the dropdown lists exactly the weights the selected family ships, labelled Thin (100) / ExtraLight (200) / Light (300) / Regular (400) / Medium (500) / SemiBold (600) / Bold (700) / ExtraBold (800) / Black (900) / UltraBlack (1000). Families outside the catalog fall back to Regular + Bold. Switching to a family that lacks the current weight snaps to the numerically nearest one it does have.
 - **Font style**: normal or italic
-- **Text align**: left, center, right, justify
+- **Text align**: left, center, right, justify — **but only area text is ever aligned.** Alignment needs a box to align within, and point text has none: the engine calls `set_size` only when an `areaWidth` is present, so for point text cosmic-text falls back to using each paragraph's *own* measured width as the alignment box. Every correction is then zero, and all four settings render byte-identically flush-left however many lines the layer has. Verified against the software renderer: a two-line point-text layer produces the same pixels and the same caret x (`0`) for left / center / right / justify, while the same text in a 400 px box puts the caret at `0` / `197.9` / `395.7`. The dropdown stays enabled and still shows the choice, so nothing signals that it is inert — and because alignment is per-paragraph, this is visible the moment a point-text layer has two lines of different lengths.
+- **Justify additionally needs a wrap.** cosmic-text never justifies the last visual line of a paragraph, and a paragraph that fits its box *is* entirely last line — so justify is indistinguishable from left until a line actually wraps. Once one does, the non-final lines stretch to the box (a wrapping run in a 300 px box goes from 275 px wide left-aligned to 309 px justified).
 - **Line height**: stored per text layer (default 1.4× the font size). Not in the options bar, but adjustable in the **Text panel** (0.5× – 4×).
 - **Letter spacing**: stored per text layer (default 0). Not in the options bar, but adjustable in the **Text panel** (−20 – 200 px); applied in the WASM engine (cosmic-text has no native tracking) and respected by the path-bound layout.
 - **Paragraph spacing**: extra space between paragraphs, stored per text layer (default 0). Text-panel only (0 – 200 px), also applied in the engine.
-- **Underline (`U`)**: toggle a horizontal stroke 10% of the font size below the baseline, 8% of font-size thick
-- **Strikethrough (`S`)**: toggle a horizontal stroke 32% of the font size above the baseline, 8% of font-size thick
-- **Mode**: point text (no wrap) or area text (fixed width with wrapping)
+- **Underline**: a toggle button glyphed **U**, drawing a horizontal stroke 10% of the font size below the baseline, 8% of font-size thick (floor 1 px).
+- **Strikethrough**: a toggle button glyphed **S**, drawing a horizontal stroke 32% of the font size above the baseline, 8% of font-size thick (floor 1 px). Neither glyph is a shortcut — `U` and `S` are bound to the **Shape** and **Clone Stamp** tools, and no key toggles either decoration.
+- **Mode is a gesture, not a setting.** There is no Mode control in the options bar or the Text panel; which kind of layer you get is decided by the drag that creates it. A click — or a drag within **4 px on both axes** — makes **point text**: `width` is `null`, the engine selects `Wrap::None`, and the line runs on forever. A drag past 4 px on either axis makes **area text**, whose fixed width is the drag's `|dx|` and which wraps on word boundaries (`Wrap::Word`). The mode is fixed at creation — nothing in the UI converts a layer from one to the other afterwards.
+- **The area box's height is discarded.** The drag's `|dy|` is written onto the editing state and then never read again: it is not sent to the engine, not stored on the layer, and the engine passes `None` for height to `set_size`. The box therefore constrains width only — text longer than the rectangle you dragged overflows its bottom edge indefinitely rather than clipping, scrolling, or growing a handle. The rectangle's height only ever existed as the drag preview.
+- **All text layout lives in the engine.** `src/tools/text/text.ts` still carries a CPU implementation — `wrapText` and `alignLineX` — with unit tests that pass, but neither has a caller anywhere in `src/`, not even inside its own file. Only `buildFontString` survives, used solely by the path-text renderer. Nothing consults the JS layout, so the engine's cosmic-text pass is the only one that runs and the wrapping and alignment behavior above is entirely its own.
 - **Bind to path**: a Path dropdown in the text options bar lists every stored path. Once bound, glyphs are placed one by one along the path's arc-length and rotated to match the local Bezier tangent (works on both open and closed paths). Live editing (typing) re-flows the type along the curve in real time, and editing the path's anchors invalidates the cached layout so the text follows. Selecting "None" unbinds and restores the layer's pre-bind position.
 
 **Font browser** (the Font control in the text options bar)
@@ -408,8 +411,11 @@ gets baked first.
   bounds. **`Cmd`/`Meta` + drag a rotation handle** snaps to 15° increments
   (`π/12`); enabling grid + snap-to-grid applies the same snap automatically
   without the modifier.
-- Grid + snap-to-grid *also* snaps the pointer position to grid cells while
-  dragging a **scale** handle — a separate effect from the 15° rotation snap.
+- Grid + snap-to-grid *also* snaps the pointer position while dragging a
+  **scale** handle — a separate effect from the 15° rotation snap. Note that
+  this path quantizes against an *origin*-anchored lattice, not the
+  document-centered one the grid draws, so on most document sizes it does not
+  land on the visible grid lines; see [Snapping](#snapping).
 - Only `metaKey` is read — this is Cmd on macOS and the Windows/Super key
   elsewhere, **not** Ctrl.
 
@@ -446,6 +452,14 @@ gets baked first.
 - **Rotate 90° CW / CCW** sit in the Move tool's own options-bar group and are
   **dual-purpose** — with a selection active they rotate the selected content,
   with no selection they rotate the entire active layer.
+  - **The whole-layer branch is raster only, and silent about it**, the same way
+    the neighbouring [Fit button](#move) is: `rotateActiveLayer` returns on a
+    text, shape, or group layer *before* `pushHistory`, so the click produces no
+    rotation, no undo step, and no feedback. The selection branch has no such
+    guard — it composites a rotation matrix through the float pipeline
+    regardless of the layer underneath. [Flip Horizontal / Vertical in the Image
+    menu](#canvas-operations) is the odd one out: it pushes history before it
+    checks anything at all.
 
 ---
 
@@ -784,17 +798,26 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 
 ## Blend Modes
 
-| Category | Modes |
-|----------|-------|
-| Basic | Normal |
-| Darken | Multiply, Darken, Color Burn |
-| Lighten | Screen, Lighten, Color Dodge |
-| Contrast | Overlay, Hard Light, Soft Light |
-| Inversion | Difference, Exclusion |
-| HSL | Hue, Saturation, Color, Luminosity |
-| Group-only | Pass Through |
+Sixteen layer blend modes, plus the group-only Pass Through. The dropdown's headings and its within-group ordering both come straight from `BLEND_MODE_GROUPS` (`src/panels/LayerEffectsPanel/LayerEffectsPanel.tsx:21`):
 
-The four **HSL** modes are RGB-only: they decompose RGB into HSL, so every other color mode drops them from the dropdown and coerces any layer already using one to Normal on conversion (see Color Modes).
+| Group heading | Modes, in dropdown order |
+|----------|-------|
+| Normal | Normal |
+| Darken | Darken, Multiply, Color Burn |
+| Lighten | Lighten, Screen, Color Dodge |
+| Contrast | Overlay, Soft Light, Hard Light |
+| Comparative | Difference, Exclusion |
+| Composite | Hue, Saturation, Color, Luminosity |
+
+**Pass Through is not a trailing group.** On a group layer the list is rebuilt as `GROUP_BLEND_MODE_GROUPS` (`:31`), which prepends a **Pass Through** heading holding that one mode *above* Normal; non-group layers never see it. The blend-mode dropdown is rendered only by the **effects drawer** — `LayerEffectsPanel` is the sole surface that draws it, so there is no second copy in the Layers panel to drift from this one.
+
+The four **Composite** modes are RGB-only: every other color mode filters them out of the dropdown (`:66`) and coerces any layer already carrying one to Normal on conversion (`convert-color-mode.ts:32`, see [Color Modes](#color-modes)). The usual justification — that they "decompose RGB into HSL" — only covers half of them. **Hue** and **Saturation** do round-trip through `rgb2hsl` / `hsl2rgb`; **Color** and **Luminosity** never touch HSL at all, and are pure `setLum` operations over a **Rec. 709** luma (`0.2126 / 0.7152 / 0.0722` — the same coefficients in `hsl_common.glsl` and `color.rs:355`). That is *not* the `0.30 / 0.59 / 0.11` luma the PDF / Photoshop non-separable blend spec uses, so Lopsy's Color and Luminosity land on different pixels than Photoshop's given identical inputs.
+
+### Compositing runs in gamma-encoded sRGB, not linear light
+
+`blend.glsl` blends the values exactly as sampled. Layer textures are allocated `RGBA8` or `RGBA16F` and **never `SRGB8_ALPHA8`**, so the GPU applies no automatic linearization, and nothing anywhere in `lopsy-wasm` calls `srgb_to_linear` on the way in. The FP16 path buys precision and EDR headroom, not a linear working space.
+
+This is worth knowing mainly because **the PSD merged composite does the opposite** — it blends in linear light, so it does not match the canvas. See [PSD Export](#psd-export).
 
 ### Pass Through (group blend mode)
 
@@ -811,8 +834,10 @@ There are exactly four layer types (`LayerType = 'raster' | 'text' | 'shape' | '
 
 - **Raster**: pixel layer
 - **Text**: live-editable text
-- **Shape**: vector shape (ellipse, polygon — see Shape Tool above)
+- **Shape**: vector shape (ellipse, polygon) — **declared and round-tripped, but never created**. See below.
 - **Group**: folder with optional per-group adjustments
+
+**Nothing in the app ever creates a shape layer.** `ShapeLayer` is constructed in exactly one place in `src/` — `project-load.ts`, deserialising a `.lopsy` file — and `shapeType` appears in only three other places: the type definition, and the two save-side ones (the serialised-layer interface and the writer that fills it). The [Shape tool](#shape-tool) does not make one: its *pixels* output rasterises straight into the **active layer** on the GPU, and its *path* output adds an entry to the [Paths panel](#paths-panel). So the only way to hold a shape layer is to open a project file that already contains one, which Lopsy itself can never have written. Several helpers still branch on the type defensively (`add-layer-mask`, `layer-model`'s width/height accessors, `convert-color-mode`, the PSD writer), and `project-save` writes out all eight shape-specific fields alongside the shared base.
 
 Lopsy has **no** Adjustment-layer or Fill-layer type. Adjustments are non-destructive **nodes** stacked on a group rather than layers of their own (see Image Adjustments), and fills are painted into a raster layer.
 
@@ -917,11 +942,160 @@ A row of icon buttons pinned below the list. Three entries are **conditional**, 
 
 ## Canvas Operations
 
-- **Crop canvas**: by rectangle
-- **Canvas Size…** (Image menu): new width/height with anchor point (extends or trims the document without resampling layer pixels)
-- **Image Size…** (Image menu): new width/height that resamples all layers
-- **Rotate Image 90° CW / 90° CCW** (Image menu): rotates the entire document (every layer, every mask, the selection, and the canvas size) about the document center
-- **Flip Horizontal / Vertical** (Image menu): mirrors the active layer along the chosen axis (operates per-layer, not document-wide, so partial-image flips are possible)
+Five commands rewrite the document's own geometry, and all five are GPU-side —
+no pixel data round-trips through JS (#710 for the three document-wide ones).
+Four of them (`crop_texture`,
+`resize_canvas_texture`, `scale_texture`, `rotate_texture_90`) allocate a fresh
+texture at the new size, blit the old content into it, release the old handle
+and swap in the new one; `flip_texture` is the exception, rendering through
+`scratch_a` and back into the *same* texture, which is why Flip alone cannot
+change a layer's dimensions. Each then drops the JS pixel cache so the GPU is
+the sole source of truth afterwards — `pixelDataManager.replace` with empty maps
+for Crop / Canvas Size / Image Size, `clearAll()` for Rotate Image, and
+`remove(activeId)` for Flip.
+
+- **Crop canvas**: by rectangle — either dragged with the [Crop tool](#crop) or
+  taken from the selection bounds via **Edit → Crop**.
+- **Canvas Size…** (Image menu): new width/height with anchor point — extends or
+  trims the document without resampling layer pixels.
+- **Image Size…** (Image menu): new width/height that resamples the document.
+- **Rotate Image 90° CW / 90° CCW** (Image menu): swaps the document dimensions
+  and rotates the raster layers about the document center.
+- **Flip Horizontal / Vertical** (Image menu): mirrors the **active layer**
+  along the chosen axis (per-layer, not document-wide, so partial-image flips
+  are possible).
+
+### What each one actually touches
+
+Only two of the four layer types are handled. `mapLayersForTransform` — the
+shared spine of Crop, Canvas Size, and Image Size — dispatches on `text` and
+`raster` and passes everything else through unchanged; `rotateImage` skips
+every non-raster layer outright.
+
+| | raster pixels | raster geometry | text | shape / group | layer mask | selection |
+|---|---|---|---|---|---|---|
+| **Crop canvas** | cropped to the rect | reset to `(0,0)` at full canvas size | translated by the crop origin | untouched | untouched | untouched by the tool; **Edit → Crop clears it** |
+| **Canvas Size** | repositioned inside a new full-canvas texture | reset to `(0,0)` at full canvas size | translated by the anchor offset | untouched | untouched | untouched |
+| **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position scaled, **font size unchanged** | untouched | untouched | untouched |
+| **Rotate Image** | rotated 90° | dimensions swapped, position rotated about the document center | **untouched** | untouched | untouched | untouched |
+| **Flip** | mirrored within the layer's own texture | untouched | mirrors the rendered glyph texture | no-op on a group's 1×1 placeholder | untouched | untouched |
+
+**Layer masks are never transformed by any of the five.** The Rust helpers
+(`crop_texture`, `resize_canvas_texture`, `scale_texture`, `rotate_texture_90`,
+`flip_texture`) all operate on `engine.layer_textures` and never look at
+`engine.layer_masks`, and on the JS side the `{...layer}` spread carries the
+same `LayerMask` object through, so `sync-layers` — which re-uploads only when
+`layer.mask.data` changes by reference — never pushes a new one. The mask keeps
+its pre-operation pixels *and* its pre-operation dimensions. `blend.glsl`
+samples it at `(docPos − layerOffset) / u_maskSize`, i.e. 1:1 document pixels
+anchored at the layer's origin, and where that UV falls outside `0…1` the mask
+is **not applied at all** — so the part of a resized or rotated layer the stale
+mask no longer covers comes back **fully unmasked** rather than hidden.
+
+**The selection is never transformed either.** None of the five reads or writes
+`state.selection`, so after a Crop-tool crop or any of the Image-menu commands
+an active marquee keeps its old document-space `bounds` and `maskData` while
+the document underneath has moved or resized. Only **Edit → Crop** tidies up
+after itself, by calling `clearSelection()` once the crop lands.
+
+### Rotate Image 90° CW / CCW
+
+- **Raster only.** The loop pushes every non-raster layer through with its
+  position and dimensions untouched, so **text layers do not rotate and do not
+  move** — they keep their old coordinates in a document whose width and height
+  have just swapped. A caption sitting near the bottom of a portrait document
+  ends up off the right edge of the resulting landscape canvas.
+- Raster layers are rotated on the GPU and repositioned about the document
+  center: clockwise sends `(x, y)` to `(docH − y − h, x)`, counter-clockwise to
+  `(y, docW − x − w)`, with width and height swapped.
+- **Known defect — the rotation does not mark its layers dirty.** Unlike Flip
+  and Rotate Layer, which both add the layer to `dirtyLayerIds`, `rotateImage`
+  writes only `document` and `renderVersion`. That is usually masked because
+  `snapshotGpuLayers` also re-snapshots any layer whose position or raster
+  dimensions changed — but a layer that is *invariant* under the rotation
+  (a square layer centred on a square document, including a full-canvas layer
+  on a square document) matches on both, so the **next** history push reuses the
+  pre-rotation snapshot handle and undoing that later action restores unrotated
+  pixels. This is the same failure mode as #704.
+
+### Flip Horizontal / Vertical
+
+- **No type guard, and history is pushed first.** `flipActiveLayer` records the
+  *Flip Horizontal* / *Flip Vertical* entry before it looks at anything, then
+  calls `flipLayer` on whatever texture the active layer owns. On a group that
+  is the 1×1 lazy placeholder, so the command adds an undo step and changes
+  nothing visible. On a text layer it mirrors the rendered glyph texture, and
+  the mirror survives until something re-renders the layer from its stored
+  string (any text property edit, a font binary finishing its download, or the
+  layer losing a path binding) — at which point the glyphs silently snap back.
+  Contrast [Rotate 90°](#quick-transforms), which bails out on any non-raster
+  layer *before* pushing history.
+- **The mirror is about the layer's own bounding box, not the document.**
+  `flip_texture` flips UVs within the existing `w × h` texture and writes back
+  into it; `x` / `y` are never touched. A layer smaller than the canvas
+  therefore flips in place rather than moving to the opposite side of the
+  document.
+
+### Canvas Size and Crop reset every raster layer to full canvas
+
+Both `resize_canvas_texture` and `crop_texture` allocate a texture at the **new
+document size**, clear it to transparent, and blit the old content in at its
+offset — and the JS side then rewrites the layer as
+`{ x: 0, y: 0, width: newW, height: newH }`. Two consequences:
+
+- **Anything outside the new bounds is gone.** Trimming with Canvas Size or
+  cropping discards the off-canvas pixels permanently; there is no equivalent of
+  Photoshop's "reveal all" to bring them back.
+- **The cropped-to-content storage invariant is discarded.** A 50 × 50 sticker
+  layer becomes a full 4096 × 4096 texture on a 4K document, for every raster
+  layer in the stack. **Image Size** deliberately does *not*
+  do this — it scales each layer's own width/height/x/y by the document factor
+  (floored at 1 px) precisely so a small layer isn't stretched to fill the
+  canvas.
+
+### The two dialogs
+
+`Canvas Size…` and `Image Size…` are the only top-level Image-menu items that
+open a dialog (Mode → *Indexed Color…* opens a third, from the submenu). The two
+share their number handling and diverge everywhere else.
+
+- Both clamp Width and Height to **1 – 16384 px** on Apply, and both fall back
+  to the *current* document dimension when a field is blank or unparseable —
+  so clearing a field and pressing Apply is a no-op on that axis rather than an
+  error.
+- Both bind Enter (apply) and Escape (cancel) with an `onKeyDown` on the dialog
+  `<div>`, which has no `tabIndex` and autofocuses nothing. React's handler only
+  sees events that bubble from inside, so the keys work once focus is in one of
+  the inputs and do nothing on a freshly opened dialog — the same focus
+  requirement the [filter dialogs](#filter-dialog-shared) have.
+- **Canvas Size** shows the current size, the two fields, and a **3 × 3 anchor
+  grid** defaulting to centre. The anchor picks where the old canvas sits inside
+  the new one: `offset = round((new − old) × anchor)` per axis.
+- **Image Size** shows a **Constrain proportions** checkbox (default on) and a
+  live percentage beside each field. The ratio it constrains to is the
+  document's ratio **as of when the dialog opened**, held constant for the
+  dialog's lifetime rather than re-derived from the current field values. The
+  percentages are read-outs only — there is no percent entry mode — and there is
+  **no resample-method choice**: `scale_texture` always switches the source
+  texture to `LINEAR` for the blit (restoring `NEAREST` afterwards), so every
+  Image Size is bilinear.
+- **Both dialogs push history unconditionally.** `resizeCanvas` and
+  `resizeImage` call `pushHistory` before they compute anything, so pressing
+  Apply without changing a number still leaves a *Resize Canvas* / *Resize
+  Image* step on the undo stack. Crop guards more carefully — `cropCanvas` rejects a
+  zero-area rectangle *before* `pushHistory`, so a degenerate drag records
+  nothing (cropping to the full document is still a real entry).
+- **Only the raster layers are resampled by Image Size.** Text layers have their
+  `x` / `y` scaled but not their font size, so type stays at its original point
+  size while the artwork around it grows or shrinks; shape and group layers are
+  not touched at all.
+
+### Crop tool commit
+
+A Normal-mode crop **commits on pointer-up** — there is no confirmation step,
+unlike Perspective mode's Apply / Cancel buttons. The drag rectangle is clamped
+to the document as it is drawn, and `handleCropUp` requires it to be more than
+1 px on *both* axes before it commits, so a stray click-drag is discarded.
 
 ---
 
@@ -963,13 +1137,21 @@ All three are undoable and auto-switch the target group from pass-through to nor
 - **Pixel grid**: a 1-CSS-px translucent gray lattice rendered when the viewport zoom exceeds 800% (8×), so individual document pixels are visible during pixel-accurate editing. View → "Show Pixel Grid" toggles whether the lattice is drawn at all (default on).
 
 ### Grid
-- **Show grid**: on/off
+- **Show grid**: on/off, **off by default**.
+- **The lattice is centered on the document, not on its origin.** `renderGrid` grows lines outward from `(docWidth / 2, docHeight / 2)` in both directions, so a line always falls exactly on the document's midpoint and the leftover partial cell ends up at the canvas edges rather than in the middle. Lines are clipped to the document rect, so the grid never extends into the surrounding workspace. **Only two of the seven snap consumers actually use this lattice** — see [Snapping](#snapping).
+- **Major lines every 4 cells**: minor lines draw at `rgba(128, 128, 128, 0.25)` and every fourth at `0.5`, both `1 / zoom` document units wide so they stay a constant 1 screen px at any magnification.
+- **The grid is the first thing drawn on the overlay canvas**, ahead of marching ants, guides, snap lines, transform handles and the brush cursor — so it paints over the artwork but every other piece of overlay chrome paints over it.
 - **Grid size**: default 16 px, changed from a slider in the [options bar](#options-bar) that appears only while the grid is shown — the sole place in the app that can set it. The slider steps through a list of power-of-two stops derived from the document's longest side, so the choices differ per document and the stored size is never re-clamped when the document changes; see the options bar for the stop table and the resulting readout/needle mismatch.
 - **Snap to grid**: on/off (auto-enabled with grid). Every consumer requires **both** Snap to Grid and Show Grid, so hiding the grid silently disables snapping while leaving View → Snap to Grid checked.
 - **Cmd/Ctrl + `'`**: toggle grid visibility from anywhere in the app
 
 ### Rulers
 - **Show rulers**: on/off (default on), toggled from **View → Show Rulers**. (The menu lists a `⌘R` accelerator, but unlike the grid and guide toggles it is not currently wired to a global key handler.)
+- **20 px thick** (`RULER_SIZE`), one along the top and one down the left, with the corner square painted over both of them and the guide-color swatch painted over that.
+- **Tick spacing follows the zoom.** The renderer takes `50 / zoom` document pixels as a target and rounds it **down** to the nearest entry in the 1-2-5 × power-of-ten sequence (`… 1, 2, 5, 10, 20, 50, 100 …`), with a floor of 1 px — so the labelled interval changes as you zoom and always lands on a round number instead of an arbitrary one. 100 % zoom labels every 50 px, 200 % every 20, 400 % every 10, 800 % every 5. Ticks are 6 px long and drawn only on the inner edge.
+- **Labels are plain document pixels**, rounded to integers, with no unit suffix. The vertical ruler's labels are rotated a quarter turn. Positions outside the canvas are labelled with their real (negative or over-size) coordinates rather than being suppressed.
+- **A cursor indicator line tracks the pointer in each ruler** — a 1 px line at the pointer's document X in the top ruler and its Y in the left one, drawn in the **guide color** rather than a color of its own (the renderer's `#4a9eff` default is unreachable, because the overlay always passes the store's `guideColor`).
+- **The ruler palette is fixed dark** — background `#2a2a2a`, ticks `#555555`, labels `#888888`, all hard-coded in the renderer rather than read from `tokens.css`. Because this is a 2D overlay canvas and not styled DOM, the rulers stay dark when the app is switched to the light theme.
 
 ### Guides
 - **Show guides**: on/off
@@ -984,10 +1166,36 @@ All three are undoable and auto-switch the target group from pass-through to nor
 - Guide creation, removal, and the color picker all require **both** Show Rulers and Show Guides to be on — with either off, ruler clicks do nothing.
 - **Cmd/Ctrl + `;`**: toggle guides visibility from anywhere in the app
 - **Clear Guides** (Edit menu): removes every guide currently placed on the canvas in a single action
+- **Nothing snaps to a guide.** Guides are purely visual reference lines. The [Snapping](#snapping) modes attract to the grid and to other layers; there is no snap-to-guides mode, no menu item for one, and no code path that consults `ui.guides` while dragging. A `snapToGuide(position, guides, threshold)` helper does exist in `tools/move/move.ts` and is unit-tested, but its only importer is its own test file — **no production caller**. Guides tell you where to line something up; they will not do it for you.
+- **Placed guides get a playhead triangle on the ruler**: a triangle 12 px across and 9 px deep pointing down from the top ruler for each vertical guide, and pointing right from the left ruler for each horizontal one, drawn in the guide color at 70 % alpha. It is clipped away once the guide scrolls off the visible ruler.
+- **Hovering a guide highlights its playhead only.** Moving the pointer within **±1 document pixel** of a guide's position turns that guide's ruler triangle white — the guide *line* itself does not change. The probe runs over the whole canvas, not just the rulers, so simply passing the cursor over a guide on the artwork lights up its marker on the ruler. Because the tolerance is in document space, it is worth 1 screen px at 100 % zoom and 16 at 1600 %.
+- **Guides cannot be selected.** The store carries `selectedGuideId`, and both renderers have a "selected" branch (a full-opacity line, a solid white playhead), but `selectGuide` has **no caller anywhere in `src/`** — the field is only ever written back to `null`, by `removeGuide`, `clearGuides`, and the project loader. Both selected-state branches are unreachable, so every guide draws at 70 % alpha and no playhead is ever the selected white. Dead state, the same shape as `document.backgroundColor`.
+- **With Cmd held, clicking a fraction that already carries a guide stacks a second one.** The delete probe runs *before* the snap and tests the **raw pointer position**, while the guide that gets added uses the **snapped** position. So Cmd-clicking near — but more than 1 px away from — an existing guide at, say, `1/2` finds nothing to delete and adds a duplicate at exactly the same coordinate. The two lines are indistinguishable on screen, and each needs its own click to remove.
+- **The delete probe checks both orientations.** `findGuideAtCursor` compares the pointer's document X against every *vertical* guide and its document Y against every *horizontal* one, and returns the first match in creation order — it is not scoped to the ruler being clicked. Clicking the top ruler can therefore delete a horizontal guide, in the narrow case where the ruler strip maps to within 1 px of that guide's Y.
+- **Guides are not undoable.** They live in the UI store, outside the [history system](#history) entirely: adding, removing, and Clear Guides all push nothing, and undo will not bring a cleared guide back.
+- **Every document-opening path clears them.** `createDocument` ends in `clearGuides()`, and every entry point routes through it — New Document, Open Image, paste-as-document, PSD import, DNG / RAF import, and project load. The `.lopsy` loader is the only one that puts any back, re-seeding `guides` from the manifest immediately afterwards (see [Native Project Format](#native-project-format-lopsy)).
+- **The guide color drives three overlays, not one.** Besides the guides themselves it colors the **ruler cursor indicator** lines and the **symmetry center marker** (the ringed crosshair drawn while a [symmetry](#symmetry) axis is active on a paint tool). Changing it from the ruler corner swatch repaints all three. Default is `rgb(0, 180, 255)`.
 
 ### Snapping
-- **Snap to Grid** (View menu): aligns drags to the nearest grid cell; auto-enabled whenever the grid is visible. Move-tool arrow-key nudges become one-cell hops under this mode.
-- **Snap to Layers** (View menu): while dragging with the Move tool, the layer's edges and X/Y centers attract to matching edges and centers of other visible layers within a 5 px threshold. Magenta alignment guides appear during the snap and clear on mouse-up.
+Two independent modes, both toggled from the View menu. Snap to Grid additionally has a **Snap** checkbox in the [options bar](#options-bar) beside the grid-size slider, and both flags are gated on Show Grid — see the [Grid](#grid) section.
+
+**Snap to Grid is not one behavior.** All seven consumers require `showGrid && snapToGrid`, but only one of them snaps an *angle* — the transform rotation handle, which quantizes to 15° (see [Scale, rotate, and modifiers](#scale-rotate-and-modifiers)). The other six quantize a position, and they do it in three mutually incompatible ways:
+
+- **Absolute, document-centered** (whole-layer Move drags, and both ends of a marquee drag): the position is quantized against the same center-anchored lattice the grid *draws*, so the result lands on a visible line. This path also **snaps to the canvas edges**: if the value is within half a grid cell of `0`, `docWidth`, or `docHeight`, it goes to that edge instead, so content aligns to the canvas border even where the centered lattice does not reach it. On a layer the edge test applies to its **origin**, so the "right edge" stop parks the layer's *left* edge on the canvas's right border, pushing it off-canvas.
+- **Absolute, origin-anchored** (dragging a transform **scale** handle, and dragging a **selection**-transform handle): the pointer is quantized as `round(p / gridSize) * gridSize` — a lattice anchored at the document's top-left corner, not its center. **These land on the drawn grid lines only when half the document's size is an exact multiple of the grid size.** On the default 1920 × 1080 document at the default 16 px grid, the vertical lines agree (`960 % 16 == 0`) while the horizontal ones are permanently 12 px off: the grid draws at `… 508, 524, 540, 556 …` and the snap goes to `… 512, 528, 544, 560 …`.
+- **Relative, no lattice at all** (arrow-key nudges, and dragging a **floating selection**): nothing is quantized — the *displacement* is changed to a whole number of cells. A nudge moves by `gridSize` instead of 1 px, and a floating-selection drag snaps its offset rather than its position (it calls the centered helper with no document dimensions, so the lattice collapses to one anchored at 0 and the edge snap is skipped). Either way the phase is preserved: something that started off-grid stays off-grid, just moving in grid-sized steps.
+
+Arrow-key nudging is also **not Move-tool-only** — the same `gridSize`-or-1 step drives the five selection tools (both marquees, both lassos, Magic Wand), where it nudges the selection rather than the layer.
+
+**Snap to Layers** attracts a dragged layer to the other layers in the document. The threshold is a hard-coded **5 document pixels** — not a screen distance and not configurable — so at 25 % zoom the pull is barely over one screen pixel wide, while at 800 % it is 40.
+
+- **Nine pairings per axis, per other layer**: the moving layer's left / center / right against that layer's left / center / right, and the same nine vertically. The X and Y snaps are resolved independently, and on each axis the smallest correction wins.
+- **It only runs on a whole-layer drag.** With an active selection the Move tool is dragging a *floating selection*, which takes the grid snap and nothing else. Arrow-key nudges never snap to layers either.
+- **Groups are excluded on both sides.** A group is never a candidate (`getLayerBounds` returns `null` for it), and a group being dragged is measured as 0 × 0, so its left, center, and right edges collapse onto its origin and only that one point can snap.
+- **Text layers have no vertical extent.** `TextLayer` carries no `height` field at all (see [Layer Properties](#layer-properties)), so a text layer's top, center, and bottom all collapse to its `y` — it attracts as a single horizontal line. **Point text is excluded outright**: its `width` is `null`, so with both dimensions zero it produces no bounds and never participates.
+- **Layers hidden by an ancestor group still attract.** The candidate filter tests the layer's own `visible` flag rather than the `isEffectivelyVisible` helper the compositor uses, so a layer that is invisible on canvas because its parent group is hidden still pulls the drag toward edges nothing is drawn at.
+- **Multi-selected siblings are excluded**, so dragging a set of layers together snaps the whole formation to outside layers and never to itself. The applied delta is computed after the snap and re-used for every sibling, keeping the group rigid.
+- **The magenta lines mark the target, not the mover.** Each line (`rgba(255, 0, 220, 0.85)`, 1 screen px, spanning the document) is drawn at the *candidate* edge that was matched; ties draw one line per matched edge. They are cleared on pointer-up and whenever Snap to Layers is off, but they are **not gated on Show Guides** — they appear with guides hidden.
 
 ### Seamless Pattern Preview
 - **Show Seamless Pattern** (View menu): tiles the document outside the canvas bounds so tileable textures and patterns can be previewed in context. The center tile is the actual document; surrounding tiles are repeats of the same pixels with edge wrapping (`fract(uv)`) so seams are visible immediately.
@@ -1086,6 +1294,7 @@ A `role="status"` footer across the bottom of the window. Left group: the zoom p
 - **Canvas cursor by tool**: exactly **seven** tools hide the system cursor and draw a size ring on the overlay instead — brush, pencil, eraser, clone stamp, healing brush, dodge/burn, and sponge. The ring is a circle for all of them **except the pencil, which draws a square** to match its hard-edged square dab. **Only the Brush's ring reflects the tip**: the custom tip bitmap and the Angle rotation are passed through for `brush` and hard-coded to none/0° for the other six, so a rotated star tip still shows a plain circle under, say, the eraser. Clone stamp and healing brush replace the ring with the live source preview once a source is set. Every remaining tool gets a standard cursor — move and text have their own, and everything else (including **Spray**) falls through to a crosshair. Liquify draws its own ring from the Liquify brush size while its modal is open.
 - **Color swatch selection**: clicking the foreground or background swatch in the Color panel makes it the one the picker, hex field, and RGBA sliders edit; clicking a recent-color swatch applies that color to whichever swatch is currently active. (The old double-click-to-expand behavior went away with panel collapsing.)
 - **Layer name double-click → rename**: double-clicking a layer row's name turns it into an inline text input; Enter commits, Escape cancels.
+- **Escape-to-close is per-dialog, not global.** There is no app-wide "Escape dismisses the front-most dialog" rule, and the app's modals fall into three groups. **Closes from anywhere**: New Document, Shape Size, and the group-adjustments info dialog, whose Escape is centralized on `document` by the modal host; the [Tilt-Shift](#blur) session, which binds Enter / Escape on `window`; and [Stroke Path](#paths-panel), which gets there by a different route — it selects its Width field on open, so focus is already inside. **Closes only once focus is inside**: the [filter dialogs](#filter-dialog-shared), Color LUT, [Export](#export-dialog-e), [Gradient](#gradient), Indexed Color, Pattern Fill, and both [Canvas Size and Image Size](#the-two-dialogs) — each binds Escape as an `onKeyDown` on a `<div>` that carries no `tabIndex` and autofocuses nothing, so the key is only seen when it bubbles up from a control the user has clicked or tabbed to. Open one from the menu and press Escape without touching anything and nothing happens. **Does not respond to Escape at all**: the [Brushes modal](#brush) (✕ only — it has no backdrop), its brush-export sub-dialog (✕ or backdrop), About and [Keyboard Shortcuts](#keyboard-shortcut-customization) (Close button or backdrop), and the [Liquify](#distort) panel (Apply / Cancel only — it renders no overlay). In every case where the dialog does not consume the key, Escape reaches the canvas instead and clears the active selection and any pending transform.
 - **Menu submenus**: a menu item can carry a nested submenu, marked with a `›` arrow and opened by **hovering** the parent row (Image → Mode is the only one today). The flyout is positioned against the viewport rather than nested inside the dropdown — long menus like Filter set `overflow-y: auto`, which per CSS Overflow 3 forces the horizontal axis to `auto` too and would otherwise clip a `left: 100%` child at the padding box.
 
 ### Notifications & Error Toasts
@@ -1128,7 +1337,7 @@ Nineteen tools carry a default single-letter shortcut, and that is the complete 
 - **About Lopsy**: opens the About dialog.
 
 ### Keyboard Shortcut Customization
-Single-key bindings are rebindable through the **Keyboard Shortcuts modal** (Help → Keyboard Shortcuts). The modal is **not** a projection of anything — it is a hand-written list of **32 rows in five sections** (Tools 15, Edit 7, View 5, Colors 2, Canvas 3), and only some of them are editable: rows carrying an action id render as a clickable key button, while the modifier-combo rows (`⌘Z`, `⌘C`, `⌘0`, `Esc`, `Enter`, `Space`, …) are fixed labels with no rebind affordance. Being hand-written, the list is incomplete on *both* sides — see below.
+Single-key bindings are rebindable through the **Keyboard Shortcuts modal** (Help → Keyboard Shortcuts). The modal is **not** a projection of anything — it is a hand-written list of **32 rows in five sections** (Tools 15, Edit 7, View 5, Colors 2, Canvas 3), and only **17** of them are editable (the 15 Tools rows and the 2 Colors rows): rows carrying an action id render as a clickable key button, while the modifier-combo rows (`⌘Z`, `⌘C`, `⌘0`, `Esc`, `Enter`, `Space`, …) are fixed labels with no rebind affordance. Being hand-written, the list is incomplete on *both* sides — see below.
 
 - Each editable row shows the action label and its current key. Clicking the key enters **listening mode** — the next key pressed becomes the new binding, lower-cased. Escape cancels; modifier-only presses are ignored, as is any key pressed with Cmd / Ctrl / Alt held (those combos aren't customizable).
 - **Reset**: a per-row reset button (`↺`, shown only on rows that have actually been overridden) reverts that one binding to its default; a "Reset All" button in the header clears every override at once.
@@ -1138,7 +1347,17 @@ Single-key bindings are rebindable through the **Keyboard Shortcuts modal** (Hel
   - **Menu accelerators are hard-coded strings** in the menu definitions (`⌘Z`, `⇧⌘C`, …) and never read the store. In practice this costs nothing, since every menu accelerator is a modifier combo and modifier combos aren't customizable in the first place.
   - **Toolbox tooltips are hard-coded too**, and those *are* single-key bindings — so the rail keeps advertising a tool's default letter after the user has rebound it. See [Toolbox](#toolbox).
 
-**What the modal does *not* cover.** The rebindable rows are a hard-coded list inside the modal, not a projection of the tool registry, so it has drifted out of step with the tools that actually ship a shortcut:
+**The modal binds no keys of its own except while a row is armed** — which makes the one dialog about keyboard shortcuts the one where the keyboard still drives the canvas underneath. Its `keydown` listener is installed *only* for as long as a row is listening; the rest of the time the modal has no key handling at all, and the global handler's only guard is whether the event target is an `<input>` or `<textarea>`. A modal full of buttons passes that guard, so with the dialog open and no row armed:
+
+- **`Escape` does not close it.** It falls through to the canvas, where it clears the active selection and cancels any pending transform. The modal closes only via its **Close** button or a click on the backdrop.
+- **Every single-key shortcut still fires.** Pressing `B` switches the active tool behind the dialog, `X` / `D` change the colors, `[` / `]` resize the current tool, and `Backspace` / `Delete` clears the selected pixels or removes the active layer outright — all while the shortcut list is on screen.
+- Arming a row plugs the gap for exactly one keystroke: the listening handler is registered on `window` in the **capture** phase and calls `preventDefault` + `stopPropagation`, so the key being captured is consumed instead of reaching the canvas.
+- The conflict banner is cleared when another row is armed, not when the rebind lands — so it stays on screen after the binding it describes has already been written.
+- Clicking an armed key button a second time cancels listening, the same as Escape. **Reset All** takes effect immediately, with no confirmation step.
+
+**What the modal does *not* cover.** The rebindable rows are a hard-coded list inside the modal, not a projection of the tool registry, so it has drifted out of step with the tools that actually ship a shortcut.
+
+The drift is not for want of a derived list — the codebase ships **three** registry-derived answers to "which key belongs to which action", and the modal uses none of them. `SHORTCUT_TO_TOOL` (tool registry) is a key → tool map whose only references outside its own module are a unit test asserting its contents and a mock standing in for it, so **nothing in the app reads it**. `getAllActionIds()` (shortcut store) returns exactly the list the modal is missing — every tool with a shortcut, plus the three non-tool actions — and has **no importer at all, not even a test**. Only `buildKeyToActionMap()` is live, and it is called by the key dispatcher, never by the UI. The modal instead walks its own `getAllCustomizableActionIds()` over the hard-coded 32 rows, which is why every gap below exists and why adding a tool to the registry does not add a row here:
 
 - **Four tools have a working default key but no row in the modal** — Healing Brush (`H`), Sponge (`Y`), Smudge (`R`), and Spray (`J`). Their keys work on the canvas; they simply cannot be rebound or even seen here.
 - **`Q` (toggle Quick Mask) has no row either.** It is a first-class customizable action in the store — it sits alongside swap-colors and reset-colors in `NON_TOOL_ACTION_IDS` — but the modal's Colors section lists only Swap Colors and Reset Colors, so there is no UI to rebind it.
@@ -1160,7 +1379,11 @@ Single-key bindings are rebindable through the **Keyboard Shortcuts modal** (Hel
 
 There is no **Select** section in the modal at all, so the two selection commands have nowhere to sit; the grid and guide toggles are simply missing from the View section that does exist. All nine remain labelled in the menu bar, so the cost is discoverability rather than function — but the modal cannot be read as the app's shortcut reference. It is the mirror image of the *display-only accelerator* problem under [Single-Key Shortcuts](#single-key-shortcuts): the menu bar advertises combos that are **not** wired, while the modal omits these nine that **are**.
 
-**Conflict detection warns, but does not prevent — and the modal keeps displaying the losing key.** When the pressed key already belongs to another *listed* action, the modal shows a banner naming it (`"E" is already used by Eraser`). That banner is purely informational: the rebind is written to the store unconditionally on the same keystroke, with no confirm step and no way to back out other than rebinding again or hitting reset. The runtime key map then resolves the collision by **dropping the other action's binding entirely** — the loser is left with no key at all, and the key it used to own does nothing. The modal, however, reads each row's key through `getKey(actionId)`, which falls back to the *default* whenever a row has no override of its own — so the displaced action still displays its original letter. Rebind Brush onto `E` and the Eraser row goes on showing **E** while pressing `E` selects the Brush.
+**Conflict detection warns, but does not prevent — and the modal keeps displaying the losing key.** When the pressed key already belongs to another *listed* action, the modal shows a banner naming it (`"E" is already used by Eraser`). That banner is purely informational: the rebind is written to the store unconditionally on the same keystroke, with no confirm step and no way to back out other than rebinding again or hitting reset. The runtime key map then resolves the collision by **dropping the other action's binding entirely** — the loser is left with no key at all. It also releases the key the *rebound* action used to own, so a single rebind puts **two** keys out of action: the loser keeps none, and the winner's old letter now does nothing. Rebind Brush onto `E` and pressing `B` afterwards selects nothing at all.
+
+The modal, however, reads each row's key through `getKey(actionId)`, which falls back to the *default* whenever a row has no override of its own — so the displaced action still displays its original letter. Rebind Brush onto `E` and the Eraser row goes on showing **E** while pressing `E` selects the Brush.
+
+**And once a key has been displaced, the conflict banner starts naming the wrong action.** `findConflict` scans the modal's own rows *in display order* and reports the first whose `getKey` matches — but `getKey` answers with the default for any row that has no override, including a row that has just lost its key. So both the winner and the loser claim the same letter, and whichever sits higher in the list wins the report. Rebind **Eraser** onto `B`, then try to bind Pencil to `B` as well: the banner reads `"B" is already used by Brush`, because Brush precedes Eraser in the Tools section — while the action that actually owns `B` at runtime is the Eraser. The authoritative resolver (`buildKeyToActionMap`, the same function the dispatcher uses) is never consulted by the modal.
 
 **Bindings are not restricted to single characters.** Nothing in the modal or the store checks the length of `e.key`, so a non-printing key is accepted verbatim and stored lower-cased: pressing `F1` binds the string `f1`, pressing an arrow key binds `arrowup`. These do resolve at runtime (the tool-shortcut handler looks up `e.key.toLowerCase()` the same way), and the handler runs **before** the arrow-key nudge handler — so binding a tool to an arrow key genuinely takes that arrow away from nudging. The key button renders the raw string upper-cased, giving labels like `ARROWUP`.
 
@@ -1244,7 +1467,8 @@ Tab strips follow the WAI-ARIA tabs pattern, so a group's tabs are reachable wit
 - The canvas fills whatever space the docks leave.
 
 ### Persistence
-- The full layout — dock trees, tab groups, active tabs, split fractions, dock sizes, and floating window rects — is written to `localStorage` under `dock:layout:v1`, debounced ~400 ms and flushed on page unload.
+- The full layout — dock trees, tab groups, active tabs, split fractions, dock sizes, and floating window rects — is written to `localStorage` under `dock:layout:v1`, and flushed synchronously on `beforeunload`.
+- **The ~400 ms delay is a trailing throttle, not a debounce.** `schedulePersist` starts a timer on the first change and then *refuses to restart it* — later changes only swap the pending payload — so a continuous drag (a splitter, a floating window) writes the latest layout every 400 ms for as long as it lasts, rather than once when the pointer comes up. A debounce would coalesce the whole gesture into one write. Either way the final state always lands, at most 400 ms after the last change.
 - Persisted layouts are re-validated on load: unknown panel ids, duplicated panels, out-of-range sizes, and malformed nodes are dropped or clamped, and a layout that can't be repaired falls back to the default. If `localStorage` is unavailable the app still works — the layout just doesn't survive a reload.
 - **Known gap**: the store exposes a `resetLayout` action that restores the default arrangement, but nothing in the UI calls it yet — there is currently no "Reset Panel Layout" menu item or button.
 
@@ -1422,7 +1646,7 @@ A conversion snapshots history *before* it bakes, so the whole thing — includi
 
 - **Text and shape colors, and all five effect colors** (stroke, drop shadow, outer glow, inner glow, color overlay) go through the same constraint the pixels do — a grayscale document is not left with a colored drop shadow.
 - **Chroma-producing adjustment nodes are stripped** from group stacks: Hue/Saturation, Color Balance, Channel Mixer, Photo Filter, Gradient Map, Black & White, plus Saturation. Otherwise a Color Balance node would simply reintroduce the color the bake just removed. The same nodes disappear from the Adjustments panel's Add menu.
-- **Hue / Saturation / Color / Luminosity blend modes coerce to Normal** and drop out of the blend-mode dropdown in every mode but RGB — they decompose RGB into HSL, which is meaningless once a texture holds something else.
+- **Hue / Saturation / Color / Luminosity blend modes coerce to Normal** and drop out of the blend-mode dropdown (its **Composite** group) in every mode but RGB. The stated reason is that they decompose RGB into HSL, which is meaningless once a texture holds encoded Lab or ink channels — accurate for Hue and Saturation, though Color and Luminosity are really Rec. 709 luma transfers that assume sRGB-ish channels rather than HSL round-trips (see [Blend Modes](#blend-modes)). Either way the gate is the same `hasHslBlendModes` capability flag.
 - The **foreground and background swatches** are re-expressed in the new mode's value space, so the next stroke matches what the picker shows.
 
 Every paint entry point — brush/pencil/eraser, spray, fill, gradient (per stop), shape (fill and stroke), and text — routes its color through a shared `toDocumentColor()`. The mode's constraint therefore holds even for colors that arrived from a brush preset, the eyedropper, or tool settings saved under a previous mode.
@@ -1479,6 +1703,33 @@ More generally, the palette snap runs **only at conversion time**. Pixels painte
 
 ---
 
+## App Shell, Install & Persistence
+
+### Installable, but not offline
+- A **web app manifest** (`public/manifest.webmanifest`, linked from `index.html`) declares name and short name `Lopsy`, `display: standalone`, `start_url: /`, and background / theme colors of `#1e1e1e`, with three icon entries — 192 px, 512 px, and the 512 again marked `purpose: maskable` — alongside a separate `apple-touch-icon` link and a matching `theme-color` meta. A browser that offers installation therefore gets a standalone window with its own icon and title-bar color.
+- **Installing does not buy offline use.** `main.tsx` registers `/sw.js` on every load where `navigator.serviceWorker` exists, but `public/sw.js` is two lines — `install → skipWaiting()`, `activate → clients.claim()`. It declares **no `fetch` handler and never touches the Cache API**, so it caches nothing and contributes nothing to loading the app; its only effect is that a newly deployed worker takes control immediately instead of waiting for every tab to close. There is no build-time PWA tooling in the project (no Workbox, no `vite-plugin-pwa`), so `public/sw.js` is copied verbatim into the build and is exactly what ships.
+- **A failed registration is unhandled.** The call is a bare `navigator.serviceWorker.register('/sw.js')` with no `.catch()` — two lines below it, `initWasm().catch(() => {})` does swallow its own failure — so a refused registration (insecure origin, storage blocked, private mode) surfaces as an unhandled promise rejection in the console. Nothing else breaks, because nothing in the app depends on the worker.
+- Hosting is configured as a single-page app: `public/_redirects` maps `/* → /index.html 200`.
+- `index.html` also carries the link-preview surface — Open Graph and Twitter `summary_large_image` tags pointing at `public/og-image.jpg`, plus the page title and description.
+
+### Browser zoom and gestures are suppressed app-wide
+- `index.html` ships `maximum-scale=1.0, user-scalable=no` in its viewport meta, and `main.tsx` adds **capture-phase `window` listeners** — at capture specifically so nothing downstream can stop propagation first — that `preventDefault()` on **ctrl/meta + wheel**, on `gesturestart` / `gesturechange` / `gestureend`, and on **ctrl/meta + `+` / `-` / `=` / `0`**.
+- So the page itself never zooms or pinches: those inputs are free to drive the canvas zoom instead (see [Viewport](#viewport)). The keydown suppressor lists the four browser-zoom keys only — `⌘1` is not among them — but `handleZoomShortcut` calls `preventDefault()` for `=`, `-`, `0` **and** `1`, so every canvas zoom shortcut cancels its own default as well.
+
+### What survives a reload
+- **Exactly two things, both in `localStorage`.** The app uses no IndexedDB, no cookies, no OPFS, and no Cache API anywhere in `src/`.
+  1. **`dock:layout:v1`** — the panel layout (see [Panel Docking → Persistence](#persistence)).
+  2. **`lopsy-shortcut-customizations`** — the Zustand `persist` store behind [Keyboard Shortcut Customization](#keyboard-shortcut-customization), holding only the `customShortcuts` override map.
+- **The two are not equally careful.** The dock layout is re-validated on load and anything malformed is repaired or dropped. The shortcut store declares no `version`, no `migrate`, and no `merge`, so whatever JSON sits under its key is adopted as the override map verbatim. An override therefore outlives the action it names: seeding `{ 'ghost-tool': 'b' }` makes `buildKeyToActionMap` hand `b` to the dead id **and delete Brush's binding entirely** — `B` then selects nothing and the Brush has no key at all, with no row in the shortcuts modal to explain it, because the modal renders its own hand-written row list rather than the stored map. **Reset All** clears it.
+- **Everything else is memory-only.** Tool settings (every tool's size / opacity / hardness / mode), the foreground and background colors, the recent-colors strip, **brush presets** — both what `Save Current` snapshots and every tip imported from an `.abr` — patterns, reference images, guides, the selection, the undo history, and the viewport all reset on reload.
+- **For most of that there is no route across a reload at all.** Tool settings, brush presets, patterns, and reference images are absent from the `.lopsy` project format as well (see [Native Project Format](#native-project-format-lopsy)), so saving a project does not rescue them either. The Brushes modal's **Export** button — the `.json` preset library — is the only way to carry a custom brush from one session to the next, which is what that button is for.
+- **There is no light theme.** `.theme-light` is named in the repo's own contributor docs, but no stylesheet defines the class and nothing in the app ever sets it. The dark palette in `tokens.css` is the only one that ships, and there is no theme control anywhere in the UI.
+
+### Dev-only debug hooks
+- `main.tsx` hangs a set of `window.__*` handles for the Playwright suite — the editor, UI, tool-settings, pattern, shortcut, and dock stores, the pixel-data manager, `__readCompositedPixels` / `__readLayerPixels`, and project save / load / RAF-import helpers. The whole block sits behind `import.meta.env.DEV`, so a production build exposes none of it.
+
+---
+
 ## File I/O & Export
 
 ### Open / Save
@@ -1502,7 +1753,11 @@ More generally, the palette snap runs **only at conversion time**. Pixels painte
 #### PSD Export
 
 - **Export PSD** (File menu): serialises the current document via the PSD writer at **16-bit** precision — the menu passes 16 explicitly, and the exporter's 8-bit default is unreachable from the UI. Depth selects the channel encoding: 16-bit planes are written as **ZIP with prediction**, the (unreachable) 8-bit path as **PackBits**. Pass-through groups are written as `normal`, since PSD has no pass-through discriminant and `pass-through` is deliberately absent from the blend-index table. A Grayscale document writes header mode 1 with one color channel per layer; **every other mode — including Lab and CMYK — is written as RGB**.
-- **The merged composite is computed separately, in Rust** — every visible layer flattened bottom-to-top in **linear light**, with masks and opacity applied. It deliberately ignores **clipping masks and layer effects** and treats every group as pass-through, so in an application that only reads the flattened preview, a document built on effects or non-pass-through groups will not match what Lopsy renders. Clipping is the exception that costs nothing here: Lopsy's own compositor ignores `clipToBelow` too (see Layer Properties), so on that one axis the flattened preview and the live canvas already agree. Layer-aware readers rebuild from the layer records and are unaffected.
+- **The merged composite is computed separately, in Rust** — `flatten_layers` (`engine-rs/crates/lopsy-core/src/psd/flatten.rs:18`) walks every visible layer bottom-to-top, applying masks and opacity. It ignores **clipping masks and layer effects** and treats every group as pass-through, so in a reader that only shows the flattened preview, a document built on effects or non-pass-through groups will not match what Lopsy renders. Clipping is the exception that costs nothing: Lopsy's own compositor ignores `clipToBelow` too (see Layer Properties), so on that one axis preview and canvas already agree. Layer-aware readers rebuild from the layer records and are unaffected.
+- **The structural exclusions above are not the whole story — the blend math itself is a second implementation, and it disagrees with the canvas.** `flatten.rs` is a CPU reimplementation (`blend_colors` in `lopsy-core/src/blend.rs`) that shares no code with the GPU's `blend.glsl`. Three separate divergences, all reproducible from a native `cargo test` against `flatten_layers`:
+  - **Color space.** The flatten path linearizes on read (`srgb_to_linear`, `:134`) and re-encodes on write (`linear_to_srgb`, `:94`), i.e. it blends in **linear light** — while the canvas blends in **gamma-encoded sRGB** (see [Blend Modes](#blend-modes)). Every non-opaque or non-Normal pixel therefore lands somewhere different. Measured, 8-bit: Overlay gray-50 % over gray-75 % gives **137** in the PSD and **191** on canvas; Screen gray-50 % over itself **167 vs 192**; Multiply gray-50 % over itself **61 vs 64**; a 50 %-alpha red over blue **(188, 0, 187) vs (128, 0, 127)**. The two agree only where the transfer curve has fixed points — fully opaque Normal, and blends whose operands are already 0 or 255 (Difference of pure red over pure blue matches exactly).
+  - **Color Dodge / Color Burn guard ordering is reversed.** `blend.rs` tests the *destination* first (`:21`, `:30`); `blend.glsl` tests the *source* first (`:70`, `:77`). Where both guards fire the results are opposites: white dodged over black is **black in the PSD, white on canvas**; black burned over white is **white in the PSD, black on canvas**. This one is pure integer math — it is unaffected by the color-space gap and would survive fixing it.
+  - **Saturation with an achromatic source.** When `sat(src) == 0`, the shader substitutes the *destination's* own HSL saturation (`blend.glsl:108`), leaving the destination essentially untouched; the Rust path passes the literal 0 through `set_saturation` and **flattens the destination to gray**. So the common "paint gray in Saturation mode" gesture is a near no-op on canvas and a full desaturation in the exported preview.
 - **What does not survive the trip out**: group adjustment-node stacks, layer color tags, lock state, and text editability (text layers are written as raster at their rendered texture size). Effects are written only when at least one is **enabled**, so a layer carrying configured-but-disabled effects exports none.
 - **Color and structure**: a Display P3 profile is embedded as image resource 1039 for wide-gamut documents, and the writer's sRGB profile otherwise. Layer names are written as Unicode (`luni`) and group nesting as section dividers (`lsct`).
 - **Known defect — masks from a loaded project export corrupt.** The exporter builds the mask byte view as `new Uint8Array(layer.mask.data.buffer)` (`src/io/psd.ts:166`), omitting the `byteOffset`/`byteLength` that every other mask read in the codebase passes. When the mask is a **view into a larger buffer** — exactly what opening a `.lopsy` produces, since masks are sliced straight out of the project file's own ArrayBuffer — the export reads from the start of that whole buffer instead of from the mask. The exported mask channel then contains the opening bytes of the `.lopsy` file rather than mask pixels. Masks created in-session via Add Mask, or imported from a PSD, are freshly allocated at offset 0 and export correctly.
