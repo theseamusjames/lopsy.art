@@ -798,17 +798,26 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 
 ## Blend Modes
 
-| Category | Modes |
-|----------|-------|
-| Basic | Normal |
-| Darken | Multiply, Darken, Color Burn |
-| Lighten | Screen, Lighten, Color Dodge |
-| Contrast | Overlay, Hard Light, Soft Light |
-| Inversion | Difference, Exclusion |
-| HSL | Hue, Saturation, Color, Luminosity |
-| Group-only | Pass Through |
+Sixteen layer blend modes, plus the group-only Pass Through. The dropdown's headings and its within-group ordering both come straight from `BLEND_MODE_GROUPS` (`src/panels/LayerEffectsPanel/LayerEffectsPanel.tsx:21`):
 
-The four **HSL** modes are RGB-only: they decompose RGB into HSL, so every other color mode drops them from the dropdown and coerces any layer already using one to Normal on conversion (see Color Modes).
+| Group heading | Modes, in dropdown order |
+|----------|-------|
+| Normal | Normal |
+| Darken | Darken, Multiply, Color Burn |
+| Lighten | Lighten, Screen, Color Dodge |
+| Contrast | Overlay, Soft Light, Hard Light |
+| Comparative | Difference, Exclusion |
+| Composite | Hue, Saturation, Color, Luminosity |
+
+**Pass Through is not a trailing group.** On a group layer the list is rebuilt as `GROUP_BLEND_MODE_GROUPS` (`:31`), which prepends a **Pass Through** heading holding that one mode *above* Normal; non-group layers never see it. The blend-mode dropdown is rendered only by the **effects drawer** — `LayerEffectsPanel` is the sole surface that draws it, so there is no second copy in the Layers panel to drift from this one.
+
+The four **Composite** modes are RGB-only: every other color mode filters them out of the dropdown (`:66`) and coerces any layer already carrying one to Normal on conversion (`convert-color-mode.ts:32`, see [Color Modes](#color-modes)). The usual justification — that they "decompose RGB into HSL" — only covers half of them. **Hue** and **Saturation** do round-trip through `rgb2hsl` / `hsl2rgb`; **Color** and **Luminosity** never touch HSL at all, and are pure `setLum` operations over a **Rec. 709** luma (`0.2126 / 0.7152 / 0.0722` — the same coefficients in `hsl_common.glsl` and `color.rs:355`). That is *not* the `0.30 / 0.59 / 0.11` luma the PDF / Photoshop non-separable blend spec uses, so Lopsy's Color and Luminosity land on different pixels than Photoshop's given identical inputs.
+
+### Compositing runs in gamma-encoded sRGB, not linear light
+
+`blend.glsl` blends the values exactly as sampled. Layer textures are allocated `RGBA8` or `RGBA16F` and **never `SRGB8_ALPHA8`**, so the GPU applies no automatic linearization, and nothing anywhere in `lopsy-wasm` calls `srgb_to_linear` on the way in. The FP16 path buys precision and EDR headroom, not a linear working space.
+
+This is worth knowing mainly because **the PSD merged composite does the opposite** — it blends in linear light, so it does not match the canvas. See [PSD Export](#psd-export).
 
 ### Pass Through (group blend mode)
 
@@ -1637,7 +1646,7 @@ A conversion snapshots history *before* it bakes, so the whole thing — includi
 
 - **Text and shape colors, and all five effect colors** (stroke, drop shadow, outer glow, inner glow, color overlay) go through the same constraint the pixels do — a grayscale document is not left with a colored drop shadow.
 - **Chroma-producing adjustment nodes are stripped** from group stacks: Hue/Saturation, Color Balance, Channel Mixer, Photo Filter, Gradient Map, Black & White, plus Saturation. Otherwise a Color Balance node would simply reintroduce the color the bake just removed. The same nodes disappear from the Adjustments panel's Add menu.
-- **Hue / Saturation / Color / Luminosity blend modes coerce to Normal** and drop out of the blend-mode dropdown in every mode but RGB — they decompose RGB into HSL, which is meaningless once a texture holds something else.
+- **Hue / Saturation / Color / Luminosity blend modes coerce to Normal** and drop out of the blend-mode dropdown (its **Composite** group) in every mode but RGB. The stated reason is that they decompose RGB into HSL, which is meaningless once a texture holds encoded Lab or ink channels — accurate for Hue and Saturation, though Color and Luminosity are really Rec. 709 luma transfers that assume sRGB-ish channels rather than HSL round-trips (see [Blend Modes](#blend-modes)). Either way the gate is the same `hasHslBlendModes` capability flag.
 - The **foreground and background swatches** are re-expressed in the new mode's value space, so the next stroke matches what the picker shows.
 
 Every paint entry point — brush/pencil/eraser, spray, fill, gradient (per stop), shape (fill and stroke), and text — routes its color through a shared `toDocumentColor()`. The mode's constraint therefore holds even for colors that arrived from a brush preset, the eyedropper, or tool settings saved under a previous mode.
@@ -1744,7 +1753,11 @@ More generally, the palette snap runs **only at conversion time**. Pixels painte
 #### PSD Export
 
 - **Export PSD** (File menu): serialises the current document via the PSD writer at **16-bit** precision — the menu passes 16 explicitly, and the exporter's 8-bit default is unreachable from the UI. Depth selects the channel encoding: 16-bit planes are written as **ZIP with prediction**, the (unreachable) 8-bit path as **PackBits**. Pass-through groups are written as `normal`, since PSD has no pass-through discriminant and `pass-through` is deliberately absent from the blend-index table. A Grayscale document writes header mode 1 with one color channel per layer; **every other mode — including Lab and CMYK — is written as RGB**.
-- **The merged composite is computed separately, in Rust** — every visible layer flattened bottom-to-top in **linear light**, with masks and opacity applied. It deliberately ignores **clipping masks and layer effects** and treats every group as pass-through, so in an application that only reads the flattened preview, a document built on effects or non-pass-through groups will not match what Lopsy renders. Clipping is the exception that costs nothing here: Lopsy's own compositor ignores `clipToBelow` too (see Layer Properties), so on that one axis the flattened preview and the live canvas already agree. Layer-aware readers rebuild from the layer records and are unaffected.
+- **The merged composite is computed separately, in Rust** — `flatten_layers` (`engine-rs/crates/lopsy-core/src/psd/flatten.rs:18`) walks every visible layer bottom-to-top, applying masks and opacity. It ignores **clipping masks and layer effects** and treats every group as pass-through, so in a reader that only shows the flattened preview, a document built on effects or non-pass-through groups will not match what Lopsy renders. Clipping is the exception that costs nothing: Lopsy's own compositor ignores `clipToBelow` too (see Layer Properties), so on that one axis preview and canvas already agree. Layer-aware readers rebuild from the layer records and are unaffected.
+- **The structural exclusions above are not the whole story — the blend math itself is a second implementation, and it disagrees with the canvas.** `flatten.rs` is a CPU reimplementation (`blend_colors` in `lopsy-core/src/blend.rs`) that shares no code with the GPU's `blend.glsl`. Three separate divergences, all reproducible from a native `cargo test` against `flatten_layers`:
+  - **Color space.** The flatten path linearizes on read (`srgb_to_linear`, `:134`) and re-encodes on write (`linear_to_srgb`, `:94`), i.e. it blends in **linear light** — while the canvas blends in **gamma-encoded sRGB** (see [Blend Modes](#blend-modes)). Every non-opaque or non-Normal pixel therefore lands somewhere different. Measured, 8-bit: Overlay gray-50 % over gray-75 % gives **137** in the PSD and **191** on canvas; Screen gray-50 % over itself **167 vs 192**; Multiply gray-50 % over itself **61 vs 64**; a 50 %-alpha red over blue **(188, 0, 187) vs (128, 0, 127)**. The two agree only where the transfer curve has fixed points — fully opaque Normal, and blends whose operands are already 0 or 255 (Difference of pure red over pure blue matches exactly).
+  - **Color Dodge / Color Burn guard ordering is reversed.** `blend.rs` tests the *destination* first (`:21`, `:30`); `blend.glsl` tests the *source* first (`:70`, `:77`). Where both guards fire the results are opposites: white dodged over black is **black in the PSD, white on canvas**; black burned over white is **white in the PSD, black on canvas**. This one is pure integer math — it is unaffected by the color-space gap and would survive fixing it.
+  - **Saturation with an achromatic source.** When `sat(src) == 0`, the shader substitutes the *destination's* own HSL saturation (`blend.glsl:108`), leaving the destination essentially untouched; the Rust path passes the literal 0 through `set_saturation` and **flattens the destination to gray**. So the common "paint gray in Saturation mode" gesture is a near no-op on canvas and a full desaturation in the exported preview.
 - **What does not survive the trip out**: group adjustment-node stacks, layer color tags, lock state, and text editability (text layers are written as raster at their rendered texture size). Effects are written only when at least one is **enabled**, so a layer carrying configured-but-disabled effects exports none.
 - **Color and structure**: a Display P3 profile is embedded as image resource 1039 for wide-gamut documents, and the writer's sRGB profile otherwise. Layer names are written as Unicode (`luni`) and group nesting as section dividers (`lsct`).
 - **Known defect — masks from a loaded project export corrupt.** The exporter builds the mask byte view as `new Uint8Array(layer.mask.data.buffer)` (`src/io/psd.ts:166`), omitting the `byteOffset`/`byteLength` that every other mask read in the codebase passes. When the mask is a **view into a larger buffer** — exactly what opening a `.lopsy` produces, since masks are sliced straight out of the project file's own ArrayBuffer — the export reads from the start of that whole buffer instead of from the mask. The exported mask channel then contains the opening bytes of the `.lopsy` file rather than mask pixels. Masks created in-session via Add Mask, or imported from a PSD, are freshly allocated at offset 0 and export correctly.
