@@ -59,6 +59,7 @@ const ALLOWLIST = {
   'src/filters/surface-blur.test.ts': 5,
   'src/io/project-save.test.ts': 1,
   'src/panels/AdjustmentsPanel/histogram-compute.test.ts': 2,
+  'src/panels/LayerPanel/thumbnail-read-queue.test.ts': 1,   // fixture buffer for mocked readback
   'src/selection/selection-to-path.test.ts': 2,
   'src/selection/selection.test.ts': 17,
   'src/test-setup.ts': 1,
