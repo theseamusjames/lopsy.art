@@ -642,6 +642,8 @@ The Adjustments panel is a reorderable, stackable list of adjustment **nodes** a
 
 The Add menu is filtered by the document's color mode: outside RGB, the chroma-producing types (Hue / Saturation, Color Balance, Channel Mixer, Photo Filter, Gradient Map, Black & White, Saturation & Vibrance) are hidden, and Curves shows only the composite curve instead of its R/G/B tabs. The filter applies to the **Add menu only** — a node that is already on the stack keeps its full controls whatever the mode. See Color Modes.
 
+**One cross-cutting hazard worth knowing before you stack these.** Every node in this panel is evaluated by a single shader program that the destructive **Filter → Brightness / Contrast** command also borrows — and that filter resets only 7 of its 42 uniforms. Once any adjustment has been enabled in a session, applying Brightness / Contrast bakes the whole live adjustment stack into the layer's pixels on top of doing its own job, and the panel then keeps applying it as well. Details under [Filters → Color](#color).
+
 Per-node controls (header):
 - **Eye** icon — enable / disable this node without removing it
 - **Trash** — remove
@@ -719,6 +721,7 @@ Independent of which dialog (or none) fronts it, a filter reaches the GPU throug
 
 - **Filters are confined to the active selection, and feather with it.** The layer is copied aside first, the filter runs across the whole texture into a scratch buffer, and the two are recombined per pixel as `mix(original, filtered, mask)` against the selection mask. Because that is a linear blend on the mask's own value rather than a cut-out, **a feathered or partially-painted selection yields a partially-applied filter** — a 50 %-grey mask region comes back half-filtered, and a feathered marquee edge fades the effect out across the falloff rather than ending it on a hard line. With no selection active the filtered scratch is simply blitted back over the layer. **Two things opt out.** Color-mode conversion deliberately does — it is the only caller of `apply_filter_full_layer`, on the grounds that a partial conversion would strand half a layer in the old color space. **Liquify simply doesn't participate**: its render path never touches the selection mask, so a Liquify session warps the entire layer even with a marquee live. Mesh Warp, which does go through `apply_filter`, is the opposite case — it honors the mask on top of already confining its grid to the selection's bounding box.
 - **A filter grows the layer to at least document size.** `ensure_layer_full_size` runs first, because the scratch FBOs are document-sized and a smaller layer texture would make the filter sample the scratch's unwritten region. For an edit-in-place filter (blur, adjust, sharpen) the new margin is transparent and nothing looks different, but **for the generators it is the whole point of the output**: run Clouds, Smoke, Fibers, or Add Noise on a small shape or a barely-painted layer and the result covers the entire canvas, not the old content bounds. Pair one with a selection to get it back under control.
+- **There is no CPU fallback, and the CPU implementation that looks like one is dead.** `lopsy-core::filters` carries a complete, self-contained CPU version of six adjustments (brightness/contrast, hue/saturation, invert, desaturate, posterize, threshold), Gaussian and box blur, unsharp mask, and both noise generators. **None of it runs in the app.** Outside its own module the only production callers are `gaussian_kernel` — which the GPU blur passes use to build their kernel uniform, so that one is genuinely shared rather than duplicated — and `gaussian_blur_gray`, used by the glow effect. Everything else is reachable only from `crates/lopsy-core/tests/visual_output.rs`, a test that writes PNGs to `test-output/` for human review and asserts nothing. That matters for two reasons: a filter whose shader fails to compile or whose context is lost has nothing to fall back to, and **the dead code does not agree with the live code** — its `desaturate` is the Rec. 709 luma the shader does not do, and its brightness/contrast is a different curve entirely (both above). Reading the CPU module to find out what a filter does will mislead you.
 - One consequence of that expansion is worth flagging: it re-origins the engine's copy of the layer descriptor (to `x = 0, y = 0` and document dimensions) without telling the Zustand store, which keeps the layer's pre-filter position and size. This is the same engine behavior the paint bucket has to reconcile around — see [Fill (Paint Bucket)](#fill-paint-bucket) — but the menu filters run outside the canvas gesture path and so never call `expandLayerForEditing`, leaving the two descriptions of the layer's bounds out of step until something else resyncs them.
 
 ### Blur
@@ -742,9 +745,28 @@ Independent of which dialog (or none) fronts it, a filter reaches the GPU throug
 - **Brightness / Contrast**: -100 to +100 each
 - **Hue / Saturation / Lightness**: hue -180 to +180, saturation -100 to +100, lightness -100 to +100
 - **Invert**: no parameters
-- **Desaturate**: no parameters (Rec. 709 luminance)
+- **Desaturate**: no parameters
 - **Posterize**: levels 2 - 32
 - **Threshold**: level 0 - 255
+
+**Desaturate is an HSL-lightness grayscale, not a luminance one.** It has no shader of its own: `filterDesaturate` runs the **Hue/Saturation** shader with `u_saturation = -100`, which drives HSL saturation to zero, and `hsl2rgb` then returns the HSL **lightness** — `(max(R,G,B) + min(R,G,B)) / 2` — on all three channels. That is a very different transform from the Rec. 709 luma (`0.2126 R + 0.7152 G + 0.0722 B`) you would expect, and the difference is large and hue-dependent:
+
+| source | Desaturate (HSL lightness) | Rec. 709 luma | delta |
+| --- | --- | --- | --- |
+| pure red `(255,0,0)` | **128** | 54 | +74 |
+| pure green `(0,255,0)` | **128** | 182 | −54 |
+| pure blue `(0,0,255)` | **128** | 18 | +110 |
+| pure yellow `(255,255,0)` | **128** | 237 | −109 |
+| pure cyan `(0,255,255)` | **128** | 201 | −73 |
+| pure magenta `(255,0,255)` | **128** | 73 | +55 |
+| olive `(110,120,40)` | 80 | 112 | −32 |
+| skin tone `(222,173,145)` | 184 | 181 | +3 |
+
+The pattern in the first six rows is the point: **every fully saturated hue desaturates to exactly the same mid-grey, 128.** Red, green, blue, yellow, cyan and magenta become indistinguishable, and the tonal ordering a photographer expects — yellow light, blue dark — is gone entirely. Only near-neutral colors (the skin tone above) come out close to the luminance answer. If you want a luma-weighted grayscale, the **Black & White** adjustment node has per-hue weights; Desaturate is not it.
+
+**Brightness / Contrast's contrast is gentler than the slider range suggests.** The live shader computes `(c − 0.5) × max(contrast + 1, 0) + 0.5 + brightness` with `contrast` normalized to −1…1, so the multiplier runs **linearly from 0× at −100 to 2× at +100** — at full contrast a pixel's deviation from mid-grey merely doubles, and the filter can never clip a mid-tone to pure black or white on its own. (A hyperbolic `(1 + c) / (1 − c)` curve — which reaches 3× at +50 and ~2000× at +100 — exists in the codebase but is part of the dead CPU module below, so it never runs.)
+
+- **Known defect — Brightness / Contrast bakes in the live adjustment stack.** It is the only filter that shares a compiled shader program with the compositor's non-destructive adjustment pass (`adjustments.glsl`, which carries Exposure, Curves, Levels, Hue/Sat, Color Balance, Photo Filter, Black & White, Channel Mixer, Invert, Gradient Map and more). WebGL uniform values are **per-program state that persists across `useProgram` and draw calls**, and `apply_filter` resets nothing — it binds `u_tex` and calls the caller's uniform closure. That closure sets **7 of the shader's 42 non-sampler uniforms** (brightness, contrast, and zeros for exposure/highlights/shadows/whites/blacks); the other **35 — plus the three LUT samplers — keep whatever the last composite frame wrote.** So once you have touched the Adjustments panel in a session, applying Brightness / Contrast permanently bakes that entire adjustment stack into the layer *as well*, and the compositor then keeps applying it on top — the adjustment lands twice, once irreversibly. Turning the adjustments off first does not help: `apply_image_adjustments` early-returns when nothing is active, so the stale uniforms are never zeroed. Only a session that has never enabled an adjustment is safe, because GL initializes uniforms to zero and every one of those flags is a no-op at zero. The zeroing list is a hand-maintained one that stopped at the five tone uniforms the shader had when it was written; every uniform added since was never added to it.
 
 ### Noise
 - **Add Noise**: amount 1 - 100 (default 25), Mode: Color / Mono (monochromatic), Distribution: Uniform / Gaussian (Uniform is the classic evenly-spread noise; Gaussian clusters values near zero for a finer, film/sensor-grain look)
