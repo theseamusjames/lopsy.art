@@ -300,10 +300,11 @@ The outline is drawn on the 2D overlay canvas, not by the GPU compositor.
 - Shortcut: `Q` (toggle). There is also a dedicated toggle button in its own group at the bottom of the toolbox, labelled *Enter Quick Mask (Q)* / *Exit Quick Mask (Q)* and highlighted while the mode is on.
 - **Entering** clears the active selection and blits the selection mask GPU-to-GPU into a separate quick-mask texture. With no selection active it starts all-zero — nothing selected.
 - **The overlay is blue, and it covers the *unselected* region** — not a red overlay of the selection. Coverage is `(1 − mask) × 0.5`, so fully-unselected areas are tinted `rgb(0, 99, 255)` at 50 % and fully-selected areas are left untouched. It shares the shader branch used by layer-mask edit mode, which is why the two look alike.
-- Brush, pencil, and eraser edit the selection mask directly. **The foreground color is reduced to a binary decision**: Rec. 709 luminance ≥ 128 adds to the selection, below 128 subtracts. A mid-gray therefore does not paint partial coverage — it just picks a side. Partial coverage comes from brush hardness and opacity, which shape the dab with a quadratic `1 − t²` falloff plus a 1 px smoothstep edge. The eraser ignores the color and always subtracts.
+- Brush, pencil, and eraser edit the selection mask directly. **The foreground color is reduced to a binary decision**: Rec. 709 luminance ≥ 128 adds to the selection, below 128 subtracts. A mid-gray therefore does not paint partial coverage — it just picks a side. Partial coverage comes from brush hardness and opacity, which shape the dab with a quadratic `1 − t²` falloff plus a 1 px smoothstep edge. The eraser ignores the color and always subtracts. **Size, hardness, and opacity are the only brush settings that reach the dab** — the tip bitmap, jitters, scatter, angle, texture, fade, taper, speed-size, sub-brushes, and the Spacing setting are all dropped, exactly as in layer-mask mode (see [Editing a Layer Mask](#editing-a-layer-mask) for the full list and for what a dab costs).
 - **Adding and subtracting are not symmetric.** Adding takes `max(existing, dabStrength)`, so opacity acts as a ceiling — repeated passes at 50 % opacity never push that area past 50 %. Subtracting multiplies by `(1 − dabStrength)`, so repeated passes compound and do drive the mask to zero.
 - Works regardless of the active layer — painting only affects the selection mask, not pixels
 - **Fill (paint bucket) and Gradient tools route into the quick mask** instead of the active layer while quick mask is on, so smooth selection falloffs (linear or radial gradients) and bucket fills of the selection mask are first-class operations. Quick mask mode takes precedence over layer-mask edit mode if both are somehow active.
+  - **The bucket only ever adds.** Unlike the quick-mask brush and pencil, it does not read the foreground color — the fill value is hard-coded to white, so there is no bucket route that subtracts from the selection. (On a *layer* mask the same tool is hard-coded the other way, to black; see [Editing a Layer Mask](#editing-a-layer-mask).) It is a CPU flood fill over a full readback of the quick-mask texture, with tolerance measured against the mask's gray value.
 - **The Move tool moves painted mask content.** With a marquee active in quick mask, dragging translates both the marquee and the quick-mask pixels inside it: the pixels under the marquee's original position are cleared and the moved content is max-blended into its new position, so it adds to rather than replaces whatever it lands on. Mask content outside the marquee stays put, and the layer texture is never touched.
 - **Exiting** reads the quick-mask texture back from the GPU and installs it as the selection. Bounds are computed from any non-zero pixel, so a soft-edged mask reports bounds covering its entire falloff. No feather is applied on the way out — the marquee's Feather slider has no effect on a quick-mask selection.
 - **Quick-mask strokes are not undoable.** Painting pushes a *Quick Mask Paint* / *Quick Mask Erase* entry into history, but a history snapshot stores the document, the selection, and layer textures — the quick-mask texture is not among them. Undoing one of these entries restores nothing visible and the painted mask survives; the entry still consumes an undo step.
@@ -510,7 +511,7 @@ Paste takes one of two routes depending on where the image came from.
 - **Tolerance**: 0 - 255 (default 32)
 - **Contiguous**: on/off (default on). Turning it **off** is the "fill by color" mode — instead of flooding outward from the click point, every pixel in the layer within tolerance of the clicked color is filled, whether or not it connects to the click.
 - These two are the tool's entire surface: there is no opacity, blend mode, anti-alias, or "all layers" option, and no modifier-key behavior. Shortcut: `G`.
-- Fills honor the active selection mask, and route into the quick mask instead of the layer while Quick Mask is on (see Quick Mask Mode).
+- Fills honor the active selection mask, and route into the quick mask instead of the layer while Quick Mask is on (see Quick Mask Mode). **Both statements stop at mask edit mode**: a bucket click on a layer mask takes a wholly separate CPU path that ignores the selection and always fills black — see [Editing a Layer Mask](#editing-a-layer-mask).
 - **GPU fast paths**: three routes, chosen automatically —
   - *Empty layer or full-coverage fill* → filled directly on the GPU from a synthesized full-coverage (or selection-derived) mask.
   - *Non-contiguous ("fill by color")* → a single per-pixel shader that samples the clicked color and fills everywhere within tolerance, optionally clipped by the selection.
@@ -529,7 +530,7 @@ Paste takes one of two routes depending on where the image came from.
   - If a symmetry mode is active, pressing Cmd *before* the pointer goes down never starts a gradient at all — the canvas intercepts Cmd+click to reposition the symmetry center (see [Symmetry](#symmetry)). Start the drag first, then hold Cmd.
 - **Shift** does nothing in this tool, despite being the angle-constraint convention in Photoshop / GIMP / Figma / Krita.
 - **The drag preview is live on canvas but not in the panels** — same as the Shape tool: the gradient re-renders on every pointer-move, but the pixel version is bumped once on release, so the Layers and Channels thumbnails lag the drag (#732 — see [Channels Panel](#channels-panel)).
-- **Mask edit mode**: when the active layer's mask is being edited, gradient drags paint into the mask texture instead of the layer pixels.
+- **Mask edit mode**: when the active layer's mask is being edited, gradient drags paint into the mask texture instead of the layer pixels. The mask route hard-codes `u_hasMask = 0`, so — unlike a gradient on the layer — **an active selection does not confine it** (see [Editing a Layer Mask](#editing-a-layer-mask)).
 - **Quick Mask mode**: when Quick Mask is active, gradient drags paint into the GPU quick-mask texture in document space — produces smooth selection falloffs.
 
 ### Crop
@@ -872,8 +873,67 @@ Lopsy has **no** Adjustment-layer or Fill-layer type. Adjustments are non-destru
 - **Position**: x, y
 - **Clip to below**: a per-layer boolean that is **inert in this build** — there is no clipping-mask feature in the UI or the renderer. No control anywhere sets it (no menu item, no context-menu entry, no panel toggle, no shortcut — the identifier does not appear in a single component), and every layer is created with it `false`. The flag is forwarded to the engine on every sync as `clip_to_below` and lands on the Rust layer descriptor, but **nothing ever reads it**: the compositor never references it and no shader carries a clipping uniform. The only way a layer acquires a `true` value is **PSD import** or loading a `.lopsy` that was saved from one, and the value then round-trips faithfully back out to both formats. The practical consequence is that a Photoshop document built on clipping masks imports with its clipping metadata intact and **renders unclipped** — each clipped layer composites across the full canvas instead of being confined to the alpha of the layer beneath it — and exports again still flagged, so the information is preserved for other applications even though Lopsy itself never honors it.
 - **Effects**: drop shadow, outer glow, inner glow, stroke, color overlay
-- **Mask**: grayscale mask with an `enabled` flag (see the caveat under Layer Operations — nothing in the UI can currently flip it). All mask painting (brush, eraser, pencil, gradient, fill) runs directly on the GPU mask texture — no per-frame CPU→GPU upload, so editing a mask is as fast as painting pixels. The round trip happens once per stroke, not once per frame: pointer-down uploads the current mask array to the GPU, every dab in the stroke renders GPU-side, and **pointer-up reads the texture back** and writes it into the layer model. That readback is what makes mask edits undoable — the history entry is pushed *before* the stroke, so the snapshot it takes carries the pre-stroke mask array inside the document. (Quick Mask has no equivalent readback, which is why its strokes are **not** undoable — see Quick Mask Mode.) **Only the mask crosses the bridge.** Until #733 a mask stroke also expanded and cached the layer's *own* RGBA at pointer-down — the guard that skips that work for Quick Mask never named layer-mask mode — so every stroke dragged four bytes a pixel of layer data nobody would read across, on top of the mask's one; and until #734 the stroke-end readback was stored as a freshly allocated array whose new object identity tripped `syncLayers`' reference-equality gate, echoing the same bytes straight back to the GPU on the next frame. The readback's own array is now seeded as the tracked reference, so the upload gate recognizes them as already resident.
+- **Mask**: grayscale mask with an `enabled` flag (see the caveat under Layer Operations — nothing in the UI can currently flip it). Mask painting with the brush, eraser, pencil, and gradient runs on the GPU mask texture with no per-frame CPU→GPU upload — **the bucket is the exception, and it is a CPU flood fill** (see [Editing a Layer Mask](#editing-a-layer-mask), which also covers why a mask dab is *not* as cheap as a layer dab). For the four GPU tools the round trip happens once per stroke, not once per frame: pointer-down uploads the current mask array to the GPU, every dab in the stroke renders GPU-side, and **pointer-up reads the texture back** and writes it into the layer model. That readback is what makes mask edits undoable — the history entry is pushed *before* the stroke, so the snapshot it takes carries the pre-stroke mask array inside the document. (Quick Mask has no equivalent readback, which is why its strokes are **not** undoable — see Quick Mask Mode.) **Only the mask crosses the bridge.** Until #733 a mask stroke also expanded and cached the layer's *own* RGBA at pointer-down — the guard that skips that work for Quick Mask never named layer-mask mode — so every stroke dragged four bytes a pixel of layer data nobody would read across, on top of the mask's one; and until #734 the stroke-end readback was stored as a freshly allocated array whose new object identity tripped `syncLayers`' reference-equality gate, echoing the same bytes straight back to the GPU on the next frame. The readback's own array is now seeded as the tracked reference, so the upload gate recognizes them as already resident.
 - **Color tag**: optional swatch (red, orange, yellow, green, blue, purple, gray, or none) shown as a vertical bar on the left edge of the layer row. Set via the layer row's right-click context menu; useful for visually grouping/organizing layers in a deep stack. **Tags are session-only** — they are not serialized into `.lopsy` projects or PSD exports, so they are lost as soon as the document is saved and reopened.
+
+### Editing a Layer Mask
+
+Mask edit mode reuses the brush, pencil, eraser, gradient, and bucket from the
+toolbox, but **none of the five behaves the way it does on a layer.** Each one
+routes to a separate, much smaller code path (`mask_paint_gpu.rs`), and the
+differences are not cosmetic.
+
+- **The foreground color is never read.** On a layer mask the tool alone decides
+  the value: **brush and pencil always paint black (hide), the eraser always
+  paints white (reveal)**, and the bucket always fills black. Setting the
+  foreground to white and picking up the brush does not reveal anything — you
+  have to switch to the eraser. This is the opposite of [Quick Mask](#quick-mask-mode),
+  where the brush and pencil *do* read the foreground color (luminance ≥ 128
+  adds, below subtracts) and only the eraser is fixed.
+- **Nothing is clipped by the active selection.** Painting, filling, and
+  gradients on a *layer* all honor the selection mask; mask editing honors none
+  of it. The dab
+  shader carries no selection uniform at all, the pencil path forces
+  `u_hasSelection` to 0, the gradient forces `u_hasMask` to 0, and the bucket
+  returns before the selection intersect that the layer route runs. So a live
+  marquee does **not** confine a mask stroke, and there is no way to mask-paint
+  "inside the selection only". (Quick Mask reaches the same place by a different
+  road — entering it clears the selection outright.)
+- **The mask brush is not the Brush.** Mask dabs go through a fixed circular
+  shader with a quadratic `1 − t²` falloff and a 1 px smoothstep edge — the same
+  one Quick Mask uses. Only **size, hardness, and opacity** are forwarded.
+  Everything else the Brushes modal exposes is silently dropped: the tip bitmap,
+  all four jitters, scatter, angle, texture, fade, taper, speed-size, and
+  sub-brushes. Spacing is not the brush's Spacing setting either — mask dabs are
+  interpolated at a hard-coded `max(1, size × 0.25)`. Painting a mask with an elaborate
+  custom preset gets you a plain soft circle. (Symmetry is separately disabled in
+  mask mode — see [Brush](#brush).)
+- **The mask bucket is not the Fill tool.** It reads Tolerance and Contiguous and
+  nothing else, and its tolerance is measured against the mask's own **gray
+  value**, not against RGB color distance. Where the layer bucket has been
+  tuned down to zero pre-fill readbacks on two of its three routes (#742), the
+  mask bucket moves the entire mask across the bridge **four times for one
+  click**: JS uploads the mask, the engine reads the whole texture back, runs a
+  4-way CPU flood fill in Rust, re-uploads the whole texture, and JS reads it
+  back again to update the layer model. There is no GPU route and no
+  empty-mask fast path.
+- **A mask dab costs two full-texture passes.** The layer brush scissors each dab
+  to its bounding box — without that the fragment shader runs across the whole
+  stroke texture and discards well over 99 % of its invocations — and accumulates
+  into a separate stroke texture that is composited once at pointer-up. The mask
+  path does neither. For **every interpolated dab point** it renders the dab
+  across the entire mask texture into a scratch buffer, then blits the whole
+  scratch back over the mask: two unscissored full-texture passes per point. (The
+  mask *pencil* is the exception — it scissors each block, like the layer pencil.)
+  At the `max(1, size × 0.25)` spacing above, a
+  single 100 px drag of a 10 px brush is 40 points — 80 full-mask passes. Quick
+  Mask uses the identical loop against a **document-sized** texture. This is why
+  mask painting on a large document feels heavier than painting pixels, despite
+  never touching the CPU.
+- **Undo behaves, though.** The pointer-up readback described under **Mask** above
+  is what makes all of this undoable; the history entries are *Mask Paint*,
+  *Mask Erase*, and *Mask Fill*. Quick Mask has no such readback and its strokes
+  are not undoable — see [Quick Mask Mode](#quick-mask-mode).
 
 ### Layer Texture Lifecycle (crop on switch, expand on return)
 
