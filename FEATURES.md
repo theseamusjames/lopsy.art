@@ -103,13 +103,21 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **Exposure**: 1 - 100%
 - **Size**: 1 - 200 px (base range; auto-scaled by document size). **This is the Brush's size setting, not a separate one** — the Dodge options bar binds `settings.brush.size` directly, so resizing here (by slider or by `[` / `]`) resizes the Brush too, and vice versa. Exposure and Mode are the only settings Dodge/Burn owns.
 - **Shift+click**: applies dodge/burn along a straight line from the previous stroke endpoint
+- **Hardness is a hard-coded 0.5** and spacing a hard-coded 25 % of size (`DODGE_HARDNESS`, `dodgeSize * 0.25` in `dodge-interaction.ts`). Neither is exposed, and the Brush's Spacing setting does not reach it — see [Dab Engines](#dab-engines-shared-across-paint-tools).
+- **This is the best-built of the non-brush dab engines.** It is the only one besides Sponge that opens a real stroke: `begin_dodge_burn_stroke` allocates a per-stroke *coverage* texture, each dab MAX-accumulates its scalar strength (`stamp × exposure`) into it, and the compositor renders a **live preview** from that coverage without touching the layer. The layer is only mutated at pointer-up, when `end_dodge_burn_stroke` bakes the coverage in once. Consequences: **overlapping dabs within one stroke do not compound** — dragging back and forth over the same spot in a single stroke is exactly as strong as one pass, and pushing further requires releasing and stroking again — and an active **selection is honored** (the dab shader samples the selection mask in document space, using the layer offset).
+- **The math is a plain screen / multiply against white and black.** Dodge is `rgb += (1 − rgb) × strength`, burn is `rgb *= (1 − strength)` (`dodge_burn.glsl`). Both apply to **every tone equally — there is no Range control** (shadows / midtones / highlights) of the kind Photoshop's dodge and burn have, so the tool cannot be aimed at one part of the tonal range.
+- The dab's falloff is `hardness + (1 − hardness)(1 − t²)`, i.e. **1.0 at the center decaying only to 0.5 at the rim**, with a 1 px `smoothstep` feather doing the final drop to zero. It is much harder-edged than the name "soft" suggests.
 
 ### Sponge
 - **Mode**: saturate or desaturate
-- **Strength**: 1 - 100 (saturation delta applied per dab)
+- **Strength**: 1 - 100
 - **Size**: 1 px – document-scaled max (default cap 200 px)
 - Shortcut: `Y`
-- Converts each affected pixel to HSL, shifts the saturation channel by the configured delta with a Gaussian falloff (1.0 at the dab center, 0 at the edge), and writes back to RGB. Internal hardness is fixed at 0.5; dab spacing is 25% of the brush size.
+- Converts each affected pixel to HSL, adds (saturate) or subtracts (desaturate) from the saturation channel with a clamp to 0 – 1, and writes back to RGB. Internal hardness is fixed at 0.5; dab spacing is 25% of the brush size.
+- **Strength is neither linear nor a saturation delta.** `scaleSpongeStrength` squares the normalized slider and scales it by a quarter — `(slider / 100)² × 0.25` — so the delta actually applied at the center of a dab is **0.25 at Strength 100** and **0.0625 at Strength 50**. Halving the slider gives a *quarter* of the effect, and the tool can never shift saturation by more than 25 points in a single stroke.
+- The falloff is **not Gaussian and does not reach 0 at the edge**: it is `hardness + (1 − hardness)(1 − t²)` with hardness 0.5, so a dab is at full strength in the center and still at **half strength at the rim**, where a 1 px `smoothstep` feather takes it the rest of the way down. Sponge shares `dodge_burn_dab.glsl` with Dodge / Burn for this — the uniform the shader calls `u_exposure` is what the Sponge options bar calls Strength.
+- **Same stroke architecture as Dodge / Burn**: a per-stroke coverage texture, MAX-accumulated, previewed live by the compositor and baked into the layer only at pointer-up. So **overlapping dabs within one stroke do not compound**, and an active **selection is honored**.
+- **Fully transparent pixels are skipped** (`c.a < 0.001` returns the pixel untouched), so sponging over empty canvas does nothing — unlike Dodge / Burn, which does not check alpha.
 - **`[` / `]` do not resize the Sponge** — the size shortcut has no branch for this tool, so its Size is slider-only (see [Single-Key Shortcuts](#single-key-shortcuts)).
 - **Shift+click**: applies the sponge along a straight line from the previous stroke endpoint
 
@@ -118,6 +126,9 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **Alt/Cmd+click**: set the source sample point
 - **Shift+click**: stamps along a straight line from the previous stroke endpoint, preserving source offset
 - **Cursor**: a circular brush-size cursor (no crosshair fallback). Once a source point is set, the cursor becomes a live **source preview** — the pixels under the source offset are drawn at 70% opacity, clipped to the brush circle, with a white outline ring around the cursor and a small crosshair marking the current source point. The preview tracks the source offset as you move, so you can see exactly what will be stamped before painting.
+- **Size is the only setting that reaches the dab.** There is no opacity, flow, or hardness control, and none is read: hardness is a **literal `0.8` written into `clone_stamp.glsl`** rather than a uniform, and spacing is the usual hard-coded 25 % of size. Every dab therefore stamps the source at full strength.
+- **The Clone Stamp ignores the active selection.** `clone_stamp.glsl` declares no selection uniform and `clone_stamp_gpu.rs` sets none, so a marquee does not confine it — cloning paints straight across the selection edge. Same for Symmetry. See [Dab Engines](#dab-engines-shared-across-paint-tools).
+- **The source is the layer as it is being written, not a snapshot taken at pointer-down.** Each dab renders into the scratch texture and is blitted back over the layer before the next dab runs, and the shader samples that same layer texture for its source. When the source and destination circles overlap, dab *n+1* clones dab *n*'s output — the classic smearing feedback — rather than repeatedly copying the original pixels.
 
 ### Healing Brush
 - **Size**: 1 px – document-scaled max (default cap 200 px, scales with canvas size)
@@ -125,14 +136,20 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **Alt/Cmd+click**: set the healing source sample point
 - **Shift+click**: heals along a straight line from the previous stroke endpoint, preserving source offset
 - Color-correction healing: subtracts the source mean color and adds the destination mean color, so texture is borrowed from the source while tone matches the destination
-- Soft quadratic falloff at the dab edge for seamless blending
+- Soft quadratic falloff at the dab edge for seamless blending (`(1 − t²)` plus a 1 px `smoothstep` rim — this one really does reach zero at the edge, unlike Dodge / Burn and Sponge)
+- **Every dab costs two synchronous GPU→CPU readbacks.** The two means are not computed on the CPU and not kept on the GPU: `compute_region_mean` renders `healing_mean.glsl` into a **1 × 1** viewport and then calls `gl.readPixels` to fetch the single resulting pixel — once for the source region and once for the destination — before the dab itself can be drawn. A `readPixels` stalls the pipeline until the GPU drains, so a healing stroke pays **two full pipeline stalls per dab**, on top of the two full-texture passes every dab in this family already costs. This is by a wide margin the most expensive paint tool in the app.
+- **The "mean" is a 32-tap estimate, quantized to 8 bits.** `healing_mean.glsl` averages a fixed 32-point Poisson-disk sample of the region (skipping fully transparent taps), not every pixel under the dab, so the correction is a stochastic estimate — deterministic, but biased for small radii where 32 taps land on a handful of pixels. The result is then read back as `UNSIGNED_BYTE`, so both means are rounded to 8 bits per channel before they reach the shader — despite the function's own header comment claiming the path exists to preserve FP16 precision.
+- **The Healing Brush ignores the active selection**, and Symmetry, for the same reason as the Clone Stamp: `healing_dab.glsl` declares no selection uniform. It also samples its source from the progressively updated layer, so overlapping source and destination smear the same way.
 - **Cursor**: the same circular brush-size cursor and live **source preview** as the Clone Stamp — once a source point is set, the source pixels render at 70% opacity inside the brush circle with a white outline ring and a crosshair at the source point (previously the heal brush fell through to a plain crosshair).
 
 ### Smudge
 - **Size**: 1 - 200 px (base range; auto-scaled by document size)
 - **Strength**: 0 - 100% (how far pixels are pulled along the stroke)
 - Shortcut: `R`
-- Pulls colors along the stroke direction, blending neighbouring pixels.
+- Pulls colors along the stroke direction, blending neighbouring pixels. Each fragment samples the pixel that sat at `fragPos − (center − prev)` and mixes toward it by `falloff × strength`, which is what produces the drag.
+- The falloff is **quartic** — `(1 − d²)²` — plus a 1 px edge feather, deliberately weighting the center so the outer ring fades out instead of ending on a visible circular silhouette.
+- **Smudge ignores the active selection** (`smudge_dab.glsl` declares no selection uniform) and Symmetry.
+- **Smudge is the only read-modify-write dab engine that guards its layer size.** It calls `ensure_layer_full_size` before dabbing, with a comment naming the exact failure the others still have: the dispatch writes to a document-sized scratch FBO with the viewport set to the *layer* texture size, so a layer smaller than the scratch blits back garbage as full-width streaks. The Eraser, Clone Stamp, and Healing Brush take the same route without the guard — see [Dab Engines](#dab-engines-shared-across-paint-tools).
 - **Shift+click**: the straight-line smudge is implemented but does not fire after a smudge stroke — smudge is not registered as a paint tool, so its strokes never record a line origin. See the Smudge caveat under Straight-Line Strokes.
 
 ### Spray
@@ -143,7 +160,42 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - Shortcut: `J`
 - Holding the cursor still keeps emitting dots at ~6 Hz so paint accumulates over time, mimicking an airbrush. Dragging spreads dots along the path with automatic spacing scaled to brush size.
 - **No shift+click straight line**: unlike the other paint tools, the spray handler never reads the shift key, so shift+click sprays a normal dab at the click point. A shift-hold line preview *is* drawn (see below) even though clicking will not follow it.
+- **Spray has no dab engine of its own.** It generates dots and paints each one with a plain **Brush** dab (`applyBrushDab` per dot, flow 1, all jitters 0). Two things follow from that. It **inherits the Brush's active tip**: `brush_has_tip` / `brush_tip_is_color` are engine-global state synced from the Brush's selected tip, not per tool, so choosing a textured or colored brush preset and then switching to Spray sprays that tip's bitmap even though the Spray options bar exposes no tip control. And its dots **do honor the active selection**, since they go through the brush dab shader.
+- **Known defect — spray dabs never reach a stroke texture, so spray can only lighten.** The shared paint-tool path opens a stroke texture at pointer-down, but `handleSprayDown` then calls `pushHistory('Spray')`, and `pushHistory` runs `endStroke` first — which *removes* that stroke texture — before the first dot is emitted. `apply_dab_batch` falls back to `stroke_tex.or_else(layer_texture)`, so every spray dot MAX-blends **directly onto the layer**. Since a dab is emitted premultiplied (`vec4(color.rgb × a, a)`) and `MAX` ignores the blend factors, the result is a per-channel maximum against the artwork already there: spraying a **darker color over opaque lighter pixels does nothing at all**, and spraying any color only ever raises channel values. The Brush avoids this because its dabs accumulate in an initially-empty stroke texture that is composited over the layer properly at `end_stroke`; Spray never gets one. Neither `handleSprayMove` nor the ~6 Hz timer re-opens it.
+- **Symmetry does not apply.** Spray calls the dab entry point directly rather than going through the brush stroke module, so it never mirrors points (see [Symmetry](#symmetry)).
 - **No size cursor and no `[` / `]`**: Spray is the one painting tool left out of both size affordances. It is absent from the brush-cursor tool set, so it falls through to a plain crosshair with no ring showing the dab footprint, and absent from the size-shortcut branches, so the brackets do nothing. Both gaps bite hardest here, since Spray has the widest size range of any tool (base cap 500 px).
+
+### Dab Engines (shared across paint tools)
+
+The paint tools do not share a dab implementation. There are **three different architectures** behind them, and which one a tool uses decides whether its opacity behaves like a ceiling or a rate, whether a selection confines it, and what a single dab costs.
+
+| Tool | Architecture | Settings that reach the dab | Selection | Symmetry | GPU work per dab |
+|------|--------------|------------------------------|-----------|----------|------------------|
+| Brush | stroke texture, `MAX` (over-composite for color tips) | all of them | yes | yes | 1 scissored pass |
+| Pencil | stroke texture, `MAX` | size | yes | yes | 1 scissored pass |
+| Spray | brush dabs, but **no** stroke texture | size, density, opacity, softness (+ the Brush's tip) | yes | no | 1 scissored pass **per dot** |
+| Dodge / Burn | coverage texture, `MAX`, baked at pointer-up | brush size, exposure, mode | yes | no | 1 full pass |
+| Sponge | coverage texture, `MAX`, baked at pointer-up | size, strength, mode | yes | no | 1 full pass |
+| Eraser | read-modify-write onto the layer | size, opacity | yes | yes | 2 full passes |
+| Smudge | read-modify-write onto the layer | size, strength | **no** | no | 2 full passes |
+| Clone Stamp | read-modify-write onto the layer | size | **no** | no | 2 full passes |
+| Healing Brush | read-modify-write onto the layer | size, opacity | **no** | no | 2 full passes **+ 2 readbacks** |
+
+**The three architectures**
+
+1. **Stroke texture** (Brush, Pencil). Dabs accumulate into a per-stroke texture that starts empty and is composited over the layer once, at `end_stroke`. Because they accumulate under `blend_equation(MAX)`, overlapping dabs cannot push past the slider, so **Opacity is a ceiling** — except for color tips, which over-composite instead and therefore do compound.
+2. **Coverage texture** (Dodge / Burn, Sponge). A per-stroke texture accumulates each dab's *scalar strength* under `MAX`; the compositor renders a live preview from it and the layer is mutated once, at pointer-up. Overlapping dabs within a stroke **do not compound**, and the layer is untouched until the gesture ends.
+3. **Read-modify-write** (Eraser, Smudge, Clone Stamp, Healing Brush). Each dab reads the layer, draws a full-screen quad into the shared scratch FBO, and blits the whole scratch texture straight back over the layer — then the next dab reads *that*. So these tools **compound within a single stroke** (the Eraser's Opacity is a rate, not a ceiling — see [Eraser](#eraser)), and each dab costs two full-texture passes instead of one scissored one.
+
+**What every non-brush engine drops.** Spacing is hard-coded to `max(1, size × 0.25)` in all of them, so the Brush's Spacing setting reaches only the Brush. None of them reads the tip bitmap, the four jitters, scatter, angle, texture, flow, fade, taper, speed-size, or sub-brushes. This is the same shape of gap documented for [mask editing](#editing-a-layer-mask) and the [Eraser](#eraser), and it has the same cause: each is a second implementation that was never grown to match the first.
+
+**Three tools paint straight through an active selection.** Smudge, Clone Stamp, and Healing Brush are unconstrained by a marquee — their shaders declare no selection uniform at all and their Rust callers set none, and nothing upstream clips the dab points either. This is not a soft-mask subtlety; the selection is simply absent from those code paths. Every other paint tool samples the selection mask in the shader and is confined by it.
+
+**Only the scissored engines are cheap.** The brush's own note is that scissoring a dab to its bounding box "discards >99.98% of invocations for a typical brush size". Of the nine tools above only the three brush-dab paths do it; the other six run full-texture passes for every dab, so their cost scales with the layer, not the brush.
+
+**Known defect — the scratch texture is document-sized, but three of the four read-modify-write engines set a layer-sized viewport.** `scratch_texture_a` is allocated at document dimensions while the Eraser, Clone Stamp, and Healing Brush set `gl.viewport` and blit at the *layer* texture's dimensions, so painting on a layer that has been expanded past the document bounds reads and writes outside the scratch texture's extent. Smudge is the exception — it calls `ensure_layer_full_size` first, and its comment names the symptom ("full-width streak artifacts"). Dodge / Burn and Sponge call it too, at `begin_*_stroke`. `end_stroke` guards precisely this case for brush strokes; the three unguarded paths have no equivalent.
+
+**Known defect — five tools push two undo entries per stroke.** The shared paint-tool path at pointer-down pushes a history entry whose label is `activeTool === 'brush' ? 'Brush' : activeTool === 'pencil' ? 'Pencil' : 'Eraser'`, so **every tool that is not the brush or the pencil is labeled "Eraser"** — and Dodge / Burn, Sponge, Clone Stamp, Healing Brush, and Spray each then push their own correctly-labeled entry from their own handler. `pushHistory` does not coalesce, so one stroke with any of those five leaves two rows in the History panel: a spurious **"Eraser"** followed by the real one, and undoing the stroke takes two steps. (Smudge is unaffected — it is not registered as a paint tool, which is also why it has no straight-line origin.)
 
 ### Straight-Line Strokes (shared across paint tools)
 
@@ -296,7 +348,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 
 The outline is drawn on the 2D overlay canvas, not by the GPU compositor.
 
-- **The ants trace the 50 % contour.** Edge extraction thresholds the mask at **128**, so a selection is outlined where it crosses half coverage. A soft selection whose values are all below 128 — a heavily feathered edge, or the selection returned by exiting a quick mask that was painted at low opacity — is fully active and does constrain painting, but draws **no ants at all**. The absence of an outline is not proof of an empty selection.
+- **The ants trace the 50 % contour.** Edge extraction thresholds the mask at **128**, so a selection is outlined where it crosses half coverage. A soft selection whose values are all below 128 — a heavily feathered edge, or the selection returned by exiting a quick mask that was painted at low opacity — is fully active and does constrain painting — for the tools that read the mask at all; Smudge, Clone Stamp, and Healing Brush ignore it entirely (see [Dab Engines](#dab-engines-shared-across-paint-tools)) — but draws **no ants at all**. The absence of an outline is not proof of an empty selection.
 - Edge segments are chained into connected polylines by matching shared endpoints, so the dash pattern flows continuously around each contour instead of restarting on every one-pixel segment.
 - Each contour is stroked twice: a solid black under-stroke, then a white dashed over-stroke on top, so the outline stays legible over any background. Line width is `1.5 / zoom` and the dash is `8 / zoom` on/off, both zoom-compensated so the ants keep a constant on-screen size. The dash offset cycles over a 120-frame period.
 - Contours are cached against the mask buffer's identity and retraced only when the mask itself is replaced, and the edge scan is clipped to the selection's bounding box (expanded 1 px) rather than the whole canvas — without that clip a live drag on a large document collapses to a few frames per second.
@@ -1789,7 +1841,7 @@ More generally, the palette snap runs **only at conversion time**. Pixels painte
 - **Undone steps stay in the list** below the current position, dimmed in the disabled text color, and clicking one redoes forward into it. They are discarded the moment a new edit is pushed (the redo stack is cleared on every push).
 - The list is its own scroll area (120 px minimum, 250 px maximum) and scrolls to the **bottom** whenever the undo stack length changes — which after an undo means the furthest *future* row, not the current one.
 - At most **51 past rows** are reachable: `Original` plus the 50 snapshots the cap allows, with any undone steps listed below them.
-- A single gesture can produce two rows. Hold-to-smooth pushes the freehand stroke as its own `Brush` entry before rasterizing the smoothed one, so returning to the pre-stroke state takes two undos (see *Brush → Hold-to-smooth*).
+- A single gesture can produce two rows. Hold-to-smooth pushes the freehand stroke as its own `Brush` entry before rasterizing the smoothed one, so returning to the pre-stroke state takes two undos (see *Brush → Hold-to-smooth*). **Dodge / Burn, Sponge, Clone Stamp, Healing Brush, and Spray do it on every stroke**, and the first of the two rows is mislabeled `Eraser` — see the defect note under [Dab Engines](#dab-engines-shared-across-paint-tools).
 - The plain **"No history"** placeholder shows only while *both* stacks are empty — in practice just the gap between opening a document and its first rendered frame, since the baseline snapshot lands there.
 
 ---
