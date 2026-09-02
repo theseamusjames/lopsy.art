@@ -608,16 +608,12 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const s = get();
     if (!allowLayerCreation(s.document)) return;
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
-    const result = computeDuplicateLayer(
-      s.document,
-      resolveAllPixelData(s.document.layerOrder, s.document.layers),
-    );
+    // GPU-only (duplicateLayerTexture per raster layer); no JS
+    // readback / re-upload of every layer needed (#746).
+    const result = computeDuplicateLayer(s.document);
     if (!result) return;
     s.pushHistory('Duplicate Layer');
     applyActionResult(set, result);
-    if (result.layerPixelData && result.document) {
-      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
-    }
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
@@ -625,48 +621,38 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const s = get();
     flushLayerSync(s);
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
-    const result = computeMergeDown(
-      s.document,
-      resolveAllPixelData(s.document.layerOrder, s.document.layers),
-    );
+    // GPU-only (mergeLayers composites on the GPU); the compute
+    // function invalidates JS pixel cache for the two touched layers
+    // directly. No whole-document round trip (#746).
+    const result = computeMergeDown(s.document);
     if (!result) return;
     s.pushHistory('Merge Down');
     applyActionResult(set, result);
-    if (result.layerPixelData && result.document) {
-      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
-    }
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
   flattenImage: () => {
     const s = get();
     flushLayerSync(s);
-    const result = computeFlattenImage(
-      s.document,
-      resolveAllPixelData(s.document.layerOrder, s.document.layers),
-    );
+    // GPU-only (compositeForExport + uploadLayerPixels); no JS pixel
+    // map needed (#746).
+    const result = computeFlattenImage(s.document);
     if (!result) return;
     s.pushHistory('Flatten Image');
     applyActionResult(set, result);
-    if (result.layerPixelData && result.document) {
-      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
-    }
   },
 
   rasterizeLayerStyle: () => {
     const s = get();
     flushLayerSync(s);
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
-    const result = computeRasterizeStyle(
-      s.document,
-      resolveAllPixelData(s.document.layerOrder, s.document.layers),
-    );
+    // GPU-only (rasterizeLayerEffects + uploadLayerPixels for the
+    // active layer). The compute function invalidates the JS pixel
+    // cache for the active layer directly (#746).
+    const result = computeRasterizeStyle(s.document);
     if (!result) return;
     s.pushHistory('Rasterize Layer Style');
     applyActionResult(set, result);
-    if (result.layerPixelData && result.document) {
-      syncPixelDataToGpu(result.layerPixelData, result.document.layers);
-    }
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
@@ -820,7 +806,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     let doc = s.document;
     let pixelsAreEncoded = doc.colorMode === 'lab';
     if (newMode === 'indexed') {
-      const flattened = computeFlattenImage(doc, resolveAllPixelData(doc.layerOrder, doc.layers));
+      const flattened = computeFlattenImage(doc);
       if (flattened?.document) {
         applyActionResult(set, flattened);
         doc = flattened.document;

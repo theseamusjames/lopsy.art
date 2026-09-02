@@ -3,10 +3,19 @@ import type { ActionResult } from '../types';
 import { hasEnabledEffects, DEFAULT_EFFECTS } from '../../../layers/layer-model';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { rasterizeLayerEffects, uploadLayerPixels } from '../../../engine-wasm/wasm-bridge';
+import { pixelDataManager } from '../../../engine/pixel-data-manager';
+import { invalidateBitmapCache } from '../../../engine/bitmap-cache';
 
+/**
+ * Rasterize the active layer's effects into its own texture.
+ *
+ * The read + upload happens entirely GPU-side via
+ * `rasterizeLayerEffects` + `uploadLayerPixels`; no JS-side pixel
+ * buffer is threaded through (#746). The caller does not need to
+ * `resolveAllPixelData` beforehand or `syncPixelDataToGpu` afterward.
+ */
 export function computeRasterizeStyle(
   doc: DocumentState,
-  layerPixelData: Map<string, ImageData>,
 ): ActionResult | undefined {
   const activeId = doc.activeLayerId;
   if (!activeId) return undefined;
@@ -23,9 +32,10 @@ export function computeRasterizeStyle(
   // Upload rasterized result back to the layer's GPU texture
   uploadLayerPixels(engine, activeId, pixels, doc.width, doc.height, 0, 0);
 
-  // Clear stale JS pixel data
-  const pixelData = new Map(layerPixelData);
-  pixelData.delete(activeId);
+  // GPU is source of truth for the active layer — drop stale JS pixel
+  // data and bitmap cache.
+  pixelDataManager.remove(activeId);
+  invalidateBitmapCache(activeId);
 
   return {
     document: {
@@ -42,6 +52,5 @@ export function computeRasterizeStyle(
           : l,
       ),
     },
-    layerPixelData: pixelData,
   };
 }

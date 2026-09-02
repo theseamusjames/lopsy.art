@@ -7,9 +7,17 @@ import { getEngine } from '../../../engine-wasm/engine-state';
 import { compositeForExport, uploadLayerPixels, addLayer } from '../../../engine-wasm/wasm-bridge';
 import { layerToDescJson } from '../../../engine-wasm/sync-layers';
 
+/**
+ * Flatten the whole document into a single background raster.
+ *
+ * Compositing happens on the GPU via `compositeForExport`; no JS-side
+ * pixel map is consumed (#746). The returned action clears the pixel
+ * manager (empty `layerPixelData`) because every prior layer is now
+ * garbage — its texture will be reclaimed engine-side and its JS cache
+ * is no longer meaningful.
+ */
 export function computeFlattenImage(
   doc: DocumentState,
-  _layerPixelData: Map<string, ImageData>,
 ): ActionResult | undefined {
   if (doc.layers.length <= 1) return undefined;
 

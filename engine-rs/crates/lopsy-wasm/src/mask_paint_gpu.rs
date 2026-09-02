@@ -420,10 +420,9 @@ pub fn read_mask_texture(engine: &mut EngineInner, layer_id: &str) -> Option<Vec
     let (w, h) = engine.texture_pool.get_size(handle)?;
     let tex = engine.texture_pool.get(handle)?.clone();
 
-    let rgba = engine.read_texture_rgba8(&tex, w, h)?;
-    let mut single = vec![0u8; (w * h) as usize];
-    for i in 0..(w * h) as usize {
-        single[i] = rgba[i * 4];
-    }
-    Some(single)
+    // R8 staging: 1 byte per pixel back over the bridge instead of 4,
+    // and no CPU-side strided extract. See #745 — the RGBA path stalled
+    // ~26 s per stroke on a 4K mask (60× worse than linear per pixel,
+    // driven by the 16 M-iteration cache-hostile CPU loop).
+    engine.read_texture_r8(&tex, w, h)
 }

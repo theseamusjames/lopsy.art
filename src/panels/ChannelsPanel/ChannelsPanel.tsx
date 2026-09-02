@@ -7,6 +7,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { readChannelThumbnail, readLayerThumbnail } from '../../engine-wasm/wasm-bridge';
 import { usePixelDataVersion } from '../../engine/usePixelDataVersion';
 import { contextOptions, createImageData } from '../../engine/color-space';
+import { requestThumbnailRead, cancelThumbnailRead } from '../LayerPanel/thumbnail-read-queue';
 import type { ChannelId } from './channel-extract';
 import styles from './ChannelsPanel.module.css';
 
@@ -72,9 +73,12 @@ function ChannelThumbnail({ layerId, channel, pixelVersion }: ChannelThumbnailPr
 
     let cancelled = false;
     let retries = 0;
-    let rafId = 0;
+    // Composite key: five channels share a layer id, so keying only on
+    // that would collapse RGB+R+G+B+A down to one queued entry. Include
+    // the channel so all five distinct reads survive dedup (#747).
+    const key = `${layerId}:${channel}`;
 
-    const tryRead = () => {
+    const paint = (sourceData: ImageData | null): void => {
       if (cancelled) return;
 
       const ctx = canvas.getContext('2d', contextOptions);
@@ -83,17 +87,11 @@ function ChannelThumbnail({ layerId, channel, pixelVersion }: ChannelThumbnailPr
       canvas.width = THUMB_W;
       canvas.height = THUMB_H;
 
-      // GPU-side downscale: readChannelThumbnail / readLayerThumbnail render
-      // into a small (≤THUMB_MAX) RGBA8 texture and read back only that.
-      // Previously each thumbnail did a full-doc GPU→CPU readback, so a 4K
-      // layer with the panel open moved ~67 MB per channel per pixel-version
-      // bump (5 thumbnails × ~67 MB) — see #683.
-      const sourceData = readThumbForChannel(layerId, channel);
       if (!sourceData) {
         ctx.clearRect(0, 0, THUMB_W, THUMB_H);
         if (retries < MAX_RETRIES) {
           retries++;
-          rafId = requestAnimationFrame(tryRead);
+          requestThumbnailRead(key, () => readThumbForChannel(layerId, channel), paint);
         }
         return;
       }
@@ -118,11 +116,14 @@ function ChannelThumbnail({ layerId, channel, pixelVersion }: ChannelThumbnailPr
       }
     };
 
-    rafId = requestAnimationFrame(tryRead);
+    // Route through the coalescing idle-time queue. Previously this was
+    // a raw rAF that fired the synchronous glReadPixels on the interactive
+    // frame — five times over, once per channel — see #747.
+    requestThumbnailRead(key, () => readThumbForChannel(layerId, channel), paint);
 
     return () => {
       cancelled = true;
-      cancelAnimationFrame(rafId);
+      cancelThumbnailRead(key);
     };
   }, [layerId, channel, pixelVersion]);
 

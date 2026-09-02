@@ -225,14 +225,10 @@ pub fn read_quick_mask_pixels(engine: &EngineInner) -> (u32, u32, Vec<u8>) {
     let Some((w, h)) = engine.texture_pool.get_size(handle) else { return (0, 0, Vec::new()) };
     let Some(tex) = engine.texture_pool.get(handle).cloned() else { return (0, 0, Vec::new()) };
 
-    match engine.read_texture_rgba8(&tex, w, h) {
-        Some(data) => {
-            let mut single = vec![0u8; (w * h) as usize];
-            for i in 0..(w * h) as usize {
-                single[i] = data[i * 4];
-            }
-            (w, h, single)
-        }
+    // R8 staging: 1 byte per pixel back over the bridge instead of 4,
+    // and no CPU-side strided extract (#745).
+    match engine.read_texture_r8(&tex, w, h) {
+        Some(data) => (w, h, data),
         None => (0, 0, Vec::new()),
     }
 }

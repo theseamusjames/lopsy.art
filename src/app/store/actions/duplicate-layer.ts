@@ -13,9 +13,17 @@ function shiftLayer(layer: Layer, dx: number, dy: number): Layer {
   return { ...layer, x: layer.x + dx, y: layer.y + dy } as Layer;
 }
 
+/**
+ * Duplicate the active layer (or a group and all descendants) on the GPU.
+ *
+ * The duplicate is a texture-only clone: `duplicateLayerTexture` copies
+ * the source layer's GPU texture into a new texture owned by the new
+ * layer id. No JS-side pixel buffer is read or produced (#746) — the
+ * caller does not need to `resolveAllPixelData` before, and does not
+ * need to `syncPixelDataToGpu` after.
+ */
 export function computeDuplicateLayer(
   doc: DocumentState,
-  layerPixelData: Map<string, ImageData>,
 ): ActionResult | undefined {
   const activeId = doc.activeLayerId;
   if (!activeId) return undefined;
@@ -23,7 +31,6 @@ export function computeDuplicateLayer(
   if (!layer) return undefined;
 
   const engine = getEngine();
-  const pixelData = new Map(layerPixelData);
   const newLayers = [...doc.layers];
   const newOrder = [...doc.layerOrder];
 
@@ -73,7 +80,6 @@ export function computeDuplicateLayer(
 
     return {
       document: { ...doc, layers: newLayers, layerOrder: newOrder, activeLayerId: dupRootId },
-      layerPixelData: pixelData,
     };
   }
 
@@ -98,6 +104,5 @@ export function computeDuplicateLayer(
 
   return {
     document: { ...doc, layers, layerOrder: newOrder, activeLayerId: newId },
-    layerPixelData: pixelData,
   };
 }

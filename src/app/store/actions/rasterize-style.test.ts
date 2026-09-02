@@ -13,45 +13,40 @@ function enabledEffects(): LayerEffects {
   };
 }
 
-function makeDoc(effects: LayerEffects): { doc: DocumentState; pixelData: Map<string, ImageData> } {
+function makeDoc(effects: LayerEffects): DocumentState {
   const layer = createRasterLayer({ name: 'Layer 1', width: 4, height: 4 });
   const layerWithEffects = { ...layer, effects };
-  const pixelData = new Map<string, ImageData>();
-  pixelData.set(layer.id, new ImageData(4, 4));
   return {
-    doc: {
-      id: 'doc-1',
-      name: 'Test',
-      width: 4,
-      height: 4,
-      layers: [layerWithEffects],
-      layerOrder: [layer.id],
-      activeLayerId: layer.id,
-      selectedLayerIds: [],
-      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
-      colorMode: 'rgb',
-    },
-    pixelData,
+    id: 'doc-1',
+    name: 'Test',
+    width: 4,
+    height: 4,
+    layers: [layerWithEffects],
+    layerOrder: [layer.id],
+    activeLayerId: layer.id,
+    selectedLayerIds: [],
+    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    colorMode: 'rgb',
   };
 }
 
 describe('computeRasterizeStyle', () => {
   it('returns undefined when no active layer', () => {
-    const { doc, pixelData } = makeDoc(enabledEffects());
-    const result = computeRasterizeStyle({ ...doc, activeLayerId: null }, pixelData);
+    const doc = makeDoc(enabledEffects());
+    const result = computeRasterizeStyle({ ...doc, activeLayerId: null });
     expect(result).toBeUndefined();
   });
 
   it('returns undefined when no enabled effects', () => {
-    const { doc, pixelData } = makeDoc(DEFAULT_EFFECTS);
-    const result = computeRasterizeStyle(doc, pixelData);
+    const doc = makeDoc(DEFAULT_EFFECTS);
+    const result = computeRasterizeStyle(doc);
     expect(result).toBeUndefined();
   });
 
   it('returns undefined when no GPU engine available', () => {
-    const { doc, pixelData } = makeDoc(enabledEffects());
+    const doc = makeDoc(enabledEffects());
     // getEngine() returns null in unit tests — rasterize requires GPU
-    const result = computeRasterizeStyle(doc, pixelData);
+    const result = computeRasterizeStyle(doc);
     expect(result).toBeUndefined();
   });
 });

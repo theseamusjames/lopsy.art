@@ -761,6 +761,67 @@ impl EngineInner {
         self.fbo_pool.unbind(&self.gl);
     }
 
+    /// Read a texture's red channel back as a single-byte-per-pixel
+    /// buffer. Blits the source into a temporary R8 target and reads
+    /// with `RED / UNSIGNED_BYTE` — 25% of the transfer of a full RGBA
+    /// round trip, and no CPU-side strided extract afterwards. Use for
+    /// data that is conceptually 8-bit single-channel (mask paint,
+    /// quick mask). See #745: the previous RGBA-then-strided-extract
+    /// path stalled ~26 s per mask stroke on a 4K document (staging
+    /// alloc + 64 MB transfer + a 16 M-iteration cache-hostile CPU
+    /// loop). R8 removes all three parts of that cost.
+    pub fn read_texture_r8(&self, src_tex: &web_sys::WebGlTexture, w: u32, h: u32) -> Option<Vec<u8>> {
+        let gl = &self.gl;
+
+        let staging = gl.create_texture()?;
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&staging));
+        gl.tex_storage_2d(WebGl2RenderingContext::TEXTURE_2D, 1, WebGl2RenderingContext::R8, w as i32, h as i32);
+        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MIN_FILTER, WebGl2RenderingContext::NEAREST as i32);
+        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MAG_FILTER, WebGl2RenderingContext::NEAREST as i32);
+
+        let Some(fbo) = gl.create_framebuffer() else {
+            gl.delete_texture(Some(&staging));
+            return None;
+        };
+        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
+        gl.framebuffer_texture_2d(
+            WebGl2RenderingContext::FRAMEBUFFER,
+            WebGl2RenderingContext::COLOR_ATTACHMENT0,
+            WebGl2RenderingContext::TEXTURE_2D,
+            Some(&staging),
+            0,
+        );
+        gl.viewport(0, 0, w as i32, h as i32);
+        gl.disable(WebGl2RenderingContext::BLEND);
+
+        // The blit shader writes vec4(color); the R8 attachment only
+        // keeps the R channel — GB and A are dropped by the FBO.
+        let shader = &self.shaders.blit;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src_tex));
+        if let Some(loc) = shader.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        self.draw_fullscreen_quad();
+
+        // ES 3.0 / WebGL 2 spec: for an R8 color attachment, readPixels
+        // with RED + UNSIGNED_BYTE is guaranteed to succeed.
+        let mut pixels = vec![0u8; (w * h) as usize];
+        let read_ok = gl.read_pixels_with_opt_u8_array(
+            0, 0, w as i32, h as i32,
+            WebGl2RenderingContext::RED,
+            WebGl2RenderingContext::UNSIGNED_BYTE,
+            Some(&mut pixels),
+        ).is_ok();
+
+        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+        gl.delete_framebuffer(Some(&fbo));
+        gl.delete_texture(Some(&staging));
+
+        if read_ok { Some(pixels) } else { None }
+    }
+
     /// Read a texture back as 8-bit RGBA by first blitting it into a
     /// temporary RGBA8 target. readPixels(FLOAT) from an RGBA16F
     /// attachment is the driver's slow path (an 8.4s stall for a 2MP mask
