@@ -320,7 +320,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - Edge detection runs in WASM against the active layer's GPU texture; only snapped coordinates cross back to JS
 
 ### Magic Wand
-- **Tolerance**: 0 - 255
+- **Tolerance**: 0 - 255 — measured as **squared Euclidean distance across all four RGBA channels** (`dr² + dg² + db² + da² ≤ tolerance²`), so alpha counts toward the match exactly as much as a color channel does. A pixel differing by the same amount in every color channel therefore hits the limit at roughly **58 %** of the nominal tolerance (`tolerance / √3`). Unlike the [Paint Bucket](#fill-paint-bucket), the wand runs the **same** metric whether Contiguous is on or off — both states call `lopsy_core::flood_fill`.
 - **Contiguous**: on/off
 - **Graduated**: on/off — when enabled, the wand uses a gradient-aware flood fill that produces partial-coverage selection edges across smooth color transitions, instead of a hard threshold cut
 - **Feather**: 0 - 250 px (shared marquee feather slider; applied after the wand fill)
@@ -328,7 +328,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 
 ### Quick Selection
 - **Size**: 1 - 100 px (brush radius for the paint stroke; default 20)
-- **Tolerance**: 0 - 255 (per-channel color distance threshold; default 32)
+- **Tolerance**: 0 - 255 (default 32) — a third metric again, and the only one that is actually calibrated per-channel: the region-grow compares `dr² + dg² + db²` against `tolerance² × 3`, so a pixel that differs by exactly `tolerance` in every color channel sits precisely on the boundary. **Alpha is not part of the comparison at all** (`colorDistanceSq` takes RGB only), so a fully transparent pixel and an opaque one of the same color read as identical to this tool — unlike the [Magic Wand](#magic-wand), which weighs alpha equally with color.
 - **Edge Strength**: 0 - 100 (Sobel gradient threshold — higher values stop the grow at stronger edges; default 50)
 - **Mode**: add or subtract
 - **`[` / `]` do not resize the Quick Selection brush**, and arrow keys do not nudge the selection while this tool is active — it is missing from both handlers' tool lists (see [Single-Key Shortcuts](#single-key-shortcuts) and [Move](#move)).
@@ -576,6 +576,23 @@ Paste takes one of two routes depending on where the image came from.
 - **Tolerance**: 0 - 255 (default 32)
 - **Contiguous**: on/off (default on). Turning it **off** is the "fill by color" mode — instead of flooding outward from the click point, every pixel in the layer within tolerance of the clicked color is filled, whether or not it connects to the click.
 - These two are the tool's entire surface: there is no opacity, blend mode, anti-alias, or "all layers" option, and no modifier-key behavior. Shortcut: `G`.
+- **The Contiguous checkbox silently changes what Tolerance measures.** The two routes were written against different distance metrics, so the same slider value admits different pixels depending on which one runs:
+  - *Contiguous* → `lopsy_core::flood_fill`, which tests **squared Euclidean distance across all four RGBA channels**: `dr² + dg² + db² + da² ≤ tolerance²`.
+  - *Non-contiguous* → the `bucket_fill_color_match` shader, which tests **Chebyshev distance** — the single largest per-channel difference: `max(|dr|, |dg|, |db|, |da|) ≤ tolerance`.
+
+  Chebyshev is never larger than Euclidean, so the fill-by-color route always matches a **superset** of what the contiguous route would match at the same setting. The gap is widest when a pixel differs in several channels at once: for a pixel that differs by the same amount in all three color channels (the normal case, alpha unchanged), the contiguous route needs a tolerance of **√3 ≈ 1.73×** what the non-contiguous route needs; if alpha differs too, it needs **2×**. Concretely at the default Tolerance of 32, a pixel offset by `(20, 20, 20, 0)` from the clicked color is filled by fill-by-color (Chebyshev 20 ≤ 32) but rejected by a contiguous fill (Euclidean ≈ 34.6 > 32). The two agree **exactly** when only one channel differs, which is why flat-color and grayscale artwork never reveals the split.
+- **The shader's own comment asserts the opposite.** `bucket_fill_color_match.glsl` documents `channelDelta` as "Match distance mirrors lopsy_core::flood_fill: max channel delta over rgba" — the second half describes the shader correctly, but `lopsy_core::flood_fill` does not use a max-channel delta, so the claimed equivalence does not hold. The [Magic Wand](#magic-wand) is the contrast case: it routes **both** of its Contiguous states through `lopsy_core::flood_fill` and so keeps one metric throughout. Only the bucket's non-contiguous branch was re-implemented as a shader (#667), and only the bucket's metric split.
+- **Every "Tolerance: 0 - 255" slider in the app, and what each one actually measures.** There are exactly three such controls (Fill, [Magic Wand](#magic-wand), [Quick Selection](#quick-selection)), but five distinct metrics behind them, because two of them change meaning with the route taken. The last column gives the per-channel offset that sits exactly on the limit when a pixel differs by the same amount in all three color channels — the practical way to compare the rows:
+
+  | Control / route | Match test | Channels | Uniform RGB offset at the limit |
+  | --- | --- | --- | --- |
+  | Fill — Contiguous | `Σd² ≤ tol²` (Euclidean) | RGBA | `tol / √3` ≈ 0.58 × tol |
+  | Fill — Non-contiguous | `max\|d\| ≤ tol` (Chebyshev) | RGBA | `tol` |
+  | Fill — on a layer mask / quick mask | `\|Δgray\| ≤ tol` | mask gray only | n/a (single channel) |
+  | Magic Wand — either state | `Σd² ≤ tol²` (Euclidean) | RGBA | `tol / √3` ≈ 0.58 × tol |
+  | Quick Selection | `Σd² ≤ tol² × 3` | RGB (alpha ignored) | `tol` |
+
+  So Quick Selection and the bucket's fill-by-color route are the two calibrated so that "tolerance 32" means "up to 32 per channel"; the wand and the contiguous bucket are roughly **1.7× stricter** than that at the same number, and the mask routes are not comparing color at all.
 - Fills honor the active selection mask, and route into the quick mask instead of the layer while Quick Mask is on (see Quick Mask Mode). **Both statements stop at mask edit mode**: a bucket click on a layer mask takes a wholly separate CPU path that ignores the selection and always fills black — see [Editing a Layer Mask](#editing-a-layer-mask).
 - **GPU fast paths**: three routes, chosen automatically —
   - *Empty layer or full-coverage fill* → filled directly on the GPU from a synthesized full-coverage (or selection-derived) mask.
