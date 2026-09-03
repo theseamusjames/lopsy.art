@@ -114,7 +114,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **Size**: 1 px – document-scaled max (default cap 200 px)
 - Shortcut: `Y`
 - Converts each affected pixel to HSL, adds (saturate) or subtracts (desaturate) from the saturation channel with a clamp to 0 – 1, and writes back to RGB. Internal hardness is fixed at 0.5; dab spacing is 25% of the brush size.
-- **Strength is neither linear nor a saturation delta.** `scaleSpongeStrength` squares the normalized slider and scales it by a quarter — `(slider / 100)² × 0.25` — so the delta actually applied at the center of a dab is **0.25 at Strength 100** and **0.0625 at Strength 50**. Halving the slider gives a *quarter* of the effect, and the tool can never shift saturation by more than 25 points in a single stroke.
+- **Strength is neither linear nor a saturation delta.** `scaleSpongeStrength` squares the normalized slider and scales it by a quarter — `(slider / 100)² × 0.25` — so the delta actually applied at the center of a dab is **0.25 at Strength 100** and **0.0625 at Strength 50**. Halving the slider gives a *quarter* of the effect, and the tool can never shift saturation by more than 25 points in a single stroke. The other slider labeled **Strength** — [Smudge](#smudge)'s — is plain `raw / 100` with a maximum of 1.0, so the same displayed number is **eight times** stronger there (see [Controls That Share a Label](#controls-that-share-a-label-but-not-a-meaning)).
 - The falloff is **not Gaussian and does not reach 0 at the edge**: it is `hardness + (1 − hardness)(1 − t²)` with hardness 0.5, so a dab is at full strength in the center and still at **half strength at the rim**, where a 1 px `smoothstep` feather takes it the rest of the way down. Sponge shares `dodge_burn_dab.glsl` with Dodge / Burn for this — the uniform the shader calls `u_exposure` is what the Sponge options bar calls Strength.
 - **Same stroke architecture as Dodge / Burn**: a per-stroke coverage texture, MAX-accumulated, previewed live by the compositor and baked into the layer only at pointer-up. So **overlapping dabs within one stroke do not compound**, and an active **selection is honored**.
 - **Fully transparent pixels are skipped** (`c.a < 0.001` returns the pixel untouched), so sponging over empty canvas does nothing — unlike Dodge / Burn, which does not check alpha.
@@ -131,8 +131,8 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **The source is the layer as it is being written, not a snapshot taken at pointer-down.** Each dab renders into the scratch texture and is blitted back over the layer before the next dab runs, and the shader samples that same layer texture for its source. When the source and destination circles overlap, dab *n+1* clones dab *n*'s output — the classic smearing feedback — rather than repeatedly copying the original pixels.
 
 ### Healing Brush
-- **Size**: 1 px – document-scaled max (default cap 200 px, scales with canvas size)
-- **Opacity**: 1 - 100%
+- **Size**: 1 px – document-scaled max (default 20; base cap 200 px, scales with canvas size). **This is the only paint-tool Size slider whose drag track is uncapped** — it passes no `sliderMax`, so the knob spans the entire document-scaled range (up to 5000 px) while every sibling's knob stops at 300. Given that a healing dab is the most expensive in the app (two synchronous readbacks each, below), this is the worst tool to make a 5000 px dab easy to reach. See [Controls That Share a Label](#controls-that-share-a-label-but-not-a-meaning).
+- **Opacity**: 1 - 100% (default 100). **A rate, not a ceiling** — each dab blends `healed × a + existing × (1 − a)` back onto the layer with `a = source.a × stamp × opacity`, and the next dab reads that result, so overlapping dabs compound toward full replacement (the same read-modify-write property that makes the [Eraser](#eraser)'s Opacity a rate).
 - **Alt/Cmd+click**: set the healing source sample point
 - **Shift+click**: heals along a straight line from the previous stroke endpoint, preserving source offset
 - Color-correction healing: subtracts the source mean color and adds the destination mean color, so texture is borrowed from the source while tone matches the destination
@@ -153,12 +153,13 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **Shift+click**: the straight-line smudge is implemented but does not fire after a smudge stroke — smudge is not registered as a paint tool, so its strokes never record a line origin. See the Smudge caveat under Straight-Line Strokes.
 
 ### Spray
-- **Size**: 1 - 500 px (base range; auto-scaled by document size)
-- **Density**: 1 - 100 (number of dots emitted per dab)
-- **Opacity**: 1 - 100%
-- **Softness**: 0 - 100% (per-dot hardness falloff)
+- **Size**: 1 - 500 px (base range; auto-scaled by document size; default 40) — **this is the diameter of the spray cloud, not of the marks it makes.** It is halved into a scatter radius, and dots land inside that circle at `dist = √random × radius`, which spreads them at uniform *area* density rather than bunching them toward the center.
+- **Density**: 1 - 100 (default 20) — a raw **count of dots per emission**, not a dots-per-area rate. Since Size grows the cloud's area quadratically while the count stays fixed, raising Size at a constant Density makes the spray progressively **thinner**, not bigger-and-equally-solid.
+- **Opacity**: 1 - 100% (default 60) — a ceiling that individual dots reach only by chance: each dot gets `opacity × (0.4 + 0.6 × random) × (1 − 0.3 × dist/radius)`, so dots carry 40 - 100% of the setting, and dots at the rim are scaled by a further 0.7.
+- **Softness**: 0 - 100% (default 30) — **the label is inverted.** The value is `settings.spray.hardness`, and it reaches the brush dab shader's `u_hardness` with no transformation (`hardness = hardnessPct / 100`, passed through `applyBrushDab`'s sixth parameter and assigned to the uniform verbatim). In `circleStamp`, a *higher* `u_hardness` means a *larger* fully-opaque core — everything inside `t ≤ u_hardness` is painted at full strength — so **Softness 100 paints the hardest possible dots and Softness 0 the softest.** The [Brush](#brush) exposes the identical field, normalization and uniform under the label "Hardness" and is the one that reads correctly; only the Spray options bar names it backwards. The default of 30 is soft-ish, which is consistent with either reading — likely why the inversion has gone unnoticed.
+- **The grain scales with Size, but only above Size 100.** Each dot's radius is drawn uniformly from `[max(1, 0.02 × radius), max(2, 0.12 × radius)]` and then rounded to a whole pixel, so a dot's diameter is normally 4 - 24% of the Size value and the texture keeps its proportions as Size changes. The two floors break that at small sizes: the upper bound is pinned at 2 px until Size reaches 34, and the lower bound at 1 px until Size reaches 100. Below Size 34 every dot is a 1 - 2 px speck whatever Size says, and Size only spreads the same specks over a wider circle.
 - Shortcut: `J`
-- Holding the cursor still keeps emitting dots at ~6 Hz so paint accumulates over time, mimicking an airbrush. Dragging spreads dots along the path with automatic spacing scaled to brush size.
+- Holding the cursor still keeps emitting dots on a 166 ms timer (~6 Hz) so paint accumulates over time, mimicking an airbrush. Dragging emits a fresh cloud each time the pointer has travelled `max(1, 0.3 × Size)` px, so consecutive clouds overlap by about 70% of their width at every Size.
 - **No shift+click straight line**: unlike the other paint tools, the spray handler never reads the shift key, so shift+click sprays a normal dab at the click point. A shift-hold line preview *is* drawn (see below) even though clicking will not follow it.
 - **Spray has no dab engine of its own.** It generates dots and paints each one with a plain **Brush** dab (`applyBrushDab` per dot, flow 1, all jitters 0). Two things follow from that. It **inherits the Brush's active tip**: `brush_has_tip` / `brush_tip_is_color` are engine-global state synced from the Brush's selected tip, not per tool, so choosing a textured or colored brush preset and then switching to Spray sprays that tip's bitmap even though the Spray options bar exposes no tip control. And its dots **do honor the active selection**, since they go through the brush dab shader.
 - **Known defect — spray dabs never reach a stroke texture, so spray can only lighten.** The shared paint-tool path opens a stroke texture at pointer-down, but `handleSprayDown` then calls `pushHistory('Spray')`, and `pushHistory` runs `endStroke` first — which *removes* that stroke texture — before the first dot is emitted. `apply_dab_batch` falls back to `stroke_tex.or_else(layer_texture)`, so every spray dot MAX-blends **directly onto the layer**. Since a dab is emitted premultiplied (`vec4(color.rgb × a, a)`) and `MAX` ignores the blend factors, the result is a per-channel maximum against the artwork already there: spraying a **darker color over opaque lighter pixels does nothing at all**, and spraying any color only ever raises channel values. The Brush avoids this because its dabs accumulate in an initially-empty stroke texture that is composited over the layer properly at `end_stroke`; Spray never gets one. Neither `handleSprayMove` nor the ~6 Hz timer re-opens it.
@@ -327,12 +328,13 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Shift+click**: adds the new region to the existing selection; **Alt/Option+click**: subtracts it (both combine against the current selection mask via `combineSelections`). Clicking with no modifier replaces the selection, and an Alt-subtract that empties the selection clears it.
 
 ### Quick Selection
-- **Size**: 1 - 100 px (brush radius for the paint stroke; default 20)
+- **Size**: 1 - 100 px (default 20) — **the weakest Size control in the app, and the only one that is a radius rather than a diameter.** It is passed straight in as `radius`, where every paint tool's Size is a diameter the dab shaders halve (`radius = u_size * 0.5`), so Quick Selection's 50 spans twice what a Brush's 50 does. What it actually changes is only the **seed-color sampling box**: `sampleSeedColor` averages a square of half-extent `max(1, round(size / 3))` around the sample point to decide what color to grow from. It is also the one Size slider with no document scaling — the ceiling is a flat 100 px.
 - **Tolerance**: 0 - 255 (default 32) — a third metric again, and the only one that is actually calibrated per-channel: the region-grow compares `dr² + dg² + db²` against `tolerance² × 3`, so a pixel that differs by exactly `tolerance` in every color channel sits precisely on the boundary. **Alpha is not part of the comparison at all** (`colorDistanceSq` takes RGB only), so a fully transparent pixel and an opaque one of the same color read as identical to this tool — unlike the [Magic Wand](#magic-wand), which weighs alpha equally with color.
 - **Edge Strength**: 0 - 100 (Sobel gradient threshold — higher values stop the grow at stronger edges; default 50)
 - **Mode**: add or subtract
 - **`[` / `]` do not resize the Quick Selection brush**, and arrow keys do not nudge the selection while this tool is active — it is missing from both handlers' tool lists (see [Single-Key Shortcuts](#single-key-shortcuts) and [Move](#move)).
-- Paint over the canvas to grow (or shrink) the selection: each pointer-move samples the seed color under the cursor and runs a flood-fill region-grow constrained by the brush radius, the tolerance, and the edge strength. Strokes accumulate across many sample points so dragging across a region progressively absorbs it. The pre-stroke mask is preserved so a single undo restores the prior selection.
+- Paint over the canvas to grow (or shrink) the selection: each pointer-move samples the seed color under the cursor and runs a flood-fill region-grow bounded by the tolerance and the edge strength. Strokes accumulate across many sample points so dragging across a region progressively absorbs it. The pre-stroke mask is preserved so a single undo restores the prior selection.
+- **Size does not confine the grow.** `applyQuickSelectStroke` destructures `radius` and uses it in exactly one place — the `sampleSeedColor` call — and `floodFillSelect` never receives it. The flood is bounded only by `toleranceSq` and `edgeThreshold`, so a single click in a large flat region absorbs the whole region no matter how small Size is. The parameter's own doc comment claims otherwise ("controls seed sampling area **and max flood distance**"), and that stale comment is the reason this tool is easy to mis-describe: the second half of it has no implementation behind it.
 
 ### Selection Operations
 - **Combine modes are per-tool, not global.** There is no shared add / subtract / intersect mode switch. Only two tools combine with an existing selection: the **Magic Wand** (Shift+click adds, Alt/Option+click subtracts) and **Quick Selection** (its own add / subtract Mode control). The marquee, lasso, and magnetic lasso tools always replace the selection — they read no Shift or Alt modifier for combining. The underlying mask combiner also implements an **intersect** mode, but no caller ever requests it, so intersect is unreachable from the UI.
@@ -620,6 +622,65 @@ Paste takes one of two routes depending on where the image came from.
 - **Normal mode**: interactive drag to define crop rectangle. The options bar exposes an **Aspect Ratio** control (W : H number inputs plus a lock toggle); when locked, the crop rectangle is constrained to the entered ratio while dragging. The ratio and lock are **one global setting shared with the two marquees and the Shape tool**, not a crop-specific one — see [Options Bar](#options-bar).
 - **Perspective mode**: on first activation a quadrilateral is seeded over the full document. Dragging any of the four corner handles repositions that corner; on Apply, every raster layer is warped by the inverse homography (8×8 DLT solver, bilinear inverse-warp) and the document is resized to the inferred output dimensions (edge-length heuristic). Lets you rectify perspective-distorted photographs of paintings, documents, signs, etc.
 - **Edit → Crop**: when a marquee selection is active, the Edit menu's **Crop** item crops the canvas to the selection bounds in one click (equivalent to dragging out the same rectangle with the Crop tool). Disabled when nothing is selected.
+
+---
+
+## Controls That Share a Label But Not a Meaning
+
+The options bars are assembled from one `Slider` component, and several labels appear on many tools at once. A shared label is not a shared code path: each options bar wires its own store field, and each tool's engine interprets that number its own way. These are the labels that appear more than once, and what each instance actually does. (The equivalent breakdown for the three **Tolerance** sliders — three controls, five metrics — is under [Fill](#fill-paint-bucket).)
+
+### "Size" — eleven sliders, three unit systems
+
+Nine of the eleven share a ceiling formula, `docScaledMax(base) = max(base, min(5000, round(1.5 × longest document side)))`. **The per-tool `base` is almost always dead weight**: it only wins when `1.5 × longest side` falls below it, i.e. on documents whose longest side is under 67 px (Pencil), 134 px (most tools) or 334 px (Spray). On any real canvas — an 800 × 600 document gives 1200 — all nine typed ceilings are *identical*, and the per-tool numbers that look like deliberate tuning have no effect at all.
+
+What does differ is the **knob** ceiling. `Slider` computes `knobMax = min(max, sliderMax ?? max)` and puts only that on the drag track, while the numeric input and the arrow keys clamp to the full `max`. So on a large document every one of these sliders can be typed far past the end of its own track.
+
+| Control | Store field | What the number measures | Typed ceiling | Knob ceiling |
+|---------|-------------|--------------------------|---------------|--------------|
+| Brush Size | `brush.size` | dab diameter, px | `docScaledMax(200)` | 300 |
+| Pencil Size | `pencil.size` | dab **square side**, px | `docScaledMax(100)` | 250 |
+| Eraser Size | `eraser.size` | dab diameter, px | `docScaledMax(200)` | 300 |
+| Clone Stamp Size | `stamp.size` | dab diameter, px | `docScaledMax(200)` | 300 |
+| Smudge Size | `smudge.size` | dab diameter, px | `docScaledMax(200)` | 300 |
+| Sponge Size | `sponge.size` | dab diameter, px | `docScaledMax(200)` | 300 |
+| Dodge / Burn Size | **`brush.size`** | dab diameter, px | `docScaledMax(200)` | 300 |
+| Healing Size | `healing.size` | dab diameter, px | `docScaledMax(200)` | **none set — the whole typed range, up to 5000** |
+| Spray Size | `spray.size` | **cloud** diameter, px | `docScaledMax(500)` | 500 |
+| Text Size | the layer's `fontSize` | **font size in points** | 500 (flat) | none set — same as typed |
+| Quick Selection Size | `quickSelect.size` | **seed-box radius**, px | 100 (flat) | none set — same as typed |
+
+Four consequences worth stating plainly:
+
+- **Dodge / Burn has no size of its own.** Its Size slider writes `brush.size`, so dragging it moves the Brush's size too, and vice versa.
+- **Healing is the one paint tool whose knob is uncapped**, because it is the one that passes no `sliderMax`. On a 4000 px document its track runs to 5000 px while every sibling's stops at 300. It is also by far the most expensive dab in the app — two synchronous `read_pixels` stalls per dab (see [Dab Engines](#dab-engines-shared-across-paint-tools)) — so the single tool that invites a 5000 px dab is the one that can least afford one.
+- **Two of the eleven are not lengths on the canvas at all**: Text Size is typographic points, and Quick Selection Size is a radius that only sizes a seed-sampling box.
+- **Only Quick Selection treats its Size as a radius.** Every dab shader halves it (`radius = u_size * 0.5`), so the same number describes a footprint twice as wide there as under any brush.
+
+### "Opacity" — four sliders, four different meanings
+
+All four are 1 - 100% and all four divide by 100 on the way out. What happens next is different in every case, and the distinction that matters is **ceiling vs rate**: whether a second dab over the same pixel within one stroke can darken it further.
+
+| Control | Behavior within a single stroke |
+|---------|--------------------------------|
+| Brush Opacity | **Ceiling.** Dabs accumulate into a stroke texture under `MAX`, so overlapping dabs cannot exceed the setting — *except* for color tips, which over-composite instead and therefore do compound. |
+| Eraser Opacity | **Rate.** Read-modify-write onto the layer each dab, so overlap compounds multiplicatively — with spacing at 25% of size, an Opacity of 50% removes ≈94% of a pixel's alpha in one pass (see [Eraser](#eraser)). |
+| Healing Opacity | **Rate.** Each dab writes `healed × a + existing × (1 − a)` back onto the layer with `a = source.a × stamp × opacity`, so overlapping dabs compound toward full replacement. |
+| Spray Opacity | **Stochastic ceiling.** Every dot is scaled by `(0.4 + 0.6 × random) × (1 − 0.3 × dist/radius)`, so the setting is reached only by a center dot with a lucky roll — and because spray dots `MAX` straight onto the layer, more spraying can only ever lighten. |
+
+### "Strength" — two sliders, eight times apart
+
+Both read 0/1 - 100 and sit in adjacent tools, but the scaling is not the same and neither is the maximum:
+
+| Control | Scaling | Value at 50 | Maximum |
+|---------|---------|-------------|---------|
+| Smudge Strength | `raw / 100` (linear) | 0.50 | 1.00 |
+| Sponge Strength | `(raw / 100)² × 0.25` (quadratic, scaled) | 0.0625 | 0.25 |
+
+So "Strength 50" is **eight times** stronger on the Smudge tool than on the Sponge, and Sponge's ceiling is a quarter of Smudge's. Sponge's curve also means the lower half of its track covers only the bottom 6% of its effect.
+
+### "Width" — two sliders, both honest
+
+The remaining duplicated label is the benign one. **Magnetic Lasso Width** (1 - 40) is the half-width of the band the edge detector searches, and **Shape Width** (1 - 50, shown only once a stroke color is set) is the stroke's thickness in pixels. Different quantities, but each is the natural reading of "width" in its own context, and neither is document-scaled.
 
 ---
 
