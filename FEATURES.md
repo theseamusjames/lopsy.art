@@ -199,6 +199,23 @@ The paint tools do not share a dab implementation. There are **three different a
 
 **Only the scissored engines are cheap.** The brush's own note is that scissoring a dab to its bounding box "discards >99.98% of invocations for a typical brush size". Of the nine tools above only the three brush-dab paths do it; the other six run full-texture passes for every dab, so their cost scales with the layer, not the brush.
 
+**Five falloff profiles, and three comments that name the wrong one.** Architecture is not the only thing these engines fail to share — the *shape of a single dab* is written five different ways, and three of the shaders carry a comment claiming they match the brush when none of them does. The brush's curve is a **plateau**: full strength out to `t ≤ hardness`, then `1 − smoothstep(0, 1, (t − hardness)/(1 − hardness))` to zero at the rim (`circleStamp`, `brush_dab_header.glsl`). It is not quadratic at any setting.
+
+| Profile | Formula (`t` = dist ÷ radius) | Used by | At the rim |
+|---------|------------------------------|---------|------------|
+| **Plateau + smoothstep** | `1` for `t ≤ h`, else `1 − smoothstep(0,1,(t−h)/(1−h))` | Brush (circular tip, `h` = Hardness), Spray (same shader, "Softness"), Eraser (`h` = 0.8, rasterized on the CPU) | **0** |
+| **Hardness-floored quadratic** | `h + (1 − h)(1 − t²)` | Dodge / Burn and Sponge (`h` = 0.5), Clone Stamp (`h` = 0.8), Quick Mask and layer-mask dabs (`h` = the Brush's Hardness, or 0.8 for the eraser) | **`h` — never zero** |
+| **Plain quadratic** | `1 − t²` | Healing Brush | **0** |
+| **Quartic** | `(1 − t²)²` | Smudge | **0** |
+| **Hard block** | integer cell, no falloff | Pencil (on layers and on masks) | aliased |
+
+Every one of these is closed by the same 1 px `edge = 1 − smoothstep(radius − 1, radius, dist)` rim, which is the *only* thing that takes the second family to zero.
+
+The comments that get it wrong are `clone_stamp.glsl` ("Compute stamp falloff (same as brush_dab)"), `quick_mask_dab.glsl` ("Quadratic falloff matching brush stamp") and `smudge_dab.glsl` ("Soft quadratic falloff (matches brush_dab)") — a family-two curve, a family-two curve, and a quartic, all pointing at a plateau. Two consequences are worth stating in numbers:
+
+- **The Eraser's hardness 0.8 and the Clone Stamp's hardness 0.8 are the same literal in the same role and make completely different dabs.** At 90% of the radius the Eraser's stamp has fallen to **0.50** and the Clone Stamp's is still at **0.84**; the Eraser reaches 0 at the rim while the Clone Stamp is at 0.80 and drops only through the 1 px rim. The Clone Stamp's dab is effectively a flat disc with an anti-aliased edge, which is why it stamps so much harder than "hardness 0.8" suggests.
+- **Hardness on a mask is not Hardness on a layer.** Mask and Quick Mask dabs forward the Brush's Hardness slider into the *floored quadratic*, so the same slider that gives a plateau-and-fade on pixels gives a dab that starts falling immediately and stops falling at `h`. At Hardness 100 a mask dab is a **completely flat disc**; at Hardness 50 it is still at 0.50 at the rim where the layer brush would be at 0. See [Editing a Layer Mask](#editing-a-layer-mask).
+
 **Known defect — the scratch texture is document-sized, but three of the four read-modify-write engines set a layer-sized viewport.** `scratch_texture_a` is allocated at document dimensions while the Eraser, Clone Stamp, and Healing Brush set `gl.viewport` and blit at the *layer* texture's dimensions, so painting on a layer that has been expanded past the document bounds reads and writes outside the scratch texture's extent. Smudge is the exception — it calls `ensure_layer_full_size` first, and its comment names the symptom ("full-width streak artifacts"). Dodge / Burn and Sponge call it too, at `begin_*_stroke`. `end_stroke` guards precisely this case for brush strokes; the three unguarded paths have no equivalent.
 
 **Known defect — five tools push two undo entries per stroke.** The shared paint-tool path at pointer-down pushes a history entry whose label is `activeTool === 'brush' ? 'Brush' : activeTool === 'pencil' ? 'Pencil' : 'Eraser'`, so **every tool that is not the brush or the pencil is labeled "Eraser"** — and Dodge / Burn, Sponge, Clone Stamp, Healing Brush, and Spray each then push their own correctly-labeled entry from their own handler. `pushHistory` does not coalesce, so one stroke with any of those five leaves two rows in the History panel: a spurious **"Eraser"** followed by the real one, and undoing the stroke takes two steps. (Smudge is unaffected — it is not registered as a paint tool, which is also why it has no straight-line origin.)
@@ -1071,8 +1088,15 @@ differences are not cosmetic.
   "inside the selection only". (Quick Mask reaches the same place by a different
   road — entering it clears the selection outright.)
 - **The mask brush is not the Brush.** Mask dabs go through a fixed circular
-  shader with a quadratic `1 − t²` falloff and a 1 px smoothstep edge — the same
-  one Quick Mask uses. Only **size, hardness, and opacity** are forwarded.
+  shader (`quick_mask_dab.glsl` — the same one Quick Mask uses) whose falloff is
+  `hardness + (1 − hardness)(1 − t²)` plus a 1 px smoothstep edge. Only **size,
+  hardness, and opacity** are forwarded, and the hardness that *is* forwarded
+  buys a different dab than it does on a layer: this curve starts falling from
+  the very center and floors at `hardness` instead of reaching zero, so
+  **Hardness 100 paints a perfectly flat disc** and Hardness 50 is still at half
+  strength where the layer brush would be at nothing. The shader's own comment
+  calls it "quadratic falloff matching brush stamp"; the layer brush's curve is a
+  plateau, not a quadratic. See [Dab Engines](#dab-engines-shared-across-paint-tools).
   Everything else the Brushes modal exposes is silently dropped: the tip bitmap,
   all four jitters, scatter, angle, texture, fade, taper, speed-size, and
   sub-brushes. Spacing is not the brush's Spacing setting either — mask dabs are
@@ -1103,7 +1127,14 @@ differences are not cosmetic.
   never touching the CPU.
 - **Undo behaves, though.** The pointer-up readback described under **Mask** above
   is what makes all of this undoable; the history entries are *Mask Paint*,
-  *Mask Erase*, and *Mask Fill*. Quick Mask has no such readback and its strokes
+  *Mask Erase*, and *Mask Fill*.
+- **Painting a mask is a ceiling, erasing it is a rate.** The one shader handles
+  both: brush mode writes `max(existing, stamp × opacity)` so overlapping dabs in
+  a stroke cannot push a pixel past the Opacity setting, while eraser mode writes
+  `existing × (1 − stamp × opacity)` and therefore compounds. It is the same
+  ceiling-vs-rate split the [Dab Engines](#dab-engines-shared-across-paint-tools)
+  table draws for layers, arrived at here inside a single shader rather than by
+  two different architectures. Quick Mask has no such readback and its strokes
   are not undoable — see [Quick Mask Mode](#quick-mask-mode).
 
 ### Layer Texture Lifecycle (crop on switch, expand on return)
