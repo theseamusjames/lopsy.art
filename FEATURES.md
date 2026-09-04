@@ -99,25 +99,29 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - The eraser body also never sets or clears GL blend state, inheriting whatever the previous operation left bound. It happens to be correct today only because `apply_dab_batch` disables blending on its way out, so the read-modify-write lands as a plain replace.
 
 ### Dodge / Burn
-- **Mode**: dodge or burn
-- **Exposure**: 1 - 100%
+- **Mode**: dodge or burn (default **dodge**)
+- **Exposure**: 1 - 100% (default 50) — reaches the shader as `exposure / 100`, linear, with no further scaling
+- Shortcut: `O`
 - **Size**: 1 - 200 px (base range; auto-scaled by document size). **This is the Brush's size setting, not a separate one** — the Dodge options bar binds `settings.brush.size` directly, so resizing here (by slider or by `[` / `]`) resizes the Brush too, and vice versa. Exposure and Mode are the only settings Dodge/Burn owns.
 - **Shift+click**: applies dodge/burn along a straight line from the previous stroke endpoint
 - **Hardness is a hard-coded 0.5** and spacing a hard-coded 25 % of size (`DODGE_HARDNESS`, `dodgeSize * 0.25` in `dodge-interaction.ts`). Neither is exposed, and the Brush's Spacing setting does not reach it — see [Dab Engines](#dab-engines-shared-across-paint-tools).
 - **This is the best-built of the non-brush dab engines.** It is the only one besides Sponge that opens a real stroke: `begin_dodge_burn_stroke` allocates a per-stroke *coverage* texture, each dab MAX-accumulates its scalar strength (`stamp × exposure`) into it, and the compositor renders a **live preview** from that coverage without touching the layer. The layer is only mutated at pointer-up, when `end_dodge_burn_stroke` bakes the coverage in once. Consequences: **overlapping dabs within one stroke do not compound** — dragging back and forth over the same spot in a single stroke is exactly as strong as one pass, and pushing further requires releasing and stroking again — and an active **selection is honored** (the dab shader samples the selection mask in document space, using the layer offset).
 - **The math is a plain screen / multiply against white and black.** Dodge is `rgb += (1 − rgb) × strength`, burn is `rgb *= (1 − strength)` (`dodge_burn.glsl`). Both apply to **every tone equally — there is no Range control** (shadows / midtones / highlights) of the kind Photoshop's dodge and burn have, so the tool cannot be aimed at one part of the tonal range.
 - The dab's falloff is `hardness + (1 − hardness)(1 − t²)`, i.e. **1.0 at the center decaying only to 0.5 at the rim**, with a 1 px `smoothstep` feather doing the final drop to zero. It is much harder-edged than the name "soft" suggests.
+- **Exposure 100 is a wipe, not a strong nudge.** Coverage is `clamp(stamp × exposure, 0, 1)` and `stamp` is exactly 1.0 at the dab center, so the slider's top writes coverage 1.0 — and `rgb += (1 − rgb) × 1` / `rgb *= (1 − 1)` takes those pixels to **pure white or pure black**, in a single stroke, over whatever was underneath. The top of the [Sponge](#sponge)'s identically-plumbed slider reaches only 0.25; see [one code path, two labels](#the-inverse--one-code-path-two-labels-dodges-exposure-and-sponges-strength).
+- **The live preview and the final bake agree.** `render_dodge_burn_preview` and `end_dodge_burn_stroke` both run `dodge_burn.glsl` with the same coverage texture, the same `u_mode`, and `u_exposure = 1.0` (the exposure is already baked into the coverage), so what you see during the drag is what lands on pointer-up. Sponge's pair matches in the same way. The preview is skipped, leaving the raw layer visible, only if the layer texture has been resized since the stroke began.
 
 ### Sponge
-- **Mode**: saturate or desaturate
-- **Strength**: 1 - 100
-- **Size**: 1 px – document-scaled max (default cap 200 px)
+- **Mode**: saturate or desaturate (default **desaturate** — the one tool in this family whose default mode is the subtractive one)
+- **Strength**: 1 - 100 (default 50)
+- **Size**: 1 px – document-scaled max (default 30; base cap 200 px)
 - Shortcut: `Y`
 - Converts each affected pixel to HSL, adds (saturate) or subtracts (desaturate) from the saturation channel with a clamp to 0 – 1, and writes back to RGB. Internal hardness is fixed at 0.5; dab spacing is 25% of the brush size.
-- **Strength is neither linear nor a saturation delta.** `scaleSpongeStrength` squares the normalized slider and scales it by a quarter — `(slider / 100)² × 0.25` — so the delta actually applied at the center of a dab is **0.25 at Strength 100** and **0.0625 at Strength 50**. Halving the slider gives a *quarter* of the effect, and the tool can never shift saturation by more than 25 points in a single stroke. The other slider labeled **Strength** — [Smudge](#smudge)'s — is plain `raw / 100` with a maximum of 1.0, so the same displayed number is **eight times** stronger there (see [Controls That Share a Label](#controls-that-share-a-label-but-not-a-meaning)).
+- **Strength is neither linear nor a saturation delta.** `scaleSpongeStrength` squares the normalized slider and scales it by a quarter — `(slider / 100)² × 0.25` — so the delta actually applied at the center of a dab is **0.25 at Strength 100** and **0.0625 at Strength 50**. Halving the slider gives a *quarter* of the effect, and the tool can never shift saturation by more than 25 points in a single stroke. The other slider labeled **Strength** — [Smudge](#smudge)'s — is plain `raw / 100` with a maximum of 1.0, so the same displayed number is **eight times** stronger there. The closer comparison is [Dodge / Burn's **Exposure**](#the-inverse--one-code-path-two-labels-dodges-exposure-and-sponges-strength), which is *the same uniform in the same shader* and still 8× apart at the shared default of 50 — 400× apart at 1.
 - The falloff is **not Gaussian and does not reach 0 at the edge**: it is `hardness + (1 − hardness)(1 − t²)` with hardness 0.5, so a dab is at full strength in the center and still at **half strength at the rim**, where a 1 px `smoothstep` feather takes it the rest of the way down. Sponge shares `dodge_burn_dab.glsl` with Dodge / Burn for this — the uniform the shader calls `u_exposure` is what the Sponge options bar calls Strength.
 - **Same stroke architecture as Dodge / Burn**: a per-stroke coverage texture, MAX-accumulated, previewed live by the compositor and baked into the layer only at pointer-up. So **overlapping dabs within one stroke do not compound**, and an active **selection is honored**.
 - **Fully transparent pixels are skipped** (`c.a < 0.001` returns the pixel untouched), so sponging over empty canvas does nothing — unlike Dodge / Burn, which does not check alpha.
+- **A full desaturation takes four strokes.** The 0.25 ceiling is on the *stroke*, not the tool: coverage is MAX-accumulated and applied once, so no amount of scrubbing within one gesture moves saturation further than 25 points. Releasing and stroking again applies another 0.25 to the new pixel values.
 - **`[` / `]` do not resize the Sponge** — the size shortcut has no branch for this tool, so its Size is slider-only (see [Single-Key Shortcuts](#single-key-shortcuts)).
 - **Shift+click**: applies the sponge along a straight line from the previous stroke endpoint
 
@@ -627,7 +631,7 @@ Paste takes one of two routes depending on where the image came from.
 
 ## Controls That Share a Label But Not a Meaning
 
-The options bars are assembled from one `Slider` component, and several labels appear on many tools at once. A shared label is not a shared code path: each options bar wires its own store field, and each tool's engine interprets that number its own way. These are the labels that appear more than once, and what each instance actually does. (The equivalent breakdown for the three **Tolerance** sliders — three controls, five metrics — is under [Fill](#fill-paint-bucket).)
+The options bars are assembled from one `Slider` component, and several labels appear on many tools at once. A shared label is not a shared code path: each options bar wires its own store field, and each tool's engine interprets that number its own way. These are the labels that appear more than once, and what each instance actually does — followed by the inverse case, two *differently* labeled sliders that turn out to be the same uniform in the same shader. (The equivalent breakdown for the three **Tolerance** sliders — three controls, five metrics — is under [Fill](#fill-paint-bucket).)
 
 ### "Size" — eleven sliders, three unit systems
 
@@ -676,11 +680,34 @@ Both read 0/1 - 100 and sit in adjacent tools, but the scaling is not the same a
 | Smudge Strength | `raw / 100` (linear) | 0.50 | 1.00 |
 | Sponge Strength | `(raw / 100)² × 0.25` (quadratic, scaled) | 0.0625 | 0.25 |
 
-So "Strength 50" is **eight times** stronger on the Smudge tool than on the Sponge, and Sponge's ceiling is a quarter of Smudge's. Sponge's curve also means the lower half of its track covers only the bottom 6% of its effect.
+So "Strength 50" is **eight times** stronger on the Smudge tool than on the Sponge, and Sponge's ceiling is a quarter of Smudge's. Sponge's curve also compresses its own track: the lower half of it covers only the bottom **quarter** of Sponge's range (the defining property of a square law), against a straight half for the linear Smudge.
 
 ### "Width" — two sliders, both honest
 
 The remaining duplicated label is the benign one. **Magnetic Lasso Width** (1 - 40) is the half-width of the band the edge detector searches, and **Shape Width** (1 - 50, shown only once a stroke color is set) is the stroke's thickness in pixels. Different quantities, but each is the natural reading of "width" in its own context, and neither is document-scaled.
+
+### The inverse — one code path, two labels: Dodge's "Exposure" and Sponge's "Strength"
+
+Everything above is about a label that repeats. The sharper case is the opposite one: two controls that carry *different* labels and are nonetheless the same number in the same uniform of the same shader.
+
+Sponge does not have a dab shader. `sponge_gpu.rs` binds `engine.shaders.dodge_burn_dab` and writes the Strength slider into **`u_exposure`** — the uniform the Dodge / Burn options bar calls Exposure. The two Rust modules set an identical set of uniforms, and everything around the number is identical too: the same `hardness + (1 − hardness)(1 − t²)` falloff at a hard-coded hardness of `0.5`, the same hard-coded `max(1, size × 0.25)` spacing, the same 1 px `smoothstep` rim, the same document-space selection-mask sampling, the same MAX-accumulated coverage texture. **The only thing that differs between the two tools before the coverage texture is the transfer curve from slider to uniform** — and that differs by up to 400×.
+
+| Slider reads | Dodge "Exposure" → `u_exposure` | Sponge "Strength" → `u_exposure` | Dodge ÷ Sponge |
+|--------------|--------------------------------|----------------------------------|----------------|
+| 1 | 0.01 | 0.000025 | **400×** |
+| 20 | 0.20 | 0.01 | 20× |
+| **50** (both defaults) | **0.50** | **0.0625** | **8×** |
+| 100 | 1.00 | 0.25 | 4× |
+
+- Both sliders run 1 – 100 and **both ship a default of 50**, where the same displayed number reaches the shader as `0.5` on Dodge and `0.0625` on Sponge.
+- The gap is **not a constant factor** — it is `400 / slider`, so it widens as either slider is turned down. The 8× the [Strength table](#strength--two-sliders-eight-times-apart) reports for Smudge vs Sponge is the value this ratio happens to take at 50; here it is the *same uniform in the same shader*, so nothing downstream explains it.
+- **The Sponge's whole range fits inside the Dodge's bottom quarter.** Sponge 100 is exactly Dodge 25, and Sponge 20 is exactly Dodge 1 — the Dodge's *minimum*. Nineteen of the Sponge's hundred positions land below anything the Dodge can be set to. Matching the Dodge's own default would need a Sponge Strength of ≈ 141.
+
+What keeps this defensible rather than a plain defect is that the two tools hand the coverage to different final shaders — `dodge_burn.glsl` blends the layer toward white or black by that fraction, `sponge.glsl` adds or subtracts it from the HSL saturation channel — so the two numbers are not required to mean the same thing. But the square and the quarter are bare literals (`scaleSpongeStrength` in `sponge-interaction.ts`); no comment or test records why the Sponge needs a curve when the Dodge does not.
+
+**The ceilings are what the difference actually costs.** Coverage is `clamp(stamp × u_exposure, 0, 1)` and `stamp` is exactly 1.0 at the dab center, so the slider maximum is reached literally. Dodge at Exposure 100 therefore writes coverage 1.0, and `rgb += (1 − rgb) × 1` / `rgb ×= (1 − 1)` drives those pixels to **pure white or pure black in one stroke** — the tool's top setting is a wipe, not a strong nudge. Sponge at Strength 100 tops out at 0.25, so one stroke can never move saturation by more than 25 points and a full desaturation takes **four separate strokes** however far the slider is pushed.
+
+The third control in this family is [Spray's "Softness"](#spray), which is the Brush's `hardness` field under a name that inverts its meaning. Between them, the three non-brush dab tools that borrow brush plumbing all rename the control they borrow.
 
 ---
 
