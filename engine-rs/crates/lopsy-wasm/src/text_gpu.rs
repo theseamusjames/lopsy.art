@@ -4,7 +4,7 @@
 //! Phase 3: software rasterization via swash → RGBA bytes for GPU upload.
 
 use std::collections::HashMap;
-use cosmic_text::{Align, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, Style, SwashCache, SwashImage, Weight, Wrap};
+use cosmic_text::{Align, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, Stretch, Style, SwashCache, SwashImage, Weight, Wrap};
 use swash::scale::{ScaleContext, Render, Source, StrikeWith};
 use swash::zeno::{Format, Vector};
 
@@ -151,6 +151,18 @@ impl TextRendererState {
         Ok(())
     }
 
+    /// The style/stretch to request for `family`: see [`snap_face_attrs`].
+    fn available_face_attrs(&self, family: &str, requested: Style) -> (Style, Stretch) {
+        let faces: Vec<(Style, Stretch)> = self
+            .font_system
+            .db()
+            .faces()
+            .filter(|face| face.families.iter().any(|(name, _)| name == family))
+            .map(|face| (face.style, face.stretch))
+            .collect();
+        snap_face_attrs(requested, &faces)
+    }
+
     /// Returns true if any font face with the given family name is loaded.
     pub fn is_font_loaded(&self, family: &str) -> bool {
         self.font_system.db().faces().any(|f| {
@@ -235,15 +247,17 @@ impl TextRendererState {
             buffer.set_size(&mut self.font_system, Some(w), None);
         }
 
-        let style = if font_style == "italic" {
+        let requested_style = if font_style == "italic" {
             Style::Italic
         } else {
             Style::Normal
         };
+        let (style, stretch) = self.available_face_attrs(font_family, requested_style);
         let attrs = Attrs::new()
             .family(Family::Name(font_family))
             .weight(Weight(font_weight))
-            .style(style);
+            .style(style)
+            .stretch(stretch);
 
         buffer.set_text(&mut self.font_system, text, attrs, Shaping::Advanced);
 
@@ -824,9 +838,97 @@ impl TextRendererState {
     }
 }
 
+/// cosmic-text only considers faces whose style *and* stretch equal the
+/// request exactly, and it has no cross-style fallback — so a family that
+/// ships only italic faces (Zapfino flags its single face italic) or only
+/// condensed ones (Impact declares usWidthClass 3) would be skipped entirely
+/// and the text would silently render in the Inter fallback. Snap the request
+/// to what the family actually ships: keep it when a face satisfies it,
+/// otherwise the nearest available style, then the stretch closest to normal
+/// among faces of that style. An unknown family is passed through untouched
+/// so the ordinary fallback chain still runs.
+pub fn snap_face_attrs(requested: Style, faces: &[(Style, Stretch)]) -> (Style, Stretch) {
+    if faces.is_empty() {
+        return (requested, Stretch::Normal);
+    }
+    let has_style = |style: Style| faces.iter().any(|(s, _)| *s == style);
+    let preference: [Style; 3] = match requested {
+        Style::Normal => [Style::Normal, Style::Oblique, Style::Italic],
+        Style::Italic => [Style::Italic, Style::Oblique, Style::Normal],
+        Style::Oblique => [Style::Oblique, Style::Italic, Style::Normal],
+    };
+    let style = preference
+        .into_iter()
+        .find(|s| has_style(*s))
+        .unwrap_or(requested);
+    let normal = i32::from(Stretch::Normal.to_number());
+    let stretch = faces
+        .iter()
+        .filter(|(s, _)| *s == style)
+        .map(|(_, st)| *st)
+        .min_by_key(|st| (i32::from(st.to_number()) - normal).abs())
+        .unwrap_or(Stretch::Normal);
+    (style, stretch)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snap_keeps_the_request_when_the_family_ships_it() {
+        let faces = [(Style::Normal, Stretch::Normal), (Style::Italic, Stretch::Normal)];
+        assert_eq!(snap_face_attrs(Style::Normal, &faces), (Style::Normal, Stretch::Normal));
+        assert_eq!(snap_face_attrs(Style::Italic, &faces), (Style::Italic, Stretch::Normal));
+    }
+
+    #[test]
+    fn snap_uses_the_italic_face_of_an_italic_only_family() {
+        // Zapfino: one face, fsSelection ITALIC set, style name "Regular".
+        let faces = [(Style::Italic, Stretch::Normal)];
+        assert_eq!(snap_face_attrs(Style::Normal, &faces), (Style::Italic, Stretch::Normal));
+    }
+
+    #[test]
+    fn snap_prefers_upright_when_italic_is_requested_but_missing() {
+        let faces = [(Style::Normal, Stretch::Normal)];
+        assert_eq!(snap_face_attrs(Style::Italic, &faces), (Style::Normal, Stretch::Normal));
+        let oblique_only = [(Style::Oblique, Stretch::Normal), (Style::Normal, Stretch::Condensed)];
+        assert_eq!(snap_face_attrs(Style::Italic, &oblique_only), (Style::Oblique, Stretch::Normal));
+    }
+
+    #[test]
+    fn snap_uses_the_stretch_nearest_to_normal_that_the_style_ships() {
+        // Impact: a single face declaring usWidthClass 3.
+        assert_eq!(
+            snap_face_attrs(Style::Normal, &[(Style::Normal, Stretch::Condensed)]),
+            (Style::Normal, Stretch::Condensed)
+        );
+        // Papyrus.ttc: Condensed and Regular faces — the normal one wins.
+        let papyrus = [(Style::Normal, Stretch::Condensed), (Style::Normal, Stretch::Normal)];
+        assert_eq!(snap_face_attrs(Style::Normal, &papyrus), (Style::Normal, Stretch::Normal));
+        let wide = [(Style::Normal, Stretch::UltraExpanded), (Style::Normal, Stretch::SemiExpanded)];
+        assert_eq!(snap_face_attrs(Style::Normal, &wide), (Style::Normal, Stretch::SemiExpanded));
+    }
+
+    #[test]
+    fn snap_only_considers_stretches_of_the_chosen_style() {
+        let faces = [(Style::Normal, Stretch::Normal), (Style::Italic, Stretch::Condensed)];
+        assert_eq!(snap_face_attrs(Style::Italic, &faces), (Style::Italic, Stretch::Condensed));
+    }
+
+    #[test]
+    fn snap_passes_unknown_families_through() {
+        assert_eq!(snap_face_attrs(Style::Italic, &[]), (Style::Italic, Stretch::Normal));
+    }
+
+    #[test]
+    fn set_text_content_on_a_missing_family_still_lays_out_via_fallback() {
+        let mut renderer = make_renderer();
+        let props = basic_props("fallback").replace("\"sans-serif\"", "\"No Such Family\"");
+        renderer.set_text_content("layer-missing", &props).unwrap();
+        assert!(renderer.text_layers.contains_key("layer-missing"));
+    }
 
     fn make_renderer() -> TextRendererState {
         TextRendererState::new()
