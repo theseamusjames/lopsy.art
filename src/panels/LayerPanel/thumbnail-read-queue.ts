@@ -1,27 +1,30 @@
 /**
  * Coalescing idle-time queue for GPU thumbnail readbacks.
  *
- * `readLayerThumbnail` is a synchronous `glReadPixels` — the bytes are
- * tiny (24*24*4 = 2304), but the read forces a GPU pipeline flush, so it
- * blocks on every queued draw call the compositor still has in flight.
- * Firing it from a `useEffect` that reacts to a pixel-version bump lands
- * the stall on the frame right after the user lifts the pen (#741).
+ * Thumbnail readbacks (`readLayerThumbnail`, `readChannelThumbnail`) are
+ * synchronous `glReadPixels` calls. The bytes are tiny — a 24×24 thumb
+ * is 2304 bytes — but the read forces a GPU pipeline flush, so it blocks
+ * on every queued draw call the compositor still has in flight. Firing
+ * one from a `useEffect` that reacts to a pixel-version bump lands the
+ * stall on the frame right after the user lifts the pen (#741). Firing
+ * five (ChannelsPanel: RGB + R/G/B/A) at once pays it five times over
+ * (#747).
  *
- * This module batches those requests. Each `requestThumbnailRead` adds a
- * layer id to a queue and dedups against any prior pending request for
- * the same id — only the most-recent callback and size survive. When the
- * browser is idle (or after a short timeout on browsers without
- * `requestIdleCallback`), every queued layer is read back in a single
- * tick. The first read pays the pipeline sync; the rest complete in a
- * fraction of a millisecond because the GPU is already drained.
+ * This module batches those requests. The caller supplies a stable
+ * `key` (used to dedup — for a layer thumbnail the layer id is enough;
+ * for a channel thumbnail the key must include the channel) and a
+ * reader function. When the browser is idle (or after a short timeout
+ * on browsers without `requestIdleCallback`), every queued reader is
+ * invoked in a single tick. The first read pays the pipeline sync; the
+ * rest complete in a fraction of a millisecond because the GPU is
+ * already drained.
  */
 
-import { readLayerThumbnail } from '../../engine-wasm/gpu-pixel-access';
-
+type ThumbnailReader = () => ImageData | null;
 type ThumbnailCallback = (thumb: ImageData | null) => void;
 
 interface QueuedRead {
-  size: number;
+  reader: ThumbnailReader;
   cb: ThumbnailCallback;
 }
 
@@ -63,10 +66,10 @@ function flush(): void {
   const entries: Array<[string, QueuedRead]> = [];
   for (const entry of pending) entries.push(entry);
   pending.clear();
-  for (const [layerId, req] of entries) {
+  for (const [, req] of entries) {
     let thumb: ImageData | null = null;
     try {
-      thumb = readLayerThumbnail(layerId, req.size);
+      thumb = req.reader();
     } catch (e) {
       console.error('[Lopsy] thumbnail readback failed:', e);
       thumb = null;
@@ -80,30 +83,36 @@ function flush(): void {
 }
 
 /**
- * Queue a thumbnail readback for the given layer. If a read is already
- * pending for `layerId`, the earlier request is dropped and only the
- * latest `size` and `cb` are used.
+ * Queue a thumbnail readback. If a read is already pending for `key`,
+ * the earlier request is dropped and only the latest reader and cb are
+ * used. The key must uniquely identify the readback — for a per-layer
+ * thumbnail the layer id is enough; for a per-channel thumbnail the
+ * key must also include the channel (e.g. `${layerId}:${channel}`).
  *
  * Reads run on the next idle callback (or after a short timeout as
  * fallback). If the queue is empty, one flush is scheduled.
  */
-export function requestThumbnailRead(layerId: string, size: number, cb: ThumbnailCallback): void {
-  pending.set(layerId, { size, cb });
+export function requestThumbnailRead(
+  key: string,
+  reader: ThumbnailReader,
+  cb: ThumbnailCallback,
+): void {
+  pending.set(key, { reader, cb });
   if (scheduled === null) {
     scheduled = scheduleFlush(flush, 200);
   }
 }
 
-/** Drop a pending read for the given layer id. */
-export function cancelThumbnailRead(layerId: string): void {
-  pending.delete(layerId);
+/** Drop a pending read for the given key. */
+export function cancelThumbnailRead(key: string): void {
+  pending.delete(key);
   if (pending.size === 0 && scheduled !== null) {
     cancelFlush(scheduled);
     scheduled = null;
   }
 }
 
-/** Test-only: number of layers with a queued read. */
+/** Test-only: number of entries with a queued read. */
 export function pendingThumbnailReadCount(): number {
   return pending.size;
 }

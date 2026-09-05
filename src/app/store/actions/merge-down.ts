@@ -5,10 +5,20 @@ import { mergeLayers, rasterizeLayerEffects, updateLayer, uploadLayerPixels } fr
 import { layerToDescJson } from '../../../engine-wasm/sync-layers';
 import { DEFAULT_EFFECTS, hasEnabledEffects } from '../../../layers/layer-model';
 import { removeFromParentGroup } from '../../../layers/group-utils';
+import { pixelDataManager } from '../../../engine/pixel-data-manager';
+import { invalidateBitmapCache } from '../../../engine/bitmap-cache';
 
+/**
+ * Merge the active layer into the layer below it on the GPU.
+ *
+ * `mergeLayers` composites top onto bottom on the GPU — no pixel data
+ * is read or produced on the JS side (#746). The caller does not need
+ * to `resolveAllPixelData` beforehand, and does not need to
+ * `syncPixelDataToGpu` afterward. Any stale JS-side pixel cache for
+ * the two touched layers is invalidated here.
+ */
 export function computeMergeDown(
   doc: DocumentState,
-  layerPixelData: Map<string, ImageData>,
 ): ActionResult | undefined {
   const activeId = doc.activeLayerId;
   if (!activeId) return undefined;
@@ -48,10 +58,13 @@ export function computeMergeDown(
     mergeLayers(engine, activeId, belowId);
   }
 
-  // Clear stale JS pixel data
-  const pixelData = new Map(layerPixelData);
-  pixelData.delete(activeId);
-  pixelData.delete(belowId);
+  // GPU is source of truth for the two touched layers — drop stale JS
+  // pixel data and bitmap caches so a subsequent read pulls from the
+  // freshly-composited GPU texture.
+  pixelDataManager.remove(activeId);
+  pixelDataManager.remove(belowId);
+  invalidateBitmapCache(activeId);
+  invalidateBitmapCache(belowId);
 
   // Remove merged layer from its parent group's children
   let layers = removeFromParentGroup(doc.layers, activeId);
@@ -71,6 +84,5 @@ export function computeMergeDown(
       layerOrder: doc.layerOrder.filter((id) => id !== activeId),
       activeLayerId: belowId,
     },
-    layerPixelData: pixelData,
   };
 }

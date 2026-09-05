@@ -5,41 +5,34 @@ import { computeFlattenImage } from './flatten-image';
 import { createRasterLayer } from '../../../layers/layer-model';
 import type { DocumentState } from '../../../types';
 
-function makeDoc(layerCount: number): { doc: DocumentState; pixelData: Map<string, ImageData> } {
+function makeDoc(layerCount: number): DocumentState {
   const layers = Array.from({ length: layerCount }, (_, i) =>
     createRasterLayer({ name: `Layer ${i + 1}`, width: 4, height: 4 }),
   );
-  const pixelData = new Map<string, ImageData>();
-  for (const l of layers) {
-    pixelData.set(l.id, new ImageData(4, 4));
-  }
   return {
-    doc: {
-      id: 'doc-1',
-      name: 'Test',
-      width: 4,
-      height: 4,
-      layers,
-      layerOrder: layers.map((l) => l.id),
-      activeLayerId: layers[0]!.id,
-      selectedLayerIds: [],
-      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
-      colorMode: 'rgb',
-    },
-    pixelData,
+    id: 'doc-1',
+    name: 'Test',
+    width: 4,
+    height: 4,
+    layers,
+    layerOrder: layers.map((l) => l.id),
+    activeLayerId: layers[0]!.id,
+    selectedLayerIds: [],
+    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    colorMode: 'rgb',
   };
 }
 
 describe('computeFlattenImage', () => {
   it('returns undefined when only 1 layer', () => {
-    const { doc, pixelData } = makeDoc(1);
-    const result = computeFlattenImage(doc, pixelData);
+    const doc = makeDoc(1);
+    const result = computeFlattenImage(doc);
     expect(result).toBeUndefined();
   });
 
   it('creates single layer from multiple layers', () => {
-    const { doc, pixelData } = makeDoc(2);
-    const result = computeFlattenImage(doc, pixelData)!;
+    const doc = makeDoc(2);
+    const result = computeFlattenImage(doc)!;
     // Flattened result: one raster layer + one root group
     expect(result.document!.layers).toHaveLength(2);
     expect(result.document!.layerOrder).toHaveLength(2);
@@ -49,8 +42,8 @@ describe('computeFlattenImage', () => {
   });
 
   it('clears JS pixel data (GPU is source of truth)', () => {
-    const { doc, pixelData } = makeDoc(2);
-    const result = computeFlattenImage(doc, pixelData)!;
+    const doc = makeDoc(2);
+    const result = computeFlattenImage(doc)!;
     // No JS pixel data — compositing happens on GPU
     expect(result.layerPixelData!.size).toBe(0);
   });
