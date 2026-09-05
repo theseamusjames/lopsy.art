@@ -86,3 +86,27 @@ repo file over 20 MB (big CJK/emoji fonts must use the css2 fallback).
 Audit all ~1,940 fonts anytime with
 `npx tsx scripts/check-font-loading.ts` (~10s, HEAD-only, report in
 `.context/font-check-report.json`).
+
+## Local Font Access API (`queryLocalFonts`) gotchas
+
+Chromium-only and exposed **only in secure contexts** — in Playwright a
+`page.setContent()` page on about:blank is NOT secure (no
+`window.queryLocalFonts`), a real `http://localhost` page is. Chromium
+145 raises the permission prompt with no user gesture, but rejects with
+`SecurityError: Page needs to be visible` while the tab is hidden (an
+occluded window counts — the Claude-in-Chrome MCP tab hit this). Without
+permission it resolves to an **empty array** rather than rejecting, and
+headless grants it via `context.grantPermissions(['local-fonts'])`. `FontData.blob()` hands
+back a per-face SFNT (macOS `true`-tagged TrueType, CFF `OTTO`, TTC
+members already split) that `fontdb::load_font_data` parses as-is.
+
+## cosmic-text has no cross-style / cross-stretch fallback
+
+`Attrs::matches` keeps only faces whose `style` and `stretch` equal the
+request exactly (weight is a sort key, not a filter), and the fallback
+iterator then runs through *other families*. So an italic-only family
+(Zapfino: fsSelection ITALIC, style name "Regular") or a condensed-only
+one (Impact: usWidthClass 3) silently renders in Inter. `text_gpu.rs`
+snaps the request to the family's available faces (`snap_face_attrs`)
+before shaping; keep that in mind before building `Attrs` anywhere else.
+

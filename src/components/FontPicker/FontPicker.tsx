@@ -1,15 +1,22 @@
 import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
-import { FONT_CATALOG, fontsByFamily } from '../../utils/font-catalog';
+import { FONT_CATALOG } from '../../utils/font-catalog';
 import type { FontEntry, FontCategory } from '../../utils/font-catalog';
 import { extractFamilyName, loadGoogleFontPreview } from '../../utils/font-loader';
+import { mergeLocalFonts } from '../../utils/local-fonts';
+import { useLocalFontsStore, useFontEntry } from '../../app/local-fonts-store';
 import { useVirtualScroll } from './useVirtualScroll';
 import styles from './FontPicker.module.css';
 
 const ITEM_HEIGHT = 48;
 
-const CATEGORY_ORDER: readonly FontCategory[] = [
+// Installed fonts get their own group ahead of the catalog's categories: the
+// user knows what they installed, not which generic it belongs to.
+type FontGroup = 'local' | FontCategory;
+
+const GROUP_ORDER: readonly FontGroup[] = [
+  'local',
   'sans-serif',
   'serif',
   'display',
@@ -17,7 +24,8 @@ const CATEGORY_ORDER: readonly FontCategory[] = [
   'monospace',
 ];
 
-const CATEGORY_LABELS: Record<FontCategory, string> = {
+const GROUP_LABELS: Record<FontGroup, string> = {
+  'local': 'Local',
   'sans-serif': 'Sans Serif',
   'serif': 'Serif',
   'display': 'Display',
@@ -26,27 +34,32 @@ const CATEGORY_LABELS: Record<FontCategory, string> = {
 };
 
 type ListItem =
-  | { type: 'header'; category: FontCategory; count: number }
+  | { type: 'header'; group: FontGroup; count: number }
   | { type: 'font'; entry: FontEntry };
 
+function groupOf(entry: FontEntry): FontGroup {
+  return entry.source === 'local' ? 'local' : entry.category;
+}
+
 function buildGroupedList(fonts: readonly FontEntry[]): ListItem[] {
-  const byCategory = new Map<FontCategory, FontEntry[]>();
+  const byGroup = new Map<FontGroup, FontEntry[]>();
   for (const font of fonts) {
-    let arr = byCategory.get(font.category);
+    const group = groupOf(font);
+    let arr = byGroup.get(group);
     if (!arr) {
       arr = [];
-      byCategory.set(font.category, arr);
+      byGroup.set(group, arr);
     }
     arr.push(font);
   }
-  for (const arr of byCategory.values()) {
+  for (const arr of byGroup.values()) {
     arr.sort((a, b) => a.family.localeCompare(b.family));
   }
   const items: ListItem[] = [];
-  for (const category of CATEGORY_ORDER) {
-    const group = byCategory.get(category);
+  for (const groupKey of GROUP_ORDER) {
+    const group = byGroup.get(groupKey);
     if (!group || group.length === 0) continue;
-    items.push({ type: 'header', category, count: group.length });
+    items.push({ type: 'header', group: groupKey, count: group.length });
     for (const entry of group) {
       items.push({ type: 'font', entry });
     }
@@ -69,14 +82,24 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
   const scrollElRef = useRef<HTMLDivElement | null>(null);
 
   const currentFamily = extractFamilyName(value);
-  const currentEntry = fontsByFamily.get(currentFamily);
+  const currentEntry = useFontEntry(currentFamily);
+
+  const localEntries = useLocalFontsStore((s) => s.entries);
+  const localStatus = useLocalFontsStore((s) => s.status);
+  const loadLocalFonts = useLocalFontsStore((s) => s.loadLocalFonts);
+  const allFonts = useMemo(() => mergeLocalFonts(FONT_CATALOG, localEntries), [localEntries]);
 
   const items = useMemo(() => {
-    const fonts = search
-      ? FONT_CATALOG.filter((f) => f.family.toLowerCase().includes(search.toLowerCase()))
-      : FONT_CATALOG;
+    const query = search.toLowerCase();
+    const fonts = query ? allFonts.filter((f) => f.family.toLowerCase().includes(query)) : allFonts;
     return buildGroupedList(fonts);
-  }, [search]);
+  }, [search, allFonts]);
+
+  // Offer a manual (user-gesture) load whenever we have nothing to show and
+  // the browser might still hand fonts over: not yet asked, the prompt was
+  // dismissed, or the query resolved empty because access was denied.
+  const isLocalLoadOffered =
+    localStatus !== 'unsupported' && localStatus !== 'loading' && localEntries.length === 0;
 
   const { totalHeight, offsetY, startIndex, endIndex, scrollRef, scrollToTop } =
     useVirtualScroll(items.length, ITEM_HEIGHT);
@@ -216,8 +239,8 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
     if (!item) continue;
     if (item.type === 'header') {
       visibleItems.push(
-        <div key={`header-${item.category}`} className={styles.groupHeader}>
-          <span className={styles.groupLabel}>{CATEGORY_LABELS[item.category]}</span>
+        <div key={`header-${item.group}`} className={styles.groupHeader}>
+          <span className={styles.groupLabel}>{GROUP_LABELS[item.group]}</span>
           <span className={styles.groupCount}>{item.count}</span>
         </div>,
       );
@@ -269,6 +292,21 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
                 aria-label="Search fonts"
               />
             </div>
+            {localStatus === 'loading' && (
+              <div className={styles.localRow}>
+                <span className={styles.localHint}>Loading local fonts…</span>
+              </div>
+            )}
+            {isLocalLoadOffered && (
+              <div className={styles.localRow}>
+                <button type="button" className={styles.localButton} onClick={() => void loadLocalFonts()}>
+                  Load local fonts
+                </button>
+                {localStatus !== 'idle' && (
+                  <span className={styles.localHint}>Allow font access when the browser asks</span>
+                )}
+              </div>
+            )}
             <div className={styles.listContainer} ref={combinedScrollRef}>
               {items.length === 0 ? (
                 <div className={styles.emptyState}>No fonts found</div>

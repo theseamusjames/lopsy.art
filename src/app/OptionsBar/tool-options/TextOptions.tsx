@@ -1,10 +1,10 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { Slider } from '../../../components/Slider/Slider';
 import { FontPicker } from '../../../components/FontPicker/FontPicker';
-import { fontsByFamily } from '../../../utils/font-catalog';
+import { useFontEntry } from '../../local-fonts-store';
 import { extractFamilyName } from '../../../utils/font-loader';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { rerenderCommittedTextLayer, invalidatePathTextCache } from '../../../engine-wasm/engine-sync';
@@ -40,10 +40,7 @@ export function TextOptions() {
   const textUnderline = useToolSettingsStore((s) => s.settings.text.underline);
   const textStrikethrough = useToolSettingsStore((s) => s.settings.text.strikethrough);
 
-  const fontEntry = useMemo(() => {
-    const family = extractFamilyName(textFontFamily);
-    return fontsByFamily.get(family);
-  }, [textFontFamily]);
+  const fontEntry = useFontEntry(extractFamilyName(textFontFamily));
 
   const availableWeights = fontEntry?.weights ?? [400, 700];
 

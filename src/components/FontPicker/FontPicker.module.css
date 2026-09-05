@@ -149,3 +149,33 @@
 .systemFontPreview {
   font-family: var(--preview-font);
 }
+
+.localRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.localButton {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.localButton:hover {
+  background: var(--color-bg-hover);
+}
+
+.localHint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
