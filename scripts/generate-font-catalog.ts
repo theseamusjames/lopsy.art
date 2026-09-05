@@ -256,7 +256,7 @@ function generateTypeScript(
   lines.push('  readonly category: FontCategory;');
   lines.push('  readonly weights: readonly number[];');
   lines.push('  readonly hasItalic: boolean;');
-  lines.push('  readonly source: \'google\' | \'system\';');
+  lines.push('  readonly source: \'google\' | \'system\' | \'local\';');
   lines.push('  readonly previewFile: string | null;');
   lines.push('  /** Family dir in the google/fonts repo (e.g. "ofl/roboto"); null → css2 fallback only. */');
   lines.push('  readonly ttfDir: string | null;');

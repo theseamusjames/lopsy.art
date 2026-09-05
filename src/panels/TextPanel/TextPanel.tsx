@@ -1,9 +1,8 @@
-import { useMemo } from 'react';
 import { AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { Slider } from '../../components/Slider/Slider';
 import { FontPicker } from '../../components/FontPicker/FontPicker';
-import { fontsByFamily } from '../../utils/font-catalog';
+import { useFontEntry } from '../../app/local-fonts-store';
 import { extractFamilyName } from '../../utils/font-loader';
 import {
   applyTextSetting,
@@ -38,7 +37,7 @@ export function TextPanel() {
   const text = useToolSettingsStore((s) => s.settings.text);
   const recentFonts = useToolSettingsStore((s) => s.recentFonts);
 
-  const fontEntry = useMemo(() => fontsByFamily.get(extractFamilyName(text.fontFamily)), [text.fontFamily]);
+  const fontEntry = useFontEntry(extractFamilyName(text.fontFamily));
   const availableWeights = fontEntry?.weights ?? [400, 700];
 
   const discrete = <K extends 'fontStyle' | 'align' | 'underline' | 'strikethrough'>(

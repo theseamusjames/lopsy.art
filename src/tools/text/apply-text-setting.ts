@@ -9,7 +9,7 @@ import {
   invalidatePathTextCache,
   resetTextLayerLayout,
 } from '../../engine-wasm/engine-sync';
-import { fontsByFamily } from '../../utils/font-catalog';
+import { findFontEntry, loadLocalFontToEngine } from '../../app/local-fonts-store';
 import { extractFamilyName, loadGoogleFont, loadFontBinaryToEngine } from '../../utils/font-loader';
 import type { TextSettings } from './text-settings';
 import type { TextLayer } from '../../types';
@@ -131,16 +131,19 @@ export function applyTextSetting<K extends keyof TextSettings>(key: K, value: Te
 /** Snap `weight` to the nearest weight the font offers, and load its binary. */
 function ensureWeightLoaded(family: string, weight: number): { weight: number; loading: Promise<boolean> } {
   const name = extractFamilyName(family);
-  const entry = fontsByFamily.get(name);
+  const entry = findFontEntry(name);
   if (!entry) return { weight, loading: Promise.resolve(false) };
 
   const resolved = entry.weights.includes(weight)
     ? weight
     : entry.weights.reduce((prev, curr) => (Math.abs(curr - weight) < Math.abs(prev - weight) ? curr : prev));
 
-  if (entry.source !== 'google') return { weight: resolved, loading: Promise.resolve(false) };
-  loadGoogleFont(name, entry.weights);
-  return { weight: resolved, loading: loadFontBinaryToEngine(name, resolved) };
+  if (entry.source === 'google') {
+    loadGoogleFont(name, entry.weights);
+    return { weight: resolved, loading: loadFontBinaryToEngine(name, resolved) };
+  }
+  if (entry.source === 'local') return { weight: resolved, loading: loadLocalFontToEngine(name) };
+  return { weight: resolved, loading: Promise.resolve(false) };
 }
 
 /**

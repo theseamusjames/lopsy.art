@@ -7,7 +7,7 @@ export interface FontEntry {
   readonly category: FontCategory;
   readonly weights: readonly number[];
   readonly hasItalic: boolean;
-  readonly source: 'google' | 'system';
+  readonly source: 'google' | 'system' | 'local';
   readonly previewFile: string | null;
   /** Family dir in the google/fonts repo (e.g. "ofl/roboto"); null → css2 fallback only. */
   readonly ttfDir: string | null;
