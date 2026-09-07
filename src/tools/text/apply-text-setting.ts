@@ -26,6 +26,7 @@ const SETTING_TO_LAYER = {
   lineHeight: 'lineHeight',
   letterSpacing: 'letterSpacing',
   paragraphSpacing: 'paragraphSpacing',
+  vertical: 'vertical',
 } as const satisfies Partial<Record<keyof TextSettings, keyof TextLayer>>;
 
 interface Anchored {

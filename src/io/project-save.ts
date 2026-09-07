@@ -76,6 +76,7 @@ export interface SerializedLayer {
   readonly textWidth?: number | null;
   readonly underline?: boolean;
   readonly strikethrough?: boolean;
+  readonly vertical?: boolean;
   // shape
   readonly shapeType?: string;
   readonly fill?: unknown;
@@ -149,6 +150,7 @@ function serializeLayer(
       textWidth: layer.width,
       underline: layer.underline,
       strikethrough: layer.strikethrough,
+      vertical: layer.vertical ?? false,
     };
   }
   if (layer.type === 'shape') {

@@ -190,6 +190,7 @@ function renderFrameGpu(
       toolState.settings.text.lineHeight,
       toolState.settings.text.letterSpacing,
       toolState.settings.text.paragraphSpacing,
+      toolState.settings.text.vertical,
       (layerId, x, y) => {
         const layer = layers.find((l) => l.id === layerId);
         if (layer && (layer.x !== x || layer.y !== y)) {

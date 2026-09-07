@@ -64,6 +64,7 @@ export function createTextLayer(params: {
     width: null,
     underline: false,
     strikethrough: false,
+    vertical: false,
   };
 }
 

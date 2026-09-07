@@ -32,6 +32,14 @@ pub struct TextLayerState {
     pub area_width: Option<f32>,
     /// Text alignment, needed for letter-spacing compensation on empty lines.
     pub text_align: String,
+    /// When true, glyphs stack top-to-bottom in a column centered on the anchor
+    /// and each `\n` starts a new column to the right. `letter_spacing` becomes
+    /// the extra vertical gap between glyphs and `line_height` (× font_size) the
+    /// horizontal advance from one column center to the next.
+    pub vertical: bool,
+    /// Line-height multiplier (kept so vertical layout can compute the column
+    /// advance from font_size × line_height without re-parsing props).
+    pub line_height: f32,
 }
 
 /// A single laid-out glyph with letter/paragraph spacing applied, in logical
@@ -59,13 +67,31 @@ struct AdjLine {
 
 /// Fully adjusted layout used by every geometry consumer (caret, hit-test,
 /// selection, measurement) so rendering and interaction always agree.
+///
+/// In vertical mode `line_i` on each glyph is the *column* index (one column
+/// per buffer line), `line_top` is the row's top-y, `line_height` is
+/// `font_size` (one row's advance minus letter_spacing), and `x`/`w` are the
+/// glyph's centered horizontal extent within its column. `col_advance` is the
+/// horizontal step from one column's left edge to the next (including
+/// paragraph_spacing) so hit-test can pick a column from an x coordinate.
 struct AdjLayout {
-    /// All glyphs in visual order across every line.
+    /// All glyphs in visual order across every line (or column in vertical).
     glyphs: Vec<AdjGlyph>,
-    /// One entry per visual line, in order.
+    /// One entry per visual line (or column in vertical mode), in order.
     lines: Vec<AdjLine>,
     /// Global byte offset of the first char of each buffer line.
     line_byte_base: Vec<usize>,
+    /// Vertical text mode — glyphs are stacked in columns.
+    vertical: bool,
+    /// In vertical mode: horizontal step from one column's left edge to the
+    /// next (font_size × line_height + paragraph_spacing). Zero otherwise.
+    col_advance: f32,
+    /// In vertical mode: font_size × line_height — the column's inner width
+    /// used to place the caret at the column's left edge.
+    col_width: f32,
+    /// In vertical mode: font_size — a single row's visual height (used as the
+    /// caret height and to size vertical rects). Zero otherwise.
+    row_height: f32,
 }
 
 /// Horizontal compensation applied to a whole visual line so letter spacing
@@ -230,13 +256,16 @@ impl TextRendererState {
         let area_width = v["areaWidth"].as_f64().map(|w| w as f32);
         let underline = v["underline"].as_bool().unwrap_or(false);
         let strikethrough = v["strikethrough"].as_bool().unwrap_or(false);
+        let vertical = v["vertical"].as_bool().unwrap_or(false);
 
         let line_height_px = font_size * line_height;
         let metrics = Metrics::new(font_size, line_height_px);
 
         let mut buffer = Buffer::new(&mut self.font_system, metrics);
 
-        let wrap = if area_width.is_some() {
+        // Vertical text repositions glyphs post-shape, so it always shapes as one
+        // unwrapped run per buffer line (each buffer line becomes a column).
+        let wrap = if area_width.is_some() && !vertical {
             Wrap::Word
         } else {
             Wrap::None
@@ -244,7 +273,9 @@ impl TextRendererState {
         buffer.set_wrap(&mut self.font_system, wrap);
 
         if let Some(w) = area_width {
-            buffer.set_size(&mut self.font_system, Some(w), None);
+            if !vertical {
+                buffer.set_size(&mut self.font_system, Some(w), None);
+            }
         }
 
         let requested_style = if font_style == "italic" {
@@ -289,6 +320,8 @@ impl TextRendererState {
                 font_size,
                 area_width,
                 text_align: text_align_val.to_string(),
+                vertical,
+                line_height,
             },
         );
 
@@ -311,6 +344,9 @@ impl TextRendererState {
     /// Build the fully adjusted layout (letter + paragraph spacing applied) that
     /// all geometry consumers share. Returns None if the layer is missing.
     fn build_adj_layout(state: &TextLayerState) -> AdjLayout {
+        if state.vertical {
+            return Self::build_adj_layout_vertical(state);
+        }
         let buffer = &state.buffer;
         let ls = state.letter_spacing;
         let para = state.paragraph_spacing;
@@ -359,7 +395,71 @@ impl TextRendererState {
             }
         }
 
-        AdjLayout { glyphs, lines, line_byte_base }
+        AdjLayout {
+            glyphs,
+            lines,
+            line_byte_base,
+            vertical: false,
+            col_advance: 0.0,
+            col_width: 0.0,
+            row_height: 0.0,
+        }
+    }
+
+    /// Vertical layout: each buffer line is a column. Glyphs stack top-to-bottom
+    /// in their column, each row `font_size + letter_spacing` tall, and every
+    /// column is `font_size × line_height` wide (`+ paragraph_spacing` between
+    /// columns). Glyphs are centered horizontally within their column.
+    fn build_adj_layout_vertical(state: &TextLayerState) -> AdjLayout {
+        let buffer = &state.buffer;
+        let line_byte_base = Self::line_byte_base(buffer);
+
+        let font_size = state.font_size;
+        let col_width = font_size * state.line_height.max(0.0001);
+        let col_advance = col_width + state.paragraph_spacing;
+        let row_advance = font_size + state.letter_spacing;
+
+        let mut glyphs: Vec<AdjGlyph> = Vec::new();
+        let mut lines: Vec<AdjLine> = Vec::new();
+
+        for run in buffer.layout_runs() {
+            let col_i = run.line_i;
+            let base = line_byte_base.get(col_i).copied().unwrap_or(0);
+            let col_left = col_i as f32 * col_advance;
+            let col_center = col_left + col_width / 2.0;
+
+            // Empty-column caret: at column's left edge, row 0.
+            lines.push(AdjLine {
+                line_i: col_i,
+                line_top: 0.0,
+                line_height: font_size,
+                start_x: col_left,
+            });
+
+            for (j, glyph) in run.glyphs.iter().enumerate() {
+                let row_top = j as f32 * row_advance;
+                let gx = col_center - glyph.w / 2.0;
+                glyphs.push(AdjGlyph {
+                    global_start: base + glyph.start,
+                    global_end: base + glyph.end,
+                    x: gx,
+                    w: glyph.w,
+                    line_i: col_i,
+                    line_top: row_top,
+                    line_height: font_size,
+                });
+            }
+        }
+
+        AdjLayout {
+            glyphs,
+            lines,
+            line_byte_base,
+            vertical: true,
+            col_advance,
+            col_width,
+            row_height: font_size,
+        }
     }
 
     /// Map a global byte offset to its buffer-line index (largest line whose
@@ -388,6 +488,30 @@ impl TextRendererState {
         }
 
         let line_i = Self::line_for_offset(&layout.line_byte_base, offset);
+
+        if layout.vertical {
+            // Column left edge — a thin vertical bar next to the current row.
+            let col_left = line_i as f32 * layout.col_advance;
+            let n_in_col = layout.glyphs.iter().filter(|g| g.line_i == line_i).count();
+
+            // Find the row index (glyph index in column) for this offset.
+            let mut row_top = 0.0;
+            let mut placed = false;
+            for (row_i, g) in layout.glyphs.iter().filter(|g| g.line_i == line_i).enumerate() {
+                if offset < g.global_end {
+                    row_top = g.line_top;
+                    // Anchor caret slightly above the row so it reads "before this glyph".
+                    let _ = row_i;
+                    placed = true;
+                    break;
+                }
+            }
+            if !placed {
+                // Past every glyph → caret one row past the last one.
+                row_top = n_in_col as f32 * (layout.row_height + state.letter_spacing);
+            }
+            return Some([col_left, row_top, layout.row_height]);
+        }
 
         // First glyph on this line whose cluster ends past the cursor → caret at
         // its left edge. Restricting to `line_i` keeps a caret sitting in a `\n`
@@ -418,6 +542,28 @@ impl TextRendererState {
         let layout = Self::build_adj_layout(state);
         if layout.lines.is_empty() {
             return Some(0);
+        }
+
+        if layout.vertical {
+            // Pick the column whose horizontal band contains x (nearest by x).
+            let col_advance = layout.col_advance.max(1.0);
+            let n_cols = layout.line_byte_base.len().max(1);
+            let raw_col = (x / col_advance).floor() as isize;
+            let target_col = raw_col.clamp(0, n_cols as isize - 1) as usize;
+
+            let col_glyphs: Vec<&AdjGlyph> =
+                layout.glyphs.iter().filter(|g| g.line_i == target_col).collect();
+            if col_glyphs.is_empty() {
+                return Some(layout.line_byte_base.get(target_col).copied().unwrap_or(0));
+            }
+
+            for g in &col_glyphs {
+                // Above the glyph's midpoint → before it; below → after it.
+                if y < g.line_top + g.line_height / 2.0 {
+                    return Some(g.global_start);
+                }
+            }
+            return Some(col_glyphs.last().unwrap().global_end);
         }
 
         // Pick the visual line whose vertical band contains y, else the nearest.
@@ -469,6 +615,43 @@ impl TextRendererState {
             return out;
         }
         let layout = Self::build_adj_layout(state);
+
+        if layout.vertical {
+            for line in &layout.lines {
+                let col_glyphs: Vec<&AdjGlyph> =
+                    layout.glyphs.iter().filter(|g| g.line_i == line.line_i).collect();
+
+                let col_left = line.line_i as f32 * layout.col_advance;
+                let mut lo_y = f32::INFINITY;
+                let mut hi_y = f32::NEG_INFINITY;
+                for g in &col_glyphs {
+                    if start < g.global_end && end > g.global_start {
+                        lo_y = lo_y.min(g.line_top);
+                        hi_y = hi_y.max(g.line_top + g.line_height);
+                    }
+                }
+
+                if hi_y > lo_y {
+                    out.extend_from_slice(&[col_left, lo_y, layout.col_width, hi_y - lo_y]);
+                    continue;
+                }
+
+                // Empty column inside the selected range → thin caret marker.
+                let base = layout.line_byte_base.get(line.line_i).copied().unwrap_or(0);
+                let line_len = state
+                    .buffer
+                    .lines
+                    .get(line.line_i)
+                    .map(|l| l.text().len())
+                    .unwrap_or(0);
+                let line_start = base;
+                let line_end = base + line_len;
+                if col_glyphs.is_empty() && start <= line_start && end > line_end {
+                    out.extend_from_slice(&[col_left, 0.0, layout.col_width, layout.row_height]);
+                }
+            }
+            return out;
+        }
 
         for line in &layout.lines {
             let line_glyphs: Vec<&AdjGlyph> =
@@ -638,42 +821,79 @@ impl TextRendererState {
         let ls = state.letter_spacing;
         let para = state.paragraph_spacing;
         let align = state.text_align.clone();
+        let font_size = state.buffer.metrics().font_size;
+        let line_height_mul = state.line_height;
+        let vertical = state.vertical;
         let mut glyph_layouts: Vec<GlyphLayout> = Vec::new();
         let mut run_infos: Vec<RunInfo> = Vec::new();
-        for run in state.buffer.layout_runs() {
-            let mut run_x_start = i32::MAX;
-            let mut run_x_end = i32::MIN;
-            // Letter/paragraph spacing applied post-layout (cosmic-text lacks both):
-            // shift each glyph right by comp + letter_spacing*index and every run
-            // down by paragraph_spacing per hard line break.
-            let comp = line_x_comp(ls, run.glyphs.len(), &align);
-            let para_y = para * run.line_i as f32;
-            let baseline_y = run.line_y + para_y;
-            for (i, glyph) in run.glyphs.iter().enumerate() {
-                let extra_x = comp + ls * i as f32;
-                let phys = glyph.physical((extra_x, baseline_y), 1.0);
-                let gx_start = phys.x;
-                let gx_end = phys.x + glyph.w.ceil() as i32;
-                if gx_start < run_x_start { run_x_start = gx_start; }
-                if gx_end > run_x_end { run_x_end = gx_end; }
-                glyph_layouts.push(GlyphLayout {
-                    cache_key: phys.cache_key,
-                    x: phys.x,
-                    y: phys.y,
-                });
+        if vertical {
+            // Vertical layout: each buffer line = one column. Glyphs stack
+            // top-to-bottom, centered horizontally within a column of width
+            // font_size × line_height. paragraph_spacing widens the gap between
+            // columns; letter_spacing widens the gap between glyphs.
+            let col_width = font_size * line_height_mul.max(0.0001);
+            let col_advance = col_width + para;
+            let row_advance = font_size + ls;
+            for run in state.buffer.layout_runs() {
+                let col_i = run.line_i;
+                let col_left = col_i as f32 * col_advance;
+                let col_center = col_left + col_width / 2.0;
+                for (j, glyph) in run.glyphs.iter().enumerate() {
+                    let row_top = j as f32 * row_advance;
+                    // Baseline near the bottom of the row so descenders sit in
+                    // the row's box; font_size is a close-enough baseline offset.
+                    let target_baseline = row_top + font_size;
+                    let target_x = col_center - glyph.w / 2.0;
+                    let phys = glyph.physical(
+                        (target_x - glyph.x, target_baseline),
+                        1.0,
+                    );
+                    glyph_layouts.push(GlyphLayout {
+                        cache_key: phys.cache_key,
+                        x: phys.x,
+                        y: phys.y,
+                    });
+                }
             }
-            if run_x_start <= run_x_end {
-                run_infos.push(RunInfo {
-                    x_start: run_x_start,
-                    x_end: run_x_end,
-                    baseline_y: baseline_y.round() as i32,
-                    font_size: state.buffer.metrics().font_size,
-                });
+        } else {
+            for run in state.buffer.layout_runs() {
+                let mut run_x_start = i32::MAX;
+                let mut run_x_end = i32::MIN;
+                // Letter/paragraph spacing applied post-layout (cosmic-text lacks both):
+                // shift each glyph right by comp + letter_spacing*index and every run
+                // down by paragraph_spacing per hard line break.
+                let comp = line_x_comp(ls, run.glyphs.len(), &align);
+                let para_y = para * run.line_i as f32;
+                let baseline_y = run.line_y + para_y;
+                for (i, glyph) in run.glyphs.iter().enumerate() {
+                    let extra_x = comp + ls * i as f32;
+                    let phys = glyph.physical((extra_x, baseline_y), 1.0);
+                    let gx_start = phys.x;
+                    let gx_end = phys.x + glyph.w.ceil() as i32;
+                    if gx_start < run_x_start { run_x_start = gx_start; }
+                    if gx_end > run_x_end { run_x_end = gx_end; }
+                    glyph_layouts.push(GlyphLayout {
+                        cache_key: phys.cache_key,
+                        x: phys.x,
+                        y: phys.y,
+                    });
+                }
+                if run_x_start <= run_x_end {
+                    run_infos.push(RunInfo {
+                        x_start: run_x_start,
+                        x_end: run_x_end,
+                        baseline_y: baseline_y.round() as i32,
+                        font_size,
+                    });
+                }
             }
         }
         let color = state.color;
-        let do_underline = state.underline;
-        let do_strikethrough = state.strikethrough;
+        // Underline/strikethrough decorations only apply to horizontal text
+        // for now — the underline pass reads `run_infos`, which we leave empty
+        // in vertical mode.
+        let do_underline = state.underline && !vertical;
+        let do_strikethrough = state.strikethrough && !vertical;
 
         // Render all glyphs without hinting for smooth curves.
         let mut glyph_images: Vec<Option<SwashImage>> = Vec::with_capacity(glyph_layouts.len());
@@ -1149,6 +1369,106 @@ mod tests {
         // must be strictly greater than plain text alone.
         assert!(under_opaque > plain_opaque,
             "underline should add opaque pixels; plain={plain_opaque} under={under_opaque}");
+    }
+
+    fn vertical_props(text: &str) -> String {
+        format!(
+            r#"{{"text":"{text}","fontFamily":"sans-serif","fontSize":20,"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":0,"paragraphSpacing":0,"textAlign":"left","areaWidth":null,"underline":false,"strikethrough":false,"vertical":true}}"#
+        )
+    }
+
+    #[test]
+    fn vertical_stacks_glyphs_below_each_other() {
+        // Three glyphs in one column: each next glyph must sit strictly BELOW
+        // the previous and at the same x (columns are centered on x=col_center).
+        let mut renderer = make_renderer();
+        renderer.set_text_content("v", &vertical_props("ABC")).expect("ok");
+        let positions = renderer.get_glyph_positions("v");
+        // Each glyph tuple = [x, y, w, h, global_offset].
+        let ys: Vec<f64> = positions.chunks(5).map(|c| c[1]).collect();
+        assert!(ys.len() >= 3, "expected 3+ glyph rows, got {:?}", ys);
+        assert!(ys[1] > ys[0], "row 1 y ({}) must be below row 0 y ({})", ys[1], ys[0]);
+        assert!(ys[2] > ys[1], "row 2 y ({}) must be below row 1 y ({})", ys[2], ys[1]);
+        // Glyph heights (row_height) should equal font_size = 20 in vertical.
+        for c in positions.chunks(5) {
+            assert!((c[3] - 20.0).abs() < 0.5, "row height should ≈ font_size, got {}", c[3]);
+        }
+    }
+
+    #[test]
+    fn vertical_newline_starts_new_column_to_the_right() {
+        // "AB\nCD": columns should be side by side horizontally, first at x≈0.
+        // The 3rd glyph ("C") must sit to the right of the first glyph ("A")
+        // AND at the same y as the first glyph (top of its column).
+        let mut renderer = make_renderer();
+        renderer.set_text_content("v", &vertical_props("AB\\nCD")).expect("ok");
+        let positions = renderer.get_glyph_positions("v");
+        let rows: Vec<[f64; 5]> = positions
+            .chunks(5)
+            .map(|c| [c[0], c[1], c[2], c[3], c[4]])
+            .collect();
+        assert_eq!(rows.len(), 4, "expected 4 glyphs (A, B, C, D), got {:?}", rows);
+        // Row 0 = A (col 0, top). Row 2 = C (col 1, top).
+        let a = rows[0];
+        let c = rows[2];
+        assert!(c[0] > a[0] + 5.0, "C column x ({}) should be right of A column x ({})", c[0], a[0]);
+        assert!((c[1] - a[1]).abs() < 0.5, "C y ({}) should equal A y ({})", c[1], a[1]);
+    }
+
+    #[test]
+    fn vertical_letter_spacing_widens_row_gap() {
+        // With letterSpacing = 12, the gap between rows must grow by ≥ 12.
+        let mut renderer = make_renderer();
+        renderer.set_text_content("tight", &vertical_props("AB")).expect("ok");
+        let tight_ys: Vec<f64> = renderer.get_glyph_positions("tight")
+            .chunks(5).map(|c| c[1]).collect();
+        let tight_gap = tight_ys[1] - tight_ys[0];
+
+        let loose = vertical_props("AB").replace("\"letterSpacing\":0", "\"letterSpacing\":12");
+        renderer.set_text_content("loose", &loose).expect("ok");
+        let loose_ys: Vec<f64> = renderer.get_glyph_positions("loose")
+            .chunks(5).map(|c| c[1]).collect();
+        let loose_gap = loose_ys[1] - loose_ys[0];
+
+        assert!(loose_gap >= tight_gap + 11.0,
+            "letter spacing should widen row gap: tight={tight_gap} loose={loose_gap}");
+    }
+
+    #[test]
+    fn vertical_hit_position_second_column() {
+        // Click well to the right of the first column should land in column 2.
+        // "A\nB" → column 0 has "A" (offset 0), column 1 has "B" (offset 2).
+        let mut renderer = make_renderer();
+        renderer.set_text_content("v", &vertical_props("A\\nB")).expect("ok");
+        // Column width = font_size × lineHeight = 20 × 1.4 = 28. Click at
+        // x=40 (in column 1 band), y=5 (row 0).
+        let pos = renderer.text_hit_position("v", 40.0, 5.0).unwrap();
+        assert_eq!(pos, 2, "expected start of column 2 (offset 2), got {pos}");
+    }
+
+    #[test]
+    fn vertical_cursor_rect_advances_row_between_glyphs() {
+        // Cursor at offsets 0, 1, 2 in "ABC" (all one column) should move
+        // downward one row_advance each time.
+        let mut renderer = make_renderer();
+        renderer.set_text_content("v", &vertical_props("ABC")).expect("ok");
+        let r0 = renderer.text_cursor_rect("v", 0).unwrap();
+        let r1 = renderer.text_cursor_rect("v", 1).unwrap();
+        let r2 = renderer.text_cursor_rect("v", 2).unwrap();
+        assert!(r1[1] > r0[1], "cursor at offset 1 y ({}) should be below offset 0 y ({})", r1[1], r0[1]);
+        assert!(r2[1] > r1[1], "cursor at offset 2 y ({}) should be below offset 1 y ({})", r2[1], r1[1]);
+        // Height per row should equal font_size = 20.
+        assert!((r0[2] - 20.0).abs() < 0.5, "caret height should ≈ font_size, got {}", r0[2]);
+    }
+
+    #[test]
+    fn vertical_render_produces_taller_than_wide_output() {
+        // "ABC" rendered vertically should have height > width.
+        let mut renderer = make_renderer();
+        renderer.set_text_content("v", &vertical_props("ABC")).expect("ok");
+        let (_, w, h, _, _) = renderer.render_text_layer_software("v")
+            .expect("render should succeed");
+        assert!(h > w, "vertical render should be taller than wide: w={w} h={h}");
     }
 
     #[test]

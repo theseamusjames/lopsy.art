@@ -39,6 +39,7 @@ export function TextOptions() {
   const textAlign = useToolSettingsStore((s) => s.settings.text.align);
   const textUnderline = useToolSettingsStore((s) => s.settings.text.underline);
   const textStrikethrough = useToolSettingsStore((s) => s.settings.text.strikethrough);
+  const textVertical = useToolSettingsStore((s) => s.settings.text.vertical);
 
   const fontEntry = useFontEntry(extractFamilyName(textFontFamily));
 
@@ -150,6 +151,15 @@ export function TextOptions() {
           title="Strikethrough"
         >
           <span className={decorationStyles.strikethroughIcon}>S</span>
+        </button>
+        <button
+          className={`${decorationStyles.decorationBtn} ${textVertical ? decorationStyles.decorationBtnActive : ''}`}
+          onClick={() => { beginTextLayerHistory(); applyTextSetting('vertical', !textVertical); }}
+          aria-label="Toggle vertical text"
+          aria-pressed={textVertical}
+          title="Vertical text"
+        >
+          <span className={decorationStyles.verticalIcon}><span>A</span><span>B</span></span>
         </button>
       </div>
       {paths.length > 0 && (

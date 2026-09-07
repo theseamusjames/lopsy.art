@@ -30,6 +30,8 @@ describe('createTextLayer', () => {
     expect(l.text).toBe('Hello');
     expect(l.fontFamily).toBe('Inter');
     expect(l.fontSize).toBe(24);
+    // New layers default to horizontal orientation (#751).
+    expect(l.vertical).toBe(false);
   });
 });
 
