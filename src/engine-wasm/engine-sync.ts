@@ -899,6 +899,7 @@ export function syncTextLayers(
   lineHeight: number,
   letterSpacing: number,
   paragraphSpacing: number,
+  vertical: boolean,
   onPositionChange: (layerId: string, x: number, y: number) => void,
 ): void {
   const tracked = getTracked(engine);
@@ -935,6 +936,7 @@ export function syncTextLayers(
     areaWidth: bounds.width ?? null,
     underline,
     strikethrough,
+    vertical,
   });
 
   const cacheKey = `${layerId}\0${bounds.x}\0${bounds.y}\0${propsJson}`;
@@ -977,6 +979,7 @@ function textLayerPropsJson(layer: TextLayer): string {
     areaWidth: layer.width ?? null,
     underline: layer.underline,
     strikethrough: layer.strikethrough,
+    vertical: layer.vertical ?? false,
   });
 }
 

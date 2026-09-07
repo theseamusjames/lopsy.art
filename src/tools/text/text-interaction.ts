@@ -140,6 +140,7 @@ export function commitTextEditing(): void {
         areaWidth: areaWidth ?? null,
         underline: text.underline,
         strikethrough: text.strikethrough,
+        vertical: text.vertical,
       });
       setTextLayerContent(engine, editing.layerId, propsJson);
       const boundsResult = renderTextLayer(engine, editing.layerId);
@@ -184,6 +185,7 @@ export function commitTextEditing(): void {
     visible: true,
     underline: textForLayer.underline,
     strikethrough: textForLayer.strikethrough,
+    vertical: textForLayer.vertical,
   });
 
   editorState.notifyRender();
@@ -283,6 +285,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
     toolSettings.setTextSetting('lineHeight', hitLayer.lineHeight);
     toolSettings.setTextSetting('letterSpacing', hitLayer.letterSpacing);
     toolSettings.setTextSetting('paragraphSpacing', hitLayer.paragraphSpacing);
+    toolSettings.setTextSetting('vertical', hitLayer.vertical ?? false);
 
     editorState.setActiveLayer(hitLayer.id);
 
@@ -315,6 +318,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
         paragraphSpacing: hitLayer.paragraphSpacing,
         textAlign: hitLayer.textAlign,
         areaWidth: hitLayer.width ?? null,
+        vertical: hitLayer.vertical ?? false,
       });
       setTextLayerContent(reEditEngine, hitLayer.id, reEditPropsJson);
       const boundsResult = renderTextLayer(reEditEngine, hitLayer.id);
@@ -433,6 +437,7 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
     fontWeight: text.fontWeight,
     fontStyle: text.fontStyle,
     textAlign: text.align,
+    vertical: text.vertical,
     visible: true, // GPU renders text preview in real-time
   });
 

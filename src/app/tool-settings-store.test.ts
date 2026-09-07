@@ -681,6 +681,7 @@ describe('per-tool slice: text (#453)', () => {
       lineHeight: 1.4,
       letterSpacing: 0,
       paragraphSpacing: 0,
+      vertical: false,
     });
   });
 

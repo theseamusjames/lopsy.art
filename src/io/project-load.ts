@@ -117,6 +117,7 @@ function deserializeLayer(s: SerializedLayer): Layer {
       width: s.textWidth ?? null,
       underline: s.underline ?? false,
       strikethrough: s.strikethrough ?? false,
+      vertical: s.vertical ?? false,
     };
     return layer;
   }

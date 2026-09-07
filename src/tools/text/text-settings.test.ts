@@ -19,6 +19,7 @@ describe('text-settings clamps and defaults (#453)', () => {
       lineHeight: 1.4,
       letterSpacing: 0,
       paragraphSpacing: 0,
+      vertical: false,
     } satisfies TextSettings);
   });
 
@@ -77,5 +78,7 @@ describe('text-settings clamps and defaults (#453)', () => {
     expect(clampTextSetting('underline', false)).toBe(false);
     expect(clampTextSetting('strikethrough', true)).toBe(true);
     expect(clampTextSetting('strikethrough', false)).toBe(false);
+    expect(clampTextSetting('vertical', true)).toBe(true);
+    expect(clampTextSetting('vertical', false)).toBe(false);
   });
 });

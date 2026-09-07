@@ -47,6 +47,12 @@ export interface TextLayer extends LayerBase {
   readonly width: number | null; // null = point text, number = area text
   readonly underline: boolean;
   readonly strikethrough: boolean;
+  /**
+   * When true, glyphs stack top-to-bottom in a column centered on the text
+   * anchor and each `\n` starts a new column. `letterSpacing` becomes the extra
+   * vertical distance between glyphs; `lineHeight` scales the column advance.
+   */
+  readonly vertical?: boolean;
   readonly pathId?: string;
   readonly prePathX?: number;
   readonly prePathY?: number;

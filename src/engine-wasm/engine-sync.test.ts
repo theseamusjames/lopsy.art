@@ -497,6 +497,7 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
       1.4,
       0,
       0,
+      false,
       onPos,
     );
   };

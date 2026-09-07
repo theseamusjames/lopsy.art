@@ -35,6 +35,13 @@ export interface TextSettings {
   letterSpacing: number;
   /** Extra px inserted below each hard paragraph break. */
   paragraphSpacing: number;
+  /**
+   * When true, glyphs stack top-to-bottom in a single column centered on the
+   * anchor and each `\n` starts a new column to the right. `letterSpacing`
+   * becomes the vertical gap between glyphs and `lineHeight` the column
+   * advance multiplier.
+   */
+  vertical: boolean;
 }
 
 export const DEFAULT_TEXT_SETTINGS: TextSettings = {
@@ -49,6 +56,7 @@ export const DEFAULT_TEXT_SETTINGS: TextSettings = {
   lineHeight: 1.4,
   letterSpacing: 0,
   paragraphSpacing: 0,
+  vertical: false,
 };
 
 export function clampTextSetting<K extends keyof TextSettings>(
@@ -70,6 +78,9 @@ export function clampTextSetting<K extends keyof TextSettings>(
   if (key === 'paragraphSpacing') {
     const n = value as number;
     return Math.max(0, Math.min(200, n)) as TextSettings[K];
+  }
+  if (key === 'vertical') {
+    return Boolean(value) as TextSettings[K];
   }
   return value;
 }
