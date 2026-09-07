@@ -953,7 +953,35 @@ Independent of which dialog (or none) fronts it, a filter reaches the GPU throug
 | olive `(110,120,40)` | 80 | 112 | −32 |
 | skin tone `(222,173,145)` | 184 | 181 | +3 |
 
-The pattern in the first six rows is the point: **every fully saturated hue desaturates to exactly the same mid-grey, 128.** Red, green, blue, yellow, cyan and magenta become indistinguishable, and the tonal ordering a photographer expects — yellow light, blue dark — is gone entirely. Only near-neutral colors (the skin tone above) come out close to the luminance answer. If you want a luma-weighted grayscale, the **Black & White** adjustment node has per-hue weights; Desaturate is not it.
+The pattern in the first six rows is the point: **every fully saturated hue desaturates to exactly the same mid-grey, 128.** Red, green, blue, yellow, cyan and magenta become indistinguishable, and the tonal ordering a photographer expects — yellow light, blue dark — is gone entirely. Only near-neutral colors (the skin tone above) come out close to the luminance answer.
+
+**There are three ways to make an image monochrome, and all three disagree.** Desaturate is one; the others are **Image → Mode → Grayscale** and the **Black & White** adjustment node. Only the first is a Rec. 709 luma:
+
+| source | Image → Mode → Grayscale (Rec. 709) | Black & White node (defaults) | Desaturate (HSL lightness) |
+| --- | --- | --- | --- |
+| pure red `(255,0,0)` | 54 | 102 | 128 |
+| pure yellow `(255,255,0)` | 237 | 153 | 128 |
+| pure green `(0,255,0)` | 182 | 102 | 128 |
+| pure cyan `(0,255,255)` | 201 | 153 | 128 |
+| pure blue `(0,0,255)` | 18 | 51 | 128 |
+| pure magenta `(255,0,255)` | 73 | 204 | 128 |
+| 50 % grey `(128,128,128)` | 128 | 128 | 128 |
+
+**Black & White is not the luma route, despite being the one that sounds like it.** Its shader computes `mix(stdLum, clamp(w / 100 × L × 2, 0, 1), S)` (`adjustments.glsl:153`), so the Rec. 709 luma `stdLum` is what a **fully desaturated** pixel gets and nothing else: every colored pixel is pulled toward the hue-interpolated weight `w` in proportion to its HSL saturation `S`. At the default mix (Reds 40, Yellows 60, Greens 40, Cyans 60, Blues 20, Magentas 80) that inverts the ordering luma gives — magenta comes out **lighter** than yellow, 204 against 153, where Rec. 709 makes it far darker, 73 against 237. `color_mode.rs:14`'s comment on the Grayscale weights — that they are chosen "so the result matches the Black & White adjustment" — therefore holds only on the `S = 0` axis, where both collapse to `stdLum` and the pixel was already grey. Muted real-world colors stay within ~10 levels of each other; saturated ones diverge by up to 131.
+
+**So: for a luminance grayscale, use Image → Mode → Grayscale.** It is the only one of the three that is `0.2126 R + 0.7152 G + 0.0722 B` — Desaturate flattens every saturated hue to 128, and Black & White re-weights by hue.
+
+**Two luminance weightings are in use app-wide, and which one you get depends on the feature.** Everything tonal is **Rec. 709** (`0.2126 / 0.7152 / 0.0722`); a smaller set still uses the older **Rec. 601** (`0.299 / 0.587 / 0.114`):
+
+| Rec. 601 — `0.299 / 0.587 / 0.114` | Rec. 709 — `0.2126 / 0.7152 / 0.0722` |
+| --- | --- |
+| **Find Edges**, **Cel Shading**, **Emboss** — the Sobel / gradient-magnitude family | every adjustment in `adjustments.glsl`: highlights, shadows, whites, blacks, saturation, vibrance, color balance, photo filter, Black & White's `stdLum`, Gradient Map |
+| **Halftone** — cell luminance drives dot size | **Threshold**; **Bloom**'s brightness threshold |
+| **Quick Selection**'s Sobel edge term (`quick-select.ts:63`) | the **Luminosity** and **Color** blend modes (`lum()`, `blend.glsl:40`) |
+| **Magnetic Lasso**'s edge field (`magnetic_lasso.rs:14`) | **Image → Mode → Grayscale** and the Grayscale **K** clamp (`luminance8`) |
+| brush **tip capture** — texture import, Define Brush, and the built-in tips | the shared **Auto Tone / Auto Contrast / Auto Color** histogram (`computeHistograms`); the **Color LUT** *Noir* preset; quick-mask paint's add / subtract decision |
+
+The split is mostly principled: the Rec. 601 column is the edge-detection family plus grayscale tip capture, and `magnetic_lasso.rs` says so outright — its weights "match `find_edges.glsl` so the tool snaps to the same edges the Find Edges filter highlights." **Halftone is the outlier.** It is a tonal operation, not an edge one, and it is the only filter whose *output tone* is computed on Rec. 601 weights. The gap is widest on the primaries — Rec. 601 reads green **32 levels darker** and magenta **32 levels lighter** than Rec. 709 (150 vs 182, 105 vs 73) — so a Halftone of a saturated green subject lays down heavier dots than the rest of the tonal pipeline would lead you to expect.
 
 **Brightness / Contrast's contrast is gentler than the slider range suggests.** The live shader computes `(c − 0.5) × max(contrast + 1, 0) + 0.5 + brightness` with `contrast` normalized to −1…1, so the multiplier runs **linearly from 0× at −100 to 2× at +100** — at full contrast a pixel's deviation from mid-grey merely doubles, and the filter can never clip a mid-tone to pure black or white on its own. (A hyperbolic `(1 + c) / (1 − c)` curve — which reaches 3× at +50 and ~2000× at +100 — exists in the codebase but is part of the dead CPU module below, so it never runs.)
 
@@ -968,7 +996,7 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 - **Pixelate / Mosaic**: block size 2 - 64 px
 
 ### Halftone
-- **Halftone**: dot size 2 - 32 px, density 0.25 - 3 (default 1.0 — scales dot coverage/frequency relative to the cell grid), angle 0 - 180 degrees, softness 0 - 4
+- **Halftone**: dot size 2 - 32 px, density 0.25 - 3 (default 1.0 — scales dot coverage/frequency relative to the cell grid), angle 0 - 180 degrees, softness 0 - 4. Cell luminance is measured on **Rec. 601** weights, unlike every other tonal filter — see the luminance-weighting split under [Color](#color).
 
 ### Stylize
 - **Find Edges**: Sobel edge detection, no parameters
@@ -1977,7 +2005,7 @@ Every paint entry point — brush/pencil/eraser, spray, fill, gradient (per stop
 
 ### Per-mode notes
 
-- **Grayscale** — pixels are baked on the GPU to Rec. 709 luma (`0.2126 R + 0.7152 G + 0.0722 B`). The bake covers the **whole layer even under an active selection**: a mode change must not leave part of a layer in the old space. The picker collapses from the HSV square to a black→white value ramp.
+- **Grayscale** — pixels are baked on the GPU to Rec. 709 luma (`0.2126 R + 0.7152 G + 0.0722 B`). The bake covers the **whole layer even under an active selection**: a mode change must not leave part of a layer in the old space. The picker collapses from the HSV square to a black→white value ramp. This is the **only** monochrome route in the app that is a true luma — Desaturate and the Black & White node both give a different grey for the same pixel, sometimes by more than 100 levels.
 - **Indexed** — flattens the document, then builds a palette of at most **256 colors** via a median-cut quantizer and snaps every pixel to the nearest entry. The dialog collects **Colors** (2 – 256, default 256) and a **Dither (Floyd–Steinberg)** checkbox (off by default), warns up front when more than one layer will be flattened, and takes **Enter** to convert / **Escape** to cancel. Palette building subsamples on a fixed stride above 262,144 pixels so a 4K canvas stays bounded — the snap itself still visits every pixel. The palette is stored on the document, shown in the Color panel as a swatch grid, and persisted in the `.lopsy` manifest. **Adding a layer is refused** while Indexed is active, with an info toast: *"Indexed mode does not support layers. Convert to RGB first."*
 - **Lab** — the only mode whose layer textures hold something other than sRGB. Pixels are stored as encoded CIELAB (L in R, a in G, b in B), and the engine decodes for display (`u_docColorMode == 1` in `final_blit.glsl`), for the export composite, and for the eyedropper — which decodes *before* averaging its sample square, since the transform is non-linear. The panel's L/a/b sliders drive a TypeScript mirror of the Rust math, used for single colors only so the two can't drift on bulk pixel work. Stored 8-bit, matching Photoshop's 8-bit Lab; a/b quantization costs a few sRGB units at saturated gamut corners.
 - **CMYK** — sRGB-backed. The C/M/Y/K sliders are a unit system over sRGB rather than stored ink, and **a CMYK document does not yet render any differently from an RGB one**. The naive ink model is a bijection with sRGB — its round trip is lossless across the whole cube — so there is no gamut to clip; a real difference needs profile-based conversion with ink limits. Native ink storage is blocked on the paint pipeline owning the alpha channel (dabs write coverage there and premultiply by it), leaving no fourth channel free for black.
