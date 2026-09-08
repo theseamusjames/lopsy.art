@@ -84,6 +84,23 @@
   color: var(--color-text-secondary);
 }
 
+.unitSelect {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  min-width: 80px;
+}
+
+.unitSelect:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
 .constrainRow {
   display: flex;
   align-items: center;
