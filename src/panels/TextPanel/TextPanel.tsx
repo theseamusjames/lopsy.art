@@ -9,6 +9,7 @@ import {
   applyTextFontFamily,
   applyTextWeight,
   beginTextLayerHistory,
+  endTextLayerHistory,
 } from '../../tools/text/apply-text-setting';
 import type { FontStyle, TextAlign } from '../../types';
 import styles from './TextPanel.module.css';
@@ -101,6 +102,7 @@ export function TextPanel() {
           max={500}
           suffix="px"
           onDragStart={beginTextLayerHistory}
+          onCommit={endTextLayerHistory}
           onChange={(v) => applyTextSetting('fontSize', v)}
         />
         <Slider
@@ -111,6 +113,7 @@ export function TextPanel() {
           step={0.05}
           defaultValue={1.4}
           onDragStart={beginTextLayerHistory}
+          onCommit={endTextLayerHistory}
           onChange={(v) => applyTextSetting('lineHeight', v)}
         />
         <Slider
@@ -122,6 +125,7 @@ export function TextPanel() {
           defaultValue={0}
           suffix="px"
           onDragStart={beginTextLayerHistory}
+          onCommit={endTextLayerHistory}
           onChange={(v) => applyTextSetting('letterSpacing', v)}
         />
       </section>
@@ -152,6 +156,7 @@ export function TextPanel() {
           defaultValue={0}
           suffix="px"
           onDragStart={beginTextLayerHistory}
+          onCommit={endTextLayerHistory}
           onChange={(v) => applyTextSetting('paragraphSpacing', v)}
         />
       </section>
