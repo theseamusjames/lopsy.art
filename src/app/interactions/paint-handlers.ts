@@ -7,6 +7,7 @@ import type { InteractionContext, InteractionState } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { swapBrushTip, restorePrimaryBrushTip } from '../../engine-wasm/engine-sync';
+import { flushPendingMaskRead } from '../mask-read-queue';
 import type { Engine } from '../../engine-wasm/wasm-bridge';
 import type { SubBrush } from '../../types/brush';
 import type { Point } from '../../types';
@@ -213,6 +214,13 @@ export function handlePaintDown(
 
   // Mask edit mode: GPU painting on the layer mask texture
   if (maskEditMode && activeLayer.mask) {
+    // #756: a previous mask stroke's readback may still be queued. Drain
+    // it so `layer.mask.data` is current before we upload it to the GPU
+    // and before pushHistory snapshots the document.
+    flushPendingMaskRead(activeLayerId);
+    const freshLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId);
+    const freshMask = freshLayer?.mask ?? activeLayer.mask;
+
     editorState.pushHistory(tool === 'eraser' ? 'Mask Erase' : 'Mask Paint');
     const engine = getEngine();
 
@@ -234,8 +242,8 @@ export function handlePaintDown(
     }
 
     // Ensure mask texture is on GPU before painting
-    const maskBytes = new Uint8Array(activeLayer.mask.data.buffer, activeLayer.mask.data.byteOffset, activeLayer.mask.data.byteLength);
-    uploadLayerMask(engine, activeLayerId, maskBytes, activeLayer.mask.width, activeLayer.mask.height);
+    const maskBytes = new Uint8Array(freshMask.data.buffer, freshMask.data.byteOffset, freshMask.data.byteLength);
+    uploadLayerMask(engine, activeLayerId, maskBytes, freshMask.width, freshMask.height);
 
     // Inverted from quick mask: brush=1 (subtract/hide), eraser=0 (add/reveal)
     const mode = tool === 'eraser' ? 0 : 1;
