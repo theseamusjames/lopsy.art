@@ -42,8 +42,10 @@ vi.mock('../../app/sync-layer-after-full-size', () => ({
 const editorState = {
   pushHistory: vi.fn(),
   notifyRender: vi.fn(),
-  // Paint entry points snap colors to the document's color mode.
-  document: { colorMode: 'rgb' as const },
+  // Paint entry points snap colors to the document's color mode. `layers`
+  // is read by the mask-mode branch to re-fetch fresh mask data after
+  // #756's deferred mask readback lands.
+  document: { colorMode: 'rgb' as const, layers: [] as Array<{ id: string; mask?: unknown }> },
 };
 vi.mock('../../app/editor-store', () => ({
   useEditorStore: { getState: () => editorState },
