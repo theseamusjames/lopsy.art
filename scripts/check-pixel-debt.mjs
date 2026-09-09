@@ -59,6 +59,7 @@ const ALLOWLIST = {
   'src/filters/surface-blur.test.ts': 5,
   'src/io/project-save.test.ts': 1,
   'src/panels/AdjustmentsPanel/histogram-compute.test.ts': 2,
+  'src/app/mask-read-queue.test.ts': 10,                     // fixture buffers for #756 mask readback queue
   'src/panels/LayerPanel/thumbnail-read-queue.test.ts': 1,   // fixture buffer for mocked readback
   'src/selection/selection-to-path.test.ts': 2,
   'src/selection/selection.test.ts': 17,
@@ -77,7 +78,7 @@ const ALLOWLIST = {
   'src/tools/path/boolean-ops.test.ts': 11,
   'src/tools/quick-select/quick-select-interaction.test.ts': 3,
   'src/tools/quick-select/quick-select.test.ts': 3,
-  'src/tools/text/text-interaction.test.ts': 5,
+  'src/tools/text/text-interaction.test.ts': 3,               // #757 drops the JS RGBA fixtures
   'src/tools/transform/transform.test.ts': 2,
   'src/tools/wand/wand-strategy.test.ts': 4,
   'src/utils/bmp-encoder.test.ts': 2,

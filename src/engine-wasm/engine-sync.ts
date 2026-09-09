@@ -93,7 +93,7 @@ import {
   setBrushTextureState,
   setTextLayerContent,
   renderTextLayer,
-  getRenderedTextPixels,
+  renderTextLayerToTexture,
   uploadLayerPixels,
   removeTextLayerState,
 } from './wasm-bridge';
@@ -944,21 +944,17 @@ export function syncTextLayers(
 
   setTextLayerContent(engine, layerId, propsJson);
 
-  const boundsResult = renderTextLayer(engine, layerId);
+  // #757: single WASM call renders + uploads to the layer texture without
+  // round-tripping the RGBA buffer through the JS heap. Returns
+  // [width, height, offsetX, offsetY] with the same semantics as before.
+  const boundsResult = renderTextLayerToTexture(engine, layerId, bounds.x, bounds.y);
   if (boundsResult.length !== 4) return;
 
-  const width = boundsResult[0]!;
-  const height = boundsResult[1]!;
   const offsetX = boundsResult[2]!;
   const offsetY = boundsResult[3]!;
-
-  const pixels = getRenderedTextPixels(engine, layerId);
-  if (pixels.length === 0) return;
-
   const desiredX = bounds.x + offsetX;
   const desiredY = bounds.y + offsetY;
 
-  uploadLayerPixels(engine, layerId, pixels, width, height, desiredX, desiredY);
   onPositionChange(layerId, desiredX, desiredY);
   tracked.editingTextKey = cacheKey;
 }
@@ -995,21 +991,13 @@ export function rerenderCommittedTextLayer(
   layer: TextLayer,
 ): { x: number; y: number } | null {
   setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
-  const boundsResult = renderTextLayer(engine, layer.id);
+  // #757: renderTextLayerToTexture rasterizes and uploads in one WASM call.
+  const boundsResult = renderTextLayerToTexture(engine, layer.id, layer.x, layer.y);
   if (boundsResult.length !== 4) return null;
 
-  const width = boundsResult[0]!;
-  const height = boundsResult[1]!;
   const offsetX = boundsResult[2]!;
   const offsetY = boundsResult[3]!;
-
-  const pixels = getRenderedTextPixels(engine, layer.id);
-  if (pixels.length === 0) return null;
-
-  const x = layer.x + offsetX;
-  const y = layer.y + offsetY;
-  uploadLayerPixels(engine, layer.id, pixels, width, height, x, y);
-  return { x, y };
+  return { x: layer.x + offsetX, y: layer.y + offsetY };
 }
 
 /**
@@ -1050,16 +1038,11 @@ export function placeTextLayerAtAnchor(
   anchorY: number,
 ): { x: number; y: number } | null {
   setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
-  const bounds = renderTextLayer(engine, layer.id);
+  // #757: renderTextLayerToTexture rasterizes and uploads in one WASM call.
+  const bounds = renderTextLayerToTexture(engine, layer.id, anchorX, anchorY);
   if (bounds.length !== 4) return null;
 
-  const pixels = getRenderedTextPixels(engine, layer.id);
-  if (pixels.length === 0) return null;
-
-  const x = anchorX + bounds[2]!;
-  const y = anchorY + bounds[3]!;
-  uploadLayerPixels(engine, layer.id, pixels, bounds[0]!, bounds[1]!, x, y);
-  return { x, y };
+  return { x: anchorX + bounds[2]!, y: anchorY + bounds[3]! };
 }
 
 /**

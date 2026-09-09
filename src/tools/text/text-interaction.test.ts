@@ -2,16 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const setTextLayerContent = vi.fn();
 const renderTextLayer = vi.fn((..._args: unknown[]): Float32Array => new Float32Array(0));
-const getRenderedTextPixels = vi.fn((..._args: unknown[]): Uint8Array => new Uint8Array(0));
-const uploadLayerPixels = vi.fn();
+const renderTextLayerToTexture = vi.fn((..._args: unknown[]): Float64Array => new Float64Array(0));
 const textHitPosition = vi.fn((..._args: unknown[]): number => 0);
 const getLayerTextureDimensions = vi.fn((..._args: unknown[]): Uint32Array => new Uint32Array([200, 40]));
 
 vi.mock('../../engine-wasm/wasm-bridge', () => ({
   setTextLayerContent: (...args: unknown[]) => setTextLayerContent(...args),
   renderTextLayer: (...args: unknown[]) => renderTextLayer(...args),
-  getRenderedTextPixels: (...args: unknown[]) => getRenderedTextPixels(...args),
-  uploadLayerPixels: (...args: unknown[]) => uploadLayerPixels(...args),
+  renderTextLayerToTexture: (...args: unknown[]) => renderTextLayerToTexture(...args),
   textHitPosition: (...args: unknown[]) => textHitPosition(...args),
   getLayerTextureDimensions: (...args: unknown[]) => getLayerTextureDimensions(...args),
 }));
@@ -178,9 +176,8 @@ beforeEach(() => {
   setTextLayerContent.mockClear();
   renderTextLayer.mockReset();
   renderTextLayer.mockReturnValue(new Float32Array(0));
-  getRenderedTextPixels.mockReset();
-  getRenderedTextPixels.mockReturnValue(new Uint8Array(0));
-  uploadLayerPixels.mockClear();
+  renderTextLayerToTexture.mockReset();
+  renderTextLayerToTexture.mockReturnValue(new Float64Array(0));
   clearJsPixelData.mockClear();
   textHitPosition.mockReset();
   textHitPosition.mockReturnValue(0);
@@ -472,8 +469,7 @@ describe('commitTextEditing', () => {
       bounds: { x: 30, y: 40, width: 200, height: null },
       text: 'New text',
     });
-    renderTextLayer.mockReturnValue(new Float32Array([120, 50, 4, 6]));
-    getRenderedTextPixels.mockReturnValue(new Uint8Array(120 * 50 * 4));
+    renderTextLayerToTexture.mockReturnValue(new Float64Array([120, 50, 4, 6]));
 
     commitTextEditing();
 
@@ -491,13 +487,12 @@ describe('commitTextEditing', () => {
     expect(props.color).toEqual([1, 128 / 255, 0, 1]);
     expect(props.areaWidth).toBe(200);
 
-    // (engine, layerId, pixels, width, height, x, y)
-    const up = uploadLayerPixels.mock.calls[0]!;
-    expect(up[1]).toBe('text-1');
-    expect(up[3]).toBe(120);
-    expect(up[4]).toBe(50);
-    expect(up[5]).toBe(34); // 30 + offsetX 4
-    expect(up[6]).toBe(46); // 40 + offsetY 6
+    // (engine, layerId, anchorX, anchorY) — the WASM function uploads
+    // internally, so JS never touches raw pixels.
+    const rt = renderTextLayerToTexture.mock.calls[0]!;
+    expect(rt[1]).toBe('text-1');
+    expect(rt[2]).toBe(30);
+    expect(rt[3]).toBe(40);
 
     expect(editorState.pushHistory).toHaveBeenCalledWith('Text');
     expect(ts.addRecentColor).toHaveBeenCalledWith({ r: 255, g: 128, b: 0, a: 1 });
@@ -515,13 +510,11 @@ describe('commitTextEditing', () => {
     expect(editorState.notifyRender).toHaveBeenCalled();
   });
 
-  it('keeps the bounds position when the engine returns no pixels', () => {
+  it('keeps the bounds position when the engine returns no bounds', () => {
     editorState.document.layers = [makeTextLayer()];
     uiState.textEditing = editingState({ bounds: { x: 30, y: 40, width: null, height: null } });
-    renderTextLayer.mockReturnValue(new Float32Array([120, 50, 4, 6]));
-    getRenderedTextPixels.mockReturnValue(new Uint8Array(0));
+    renderTextLayerToTexture.mockReturnValue(new Float64Array(0));
     commitTextEditing();
-    expect(uploadLayerPixels).not.toHaveBeenCalled();
     expect(editorState.updateTextLayerProperties).toHaveBeenCalledWith(
       'text-1',
       expect.objectContaining({ x: 30, y: 40 }),
@@ -546,7 +539,7 @@ describe('commitTextEditing', () => {
     uiState.textEditing = editingState();
     commitTextEditing();
     expect(setTextLayerContent).not.toHaveBeenCalled();
-    expect(uploadLayerPixels).not.toHaveBeenCalled();
+    expect(renderTextLayerToTexture).not.toHaveBeenCalled();
     expect(editorState.updateTextLayerProperties).toHaveBeenCalledWith(
       'text-1',
       expect.objectContaining({ x: 0, y: 0 }),
