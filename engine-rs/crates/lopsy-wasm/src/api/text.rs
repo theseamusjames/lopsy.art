@@ -2,6 +2,7 @@
 
 use wasm_bindgen::prelude::*;
 use crate::Engine;
+use crate::layer_manager;
 use crate::text_gpu::TextRendererState;
 
 fn ensure_text_renderer(engine: &mut Engine) -> &mut TextRendererState {
@@ -64,6 +65,46 @@ pub fn get_rendered_text_pixels(engine: &mut Engine, layer_id: &str) -> Vec<u8> 
         Some(tr) => tr.get_rendered_pixels(layer_id),
         None => vec![],
     }
+}
+
+/// Rasterize the text layer and upload the RGBA bytes to the layer's GPU
+/// texture in a single WASM call, avoiding the JS-side round trip that
+/// `renderTextLayer` + `getRenderedTextPixels` + `uploadLayerPixels` used
+/// to move the pixels through (#757). The texture is placed at document
+/// space (`anchor_x + offset_x`, `anchor_y + offset_y`) where `offset_x`
+/// / `offset_y` come from the layer's rendered geometry.
+///
+/// Returns `[width, height, offset_x, offset_y]` on success (bounds in
+/// texture pixels; `offset_x` / `offset_y` from the anchor to the texture
+/// top-left), or an empty array if the layer has no visible glyphs or is
+/// unknown.
+#[wasm_bindgen(js_name = "renderTextLayerToTexture")]
+pub fn render_text_layer_to_texture(
+    engine: &mut Engine,
+    layer_id: &str,
+    anchor_x: f64,
+    anchor_y: f64,
+) -> Vec<f64> {
+    let tr = match engine.inner.text_renderer.as_mut() {
+        Some(t) => t,
+        None => return vec![],
+    };
+    let (pixels, width, height, offset_x, offset_y) = match tr.render_text_layer_software(layer_id) {
+        Some(v) => v,
+        None => return vec![],
+    };
+    // Keep the cache in sync with the render path so callers that still
+    // reach for `getRenderedTextPixels` (or a future re-anchor without a
+    // re-render) see the same bytes.
+    if let Some(state) = tr.text_layers.get_mut(layer_id) {
+        state.rendered_pixels = Some(pixels.clone());
+    }
+    let x = (anchor_x + offset_x as f64).round() as i32;
+    let y = (anchor_y + offset_y as f64).round() as i32;
+    if layer_manager::upload_pixels(&mut engine.inner, layer_id, &pixels, width, height, x, y).is_err() {
+        return vec![];
+    }
+    vec![width as f64, height as f64, offset_x as f64, offset_y as f64]
 }
 
 /// Returns per-glyph positions as a flat f64 array of [x, y, w, h, global_offset]

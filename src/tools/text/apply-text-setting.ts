@@ -11,6 +11,7 @@ import {
 } from '../../engine-wasm/engine-sync';
 import { findFontEntry, loadLocalFontToEngine } from '../../app/local-fonts-store';
 import { extractFamilyName, loadGoogleFont, loadFontBinaryToEngine } from '../../utils/font-loader';
+import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 import type { TextSettings } from './text-settings';
 import type { TextLayer } from '../../types';
 
@@ -36,6 +37,15 @@ interface Anchored {
   anchorY: number;
 }
 
+/**
+ * Anchor cached at the start of a slider drag (#758). While set, subsequent
+ * `applyTextSetting` calls place the new texture at this anchor directly
+ * instead of paying to re-rasterize the *old* layer just to recover its
+ * offset. The anchor is a property of the layout origin and cannot change
+ * mid-drag, so caching it is safe.
+ */
+let dragAnchor: { layerId: string; anchorX: number; anchorY: number } | null = null;
+
 /** The committed text layer that panel/options edits should target, or null. */
 function selectedCommittedTextLayer(): TextLayer | null {
   // While editing, the live sync owns the preview — don't touch a committed layer.
@@ -50,18 +60,45 @@ function selectedCommittedTextLayer(): TextLayer | null {
  * Push one history entry before mutating the selected committed text layer.
  * Call from a control's drag-start / before a discrete change so the pre-change
  * texture is snapshotted (a no-op while editing — commit handles history there).
+ *
+ * When a drag begins, cache the layer's current anchor so the drag's
+ * `applyTextSetting` stream can skip the "measure the old layer to find its
+ * offset" rasterization on every pointer-move (#758).
  */
 export function beginTextLayerHistory(): void {
-  if (selectedCommittedTextLayer()) {
-    useEditorStore.getState().pushHistory('Text');
+  dragAnchor = null;
+  const layer = selectedCommittedTextLayer();
+  if (!layer) return;
+  useEditorStore.getState().pushHistory('Text');
+
+  const engine = getEngine();
+  if (!engine || layer.pathId) return;
+
+  // The current layer's texture is placed at `anchor + oldRenderOffset`, so
+  // recovering the anchor requires knowing `oldRenderOffset`. This one
+  // rasterization is the price we pay once at drag start; subsequent
+  // `applyTextSetting` calls during the drag reuse the cached anchor.
+  const result = rerenderCommittedTextLayerAnchored(engine, layer, layer);
+  if (result) {
+    dragAnchor = { layerId: layer.id, anchorX: result.anchorX, anchorY: result.anchorY };
   }
 }
 
 /**
- * Re-render a committed text layer's GPU texture after a property change, keeping
- * the text anchored (the new texture is placed so the type origin stays put).
- * Returns the anchor so callers can re-place the layer later (e.g. once an
- * async web-font download completes).
+ * End a slider drag (or any grouped edit sequence): flush the coalesced
+ * re-render so the final value is applied even if rAF hasn't fired since
+ * the last event, then drop the cached anchor.
+ */
+export function endTextLayerHistory(): void {
+  rerenderCoalesced.flush();
+  dragAnchor = null;
+}
+
+/**
+ * Re-render a committed text layer's GPU texture after a property change,
+ * keeping the text anchored (the new texture is placed so the type origin
+ * stays put). Returns the anchor so callers can re-place the layer later
+ * (e.g. once an async web-font download completes).
  */
 function rerenderLayer(oldLayer: TextLayer, newLayer: TextLayer): Anchored | null {
   const editor = useEditorStore.getState();
@@ -71,10 +108,41 @@ function rerenderLayer(oldLayer: TextLayer, newLayer: TextLayer): Anchored | nul
   }
   const engine = getEngine();
   if (!engine) return null;
+
+  // Fast path during a drag: the anchor was recovered once at drag start,
+  // so we can place the new texture without another old-layer rasterization.
+  if (dragAnchor && dragAnchor.layerId === newLayer.id) {
+    const pos = placeTextLayerAtAnchor(engine, newLayer, dragAnchor.anchorX, dragAnchor.anchorY);
+    if (pos) {
+      editor.updateTextLayerProperties(newLayer.id, { x: pos.x, y: pos.y });
+      return { x: pos.x, y: pos.y, anchorX: dragAnchor.anchorX, anchorY: dragAnchor.anchorY };
+    }
+    return null;
+  }
+
   const result = rerenderCommittedTextLayerAnchored(engine, oldLayer, newLayer);
   if (result) editor.updateTextLayerProperties(newLayer.id, { x: result.x, y: result.y });
   return result;
 }
+
+/**
+ * Coalesce re-renders during high-frequency slider drags. Every
+ * `applyTextSetting` call updates the store synchronously (so downstream
+ * subscribers see the latest value immediately) but the GPU-side re-render
+ * happens at most once per animation frame with the latest layer state.
+ */
+const rerenderCoalesced = coalesceToAnimationFrame((layerId: string) => {
+  const editor = useEditorStore.getState();
+  const layer = editor.document.layers.find((l): l is TextLayer => l.id === layerId && l.type === 'text');
+  if (!layer) return;
+  // We no longer have the true "old" layer here — during a coalesced drag
+  // the cached anchor is what makes this work; the anchor-cache branch of
+  // rerenderLayer doesn't consult `oldLayer`, so passing the current layer
+  // twice is correct. Outside a drag, `rerenderCoalesced.flush()` is not
+  // called, and callers that need synchronous, anchored re-render (like
+  // font family/weight changes) still take the direct path.
+  rerenderLayer(layer, layer);
+});
 
 /**
  * Refresh text after a web-font binary finishes downloading: re-render the
@@ -115,6 +183,11 @@ function refreshTextAfterFontLoad(target: { id: string; anchorX: number; anchorY
  * Set a text tool setting and, when a committed text layer is selected (and not
  * editing), apply the change to that layer immediately (Character-panel style).
  * Does NOT push history — call {@link beginTextLayerHistory} first.
+ *
+ * During a slider drag (between `beginTextLayerHistory` and
+ * `endTextLayerHistory`) the GPU re-render is coalesced to one per animation
+ * frame; the store still updates synchronously so React reflects the value
+ * without lag.
  */
 export function applyTextSetting<K extends keyof TextSettings>(key: K, value: TextSettings[K]): void {
   useToolSettingsStore.getState().setTextSetting(key, value);
@@ -126,6 +199,14 @@ export function applyTextSetting<K extends keyof TextSettings>(key: K, value: Te
 
   const clamped = useToolSettingsStore.getState().settings.text[key];
   useEditorStore.getState().updateTextLayerProperties(layer.id, { [layerKey]: clamped });
+
+  if (dragAnchor && dragAnchor.layerId === layer.id) {
+    // In-drag path: coalesce the GPU render to the next animation frame so a
+    // 250 Hz pen tablet stops rasterizing multiple times per displayed frame.
+    rerenderCoalesced(layer.id);
+    return;
+  }
+
   rerenderLayer(layer, { ...layer, [layerKey]: clamped } as TextLayer);
 }
 

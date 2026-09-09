@@ -13,6 +13,7 @@ import {
   applyTextFontFamily,
   applyTextWeight,
   beginTextLayerHistory,
+  endTextLayerHistory,
 } from '../../../tools/text/apply-text-setting';
 import type { TextLayer, FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
@@ -98,6 +99,7 @@ export function TextOptions() {
         min={1}
         max={500}
         onDragStart={beginTextLayerHistory}
+        onCommit={endTextLayerHistory}
         onChange={(v) => applyTextSetting('fontSize', v)}
       />
       <label className={styles.label} id="text-font-label">Font</label>

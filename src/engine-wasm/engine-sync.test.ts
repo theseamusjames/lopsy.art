@@ -70,6 +70,7 @@ vi.mock('./wasm-bridge', () => ({
   setSeamlessPattern: vi.fn(),
   setTextLayerContent: vi.fn(),
   renderTextLayer: vi.fn(() => new Int32Array([100, 50, 0, 0])),
+  renderTextLayerToTexture: vi.fn(() => new Float64Array([100, 50, 0, 0])),
   getRenderedTextPixels: vi.fn(() => new Uint8Array(100 * 50 * 4)),
 }));
 
@@ -463,6 +464,7 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
   beforeEach(() => {
     vi.mocked(bridge.setTextLayerContent).mockClear();
     vi.mocked(bridge.renderTextLayer).mockClear();
+    vi.mocked(bridge.renderTextLayerToTexture).mockClear();
     vi.mocked(bridge.getRenderedTextPixels).mockClear();
     vi.mocked(bridge.uploadLayerPixels).mockClear();
   });
@@ -502,16 +504,17 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
     );
   };
 
-  it('skips rasterize/readback/upload when props are unchanged', () => {
+  it('skips rasterize/upload when props are unchanged', () => {
     const engine = makeFakeEngine();
     call(engine, editing('hello'));
     call(engine, editing('hello'));
     call(engine, editing('hello'));
 
     expect(vi.mocked(bridge.setTextLayerContent)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(bridge.renderTextLayer)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(bridge.getRenderedTextPixels)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(1);
+    // #757: one combined bridge call replaces render/readback/upload.
+    expect(vi.mocked(bridge.renderTextLayerToTexture)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(bridge.renderTextLayer)).not.toHaveBeenCalled();
+    expect(vi.mocked(bridge.getRenderedTextPixels)).not.toHaveBeenCalled();
   });
 
   it('re-renders when the text content changes', () => {
@@ -520,8 +523,7 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
     call(engine, editing('ab'));
     call(engine, editing('abc'));
 
-    expect(vi.mocked(bridge.renderTextLayer)).toHaveBeenCalledTimes(3);
-    expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(bridge.renderTextLayerToTexture)).toHaveBeenCalledTimes(3);
   });
 
   it('re-renders when bounds x/y change (drag the text box)', () => {
@@ -530,7 +532,7 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
     call(engine, editing('hi', 20, 10));
     call(engine, editing('hi', 20, 30));
 
-    expect(vi.mocked(bridge.renderTextLayer)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(bridge.renderTextLayerToTexture)).toHaveBeenCalledTimes(3);
   });
 
   it('empty text uploads the 1x1 clear once and skips subsequent identical calls', () => {
@@ -540,21 +542,22 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
     call(engine, editing(''));
 
     expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(bridge.renderTextLayer)).not.toHaveBeenCalled();
+    expect(vi.mocked(bridge.renderTextLayerToTexture)).not.toHaveBeenCalled();
   });
 
   it('empty → non-empty transitions to a fresh rasterize', () => {
     const engine = makeFakeEngine();
     call(engine, editing(''));
     call(engine, editing('now with text'));
-    expect(vi.mocked(bridge.renderTextLayer)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(bridge.renderTextLayerToTexture)).toHaveBeenCalledTimes(1);
+    // The empty→non-empty transition still uploads the 1x1 clear once.
+    expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(1);
   });
 
   it('clears the cache when text editing ends so re-entry re-renders', () => {
     const engine = makeFakeEngine();
     call(engine, editing('hello'));
-    expect(vi.mocked(bridge.renderTextLayer)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(bridge.renderTextLayerToTexture)).toHaveBeenCalledTimes(1);
 
     // User exits edit mode.
     call(engine, null);
@@ -563,7 +566,7 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
     // Re-enters with the identical props — the texture may have been mutated
     // by paint/filter operations while not editing, so we must re-render.
     call(engine, editing('hello'));
-    expect(vi.mocked(bridge.renderTextLayer)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(bridge.renderTextLayerToTexture)).toHaveBeenCalledTimes(2);
   });
 
   it('re-renders after resetTrackedState (undo/redo full re-sync)', () => {
@@ -572,7 +575,7 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
     sync.resetTrackedState(engine);
     call(engine, editing('hello'));
 
-    expect(vi.mocked(bridge.renderTextLayer)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(bridge.renderTextLayerToTexture)).toHaveBeenCalledTimes(2);
   });
 });
 
