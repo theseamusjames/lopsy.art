@@ -12,10 +12,10 @@ The toolbar exposes Size, Opacity, Hardness, Fade, and the symmetry toggle. Ever
 - **Footer** — **Export** (opens the Export Brushes modal, below) and **Save Current**, which prompts for a name and snapshots the live brush — tip, size, hardness, spacing, scatter, angle, opacity, fade, taper, all four jitters, the speed-size settings, and any sub-brushes — as a new custom preset, which it then makes active. Texture is deliberately *not* captured.
 
 **Core parameters**
-- **Size**: 1 - 2000 px (auto-scaled by document size). **The two places that edit this number do not share a ceiling**: the Brushes modal's Shape tab runs to `max(2000, 1.5 × longest-document-side)` while the **options-bar** Size slider stops at `max(200, …)` — both write the same `settings.brush.size`. A size dialed above 200 in the modal survives (sliders clamp on interaction, not on render) until you next touch the options-bar slider, which clamps it back down to its own maximum.
+- **Size**: 1 - 2000 px (auto-scaled by document size). **The two places that edit this number do not share a ceiling**: the Brushes modal's Shape tab runs to `docScaledMax(2000)` — `max(2000, min(5000, round(1.5 × longest-document-side)))`, the same 5000 px cap as every other scaled slider — while the **options-bar** Size slider stops at `docScaledMax(200)`; both write the same `settings.brush.size`. Unlike the options bar's base of 200, the modal's base of 2000 is not dead weight: it is the ceiling on any document whose longest side is under 1,334 px. A size dialed above 200 in the modal survives (sliders clamp on interaction, not on render) until you next touch the options-bar slider, which clamps it back down to its own maximum.
 - **Opacity**: 1 - 100%. For the default circular tip and for **alpha** tip bitmaps this is a **ceiling, not a rate**: dabs accumulate into a per-layer stroke texture under `blend_equation(MAX)`, so each pixel simply takes the highest alpha any overlapping dab produced and one continuous stroke can never drive alpha past the slider value — going back and forth over the same spot without lifting the pen darkens nothing further. The ceiling resets at pointer-up, so a *second* stroke does build on the first. **A color tip is the exception**: `brush_has_tip && brush_tip_is_color` switches the accumulation to premultiplied "over" compositing (`FUNC_ADD`, `ONE` / `ONE_MINUS_SRC_ALPHA`), deliberately, because per-channel MAX on colored dabs invents colors that are in neither dab (the code's example: blue + orange reading out as pink). The cost of that correctness fix is that **overlapping dabs from a color tip do compound within a single stroke**, so the same Opacity value behaves as a ceiling with one tip and as a rate with another. (The Eraser compounds too, for an unrelated reason — see [Eraser](#eraser).)
 - **Hardness**: 0 - 100%
-- **Fade**: 0 - 2000 px (opacity fade-out distance, exposed on the options bar)
+- **Fade**: 0 - 2000 px base range, auto-scaled by document size (`docScaledMax(2000)`, the same ceiling as the modal's Size and Taper) — opacity fade-out distance, exposed on the options bar. It passes no `sliderMax`, so its knob spans the whole scaled range.
 - **Taper**: 0 - 2000 px base range, auto-scaled by document size like Size (the modal's Shape-tab slider max is `1.5 × longest-document-side`, capped at 5000 px) — size taper-out distance: brush dabs shrink toward zero over this many pixels of stroke length, independent of the Fade opacity rolloff
 - **Spacing**: 1 - 200 % of brush size on the slider — but the clamp accepts **0**, and the shipped default *is* 0, below the slider's own minimum. The dab pitch is `max(1, size × spacing / 100)`, so it is floored at one pixel: spacing 0 and every value under `100 / size` all mean a 1 px pitch, and the setting only starts to bite on large brushes (at Size 500, spacing 1 % is 5 px while spacing 0 is still 1 px).
 - **Scatter**: 0 - 100%
@@ -138,7 +138,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **The source is the layer as it is being written, not a snapshot taken at pointer-down.** Each dab renders into the scratch texture and is blitted back over the layer before the next dab runs, and the shader samples that same layer texture for its source. When the source and destination circles overlap, dab *n+1* clones dab *n*'s output — the classic smearing feedback — rather than repeatedly copying the original pixels.
 
 ### Healing Brush
-- **Size**: 1 px – document-scaled max (default 20; base cap 200 px, scales with canvas size). **This is the only paint-tool Size slider whose drag track is uncapped** — it passes no `sliderMax`, so the knob spans the entire document-scaled range (up to 5000 px) while every sibling's knob stops at 300. Given that a healing dab is the most expensive in the app (two synchronous readbacks each, below), this is the worst tool to make a 5000 px dab easy to reach. See [Controls That Share a Label](#controls-that-share-a-label-but-not-a-meaning).
+- **Size**: 1 px – document-scaled max (default 20; base cap 200 px, scales with canvas size). **This is the only paint-tool Size slider whose drag track is uncapped** — it passes no `sliderMax`, so the knob spans the entire document-scaled range (up to 5000 px) while every sibling's knob stops at a fixed value — 300 for most, 250 for the Pencil, 500 for Spray. Given that a healing dab is the most expensive in the app (two synchronous readbacks each, below), this is the worst tool to make a 5000 px dab easy to reach. See [Controls That Share a Label](#controls-that-share-a-label-but-not-a-meaning).
 - **Opacity**: 1 - 100% (default 100). **A rate, not a ceiling** — each dab blends `healed × a + existing × (1 − a)` back onto the layer with `a = source.a × stamp × opacity`, and the next dab reads that result, so overlapping dabs compound toward full replacement (the same read-modify-write property that makes the [Eraser](#eraser)'s Opacity a rate).
 - **Alt/Cmd+click**: set the healing source sample point
 - **Shift+click**: heals along a straight line from the previous stroke endpoint, preserving source offset
@@ -199,11 +199,13 @@ The paint tools do not share a dab implementation. There are **three different a
 
 **But the hard-coded spacing is not one number — it is three.** Six engines use `max(1, size × 0.25)`: Eraser, Dodge / Burn, Sponge, Smudge, Clone Stamp, Healing Brush. **Spray uses `max(1, size × 0.3)`** — 30 %, not 25 % (`spray-interaction.ts`), and there it is only a *supplement* to a 166 ms timer rather than the primary metering (see [Spray](#spray)). **The Pencil has no spacing concept at all** — it never interpolates in JS. `handlePencilStroke` hands the whole segment to `drawPencilLine`, and the engine walks it at a **fixed 1.0 px** (`brush_gpu.rs:403`), independent of brush size. So at Pencil size 40 the dab pitch is 1 px where every other engine's would be 10.
 
-**What happens *below* one spacing step differs three ways, and it decides how hard a slow stroke bites.** Spacing only states how far apart dabs should be. What an engine does when a single pointer segment is *shorter* than one step is where they part company — and since four of these tools read-modify-write the layer, it directly controls how much a slow pass compounds.
+**What happens *below* one spacing step differs three ways across the table (and a fourth way on masks, below), and it decides how hard a slow stroke bites.** Spacing only states how far apart dabs should be. What an engine does when a single pointer segment is *shorter* than one step is where they part company — and since four of these tools read-modify-write the layer, it directly controls how much a slow pass compounds.
 
 - **Bank it** (Brush, Eraser). `interpolateWithSpacing` (`paint-handlers.ts:461`) carries a remainder across pointer events: a short segment emits **nothing** and adds its length to a running total, so a dab lands after exactly one spacing step of *travel* however the pointer was sampled. Spacing is honored exactly.
 - **Ignore it** (Dodge / Burn, Sponge, Smudge, Clone Stamp, Healing Brush). `interpolateFlat` returns the **destination point** whenever `dist < spacing` (`dab-interpolation.ts:15`), so a short segment still stamps a dab. Spacing therefore collapses on a slow stroke and dab density becomes a function of the **pointer sample rate** rather than of distance — a drag moving 5 px per event lays dabs 5 px apart where a 40 px brush's 25 % rule asks for 10.
 - **Discard it** (Spray). A short segment advances `lastPoint` and returns without emitting, throwing that distance away — but the 166 ms timer keeps spraying at the updated position, so a slow spray stroke is metered by *time* instead. Spray is the only paint tool whose output is time-driven.
+
+**Mask painting is a fourth regime, outside the table: stamp both ends.** The brush and eraser on a layer mask and in Quick Mask interpolate through `packDabLine` → `interpolatePoints`, which returns `ceil(dist / spacing) + 1` evenly spaced points from the segment's start to its end *inclusive*. So a segment shorter than one step still emits **two** dabs; the real pitch is `dist / ceil(dist / spacing)` — never wider than the spacing and usually narrower; and every pointer sample is stamped **twice**, once as the end of one segment and again as the start of the next. On the MAX branch those extra dabs are harmless, but on the multiply branch — hiding on a layer mask, subtracting in Quick Mask — each one compounds, which is part of why a single mask stroke hides so much more than its Opacity reads (see [Editing a Layer Mask](#editing-a-layer-mask)).
 
 **The Eraser is the only read-modify-write tool with exact spacing**, and that is what licenses its compounding math: the [Eraser](#eraser)'s "≈ 4 dabs per pixel, so Opacity 50 % removes ≈ 94 % in one pass" holds because the remainder keeps dabs a true 25 % apart. **Smudge, Clone Stamp, and Healing Brush compound identically but without that guarantee**, so a slow pass stacks more dabs than the nominal spacing implies and all three grow *stronger the slower you draw* — a speed dependence none of their sliders mentions.
 
@@ -232,7 +234,7 @@ The comments that get it wrong are `clone_stamp.glsl` ("Compute stamp falloff (s
 
 **Known defect — the scratch texture is document-sized, but three of the four read-modify-write engines set a layer-sized viewport.** `scratch_texture_a` is allocated at document dimensions while the Eraser, Clone Stamp, and Healing Brush set `gl.viewport` and blit at the *layer* texture's dimensions, so painting on a layer that has been expanded past the document bounds reads and writes outside the scratch texture's extent. Smudge is the exception — it calls `ensure_layer_full_size` first, and its comment names the symptom ("full-width streak artifacts"). Dodge / Burn and Sponge call it too, at `begin_*_stroke`. `end_stroke` guards precisely this case for brush strokes; the three unguarded paths have no equivalent.
 
-**Known defect — five tools push two undo entries per stroke.** The shared paint-tool path at pointer-down pushes a history entry whose label is `activeTool === 'brush' ? 'Brush' : activeTool === 'pencil' ? 'Pencil' : 'Eraser'`, so **every tool that is not the brush or the pencil is labeled "Eraser"** — and Dodge / Burn, Sponge, Clone Stamp, Healing Brush, and Spray each then push their own correctly-labeled entry from their own handler. `pushHistory` does not coalesce, so one stroke with any of those five leaves two rows in the History panel: a spurious **"Eraser"** followed by the real one, and undoing the stroke takes two steps. (Smudge is unaffected — it is not registered as a paint tool, which is also why it has no straight-line origin.)
+**Known defect — five tools push two undo entries per stroke.** The shared paint-tool path at pointer-down pushes a history entry whose label is `activeTool === 'brush' ? 'Brush' : activeTool === 'pencil' ? 'Pencil' : 'Eraser'`, so **every tool that is not the brush or the pencil is labeled "Eraser"** — and Dodge / Burn, Sponge, Clone Stamp, Healing Brush, and Spray each then push their own correctly-labeled entry from their own handler. `pushHistory` does not coalesce, so one stroke with any of those five leaves two rows in the History panel: a spurious **"Eraser"** followed by the real one, and undoing the stroke takes two steps. (Smudge is unaffected — it is not registered as a paint tool, which is also why it has no straight-line origin. And the defect vanishes in layer-mask edit mode and Quick Mask, because the shared setup that pushes the spurious row is skipped whenever a mask mode is on — though there these tools paint the layer instead of the mask; see [Editing a Layer Mask](#editing-a-layer-mask).)
 
 ### Straight-Line Strokes (shared across paint tools)
 
@@ -295,7 +297,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Boolean path operations** (Path options bar buttons + **Path** menu in the menu bar): Unite, Subtract, Intersect, Exclude. Operates between the selected path and the most recently added other path; both source paths are consumed and replaced by the result. Implemented by flattening Bezier paths to polygons, rasterizing to binary masks, combining pixel-wise, then tracing contours with marching squares and refitting Catmull-Rom/Bezier anchors. Buttons are disabled until the document contains at least 2 paths and one is selected.
 
 ### Text Tool
-- **Font size**: 1 - 500
+- **Font size**: 1 - 500 **px** — a pixel size, not points. The engine hands `fontSize` straight to cosmic-text's `Metrics::new` as the em size in document pixels (`text_gpu.rs`), the path-text renderer builds a `…px` CSS font string from the same number, and the Text panel labels the field `px`; the options-bar slider shows no unit at all. `[` / `]` do not change it (see [Single-Key Shortcuts](#single-key-shortcuts)).
 - **Font family**: chosen from a searchable **font browser** (see below) covering 1,954 families — 14 system faces (Inter, Arial, Helvetica, Georgia, Times New Roman, Courier New, JetBrains Mono, Verdana, Trebuchet MS, Impact, Comic Sans MS, Palatino, Garamond, Brush Script MT) plus 1,940 Google Fonts — and, in Chromium browsers, **every family installed on the machine** (see *Local fonts* below).
 - **Font weight**: the dropdown lists exactly the weights the selected family ships, labelled Thin (100) / ExtraLight (200) / Light (300) / Regular (400) / Medium (500) / SemiBold (600) / Bold (700) / ExtraBold (800) / Black (900) / UltraBlack (1000). Families outside the catalog fall back to Regular + Bold. Switching to a family that lacks the current weight snaps to the numerically nearest one it does have.
 - **Font style**: normal or italic
@@ -393,7 +395,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Combine modes are per-tool, not global.** There is no shared add / subtract / intersect mode switch. Only two tools combine with an existing selection: the **Magic Wand** (Shift+click adds, Alt/Option+click subtracts) and **Quick Selection** (its own add / subtract Mode control). The marquee, lasso, and magnetic lasso tools always replace the selection — they read no Shift or Alt modifier for combining. The underlying mask combiner also implements an **intersect** mode, but no caller ever requests it, so intersect is unreachable from the UI.
 - Invert selection (`⇧⌘I`) — inverts every mask value (`255 − v`, so partial coverage inverts to its complement rather than snapping) and sets the reported selection bounds to the **whole document**, since an inverted selection almost always touches the canvas edges.
 - Select all (`⌘A`)
-- Deselect (`⌘D`)
+- Deselect (`⌘D`) — **the key and the menu item are not the same command.** The `⌘D` key handler clears the selection, clears the transform state, and drops the GPU float (committing any transform in flight). **Select → Deselect** — despite listing `⌘D` as its accelerator — and the canvas right-click **Deselect** call only `clearSelection()`: the ants and handles disappear, but the float and the transform state survive. The next canvas press with any tool other than Move then does what every float commit does — bakes the float and re-derives the selection from the layer's alpha — so **the selection comes back**, as the *whole layer's* alpha rather than the region you had. Verified in the running app: marquee a region, scale it with a Move handle, choose Select → Deselect, then make one Brush click — the selection returns as the full 400 × 300 document with transform handles around it. Pressing `⌘D` instead leaves no selection after the same click.
 - **Move the selection outline**: with a rectangular or elliptical marquee tool active, press-drag from *inside* an existing selection to translate the selection mask itself — the marching-ants outline moves while the underlying pixels stay put (any active floating selection is dropped first). Arrow keys nudge the same marquee bounds.
 - **Click to deselect**: a single click (drag < 2 px) with a marquee tool clears the active selection, the same as `⌘D`.
 - Selection from layer alpha — `Cmd/Ctrl+click` a layer thumbnail (non-transparent pixels become the selection)
@@ -420,9 +422,9 @@ The outline is drawn on the 2D overlay canvas, not by the GPU compositor.
 - Shortcut: `Q` (toggle). There is also a dedicated toggle button in its own group at the bottom of the toolbox, labelled *Enter Quick Mask (Q)* / *Exit Quick Mask (Q)* and highlighted while the mode is on.
 - **Entering** clears the active selection and blits the selection mask GPU-to-GPU into a separate quick-mask texture. With no selection active it starts all-zero — nothing selected.
 - **The overlay is blue, and it covers the *unselected* region** — not a red overlay of the selection. Coverage is `(1 − mask) × 0.5`, so fully-unselected areas are tinted `rgb(0, 99, 255)` at 50 % and fully-selected areas are left untouched. It shares the shader branch used by layer-mask edit mode, which is why the two look alike.
-- Brush, pencil, and eraser edit the selection mask directly. **The foreground color is reduced to a binary decision**: Rec. 709 luminance ≥ 128 adds to the selection, below 128 subtracts. A mid-gray therefore does not paint partial coverage — it just picks a side. Partial coverage comes from brush hardness and opacity, which shape the dab with a quadratic `1 − t²` falloff plus a 1 px smoothstep edge. The eraser ignores the color and always subtracts. **Size, hardness, and opacity are the only brush settings that reach the dab** — the tip bitmap, jitters, scatter, angle, texture, fade, taper, speed-size, sub-brushes, and the Spacing setting are all dropped, exactly as in layer-mask mode (see [Editing a Layer Mask](#editing-a-layer-mask) for the full list and for what a dab costs).
-- **Adding and subtracting are not symmetric.** Adding takes `max(existing, dabStrength)`, so opacity acts as a ceiling — repeated passes at 50 % opacity never push that area past 50 %. Subtracting multiplies by `(1 − dabStrength)`, so repeated passes compound and do drive the mask to zero.
-- Works regardless of the active layer — painting only affects the selection mask, not pixels
+- Brush, pencil, and eraser edit the selection mask directly. **The foreground color is reduced to a binary decision**: Rec. 709 luminance ≥ 128 adds to the selection, below 128 subtracts. A mid-gray therefore does not paint partial coverage — it just picks a side. Partial coverage comes from brush hardness and opacity, which shape the dab with the **hardness-floored** quadratic `h + (1 − h)(1 − t²)` — `h` being the Brush's Hardness, or a fixed 0.8 for the eraser — plus a 1 px smoothstep edge. It is not a plain `1 − t²`: at the Brush's startup hardness of 80 a quick-mask dab never drops below 80 % strength inside its rim (see the falloff table under [Dab Engines](#dab-engines-shared-across-paint-tools)). The eraser ignores the color and always subtracts. **Size, hardness, and opacity are the only brush settings that reach the dab** — the tip bitmap, jitters, scatter, angle, texture, fade, taper, speed-size, sub-brushes, and the Spacing setting are all dropped, and Symmetry does not mirror, exactly as in layer-mask mode (see [Editing a Layer Mask](#editing-a-layer-mask) for the full list and for what a dab costs).
+- **Adding and subtracting are not symmetric.** Adding takes `max(existing, dabStrength)`, so opacity acts as a ceiling — repeated passes at 50 % opacity never push that area past 50 %. Subtracting multiplies by `(1 − dabStrength)`, so repeated passes compound and do drive the mask to zero. Layer-mask editing runs the same two branches with the tool mapping inverted, so there it is the **Brush** that compounds and the Eraser that is capped — in both modes, painting toward white is the ceiling and painting toward black is the rate (see [Editing a Layer Mask](#editing-a-layer-mask)).
+- Works regardless of the active layer — for the brush, pencil, and eraser (and the bucket and gradient, below), painting affects only the selection mask, not pixels. **Every other pixel tool ignores Quick Mask and paints the active layer underneath the overlay** — Dodge / Burn, Sponge, Clone Stamp, Healing Brush, Smudge, Spray, and the Shape tool's pixel output all go straight to their normal layer routines. It is the same hole as in layer-mask edit mode; see [Editing a Layer Mask](#editing-a-layer-mask).
 - **Fill (paint bucket) and Gradient tools route into the quick mask** instead of the active layer while quick mask is on, so smooth selection falloffs (linear or radial gradients) and bucket fills of the selection mask are first-class operations. Quick mask mode takes precedence over layer-mask edit mode if both are somehow active.
   - **The bucket only ever adds.** Unlike the quick-mask brush and pencil, it does not read the foreground color — the fill value is hard-coded to white, so there is no bucket route that subtracts from the selection. (On a *layer* mask the same tool is hard-coded the other way, to black; see [Editing a Layer Mask](#editing-a-layer-mask).) It is a CPU flood fill over a full readback of the quick-mask texture, with tolerance measured against the mask's gray value.
 - **The Move tool moves painted mask content.** With a marquee active in quick mask, dragging translates both the marquee and the quick-mask pixels inside it: the pixels under the marquee's original position are cleared and the moved content is max-blended into its new position, so it adds to rather than replaces whatever it lands on. Mask content outside the marquee stays put, and the layer texture is never touched.
@@ -435,7 +437,8 @@ The outline is drawn on the 2D overlay canvas, not by the GPU compositor.
 
 Transform is **selection-bound** — there is no separate transform tool and no
 "free transform the whole layer" mode. The handles are drawn on top of the
-marching ants, and Escape or `⌘D` tears both down together.
+marching ants, and Escape or the `⌘D` key tears both down together (the
+Select-menu Deselect does not — see [Selection Operations](#selection-operations)).
 
 Seeding a transform is an explicit step that individual call sites opt into,
 *not* something `setSelection` does on its own. Committing a marquee, lasso,
@@ -551,6 +554,8 @@ gets baked first.
   successive scale/rotate drags therefore do not compound resampling loss.
 - The float is dropped — baking the result into the layer texture — on
   **Escape**, **`⌘D`**, or **selecting a different layer** in the Layers panel.
+  That is the `⌘D` *key*: Select → Deselect and the canvas context menu's
+  Deselect leave the float alive (see [Selection Operations](#selection-operations)).
 - **Undo and redo also drop the float first**, and cancel any scheduled prefloat,
   before restoring their snapshot. This is a correctness requirement rather than
   a convenience: while a float is live the engine keeps `float_layer_id` set, and
@@ -590,12 +595,12 @@ gets baked first.
 - Drag to reposition layers
 - **Multi-layer drag**: when several layers are multi-selected in the Layers panel, a drag moves **all of them together**. Each selected layer's starting position is captured at pointer-down, and every tick applies the same delta to each — so the group translates rigidly rather than each layer being dragged independently.
   - **Locked layers in the selection stay put.** They are filtered out when the sibling list is built, so a locked layer inside a multi-selection anchors while the rest move.
-  - The delta handed to the siblings is the **post-snap** delta of the active layer, not the raw pointer delta, so snapping to grid, guides, or layers moves the whole group in formation instead of snapping each layer to its own nearest target.
+  - The delta handed to the siblings is the **post-snap** delta of the active layer, not the raw pointer delta, so snapping to the grid or to other layers moves the whole group in formation instead of snapping each layer to its own nearest target.
   - The other selected layers are **excluded from the snap-to-layers candidate set**, so a moving group does not try to snap to itself.
 - Arrow key nudge — 1 px by default; when grid + snap-to-grid is enabled, each key press nudges by exactly one grid cell. Arrow keys also nudge the active marquee bounds when a selection tool is active — but the responding set is an explicit list of **five** tools (rectangular marquee, elliptical marquee, lasso, magnetic lasso, magic wand). **Quick Selection is not in it**, so arrow keys do not nudge a selection while that tool is active; switch to any other selection tool and the same selection nudges fine. Under every other tool the arrow keys fall through untouched.
   - **Nudge follows the same multi-layer rule as dragging**: every other selected, unlocked layer shifts by the identical delta. This applies to the whole-layer nudge only — when a marquee selection is active the arrow keys move the floating selection instead, and multi-selection plays no part.
 - Snap to grid
-- Snap to guides
+- **No snap to guides.** A Move drag snaps to the grid and to other layers and to nothing else — `move-handlers.ts` imports `snapPositionToGrid` and `snapPositionToLayers` only, and the `snapToGuide` helper in `tools/move/move.ts` has no production caller. Guides are reference lines only; see [Guides](#guides).
 - **Snap to layers** (View menu → "Snap to Layers"): while dragging, the moving layer's left/right/top/bottom edges and X/Y centers attract to the matching edges and centers of every other visible layer within a 5 px threshold. Magenta alignment guides span the document while a snap is engaged and clear on mouse-up.
 - **Align**: left, center-h, right, top, center-v, bottom
 - **Fit** (options-bar button, labelled *Fit layer to canvas*): scales the active raster layer to fit inside the canvas — the scale factor is `min(canvasW / layerW, canvasH / layerH)`, so aspect ratio is preserved — and centers the result on the artboard. Reuses the GPU `scaleLayerTexture` path, so no pixel data round-trips through JS. Pasting or dropping an oversized image now runs this same fit automatically (see Paste / Drop behavior), so the button is for the cases that don't — a layer scaled up after the fact, or one that outgrew the canvas when the document was resized.
@@ -699,14 +704,14 @@ What does differ is the **knob** ceiling. `Slider` computes `knobMax = min(max, 
 | Dodge / Burn Size | **`brush.size`** | dab diameter, px | `docScaledMax(200)` | 300 |
 | Healing Size | `healing.size` | dab diameter, px | `docScaledMax(200)` | **none set — the whole typed range, up to 5000** |
 | Spray Size | `spray.size` | **cloud** diameter, px | `docScaledMax(500)` | 500 |
-| Text Size | the layer's `fontSize` | **font size in points** | 500 (flat) | none set — same as typed |
+| Text Size | the layer's `fontSize` | **font em size**, px | 500 (flat) | none set — same as typed |
 | Quick Selection Size | `quickSelect.size` | **seed-box radius**, px | 100 (flat) | none set — same as typed |
 
 Four consequences worth stating plainly:
 
 - **Dodge / Burn has no size of its own.** Its Size slider writes `brush.size`, so dragging it moves the Brush's size too, and vice versa.
-- **Healing is the one paint tool whose knob is uncapped**, because it is the one that passes no `sliderMax`. On a 4000 px document its track runs to 5000 px while every sibling's stops at 300. It is also by far the most expensive dab in the app — two synchronous `read_pixels` stalls per dab (see [Dab Engines](#dab-engines-shared-across-paint-tools)) — so the single tool that invites a 5000 px dab is the one that can least afford one.
-- **Two of the eleven are not lengths on the canvas at all**: Text Size is typographic points, and Quick Selection Size is a radius that only sizes a seed-sampling box.
+- **Healing is the one paint tool whose knob is uncapped**, because it is the one that passes no `sliderMax`. On a 4000 px document its track runs to 5000 px while the siblings' stop at 300 (Pencil's at 250, Spray's at 500). It is also by far the most expensive dab in the app — two synchronous `read_pixels` stalls per dab (see [Dab Engines](#dab-engines-shared-across-paint-tools)) — so the single tool that invites a 5000 px dab is the one that can least afford one.
+- **Two of the eleven size nothing a brush paints**: Text Size is the font's em size in document pixels — *not* typographic points; the engine consumes it as px and the Text panel labels it so — and Quick Selection Size is a radius that only sizes a seed-sampling box.
 - **Only Quick Selection treats its Size as a radius.** Every dab shader halves it (`radius = u_size * 0.5`), so the same number describes a footprint twice as wide there as under any brush.
 
 ### "Opacity" — four sliders, four different meanings
@@ -1133,6 +1138,20 @@ toolbox, but **none of the five behaves the way it does on a layer.** Each one
 routes to a separate, much smaller code path (`mask_paint_gpu.rs`), and the
 differences are not cosmetic.
 
+- **Only those five know the mask is there.** Dodge / Burn, Sponge, Clone
+  Stamp, Healing Brush, Smudge, and Spray — and the Shape tool's pixel output —
+  have no mask branch at all. Their handlers never read `maskMode`, and the
+  canvas skips the shared paint-tool setup whenever a mask mode is on, so they
+  go straight to their ordinary routines and **paint the layer's own pixels**,
+  underneath the blue edit overlay, while the mask thumbnail stays outlined as
+  though the mask were the target. Verified in the running app: with a mask in
+  edit mode, a Burn stroke across a white Background changed **0** mask bytes,
+  pushed a *Burn* history entry, and darkened the layer itself. Quick Mask has
+  the identical hole. One side effect: the skipped setup is also where the
+  spurious *Eraser* history entry comes from, so in either mask mode these
+  tools push only their own correctly-labelled entry (compare
+  [Dab Engines](#dab-engines-shared-across-paint-tools)).
+
 - **The foreground color is never read.** On a layer mask the tool alone decides
   the value: **brush and pencil always paint black (hide), the eraser always
   paints white (reveal)**, and the bucket always fills black. Setting the
@@ -1162,9 +1181,12 @@ differences are not cosmetic.
   Everything else the Brushes modal exposes is silently dropped: the tip bitmap,
   all four jitters, scatter, angle, texture, fade, taper, speed-size, and
   sub-brushes. Spacing is not the brush's Spacing setting either — mask dabs are
-  interpolated at a hard-coded `max(1, size × 0.25)`. Painting a mask with an elaborate
-  custom preset gets you a plain soft circle. (Symmetry is separately disabled in
-  mask mode — see [Brush](#brush).)
+  interpolated at a hard-coded `max(1, size × 0.25)`, and each pointer segment is
+  stamped at **both** of its ends, so every sampled pointer position is dabbed
+  twice (the fourth spacing regime under
+  [Dab Engines](#dab-engines-shared-across-paint-tools)). Painting a mask with an
+  elaborate custom preset gets you a plain soft circle. Symmetry is dropped too:
+  neither mask route calls the mirroring helpers — see [Symmetry](#symmetry).
 - **The mask bucket is not the Fill tool.** It reads Tolerance and Contiguous and
   nothing else, and its tolerance is measured against the mask's own **gray
   value**, not against RGB color distance. Where the layer bucket has been
@@ -1183,7 +1205,10 @@ differences are not cosmetic.
   scratch back over the mask: two unscissored full-texture passes per point. (The
   mask *pencil* is the exception — it scissors each block, like the layer pencil.)
   At the `max(1, size × 0.25)` spacing above, a
-  single 100 px drag of a 10 px brush is 40 points — 80 full-mask passes. Quick
+  100 px drag of a 10 px brush is at least **41** points even when it arrives as
+  a single pointer segment — 82 full-mask passes — and every further pointer
+  event along the way adds one more, because each segment re-stamps its own
+  starting point. Quick
   Mask uses the identical loop against a **document-sized** texture. This is why
   mask painting on a large document feels heavier than painting pixels, despite
   never touching the CPU.
@@ -1205,14 +1230,35 @@ differences are not cosmetic.
   (`read_texture_r8`) backs the **Quick Mask** read, so the quick-mask bucket's
   full-texture readback got the identical cut; Quick Mask still has no stroke-end
   readback and its strokes are still not undoable.
-- **Painting a mask is a ceiling, erasing it is a rate.** The one shader handles
-  both: brush mode writes `max(existing, stamp × opacity)` so overlapping dabs in
-  a stroke cannot push a pixel past the Opacity setting, while eraser mode writes
-  `existing × (1 − stamp × opacity)` and therefore compounds. It is the same
-  ceiling-vs-rate split the [Dab Engines](#dab-engines-shared-across-paint-tools)
-  table draws for layers, arrived at here inside a single shader rather than by
-  two different architectures. Quick Mask has no such readback and its strokes
-  are not undoable — see [Quick Mask Mode](#quick-mask-mode).
+- **On a layer mask, hiding is a rate and revealing is a ceiling — the reverse
+  of what the shader's own comments suggest.** `quick_mask_dab.glsl` has two
+  branches: mode 0 writes `max(existing, stamp × opacity)`, mode 1 writes
+  `existing × (1 − stamp × opacity)`, and its comments label them "Brush" and
+  "Eraser" — which is true in Quick Mask, where the brush adds. The layer-mask
+  route **inverts that mapping** — the brush passes mode 1 and the eraser mode 0,
+  straight through `api/paint.rs` — because here the brush hides. (The pencil
+  also passes mode 1, but it writes hard blocks as a plain replace, so it never
+  compounds.) So:
+  - **The Brush compounds.** Every overlapping dab multiplies the mask down
+    again, and with the doubled segment endpoints above there are plenty of
+    them. Measured with a 40 px brush at hardness 80 and **Opacity 50 %**, one
+    straight stroke took a white mask to **10 – 21 of 255** along its centre —
+    4 – 8 % visible, not the 50 % the slider reads.
+  - **The Eraser is capped, permanently.** It can only raise a pixel to
+    `stamp × opacity`, and because the MAX is taken against the mask itself
+    rather than a per-stroke texture, the cap does not reset between strokes.
+    Measured at **Opacity 50 %**: one pass revealed a hidden mask to 125 – 126
+    of 255, and two further passes over the same pixels left it at exactly
+    125 – 126. Fully revealing an area needs the Eraser at 100 %.
+
+  Both are the opposite of the same tools on a layer, where the Brush's Opacity
+  is a per-stroke ceiling and the Eraser's is a rate (see
+  [Dab Engines](#dab-engines-shared-across-paint-tools)). The rule
+  that does hold across both mask modes is about direction, not tool: painting
+  toward **white** is a ceiling and painting toward **black** is a rate — so in
+  [Quick Mask](#quick-mask-mode), where a light brush adds and the eraser
+  subtracts, the tools trade places. Quick Mask also has no stroke-end readback,
+  so its strokes are not undoable.
 
 ### Layer Texture Lifecycle (crop on switch, expand on return)
 
@@ -1686,7 +1732,7 @@ Transient messages surface as toasts stacked in a fixed panel at the **top-right
 ### Canvas Right-Click Context Menu
 Right-clicking the canvas opens a small menu with:
 - **Define Brush Preset** — only shown when a marquee selection is active. Captures the selected pixels of the active layer as a new brush tip and opens the Brushes modal with the new preset selected. This is a **separate implementation** from Edit → Define Brush…, not a shared one: it names the tip "Custom Brush" without prompting and opens the modal, where the Edit-menu version prompts for a name and leaves the modal closed.
-- **Deselect** — clears the active marquee selection (disabled when there is none).
+- **Deselect** — clears the active marquee selection (disabled when there is none). Like Select → Deselect and unlike the `⌘D` key, it leaves a live transform float behind, so the next non-Move canvas press can bring a selection back — see [Selection Operations](#selection-operations).
 - **Select All** — selects every pixel in the document (equivalent to ⌘A).
 
 The menu is suppressed on coarse-pointer devices (touch) so long-press doesn't accidentally open it.
@@ -1697,7 +1743,7 @@ Nineteen tools carry a default single-letter shortcut, and that is the complete 
 - **`X`** — swap foreground and background colors
 - **`D`** — reset foreground/background to the defaults (black / white)
 - **`Q`** — toggle Quick Mask mode
-- **`[` / `]`** — decrement / increment the active tool's size by 1. The handler is an explicit tool list, **not** a lookup of "whichever size slider the tool exposes": brush **and dodge & burn** (both write the shared `brush.size`), smudge, pencil, eraser, clone stamp, healing brush, pen-tool stroke width, and shape-tool stroke width. **Three tools ship a Size slider that the brackets ignore** — Sponge, Spray, and Quick Selection; their size is slider-only.
+- **`[` / `]`** — decrement / increment the active tool's size by 1. The handler is an explicit tool list, **not** a lookup of "whichever size slider the tool exposes": brush **and dodge & burn** (both write the shared `brush.size`), smudge, pencil, eraser, clone stamp, healing brush, pen-tool stroke width, and shape-tool stroke width. **Four tools ship a Size slider that the brackets ignore** — Sponge, Spray, Quick Selection, and **Text** (whose Size is the font size; `handleSizeShortcut` has no `text` branch); their size is slider-only.
   - **The brackets are not bound by the slider's ceiling.** They write straight through the store clamp — **1 – 5000 px** for every pixel-size setting (1 – 50 for the pen/shape stroke widths) — without consulting the options bar's document-scaled maximum. On a small document, where the Brush Size slider stops at 200, holding `]` walks the size well past the visible end of the slider, all the way to 5000.
   - The handler reports the key as handled for *every* tool, so `[` / `]` are swallowed even when the active tool has no size to change.
 - **`Shift`** (held, paint tool, after a stroke on the active layer) — previews the straight-line stroke as a hairline from the last stroke endpoint to the cursor; shift+click commits it. Adding **Cmd/Meta** snaps to 15° and turns the preview blue. See Straight-Line Strokes.
@@ -1949,7 +1995,7 @@ Panel edits and options-bar edits share the same apply path (`apply-text-setting
 - **Axes**: horizontal, vertical, both (4-way), or radial. Radial symmetry mirrors each dab into **2 - 32 evenly-rotated copies** around the center (kaleidoscope-style) and takes precedence over the horizontal/vertical mirrors when its segment count is ≥ 2.
 - **Radial segment count**: the Radial Symmetry button is a toggle that switches radial **on at 8 segments** and off by zeroing the count. While it is on, a number input appears; the store rounds and clamps whatever it receives to **0 - 32**, so a typed value above 32 is pulled back down, and 0 or 1 simply turns radial off (the count must reach 2 before any mirroring happens).
 - **Center**: configurable, defaulting to the canvas center. The center is resolved **once at pointer-down** and stored in layer-local coordinates for the whole stroke, so moving the symmetry center mid-stroke is not possible.
-- Available on brush, pencil, and eraser. The symmetry config (axes, center, radial segment count) is global, so it applies to whichever of these tools is active. Only the Brush options bar exposes the **Radial Symmetry** toggle and its segment-count number input; the Pencil options bar exposes just the horizontal/vertical toggles (radial set from the Brush still applies to pencil/eraser strokes), and the Eraser inherits the active config without its own toggles.
+- Available on brush, pencil, and eraser — **on layers only**. In layer-mask edit mode and in Quick Mask those three tools take the mask routes, which never call `mirrorBatchPoints` / `getMirroredPoints`, so a stroke lays down just the unmirrored dab while the center marker stays on screen. The symmetry config (axes, center, radial segment count) is global, so it applies to whichever of these tools is active. Only the Brush options bar exposes the **Radial Symmetry** toggle and its segment-count number input; the Pencil options bar exposes just the horizontal/vertical toggles (radial set from the Brush still applies to pencil/eraser strokes), and the Eraser inherits the active config without its own toggles.
 - **The center marker is drawn for five tools that do not mirror.** The overlay gates the ringed crosshair on the *registered paint-tool set* — brush, pencil, eraser, clone stamp, healing brush, dodge/burn, sponge and spray — while the mirroring itself lives only in the brush/pencil/eraser stroke paths (`mirrorBatchPoints` / `getMirroredPoints` are imported by `paint-handlers.ts`, `brush-stroke.ts`, `pencil-stroke.ts` and `eraser-stroke.ts` and by nothing else; no `*_gpu.rs` dab engine mentions symmetry at all). So selecting Sponge or Clone Stamp with a symmetry axis enabled still shows the center marker sitting on the canvas, and strokes ignore it completely — the marker reads as an active-mode indicator but is only a reminder that the setting exists. Smudge, which is not in the paint-tool set, shows no marker and likewise does not mirror.
 - **Cmd/Meta+click** on the canvas while any symmetry mode (horizontal, vertical, or radial with 2+ segments) is active moves the symmetry center to the click point without painting a dab. Lets the user reposition the mirror axis directly from the canvas without opening a settings panel.
 - **Caveat — this intercept is global, not brush-only.** The check runs at the top of the canvas pointer-down handler, before the tool guards and before any tool dispatch, and it is not scoped to the paint tools. So while *any* symmetry axis is enabled, a Cmd/Meta+click is swallowed by the symmetry-center move for **every** tool — which suppresses the other documented Cmd/Meta gestures (shape and marquee 1:1 lock, gradient 15° snap, transform snap, Path anchor convert, the Cmd+shift 15° snap on straight-line brush/pencil/eraser strokes, and the Cmd half of the Clone Stamp / Healing source-set). Alt/Option still sets the stamp and healing source. Turn symmetry off to get those gestures back.
