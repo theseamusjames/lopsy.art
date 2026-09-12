@@ -78,6 +78,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **Hold-to-smooth**: pause the cursor mid-stroke for ~1500 ms and the recorded freehand path is auto-smoothed and re-rasterized in place. The path is first tested for straightness — if every point lies within a tolerance of the first→last line it is replaced with a perfect straight segment; the tolerance is the larger of **4 px** or **10% of the stroke length**, so long strokes with small relative wobble still snap straight. Otherwise the path is simplified with Ramer-Douglas-Peucker (9 px epsilon) and re-interpolated as a Catmull-Rom spline. Undo restores the freehand version first, then the pre-stroke state.
   - **Applies to the Brush only**, requires the GPU stroke path, and is disabled while `maskMode` is set — so it never fires when painting a layer mask or in Quick Mask.
   - **The stroke ends the moment smoothing fires.** The interaction state is reset as part of the re-raster even though the pointer button is still held: further cursor movement paints nothing more and the eventual mouse-up is a no-op, so continuing the stroke means lifting and pressing again. The timer is also only armed once the stroke has recorded at least **3 points**.
+  - **It never arms in a mask mode.** The timer is set only when the gesture is a brush paint stroke *and* the interaction state's `maskMode` flag is false — and `paint-handlers.ts` sets that flag true for both layer-mask and quick-mask strokes. Painting a mask is therefore always freehand however long the cursor is held still, which is the one brush behavior mask mode drops outright rather than re-routing (contrast the settings list under [Editing a Layer Mask](#editing-a-layer-mask), which are dropped at the dab). It is also brush-only in the ordinary sense: the pencil and eraser never arm it either.
   - **The re-raster does not carry every brush parameter.** It emits uniform dabs carrying size, hardness, opacity, color, and symmetry only: angle jitter and opacity jitter are hard-coded to zero, and taper, fade, scatter, and sub-brushes are not routed through at all. A heavily scattered / jittered / tapered / sub-brush tip therefore visibly changes character the moment hold-to-smooth fires.
 
 ### Pencil
@@ -290,7 +291,9 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - Close path, split segment, convert anchor
 - Stroke path to pixels
 - Convert path to selection
-- **Cmd/Meta+click an anchor**: toggles between corner (no handles) and smooth spline (double-click does the same)
+- **Cmd/Meta+click an anchor**: straightens a smooth anchor to a corner — double-click does the same. **The reverse is not a click.** `toggleAnchorSpline` only acts when the anchor already carries handles; on a plain corner anchor it does nothing and returns, so a bare Cmd+click there has no visible effect at all. What turns a corner into a spline is Cmd/Meta+**drag**: the pointer-move pulls symmetric handles out of the anchor once the drag passes 2 px on either axis.
+- **Known defect — the conversion is one-way as far as undo is concerned.** Straightening pushes a *Straighten Path Anchor* entry before it edits, but the corner → spline drag pushes **nothing** — the push sits inside the branch that only runs when handles already exist, and the handles the drag pulls out are written straight to the path. `⌘Z` therefore steps past the conversion to whatever came before it. Verified live: Cmd+click on a handled anchor recorded `Straighten Path Anchor` and cleared its handles; Cmd+click on a bare corner left the undo stack untouched.
+- **Known defect — clicking an anchor without dragging still records a *Move Path Anchor*.** The entry is pushed on pointer-down, before anything is known about whether the pointer will move, and `handlePathUp` has no way to take it back — nothing in the app pops a history entry. A click that merely selects an anchor therefore leaves an empty row on the stack **and clears the redo stack**; *Edit Path Handle* does the same for a click on a handle. Verified live: with `Add Layer` sitting in the redo stack, one click on an anchor left `…, Add Path, Move Path Anchor` with an empty redo stack and three unchanged anchors. Same family as the `Nudge` rows — see [History](#history).
 - **Path edits are undoable.** Each mutating edit pushes its own metadata history entry at the start of the operation — *Move Path Anchor*, *Edit Path Handle*, *Straighten Path Anchor*, *Split Path Segment*, and *Add Path* when an in-progress anchor list is committed — and the document's stored path list travels inside every history snapshot, so `⌘Z` steps back through path construction the same way it steps back through brush strokes. (*Stroke Path* rasterizes, so it pushes a full pixel snapshot instead.)
 - **Enter** (with the Path tool active and ≥ 2 anchors placed): strokes the in-progress anchor list directly to pixels on the active layer using the current stroke width — no need to commit the path through the Paths panel first.
 - **Escape** (with the Path tool active and anchors placed): discards the in-progress anchor list without stroking. When no path is in progress, Escape falls through to its global behavior (clears any active selection and cancels any pending transform).
@@ -654,6 +657,7 @@ Paste takes one of two routes depending on where the image came from.
   | Quick Selection | `Σd² ≤ tol² × 3` | RGB (alpha ignored) | `tol` |
 
   So Quick Selection and the bucket's fill-by-color route are the two calibrated so that "tolerance 32" means "up to 32 per channel"; the wand and the contiguous bucket are roughly **1.7× stricter** than that at the same number, and the mask routes are not comparing color at all.
+- **Known defect — a bucket click outside an active selection records an empty *Bucket Fill*.** On the normal-mode route `handleFillDown` pushes history as its first act and only *then* tests the clicked pixel against the selection mask, returning without filling when that pixel is fully excluded. `pushHistory` has no no-op check, so the click leaves a *Bucket Fill* row on the undo stack, **clears the redo stack**, and raises the dirty flag while painting nothing. Verified live on a 400 × 300 document: with a 128 × 128 marquee and `Add Layer` sitting in the redo stack, one click outside the marquee gave `New Document, Bucket Fill`, an empty redo stack, and a layer still transparent at every probe — while the control click inside the marquee filled exactly the selected rectangle and nothing beyond it. Same family as the `Nudge` and *Move Path Anchor* rows — see [History](#history).
 - Fills honor the active selection mask, and route into the quick mask instead of the layer while Quick Mask is on (see Quick Mask Mode). **Both statements stop at mask edit mode**: a bucket click on a layer mask takes a wholly separate CPU path that ignores the selection and always fills black — see [Editing a Layer Mask](#editing-a-layer-mask).
 - **GPU fast paths**: three routes, chosen automatically —
   - *Empty layer or full-coverage fill* → filled directly on the GPU from a synthesized full-coverage (or selection-derived) mask.
@@ -1386,8 +1390,10 @@ for Crop / Canvas Size / Image Size, `clearAll()` for Rotate Image, and
 - **Crop canvas**: by rectangle — either dragged with the [Crop tool](#crop) or
   taken from the selection bounds via **Edit → Crop**.
 - **Canvas Size…** (Image menu): new width/height with anchor point — extends or
-  trims the document without resampling layer pixels.
-- **Image Size…** (Image menu): new width/height that resamples the document.
+  trims the document without resampling layer pixels. Entered in pixels or
+  inches (see [The two dialogs](#the-two-dialogs)).
+- **Image Size…** (Image menu): new width/height that resamples the document,
+  in pixels or inches.
 - **Rotate Image 90° CW / 90° CCW** (Image menu): swaps the document dimensions
   and rotates the raster layers about the document center.
 - **Flip Horizontal / Vertical** (Image menu): mirrors the **active layer**
@@ -1492,6 +1498,40 @@ share their number handling and diverge everywhere else.
   to the *current* document dimension when a field is blank or unparseable —
   so clearing a field and pressing Apply is a no-op on that axis rather than an
   error.
+- **Both accept inches as well as pixels.** Beside the two fields sits a
+  **Unit** dropdown offering **Pixels** and **Inches** — the same two the
+  [New Document modal](#document) offers — and choosing Inches reveals a
+  **Resolution (DPI)** field (default 72). The *Current:* read-out at the top of
+  the dialog re-expresses the document's own size in the chosen unit, to two
+  decimals for inches. Switching the dropdown converts whatever is typed at the
+  DPI showing at that moment: pixels → inches rounded to two decimals, inches
+  → pixels rounded to whole pixels.
+  - **Changing the DPI does not re-convert the fields, it re-interprets them.**
+    The typed numbers stay put, so the same `8.5 × 11` applies as
+    **612 × 792 px** at 72 DPI and **2550 × 3300 px** at 300. Only the
+    *Current:* read-out moves with the DPI. Verified live on a 400 × 300
+    document: switching Canvas Size to Inches filled the fields with
+    `5.56 × 4.17` and read *Current: 5.56 × 4.17 in*; typing 300 into DPI left
+    both fields untouched and moved the read-out to *1.33 × 1.00 in*; Apply
+    resized to **1668 × 1251 px** — the typed inches at the new DPI.
+  - **Neither the unit nor the DPI survives closing the dialog.** The menu bar
+    mounts each modal only while it is open, so every open starts again at
+    Pixels / 72 DPI. Reopening Canvas Size straight after that resize showed
+    *Current: 1668 × 1251 px* with the unit back on Pixels and no DPI field at
+    all.
+  - **Apply rounds in pixel mode too.** Conversion runs through
+    `toPixels`, which rounds in *both* units, and the fields carry
+    `min="0.01"` either way (only the `step` changes, 1 px vs 0.01 in). A
+    fractional pixel entry is therefore accepted and rounded — `0.4` becomes 0
+    and is then clamped up to the 1 px floor.
+  - **Only the lower DPI bound is enforced.** `max="1200"` is an input
+    attribute and nothing checks it, so a hand-typed 5000 is used as-is; the
+    floor is real (`Math.max(1, parseInt(dpi) || 72)`), and a blank or
+    unparseable DPI falls back to 72. The two dialogs diverge on one path:
+    Image Size applies that floor inside its unit-switch conversion as well,
+    Canvas Size does not, so a negative DPI typed into Canvas Size converts the
+    fields by a negative factor when you switch back to Pixels — Apply's own
+    clamp then lands on 1 px.
 - Both bind Enter (apply) and Escape (cancel) with an `onKeyDown` on the dialog
   `<div>`, which has no `tabIndex` and autofocuses nothing. React's handler only
   sees events that bubble from inside, so the keys work once focus is in one of
@@ -1504,6 +1544,10 @@ share their number handling and diverge everywhere else.
   live percentage beside each field. The ratio it constrains to is the
   document's ratio **as of when the dialog opened**, held constant for the
   dialog's lifetime rather than re-derived from the current field values. The
+  link and the percentages both work through the pixel conversion — a typed
+  inch value is turned into pixels, the ratio applied there, and the result
+  formatted back to two decimals — so the *pixel* ratio is what is preserved
+  and the inch read-out is that number rounded. The
   percentages are read-outs only — there is no percent entry mode — and there is
   **no resample-method choice**: `scale_texture` always switches the source
   texture to `LINEAR` for the blit (restoring `NEAREST` afterwards), so every
@@ -1676,7 +1720,7 @@ The vertical rail down the far left of the editor body, outside the dock host, a
 
 ### Options Bar
 
-The 32 px horizontal strip directly under the menu bar, sharing the app header with it and sitting above the toolbox and canvas. It is present for every tool once a document is open — there is no "no tool selected" state (the editor boots with Move active) and no toggle that hides it, though the pre-document start screen and the WebGL2 warning are separate shells that have no options bar at all. Three zones, left to right: the tool's name, that tool's own controls, and a trailing group of document-wide toggles that has nothing to do with the tool.
+The 32 px horizontal strip directly under the menu bar, sharing the app header with it and sitting above the toolbox and canvas. It is present for every tool once a document is open — there is no "no tool selected" state (the editor boots with Move active) and no toggle that hides it, though the pre-document start screen and the [WebGL 2 warning](#the-webgl-2-gate) are separate shells that have no options bar at all. Three zones, left to right: the tool's name, that tool's own controls, and a trailing group of document-wide toggles that has nothing to do with the tool.
 
 - **The name is the registry `label`**, so the bar reads `Paint Bucket`, `Pen Tool`, and `Dodge/Burn` where the toolbox and this document often use the shorter names. The bar declares `role="toolbar"` with an `aria-label` rebuilt per tool (`Brush options`, `Crop options`), and — exactly like the [toolbox](#toolbox) rail — ships **no arrow-key handler or roving tabindex**, so the ARIA toolbar keyboard pattern is not implemented and each control is an ordinary tab stop.
 - **Which controls appear is a single registry lookup**, `toolRegistry[activeTool].optionsComponent`. 21 of the 23 tools name one (20 distinct components — the two marquees share one), and all of them are **statically imported** rather than lazy-loaded. The active set is swapped wholesale on tool change, so local state inside it — an open fill/stroke color popover, for instance — is discarded on the way out and does not reopen on the way back.
@@ -2113,6 +2157,7 @@ More generally, the palette snap runs **only at conversion time**. Pixels painte
 - **Undoing does not make the document clean again.** The dirty flag is raised by every push and is never lowered by undo or redo, so stepping all the way back to the start still trips the unsaved-changes guard on New / Open. Only Save Project, PSD import, any export, and creating or opening a document clear it (see *Open / Save*).
 - **Known defect — snapshot textures are never freed.** Nothing releases a snapshot once it has landed in the undo or redo stack: not the 50-state trim, which drops the oldest snapshot without releasing the handles no newer state still shares; not the redo-stack clear that every push performs; and not New Document / Open, whose engine reset releases layer, mask, stroke, selection, clipboard, and float textures but does not touch the snapshot store. The engine exports a `clearGpuSnapshots` entry point for exactly this purpose and **it has no caller anywhere in the app.** GPU texture memory therefore grows with the number of pixel-edits made and is reclaimed only when the WebGL context itself goes away (a reload, or context-loss recovery). The one place snapshot handles *are* released is the speculative pre-float the Move tool builds and then discards.
 - **Known defect — an arrow key that moves nothing still records a `Nudge`, and wipes the redo stack doing it.** The keyboard-nudge coalescer (`nudge-coalesce.ts`) calls `pushHistory('Nudge')` synchronously on the first key-down of a key-hold and only afterwards runs the tool's nudge, which is free to do nothing — and `pushHistory` has no no-op check, so the push also clears the redo stack and raises the dirty flag. Two everyday states hit it: **a selection tool (Rectangular / Elliptical Marquee, Lasso, Magnetic Lasso, Magic Wand) with no selection**, where `nudgeSelection` returns at once, and **the Move tool on a locked active layer**, where `handleNudgeMove` returns at its lock check. Each key-hold then adds an empty `Nudge` row, and whatever had been undone is gone. Verified live: Add Layer → `⌘Z` → `→` with the Rectangular Marquee and no selection left the stack at `New Document, Nudge` with an empty redo stack, and `⇧⌘Z` brought nothing back. It is the keyboard twin of the bare-click *Move* rows that #721 removed from pointer drags by pushing lazily (see [Move](#move)).
+- **Known defect — the same push-before-bail shape reaches two more tools.** `pushHistory` / `pushHistoryMetadata` is called at the *top* of several handlers, ahead of the guards that decide whether there is any work to do, and every guard that then returns leaves an empty row behind and an emptied redo stack. Besides `Nudge`, two are reachable from an ordinary gesture: a [bucket-fill click outside an active selection](#fill-paint-bucket) (*Bucket Fill*), and a [path anchor or handle click that never becomes a drag](#path--pen-tool) (*Move Path Anchor*, *Edit Path Handle*). A census of all 85 push sites in the app found no others a user can trigger — the remaining returns that follow a push are either `.map` callbacks rather than bails, or they re-test a condition the caller already checked *before* pushing (`cropCanvas` re-checks its own zero-area rectangle, `convertColorMode` its own same-mode case), so they cannot fire.
 
 ### History Panel
 - Rows are numbered from **0 — "Original"**; every later row shows the label of the action that produced it (`Brush`, `Merge Down`, `Clear Selection`, …). Row 0 is literally the original only while the stack is under its cap — once the oldest snapshot has been trimmed the row still reads "Original" but lands on the oldest state still retained, which may be many edits in.
@@ -2137,6 +2182,12 @@ More generally, the palette snap runs **only at conversion time**. Pixels painte
 ---
 
 ## App Shell, Install & Persistence
+
+### The WebGL 2 gate
+- **The very first thing the app decides is whether it can run at all.** `App.tsx` calls `checkWebGL2Support()` — which creates a throwaway `<canvas>`, asks it for a `webgl2` context, and reports false on a null context *or* on any thrown exception — and renders `<WebGL2Warning />` instead of everything else when it comes back false. The gate sits **above** the `documentReady` branch, so it replaces the pre-document [New Document](#document) start screen as well: no menu bar, no options bar, no toolbox, no canvas, just the warning card (`role="alert"`).
+- **The check runs once and is never repeated.** It lives in a `useState` initializer whose setter is not kept, so nothing in the session can re-run it. Following the card's instructions and switching back to the tab shows the same card — which is why every one of those instruction lists ends by telling you to reload or relaunch.
+- **The card names your browser and gives it its own steps.** Detection is a `navigator.userAgent` substring test in a fixed order — `Edg/` → Edge, then `Chrome/` → Chrome, then `Firefox/` → Firefox, then `Safari/` → Safari, otherwise the generic “your browser”. The order is the whole trick: Chrome's UA contains `Safari/`, and Edge's contains both `Edg/` and `Chrome/`, so each test has to come before the one it would otherwise be caught by. Chrome and Edge are pointed at the hardware-acceleration switch in `chrome://settings/system` / `edge://settings/system` and told to relaunch; Firefox at `about:config` → `webgl.disabled` → false; Safari at Settings → Advanced → “Show features for web developers” → Develop → Feature Flags → WebGL 2.0; the fallback suggests checking hardware acceleration, updating graphics drivers, and trying Chrome or Firefox.
+- **Two populations get instructions that cannot work.** Every *other* Chromium browser carries `Chrome/` and not `Edg/`, so Brave, Opera, Vivaldi, and Arc are all identified as Chrome and sent to `chrome://settings/system` — a scheme none of them answer to. And the Safari steps are the desktop Develop-menu route, handed verbatim to iOS and iPadOS Safari, which has no Develop menu. Both still reach the closing advice to update or switch browsers, which is the part that applies.
 
 ### Installable, but not offline
 - A **web app manifest** (`public/manifest.webmanifest`, linked from `index.html`) declares name and short name `Lopsy`, `display: standalone`, `start_url: /`, and background / theme colors of `#1e1e1e`, with three icon entries — 192 px, 512 px, and the 512 again marked `purpose: maskable` — alongside a separate `apple-touch-icon` link and a matching `theme-color` meta. A browser that offers installation therefore gets a standalone window with its own icon and title-bar color.
@@ -2168,7 +2219,7 @@ More generally, the palette snap runs **only at conversion time**. Pixels painte
 ### Open / Save
 - **New** (`⌘N`, menu-only accelerator): blank document with width/height/background prompt, plus a **Color Mode** dropdown offering RGB Color / Grayscale / CMYK Color / Lab Color. Indexed is deliberately absent — as in Photoshop it is conversion-only, since a meaningful palette has to be quantized from existing pixels. The initial fill is written already encoded for the chosen mode — a new document is created before the canvas mounts, so there is no engine to bake through, and a literal white buffer would open as maximum chroma in Lab. The default adjustment-node set is filtered to what the mode allows, so a new Grayscale document does not ship with chroma nodes, and the toolbox swatches are normalized into the mode's value space the same way a conversion does. **The background choice also decides the layer count**: White creates *two* raster layers — an opaque `Background` plus an empty `Layer 1`, which starts active — while Transparent creates only the (empty) `Background`, and that is the active layer. (The second layer is additionally gated on the mode supporting added layers, which excludes only Indexed — a mode this dialog does not offer.) Resets the viewport zoom and pan so the fresh canvas always lands fit-to-view, even after working on a much larger document.
 - **The New Document modal's size controls.** Six **preset** tiles head the dialog — **Web 1080p** (1920 × 1080), **Web 720p** (1280 × 720), **Instagram Post** (1080 × 1080), **US Letter** (8.5 × 11 in), **A4** (8.27 × 11.69 in), and **4K UHD** (3840 × 2160) — and it opens on Web 1080p. Width and Height sit beside a **Unit** dropdown offering only **Pixels** and **Inches**; choosing Inches reveals a **Resolution (DPI)** field (default 72; the two print presets set 300), and switching units converts the typed values at that DPI — pixels → inches rounded to two decimals, inches → pixels rounded to whole pixels. Editing Width, Height, Unit, or DPI un-highlights the preset. On Create the size is converted to pixels and clamped to **1 – 16,384** on each side. The first-run instance, shown before any document exists, is the whole app and cannot be dismissed — no Cancel button, no Escape; the File → New instance adds both.
-  - **DPI is a conversion factor, not a document property.** `onCreateDocument` receives only the pixel width, height, background, and color mode, and the document model has no resolution field, so the DPI is not stored, not saved to `.lopsy`, and not written to any export. US Letter at 300 DPI simply produces a **2550 × 3300 px** document.
+  - **DPI is a conversion factor, not a document property.** `onCreateDocument` receives only the pixel width, height, background, and color mode, and the document model has no resolution field, so the DPI is not stored, not saved to `.lopsy`, and not written to any export. US Letter at 300 DPI simply produces a **2550 × 3300 px** document. The same holds for the DPI in [Canvas Size and Image Size](#the-two-dialogs), which offer the identical Pixels / Inches pair: because nothing keeps the number, all three dialogs start at 72 and none of them ever shows what an earlier one used. Create a US Letter document at 300 DPI and open Canvas Size in inches and it reads **35.42 × 45.83 in**, the pixel size divided by 72.
   - **A4 lands one pixel off in each direction.** The preset stores its inches rounded to two places, so it yields **2481 × 3507 px** rather than the 2480 × 3508 that 210 × 297 mm gives at 300 DPI. The same two-decimal rounding means a pixel size does not always survive a round trip through Inches at high DPI: 1001 px at 300 DPI becomes 3.34 in and comes back as 1002 px.
   - **The From Clipboard tile.** On every mount the modal calls `navigator.clipboard.read()`; if the clipboard holds an image, a seventh tile, **From Clipboard**, appears *pre-selected* showing the image's pixel size (a refused or unavailable read just leaves it out). With that tile active, **Create** pastes the image as a new document named `Copied File` — sized to the image, its only layer the pasted one, with an empty undo stack — instead of building a blank canvas. That route never reads the **Color Mode** or **Background** controls, and changing either of them does not deselect the tile (only picking another tile or editing Width, Height, Unit, or DPI does), so choosing Grayscale or Transparent and pressing Create still yields an RGB paste.
 - **New Document tip strip**: the modal shows a 💡 *Tip:* line drawn from a fixed list of eight one-liners (symmetry, the seamless pattern tool, group adjustments, guide colors, raw formats, ABR brush import, an update note, and a link to the GitHub repo). One is chosen **at random per mount** — it does not rotate while the modal is open — and it is rendered as raw HTML so the last entry's link is clickable. One of the eight is inaccurate: it advertises **TIF** support, which does not exist (no `.tif` in any file picker, no TIFF image importer — the TIFF parser in the tree is internal to the DNG decoder, and a `.tif` dropped on the app falls through to the browser `<img>` decode and fails).
