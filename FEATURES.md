@@ -567,9 +567,29 @@ gets baked first.
   then leave the descriptor mismatched, and the layer renders stretched across
   the whole document from the origin instead of at its own position. Dropping the
   float before the restore keeps the descriptor and the texture in agreement.
-- The selection mask is not recomputed during the drag; it is rebuilt from the
-  committed pixel alpha afterwards, which keeps it from drifting away from
-  what the GPU actually rendered.
+- The selection mask is not recomputed during the drag. It is rebuilt only
+  when something later commits the float — and every one of those sites calls
+  `selectLayerAlpha` on the active layer, so the rebuilt mask is **the whole
+  layer's alpha**, not the transformed region. On a layer that holds nothing
+  but the floated content (a paste, a layer picked up by Cmd/Ctrl+clicking its
+  thumbnail) the two are the same. On a layer with anything else on it, the
+  marquee silently grows to cover all of it. The sites are: a **Move-tool press**
+  while a transform float is live; **any other tool's canvas press** while any
+  float is live (Move drag or transform); a **handle grab** after a Move-drag
+  float; the options bar's **mode switch**; the **Flip Horizontal / Vertical**
+  and selection-branch **Rotate 90°** buttons, which re-select after every
+  click (see [Quick transforms](#quick-transforms)); and **`Delete`**. The swap pushes no history row of its own, so no single undo
+  step gives the marquee back — only undoing the edit before it, whose
+  snapshot still holds the old selection.
+  - Verified live on an opaque 400 × 300 layer with a 100 × 80 marquee. After
+    a corner-handle scale, a Move-tool drag of 100 px **moved the entire layer**
+    — the top 100 rows went transparent and the selection became 400 × 300 —
+    whereas the same drag with no transform first moved only the piece. After
+    a plain Move drag, one **Eyedropper click** turned the 100 × 80 selection
+    into 400 × 300 with no pixel change and no history row, so any brush, fill,
+    gradient, or filter confined to "the selection" afterwards covers the whole
+    layer. For what `Delete` does with the swapped mask, see
+    [Clipboard](#clipboard).
 - Floating a **text** layer expands the buffer to the layer's diagonal so
   rotation doesn't clip the glyphs.
 
@@ -578,6 +598,9 @@ gets baked first.
 - **Flip Horizontal / Flip Vertical** (options bar, next to the mode buttons)
   apply instantly to the selected content: float → composite the flip matrix →
   drop → re-select from the committed alpha. They require an active selection.
+  That re-select reads the **whole active layer's** alpha, so on a layer with
+  other content the selection grows to all of it after a single click — see
+  the mask-rebuild note under [Commit lifecycle](#commit-lifecycle).
 - **Rotate 90° CW / CCW** sit in the Move tool's own options-bar group and are
   **dual-purpose** — with a selection active they rotate the selected content,
   with no selection they rotate the entire active layer.
@@ -614,6 +637,7 @@ gets baked first.
   - Before computing the fit it **drops any live floating selection** (its pixels are already composited back into the layer) and crops the layer texture back to the selection bounds. A paste leaves the layer's JS descriptor drifting from its doc-sized GPU texture — the prefloat expands the texture but syncs only `x` / `y` — and without that re-crop the no-op check above missed, so Fit squashed an already-fitted paste instead of doing nothing (#728).
 - **Alt/Option+drag (no active marquee)**: duplicates the active layer in place, then moves the new copy — leaves the original layer untouched. The duplicate is deliberately excluded from the multi-layer sibling capture below: `duplicateLayer` makes the copy active but leaves the *pre-duplicate* selection in `selectedLayerIds`, so treating those as move siblings would drag the originals along with the copy. An option-drag therefore always moves exactly one layer, even when several were selected before it started.
 - **Alt/Option+drag (with an active marquee)**: copies the selected pixels of the active layer into a floating duplicate and moves that copy, leaving the original pixels under the selection intact (Photoshop-style "alt-drag the selection").
+- **A drag with an active marquee leaves the float live after release**, just as a transform-handle drag does — a follow-up drag keeps moving the same pixels, and nothing is baked until Escape, the `⌘D` key, undo/redo, or a layer switch. Two consequences are easy to hit. The next canvas press with **any other tool** commits the float by re-selecting the **whole layer's** alpha, so the marquee grows to cover everything on the layer (see [Commit lifecycle](#commit-lifecycle)). And **`Delete`** in that state clears the entire layer, while a **`⌘X`** is reverted by the next drag (both under [Clipboard](#clipboard)).
 - **Undo granularity.** A whole-layer drag records exactly one **"Move"** history entry, and it is pushed **lazily — on the first pointer-move that actually shifts the layer**, not on pointer-down. A click-and-release on the Move tool therefore records nothing and mutates nothing; before that deferral every bare click left a no-op *Move* step on the stack, which is what made long undo chains replay through positions the layer was never in (#721).
   - The guard compares a **document-space** delta (`round(canvasPos − startPoint)`), so a jiggle that stays inside one document pixel — easy at high zoom — still counts as a bare click. Once it clears one document pixel the entry is pushed even if snapping then returns the layer to exactly where it started.
   - **The deferral is specific to the whole-layer case.** An option-drag pushes **"Duplicate Layer"** at pointer-down, a drag with an active marquee pushes its float snapshot at pointer-down, and a Quick Mask drag pushes **"Move"** at pointer-down — all unconditionally, so a bare click under any of those *does* still leave a history entry behind.
@@ -1361,8 +1385,17 @@ A row of icon buttons pinned below the list. Three entries are **conditional**, 
 - Selected layers can be grouped or reordered together. The active layer remains the target for painting, filters, and adjustments — but **not for the Move tool**, which drags (and arrow-key nudges) every selected unlocked layer at once. See [Move](#move).
 
 ### Clipboard
-- **Cut** (`⌘X`) / **Copy** (`⌘C`) / **Paste** (`⌘V`): standard clipboard actions; copy/cut respect the active marquee selection
+- **Cut** (`⌘X`) / **Copy** (`⌘C`) / **Paste** (`⌘V`): standard clipboard actions; copy/cut respect the active marquee selection. The Edit-menu items and the keys call the same three store actions.
 - **Copy Merged** (`⇧⌘C`): composites all visible layers within the selection bounds before copying, so the clipboard contains a flattened RGBA snapshot rather than just the active layer
+- **What lands on the clipboard without a selection.** Copy and Cut read the **active layer's texture** at the layer's own position and size — which is not the canvas rect for a moved or content-cropped layer, and can reach past the canvas edge. Copy Merged reads the same composite the exporters use and, with no selection, is always exactly **document-sized**. Cut with no selection copies the layer and then clears **all** of it; the layer itself stays, empty (compare `Delete`, which removes the layer — see [Single-Key Shortcuts](#single-key-shortcuts)).
+- **A soft selection gets three different treatments.** The three operations are separate code paths and disagree about a partially selected pixel:
+  - **Copy** runs the `clipboard_copy` shader, which multiplies alpha by the mask — the feather survives.
+  - **Cut** copies through that same shader but then clears the layer with `clipboard_clear`, which zeroes every pixel whose mask value is **above 0**. The clipboard gets a soft edge; the layer gets a **hard-edged hole the full width of the feather**. `Delete` / `Backspace` with a selection runs the identical clear, so it punches the same hole.
+  - **Copy Merged** masks on the JavaScript side and zeroes only pixels whose mask is **exactly 0**; everything else is copied at full strength. A feathered selection therefore comes out as a **hard-edged block** that includes the whole fringe at 100 % opacity.
+
+  Verified live on a 400 × 300 opaque layer with a 20 px feather (mask along one row: 1, 14, 40, 81, 133, 183, 221, 255): Copy → paste gave alpha 1, 14, 40, 81, 133, 183, 221, 255; Copy Merged → paste gave 255 at every one of those pixels; Cut cleared **42 932** pixels — exactly the count of non-zero mask pixels — and pasting it back in place left the fringe at the soft values instead of restoring 255. So `⌘X` then `⌘V` is **not** a round trip on a feathered selection. Filters are the contrast case: they blend through the mask proportionally (see [What every filter does to the layer](#what-every-filter-does-to-the-layer)).
+- **Known defect — `Delete` while a float is live clears the entire layer.** Before clearing, the Delete handler checks for a live GPU float, and if there is one it calls `selectLayerAlpha` on the active layer to commit it — which **replaces the selection with that whole layer's alpha**, not with the region that was floated. The clear then runs against the replacement. A float stays live after any Move-tool drag of a marquee selection and after any transform-handle drag, until Escape, the `⌘D` key, undo/redo, or a layer switch commits it (see [Commit lifecycle](#commit-lifecycle)) — so *select, drag the piece somewhere, press Delete* is enough. Verified live: an opaque 400 × 300 layer, a 100 × 80 marquee dragged 60 px with the Move tool, then `Delete` → **0 of 120 000 pixels left**, and the selection had become 400 × 300. The control — the same marquee and `Delete` without the drag — cleared only the rectangle. The `Clear Selection` row is pushed *after* the selection swap, so `⌘Z` brings the pixels back but not the marquee: the restored selection is still the whole layer. **`⌘X` is not affected** — Cut calls the same engine clear but skips the float check, and in the same setup removed exactly the 100 × 80 moved block.
+- **Known defect — a Cut made while a float is live is undone by the next Move drag.** Cut clears the pixels from the layer texture, but the float texture still holds them, and the Move tool re-composites that float from its saved base on every drag. Verified live: marquee → Move-drag 60 px → `⌘X` (the 100 × 80 block cleared, clipboard filled) → a second Move drag of 40 px, after which the layer held **exactly** the pre-Cut content with the block moved the extra 40 px. The `Cut` row stays on the undo stack and the clipboard keeps its copy, so a paste now duplicates the block.
 - Paste external image data (PNG/JPEG/WebP from the system clipboard) creates a new raster layer with the bitmap
 
 ### Fill from Menu
@@ -1798,7 +1831,7 @@ Nineteen tools carry a default single-letter shortcut, and that is the complete 
 - **`Shift`** (held, paint tool, after a stroke on the active layer) — previews the straight-line stroke as a hairline from the last stroke endpoint to the cursor; shift+click commits it. Adding **Cmd/Meta** snaps to 15° and turns the preview blue. See Straight-Line Strokes.
 - **`Space+drag`** / **middle-click drag** — temporary pan from any tool
 - **`Cmd/Ctrl+scroll`** — zoom in / out (anchored to the viewport center, not the cursor); plain scroll pans. **Two-finger pinch** on touch devices zooms and pans together.
-- **`Backspace` / `Delete`** (canvas focused) — when a marquee selection is active, clears the selected pixels on the active layer (GPU clear, undoable as "Clear Selection"); when no selection is active, removes the active layer from the document. Suppressed while a text input or text-layer edit is focused.
+- **`Backspace` / `Delete`** (canvas focused) — when a marquee selection is active, clears the selected pixels on the active layer (GPU clear, undoable as "Clear Selection") — hard-edged across a feather, and **the whole layer** if a Move or transform float is still live (both under [Clipboard](#clipboard)); when no selection is active, removes the active layer from the document. Suppressed while a text input or text-layer edit is focused.
 - **`Escape`** — cancels in-progress state: clears unstroked Path-tool anchors first, otherwise clears the active selection and any pending transform; ends text editing with the prior layer state restored.
 - **`Enter`** — when the Path tool is active and ≥ 2 anchors are placed, strokes the in-progress path to pixels.
 - **`Cmd/Ctrl + E`** — merge the active layer down into the layer below.
