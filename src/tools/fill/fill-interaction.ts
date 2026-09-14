@@ -7,6 +7,7 @@ import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { syncLayerAfterFullSize } from '../../app/sync-layer-after-full-size';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { getEngine } from '../../engine-wasm/engine-state';
+import { flushPendingMaskRead } from '../../app/mask-read-queue';
 import {
   floodFill as wasmFloodFill,
   applyFillToLayer as wasmApplyFillToLayer,
@@ -48,6 +49,12 @@ export function handleFillDown(ctx: InteractionContext): void {
   const maskEditMode = useUIStore.getState().maskMode === 'layerMask';
   const maskLayer = editorState.document.layers.find((l) => l.id === activeLayerId);
   if (maskEditMode && maskLayer?.mask) {
+    // #756: drain any deferred read so we upload the current mask, not
+    // the pre-previous-stroke state.
+    flushPendingMaskRead(activeLayerId);
+    const freshMask = useEditorStore.getState().document.layers
+      .find((l) => l.id === activeLayerId)?.mask ?? maskLayer.mask;
+
     editorState.pushHistory('Mask Fill');
     const toolSettings = useToolSettingsStore.getState();
     const { tolerance, contiguous } = toolSettings.settings.fill;
@@ -55,8 +62,8 @@ export function handleFillDown(ctx: InteractionContext): void {
     const engine = getEngine();
     if (!engine) return;
 
-    const maskBytes = new Uint8Array(maskLayer.mask.data.buffer, maskLayer.mask.data.byteOffset, maskLayer.mask.data.byteLength);
-    uploadLayerMask(engine, activeLayerId, maskBytes, maskLayer.mask.width, maskLayer.mask.height);
+    const maskBytes = new Uint8Array(freshMask.data.buffer, freshMask.data.byteOffset, freshMask.data.byteLength);
+    uploadLayerMask(engine, activeLayerId, maskBytes, freshMask.width, freshMask.height);
 
     const startX = Math.round(layerPos.x);
     const startY = Math.round(layerPos.y);
