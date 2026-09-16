@@ -29,7 +29,7 @@ import {
 import type { LutPreset } from '../../filters/color-lut';
 import {
   exportCanvasWithOptions,
-  buildExportPreview,
+  createExportPreviewSession,
   registerOpenExportDialog,
   unregisterOpenExportDialog,
 } from './menus/file-menu';
@@ -44,6 +44,7 @@ import { useEditorStore } from '../editor-store';
 import { growSelection, shrinkSelection, selectionBounds } from '../../selection/selection';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { setSelectionMask, featherSelectionMask, readSelectionMask } from '../../engine-wasm/wasm-bridge';
+import { seedSelectionMaskRef } from '../../engine-wasm/sync-state';
 import { createTransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
 import styles from './MenuBar.module.css';
@@ -237,8 +238,8 @@ export function MenuBar() {
     setShowExportDialog(false);
   }, []);
 
-  const handleExportDialogPreview = useCallback((options: ExportOptions) => {
-    return buildExportPreview(options);
+  const handleExportPreviewSource = useCallback(() => {
+    return createExportPreviewSession();
   }, []);
 
   const handleSelectDialogApply = useCallback((values: Record<string, number>) => {
@@ -261,6 +262,9 @@ export function MenuBar() {
           const rw = dv.getUint32(0, true);
           const rh = dv.getUint32(4, true);
           newMask = new Uint8ClampedArray(readback.buffer, readback.byteOffset + 8, rw * rh);
+          // #763: the feathered bytes are already on the GPU — seed the
+          // tracked ref so the next syncSelection skips the echo upload.
+          seedSelectionMaskRef(engine, newMask);
         } else {
           newMask = sel.mask;
         }
@@ -446,7 +450,7 @@ export function MenuBar() {
         <ExportDialog
           onExport={handleExportDialogExport}
           onCancel={handleExportDialogCancel}
-          onPreviewRequest={handleExportDialogPreview}
+          onPreviewSourceRequest={handleExportPreviewSource}
         />
       )}
     </>

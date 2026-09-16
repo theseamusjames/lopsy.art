@@ -193,11 +193,24 @@ export function exportCanvasWithOptions(options: ExportOptions): void {
 }
 
 /**
- * Build a preview thumbnail blob URL for the export dialog. Runs the
- * compositor, applies the chosen format/quality, and returns an object URL.
- * Caller must revoke the URL when done.
+ * A cached export preview: the composite has been rendered and downscaled
+ * once, and every format/quality change re-runs only the small toBlob on
+ * the cached thumbnail. Avoids re-compositing a 4K document (64 MB, ~500 ms)
+ * every time the user clicks a format button or the Quality slider pauses
+ * (#762).
  */
-export async function buildExportPreview(options: ExportOptions): Promise<string | null> {
+export interface ExportPreviewSession {
+  /** Encode the cached thumbnail at the given format/quality and return a blob URL. */
+  encode: (options: ExportOptions) => Promise<string | null>;
+}
+
+/**
+ * Composite the document once, downscale to a preview thumbnail, and return
+ * a session whose `encode()` re-runs only the small canvas.toBlob call on
+ * every format/quality change (#762). Returns `null` if the engine or the
+ * canvas 2D context is unavailable.
+ */
+export function createExportPreviewSession(): ExportPreviewSession | null {
   const engine = getEngine();
   if (!engine) return null;
   finalizePendingStrokeGlobal();
@@ -212,7 +225,6 @@ export async function buildExportPreview(options: ExportOptions): Promise<string
   clamped.set(rawPixels);
   const imageData = createImageDataFromArray(clamped, width, height);
 
-  // Scale to a thumbnail ≤ 220px for the preview pane
   const THUMB_MAX = 220;
   const thumbScale = Math.min(1, THUMB_MAX / Math.max(width, height));
   const thumbW = Math.max(1, Math.round(width * thumbScale));
@@ -232,18 +244,32 @@ export async function buildExportPreview(options: ExportOptions): Promise<string
   if (!thumbCtx) return null;
   thumbCtx.drawImage(srcCanvas, 0, 0, thumbW, thumbH);
 
-  // Encode at the chosen format/quality so JPEG artifacts appear in preview.
-  // BMP has no canvas.toBlob support, so use PNG for BMP previews.
-  const mimeType = FORMAT_MIME[options.format === 'bmp' ? 'png' : options.format];
-  const qualityFraction = qualityToFraction(options.quality);
+  return {
+    encode: (options: ExportOptions): Promise<string | null> => {
+      // BMP has no canvas.toBlob support, so use PNG for BMP previews.
+      const mimeType = FORMAT_MIME[options.format === 'bmp' ? 'png' : options.format];
+      const qualityFraction = qualityToFraction(options.quality);
+      return new Promise<string | null>((resolve) => {
+        thumbCanvas.toBlob(
+          (blob) => resolve(blob ? URL.createObjectURL(blob) : null),
+          mimeType,
+          qualityFraction,
+        );
+      });
+    },
+  };
+}
 
-  return new Promise<string | null>((resolve) => {
-    thumbCanvas.toBlob(
-      (blob) => resolve(blob ? URL.createObjectURL(blob) : null),
-      mimeType,
-      qualityFraction,
-    );
-  });
+/**
+ * Convenience: composite + encode in one call. Retained for callers that
+ * want a one-shot preview (Storybook, ad-hoc uses). The Export dialog now
+ * caches the composite via `createExportPreviewSession` and only re-encodes
+ * per option change — see #762.
+ */
+export async function buildExportPreview(options: ExportOptions): Promise<string | null> {
+  const session = createExportPreviewSession();
+  if (!session) return null;
+  return session.encode(options);
 }
 
 function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, options: ExportOptions): void {

@@ -1,26 +1,30 @@
 /**
- * Idle-time queue for layer-mask GPU readbacks.
+ * Deferred queue for layer-mask GPU readbacks.
  *
  * `readMaskTexture` is a synchronous `glReadPixels` that forces a GPU
- * pipeline flush — the transfer itself takes ~20 ms even for a 4K mask,
- * but drops onto a pointer-up frame where a full-canvas mask stroke has
- * left a backlog of compositing work behind it, blocking the main
- * thread for 15–20 s in the worst case (#756).
+ * pipeline flush. A full-canvas mask stroke queues a lot of GPU work
+ * (dab batches + full-frame composites); if the readback fires before
+ * that queue drains, it blocks the main thread for the entire time the
+ * GPU is still catching up — 2–2.7 s on a 4K canvas (#756, #760). A
+ * fixed 200 ms `requestIdleCallback` timeout does not help: the browser
+ * hits the timeout long before the GPU is done and the read stalls
+ * anyway (#760).
  *
  * The bytes are only needed on the JS side for (a) the mask thumbnail,
- * (b) history snapshots, (c) project save, and (d) subsequent mask
- * paint/fill/gradient operations that upload `layer.mask.data` back to
- * the GPU at stroke start. None of these need to happen on the same
- * frame as pointer-up. Deferring to idle lets the queued draw calls
- * drain first, so the read pays only its own cost.
+ * (b) subsequent mask paint/fill/gradient operations that upload
+ * `layer.mask.data` back to the GPU at stroke start, and (c) project
+ * save. None of these need the current frame. This module waits for a
+ * stretch of quiet animation frames — the browser only paces rAF at
+ * ~16 ms when it is *not* waiting on the GPU, so a run of quick frames
+ * is a reliable proxy for "GPU has caught up". When the app stays busy,
+ * a hard cap fires the read anyway.
  *
  * Callers that need the mask data to be current in `layer.mask.data`
- * (paint handlers about to upload it, `pushHistory` about to snapshot
- * the document, project save about to write it to disk) must call
- * `flushPendingMaskRead(layerId)` — or `flushAllPendingMaskReads()` —
- * first. Those flushes pay the readback cost synchronously, but they
- * are at moments the frame budget is already spent, not at the
- * gesture boundary.
+ * (paint handlers about to upload it, project save about to write it to
+ * disk) still call `flushPendingMaskRead(layerId)` — or
+ * `flushAllPendingMaskReads()` — first. Those flushes pay the readback
+ * cost synchronously, but they happen at moments the frame budget is
+ * already spent, not at the gesture boundary.
  */
 
 export type MaskReader = () => Uint8ClampedArray | null;
@@ -31,42 +35,101 @@ interface QueuedRead {
   cb: MaskCallback;
 }
 
-type IdleHandle = { kind: 'idle'; id: number } | { kind: 'timeout'; id: ReturnType<typeof setTimeout> };
+/**
+ * rAF frame duration considered "quiet". At 60 fps the browser paces
+ * rAF at ~16.7 ms; when the GPU is bottlenecked, the browser waits
+ * for it and the observed rAF-to-rAF gap grows. 32 ms comfortably
+ * covers a paced 60 fps frame plus jitter without letting a stalled
+ * frame slip through.
+ */
+const QUIET_FRAME_MS = 32;
+/** Consecutive quiet frames before the read fires. */
+const QUIET_FRAMES_NEEDED = 2;
+/** Hard cap so a persistently busy app still gets a read eventually. */
+const MAX_WAIT_MS = 3000;
+/**
+ * Fallback delay used when neither rAF nor setTimeout are available in
+ * a useful form — matches the previous behavior so existing callers do
+ * not observe a regression in edge cases.
+ */
+const FALLBACK_DELAY_MS = 200;
 
-interface WindowWithIdle {
-  requestIdleCallback?: (
-    cb: (deadline: { didTimeout: boolean; timeRemaining: () => number }) => void,
-    opts?: { timeout: number },
-  ) => number;
-  cancelIdleCallback?: (id: number) => void;
+interface WindowWithRaf {
+  requestAnimationFrame?: (cb: (t: number) => void) => number;
+  cancelAnimationFrame?: (id: number) => void;
 }
 
-function scheduleFlush(cb: () => void, timeout: number): IdleHandle {
-  const w = globalThis as unknown as WindowWithIdle;
-  if (typeof w.requestIdleCallback === 'function') {
-    return { kind: 'idle', id: w.requestIdleCallback(() => cb(), { timeout }) };
-  }
-  return { kind: 'timeout', id: setTimeout(cb, Math.max(0, timeout)) };
+interface Handle {
+  cancel: () => void;
 }
 
-function cancelHandle(handle: IdleHandle): void {
-  if (handle.kind === 'idle') {
-    const w = globalThis as unknown as WindowWithIdle;
-    w.cancelIdleCallback?.(handle.id);
-    return;
+function now(): number {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+}
+
+/**
+ * Wait until rAF has been steady for `QUIET_FRAMES_NEEDED` consecutive
+ * frames or `MAX_WAIT_MS` elapses, then call `cb`. Falls back to a
+ * simple setTimeout when rAF is unavailable (Node, tests, workers).
+ */
+function scheduleFlush(cb: () => void): Handle {
+  const w = globalThis as unknown as WindowWithRaf;
+  const raf = w.requestAnimationFrame;
+  const cancelRaf = w.cancelAnimationFrame;
+
+  const startedAt = now();
+
+  if (typeof raf !== 'function') {
+    const id = setTimeout(cb, FALLBACK_DELAY_MS);
+    return { cancel: () => clearTimeout(id) };
   }
-  clearTimeout(handle.id);
+
+  let rafId: number | null = null;
+  let cancelled = false;
+  let lastFrame = -1;
+  let quietFrames = 0;
+
+  const tick = (t: number): void => {
+    if (cancelled) return;
+    rafId = null;
+    if (lastFrame >= 0) {
+      const gap = t - lastFrame;
+      if (gap <= QUIET_FRAME_MS) {
+        quietFrames++;
+      } else {
+        quietFrames = 0;
+      }
+    }
+    lastFrame = t;
+    const elapsed = now() - startedAt;
+    if (quietFrames >= QUIET_FRAMES_NEEDED || elapsed >= MAX_WAIT_MS) {
+      cb();
+      return;
+    }
+    rafId = raf.call(w, tick);
+  };
+
+  rafId = raf.call(w, tick);
+  return {
+    cancel: () => {
+      cancelled = true;
+      if (rafId !== null && typeof cancelRaf === 'function') cancelRaf.call(w, rafId);
+      rafId = null;
+    },
+  };
 }
 
 const pending = new Map<string, QueuedRead>();
-let scheduled: IdleHandle | null = null;
+let scheduled: Handle | null = null;
 
 function drainOne(layerId: string): void {
   const entry = pending.get(layerId);
   if (!entry) return;
   pending.delete(layerId);
   if (pending.size === 0 && scheduled !== null) {
-    cancelHandle(scheduled);
+    scheduled.cancel();
     scheduled = null;
   }
   let data: Uint8ClampedArray | null = null;
@@ -95,8 +158,9 @@ function flushAll(): void {
 /**
  * Enqueue a mask readback for `layerId`. If a read is already queued
  * for the same layer, the earlier request is dropped and only the
- * latest reader/callback are used. Reads run on the next idle callback
- * (or after ~200 ms as fallback).
+ * latest reader/callback are used. The read fires once the browser's
+ * rAF loop has been steady for a few frames (a proxy for the GPU
+ * having caught up with its backlog), or `MAX_WAIT_MS` at latest.
  */
 export function requestMaskRead(
   layerId: string,
@@ -105,7 +169,7 @@ export function requestMaskRead(
 ): void {
   pending.set(layerId, { reader, cb });
   if (scheduled === null) {
-    scheduled = scheduleFlush(flushAll, 200);
+    scheduled = scheduleFlush(flushAll);
   }
 }
 
@@ -120,7 +184,7 @@ export function flushAllPendingMaskReads(): void {
   if (pending.size === 0) return;
   const handle = scheduled;
   scheduled = null;
-  if (handle) cancelHandle(handle);
+  if (handle) handle.cancel();
   const ids: string[] = [];
   for (const id of pending.keys()) ids.push(id);
   for (const id of ids) drainOne(id);
@@ -130,7 +194,7 @@ export function flushAllPendingMaskReads(): void {
 export function cancelMaskRead(layerId: string): void {
   if (!pending.delete(layerId)) return;
   if (pending.size === 0 && scheduled !== null) {
-    cancelHandle(scheduled);
+    scheduled.cancel();
     scheduled = null;
   }
 }
@@ -143,7 +207,7 @@ export function pendingMaskReadCount(): number {
 /** Test-only: reset everything without running any callbacks. */
 export function __resetMaskReadQueueForTest(): void {
   if (scheduled !== null) {
-    cancelHandle(scheduled);
+    scheduled.cancel();
     scheduled = null;
   }
   pending.clear();

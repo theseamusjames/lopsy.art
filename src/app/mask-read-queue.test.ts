@@ -12,10 +12,18 @@ describe('mask-read-queue', () => {
   beforeEach(() => {
     __resetMaskReadQueueForTest();
     vi.useFakeTimers();
-    // Ensure the queue picks the setTimeout fallback so tests can advance it.
-    const g = globalThis as unknown as { requestIdleCallback?: unknown; cancelIdleCallback?: unknown };
+    // Force the queue's setTimeout fallback path so tests can advance
+    // deterministically via vi.advanceTimersByTime. rAF is not paced by
+    // fake timers in jsdom, so leaving it defined would leave the queue
+    // waiting on a callback that never fires.
+    const g = globalThis as unknown as {
+      requestIdleCallback?: unknown; cancelIdleCallback?: unknown;
+      requestAnimationFrame?: unknown; cancelAnimationFrame?: unknown;
+    };
     g.requestIdleCallback = undefined;
     g.cancelIdleCallback = undefined;
+    g.requestAnimationFrame = undefined;
+    g.cancelAnimationFrame = undefined;
   });
 
   afterEach(() => {
@@ -124,5 +132,110 @@ describe('mask-read-queue', () => {
     cancelMaskRead('l1');
     vi.advanceTimersByTime(300);
     expect(pendingMaskReadCount()).toBe(0);
+  });
+});
+
+/**
+ * Issue #760 — a fixed 200 ms `requestIdleCallback` timeout fires the
+ * read before the GPU has drained, so `readPixels` blocks for the full
+ * 2–3 s the backlog needs to clear. The queue now polls `rAF` and only
+ * fires once several consecutive frames arrive on schedule (a proxy for
+ * the browser no longer waiting on the GPU). These tests drive rAF by
+ * hand.
+ */
+describe('mask-read-queue — rAF quiescence detection (#760)', () => {
+  let now = 0;
+  let rafCbs: Array<(t: number) => void> = [];
+  let realPerformanceNow: (() => number) | null = null;
+
+  beforeEach(() => {
+    __resetMaskReadQueueForTest();
+    now = 1000;
+    rafCbs = [];
+    const g = globalThis as unknown as {
+      requestAnimationFrame: (cb: (t: number) => void) => number;
+      cancelAnimationFrame: (id: number) => void;
+      requestIdleCallback?: unknown;
+      cancelIdleCallback?: unknown;
+    };
+    g.requestIdleCallback = undefined;
+    g.cancelIdleCallback = undefined;
+    let next = 1;
+    g.requestAnimationFrame = (cb) => {
+      const id = next++;
+      rafCbs.push(cb);
+      return id;
+    };
+    g.cancelAnimationFrame = () => { /* not exercised */ };
+    // The queue's hard cap uses performance.now(); anchor it to the same
+    // clock the tests drive so ticks control both signals.
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+      realPerformanceNow = performance.now.bind(performance);
+      (performance as unknown as { now: () => number }).now = () => now;
+    }
+  });
+
+  afterEach(() => {
+    __resetMaskReadQueueForTest();
+    const g = globalThis as unknown as { requestAnimationFrame?: unknown; cancelAnimationFrame?: unknown };
+    g.requestAnimationFrame = undefined;
+    g.cancelAnimationFrame = undefined;
+    if (realPerformanceNow) {
+      (performance as unknown as { now: () => number }).now = realPerformanceNow;
+      realPerformanceNow = null;
+    }
+  });
+
+  function tick(deltaMs: number): void {
+    now += deltaMs;
+    const cbs = rafCbs;
+    rafCbs = [];
+    for (const cb of cbs) cb(now);
+  }
+
+  it('does not fire the read while frames are long (GPU is bottlenecked)', () => {
+    const reader = vi.fn(() => new Uint8ClampedArray(4));
+    const cb = vi.fn();
+    requestMaskRead('l1', reader, cb);
+    // Simulate slow frames (100 ms each) — quiescence never reached.
+    for (let i = 0; i < 10; i++) tick(100);
+    expect(reader).not.toHaveBeenCalled();
+    expect(cb).not.toHaveBeenCalled();
+    expect(pendingMaskReadCount()).toBe(1);
+  });
+
+  it('fires the read after two consecutive quick frames', () => {
+    const reader = vi.fn(() => new Uint8ClampedArray(4));
+    const cb = vi.fn();
+    requestMaskRead('l1', reader, cb);
+    // First tick just records the timestamp (no delta yet), then two quiet
+    // frames (~17 ms each) — the read should fire on the third.
+    tick(0);
+    tick(17);
+    tick(17);
+    expect(reader).toHaveBeenCalledTimes(1);
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+
+  it('quiet-frame counter resets after a long frame', () => {
+    const reader = vi.fn(() => new Uint8ClampedArray(4));
+    const cb = vi.fn();
+    requestMaskRead('l1', reader, cb);
+    tick(0);
+    tick(17);      // 1 quiet frame
+    tick(100);     // long frame — reset
+    tick(17);      // 1 quiet frame — not yet enough
+    expect(reader).not.toHaveBeenCalled();
+    tick(17);      // 2 quiet frames — fire
+    expect(reader).toHaveBeenCalledTimes(1);
+  });
+
+  it('force-fires after the 3 s hard cap even if frames stay slow', () => {
+    const reader = vi.fn(() => new Uint8ClampedArray(4));
+    const cb = vi.fn();
+    requestMaskRead('l1', reader, cb);
+    // ~30 slow frames each 100 ms → 3 s total.
+    for (let i = 0; i < 32; i++) tick(100);
+    expect(reader).toHaveBeenCalledTimes(1);
   });
 });

@@ -12,16 +12,30 @@ import styles from './ExportDialog.module.css';
 
 const FORMATS: ExportFormat[] = ['png', 'jpeg', 'webp', 'bmp'];
 
+/**
+ * A cached preview source (the composited & downscaled thumbnail). The
+ * dialog holds one per open — every format/quality change re-encodes it
+ * via `encode`, so we don't re-composite a 4K document per option change
+ * (#762). `encode` returns a blob URL the dialog must revoke.
+ */
+export interface ExportPreviewSourceHandle {
+  encode: (options: ExportOptions) => Promise<string | null>;
+}
+
 interface ExportDialogProps {
   onExport: (options: ExportOptions) => void;
   onCancel: () => void;
-  /** Async function that generates a preview blob given current options. */
-  onPreviewRequest?: (options: ExportOptions) => Promise<string | null>;
+  /**
+   * Called once when the dialog opens to build a reusable preview source
+   * (the expensive full-document composite happens here). Returning null
+   * disables the preview pane.
+   */
+  onPreviewSourceRequest?: () => ExportPreviewSourceHandle | null;
 }
 
 export type { ExportDialogProps };
 
-export function ExportDialog({ onExport, onCancel, onPreviewRequest }: ExportDialogProps) {
+export function ExportDialog({ onExport, onCancel, onPreviewSourceRequest }: ExportDialogProps) {
   const docName = useEditorStore((s) => s.document.name);
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
@@ -34,6 +48,10 @@ export function ExportDialog({ onExport, onCancel, onPreviewRequest }: ExportDia
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevPreviewUrl = useRef<string | null>(null);
+  // #762: composite + downscale runs ONCE per dialog open. Every format
+  // click and Quality-slider pause re-runs only the small toBlob call.
+  const previewSourceRef = useRef<ExportPreviewSourceHandle | null>(null);
+  const [sourceReady, setSourceReady] = useState(false);
 
   const currentOptions: ExportOptions = {
     format,
@@ -42,34 +60,43 @@ export function ExportDialog({ onExport, onCancel, onPreviewRequest }: ExportDia
     filename,
   };
 
-  // Request preview whenever relevant options change
+  // Build the preview source once per dialog open. The composite is the
+  // expensive part; caching it lets option changes re-encode cheaply.
+  useEffect(() => {
+    if (!onPreviewSourceRequest) return;
+    setIsPreviewLoading(true);
+    const source = onPreviewSourceRequest();
+    previewSourceRef.current = source;
+    setSourceReady(true);
+    if (!source) setIsPreviewLoading(false);
+  }, [onPreviewSourceRequest]);
+
   const requestPreview = useCallback((opts: ExportOptions) => {
-    if (!onPreviewRequest) return;
+    const source = previewSourceRef.current;
+    if (!source) return;
     if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
     previewDebounceRef.current = setTimeout(() => {
       setIsPreviewLoading(true);
-      onPreviewRequest(opts)
+      source
+        .encode(opts)
         .then((url) => {
-          // Revoke the old URL to avoid memory leaks
           if (prevPreviewUrl.current) {
             URL.revokeObjectURL(prevPreviewUrl.current);
           }
           prevPreviewUrl.current = url;
           setPreviewUrl(url);
         })
-        .catch(() => {
-          setPreviewUrl(null);
-        })
+        .catch(() => setPreviewUrl(null))
         .finally(() => setIsPreviewLoading(false));
     }, 200);
-  }, [onPreviewRequest]);
+  }, []);
 
   useEffect(() => {
+    if (!sourceReady) return;
     requestPreview(currentOptions);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [format, quality, highQuality, requestPreview]);
+  }, [format, quality, highQuality, sourceReady, requestPreview]);
 
-  // Revoke preview URL on unmount
   useEffect(() => {
     return () => {
       if (prevPreviewUrl.current) URL.revokeObjectURL(prevPreviewUrl.current);

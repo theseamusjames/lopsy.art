@@ -18,6 +18,16 @@ export interface HistorySlice {
   isDirty: boolean;
   undo: () => void;
   redo: () => void;
+  /**
+   * Batched undo: pop `n` snapshots off `undoStack`, restore the target
+   * state in a single GPU restore + tracked-state reset + syncLayers pass.
+   * A held Cmd+Z and a History-panel jump both use this — each intermediate
+   * step is skipped so masks and selection are re-uploaded once instead of
+   * once per step (#761).
+   */
+  undoBy: (steps: number) => void;
+  /** Batched redo — see `undoBy`. */
+  redoBy: (steps: number) => void;
   pushHistory: (label?: string) => void;
   pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => void;
   pushHistoryMetadata: (label: string) => void;
@@ -152,6 +162,15 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   isDirty: false,
 
   undo: () => {
+    get().undoBy(1);
+  },
+
+  redo: () => {
+    get().redoBy(1);
+  },
+
+  undoBy: (steps: number) => {
+    if (steps <= 0) return;
     finalizePendingStrokeGlobal();
     // Drop any active float (and cancel a scheduled prefloat) before
     // restoring. A leftover float leaves `float_layer_id` set on the engine,
@@ -166,27 +185,36 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     flushPendingSnapshots();
 
     const state = get();
-    if (state.undoStack.length === 0) return;
-    const previous = state.undoStack[state.undoStack.length - 1];
-    if (!previous) return;
+    const S = state.undoStack.length;
+    if (S === 0) return;
+    const n = Math.min(steps, S);
+    const target = state.undoStack[S - n];
+    if (!target) return;
 
-    let currentSnapshot: HistorySnapshot;
-    if (previous.kind === 'metadata') {
-      currentSnapshot = {
+    // Build the additions to push onto redoStack — one entry per undone
+    // step, in the order they'd have been pushed by n consecutive undo()
+    // calls. The first is a fresh snapshot of the current live state; each
+    // subsequent one is the undoStack entry immediately below it, which by
+    // construction has both the document AND the gpuSnapshots for the
+    // intermediate state that undo() would have paused at (#761).
+    const additions: HistorySnapshot[] = [];
+    let firstSnapshot: HistorySnapshot;
+    if (target.kind === 'metadata') {
+      firstSnapshot = {
         kind: 'metadata',
         document: state.document,
         selection: state.selection,
-        label: previous.label,
+        label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
       };
     } else if (lastRestoredSnapshot && lastRestoredSnapshot.kind === 'pixels') {
-      currentSnapshot = {
+      firstSnapshot = {
         kind: 'pixels',
         document: state.document,
         selection: state.selection,
         gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
-        label: previous.label,
+        label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
       };
@@ -195,33 +223,38 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         state.document.layers,
         state.document.layerOrder,
         state.dirtyLayerIds,
-        previous,
+        state.undoStack[S - 1],
       );
-      currentSnapshot = {
+      firstSnapshot = {
         kind: 'pixels',
         document: state.document,
         selection: state.selection,
         gpuSnapshots,
-        label: previous.label,
+        label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
       };
     }
+    additions.push(firstSnapshot);
+    for (let i = S - 1; i > S - n; i--) {
+      const step = state.undoStack[i];
+      if (step) additions.push(step);
+    }
 
-    restoreGpuFromSnapshot(previous);
-    lastRestoredSnapshot = previous;
+    restoreGpuFromSnapshot(target);
+    lastRestoredSnapshot = target;
     const eng = getEngine();
     if (eng) resetTrackedState(eng);
 
     pixelDataManager.clearAll();
     set({
-      undoStack: state.undoStack.slice(0, -1),
-      redoStack: [...state.redoStack, currentSnapshot],
-      document: previous.document,
-      selection: previous.selection,
-      paths: [...previous.paths],
-      selectedPathId: previous.selectedPathId,
-      dirtyLayerIds: new Set(previous.document.layerOrder),
+      undoStack: state.undoStack.slice(0, S - n),
+      redoStack: [...state.redoStack, ...additions],
+      document: target.document,
+      selection: target.selection,
+      paths: [...target.paths],
+      selectedPathId: target.selectedPathId,
+      dirtyLayerIds: new Set(target.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
     if (eng) {
@@ -230,7 +263,8 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     }
   },
 
-  redo: () => {
+  redoBy: (steps: number) => {
+    if (steps <= 0) return;
     // Same reasoning as undo: a stale float would preserve expanded dims in
     // the engine's layer descriptor and misplace the restored texture.
     cancelPrefloat();
@@ -238,27 +272,34 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     if (eng0 && hasFloat(eng0)) dropFloat(eng0);
     flushPendingSnapshots();
     const state = get();
-    if (state.redoStack.length === 0) return;
-    const next = state.redoStack[state.redoStack.length - 1];
-    if (!next) return;
+    const R = state.redoStack.length;
+    if (R === 0) return;
+    const n = Math.min(steps, R);
+    const target = state.redoStack[R - n];
+    if (!target) return;
 
-    let currentSnapshot: HistorySnapshot;
-    if (next.kind === 'metadata') {
-      currentSnapshot = {
+    // Build additions to push onto undoStack, in the order n consecutive
+    // redo() calls would have. First is a fresh snapshot of the current
+    // live state; each subsequent one is the redoStack entry immediately
+    // above it — same reuse trick as undoBy (#761).
+    const additions: HistorySnapshot[] = [];
+    let firstSnapshot: HistorySnapshot;
+    if (target.kind === 'metadata') {
+      firstSnapshot = {
         kind: 'metadata',
         document: state.document,
         selection: state.selection,
-        label: next.label,
+        label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
       };
     } else if (lastRestoredSnapshot && lastRestoredSnapshot.kind === 'pixels') {
-      currentSnapshot = {
+      firstSnapshot = {
         kind: 'pixels',
         document: state.document,
         selection: state.selection,
         gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
-        label: next.label,
+        label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
       };
@@ -267,33 +308,38 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         state.document.layers,
         state.document.layerOrder,
         state.dirtyLayerIds,
-        next,
+        state.redoStack[R - 1],
       );
-      currentSnapshot = {
+      firstSnapshot = {
         kind: 'pixels',
         document: state.document,
         selection: state.selection,
         gpuSnapshots,
-        label: next.label,
+        label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
       };
     }
+    additions.push(firstSnapshot);
+    for (let i = R - 1; i > R - n; i--) {
+      const step = state.redoStack[i];
+      if (step) additions.push(step);
+    }
 
-    restoreGpuFromSnapshot(next);
-    lastRestoredSnapshot = next;
+    restoreGpuFromSnapshot(target);
+    lastRestoredSnapshot = target;
     const eng = getEngine();
     if (eng) resetTrackedState(eng);
 
     pixelDataManager.clearAll();
     set({
-      redoStack: state.redoStack.slice(0, -1),
-      undoStack: [...state.undoStack, currentSnapshot],
-      document: next.document,
-      selection: next.selection,
-      paths: [...next.paths],
-      selectedPathId: next.selectedPathId,
-      dirtyLayerIds: new Set(next.document.layerOrder),
+      redoStack: state.redoStack.slice(0, R - n),
+      undoStack: [...state.undoStack, ...additions],
+      document: target.document,
+      selection: target.selection,
+      paths: [...target.paths],
+      selectedPathId: target.selectedPathId,
+      dirtyLayerIds: new Set(target.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
     if (eng) {

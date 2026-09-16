@@ -32,10 +32,11 @@ export const JPEGWithQuality: Story = {
 };
 
 export const WithPreview: Story = {
-  name: 'With async preview callback',
+  name: 'With cached preview source',
   args: {
-    onPreviewRequest: async () => {
-      // Return a tiny placeholder data URL for Storybook preview
+    onPreviewSourceRequest: () => {
+      // Cached preview thumbnail — encoded fresh on every option change,
+      // but the composite happens once (here, via a fixed placeholder).
       const canvas = document.createElement('canvas');
       canvas.width = 64;
       canvas.height = 64;
@@ -46,11 +47,11 @@ export const WithPreview: Story = {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(16, 16, 32, 32);
       }
-      return new Promise<string>((resolve) => {
-        canvas.toBlob((blob) => {
-          resolve(blob ? URL.createObjectURL(blob) : null as unknown as string);
-        }, 'image/png');
-      });
+      return {
+        encode: () => new Promise<string | null>((resolve) => {
+          canvas.toBlob((blob) => resolve(blob ? URL.createObjectURL(blob) : null), 'image/png');
+        }),
+      };
     },
   },
 };
