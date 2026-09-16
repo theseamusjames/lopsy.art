@@ -19,6 +19,7 @@ import { useToolSettingsStore } from './tool-settings-store';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { deferCacheLayerSnapshot } from './store/history-slice';
 import { clearPendingStroke } from './interactions/pending-stroke';
+import { requestMaskRead } from './mask-read-queue';
 import { syncLayerAfterFullSize } from './sync-layer-after-full-size';
 import type {
   InteractionState, InteractionContext,
@@ -605,25 +606,36 @@ export function useCanvasInteraction(
       useUIStore.getState().setGradientPreview(null);
     }
 
-    // Sync mask GPU texture back to store
+    // Sync mask GPU texture back to store — deferred to idle (#756). The
+    // readback is a synchronous `glReadPixels` that stalls on the queued
+    // compositing work a full-canvas mask stroke leaves behind (15–20 s on
+    // a 4K canvas). Idle-time lets those queued draws drain first so the
+    // read pays only its own cost. Anything that needs `layer.mask.data`
+    // to be current (paint handlers, pushHistory, project save) flushes
+    // the queue synchronously via `flushPendingMaskRead` first.
     if (state.maskMode && state.layerId) {
       const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
       if (!isQuickMaskMode) {
-        const engine = getEngine();
-        if (engine) {
-          const maskData = readMaskTexture(engine, state.layerId);
-          if (maskData) {
-            const layer = useEditorStore.getState().document.layers.find((l) => l.id === state.layerId);
-            if (layer?.mask) {
-              const seeded = new Uint8ClampedArray(maskData);
-              useEditorStore.getState().updateLayerMaskData(state.layerId, seeded);
-              // These bytes just came *from* the GPU — record the readback's
-              // reference as the tracked one so the next frame's syncLayers
-              // doesn't upload them straight back (#734).
-              seedMaskDataRef(engine, state.layerId, seeded);
-            }
-          }
-        }
+        const layerId = state.layerId;
+        requestMaskRead(
+          layerId,
+          () => {
+            const eng = getEngine();
+            if (!eng) return null;
+            const bytes = readMaskTexture(eng, layerId);
+            return bytes ? new Uint8ClampedArray(bytes) : null;
+          },
+          (seeded) => {
+            const layer = useEditorStore.getState().document.layers.find((l) => l.id === layerId);
+            if (!layer?.mask) return;
+            useEditorStore.getState().updateLayerMaskData(layerId, seeded);
+            const eng = getEngine();
+            // These bytes just came *from* the GPU — record the readback's
+            // reference as the tracked one so the next frame's syncLayers
+            // doesn't upload them straight back (#734).
+            if (eng) seedMaskDataRef(eng, layerId, seeded);
+          },
+        );
       }
     }
 

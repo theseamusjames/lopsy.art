@@ -8,6 +8,7 @@ import { toDocumentColor } from '../../app/document-color';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { syncLayerAfterFullSize } from '../../app/sync-layer-after-full-size';
 import { getEngine } from '../../engine-wasm/engine-state';
+import { flushPendingMaskRead } from '../../app/mask-read-queue';
 import {
   renderLinearGradient as gpuRenderLinearGradient,
   renderRadialGradient as gpuRenderRadialGradient,
@@ -35,10 +36,15 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   if (isQuickMaskMode) {
     editorState.pushHistory(gradientType === 'radial' ? 'Quick Mask Radial Gradient' : 'Quick Mask Linear Gradient');
   } else if (maskEditMode && activeLayer.mask) {
+    // #756: drain any deferred mask readback so we upload the current
+    // mask, not the pre-previous-stroke state.
+    flushPendingMaskRead(activeLayerId);
+    const freshMask = editorState.document.layers
+      .find((l) => l.id === activeLayerId)?.mask ?? activeLayer.mask;
     editorState.pushHistory(gradientType === 'radial' ? 'Mask Radial Gradient' : 'Mask Linear Gradient');
     if (engine) {
-      const maskBytes = new Uint8Array(activeLayer.mask.data.buffer, activeLayer.mask.data.byteOffset, activeLayer.mask.data.byteLength);
-      uploadLayerMask(engine, activeLayerId, maskBytes, activeLayer.mask.width, activeLayer.mask.height);
+      const maskBytes = new Uint8Array(freshMask.data.buffer, freshMask.data.byteOffset, freshMask.data.byteLength);
+      uploadLayerMask(engine, activeLayerId, maskBytes, freshMask.width, freshMask.height);
     }
   } else {
     editorState.pushHistory(gradientType === 'radial' ? 'Radial Gradient' : 'Linear Gradient');

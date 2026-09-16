@@ -12,8 +12,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import {
   setTextLayerContent,
   renderTextLayer,
-  getRenderedTextPixels,
-  uploadLayerPixels,
+  renderTextLayerToTexture,
   textHitPosition,
   getLayerTextureDimensions,
 } from '../../engine-wasm/wasm-bridge';
@@ -143,18 +142,15 @@ export function commitTextEditing(): void {
         vertical: text.vertical,
       });
       setTextLayerContent(engine, editing.layerId, propsJson);
-      const boundsResult = renderTextLayer(engine, editing.layerId);
+      // #757: single WASM call renders + uploads without the JS round-trip.
+      const boundsResult = renderTextLayerToTexture(
+        engine, editing.layerId, editing.bounds.x, editing.bounds.y,
+      );
       if (boundsResult.length === 4) {
-        const width = boundsResult[0]!;
-        const height = boundsResult[1]!;
         const offsetX = boundsResult[2]!;
         const offsetY = boundsResult[3]!;
-        const pixels = getRenderedTextPixels(engine, editing.layerId);
-        if (pixels.length > 0) {
-          finalX = editing.bounds.x + offsetX;
-          finalY = editing.bounds.y + offsetY;
-          uploadLayerPixels(engine, editing.layerId, pixels, width, height, finalX, finalY);
-        }
+        finalX = editing.bounds.x + offsetX;
+        finalY = editing.bounds.y + offsetY;
       }
     } else {
       // Fallback: use position set by the last syncTextLayers call if engine unavailable.

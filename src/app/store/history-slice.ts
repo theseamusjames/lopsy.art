@@ -10,6 +10,7 @@ import { resetTrackedState, flushLayerSync, syncLayers } from '../../engine-wasm
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 import { cancelPrefloat } from '../interactions/prefloat';
+import { flushAllPendingMaskReads } from '../mask-read-queue';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -302,6 +303,10 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   },
 
   pushHistory: (label = 'Edit') => {
+    // #756: mask readbacks are deferred to idle. Ensure any pending read
+    // has settled so this snapshot captures the current mask data, not
+    // the pre-stroke state.
+    flushAllPendingMaskReads();
     flushPendingSnapshots();
     const state = get();
     lastRestoredSnapshot = null;
