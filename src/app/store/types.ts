@@ -189,6 +189,15 @@ export interface EditorState {
   // History
   undo: () => void;
   redo: () => void;
+  /**
+   * Batched undo — pop `steps` snapshots off the undo stack in a single
+   * GPU restore + syncLayers pass. Used by the History-panel jump and
+   * Cmd+Z auto-repeat coalescer so long jumps don't re-upload every
+   * layer mask and the selection mask once per intermediate step (#761).
+   */
+  undoBy: (steps: number) => void;
+  /** Batched redo — see `undoBy`. */
+  redoBy: (steps: number) => void;
   pushHistory: (label?: string) => void;
   pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => void;
   pushHistoryMetadata: (label: string) => void;

@@ -6,8 +6,8 @@ export function HistoryPanel() {
   const listRef = useRef<HTMLDivElement>(null);
   const undoStack = useEditorStore((s) => s.undoStack);
   const redoStack = useEditorStore((s) => s.redoStack);
-  const undo = useEditorStore((s) => s.undo);
-  const redo = useEditorStore((s) => s.redo);
+  const undoBy = useEditorStore((s) => s.undoBy);
+  const redoBy = useEditorStore((s) => s.redoBy);
 
   const currentIndex = undoStack.length;
 
@@ -18,10 +18,13 @@ export function HistoryPanel() {
 
   const handleClick = (index: number) => {
     const diff = index - currentIndex;
+    // #761: batch the jump into a single restore + syncLayers pass —
+    // running undo()/redo() in a loop re-uploads every layer mask and the
+    // selection mask once per intermediate step.
     if (diff < 0) {
-      for (let i = 0; i < -diff; i++) undo();
+      undoBy(-diff);
     } else if (diff > 0) {
-      for (let i = 0; i < diff; i++) redo();
+      redoBy(diff);
     }
   };
 

@@ -51,6 +51,7 @@ const ALLOWLIST = {
   'src/app/store/clipboard-image-match.test.ts': 1,
   'src/engine-wasm/engine-sync.test.ts': 3,
   'src/engine-wasm/sync-layers.test.ts': 11,           // +3: fixture buffers for #734 mask-readback seed tests
+  'src/engine-wasm/sync-selection.test.ts': 5,         // #763 seedSelectionMaskRef fixtures
   'src/engine-wasm/sync-state.test.ts': 7,             // #734 seedMaskDataRef fixtures
   'src/engine/pixel-data-manager.test.ts': 2,
   'src/engine/pixel-data.test.ts': 1,
@@ -59,7 +60,7 @@ const ALLOWLIST = {
   'src/filters/surface-blur.test.ts': 5,
   'src/io/project-save.test.ts': 1,
   'src/panels/AdjustmentsPanel/histogram-compute.test.ts': 2,
-  'src/app/mask-read-queue.test.ts': 10,                     // fixture buffers for #756 mask readback queue
+  'src/app/mask-read-queue.test.ts': 14,                     // +4: rAF quiescence tests for #760
   'src/panels/LayerPanel/thumbnail-read-queue.test.ts': 1,   // fixture buffer for mocked readback
   'src/selection/selection-to-path.test.ts': 2,
   'src/selection/selection.test.ts': 17,

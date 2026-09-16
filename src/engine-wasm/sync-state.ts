@@ -226,3 +226,24 @@ export function seedMaskDataRef(engine: Engine, layerId: string, data: Uint8Clam
   tracked.uploadFailures.delete(`${layerId}:mask`);
 }
 
+/**
+ * Record the selection mask `syncSelection` should treat as already-uploaded.
+ *
+ * When Feather > 0, `commitFeatheredSelection` uploads the raw mask to the
+ * GPU directly (bypassing tracked state), runs the GPU feather blur, then
+ * reads the feathered bytes back to store them in Zustand via `setSelection`.
+ * Because the direct upload never touched `tracked.selectionMask`, the next
+ * frame's `syncSelection` sees the fresh readback array reference and echoes
+ * it right back to the GPU — a 16 MB / 87 ms round-trip that duplicates what
+ * the GPU already holds (#763, the selection twin of #734/#736).
+ *
+ * Seeding the tracked ref with the readback's own array short-circuits the
+ * echo — the next `syncSelection` sees `selection.mask === tracked.selectionMask`
+ * and skips the upload entirely.
+ */
+export function seedSelectionMaskRef(engine: Engine, mask: Uint8ClampedArray): void {
+  const tracked = getTracked(engine);
+  tracked.selectionMask = mask;
+  tracked.selectionActive = true;
+}
+
