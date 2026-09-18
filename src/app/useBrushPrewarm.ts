@@ -16,6 +16,11 @@ export function shouldPrewarmStroke(activeTool: ToolId, layer: Layer | null | un
   if (!layer) return false;
   if (layer.locked) return false;
   if (layer.type === 'group') return false;
+  // Text layers own a texture but rebuild it on every property change,
+  // which would wipe painted pixels. Prewarm also re-origins the layer
+  // to (0,0), corrupting the anchor invariant in
+  // rerenderCommittedTextLayerAnchored (#767).
+  if (layer.type === 'text') return false;
   return true;
 }
 

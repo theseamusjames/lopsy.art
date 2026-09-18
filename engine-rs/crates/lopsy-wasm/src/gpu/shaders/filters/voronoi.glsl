@@ -70,5 +70,8 @@ void main() {
 
     vec3 edgeColor = vec3(u_edgeR, u_edgeG, u_edgeB);
     vec3 finalColor = mix(cellColor.rgb, edgeColor, edge);
-    fragColor = vec4(finalColor, cellColor.a);
+    // #766: voronoi is a generator — write full alpha so the cell pattern
+    // shows on a transparent layer. Sampling cellColor.a from the source
+    // meant an empty layer stayed empty.
+    fragColor = vec4(finalColor, 1.0);
 }

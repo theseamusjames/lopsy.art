@@ -54,6 +54,7 @@ import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 // new paint or GPU tool is a single-file change at the descriptor.
 import { PAINT_TOOLS, GPU_TOOLS } from '../tools/tool-registry';
 import { pixelDataManager } from '../engine/pixel-data-manager';
+import { guardPixelWrite, toolWritesRasterPixels } from '../layers/paint-target';
 
 export { strokeCurrentPath } from './interactions/path-stroke';
 
@@ -154,6 +155,12 @@ export function useCanvasInteraction(
 
       const activeLayer = editorState.document.layers.find((l) => l.id === activeLayerId);
       if (!activeLayer || activeLayer.locked) return;
+
+      // #768: refuse pixel writes on group / text layers before dispatching
+      // to the tool handler. Without this every writer allocates a texture,
+      // pushes a history row, and clears the redo stack for a change that
+      // is either invisible (group) or wiped by the next re-render (text).
+      if (toolWritesRasterPixels(activeTool) && !guardPixelWrite(activeLayer)) return;
 
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;

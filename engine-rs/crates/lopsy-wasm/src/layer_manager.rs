@@ -1473,6 +1473,12 @@ pub fn fill_with_color(
     b: f32,
     a: f32,
 ) -> Result<(), String> {
+    // #765: expand the layer's texture to the doc union before filling.
+    // Without this, a fresh layer whose GPU texture is still the lazy 1x1
+    // placeholder only takes a single pixel of the fill — and worse, that
+    // pixel samples stale scratch-FBO content, not the requested colour.
+    let _ = engine.ensure_layer_full_size(layer_id);
+
     let layer_tex_handle = *engine.layer_textures.get(layer_id)
         .ok_or_else(|| format!("Layer {layer_id} not found"))?;
     let (lw, lh) = engine.texture_pool.get_size(layer_tex_handle).unwrap_or((1, 1));
