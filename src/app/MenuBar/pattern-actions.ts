@@ -4,13 +4,27 @@ import { readLayerPixels, getLayerTextureDimensions, filterPatternFill, saveFilt
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { usePatternStore, generateThumbnail } from '../pattern-store';
 import type { PatternDefinition } from '../pattern-store';
+import { guardPixelWrite } from '../../layers/paint-target';
+import type { Layer } from '../../types';
 
 let patternCounter = 0;
+
+function findActiveLayer(): Layer | undefined {
+  const st = useEditorStore.getState();
+  const id = st.document.activeLayerId;
+  if (!id) return undefined;
+  return st.document.layers.find((l) => l.id === id);
+}
 
 export function definePattern(): void {
   const state = useEditorStore.getState();
   const activeId = state.document.activeLayerId;
   if (!activeId) return;
+
+  // Reading from a group layer produces the zero/1x1 texture path already,
+  // but text layers have a texture that will be wiped by the next re-render
+  // — treat the same as any other pixel-read on those types.
+  if (!guardPixelWrite(findActiveLayer())) return;
 
   const engine = getEngine();
   if (!engine) return;
@@ -90,6 +104,8 @@ export function applyPatternFill(patternId: string, scale: number, offsetX: numb
   const activeId = useEditorStore.getState().document.activeLayerId;
   if (!activeId) return;
 
+  if (!guardPixelWrite(findActiveLayer())) return;
+
   const engine = getEngine();
   if (!engine) return;
 
@@ -111,6 +127,7 @@ export function applyPatternFill(patternId: string, scale: number, offsetX: numb
 export function beginPatternPreview(): void {
   const activeId = useEditorStore.getState().document.activeLayerId;
   if (!activeId) return;
+  if (!guardPixelWrite(findActiveLayer())) return;
   const engine = getEngine();
   if (!engine) return;
   saveFilterPreview(engine, activeId);
@@ -122,6 +139,8 @@ export function previewPatternFill(patternId: string, scale: number, offsetX: nu
 
   const activeId = useEditorStore.getState().document.activeLayerId;
   if (!activeId) return;
+
+  if (!guardPixelWrite(findActiveLayer())) return;
 
   const engine = getEngine();
   if (!engine) return;
@@ -159,6 +178,8 @@ export function applyPatternFillWithPreview(patternId: string, scale: number, of
 
   const activeId = useEditorStore.getState().document.activeLayerId;
   if (!activeId) return;
+
+  if (!guardPixelWrite(findActiveLayer())) return;
 
   const engine = getEngine();
   if (!engine) return;

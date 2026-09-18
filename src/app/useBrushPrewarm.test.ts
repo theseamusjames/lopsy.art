@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Engine } from '../engine-wasm/wasm-bridge';
-import type { RasterLayer, GroupLayer, ToolId } from '../types';
+import type { RasterLayer, GroupLayer, TextLayer, ToolId } from '../types';
 
 vi.mock('../engine-wasm/wasm-bridge', () => ({
   prewarmStroke: vi.fn(),
@@ -89,6 +89,39 @@ describe('shouldPrewarmStroke', () => {
 
   it('returns false for group layers — strokes paint into rasters', () => {
     expect(shouldPrewarmStroke('brush', baseGroup)).toBe(false);
+  });
+
+  it('returns false for text layers — prewarm re-origins to (0,0), corrupting the text anchor (#767)', () => {
+    const baseText: TextLayer = {
+      id: 'text-1',
+      name: 'HELLO',
+      type: 'text',
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      x: 97,
+      y: 233,
+      clipToBelow: false,
+      effects: DEFAULT_EFFECTS,
+      mask: null,
+      text: 'HELLO',
+      fontFamily: 'Inter',
+      fontSize: 32,
+      fontWeight: 400,
+      fontStyle: 'normal',
+      color: { r: 0, g: 0, b: 0, a: 1 },
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      paragraphSpacing: 0,
+      textAlign: 'left',
+      width: null,
+      underline: false,
+      strikethrough: false,
+    };
+    for (const tool of PAINT) {
+      expect(shouldPrewarmStroke(tool, baseText)).toBe(false);
+    }
   });
 });
 
