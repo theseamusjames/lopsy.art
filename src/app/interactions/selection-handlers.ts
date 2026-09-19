@@ -19,6 +19,7 @@ import {
   featherSelectionMask,
   readSelectionMask,
 } from '../../engine-wasm/wasm-bridge';
+import { seedSelectionMaskRef } from '../../engine-wasm/sync-state';
 import { createPolygonMask as tsCreatePolygonMask } from '../../tools/lasso/lasso';
 import { createTransformState } from '../../tools/transform/transform';
 import { marqueeStrategy } from '../../tools/marquee/marquee-strategy';
@@ -85,6 +86,10 @@ export function commitFeatheredSelection(
         const newBounds = selectionBounds(feathered, rw, rh);
         if (newBounds) {
           editorState.setSelection(newBounds, feathered, rw, rh);
+          // #763: the feathered bytes were just written to the GPU by
+          // featherSelectionMask — record them as the tracked reference so
+          // the next syncSelection skips the echo upload.
+          seedSelectionMaskRef(engine, feathered);
           useUIStore.getState().setTransform(createTransformState(newBounds));
           return;
         }

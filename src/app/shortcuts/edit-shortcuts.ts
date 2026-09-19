@@ -4,6 +4,7 @@ import { selectAll, invertSelectionAction } from '../MenuBar/menus/select-menu';
 import { applyAutoTone, applyAutoContrast, applyAutoColor } from '../MenuBar/menus/image-menu';
 import { openLiquify } from '../MenuBar/liquify-actions';
 import { scheduleFallbackPaste } from '../useKeyboardShortcuts';
+import { scheduleUndoRedo } from './undo-coalesce';
 
 export function handleEditShortcut(
   e: KeyboardEvent,
@@ -74,11 +75,9 @@ export function handleEditShortcut(
   }
   if (e.key === 'z' || e.key === 'Z') {
     e.preventDefault();
-    if (e.shiftKey) {
-      useEditorStore.getState().redo();
-    } else {
-      useEditorStore.getState().undo();
-    }
+    // #761: coalesce Cmd+Z / Cmd+Shift+Z auto-repeat across one rAF so a
+    // held key applies N undos via one batched restore instead of N.
+    scheduleUndoRedo(e.shiftKey ? 'redo' : 'undo');
     return true;
   }
   // Shift+Cmd+L — Auto Tone
