@@ -3,6 +3,7 @@ import { useUIStore } from '../ui-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { saveFilterPreview, restoreFilterPreview, clearFilterPreview, filterTiltShiftBlur } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 
 export function beginTiltShiftSession(): void {
   const activeId = useEditorStore.getState().document.activeLayerId;
@@ -11,6 +12,9 @@ export function beginTiltShiftSession(): void {
   if (!engine) return;
 
   saveFilterPreview(engine, activeId);
+  // saveFilterPreview expands the layer texture to doc size — reconcile
+  // JS bounds so the next syncLayers push does not clobber it (#771).
+  syncLayerAfterFullSize(engine, activeId);
 
   useUIStore.getState().setTiltShift({
     focusPosition: 0.5,
@@ -74,6 +78,7 @@ export function applyTiltShift(): void {
   useEditorStore.getState().pushHistory('Tilt-Shift Blur');
   const angleRad = (session.angle * Math.PI) / 180;
   filterTiltShiftBlur(engine, activeId, session.focusPosition, session.focusWidth, session.blurRadius, angleRad);
+  syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
 
   useUIStore.getState().setTiltShift(null);
