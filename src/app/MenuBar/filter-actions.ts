@@ -13,6 +13,8 @@ import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pix
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { filterRegistry } from '../../filters/filter-registry';
 import type { FilterDefinition } from '../../filters/filter-types';
+import { guardPixelWrite } from '../../layers/paint-target';
+import type { Layer } from '../../types';
 
 export type FilterDialogId =
   | 'gaussian-blur'
@@ -49,6 +51,13 @@ function getActiveLayerId(): string | null {
   return useEditorStore.getState().document.activeLayerId;
 }
 
+function getActiveLayer(): Layer | undefined {
+  const state = useEditorStore.getState();
+  const id = state.document.activeLayerId;
+  if (!id) return undefined;
+  return state.document.layers.find((l) => l.id === id);
+}
+
 
 export function getFilterDialogConfig(id: FilterDialogId): FilterDefinition | null {
   return filterRegistry[id] ?? null;
@@ -60,6 +69,8 @@ export function applyGenericFilter(id: FilterDialogId, values: Record<string, nu
 
   const activeId = getActiveLayerId();
   if (!activeId) return;
+
+  if (!guardPixelWrite(getActiveLayer())) return;
 
   const engine = getEngine();
   if (!engine) return;
@@ -74,6 +85,7 @@ export function applyGenericFilter(id: FilterDialogId, values: Record<string, nu
 export function beginFilterPreview(): void {
   const activeId = getActiveLayerId();
   if (!activeId) return;
+  if (!guardPixelWrite(getActiveLayer())) return;
   const engine = getEngine();
   if (!engine) return;
   // Ensure all layer data is synced to the GPU before saving the preview.
@@ -90,6 +102,7 @@ export function previewGenericFilter(id: FilterDialogId, values: Record<string, 
   if (!filter) return;
   const activeId = getActiveLayerId();
   if (!activeId) return;
+  if (!guardPixelWrite(getActiveLayer())) return;
   const engine = getEngine();
   if (!engine) return;
 
@@ -119,6 +132,7 @@ export function applyGenericFilterWithPreview(id: FilterDialogId, values: Record
   if (!filter) return;
   const activeId = getActiveLayerId();
   if (!activeId) return;
+  if (!guardPixelWrite(getActiveLayer())) return;
   const engine = getEngine();
   if (!engine) return;
 
@@ -146,6 +160,8 @@ export function applyInvert(): void {
   const activeId = getActiveLayerId();
   if (!activeId) return;
 
+  if (!guardPixelWrite(getActiveLayer())) return;
+
   const engine = getEngine();
   if (!engine) return;
 
@@ -159,6 +175,8 @@ export function applyDesaturate(): void {
   const activeId = getActiveLayerId();
   if (!activeId) return;
 
+  if (!guardPixelWrite(getActiveLayer())) return;
+
   const engine = getEngine();
   if (!engine) return;
 
@@ -171,6 +189,8 @@ export function applyDesaturate(): void {
 export function applyFindEdges(): void {
   const activeId = getActiveLayerId();
   if (!activeId) return;
+
+  if (!guardPixelWrite(getActiveLayer())) return;
 
   const engine = getEngine();
   if (!engine) return;

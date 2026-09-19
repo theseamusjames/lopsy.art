@@ -53,6 +53,8 @@ void main() {
     smoke = smoothstep(0.2, 0.8, smoke);
     smoke *= smoke;
 
-    vec4 orig = texture(u_tex, v_uv);
-    fragColor = vec4(vec3(smoke), orig.a);
+    // #766: smoke is a generator — write full alpha so it produces
+    // visible output on a transparent layer instead of only recoloring
+    // whatever alpha was already there.
+    fragColor = vec4(vec3(smoke), 1.0);
 }

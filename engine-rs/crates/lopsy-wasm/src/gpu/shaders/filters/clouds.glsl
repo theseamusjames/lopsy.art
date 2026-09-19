@@ -46,6 +46,9 @@ void main() {
     float cloud = fbm(uv);
     cloud = smoothstep(0.3, 0.7, cloud);
 
-    vec4 orig = texture(u_tex, v_uv);
-    fragColor = vec4(vec3(cloud), orig.a);
+    // #766: clouds is a generator, not a recolorer — writing full alpha
+    // makes it produce visible output on an empty / transparent layer.
+    // Preserving the source alpha meant the filter rendered nothing over
+    // pixels the layer never held.
+    fragColor = vec4(vec3(cloud), 1.0);
 }

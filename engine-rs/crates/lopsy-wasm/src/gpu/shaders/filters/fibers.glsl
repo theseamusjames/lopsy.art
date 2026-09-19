@@ -75,6 +75,8 @@ void main() {
 
     fiber = clamp(fiber, 0.0, 1.0);
 
-    vec4 orig = texture(u_tex, v_uv);
-    fragColor = vec4(vec3(fiber), orig.a);
+    // #766: fibers is a generator — write full alpha so the pattern
+    // shows on a transparent layer, not just where alpha was already
+    // opaque.
+    fragColor = vec4(vec3(fiber), 1.0);
 }
