@@ -3,6 +3,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { saveFilterPreview, restoreFilterPreview, clearFilterPreview } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { applyMeshWarpGpu } from '../../filters/mesh-warp';
+import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import type { MeshWarpGrid } from '../../filters/mesh-warp';
 import type { Rect } from '../../types';
 
@@ -20,6 +21,7 @@ export function applyMeshWarp(grid: MeshWarpGrid, bounds: Rect): void {
 
   useEditorStore.getState().pushHistory('Mesh Warp');
   applyMeshWarpGpu(engine, activeId, grid, bounds, w, h);
+  syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
@@ -30,6 +32,9 @@ export function beginMeshWarpPreview(): void {
   const engine = getEngine();
   if (!engine) return;
   saveFilterPreview(engine, activeId);
+  // saveFilterPreview expands the layer texture to doc size — reconcile
+  // JS bounds so the next syncLayers push does not clobber it (#771).
+  syncLayerAfterFullSize(engine, activeId);
 }
 
 export function previewMeshWarp(grid: MeshWarpGrid, bounds: Rect): void {
@@ -69,6 +74,7 @@ export function applyMeshWarpWithPreview(grid: MeshWarpGrid, bounds: Rect): void
 
   useEditorStore.getState().pushHistory('Mesh Warp');
   applyMeshWarpGpu(engine, activeId, grid, bounds, w, h);
+  syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }

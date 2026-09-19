@@ -18,6 +18,7 @@ import {
   liquifyRelease,
 } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import { MAX_DISP, defaultLiquifySettings } from '../../tools/liquify/liquify';
 import type { LiquifySession } from '../ui-store';
 
@@ -35,6 +36,9 @@ export function openLiquify(): void {
   const { width, height } = layer;
 
   saveFilterPreview(engine, activeId);
+  // saveFilterPreview expands the layer texture to doc size — reconcile
+  // JS bounds so the next syncLayers push does not clobber it (#771).
+  syncLayerAfterFullSize(engine, activeId);
 
   const zeroed = new Uint8Array(width * height * 4);
   for (let i = 0; i < width * height; i++) {
@@ -66,6 +70,7 @@ export function applyLiquify(): void {
   useEditorStore.getState().pushHistory('Liquify');
 
   liquifyRender(engine, session.layerId, MAX_DISP);
+  syncLayerAfterFullSize(engine, session.layerId);
 
   clearJsPixelData(session.layerId);
   liquifyRelease(engine);
