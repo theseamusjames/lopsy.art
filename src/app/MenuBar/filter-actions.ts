@@ -13,6 +13,7 @@ import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pix
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { filterRegistry } from '../../filters/filter-registry';
 import type { FilterDefinition } from '../../filters/filter-types';
+import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 
 export type FilterDialogId =
   | 'gaussian-blur'
@@ -66,6 +67,7 @@ export function applyGenericFilter(id: FilterDialogId, values: Record<string, nu
 
   useEditorStore.getState().pushHistory(filter.title);
   filter.applyGpu(engine, activeId, values);
+  syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
@@ -82,6 +84,11 @@ export function beginFilterPreview(): void {
   const state = useEditorStore.getState();
   flushLayerSync(state);
   saveFilterPreview(engine, activeId);
+  // saveFilterPreview calls ensure_layer_full_size on the WASM side to
+  // guarantee the preview snapshot is doc-sized. Reconcile JS bounds so a
+  // subsequent syncLayers push does not clobber the engine's expanded
+  // descriptor with the pre-filter x/y/width/height (#771).
+  syncLayerAfterFullSize(engine, activeId);
 }
 
 /** Apply a filter for preview without pushing history. */
@@ -137,6 +144,7 @@ export function applyGenericFilterWithPreview(id: FilterDialogId, values: Record
   } else {
     filter.applyGpu(engine, activeId, values);
   }
+  syncLayerAfterFullSize(engine, activeId);
 
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
@@ -151,6 +159,7 @@ export function applyInvert(): void {
 
   useEditorStore.getState().pushHistory('Invert');
   filterInvert(engine, activeId);
+  syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
@@ -164,6 +173,7 @@ export function applyDesaturate(): void {
 
   useEditorStore.getState().pushHistory('Desaturate');
   filterDesaturate(engine, activeId);
+  syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
@@ -177,6 +187,7 @@ export function applyFindEdges(): void {
 
   useEditorStore.getState().pushHistory('Find Edges');
   filterFindEdges(engine, activeId);
+  syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
