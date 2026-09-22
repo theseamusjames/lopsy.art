@@ -3,6 +3,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { readLayerPixels, getLayerTextureDimensions, filterPatternFill, saveFilterPreview, restoreFilterPreview, clearFilterPreview } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { usePatternStore, generateThumbnail } from '../pattern-store';
+import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import type { PatternDefinition } from '../pattern-store';
 import { guardPixelWrite } from '../../layers/paint-target';
 import type { Layer } from '../../types';
@@ -120,6 +121,7 @@ export function applyPatternFill(patternId: string, scale: number, offsetX: numb
     offsetX / 100,
     offsetY / 100,
   );
+  syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
@@ -131,6 +133,9 @@ export function beginPatternPreview(): void {
   const engine = getEngine();
   if (!engine) return;
   saveFilterPreview(engine, activeId);
+  // saveFilterPreview expands the layer texture to doc size — reconcile
+  // JS bounds so the next syncLayers push does not clobber it (#771).
+  syncLayerAfterFullSize(engine, activeId);
 }
 
 export function previewPatternFill(patternId: string, scale: number, offsetX: number, offsetY: number): void {
@@ -198,6 +203,7 @@ export function applyPatternFillWithPreview(patternId: string, scale: number, of
     offsetX / 100,
     offsetY / 100,
   );
+  syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }

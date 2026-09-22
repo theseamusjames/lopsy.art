@@ -9,6 +9,7 @@ import {
 } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
+import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import type { LutPreset } from '../../filters/color-lut';
 
 function getActiveLayerId(): string | null {
@@ -23,6 +24,9 @@ export function beginColorLutPreview(): void {
   const state = useEditorStore.getState();
   flushLayerSync(state);
   saveFilterPreview(engine, activeId);
+  // saveFilterPreview expands the layer texture to doc size — reconcile
+  // JS bounds so the next syncLayers push does not clobber it (#771).
+  syncLayerAfterFullSize(engine, activeId);
 }
 
 export function previewColorLut(preset: LutPreset, intensity: number): void {
@@ -67,6 +71,7 @@ export function applyColorLut(preset: LutPreset, intensity: number): void {
   } else {
     filterColorLut(engine, activeId, preset.data, preset.size, intensity);
   }
+  syncLayerAfterFullSize(engine, activeId);
 
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
@@ -80,6 +85,7 @@ export function applyColorLutDirect(preset: LutPreset, intensity: number): void 
 
   useEditorStore.getState().pushHistory('Color LUT');
   filterColorLut(engine, activeId, preset.data, preset.size, intensity);
+  syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
