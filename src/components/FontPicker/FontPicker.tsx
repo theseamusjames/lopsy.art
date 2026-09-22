@@ -5,7 +5,7 @@ import { FONT_CATALOG } from '../../utils/font-catalog';
 import type { FontEntry, FontCategory } from '../../utils/font-catalog';
 import { extractFamilyName, loadGoogleFontPreview } from '../../utils/font-loader';
 import { mergeLocalFonts } from '../../utils/local-fonts';
-import { useLocalFontsStore, useFontEntry } from '../../app/local-fonts-store';
+import { useLocalFontsStore, useFontEntry, loadLocalFontToDom } from '../../app/local-fonts-store';
 import { useVirtualScroll } from './useVirtualScroll';
 import styles from './FontPicker.module.css';
 
@@ -334,14 +334,25 @@ interface FontPickerItemProps {
 
 function FontPickerItem({ entry, isSelected, isHighlighted, onClick }: FontPickerItemProps) {
   useEffect(() => {
-    if (entry.source !== 'google') return;
-    // css2 subsets the returned face to only the family-name glyphs, so this
-    // stays cheap even while many rows scroll through the virtual window.
-    // document.fonts re-renders each row in its own face once loaded.
-    loadGoogleFontPreview(entry.family, entry.family).catch(() => {
-      // If the request fails the row still reads correctly in the category
-      // fallback face — no need to signal.
-    });
+    if (entry.source === 'google') {
+      // css2 subsets the returned face to only the family-name glyphs, so this
+      // stays cheap even while many rows scroll through the virtual window.
+      // document.fonts re-renders each row in its own face once loaded.
+      loadGoogleFontPreview(entry.family, entry.family).catch(() => {
+        // If the request fails the row still reads correctly in the category
+        // fallback face — no need to signal.
+      });
+      return;
+    }
+    if (entry.source === 'local') {
+      // Chromium hides installed families from the CSS font-family lookup
+      // for anti-fingerprinting, so `font-family: '<family>'` alone renders
+      // in the category fallback. Feed the Font Access bytes into
+      // document.fonts so the preview span reads in the real face.
+      loadLocalFontToDom(entry.family).catch(() => {
+        // On failure the row still reads in the category fallback.
+      });
+    }
   }, [entry.family, entry.source]);
 
   const className = [

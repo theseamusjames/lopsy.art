@@ -508,7 +508,7 @@ test.describe('Cut text then paste preserves correct clipboard', () => {
         };
       };
       const layers = store.getState().document.layers;
-      return layers.find((l) => l.name.startsWith('Text'))?.id ?? '';
+      return layers.find((l) => l.type === 'text')?.id ?? '';
     });
     expect(textLayerId).not.toBe('');
 

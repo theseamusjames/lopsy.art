@@ -46,6 +46,30 @@ describe('computeAddTextLayer', () => {
     expect(result.document!.activeLayerId).toBe(textLayer.id);
   });
 
+  it('sets selectedLayerIds to only the new text layer', () => {
+    // Regression: adding a text layer used to leave selectedLayerIds
+    // untouched, so any previously selected raster layer stayed selected
+    // beside the new text layer.
+    const layerA = createRasterLayer({ name: 'A', width: 100, height: 100 });
+    const layerB = createRasterLayer({ name: 'B', width: 100, height: 100 });
+    const doc: DocumentState = {
+      id: 'doc-1',
+      name: 'Test',
+      width: 100,
+      height: 100,
+      layers: [layerA, layerB],
+      layerOrder: [layerA.id, layerB.id],
+      activeLayerId: layerB.id,
+      selectedLayerIds: [layerA.id, layerB.id],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
+    };
+    const textLayer = createTextLayer({ name: 'Text', text: 'Hello' });
+    const result = computeAddTextLayer(doc, textLayer);
+    expect(result.document!.selectedLayerIds).toEqual([textLayer.id]);
+    expect(result.document!.activeLayerId).toBe(textLayer.id);
+  });
+
   it('preserves text layer properties', () => {
     const doc = makeDoc();
     const textLayer = createTextLayer({

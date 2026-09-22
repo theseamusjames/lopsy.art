@@ -139,7 +139,7 @@ test.describe('Text selection + merge', () => {
         };
       };
       // Text layers stay as type 'text' after commit — find by name
-      return store.getState().document.layers.find((l) => l.type === 'text' && l.name.startsWith('Text'))?.id ?? '';
+      return store.getState().document.layers.find((l) => l.type === 'text')?.id ?? '';
     });
     await page.locator(`[data-layer-id="${textId}"]`).click();
     await page.waitForTimeout(100);

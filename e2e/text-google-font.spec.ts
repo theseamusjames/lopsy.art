@@ -78,7 +78,7 @@ async function getTextLayers(page: Page) {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => { document: { layers: Array<{ id: string; type: string; name: string; visible: boolean }> } };
     };
-    return store.getState().document.layers.filter((l) => l.type === 'text' && l.name.startsWith('Text'));
+    return store.getState().document.layers.filter((l) => l.type === 'text');
   });
 }
 

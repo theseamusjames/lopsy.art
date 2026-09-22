@@ -86,6 +86,7 @@ async function getEditorDoc(page: Page) {
         width?: number | null;
       }>,
       activeLayerId: doc.activeLayerId as string,
+      selectedLayerIds: doc.selectedLayerIds as string[],
     };
   });
 }
@@ -151,9 +152,11 @@ test.describe('Text tool', () => {
 
     const doc = await getEditorDoc(page);
     // After commit, text layers stay as type 'text'
-    const committedTextLayers = doc.layers.filter((l) => l.type === 'text' && l.name.startsWith('Text'));
+    const committedTextLayers = doc.layers.filter((l) => l.type === 'text');
     expect(committedTextLayers.length).toBe(1);
     expect(committedTextLayers[0]!.visible).toBe(true);
+    // Committing renames the layer to the typed text (up to 16 chars).
+    expect(committedTextLayers[0]!.name).toBe('Hello World');
   });
 
   test('pressing Escape cancels editing and removes the new layer', async ({ page }) => {
@@ -187,7 +190,7 @@ test.describe('Text tool', () => {
 
     const doc = await getEditorDoc(page);
     // After commit, text layers remain type 'text' (not rasterized)
-    const committedTextLayers = doc.layers.filter((l) => l.type === 'text' && l.name.startsWith('Text'));
+    const committedTextLayers = doc.layers.filter((l) => l.type === 'text');
     expect(committedTextLayers.length).toBe(1);
     // Area text layer has a non-null width (the drag width)
     expect(committedTextLayers[0]!.width).not.toBeNull();
@@ -238,9 +241,43 @@ test.describe('Text tool', () => {
     await page.waitForTimeout(100);
 
     const doc = await getEditorDoc(page);
-    // No text or rasterized-text layers should exist
-    const textLayers = doc.layers.filter((l) => l.name.startsWith('Text'));
+    // No text layers should exist — the empty commit removes the placeholder.
+    const textLayers = doc.layers.filter((l) => l.type === 'text');
     expect(textLayers.length).toBe(0);
+  });
+
+  test('adding a text layer clears any prior multi-selection', async ({ page }) => {
+    // Regression for issue #773 (multi-selection carry-over): with the
+    // background raster already selected, opening the text tool and
+    // committing a text layer used to leave two layers selected.
+    const before = await getEditorDoc(page);
+    expect(before.selectedLayerIds.length).toBeGreaterThan(0);
+
+    await clickAtDoc(page, 200, 200);
+    await page.keyboard.type('Hi');
+    await page.keyboard.press('Shift+Enter');
+    await page.waitForTimeout(200);
+
+    const after = await getEditorDoc(page);
+    const textLayers = after.layers.filter((l) => l.type === 'text');
+    expect(textLayers.length).toBe(1);
+    expect(after.selectedLayerIds).toEqual([textLayers[0]!.id]);
+    expect(after.activeLayerId).toBe(textLayers[0]!.id);
+  });
+
+  test('committing renames the text layer to its content (16 char cap)', async ({ page }) => {
+    // Regression for issue #773 (text-layer naming): the layer name used
+    // to stay as the auto-generated "Text N" after commit; it should now
+    // follow the typed text, capped at 16 characters.
+    await clickAtDoc(page, 200, 200);
+    await page.keyboard.type('Sunset over lake and hills');
+    await page.keyboard.press('Shift+Enter');
+    await page.waitForTimeout(200);
+
+    const doc = await getEditorDoc(page);
+    const textLayers = doc.layers.filter((l) => l.type === 'text');
+    expect(textLayers).toHaveLength(1);
+    expect(textLayers[0]!.name).toBe('Sunset over lake');
   });
 
   test('text layer has pixel data after commit', async ({ page }) => {
@@ -259,7 +296,7 @@ test.describe('Text tool', () => {
       const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
         (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
       const state = store.getState();
-      const textLayer = state.document.layers.find((l) => l.type === 'text' && l.name.startsWith('Text'));
+      const textLayer = state.document.layers.find((l) => l.type === 'text');
       if (!textLayer) return false;
       const result = await readFn(textLayer.id);
       if (!result || result.width === 0) return false;

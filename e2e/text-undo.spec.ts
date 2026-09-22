@@ -66,7 +66,7 @@ test('undo after text commit removes the text layer', async ({ page }) => {
 
   const afterCommit = await getLayers(page);
   console.log('After commit:', JSON.stringify(afterCommit));
-  const textLayer = afterCommit.find(l => l.name.startsWith('Text'));
+  const textLayer = afterCommit.find(l => l.type === 'text');
 
   // Text layer should exist and stay as type 'text'
   if (!textLayer) {
@@ -90,7 +90,7 @@ test('undo after text commit removes the text layer', async ({ page }) => {
   await page.screenshot({ path: 'e2e/screenshots/text-undo-02-after-undo.png' });
 
   // Text layer should be gone
-  const textLayerAfterUndo = afterUndo.find(l => l.name.startsWith('Text'));
+  const textLayerAfterUndo = afterUndo.find(l => l.type === 'text');
   expect(textLayerAfterUndo).toBeUndefined();
   expect(afterUndo.length).toBe(layerCountBefore);
 });
@@ -200,7 +200,7 @@ test('undo + redo after text commit preserves text correctly', async ({ page }) 
   await commitTextViaUI(page, 150, 130, 'REDO');
 
   const afterCommit = await getLayers(page);
-  const textLayer = afterCommit.find(l => l.name.startsWith('Text'));
+  const textLayer = afterCommit.find(l => l.type === 'text');
   if (!textLayer) {
     console.log('SKIP: Text did not render');
     return;
@@ -221,7 +221,7 @@ test('undo + redo after text commit preserves text correctly', async ({ page }) 
   await page.screenshot({ path: 'e2e/screenshots/text-undo-04-after-redo.png' });
 
   // The text layer should be back as type 'text'
-  const redoTextLayer = afterRedo.find(l => l.name.startsWith('Text'));
+  const redoTextLayer = afterRedo.find(l => l.type === 'text');
   expect(redoTextLayer).toBeTruthy();
   expect(redoTextLayer!.type).toBe('text');
 });
