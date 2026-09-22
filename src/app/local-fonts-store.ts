@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { fontsByFamily, type FontEntry } from '../utils/font-catalog';
-import { groupLocalFontFaces, type LocalFontFace } from '../utils/local-fonts';
+import { groupLocalFontFaces, isItalicStyle, styleToWeight, type LocalFontFace } from '../utils/local-fonts';
 import { getEngine } from '../engine-wasm/engine-state';
 import { isFontLoaded, loadFontData } from '../engine-wasm/wasm-bridge';
 import { describeError } from './notifications-store';
@@ -36,6 +36,8 @@ interface LocalFontsState {
 // objects whose only job is to hand over bytes on demand.
 const facesByFamily = new Map<string, LocalFontData[]>();
 const inflightEngineLoads = new Map<string, Promise<boolean>>();
+const domLoadedFamilies = new Set<string>();
+const inflightDomLoads = new Map<string, Promise<boolean>>();
 
 export const useLocalFontsStore = create<LocalFontsState>((set, get) => ({
   status: 'idle',
@@ -125,5 +127,50 @@ export function loadLocalFontToEngine(family: string): Promise<boolean> {
   })().finally(() => inflightEngineLoads.delete(family));
 
   inflightEngineLoads.set(family, load);
+  return load;
+}
+
+/**
+ * Register a local family's faces with `document.fonts` so CSS
+ * `font-family: '<family>'` renders in-face. The Font Access API bytes are
+ * not otherwise reachable from CSS — Chromium hides installed families from
+ * the CSS font-family lookup for anti-fingerprinting, so the picker rows and
+ * any DOM preview using them would silently fall back to their category
+ * generic without this call.
+ *
+ * Resolves `true` once the family is registered (or was already), `false`
+ * when it is not a known local family or the browser refused every blob.
+ */
+export function loadLocalFontToDom(family: string): Promise<boolean> {
+  if (domLoadedFamilies.has(family)) return Promise.resolve(true);
+  const faces = facesByFamily.get(family);
+  if (!faces || faces.length === 0) return Promise.resolve(false);
+  if (typeof document === 'undefined' || !document.fonts) return Promise.resolve(false);
+
+  const inflight = inflightDomLoads.get(family);
+  if (inflight) return inflight;
+
+  const load = (async () => {
+    let anyLoaded = false;
+    for (const face of faces) {
+      const bytes = await readFaceBytes(face);
+      if (!bytes) continue;
+      try {
+        const fontFace = new FontFace(family, bytes.buffer as ArrayBuffer, {
+          weight: String(styleToWeight(face.style)),
+          style: isItalicStyle(face.style) ? 'italic' : 'normal',
+        });
+        await fontFace.load();
+        document.fonts.add(fontFace);
+        anyLoaded = true;
+      } catch {
+        // Ignore per-face failures; other faces of the family may still load.
+      }
+    }
+    if (anyLoaded) domLoadedFamilies.add(family);
+    return anyLoaded;
+  })().finally(() => inflightDomLoads.delete(family));
+
+  inflightDomLoads.set(family, load);
   return load;
 }

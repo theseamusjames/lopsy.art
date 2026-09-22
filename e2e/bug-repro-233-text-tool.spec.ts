@@ -52,7 +52,8 @@ test('issue #233 (A) — second text after move-tool commit still rasterizes con
 
   const winterLayerId = await page.evaluate(() => {
     const store = (window as unknown as { __editorStore: { getState: () => { document: { layers: Array<{ id: string; name: string }> } } } }).__editorStore.getState();
-    return store.document.layers.find((l) => l.name === 'Text 4')?.id ?? null;
+    // Committing renames the text layer to the typed content (up to 16 chars).
+    return store.document.layers.find((l) => l.name === 'WINTER')?.id ?? null;
   });
   expect(winterLayerId).not.toBeNull();
   const winterOpaque = await readActiveLayerOpaqueCount(page, winterLayerId!);
@@ -74,8 +75,7 @@ test('issue #233 (A) — second text after move-tool commit still rasterizes con
 
   const jazzLayerId = await page.evaluate(() => {
     const store = (window as unknown as { __editorStore: { getState: () => { document: { layers: Array<{ id: string; name: string }> } } } }).__editorStore.getState();
-    const text = store.document.layers.filter((l) => l.name.startsWith('Text'));
-    return text.find((l) => l.name !== 'Text 4')?.id ?? null;
+    return store.document.layers.find((l) => l.name === 'JAZZ')?.id ?? null;
   });
   expect(jazzLayerId).not.toBeNull();
   const jazzOpaque = await readActiveLayerOpaqueCount(page, jazzLayerId!);

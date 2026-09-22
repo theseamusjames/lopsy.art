@@ -61,9 +61,9 @@ async function getTextLayers(page: Page) {
       };
     };
     const doc = store.getState().document;
-    // Text layers are rasterized on commit — match by name prefix
+    // Text layers stay as type 'text' after commit.
     return {
-      layers: doc.layers.filter((l) => l.name.startsWith('Text')),
+      layers: doc.layers.filter((l) => l.type === 'text'),
       activeLayerId: doc.activeLayerId,
     };
   });

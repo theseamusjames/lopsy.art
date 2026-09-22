@@ -54,7 +54,7 @@ test('text layer rotation: content stays centered and does not scale', async ({ 
       id: l.id, x: l.x, y: l.y, width: l.width, height: l.height, fontSize: l.fontSize, type: l.type, name: l.name,
     }));
   });
-  const textLayer = layers.find(l => l.name.startsWith('Text'));
+  const textLayer = layers.find(l => l.type === 'text');
   console.log('All layers:', JSON.stringify(layers));
   console.log('Text layer:', JSON.stringify(textLayer));
 

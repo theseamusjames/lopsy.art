@@ -127,7 +127,7 @@ test.describe('Text + brush + merge down', () => {
         };
       };
       // Text layers stay as type 'text' after commit — find by name
-      return store.getState().document.layers.find((l) => l.type === 'text' && l.name.startsWith('Text'))?.id ?? '';
+      return store.getState().document.layers.find((l) => l.type === 'text')?.id ?? '';
     });
     expect(textId).not.toBe('');
 

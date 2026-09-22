@@ -353,7 +353,7 @@ async function createTextLayer(
         document: { layers: Array<{ id: string; type: string; name: string }> };
       };
     };
-    const textLayers = store.getState().document.layers.filter((l) => l.name.startsWith('Text'));
+    const textLayers = store.getState().document.layers.filter((l) => l.type === 'text');
     return textLayers[textLayers.length - 1]?.id ?? '';
   });
 }
@@ -721,8 +721,8 @@ test.describe('Composition: Neon City — Export Round-Trip', () => {
     // Root group + Buildings + Neon Signs = at least 3
     expect(groups.length).toBeGreaterThanOrEqual(3);
 
-    // Text layers are rasterized on commit — find by name prefix
-    const textLayers = finalDoc.layers.filter((l) => l.name.startsWith('Text'));
+    // Text layers stay as type 'text' after commit.
+    const textLayers = finalDoc.layers.filter((l) => l.type === 'text');
     expect(textLayers.length).toBeGreaterThanOrEqual(3);
 
     await page.screenshot({ path: 'e2e/screenshots/comp-neon-city-final.png' });

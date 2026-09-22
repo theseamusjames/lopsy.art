@@ -20,6 +20,7 @@ export function computeAddTextLayer(
       layers,
       layerOrder,
       activeLayerId: textLayer.id,
+      selectedLayerIds: [textLayer.id],
     },
   };
 }

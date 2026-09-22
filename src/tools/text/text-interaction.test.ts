@@ -86,6 +86,7 @@ import {
   handleTextUp,
   commitTextEditing,
   resetTextInteractionState,
+  textLayerNameFromContent,
 } from './text-interaction';
 import { DEFAULT_EFFECTS } from '../../layers/layer-model';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
@@ -463,6 +464,26 @@ describe('commitTextEditing', () => {
     expect(editorState.updateTextLayerProperties).toHaveBeenCalledWith('text-1', { visible: false });
   });
 
+  it('renames the layer to the committed text (capped at 16 chars)', () => {
+    editorState.document.layers = [makeTextLayer({ name: 'Text 1' })];
+    uiState.textEditing = editingState({ text: 'A longer heading string', isNew: true });
+    commitTextEditing();
+    expect(editorState.updateTextLayerProperties).toHaveBeenCalledWith(
+      'text-1',
+      expect.objectContaining({ name: 'A longer heading' }),
+    );
+  });
+
+  it('renames the layer on re-edit to reflect the new text', () => {
+    editorState.document.layers = [makeTextLayer({ name: 'Hello' })];
+    uiState.textEditing = editingState({ text: 'Goodbye', isNew: false });
+    commitTextEditing();
+    expect(editorState.updateTextLayerProperties).toHaveBeenCalledWith(
+      'text-1',
+      expect.objectContaining({ name: 'Goodbye' }),
+    );
+  });
+
   it('renders via the engine and positions the layer at bounds plus layout offset', () => {
     editorState.document.layers = [makeTextLayer()];
     uiState.textEditing = editingState({
@@ -610,5 +631,25 @@ describe('text down — caret + selection while editing', () => {
     handleTextMove(state, { x: 70, y: 50 });
     handleTextUp(state, { x: 70, y: 50 });
     expect(editorState.addTextLayer).not.toHaveBeenCalled();
+  });
+});
+
+describe('textLayerNameFromContent', () => {
+  it('returns short text unchanged', () => {
+    expect(textLayerNameFromContent('Hello')).toBe('Hello');
+  });
+
+  it('caps names at 16 characters', () => {
+    expect(textLayerNameFromContent('The quick brown fox jumps')).toBe('The quick brown ');
+  });
+
+  it('trims surrounding whitespace and collapses runs', () => {
+    expect(textLayerNameFromContent('  Hello   World  ')).toBe('Hello World');
+    expect(textLayerNameFromContent('Line 1\nLine 2')).toBe('Line 1 Line 2');
+  });
+
+  it('falls back to "Text" when the content has no non-whitespace', () => {
+    expect(textLayerNameFromContent('')).toBe('Text');
+    expect(textLayerNameFromContent('   \n\t ')).toBe('Text');
   });
 });

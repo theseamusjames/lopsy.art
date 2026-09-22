@@ -15,6 +15,7 @@ import {
   useLocalFontsStore,
   findFontEntry,
   loadLocalFontToEngine,
+  loadLocalFontToDom,
   type LocalFontData,
 } from './local-fonts-store';
 
@@ -169,5 +170,73 @@ describe('local-fonts-store', () => {
     isFontLoaded.mockReturnValue(false);
     await expect(loadLocalFontToEngine('Broken')).resolves.toBe(false);
     expect(loadFontData).toHaveBeenCalledTimes(1);
+  });
+
+  describe('loadLocalFontToDom', () => {
+    const addedFaces: Array<{ family: string; weight?: string; style?: string; bytes: number }> = [];
+
+    class FakeFontFace {
+      family: string;
+      weight?: string;
+      style?: string;
+      bytes: number;
+      constructor(family: string, source: ArrayBuffer, opts?: { weight?: string; style?: string }) {
+        this.family = family;
+        this.weight = opts?.weight;
+        this.style = opts?.style;
+        this.bytes = source.byteLength;
+      }
+      async load() { return this; }
+    }
+
+    beforeEach(() => {
+      addedFaces.length = 0;
+      (globalThis as unknown as { FontFace?: typeof FakeFontFace }).FontFace = FakeFontFace;
+      (globalThis as unknown as { document?: unknown }).document = {
+        visibilityState: 'visible',
+        addEventListener: vi.fn(),
+        fonts: {
+          add(face: FakeFontFace) {
+            addedFaces.push({ family: face.family, weight: face.weight, style: face.style, bytes: face.bytes });
+          },
+        },
+      };
+    });
+
+    afterEach(() => {
+      delete (globalThis as unknown as { document?: unknown }).document;
+      delete (globalThis as unknown as { FontFace?: typeof FakeFontFace }).FontFace;
+    });
+
+    it('registers every face of a local family with document.fonts and reports success', async () => {
+      stubWindow(async () => [
+        face('Zapfino', 'Regular', [1, 2, 3]),
+        face('Zapfino', 'Bold Italic', [4, 5, 6, 7]),
+      ]);
+      await useLocalFontsStore.getState().loadLocalFonts();
+
+      await expect(loadLocalFontToDom('Zapfino')).resolves.toBe(true);
+      expect(addedFaces).toHaveLength(2);
+      const regular = addedFaces.find((f) => f.style === 'normal')!;
+      expect(regular).toMatchObject({ family: 'Zapfino', weight: '400', bytes: 3 });
+      const boldItalic = addedFaces.find((f) => f.style === 'italic')!;
+      expect(boldItalic).toMatchObject({ family: 'Zapfino', weight: '700', bytes: 4 });
+    });
+
+    it('is a no-op after the first registration succeeds', async () => {
+      stubWindow(async () => [face('Zapfino', 'Regular', [1, 2])]);
+      await useLocalFontsStore.getState().loadLocalFonts();
+      await loadLocalFontToDom('Zapfino');
+      addedFaces.length = 0;
+      await expect(loadLocalFontToDom('Zapfino')).resolves.toBe(true);
+      expect(addedFaces).toEqual([]);
+    });
+
+    it('returns false for families that are not installed locally', async () => {
+      stubWindow(async () => [face('Zapfino', 'Regular')]);
+      await useLocalFontsStore.getState().loadLocalFonts();
+      await expect(loadLocalFontToDom('Impact')).resolves.toBe(false);
+      expect(addedFaces).toEqual([]);
+    });
   });
 });

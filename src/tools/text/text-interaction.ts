@@ -73,6 +73,19 @@ function hitTestOffset(layerId: string, text: string, boundsX: number, boundsY: 
   return byte >= 0 ? utf8ToUtf16(text, byte) : text.length;
 }
 
+/**
+ * Derive a layer name from the text content: collapse whitespace to spaces,
+ * strip surrounding whitespace, cap at 16 characters. Falls back to "Text"
+ * when the input has no non-whitespace characters (commitTextEditing
+ * removes empty-text layers before we get here, but the helper stays safe
+ * for callers that reuse it).
+ */
+export function textLayerNameFromContent(text: string): string {
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  if (collapsed.length === 0) return 'Text';
+  return collapsed.length > 16 ? collapsed.slice(0, 16) : collapsed;
+}
+
 
 /** Commit the current text editing session: render text to pixels and update the layer. */
 export function commitTextEditing(): void {
@@ -166,6 +179,7 @@ export function commitTextEditing(): void {
   toolSettings.addRecentFont(extractFamilyName(textForLayer.fontFamily));
   editorState.updateTextLayerProperties(editing.layerId, {
     text: editing.text,
+    name: textLayerNameFromContent(editing.text),
     fontFamily: textForLayer.fontFamily,
     fontSize: textForLayer.fontSize,
     fontWeight: textForLayer.fontWeight,
