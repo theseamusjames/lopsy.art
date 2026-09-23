@@ -39,7 +39,15 @@ export function selectLayerAlpha(layerId: string): void {
   if (bounds) {
     editorState.setSelection(bounds, selMask, docW, docH);
     useUIStore.getState().setTransform(createTransformState(bounds));
-    schedulePrefloat(layerId, selMask, bounds);
+    // Prefloat runs ensure_layer_full_size on the engine, which re-origins
+    // the layer to (0,0). For text layers that destroys the anchor
+    // invariant in rerenderCommittedTextLayerAnchored — the next text-tool
+    // click in empty space then edits the "moved" text at the top-left of
+    // the canvas. Same broken invariant as #767 (Brush pre-warm); this is
+    // the alpha-thumbnail-click entry point (#785).
+    if (layer.type !== 'text') {
+      schedulePrefloat(layerId, selMask, bounds);
+    }
   }
 }
 
