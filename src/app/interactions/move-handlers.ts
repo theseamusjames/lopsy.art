@@ -218,22 +218,38 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   if (sel.active && sel.mask) {
     const engine = getEngine();
 
-    // If a transform float is active (persistentTransformRef set), commit it
-    // first so the layer texture has the transformed content and we can
-    // re-select from the actual pixel alpha before floating for the move.
-    // selectLayerAlpha handles: dropFloat + clear JS data + rebuild mask.
+    // If a transform float is active (persistentTransformRef set), the GPU
+    // already holds the rotated/scaled pixels. Drag-to-reposition must
+    // move THAT float, not commit-and-reselect the whole layer alpha —
+    // otherwise the drag picks up every opaque pixel on the layer and
+    // scatters the un-selected ones across the canvas (#786). Preserve
+    // the float and translate it.
     if (persistentTransformRef.current) {
-      persistentTransformRef.current = null;
-      floatingSelectionRef.current = null;
-      selectLayerAlpha(activeLayerId);
-
-      // Force-sync the new selection mask to GPU immediately so the
-      // subsequent floatSelection uses the correct mask (not the stale one
-      // from before the transform was committed).
-      const selAfter = useEditorStore.getState().selection;
-      if (engine && selAfter.active && selAfter.mask) {
-        const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
-        setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
+      const persistent = persistentTransformRef.current;
+      if (engine && hasFloat(engine) && sel.bounds) {
+        floatingSelectionRef.current = {
+          offsetX: 0,
+          offsetY: 0,
+          // Marching ants during the move follow the transformed
+          // bounding box (from `sel.bounds`, already updated by the
+          // handle-drag). handleMoveUp will translate this mask by the
+          // move delta to build the post-drop selection.
+          originalMask: persistent.originalMask,
+          originalBounds: { ...sel.bounds },
+          gpuResident: true,
+        };
+        persistentTransformRef.current = null;
+      } else {
+        // Fallback: no live GPU float (e.g. engine dropped it) — commit
+        // and reselect, matching the old behavior.
+        persistentTransformRef.current = null;
+        floatingSelectionRef.current = null;
+        selectLayerAlpha(activeLayerId);
+        const selAfter = useEditorStore.getState().selection;
+        if (engine && selAfter.active && selAfter.mask) {
+          const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
+          setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
+        }
       }
     }
 
