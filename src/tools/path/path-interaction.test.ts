@@ -260,12 +260,25 @@ describe('path edit mode', () => {
     expect(editorState.paths[0]!.anchors[1]!.point).toEqual({ x: 50, y: 50 });
   });
 
-  it('clicking empty space deselects the path', () => {
+  it('clicking empty space deselects the path AND starts the next path (#789)', () => {
     selectPathWith([anchor(0, 0), anchor(10, 0)]);
-    const result = handlePathDown(makeCtx({ canvasPos: { x: 200, y: 200 } }));
-    expect(result).toBeUndefined();
+    const result = handlePathDown(makeCtx({
+      canvasPos: { x: 200, y: 200 },
+      layerPos: { x: 200, y: 200 },
+    }));
     expect(editorState.selectPath).toHaveBeenCalledWith(null);
     expect(uiState.setEditingAnchorIndex).toHaveBeenCalledWith(null);
+    // The click also becomes the first anchor of the next path.
+    expect(uiState.addPathAnchor).toHaveBeenCalledWith({
+      point: { x: 200, y: 200 },
+      handleIn: null,
+      handleOut: null,
+    });
+    expect(result).toMatchObject({
+      drawing: true,
+      tool: 'path',
+      startPoint: { x: 200, y: 200 },
+    });
   });
 
   it('scales the hit threshold with zoom', () => {
