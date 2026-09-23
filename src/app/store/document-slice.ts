@@ -967,26 +967,32 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     }
 
     const displayList = buildFlatDisplayList(doc.layers, doc.layerOrder);
-    // Preserve visual order (top→bottom in panel)
-    const orderedIds = displayList
+    // displayList walks top→bottom (panel order). `layerOrder` and
+    // `GroupLayer.children` both store bottom→top, so we need both
+    // orderings: display-order for anchoring the group at the topmost
+    // selected row, and its reverse for the children[] / layerOrder block
+    // (#784 — otherwise grouping silently flipped the stacking order).
+    const idsTopToBottom = displayList
       .map((e) => e.layer.id)
       .filter((id) => idsToGroup.includes(id));
+    const idsBottomToTop = [...idsTopToBottom].reverse();
 
     const group = createGroupLayer({
       name: 'Group',
-      children: [...orderedIds],
+      children: [...idsBottomToTop],
     });
 
-    // Find the parent group to add the new group into
-    const firstId = orderedIds[0]!;
-    const parentGroup = findParentGroup(doc.layers, firstId);
+    // Anchor the new group at the topmost selected layer's parent, so
+    // grouping doesn't hoist the group above unrelated siblings (#784).
+    const topmostId = idsTopToBottom[0]!;
+    const parentGroup = findParentGroup(doc.layers, topmostId);
     const targetGroupId = parentGroup?.id ?? doc.rootGroupId ?? null;
 
     // Remove selected layers from their current parents BEFORE adding the
     // group — otherwise removeFromParentGroup also strips children from
     // the newly created group.
     let newLayers = [...doc.layers];
-    for (const id of orderedIds) {
+    for (const id of idsBottomToTop) {
       newLayers = removeFromParentGroup(newLayers, id);
     }
     newLayers = [...newLayers, group];
@@ -994,14 +1000,21 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       newLayers = addToGroupUtil(newLayers, group.id, targetGroupId);
     }
 
-    // Rebuild layerOrder: strip out grouped IDs, insert block before target group
-    const toGroupSet = new Set(orderedIds);
+    // Rebuild layerOrder: put the [selected bottom→top, group] block at
+    // the topmost selected layer's original z-index, so the group ends up
+    // exactly where the selection was (#784). "Position of topmost" =
+    // count of non-selected entries strictly below it in the original
+    // layerOrder.
+    const toGroupSet = new Set(idsBottomToTop);
     const filteredOrder = doc.layerOrder.filter((id) => !toGroupSet.has(id));
-    const targetIdx = targetGroupId ? filteredOrder.indexOf(targetGroupId) : filteredOrder.length;
-    const insertAt = targetIdx !== -1 ? targetIdx : filteredOrder.length;
+    const topmostIdx = doc.layerOrder.indexOf(topmostId);
+    const insertAt = doc.layerOrder
+      .slice(0, topmostIdx)
+      .filter((id) => !toGroupSet.has(id))
+      .length;
     const newOrder = [
       ...filteredOrder.slice(0, insertAt),
-      ...orderedIds,
+      ...idsBottomToTop,
       group.id,
       ...filteredOrder.slice(insertAt),
     ];

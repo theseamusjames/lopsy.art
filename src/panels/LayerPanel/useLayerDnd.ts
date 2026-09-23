@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Layer } from '../../types';
-import { isGroupLayer, canMoveToGroup, findParentGroup } from '../../layers/group-utils';
+import { isGroupLayer, canMoveToGroup, findParentGroup, isAncestorOf } from '../../layers/group-utils';
 import styles from './LayerPanel.module.css';
 
 interface DisplayEntry {
@@ -122,7 +122,15 @@ export function useLayerDnd({
         }
 
         if (targetParentId && draggedParent && targetParentId !== draggedParent.id) {
-          if (canMoveToGroup(layers, draggedLayer.id, targetParentId)) {
+          // If the target parent is an ancestor of the dragged layer's
+          // current parent, the drop is "escaping outward" past a group
+          // boundary (e.g. below the group's last child). The flat
+          // reorder honors the drop gap and re-parents based on the
+          // neighbor above; jumping straight to moveLayerToGroup would
+          // ignore the gap and hoist the layer to the top of the parent
+          // stack (#788).
+          const isEscapingOutward = isAncestorOf(layers, targetParentId, draggedParent.id);
+          if (!isEscapingOutward && canMoveToGroup(layers, draggedLayer.id, targetParentId)) {
             moveLayerToGroup(draggedLayer.id, targetParentId);
             return;
           }
