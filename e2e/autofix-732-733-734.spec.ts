@@ -86,31 +86,38 @@ test.describe('#733 — mask-edit paint no longer round-trips the layer RGBA', (
     await page.mouse.down();
     await page.mouse.move(end.x, end.y, { steps: 20 });
     await page.mouse.up();
-    await page.waitForTimeout(200);
 
-    // Post-condition: the layer's JS pixel cache is still empty. If the
-    // regression returns, `expandLayerForEditing` will have stored an
-    // ImageData for the active layer here.
+    // Sanity: the mask actually got painted. Values drop from 255 (fully
+    // reveal) toward 0 (hide) where the brush ran. The readback into
+    // `layer.mask.data` is deferred until the GPU backlog drains (rAF
+    // quiescence, #760), so poll for it rather than reading at a fixed delay.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const store = (window as unknown as Record<string, unknown>).__editorStore as {
+              getState: () => {
+                document: {
+                  activeLayerId: string | null;
+                  layers: Array<{ id: string; mask: { data: Uint8ClampedArray } | null }>;
+                };
+              };
+            };
+            const state = store.getState();
+            const layer = state.document.layers.find((l) => l.id === state.document.activeLayerId);
+            if (!layer?.mask) return -1;
+            let dark = 0;
+            for (const v of layer.mask.data) if (v < 200) dark++;
+            return dark;
+          }),
+        { timeout: 8000 },
+      )
+      .toBeGreaterThan(500);
+
+    // Post-condition: the layer's JS pixel cache is still empty. Painting the
+    // *mask* must not materialize the *layer* RGBA (#733). If the regression
+    // returns, `expandLayerForEditing` will have stored an ImageData for the
+    // active layer here.
     expect(await activeLayerPixelDataPresent(page)).toBe(false);
-
-    // Sanity: the mask actually got painted. Values drop from 255
-    // (fully reveal) toward 0 (hide) where the brush ran.
-    const paintedZeros = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: {
-            activeLayerId: string | null;
-            layers: Array<{ id: string; mask: { data: Uint8ClampedArray } | null }>;
-          };
-        };
-      };
-      const state = store.getState();
-      const layer = state.document.layers.find((l) => l.id === state.document.activeLayerId);
-      if (!layer?.mask) return -1;
-      let dark = 0;
-      for (const v of layer.mask.data) if (v < 200) dark++;
-      return dark;
-    });
-    expect(paintedZeros).toBeGreaterThan(500);
   });
 });
