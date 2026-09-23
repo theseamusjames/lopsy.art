@@ -6,6 +6,7 @@ import { Toolbox } from '../toolbox/Toolbox';
 import { LayerPanel } from '../panels/LayerPanel/LayerPanel';
 import { LayerEffectsPanel } from '../panels/LayerEffectsPanel/LayerEffectsPanel';
 import { ColorPanel } from '../panels/ColorPanel/ColorPanel';
+import { SwatchesPanel } from '../panels/SwatchesPanel/SwatchesPanel';
 import { HistoryPanel } from '../panels/HistoryPanel/HistoryPanel';
 import { InfoPanel } from '../panels/InfoPanel/InfoPanel';
 import { AdjustmentsPanel } from '../panels/AdjustmentsPanel/AdjustmentsPanel';
@@ -186,6 +187,8 @@ export function App() {
         return <InfoPanel />;
       case 'color':
         return <ColorPanel />;
+      case 'swatches':
+        return <SwatchesPanel />;
       case 'channels':
         return <ChannelsPanel />;
       case 'history':

@@ -1,4 +1,4 @@
-import { Columns3, History, Info, Layers, Map, Palette, Spline, Type } from 'lucide-react';
+import { Columns3, History, Info, Layers, Map, Palette, Spline, SwatchBook, Type } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /** Panels that participate in the docking system. */
@@ -6,6 +6,7 @@ export type DockablePanelId =
   | 'navigator'
   | 'info'
   | 'color'
+  | 'swatches'
   | 'layers'
   | 'channels'
   | 'history'
@@ -23,6 +24,7 @@ export const DOCK_PANELS: readonly DockPanelMeta[] = [
   { id: 'navigator', title: 'Navigator', icon: Map },
   { id: 'info', title: 'Info', icon: Info },
   { id: 'color', title: 'Color', icon: Palette },
+  { id: 'swatches', title: 'Swatches', icon: SwatchBook },
   { id: 'layers', title: 'Layers', icon: Layers },
   { id: 'channels', title: 'Channels', icon: Columns3 },
   { id: 'history', title: 'History', icon: History },
@@ -40,6 +42,7 @@ export const DOCK_STACK_ORDER: readonly string[] = [
   'navigator',
   'info',
   'color',
+  'swatches',
   'text',
   'channels',
   'history',
