@@ -23,8 +23,8 @@ import {
   paintMaskDab as gpuMaskDab,
   paintMaskDabBatch as gpuMaskDabBatch,
   drawMaskPencilLine as gpuMaskPencilLine,
-  uploadLayerMask,
 } from '../../engine-wasm/wasm-bridge';
+import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
 import type { SymmetryConfig } from '../../tools/symmetry';
 import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from '../../tools/symmetry';
 import { handleBrushStroke } from '../../tools/brush/brush-stroke';
@@ -241,9 +241,10 @@ export function handlePaintDown(
       return state;
     }
 
-    // Ensure mask texture is on GPU before painting
-    const maskBytes = new Uint8Array(freshMask.data.buffer, freshMask.data.byteOffset, freshMask.data.byteLength);
-    uploadLayerMask(engine, activeLayerId, maskBytes, freshMask.width, freshMask.height);
+    // Ensure mask texture is on GPU before painting. Gate on tracked
+    // ref equality so we don't echo the same array back to the GPU on
+    // every stroke — the GPU already holds these bytes (#780).
+    uploadLayerMaskIfChanged(engine, activeLayerId, freshMask.data, freshMask.width, freshMask.height);
 
     // Inverted from quick mask: brush=1 (subtract/hide), eraser=0 (add/reveal)
     const mode = tool === 'eraser' ? 0 : 1;

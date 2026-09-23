@@ -87,6 +87,60 @@ const { DEFAULT_ADJUSTMENTS } = await import('../filters/image-adjustments');
 // production, but plain objects suffice here.
 const makeFakeEngine = () => ({}) as unknown as Engine;
 
+/**
+ * #780 — every mask-paint pointer-down used to unconditionally upload
+ * the whole mask back to the GPU (~17 MB at 4K), even though the GPU
+ * already held those bytes from the previous stroke. The gated helper
+ * skips the upload when the tracked ref matches, and seeds the ref on
+ * a real change so subsequent frames' syncLayers also see a hit.
+ */
+describe('uploadLayerMaskIfChanged — #780', () => {
+  it('skips the upload when the passed data ref matches the tracked ref', () => {
+    const engine = makeFakeEngine();
+    sync.resetTrackedState(engine);
+    const bytes = new Uint8ClampedArray(16).fill(200);
+    sync.seedMaskDataRef(engine, 'layer-1', bytes);
+    const upload = vi.mocked(bridge.uploadLayerMask);
+    upload.mockClear();
+
+    const uploaded = sync.uploadLayerMaskIfChanged(engine, 'layer-1', bytes, 4, 4);
+
+    expect(uploaded).toBe(false);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('uploads and seeds the tracked ref when the data ref differs', () => {
+    const engine = makeFakeEngine();
+    sync.resetTrackedState(engine);
+    const older = new Uint8ClampedArray(16).fill(100);
+    const newer = new Uint8ClampedArray(16).fill(200);
+    sync.seedMaskDataRef(engine, 'layer-1', older);
+    const upload = vi.mocked(bridge.uploadLayerMask);
+    upload.mockClear();
+
+    const uploaded = sync.uploadLayerMaskIfChanged(engine, 'layer-1', newer, 4, 4);
+
+    expect(uploaded).toBe(true);
+    expect(upload).toHaveBeenCalledTimes(1);
+    // A second call with the same ref must now no-op (seeded).
+    upload.mockClear();
+    const again = sync.uploadLayerMaskIfChanged(engine, 'layer-1', newer, 4, 4);
+    expect(again).toBe(false);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('uploads the first time (no tracked ref yet)', () => {
+    const engine = makeFakeEngine();
+    sync.resetTrackedState(engine);
+    const upload = vi.mocked(bridge.uploadLayerMask);
+    upload.mockClear();
+
+    const uploaded = sync.uploadLayerMaskIfChanged(engine, 'layer-1', new Uint8ClampedArray(4), 2, 2);
+    expect(uploaded).toBe(true);
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('engine-sync tracked state', () => {
   it('only pushes to the engine when a value actually changes', () => {
     const engine = makeFakeEngine();

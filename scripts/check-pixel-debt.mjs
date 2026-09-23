@@ -49,10 +49,11 @@ const ALLOWLIST = {
   'src/app/store/actions/resize-canvas.test.ts': 1,
   'src/app/store/actions/resize-image.test.ts': 1,
   'src/app/store/clipboard-image-match.test.ts': 1,
-  'src/engine-wasm/engine-sync.test.ts': 3,
+  'src/app/store/history-metadata-mask-flush.test.ts': 2,  // #782 mask-read-queue fixtures
+  'src/engine-wasm/engine-sync.test.ts': 7,            // +4: uploadLayerMaskIfChanged fixtures (#780)
   'src/engine-wasm/sync-layers.test.ts': 11,           // +3: fixture buffers for #734 mask-readback seed tests
   'src/engine-wasm/sync-selection.test.ts': 5,         // #763 seedSelectionMaskRef fixtures
-  'src/engine-wasm/sync-state.test.ts': 7,             // #734 seedMaskDataRef fixtures
+  'src/engine-wasm/sync-state.test.ts': 11,            // +4: #781 preserveContentRefs fixtures
   'src/engine/pixel-data-manager.test.ts': 2,
   'src/engine/pixel-data.test.ts': 1,
   'src/filters/auto-enhance.test.ts': 1,

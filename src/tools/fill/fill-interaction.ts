@@ -17,9 +17,9 @@ import {
   getLayerTextureDimensions,
   fillQuickMask as wasmFillQuickMask,
   fillMask as wasmFillMask,
-  uploadLayerMask,
   readMaskTexture,
 } from '../../engine-wasm/wasm-bridge';
+import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
 
 /** Down handler for the bucket fill tool. Flood-fills from the click point,
  *  intersected with any active selection, and uploads to the GPU. */
@@ -62,8 +62,10 @@ export function handleFillDown(ctx: InteractionContext): void {
     const engine = getEngine();
     if (!engine) return;
 
-    const maskBytes = new Uint8Array(freshMask.data.buffer, freshMask.data.byteOffset, freshMask.data.byteLength);
-    uploadLayerMask(engine, activeLayerId, maskBytes, freshMask.width, freshMask.height);
+    // Skip re-uploading unchanged mask data — the GPU already holds it
+    // from the previous stroke, and the copy back into JS is what makes
+    // it new here (#780).
+    uploadLayerMaskIfChanged(engine, activeLayerId, freshMask.data, freshMask.width, freshMask.height);
 
     const startX = Math.round(layerPos.x);
     const startY = Math.round(layerPos.y);
