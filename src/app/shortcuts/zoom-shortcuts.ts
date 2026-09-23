@@ -1,4 +1,5 @@
 import type { RefObject } from 'react';
+import { nextZoomLevel } from '../../utils/zoom-levels';
 
 export function handleZoomShortcut(
   e: KeyboardEvent,
@@ -11,12 +12,12 @@ export function handleZoomShortcut(
 ): boolean {
   if (e.key === '=' || e.key === '+') {
     e.preventDefault();
-    setZoom(Math.min(64, zoom * 1.5));
+    setZoom(nextZoomLevel(zoom, 'in'));
     return true;
   }
   if (e.key === '-') {
     e.preventDefault();
-    setZoom(Math.max(0.01, zoom / 1.5));
+    setZoom(nextZoomLevel(zoom, 'out'));
     return true;
   }
   if (e.key === '0') {
