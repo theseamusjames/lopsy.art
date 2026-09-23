@@ -1,5 +1,6 @@
 import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
+import { nextZoomLevel } from '../../../utils/zoom-levels';
 import type { MenuDef } from './types';
 
 export function createViewMenu(): MenuDef {
@@ -11,14 +12,14 @@ export function createViewMenu(): MenuDef {
         label: 'Zoom In', shortcut: '\u2318=',
         action: () => {
           const state = useEditorStore.getState();
-          state.setZoom(Math.min(64, state.viewport.zoom * 1.5));
+          state.setZoom(nextZoomLevel(state.viewport.zoom, 'in'));
         },
       },
       {
         label: 'Zoom Out', shortcut: '\u2318-',
         action: () => {
           const state = useEditorStore.getState();
-          state.setZoom(Math.max(0.01, state.viewport.zoom / 1.5));
+          state.setZoom(nextZoomLevel(state.viewport.zoom, 'out'));
         },
       },
       {

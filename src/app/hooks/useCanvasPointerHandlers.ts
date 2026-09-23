@@ -6,6 +6,7 @@ import { isPanning, POINTER_IDLE, type PointerMode } from '../pointer-mode';
 import { RULER_SIZE } from '../rendering/ruler-constants';
 import { snapGuideToFraction } from '../rendering/guide-snap';
 import { updatePaintLinePreview } from '../interactions/paint-line-preview';
+import { zoomAtPoint, type ViewTransform } from '../../utils/zoom-at-point';
 
 interface Point {
   x: number;
@@ -56,6 +57,17 @@ function midpointOfTouches(pointers: Map<number, PointerState>): { midX: number;
     midY: (a.clientY + b.clientY) / 2,
     dist: Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY),
   };
+}
+
+/** Safari's non-standard GestureEvent, which the DOM lib doesn't declare. */
+interface SafariGestureEvent extends UIEvent {
+  readonly scale: number;
+  readonly clientX: number;
+  readonly clientY: number;
+}
+
+function isSafariGestureEvent(e: Event): e is SafariGestureEvent {
+  return 'scale' in e && 'clientX' in e && 'clientY' in e;
 }
 
 function countTouchPointers(pointers: Map<number, PointerState>): number {
@@ -280,12 +292,18 @@ export function useCanvasPointerHandlers({
       if (gestureRef.current.active) {
         const mid = midpointOfTouches(pointersRef.current);
         if (!mid || gestureRef.current.startDist <= 0) return;
-        const scale = mid.dist / gestureRef.current.startDist;
-        const newZoom = Math.max(0.01, Math.min(64, gestureRef.current.startZoom * scale));
-        deps.setZoom(newZoom);
-        const dx = mid.midX - gestureRef.current.startMidX;
-        const dy = mid.midY - gestureRef.current.startMidY;
-        deps.setPan(gestureRef.current.startPanX + dx, gestureRef.current.startPanY + dy);
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const g = gestureRef.current;
+        const next = zoomAtPoint(
+          { zoom: g.startZoom, panX: g.startPanX, panY: g.startPanY },
+          g.startZoom * (mid.dist / g.startDist),
+          { x: g.startMidX - rect.left, y: g.startMidY - rect.top },
+          rect,
+          { x: mid.midX - rect.left, y: mid.midY - rect.top },
+        );
+        deps.setZoom(next.zoom);
+        deps.setPan(next.panX, next.panY);
         return;
       }
 
@@ -411,7 +429,7 @@ export function useCanvasPointerHandlers({
       window.removeEventListener('pointerup', finishPointer);
       window.removeEventListener('pointercancel', finishPointer);
     };
-  }, [flushCursorPosition]);
+  }, [containerRef, flushCursorPosition]);
 
   // Attach wheel natively (non-passive) so ctrl+wheel can preventDefault
   // the browser's page-zoom — React's synthetic onWheel is passive and
@@ -425,17 +443,36 @@ export function useCanvasPointerHandlers({
     // common navigation gestures.
     let wheelEndTimer: ReturnType<typeof setTimeout> | null = null;
     const WHEEL_END_MS = 150;
-    const onWheel = (e: WheelEvent) => {
+    // Safari reports trackpad pinch as proprietary gesture events rather than
+    // the ctrl+wheel Chrome and Firefox send. The viewport at gesture start is
+    // kept because `scale` is cumulative from there, not per event.
+    let safariPinchStart: ViewTransform | null = null;
+    let safariPinchAnchor: Point | null = null;
+
+    const containerFor = (e: Event): HTMLDivElement | null => {
       const el = containerRef.current;
-      if (!el) return;
       const target = e.target as Node | null;
-      if (!target || !el.contains(target)) return;
+      if (!el || !target || !el.contains(target)) return null;
+      return el;
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      const el = containerFor(e);
+      if (!el) return;
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        const factor = Math.pow(1.002, -e.deltaY);
+        // A Safari pinch already drives zoom; don't double-apply it.
+        if (safariPinchStart) return;
+        const rect = el.getBoundingClientRect();
         const vp = useEditorStore.getState().viewport;
-        const newZoom = Math.max(0.01, Math.min(64, vp.zoom * factor));
-        setZoom(newZoom);
+        const next = zoomAtPoint(
+          vp,
+          vp.zoom * Math.pow(1.002, -e.deltaY),
+          { x: e.clientX - rect.left, y: e.clientY - rect.top },
+          rect,
+        );
+        setZoom(next.zoom);
+        setPan(next.panX, next.panY);
       } else {
         const vp = useEditorStore.getState().viewport;
         setPan(vp.panX - e.deltaX, vp.panY - e.deltaY);
@@ -457,9 +494,49 @@ export function useCanvasPointerHandlers({
         }
       }, WHEEL_END_MS);
     };
+    const onGestureStart = (e: Event) => {
+      const el = containerFor(e);
+      if (!el || !isSafariGestureEvent(e)) return;
+      const rect = el.getBoundingClientRect();
+      const vp = useEditorStore.getState().viewport;
+      safariPinchStart = { zoom: vp.zoom, panX: vp.panX, panY: vp.panY };
+      safariPinchAnchor = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      useUIStore.getState().setIsInteracting(true);
+    };
+    const onGestureChange = (e: Event) => {
+      const el = containerRef.current;
+      if (!el || !safariPinchStart || !safariPinchAnchor || !isSafariGestureEvent(e)) return;
+      const rect = el.getBoundingClientRect();
+      const next = zoomAtPoint(
+        safariPinchStart,
+        safariPinchStart.zoom * e.scale,
+        safariPinchAnchor,
+        rect,
+        { x: e.clientX - rect.left, y: e.clientY - rect.top },
+      );
+      setZoom(next.zoom);
+      setPan(next.panX, next.panY);
+    };
+    const onGestureEnd = () => {
+      if (!safariPinchStart) return;
+      safariPinchStart = null;
+      safariPinchAnchor = null;
+      const stillPanning = depsRef.current.pointerMode.kind === 'panning';
+      const stillTool = toolPointerIdRef.current !== null;
+      if (!gestureRef.current.active && !stillPanning && !stillTool && wheelEndTimer === null) {
+        useUIStore.getState().setIsInteracting(false);
+      }
+    };
+
     window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('gesturestart', onGestureStart);
+    window.addEventListener('gesturechange', onGestureChange);
+    window.addEventListener('gestureend', onGestureEnd);
     return () => {
       window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('gesturestart', onGestureStart);
+      window.removeEventListener('gesturechange', onGestureChange);
+      window.removeEventListener('gestureend', onGestureEnd);
       if (wheelEndTimer !== null) clearTimeout(wheelEndTimer);
     };
   }, [containerRef, setZoom, setPan]);
