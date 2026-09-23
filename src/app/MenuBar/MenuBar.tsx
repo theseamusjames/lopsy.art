@@ -47,6 +47,7 @@ import { setSelectionMask, featherSelectionMask, readSelectionMask } from '../..
 import { seedSelectionMaskRef } from '../../engine-wasm/sync-state';
 import { createTransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
+import { useNativeMenu } from './useNativeMenu';
 import styles from './MenuBar.module.css';
 
 export function MenuBar() {
@@ -95,6 +96,9 @@ export function MenuBar() {
   const convertColorMode = useEditorStore((s) => s.convertColorMode);
 
   const menus = getMenus(showFilterDialog, showImageDialog, showHelpDialog, showSelectDialog, colorMode, convertColorMode);
+  const isNativeMenu = useNativeMenu(() =>
+    getMenus(showFilterDialog, showImageDialog, showHelpDialog, showSelectDialog, colorMode, convertColorMode),
+  );
 
   const handleMenuClick = useCallback((index: number) => {
     setOpenSubmenu(null);
@@ -293,7 +297,7 @@ export function MenuBar() {
 
   return (
     <>
-      <nav ref={barRef} className={styles.bar} aria-label="Application menu">
+      {!isNativeMenu && <nav ref={barRef} className={styles.bar} aria-label="Application menu">
         {menus.map((menu, i) => (
           <div key={menu.label} className={styles.menuItem}>
             <button
@@ -381,7 +385,7 @@ export function MenuBar() {
           </div>
         ))}
         <span className={styles.logo} aria-hidden="true">LOPSY</span>
-      </nav>
+      </nav>}
       {filterDef && (
         <FilterDialog
           title={filterDef.title}

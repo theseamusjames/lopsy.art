@@ -66,6 +66,28 @@ function wasmFreshnessCheck(): Plugin {
   };
 }
 
+/**
+ * Safari still ignores unprefixed `user-select`, so UI text stayed
+ * selectable there while Chrome honoured it. Emit the -webkit- twin next to
+ * every declaration instead of hand-maintaining both spellings.
+ */
+interface CssDeclaration {
+  prop: string;
+  type: string;
+  parent?: { some: (fn: (node: { type: string; prop?: string }) => boolean) => boolean };
+  cloneBefore: (overrides: { prop: string }) => unknown;
+}
+
+const webkitUserSelect = {
+  postcssPlugin: 'webkit-user-select',
+  Declaration: {
+    'user-select': (decl: CssDeclaration) => {
+      const hasPrefixed = decl.parent?.some((n) => n.type === 'decl' && n.prop === '-webkit-user-select');
+      if (!hasPrefixed) decl.cloneBefore({ prop: '-webkit-user-select' });
+    },
+  },
+};
+
 export default defineConfig({
   base: '/',
   plugins: [react(), wasm(), topLevelAwait(), wasmFreshnessCheck()],
@@ -83,6 +105,9 @@ export default defineConfig({
     },
   },
   css: {
+    postcss: {
+      plugins: [webkitUserSelect],
+    },
     modules: {
       localsConvention: 'camelCaseOnly',
     },

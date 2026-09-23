@@ -252,6 +252,15 @@ function renderFrame(
   renderFrameGpu(overlayCanvas, container, antPhaseRef, prevActiveLayerRef, croppedLayerIds);
 }
 
+class CancelledInit extends Error {}
+
+/** Resolves after the browser has painted the current frame. */
+function waitForPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
 export function useCanvasRendering(
   canvasRef: RefObject<HTMLCanvasElement | null>,
   containerRef: RefObject<HTMLDivElement | null>,
@@ -290,7 +299,12 @@ export function useCanvasRendering(
     canvas.addEventListener('webglcontextlost', handleContextLost);
     canvas.addEventListener('webglcontextrestored', handleContextRestored);
 
-    initEngine(canvas)
+    // Engine creation compiles every shader synchronously — on a cold GPU
+    // shader cache (seen in Safari) that blocks the main thread for seconds.
+    // Let the "starting" overlay paint first so the pause has a face.
+    useUIStore.getState().setEngineReady(false);
+    waitForPaint()
+      .then(() => (cancelled ? Promise.reject(new CancelledInit()) : initEngine(canvas)))
       .then((engine) => {
         if (cancelled) {
           // Only destroy if this engine is still the current global engine.
@@ -302,17 +316,19 @@ export function useCanvasRendering(
         }
         engineReadyRef.current = true;
         dirtyRef.current = true;
+        useUIStore.getState().setEngineReady(true);
         // Force initial full sync
         markAllLayersDirty(engine);
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (cancelled || err instanceof CancelledInit) return;
         notifyError(`Failed to initialize graphics engine: ${describeError(err)}`);
       });
 
     return () => {
       cancelled = true;
       engineReadyRef.current = false;
+      useUIStore.getState().setEngineReady(false);
       canvas.removeEventListener('webglcontextlost', handleContextLost);
       canvas.removeEventListener('webglcontextrestored', handleContextRestored);
       // Tracked state is keyed by Engine in a WeakMap; destroying the engine

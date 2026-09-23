@@ -199,8 +199,10 @@ window.addEventListener('keydown', (e) => {
   }
 }, { capture: true });
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
+// Service workers only register on http(s); the tinyjs desktop build loads
+// from file://, where register() rejects.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
 }
 
 initWasm().catch(() => {});

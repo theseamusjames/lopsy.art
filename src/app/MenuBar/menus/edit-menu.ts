@@ -52,13 +52,13 @@ export function createEditMenu(showFilterDialog: (id: FilterDialogId) => void): 
   return {
     label: 'Edit',
     items: [
-      { label: 'Undo', shortcut: '⌘Z', action: () => useEditorStore.getState().undo() },
-      { label: 'Redo', shortcut: '⇧⌘Z', action: () => useEditorStore.getState().redo() },
+      { label: 'Undo', nativeRole: 'undo', shortcut: '⌘Z', action: () => useEditorStore.getState().undo() },
+      { label: 'Redo', nativeRole: 'redo', shortcut: '⇧⌘Z', action: () => useEditorStore.getState().redo() },
       { separator: true, label: '' },
-      { label: 'Cut', shortcut: '⌘X', action: () => useEditorStore.getState().cut() },
-      { label: 'Copy', shortcut: '⌘C', action: () => useEditorStore.getState().copy() },
+      { label: 'Cut', nativeRole: 'cut', shortcut: '⌘X', action: () => useEditorStore.getState().cut() },
+      { label: 'Copy', nativeRole: 'copy', shortcut: '⌘C', action: () => useEditorStore.getState().copy() },
       { label: 'Copy Merged', shortcut: '⇧⌘C', action: () => useEditorStore.getState().copyMerged() },
-      { label: 'Paste', shortcut: '⌘V', action: () => useEditorStore.getState().paste() },
+      { label: 'Paste', nativeRole: 'paste', shortcut: '⌘V', action: () => useEditorStore.getState().paste() },
       { separator: true, label: '' },
       { label: 'Fill', shortcut: '⇧F5', action: () => fillSelection() },
       { label: 'Fill with Pattern...', action: () => showFilterDialog('pattern-fill') },

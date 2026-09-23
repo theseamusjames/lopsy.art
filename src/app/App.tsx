@@ -22,6 +22,7 @@ import { OptionsBar } from './OptionsBar/OptionsBar';
 import { StatusBar } from './StatusBar/StatusBar';
 import { NewDocumentModal } from '../components/NewDocumentModal/NewDocumentModal';
 import { ModalHost, LoadingOverlay } from '../components/ModalHost/ModalHost';
+import { EngineStartingOverlay } from '../components/EngineStartingOverlay/EngineStartingOverlay';
 import { GuideColorPicker } from '../components/GuideColorPicker/GuideColorPicker';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
@@ -73,6 +74,7 @@ export function App() {
   const showEffectsDrawer = useUIStore((s) => s.showEffectsDrawer);
   const showReferenceModal = useUIStore((s) => s.showReferenceModal);
   const loadingMessage = useUIStore((s) => s.modal?.kind === 'loading' ? s.modal.message : null);
+  const isEngineReady = useUIStore((s) => s.isEngineReady);
   const isLiquifyOpen = useUIStore((s) => s.liquify !== null);
 
   useEffect(() => {
@@ -246,6 +248,7 @@ export function App() {
             <PathActionButtons containerRef={containerRef} />
             <TiltShiftControls />
             <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
+            {!isEngineReady && <EngineStartingOverlay />}
           </main>
         </DockHost>
         {contextMenu.visible && (

@@ -22,3 +22,6 @@ tests/screenshots/
 public/test-sample.raf
 e2e/screenshots/raf-import-error.png
 e2e/screenshots/raf-import.png
+# tinyjs desktop build
+dist-desktop
+.build

@@ -24,7 +24,7 @@
 
 import { FONT_PREVIEWS_INDEX } from './font-previews-index';
 
-const BLOB_URL = '/font-previews.bin';
+const BLOB_URL = `${import.meta.env.BASE_URL}font-previews.bin`;
 
 let blobPromise: Promise<ArrayBuffer> | null = null;
 const registeredFaces = new Map<string, Promise<FontFace | null>>();

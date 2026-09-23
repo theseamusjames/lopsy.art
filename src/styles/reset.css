@@ -33,6 +33,14 @@ select {
   color: inherit;
 }
 
+/* WebKit lets body's user-select: none reach text fields, leaving them
+   unselectable (and on iOS uneditable) — give them text selection back. */
+input,
+textarea,
+[contenteditable='true'] {
+  user-select: text;
+}
+
 button {
   cursor: pointer;
   border: none;

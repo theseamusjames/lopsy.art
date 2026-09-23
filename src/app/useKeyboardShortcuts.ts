@@ -202,6 +202,7 @@ export function useKeyboardShortcuts({
       }
 
       if (e.key === 'Escape') {
+        e.preventDefault();
         const uiState = useUIStore.getState();
         if (uiState.activeTool === 'path' && (uiState.pathDraft?.anchors.length ?? 0) > 0) {
           uiState.clearPath();
@@ -216,6 +217,7 @@ export function useKeyboardShortcuts({
       if (e.key === 'Enter') {
         const uiState = useUIStore.getState();
         if (uiState.activeTool === 'path' && (uiState.pathDraft?.anchors.length ?? 0) >= 2) {
+          e.preventDefault();
           strokeCurrentPath();
         }
         return;
@@ -227,10 +229,17 @@ export function useKeyboardShortcuts({
         return;
       }
 
+      // Handled keys must preventDefault: in the tinyjs desktop build WKWebView
+      // hands any key the page leaves unclaimed to AppKit, which beeps.
       if (!e.metaKey && !e.ctrlKey && !e.altKey) {
-        if (handleToolShortcut(e)) return;
-        if (handleNudgeShortcut(e, nudgeMove, nudgeSelection)) return;
-        if (handleSizeShortcut(e)) return;
+        if (
+          handleToolShortcut(e)
+          || handleNudgeShortcut(e, nudgeMove, nudgeSelection)
+          || handleSizeShortcut(e)
+        ) {
+          e.preventDefault();
+          return;
+        }
       }
 
       if (e.metaKey || e.ctrlKey) {

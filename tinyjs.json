@@ -1,0 +1,16 @@
+{
+  "name": "lopsy",
+  "title": "Lopsy",
+  "size": "1440x900",
+  "id": "art.lopsy.app",
+  "version": "0.1.0",
+  "minTinyjsVersion": "0.41.0",
+  "icon": "desktop/icon.png",
+  "backend": "desktop/main.ts",
+  "frontend": {
+    "build": "npm run build:desktop",
+    "dist": "dist-desktop",
+    "dev": "npm run dev:desktop",
+    "devUrl": "http://127.0.0.1:5173"
+  }
+}

@@ -133,6 +133,9 @@ export interface ChannelVisibility {
 }
 
 interface UIState {
+  /** False until the WebGL engine has finished creating (shader compile). */
+  isEngineReady: boolean;
+  setEngineReady: (isReady: boolean) => void;
   activeTool: ToolId;
   showGrid: boolean;
   showPixelGrid: boolean;
@@ -316,6 +319,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeTool: 'move',
   showGrid: false,
   showPixelGrid: true,
+  isEngineReady: false,
+  setEngineReady: (isReady) => set({ isEngineReady: isReady }),
   showRulers: true,
   showGuides: true,
   showSeamlessPattern: false,

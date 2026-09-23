@@ -3,6 +3,7 @@
  * This is the sole import point for the WASM module.
  */
 
+import wasmUrl from './pkg/lopsy_wasm_bg.wasm?url';
 import init, {
   Engine,
   snapshotLayerGpu,
@@ -287,10 +288,20 @@ let initPromise: Promise<void> | null = null;
 let initError: unknown = null;
 let wasmMemory: WebAssembly.Memory | null = null;
 
+// file:// responses (the tinyjs desktop build) have status 0 and no
+// Content-Type, which makes wasm-bindgen's instantiateStreaming path throw
+// instead of falling back — so hand it the raw bytes there.
+async function wasmSourceForFileProtocol(): Promise<ArrayBuffer | undefined> {
+  if (location.protocol !== 'file:') return undefined;
+  const resp = await fetch(wasmUrl);
+  return resp.arrayBuffer();
+}
+
 export async function initWasm(): Promise<void> {
   if (initError) throw initError;
   if (!initPromise) {
-    initPromise = init()
+    initPromise = wasmSourceForFileProtocol()
+      .then((source) => init(source ? { module_or_path: source } : undefined))
       .then((output: { memory: WebAssembly.Memory }) => { wasmMemory = output.memory; })
       .catch((err: unknown) => {
         initError = err;
