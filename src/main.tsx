@@ -25,6 +25,7 @@ import { importRafFile } from './io/raf';
 import { compositeForExport, getCompositeSize } from './engine-wasm/wasm-bridge';
 import { flushLayerSync } from './engine-wasm/engine-sync';
 import { prefetchFontPreviewsBlob } from './utils/font-loader';
+import { canvasPixelRatio } from './app/rendering/display-pixel-ratio';
 import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -83,7 +84,7 @@ if (import.meta.env.DEV) {
         const screenH = container ? container.clientHeight : canvas.height;
         syncDocumentSize(engine, doc.width, doc.height);
         syncBackgroundColor(engine, bg.r, bg.g, bg.b, bg.a);
-        syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH);
+        syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH, canvasPixelRatio(canvas, screenW));
         syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds);
         syncGroupAdjustments(engine, doc.layers);
         syncSelection(engine, state.selection);
@@ -169,7 +170,7 @@ if (import.meta.env.DEV) {
         const screenH = container ? container.clientHeight : canvas.height;
         syncDocumentSize(engine, doc.width, doc.height);
         syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
-        syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH);
+        syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH, canvasPixelRatio(canvas, screenW));
         syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds);
         const id = layerId ?? doc.activeLayerId;
         if (!id) { resolve({ width: 0, height: 0, pixels: [] }); return; }

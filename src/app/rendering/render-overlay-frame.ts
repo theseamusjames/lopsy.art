@@ -14,6 +14,7 @@ import { hitTestTextLayer } from '../../tools/text/text-hit-test';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './render-guides';
 import { renderTiltShiftOverlay } from './render-tilt-shift-overlay';
 import { contextOptions } from '../../engine/color-space';
+import { getDisplayPixelRatio } from './display-pixel-ratio';
 import { getLayerTextureDimensions, textCursorRect, textSelectionRects } from '../../engine-wasm/wasm-bridge';
 import { utf16ToUtf8 } from '../../engine-wasm/text-offset';
 import type { CursorRect } from './render-text-overlay';
@@ -70,10 +71,17 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
   const overlayCtx = overlayCanvas.getContext('2d', contextOptions);
   if (!overlayCtx) return;
 
+  overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
   overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
+  // The backing store is at native resolution; draw everything in CSS pixels.
+  const pixelRatio = getDisplayPixelRatio();
+  const screenW = overlayCanvas.width / pixelRatio;
+  const screenH = overlayCanvas.height / pixelRatio;
+  overlayCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+
   overlayCtx.save();
-  overlayCtx.translate(viewport.panX + overlayCanvas.width / 2, viewport.panY + overlayCanvas.height / 2);
+  overlayCtx.translate(viewport.panX + screenW / 2, viewport.panY + screenH / 2);
   overlayCtx.scale(viewport.zoom, viewport.zoom);
   overlayCtx.translate(-doc.width / 2, -doc.height / 2);
 
@@ -175,7 +183,7 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
     const webglCanvas = getEngineCanvas();
     const showedPreview = isStampTool && webglCanvas && renderStampSourcePreview(
       overlayCtx, webglCanvas, cursorPosition, size, viewport,
-      doc.width, doc.height, overlayCanvas.width, overlayCanvas.height,
+      doc.width, doc.height, screenW, screenH,
     );
     if (!showedPreview) {
       renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip, brushCursorInfo.angle);
@@ -203,13 +211,13 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
   overlayCtx.restore();
 
   if (showPixelGrid) {
-    renderPixelGrid(overlayCtx, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height);
+    renderPixelGrid(overlayCtx, screenW, screenH, viewport, doc.width, doc.height);
   }
 
   if (showRulers) {
-    renderRulers(overlayCtx, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height, cursorPosition, guideColor);
+    renderRulers(overlayCtx, screenW, screenH, viewport, doc.width, doc.height, cursorPosition, guideColor);
     if (showGuides) {
-      renderGuideRulerOverlays(overlayCtx, guides, selectedGuideId, hoveredGuideId, rulerHover, overlayCanvas.width, overlayCanvas.height, viewport, doc.width, doc.height, guideColor);
+      renderGuideRulerOverlays(overlayCtx, guides, selectedGuideId, hoveredGuideId, rulerHover, screenW, screenH, viewport, doc.width, doc.height, guideColor);
       renderGuideColorSwatch(overlayCtx, guideColor);
     }
   }

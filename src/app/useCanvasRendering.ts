@@ -2,7 +2,7 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { useEditorStore } from './editor-store';
 import { useUIStore } from './ui-store';
 import { useToolSettingsStore } from './tool-settings-store';
-import { initEngine, getEngine, destroyEngine } from '../engine-wasm/engine-state';
+import { initEngine, getEngine, getEngineCanvas, destroyEngine } from '../engine-wasm/engine-state';
 import { describeError, notifyError } from './notifications-store';
 import {
   syncDocumentSize,
@@ -26,6 +26,7 @@ import {
   markAllLayersDirty,
 } from '../engine-wasm/engine-sync';
 import { renderOverlayFrame } from './rendering/render-overlay-frame';
+import { canvasPixelRatio, sizeCanvasToDisplay } from './rendering/display-pixel-ratio';
 import { getMarqueePreview } from '../tools/marquee/marquee-preview';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
@@ -52,10 +53,12 @@ function renderFrameGpu(
   const screenW = rect.width;
   const screenH = rect.height;
 
-  if (overlayCanvas.width !== screenW || overlayCanvas.height !== screenH) {
-    overlayCanvas.width = screenW;
-    overlayCanvas.height = screenH;
-  }
+  sizeCanvasToDisplay(overlayCanvas, screenW, screenH);
+  // The resize observer doesn't fire when the window moves to a display with
+  // a different pixel ratio, so the engine canvas is re-checked every frame.
+  const engineCanvas = getEngineCanvas();
+  if (engineCanvas) sizeCanvasToDisplay(engineCanvas, screenW, screenH);
+  const pixelRatio = engineCanvas ? canvasPixelRatio(engineCanvas, screenW) : 1;
 
   // Expand newly-active raster layer to doc size so transform/stretch never clips.
   // Crop the previously-active raster layer back to its content bounds to save memory.
@@ -163,7 +166,7 @@ function renderFrameGpu(
   syncDocumentSize(engine, doc.width, doc.height);
   syncColorMode(engine, doc.colorMode);
   syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
-  syncViewport(engine, viewport.zoom, viewport.panX, viewport.panY, screenW, screenH);
+  syncViewport(engine, viewport.zoom, viewport.panX, viewport.panY, screenW, screenH, pixelRatio);
   // syncLayers must run before syncTextLayers so any new text layer's GPU texture
   // is created before syncTextLayers tries to fill or upload pixels into it.
   syncLayers(engine, layers, doc.layerOrder, dirtyLayerIds);

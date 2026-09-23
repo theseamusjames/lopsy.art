@@ -130,8 +130,8 @@ export function App() {
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
 
-      const x = (screenX - viewport.panX - canvas.width / 2) / viewport.zoom + doc.width / 2;
-      const y = (screenY - viewport.panY - canvas.height / 2) / viewport.zoom + doc.height / 2;
+      const x = (screenX - viewport.panX - canvas.clientWidth / 2) / viewport.zoom + doc.width / 2;
+      const y = (screenY - viewport.panY - canvas.clientHeight / 2) / viewport.zoom + doc.height / 2;
       return { x: Math.round(x), y: Math.round(y) };
     },
     [viewport, doc.width, doc.height],
