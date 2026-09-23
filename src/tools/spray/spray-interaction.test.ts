@@ -75,9 +75,13 @@ afterEach(() => {
 });
 
 describe('spray down', () => {
-  it('pushes history and immediately emits one dab per density unit', () => {
+  it('immediately emits one dab per density unit without a redundant pushHistory', () => {
+    // History + beginStroke are owned by the shared paint dispatch in
+    // useCanvasInteraction. Calling pushHistory here again would run
+    // endStroke first, dropping the stroke texture and leaving spray
+    // dabs to MAX-blend directly onto the layer (#787).
     const state = handleSprayDown(makeCtx());
-    expect(editorState.pushHistory).toHaveBeenCalledWith('Spray');
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
     expect(ts.addRecentColor).toHaveBeenCalledWith({ r: 255, g: 0, b: 0, a: 1 });
     expect(applyBrushDab).toHaveBeenCalledTimes(12);
     expect(state?.tool).toBe('spray');

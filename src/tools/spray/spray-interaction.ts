@@ -64,7 +64,12 @@ export function handleSprayDown(
   const toolSettings = useToolSettingsStore.getState();
   const editorState = useEditorStore.getState();
 
-  editorState.pushHistory('Spray');
+  // NOTE: history + beginStroke are already handled by the shared paint
+  // dispatch in useCanvasInteraction for isPaint tools. A pushHistory
+  // here would run endStroke first and drop the stroke texture, which is
+  // exactly how spray ended up MAX-blending premultiplied dabs straight
+  // onto the layer and rendering grey speckles on a transparent layer
+  // (#787). Emit dabs into the shared stroke texture instead.
 
   const strokeColor = toDocumentColor(toolSettings.foregroundColor);
   const state: InteractionState = {

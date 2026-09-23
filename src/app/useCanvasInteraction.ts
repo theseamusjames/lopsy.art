@@ -229,7 +229,13 @@ export function useCanvasInteraction(
             flushLayerSync(currentState);
             syncSelection(engine, currentState.selection);
             if (!canContinueStroke) {
-              const toolLabel = activeTool === 'brush' ? 'Brush' : activeTool === 'pencil' ? 'Pencil' : 'Eraser';
+              const toolLabel = activeTool === 'brush'
+                ? 'Brush'
+                : activeTool === 'pencil'
+                  ? 'Pencil'
+                  : activeTool === 'spray'
+                    ? 'Spray'
+                    : 'Eraser';
               useEditorStore.getState().pushHistory(toolLabel);
               beginStroke(engine, activeLayerId);
             }
