@@ -71,6 +71,9 @@ const SELECTION_TOOLS = new Set([
   'marquee-rect', 'marquee-ellipse', 'lasso', 'lasso-magnetic', 'wand',
 ]);
 
+/** Shift+arrow nudge distance, matching Photoshop. */
+const SHIFT_NUDGE_PX = 10;
+
 export function handleNudgeShortcut(
   e: KeyboardEvent,
   nudgeMove: (dx: number, dy: number) => void,
@@ -86,7 +89,8 @@ export function handleNudgeShortcut(
 
   e.preventDefault();
   const ui = useUIStore.getState();
-  const amount = ui.showGrid && ui.snapToGrid ? ui.gridSize : 1;
+  const step = e.shiftKey ? SHIFT_NUDGE_PX : 1;
+  const amount = ui.showGrid && ui.snapToGrid ? ui.gridSize : step;
   let dx = 0;
   let dy = 0;
   if (e.key === 'ArrowUp') dy = -amount;
