@@ -1,6 +1,7 @@
 //! Color quantization for the Indexed Color document mode: median-cut
 //! palette building plus nearest-color mapping with optional
-//! Floyd-Steinberg dithering.
+//! Floyd-Steinberg dithering. Also dominant-color extraction for the
+//! Swatches panel (median cut refined by k-means).
 
 /// Above this many candidate pixels, palette building subsamples with a
 /// fixed stride instead of scanning every pixel. Median cut only needs a
@@ -104,6 +105,121 @@ pub fn median_cut(pixels: &[u8], max_colors: usize) -> Vec<[u8; 4]> {
 
     boxes.truncate(max_colors);
     boxes.iter().map(ColorBox::average).collect()
+}
+
+/// Cap on the samples k-means refinement iterates over. Each Lloyd pass costs
+/// samples × palette size distance tests, so the median-cut sample is thinned
+/// further to keep a 16-color extraction well under a frame budget.
+const MAX_KMEANS_SAMPLES: usize = 64 * 1024;
+
+/// Upper bound on Lloyd iterations; refinement usually settles in a few.
+const KMEANS_ITERATIONS: usize = 16;
+
+/// Extract up to `max_colors` dominant colors for a user-facing palette.
+///
+/// Median cut alone splits boxes at the *population* median, so a large flat
+/// region (say, a white background) gets split into several boxes while
+/// small but distinct colors are averaged together — fine for Indexed
+/// conversion, where error is spread across the image, but it hands a palette
+/// user colors that appear nowhere in the image. Seeding k-means with the
+/// median-cut palette and running Lloyd iterations moves each entry onto the
+/// center of an actual color cluster. A cluster that ends up empty is
+/// re-seeded onto the worst-fit sample, which is how a distinct color that
+/// median cut averaged away claims its own entry.
+///
+/// Deterministic: sampling uses fixed strides and there is no RNG.
+pub fn dominant_colors(pixels: &[u8], max_colors: usize) -> Vec<[u8; 4]> {
+    let seeds = median_cut(pixels, max_colors);
+    if seeds.len() < 2 {
+        return seeds;
+    }
+    let all = collect_opaque_pixels(pixels);
+    let stride = (all.len() / MAX_KMEANS_SAMPLES).max(1);
+    let samples: Vec<[f32; 3]> = all
+        .iter()
+        .step_by(stride)
+        .map(|p| [p[0] as f32, p[1] as f32, p[2] as f32])
+        .collect();
+
+    let mut centers: Vec<[f32; 3]> = seeds
+        .iter()
+        .map(|c| [c[0] as f32, c[1] as f32, c[2] as f32])
+        .collect();
+    let mut assignment = vec![usize::MAX; samples.len()];
+    let mut counts = vec![0usize; centers.len()];
+
+    for _ in 0..KMEANS_ITERATIONS {
+        let mut sums = vec![[0f64; 3]; centers.len()];
+        counts.iter_mut().for_each(|c| *c = 0);
+        let mut worst: Option<(usize, f32)> = None;
+        let mut changed = false;
+
+        for (i, p) in samples.iter().enumerate() {
+            let (best, dist) = nearest_center(&centers, p);
+            if assignment[i] != best {
+                assignment[i] = best;
+                changed = true;
+            }
+            counts[best] += 1;
+            for c in 0..3 {
+                sums[best][c] += p[c] as f64;
+            }
+            if worst.is_none_or(|(_, d)| dist > d) {
+                worst = Some((i, dist));
+            }
+        }
+
+        let mut reseeded = false;
+        for k in 0..centers.len() {
+            if counts[k] > 0 {
+                let n = counts[k] as f64;
+                centers[k] = [
+                    (sums[k][0] / n) as f32,
+                    (sums[k][1] / n) as f32,
+                    (sums[k][2] / n) as f32,
+                ];
+                continue;
+            }
+            // One re-seed per pass: after it the worst-fit distances are stale.
+            if let Some((i, dist)) = worst.take() {
+                if dist > 0.0 {
+                    centers[k] = samples[i];
+                    reseeded = true;
+                }
+            }
+        }
+
+        if !changed && !reseeded {
+            break;
+        }
+    }
+
+    centers
+        .iter()
+        .zip(&counts)
+        .filter(|(_, &n)| n > 0)
+        .map(|(c, _)| [round_channel(c[0]), round_channel(c[1]), round_channel(c[2]), 255])
+        .collect()
+}
+
+fn nearest_center(centers: &[[f32; 3]], p: &[f32; 3]) -> (usize, f32) {
+    let mut best = 0;
+    let mut best_dist = f32::MAX;
+    for (k, c) in centers.iter().enumerate() {
+        let dr = c[0] - p[0];
+        let dg = c[1] - p[1];
+        let db = c[2] - p[2];
+        let dist = dr * dr + dg * dg + db * db;
+        if dist < best_dist {
+            best_dist = dist;
+            best = k;
+        }
+    }
+    (best, best_dist)
+}
+
+fn round_channel(v: f32) -> u8 {
+    v.round().clamp(0.0, 255.0) as u8
 }
 
 /// Collects RGB triples from opaque-enough pixels, subsampling with a fixed
@@ -260,6 +376,60 @@ mod tests {
 
     fn make_image(pixels: &[[u8; 4]]) -> Vec<u8> {
         pixels.iter().flat_map(|p| p.iter().copied()).collect()
+    }
+
+    fn flat_regions(regions: &[([u8; 4], usize)]) -> Vec<u8> {
+        let mut data = Vec::new();
+        for (color, count) in regions {
+            for _ in 0..*count {
+                data.extend_from_slice(color);
+            }
+        }
+        data
+    }
+
+    #[test]
+    fn dominant_colors_recovers_flat_colors_exactly_despite_a_dominant_background() {
+        // Median cut alone blends these: the white background takes most of
+        // the population splits and the three small colors get averaged.
+        let white = [255, 255, 255, 255];
+        let orange = [255, 87, 34, 255];
+        let jade = [40, 180, 160, 255];
+        let violet = [90, 60, 200, 255];
+        let data = flat_regions(&[(white, 7000), (orange, 1000), (jade, 1000), (violet, 1000)]);
+
+        let mut palette = dominant_colors(&data, 4);
+        palette.sort();
+        let mut expected = vec![white, orange, jade, violet];
+        expected.sort();
+        assert_eq!(palette, expected);
+    }
+
+    #[test]
+    fn dominant_colors_never_exceeds_max_or_invents_duplicates() {
+        let mut data = Vec::new();
+        for r in 0..32u8 {
+            for g in 0..32u8 {
+                data.extend_from_slice(&[r * 8, g * 8, 128, 255]);
+            }
+        }
+        let palette = dominant_colors(&data, 8);
+        assert!(!palette.is_empty() && palette.len() <= 8);
+        let mut deduped = palette.clone();
+        deduped.sort();
+        deduped.dedup();
+        assert_eq!(deduped.len(), palette.len());
+    }
+
+    #[test]
+    fn dominant_colors_ignores_transparent_pixels() {
+        let data = flat_regions(&[([0, 0, 0, 0], 500), ([10, 200, 30, 255], 20)]);
+        assert_eq!(dominant_colors(&data, 8), vec![[10, 200, 30, 255]]);
+    }
+
+    #[test]
+    fn dominant_colors_of_empty_image_is_empty() {
+        assert!(dominant_colors(&[0, 0, 0, 0], 8).is_empty());
     }
 
     #[test]
