@@ -203,8 +203,33 @@ export function getTracked(engine: Engine): TrackedState {
   return t;
 }
 
-export function resetTrackedState(engine: Engine): void {
-  trackedByEngine.set(engine, createTrackedState());
+export interface ResetOptions {
+  /**
+   * When true, `maskDataRefs`, `selectionMask` and `selectionActive` are
+   * kept across the reset. Ref-equality gating in `syncLayers` /
+   * `syncSelection` then re-diffs against the restored data references —
+   * unchanged masks skip re-upload, actually-changed masks still re-upload.
+   *
+   * Used by undoBy/redoBy so an undo doesn't re-upload every mask (16.78 MB
+   * per masked layer at 4K) when the undone step never touched them (#781).
+   * Callers that recreate the engine, or load a whole new document, must
+   * NOT set this — stale refs against a fresh GPU would silently skip real
+   * uploads.
+   */
+  preserveContentRefs?: boolean;
+}
+
+export function resetTrackedState(engine: Engine, opts?: ResetOptions): void {
+  const fresh = createTrackedState();
+  if (opts?.preserveContentRefs) {
+    const prev = trackedByEngine.get(engine);
+    if (prev) {
+      fresh.maskDataRefs = prev.maskDataRefs;
+      fresh.selectionMask = prev.selectionMask;
+      fresh.selectionActive = prev.selectionActive;
+    }
+  }
+  trackedByEngine.set(engine, fresh);
 }
 
 /**

@@ -141,6 +141,50 @@ function snapshotGpuLayers(
   return gpuSnapshots;
 }
 
+/**
+ * When restoring a metadata-only snapshot, take each layer's position and
+ * size fields (x, y, width, height) from the CURRENT document rather than
+ * the snapshot. This prevents an undo of a blend-mode / opacity / effects
+ * edit from also reverting side-effect position changes made by
+ * `transitionActiveLayer` (which crops the previously-active layer and
+ * expands the newly-active layer on every setActiveLayer). Without this,
+ * undoing a metadata edit made while the layer was in a different
+ * expand/crop state teleports its content by exactly its own (x, y) —
+ * (2x, 2y) after a second undo, (0, 0) after a redo (#783). Everything
+ * else in the snapshot (blend mode, opacity, effects, mask, adjustments,
+ * order, active layer, etc.) is restored as-is.
+ */
+function mergeMetadataLayerPositions(
+  snapshot: import('../../types').DocumentState,
+  current: import('../../types').DocumentState,
+): import('../../types').DocumentState {
+  const curById = new Map(current.layers.map((l) => [l.id, l]));
+  const layers = snapshot.layers.map((snapLayer) => {
+    const cur = curById.get(snapLayer.id);
+    if (!cur) return snapLayer;
+    if (cur.x === snapLayer.x && cur.y === snapLayer.y) {
+      const snapW = 'width' in snapLayer ? (snapLayer as { width?: number | null }).width : undefined;
+      const snapH = 'height' in snapLayer ? (snapLayer as { height?: number | null }).height : undefined;
+      const curW = 'width' in cur ? (cur as { width?: number | null }).width : undefined;
+      const curH = 'height' in cur ? (cur as { height?: number | null }).height : undefined;
+      if (snapW === curW && snapH === curH) return snapLayer;
+    }
+    const patched: Record<string, unknown> = {
+      ...(snapLayer as unknown as Record<string, unknown>),
+      x: cur.x,
+      y: cur.y,
+    };
+    if ('width' in cur && 'width' in snapLayer) {
+      patched.width = (cur as unknown as { width?: number | null }).width;
+    }
+    if ('height' in cur && 'height' in snapLayer) {
+      patched.height = (cur as unknown as { height?: number | null }).height;
+    }
+    return patched as unknown as typeof snapLayer;
+  });
+  return { ...snapshot, layers };
+}
+
 function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
   if (snapshot.kind === 'metadata') return;
 
@@ -244,17 +288,24 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     restoreGpuFromSnapshot(target);
     lastRestoredSnapshot = target;
     const eng = getEngine();
-    if (eng) resetTrackedState(eng);
+    // Preserve mask/selection content refs across the reset so an undo
+    // that never touched a layer's mask doesn't re-upload the whole mask
+    // (16.78 MB per masked layer at 4K, #781). Refs that DO differ from
+    // the restored `mask.data` still fail the syncLayers gate and re-upload.
+    if (eng) resetTrackedState(eng, { preserveContentRefs: true });
 
     pixelDataManager.clearAll();
+    const restoredDocument = target.kind === 'metadata'
+      ? mergeMetadataLayerPositions(target.document, state.document)
+      : target.document;
     set({
       undoStack: state.undoStack.slice(0, S - n),
       redoStack: [...state.redoStack, ...additions],
-      document: target.document,
+      document: restoredDocument,
       selection: target.selection,
       paths: [...target.paths],
       selectedPathId: target.selectedPathId,
-      dirtyLayerIds: new Set(target.document.layerOrder),
+      dirtyLayerIds: new Set(restoredDocument.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
     if (eng) {
@@ -329,17 +380,22 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     restoreGpuFromSnapshot(target);
     lastRestoredSnapshot = target;
     const eng = getEngine();
-    if (eng) resetTrackedState(eng);
+    // Same as undoBy — preserve mask/selection refs across the reset
+    // (#781).
+    if (eng) resetTrackedState(eng, { preserveContentRefs: true });
 
     pixelDataManager.clearAll();
+    const restoredDocument = target.kind === 'metadata'
+      ? mergeMetadataLayerPositions(target.document, state.document)
+      : target.document;
     set({
       redoStack: state.redoStack.slice(0, R - n),
       undoStack: [...state.undoStack, ...additions],
-      document: target.document,
+      document: restoredDocument,
       selection: target.selection,
       paths: [...target.paths],
       selectedPathId: target.selectedPathId,
-      dirtyLayerIds: new Set(target.document.layerOrder),
+      dirtyLayerIds: new Set(restoredDocument.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
     if (eng) {
@@ -398,6 +454,14 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   },
 
   pushHistoryMetadata: (label: string) => {
+    // #782: mask readbacks are deferred to idle. If a metadata step
+    // (visibility toggle, add layer, reorder …) runs within the wait
+    // window after a mask stroke, this snapshot would capture the
+    // stale pre-stroke mask array. Undoing the metadata entry would
+    // then restore that stale mask over the current GPU texture,
+    // erasing the stroke. Drain pending reads first, matching
+    // pushHistory().
+    flushAllPendingMaskReads();
     const state = get();
     lastRestoredSnapshot = null;
 
