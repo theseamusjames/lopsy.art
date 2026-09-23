@@ -23,8 +23,8 @@ export function handleZoomShortcut(
     e.preventDefault();
     const canvas = canvasRef.current;
     if (canvas) {
-      const scaleX = canvas.width / docWidth;
-      const scaleY = canvas.height / docHeight;
+      const scaleX = canvas.clientWidth / docWidth;
+      const scaleY = canvas.clientHeight / docHeight;
       setZoom(Math.min(scaleX, scaleY) * 0.9);
       setPan(0, 0);
     }

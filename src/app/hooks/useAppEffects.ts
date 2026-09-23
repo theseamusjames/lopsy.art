@@ -6,6 +6,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { markAllLayersDirty } from '../../engine-wasm/engine-sync';
 import { installPaintLinePreviewKeyListener } from '../interactions/paint-line-preview';
 import { useLocalFontsStore } from '../local-fonts-store';
+import { sizeCanvasToDisplay } from '../rendering/display-pixel-ratio';
 
 interface AppEffectsDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -69,9 +70,7 @@ export function useAppEffects({
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = container.getBoundingClientRect();
-      const sizeChanged = canvas.width !== rect.width || canvas.height !== rect.height;
-      canvas.width = rect.width;
-      canvas.height = rect.height;
+      const sizeChanged = sizeCanvasToDisplay(canvas, rect.width, rect.height);
       useEditorStore.getState().setViewportSize(rect.width, rect.height);
       if (!hasInitialFit && rect.width > 0 && rect.height > 0) {
         hasInitialFit = true;

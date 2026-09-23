@@ -2,6 +2,7 @@ import type { Color, Layer, Point, Rect } from '../../types';
 import type { PathAnchor } from '../../tools/path/path';
 import type { Quad } from '../../tools/crop/perspective-crop';
 import { stampSourceState } from '../../tools/common/stamp-source-state';
+import { canvasPixelRatio, getDisplayPixelRatio } from './display-pixel-ratio';
 
 interface PathOverlaySource {
   anchors: readonly PathAnchor[];
@@ -444,7 +445,8 @@ export function renderStampSourcePreview(
   const sourceSY = (sourceCenter.y - docHeight / 2) * zoom + panY + vHalf;
 
   ctx.save();
-  ctx.resetTransform();
+  const pixelRatio = getDisplayPixelRatio();
+  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
 
   ctx.globalAlpha = 0.7;
   ctx.beginPath();
@@ -452,9 +454,10 @@ export function renderStampSourcePreview(
   ctx.clip();
 
   const d = radiusScreen * 2;
+  const glRatio = canvasPixelRatio(webglCanvas, screenWidth);
   ctx.drawImage(
     webglCanvas,
-    sourceSX - radiusScreen, sourceSY - radiusScreen, d, d,
+    (sourceSX - radiusScreen) * glRatio, (sourceSY - radiusScreen) * glRatio, d * glRatio, d * glRatio,
     cursorSX - radiusScreen, cursorSY - radiusScreen, d, d,
   );
 

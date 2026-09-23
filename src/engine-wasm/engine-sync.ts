@@ -177,6 +177,10 @@ export function syncColorMode(engine: Engine, mode: DocumentColorMode): void {
   tracked.docColorMode = engineMode;
 }
 
+/**
+ * `zoom`, `pan` and `screen` are in CSS pixels; `pixelRatio` is backing-store
+ * pixels per CSS pixel, so the engine draws at the canvas's native resolution.
+ */
 export function syncViewport(
   engine: Engine,
   zoom: number,
@@ -184,21 +188,27 @@ export function syncViewport(
   panY: number,
   screenW: number,
   screenH: number,
+  pixelRatio: number,
 ): void {
   const tracked = getTracked(engine);
+  const deviceZoom = zoom * pixelRatio;
+  const devicePanX = panX * pixelRatio;
+  const devicePanY = panY * pixelRatio;
+  const deviceW = screenW * pixelRatio;
+  const deviceH = screenH * pixelRatio;
   if (
-    tracked.viewportZoom === zoom &&
-    tracked.viewportPanX === panX &&
-    tracked.viewportPanY === panY &&
-    tracked.viewportWidth === screenW &&
-    tracked.viewportHeight === screenH
+    tracked.viewportZoom === deviceZoom &&
+    tracked.viewportPanX === devicePanX &&
+    tracked.viewportPanY === devicePanY &&
+    tracked.viewportWidth === deviceW &&
+    tracked.viewportHeight === deviceH
   ) return;
-  setViewport(engine, zoom, panX, panY, screenW, screenH);
-  tracked.viewportZoom = zoom;
-  tracked.viewportPanX = panX;
-  tracked.viewportPanY = panY;
-  tracked.viewportWidth = screenW;
-  tracked.viewportHeight = screenH;
+  setViewport(engine, deviceZoom, devicePanX, devicePanY, deviceW, deviceH);
+  tracked.viewportZoom = deviceZoom;
+  tracked.viewportPanX = devicePanX;
+  tracked.viewportPanY = devicePanY;
+  tracked.viewportWidth = deviceW;
+  tracked.viewportHeight = deviceH;
 }
 
 export function syncSelection(engine: Engine, selection: SelectionData): void {

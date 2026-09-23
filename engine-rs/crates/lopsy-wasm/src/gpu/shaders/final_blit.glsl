@@ -57,6 +57,35 @@ vec3 labToSrgb(vec3 encoded) {
     return vec3(linearToSrgb(linear.r), linearToSrgb(linear.g), linearToSrgb(linear.b));
 }
 
+// Zoomed out, a single bilinear tap only sees a 2x2 patch of the many texels
+// under each screen pixel, so fine detail (thin text strokes, hairlines)
+// aliases and shimmers while panning. Average a grid of bilinear taps spread
+// at most one texel apart over the pixel's footprint instead. The tap count
+// grows as 1/zoom² but the document's on-screen area shrinks as zoom², so the
+// total cost stays roughly one fetch per document pixel.
+const int MAX_MINIFY_TAPS = 8;
+
+vec4 sampleMinified(vec2 texelPos, bool seamless) {
+    float footprint = 1.0 / u_zoom;
+    int taps = int(min(ceil(footprint), float(MAX_MINIFY_TAPS)));
+    float spacing = footprint / float(taps);
+    vec2 origin = texelPos - footprint * 0.5;
+    // Composite colour is straight alpha: weight by alpha so transparent
+    // texels don't darken the edges they're averaged with.
+    vec4 sum = vec4(0.0);
+    for (int y = 0; y < MAX_MINIFY_TAPS; y++) {
+        if (y >= taps) break;
+        for (int x = 0; x < MAX_MINIFY_TAPS; x++) {
+            if (x >= taps) break;
+            vec2 uv = (origin + (vec2(x, y) + 0.5) * spacing) / u_docSize;
+            vec4 c = texture(u_compositeTex, seamless ? fract(uv) : uv);
+            sum += vec4(c.rgb * c.a, c.a);
+        }
+    }
+    sum /= float(taps * taps);
+    return sum.a > 0.0 ? vec4(sum.rgb / sum.a, sum.a) : vec4(0.0);
+}
+
 void main() {
     vec2 screenPos = vec2(v_uv.x, 1.0 - v_uv.y) * u_resolution;
 
@@ -83,7 +112,21 @@ void main() {
     bool isCenterTile = docUV.x >= 0.0 && docUV.x <= 1.0 && docUV.y >= 0.0 && docUV.y <= 1.0;
     vec2 sampleUV = seamless ? fract(docUV) : docUV;
 
-    vec4 color = texture(u_compositeTex, sampleUV);
+    // Zoomed in, plain GL_LINEAR smears each document pixel into a gradient,
+    // which turns anti-aliased edges into a blurry staircase. Hold each texel
+    // flat and only blend across the one screen pixel where two texels meet,
+    // so pixels read as crisp squares at any zoom — including fractional ones
+    // like 130% where nearest-neighbour would make them uneven sizes.
+    if (u_zoom > 1.0) {
+        vec2 texelPos = sampleUV * u_docSize - 0.5;
+        vec2 texelBase = floor(texelPos);
+        vec2 edgeBlend = clamp((texelPos - texelBase - 0.5) * u_zoom + 0.5, 0.0, 1.0);
+        sampleUV = (texelBase + edgeBlend + 0.5) / u_docSize;
+    }
+
+    vec4 color = u_zoom < 1.0
+        ? sampleMinified(docUV * u_docSize, seamless)
+        : texture(u_compositeTex, sampleUV);
 
     // Native color modes store encoded values in the composite; decode to sRGB
     // before the RGB-assuming steps below (channel mask, checkerboard, dither).
