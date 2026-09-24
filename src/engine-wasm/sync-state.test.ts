@@ -53,3 +53,68 @@ describe('seedMaskDataRef — issue #734', () => {
     expect(tracked.maskDataRefs.get('other')).toBe(other);
   });
 });
+
+/**
+ * #781 — undoBy / redoBy reset tracked state then re-diff descriptors,
+ * but the pre-fix reset also wiped `maskDataRefs`, so every masked layer
+ * re-uploaded on every undo (50 MB per Cmd+Z at 4K with 3 masks). The
+ * `preserveContentRefs` option keeps content refs so ref-equality gating
+ * still skips uploads for masks the undone step never touched.
+ */
+describe('resetTrackedState({ preserveContentRefs: true }) — #781', () => {
+  it('keeps maskDataRefs across the reset when preserveContentRefs is set', () => {
+    const engine = makeFakeEngine();
+    resetTrackedState(engine);
+    const bytesA = new Uint8ClampedArray(16).fill(1);
+    const bytesB = new Uint8ClampedArray(16).fill(2);
+    seedMaskDataRef(engine, 'a', bytesA);
+    seedMaskDataRef(engine, 'b', bytesB);
+
+    resetTrackedState(engine, { preserveContentRefs: true });
+
+    const tracked = getTracked(engine);
+    expect(tracked.maskDataRefs.get('a')).toBe(bytesA);
+    expect(tracked.maskDataRefs.get('b')).toBe(bytesB);
+  });
+
+  it('keeps the selection mask ref across the reset when preserveContentRefs is set', () => {
+    const engine = makeFakeEngine();
+    resetTrackedState(engine);
+    const tracked1 = getTracked(engine);
+    const selMask = new Uint8ClampedArray(32);
+    tracked1.selectionMask = selMask;
+    tracked1.selectionActive = true;
+
+    resetTrackedState(engine, { preserveContentRefs: true });
+
+    const tracked = getTracked(engine);
+    expect(tracked.selectionMask).toBe(selMask);
+    expect(tracked.selectionActive).toBe(true);
+  });
+
+  it('still drops descriptor refs so undo triggers a re-diff', () => {
+    const engine = makeFakeEngine();
+    resetTrackedState(engine);
+    const tracked1 = getTracked(engine);
+    tracked1.layerVersions.set('a', 'v1');
+    tracked1.layerRefs.set('a', { id: 'a' } as never);
+    tracked1.docWidth = 400;
+
+    resetTrackedState(engine, { preserveContentRefs: true });
+
+    const tracked = getTracked(engine);
+    expect(tracked.layerVersions.has('a')).toBe(false);
+    expect(tracked.layerRefs.has('a')).toBe(false);
+    expect(tracked.docWidth).toBe(0);
+  });
+
+  it('the default reset (no option) still wipes maskDataRefs — for engine recreate / project load', () => {
+    const engine = makeFakeEngine();
+    resetTrackedState(engine);
+    seedMaskDataRef(engine, 'a', new Uint8ClampedArray(4));
+
+    resetTrackedState(engine);
+
+    expect(getTracked(engine).maskDataRefs.has('a')).toBe(false);
+  });
+});

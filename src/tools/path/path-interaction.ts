@@ -104,10 +104,12 @@ export function handlePathDown(ctx: InteractionContext): InteractionState | unde
       return undefined;
     }
 
-    // Clicked empty space — deselect path.
+    // Clicked empty space — deselect the current path and fall through to
+    // creation mode so this click starts the next path's first anchor
+    // (#789: otherwise the click is consumed as a bare deselect and the
+    // next path silently loses its first anchor).
     editorState.selectPath(null);
     uiState.setEditingAnchorIndex(null);
-    return undefined;
   }
 
   // --- Creation mode ---

@@ -18,9 +18,9 @@ import {
   renderMaskRadialGradient as gpuRenderMaskRadialGradient,
   renderQuickMaskLinearGradient as gpuRenderQuickMaskLinearGradient,
   renderQuickMaskRadialGradient as gpuRenderQuickMaskRadialGradient,
-  uploadLayerMask,
   getLayerEngineBounds,
 } from '../../engine-wasm/wasm-bridge';
+import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
 
 export function handleGradientDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer } = ctx;
@@ -43,8 +43,8 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
       .find((l) => l.id === activeLayerId)?.mask ?? activeLayer.mask;
     editorState.pushHistory(gradientType === 'radial' ? 'Mask Radial Gradient' : 'Mask Linear Gradient');
     if (engine) {
-      const maskBytes = new Uint8Array(freshMask.data.buffer, freshMask.data.byteOffset, freshMask.data.byteLength);
-      uploadLayerMask(engine, activeLayerId, maskBytes, freshMask.width, freshMask.height);
+      // Skip re-uploading unchanged mask data (#780).
+      uploadLayerMaskIfChanged(engine, activeLayerId, freshMask.data, freshMask.width, freshMask.height);
     }
   } else {
     editorState.pushHistory(gradientType === 'radial' ? 'Radial Gradient' : 'Linear Gradient');

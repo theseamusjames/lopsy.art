@@ -110,6 +110,34 @@ import { syncLayers } from './sync-layers';
 export { resetTrackedState, seedMaskDataRef, seedSelectionMaskRef } from './sync-state';
 export { syncLayers } from './sync-layers';
 
+// Explicit uploadLayerMask import so the wrapper below can call it.
+import { uploadLayerMask as wasmUploadLayerMask } from './wasm-bridge';
+
+/**
+ * Upload a layer's mask to the GPU only when its data reference doesn't
+ * match the one syncLayers last uploaded. The GPU already holds the
+ * current bytes for whatever it painted this session, so re-uploading the
+ * same array is pure waste — ~17 MB / 80 ms at 4K on every mask paint,
+ * fill or gradient pointer-down (#780). Callers pass the store's own
+ * `layer.mask.data` (Uint8ClampedArray); on a real change we upload and
+ * seed the tracked ref so syncLayers on the next frame also sees a hit.
+ * Returns true if an upload happened.
+ */
+export function uploadLayerMaskIfChanged(
+  engine: Engine,
+  layerId: string,
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+): boolean {
+  const tracked = getTracked(engine);
+  if (tracked.maskDataRefs.get(layerId) === data) return false;
+  const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  wasmUploadLayerMask(engine, layerId, bytes, width, height);
+  tracked.maskDataRefs.set(layerId, data);
+  return true;
+}
+
 function buildGradientMapLut(
   stops: readonly GradientStop[],
 ): Uint8Array {

@@ -55,7 +55,6 @@ describe('pushHistory labels — every call site is labeled', () => {
       'Smudge',
       'Healing Brush',
       'Clone Stamp',
-      'Spray',
       'Stroke Path',
       'Transform',
       'Nudge',
@@ -72,11 +71,13 @@ describe('pushHistory labels — every call site is labeled', () => {
 
     // Some labels are passed indirectly through a variable (e.g. paint
     // handlers branch on tool type) — for those, just check the literal
-    // appears in the source.
+    // appears in the source. Spray joined this list when its stroke path
+    // moved onto the shared brush/pencil/eraser dispatch (#787).
     const expectedAnywhere = [
       "'Brush'",
       "'Eraser'",
       "'Pencil'",
+      "'Spray'",
       "'Mask Paint'",
       "'Mask Erase'",
       "'Quick Mask Paint'",
