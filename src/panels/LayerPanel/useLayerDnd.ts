@@ -8,6 +8,44 @@ interface DisplayEntry {
   depth: number;
 }
 
+/**
+ * Translate a display-list drag (top→bottom, respects collapsed
+ * groups) into `moveLayer(fromLayerOrderIdx, toLayerOrderIdx)` indices
+ * on the full `document.layerOrder` (bottom→top, every layer).
+ *
+ * #797 — the previous formula `layers.length - 1 - from` treated `from`
+ * as if it were an index into the full layers array. That silently
+ * picked a HIDDEN child of any collapsed group above the dragged row,
+ * so the drop reordered the wrong layer.
+ *
+ * Returns null when the drag is a no-op (no motion, or the neighbour
+ * cannot be resolved).
+ */
+export function resolveDisplayDropIndices(
+  layers: readonly Layer[],
+  displayList: readonly DisplayEntry[],
+  from: number,
+  gap: number,
+): { fromIdx: number; toIdx: number } | null {
+  const draggedLayer = displayList[from]?.layer;
+  if (!draggedLayer) return null;
+  const fromIdx = layers.findIndex((l) => l.id === draggedLayer.id);
+  if (fromIdx < 0) return null;
+
+  let toIdx: number;
+  const neighborAboveEntry = gap < displayList.length ? displayList[gap] : null;
+  if (neighborAboveEntry) {
+    const neighborIdx = layers.findIndex((l) => l.id === neighborAboveEntry.layer.id);
+    if (neighborIdx < 0) return null;
+    toIdx = neighborIdx > fromIdx ? neighborIdx : neighborIdx + 1;
+  } else {
+    toIdx = 0;
+  }
+
+  if (toIdx === fromIdx || (fromIdx < toIdx && toIdx === fromIdx + 1)) return null;
+  return { fromIdx, toIdx };
+}
+
 interface UseLayerDndParams {
   displayList: readonly DisplayEntry[];
   layers: readonly Layer[];
@@ -137,10 +175,9 @@ export function useLayerDnd({
         }
       }
 
-      const fromArrayIdx = layers.length - 1 - from;
-      const rawToArrayIdx = layers.length - gap;
-      const toArrayIdx = rawToArrayIdx > fromArrayIdx ? rawToArrayIdx - 1 : rawToArrayIdx;
-      onReorderLayer(fromArrayIdx, toArrayIdx);
+      const resolved = resolveDisplayDropIndices(layers, displayList, from, gap);
+      if (!resolved) return;
+      onReorderLayer(resolved.fromIdx, resolved.toIdx);
     };
 
     document.addEventListener('pointermove', onMove);

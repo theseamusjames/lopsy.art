@@ -101,3 +101,52 @@
 .alphaCursor {
   left: var(--cursor-x);
 }
+
+/* #799 — hex/RGB text inputs. FEATURES.md documents them for the
+   Gradient Editor and Gradient Map. */
+.textInputs {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  gap: var(--space-1);
+  align-items: end;
+}
+
+.hexLabel,
+.rgbLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  min-width: 0;
+}
+
+.hexInput,
+.rgbInput {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono, monospace);
+}
+
+.hexInput:focus,
+.rgbInput:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.rgbInput {
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.rgbInput::-webkit-outer-spin-button,
+.rgbInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

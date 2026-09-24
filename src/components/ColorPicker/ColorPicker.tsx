@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { rgbToHsv, hsvToRgb } from '../../utils/color';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { rgbToHsv, hsvToRgb, rgbToHex6, hexToRgb } from '../../utils/color';
 import { contextOptions } from '../../engine/color-space';
 import type { Color } from '../../types';
 import styles from './ColorPicker.module.css';
@@ -393,6 +393,40 @@ export function ColorPicker({ color, onChange, compact = false, grayscale = fals
 
   const valueCursorX = `${(color.r / 255) * 100}%`;
 
+  // #799 — hex/RGB text inputs are documented in FEATURES.md (Gradient
+  // Editor, Gradient Map). `hexInput` is a local draft so users can type
+  // one character at a time without the parser rejecting the partial
+  // string; the color commits on Enter, blur, or a full 6-char hex.
+  const [hexInput, setHexInput] = useState<string | null>(null);
+  const displayedHex = hexInput ?? rgbToHex6(color).toUpperCase();
+
+  const commitHexInput = useCallback((raw: string) => {
+    const parsed = hexToRgb(raw);
+    if (parsed) {
+      onChange({ r: parsed.r, g: parsed.g, b: parsed.b, a: color.a });
+      hsvRef.current = rgbToHsv({ r: parsed.r, g: parsed.g, b: parsed.b, a: color.a });
+    }
+    setHexInput(null);
+  }, [color.a, onChange]);
+
+  const handleHexChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setHexInput(raw);
+    const parsed = hexToRgb(raw);
+    if (parsed && (raw.length === 6 || raw.length === 7)) {
+      onChange({ r: parsed.r, g: parsed.g, b: parsed.b, a: color.a });
+      hsvRef.current = rgbToHsv({ r: parsed.r, g: parsed.g, b: parsed.b, a: color.a });
+    }
+  }, [color.a, onChange]);
+
+  const handleRgbChange = useCallback((channel: 'r' | 'g' | 'b') => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const n = Math.max(0, Math.min(255, Number.parseInt(raw, 10) || 0));
+    const next = { ...color, [channel]: n } as Color;
+    onChange(next);
+    hsvRef.current = rgbToHsv(next);
+  }, [color, onChange]);
+
   if (grayscale) {
     return (
       <div className={styles.picker} role="group" aria-label="Color picker">
@@ -434,6 +468,69 @@ export function ColorPicker({ color, onChange, compact = false, grayscale = fals
         <div ref={alphaContainerRef} className={styles.alphaBar} onMouseDown={handleAlphaDown} role="slider" aria-label="Opacity" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(color.a * 100)} tabIndex={0}>
           <canvas ref={alphaCanvasRef} aria-hidden="true" />
           <div className={styles.alphaCursor} style={{ '--cursor-x': alphaCursorX } as React.CSSProperties} />
+        </div>
+      )}
+      {!compact && (
+        <div className={styles.textInputs}>
+          <label className={styles.hexLabel}>
+            <span>Hex</span>
+            <input
+              type="text"
+              className={styles.hexInput}
+              value={displayedHex.startsWith('#') ? displayedHex : `#${displayedHex}`}
+              onChange={handleHexChange}
+              onBlur={(e) => commitHexInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  commitHexInput((e.target as HTMLInputElement).value);
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              maxLength={7}
+              spellCheck={false}
+              aria-label="Hex color"
+              data-testid="color-picker-hex"
+            />
+          </label>
+          <label className={styles.rgbLabel}>
+            <span>R</span>
+            <input
+              type="number"
+              className={styles.rgbInput}
+              value={color.r}
+              onChange={handleRgbChange('r')}
+              min={0}
+              max={255}
+              aria-label="Red"
+              data-testid="color-picker-r"
+            />
+          </label>
+          <label className={styles.rgbLabel}>
+            <span>G</span>
+            <input
+              type="number"
+              className={styles.rgbInput}
+              value={color.g}
+              onChange={handleRgbChange('g')}
+              min={0}
+              max={255}
+              aria-label="Green"
+              data-testid="color-picker-g"
+            />
+          </label>
+          <label className={styles.rgbLabel}>
+            <span>B</span>
+            <input
+              type="number"
+              className={styles.rgbInput}
+              value={color.b}
+              onChange={handleRgbChange('b')}
+              min={0}
+              max={255}
+              aria-label="Blue"
+              data-testid="color-picker-b"
+            />
+          </label>
         </div>
       )}
     </div>

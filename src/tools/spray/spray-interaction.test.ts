@@ -143,12 +143,32 @@ describe('spray move', () => {
     expect(state.lastPoint).toEqual({ x: 36, y: 0 });
   });
 
-  it('a short move only advances the anchor without spraying', () => {
+  // #793 — the previous behaviour advanced the anchor without emitting,
+  // which discarded the accumulated distance between real move events.
+  // A slow drag (each move under the spacing threshold) then emitted
+  // only the pointer-down cloud. Keep the anchor pinned on sub-spacing
+  // moves so the next move that finally crosses `spacing` emits.
+  it('leaves the anchor pinned on a sub-spacing move so accumulated distance survives', () => {
     const state = handleSprayDown(makeCtx({ layerPos: { x: 0, y: 0 } }))!;
     applyBrushDab.mockClear();
     handleSprayMove(makeCtx({ layerPos: { x: 5, y: 0 } }), state);
     expect(applyBrushDab).not.toHaveBeenCalled();
-    expect(state.lastPoint).toEqual({ x: 5, y: 0 });
+    expect(state.lastPoint).toEqual({ x: 0, y: 0 });
+  });
+
+  // Sequel to the pinned-anchor fix: a run of sub-spacing moves must
+  // eventually spray as soon as the total drag exceeds `spacing`,
+  // because each move re-tests distance from the original anchor.
+  it('emits when a slow drag of many sub-spacing moves finally crosses the spacing threshold', () => {
+    const state = handleSprayDown(makeCtx({ layerPos: { x: 0, y: 0 } }))!;
+    applyBrushDab.mockClear();
+    // spacing = size * 0.3 = 12; three 5px moves = 5, 10, 15 — the third
+    // crosses the threshold and must emit.
+    handleSprayMove(makeCtx({ layerPos: { x: 5, y: 0 } }), state);
+    handleSprayMove(makeCtx({ layerPos: { x: 10, y: 0 } }), state);
+    expect(applyBrushDab).not.toHaveBeenCalled();
+    handleSprayMove(makeCtx({ layerPos: { x: 15, y: 0 } }), state);
+    expect(applyBrushDab).toHaveBeenCalled();
   });
 
   it('keeps using the color captured at stroke start', () => {
@@ -165,6 +185,28 @@ describe('spray move', () => {
     applyBrushDab.mockClear();
     handleSprayMove(makeCtx({ layerPos: { x: 36, y: 0 } }), { ...state, layerId: null } as InteractionState);
     expect(applyBrushDab).not.toHaveBeenCalled();
+  });
+
+  // #793 — the interaction dispatcher shallow-copies `state` on every
+  // frame (see `withMoveGesture`/`withToolGesture`), so the airbrush
+  // interval's closure holds the original `state` object with a stale
+  // `lastPoint`. The timer used to spray at pointer-down forever, no
+  // matter how far the cursor had travelled. Track the live cursor at
+  // module scope so the interval reads the up-to-date position.
+  it('airbrush timer follows the live cursor as the drag continues', () => {
+    const state = handleSprayDown(makeCtx({ layerPos: { x: 0, y: 0 } }))!;
+    // Drag far enough to advance the anchor.
+    handleSprayMove(makeCtx({ layerPos: { x: 100, y: 0 } }), state);
+    applyBrushDab.mockClear();
+    // The airbrush interval fires at 166ms; every emission must now be
+    // centred near the cursor's live x=100 (± brushRadius), not x=0.
+    vi.advanceTimersByTime(166);
+    expect(applyBrushDab).toHaveBeenCalled();
+    const brushRadius = ts.settings.spray.size / 2;
+    for (const call of applyBrushDab.mock.calls) {
+      const x = call[2] as number;
+      expect(Math.abs(x - 100)).toBeLessThanOrEqual(brushRadius + 0.001);
+    }
   });
 });
 

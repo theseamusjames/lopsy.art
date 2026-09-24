@@ -549,31 +549,47 @@ pub fn flip_texture(
     let src_tex = engine.texture_pool.get(tex_handle).cloned()
         .ok_or("Texture not found")?;
 
-    // Render flipped into scratch_a using the flip shader
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, w as i32, h as i32);
+    // #795 — the previous implementation rendered the flipped WxH
+    // image into the top-left of `scratch_texture_a` (which is
+    // doc-sized) with viewport(0, 0, w, h), then blitted the ENTIRE
+    // scratch texture back into the WxH layer texture. The blit
+    // samples UV [0,1] over the whole source, so any stale composite
+    // content in the doc-sized scratch outside the WxH top-left
+    // region got squashed and copied INTO the layer texture — a
+    // freshly pasted 120x120 layer flipped straight after paste ended
+    // up filled with a miniature of the whole document.
+    //
+    // Fix: acquire a temp texture at the layer's own WxH, render the
+    // flipped content into IT, blit it back, then release.
+    let temp_tex_handle = engine.texture_pool.acquire(&engine.gl, w, h)?;
+    let temp_tex = engine.texture_pool.get(temp_tex_handle).cloned()
+        .ok_or("Temp texture not found")?;
 
-    let shader = &engine.shaders.flip;
-    engine.gl.use_program(Some(&shader.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-    if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_flipH") { engine.gl.uniform1i(Some(&loc), if horizontal { 1 } else { 0 }); }
-    if let Some(loc) = shader.location(&engine.gl, "u_flipV") { engine.gl.uniform1i(Some(&loc), if horizontal { 0 } else { 1 }); }
-    engine.draw_fullscreen_quad();
+    let flip_h_val = if horizontal { 1 } else { 0 };
+    let flip_v_val = if horizontal { 0 } else { 1 };
+    engine.render_to_texture(&temp_tex, w as i32, h as i32, |engine| {
+        let shader = &engine.shaders.flip;
+        engine.gl.use_program(Some(&shader.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+        if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_flipH") { engine.gl.uniform1i(Some(&loc), flip_h_val); }
+        if let Some(loc) = shader.location(&engine.gl, "u_flipV") { engine.gl.uniform1i(Some(&loc), flip_v_val); }
+        engine.draw_fullscreen_quad();
+    });
 
-    // Copy scratch_a → layer texture
-    let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned()
-        .ok_or("scratch_a not found")?;
+    // Copy temp → layer texture. Same-size blit; UVs [0,1] map 1:1.
     engine.render_to_texture(&src_tex, w as i32, h as i32, |engine| {
         engine.gl.use_program(Some(&engine.shaders.blit.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_a_tex));
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&temp_tex));
         if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
             engine.gl.uniform1i(Some(&loc), 0);
         }
         engine.draw_fullscreen_quad();
     });
+
+    engine.texture_pool.release(temp_tex_handle);
 
     engine.mark_layer_dirty(layer_id);
     Ok(())
