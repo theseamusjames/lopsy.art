@@ -34,6 +34,7 @@ import { useContextMenu } from './useContextMenu';
 import { ContextMenu } from '../components/ContextMenu/ContextMenu';
 import { Toasts } from '../components/Toasts/Toasts';
 import { TextActionButtons } from '../components/TextActionButtons/TextActionButtons';
+import { TextInputSink } from '../components/TextInputSink/TextInputSink';
 import { PathActionButtons } from '../components/PathActionButtons/PathActionButtons';
 import { TiltShiftControls } from './OptionsBar/tool-options/TiltShiftControls';
 import { POINTER_IDLE, type PointerMode } from './pointer-mode';
@@ -245,6 +246,7 @@ export function App() {
             <canvas ref={canvasRef} aria-label="Drawing canvas" />
             <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} aria-hidden="true" />
             <TextActionButtons containerRef={containerRef} />
+            <TextInputSink containerRef={containerRef} />
             <PathActionButtons containerRef={containerRef} />
             <TiltShiftControls />
             <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />
