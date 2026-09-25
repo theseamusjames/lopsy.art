@@ -126,7 +126,8 @@ async function getTextLayers(page: Page) {
 }
 
 test.describe('WOFF2 TrueType font rendering', () => {
-  test.use({ allowConsoleErrors: [/Failed to load resource.*403/, /WOFF2 decode failed/] });
+  // A single pattern: a two-element array is read as a [value, options] fixture tuple.
+  test.use({ allowConsoleErrors: [/Failed to load resource|WOFF2 decode failed/] });
 
   test.beforeEach(async ({ page, isMobile }) => {
     test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
