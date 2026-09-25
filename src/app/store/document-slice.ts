@@ -441,8 +441,10 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set({ document: { ...doc, layers } });
   },
 
-  // No history — node edits fire continuously; history is pushed on commit
   addAdjustmentNode: (groupId, nodeType) => {
+    const s = get();
+    if (!s.document.layers.some((l) => l.id === groupId && l.type === 'group')) return;
+    s.pushHistoryMetadata('Add Adjustment');
     const doc = get().document;
     const node = createDefaultNode(nodeType);
     const layers = doc.layers.map((l) => {
@@ -456,6 +458,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   removeAdjustmentNode: (groupId, nodeId) => {
+    get().pushHistoryMetadata('Remove Adjustment');
     const doc = get().document;
     const layers = doc.layers.map((l) =>
       l.id === groupId && l.type === 'group'
@@ -479,6 +482,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   toggleAdjustmentNode: (groupId, nodeId) => {
+    get().pushHistoryMetadata('Toggle Adjustment');
     const doc = get().document;
     const layers = doc.layers.map((l) => {
       if (l.id !== groupId || l.type !== 'group') return l;
@@ -491,6 +495,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   reorderAdjustmentNodes: (groupId, nodeIds) => {
+    get().pushHistoryMetadata('Reorder Adjustments');
     const doc = get().document;
     const layers = doc.layers.map((l) => {
       if (l.id !== groupId || l.type !== 'group') return l;

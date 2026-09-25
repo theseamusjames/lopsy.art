@@ -337,4 +337,55 @@ describe('adjustment node actions — dynamic AdjustmentNode list on groups', ()
     expect(afterGroup.adjustments[1]?.type).toBe('contrast');
     expect(afterGroup.adjustments[2]?.type).toBe('exposure');
   });
+
+  describe('adjustment node history (issue #796)', () => {
+    function groupAdjustments(groupId: string) {
+      const group = useEditorStore.getState().document.layers.find((l) => l.id === groupId);
+      if (!group || group.type !== 'group') throw new Error('group missing');
+      return group.adjustments;
+    }
+
+    function setUpGroup(): string {
+      useEditorStore.getState().addGroup('Test Group');
+      return useEditorStore.getState().document.layers.find(
+        (l) => l.type === 'group' && l.name === 'Test Group',
+      )!.id;
+    }
+
+    it('adding a node is undoable and redoable', () => {
+      const groupId = setUpGroup();
+      const undoDepth = useEditorStore.getState().undoStack.length;
+
+      useEditorStore.getState().addAdjustmentNode(groupId, 'vignette');
+      expect(useEditorStore.getState().undoStack.length).toBe(undoDepth + 1);
+      expect(useEditorStore.getState().undoStack[useEditorStore.getState().undoStack.length - 1]?.label).toBe('Add Adjustment');
+      expect(groupAdjustments(groupId).map((n) => n.type)).toEqual(['vignette']);
+
+      useEditorStore.getState().undo();
+      expect(groupAdjustments(groupId)).toEqual([]);
+
+      useEditorStore.getState().redo();
+      expect(groupAdjustments(groupId).map((n) => n.type)).toEqual(['vignette']);
+    });
+
+    it('removing, toggling and reordering nodes each push one undo step', () => {
+      const groupId = setUpGroup();
+      useEditorStore.getState().addAdjustmentNode(groupId, 'exposure');
+      useEditorStore.getState().addAdjustmentNode(groupId, 'vignette');
+      const [expId, vigId] = groupAdjustments(groupId).map((n) => n.id);
+
+      useEditorStore.getState().toggleAdjustmentNode(groupId, expId!);
+      useEditorStore.getState().reorderAdjustmentNodes(groupId, [vigId!, expId!]);
+      useEditorStore.getState().removeAdjustmentNode(groupId, vigId!);
+      expect(groupAdjustments(groupId).map((n) => n.type)).toEqual(['exposure']);
+
+      useEditorStore.getState().undo();
+      expect(groupAdjustments(groupId).map((n) => n.type)).toEqual(['vignette', 'exposure']);
+      useEditorStore.getState().undo();
+      expect(groupAdjustments(groupId).map((n) => n.type)).toEqual(['exposure', 'vignette']);
+      expect(groupAdjustments(groupId)[0]?.enabled).toBe(false);
+      useEditorStore.getState().undo();
+      expect(groupAdjustments(groupId)[0]?.enabled).toBe(true);
+    });
+  });
 });

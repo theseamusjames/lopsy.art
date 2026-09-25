@@ -138,3 +138,17 @@ same plugin serves them from memory with drafts included. Cloudflare Pages serve
 `dist/tutorials/<slug>/index.html` at `/tutorials/<slug>/` and treats the whole
 site as an SPA only because there is **no top-level `404.html`** — adding one
 would break deep links into the editor. Canonical tutorial URLs end in `/`.
+
+## Layer textures hold straight (non-premultiplied) alpha
+
+blend.glsl, composite.glsl and every layer-texture producer assume straight
+RGBA; only the in-progress brush stroke texture is premultiplied (blend
+passes `u_srcPremultiplied = 1` for it). Two things silently break this and
+show up as a dark fringe on anti-aliased edges (#815): fixed-function
+`ONE, ONE_MINUS_SRC_ALPHA` blending of a coverage-weighted colour into a
+layer, and hardware LINEAR filtering when resampling a layer (transparent
+texels are black, so their RGB bleeds in). Composite "over" in the shader
+against a copy of the destination instead, and resample with
+`samplePremulBilinear` (`//#include premul_sample`, see
+`gpu/shaders/premul_sample.glsl`). The group-adjustment scratch is also
+straight alpha — blend it with `premultiplied = false`.
