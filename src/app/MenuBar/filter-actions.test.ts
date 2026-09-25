@@ -301,6 +301,24 @@ describe('#771 — liquify-actions.ts reconciles JS bounds after each engine wri
     const { applyLiquify } = await import('./liquify-actions');
     applyLiquify();
     expect(liquifyRender).toHaveBeenCalledTimes(1);
-    expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
+    // #816 — applyLiquify now also reconciles after the pre-history
+    // restoreFilterPreview, so we get two calls: one after the restore
+    // and one after the final liquify render.
+    expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(2);
+  });
+
+  // #816 — applyLiquify must restore the pre-warp preview BEFORE
+  // pushHistory, otherwise the snapshot captures the live-warped
+  // texture and undo becomes a no-op.
+  it('applyLiquify restores the preview before pushHistory (#816)', async () => {
+    const { applyLiquify } = await import('./liquify-actions');
+    const callOrder: string[] = [];
+    restoreFilterPreview.mockImplementation(() => { callOrder.push('restore'); });
+    editorState.pushHistory.mockImplementation(() => { callOrder.push('pushHistory'); });
+    liquifyRender.mockImplementation(() => { callOrder.push('liquifyRender'); });
+    applyLiquify();
+    expect(callOrder[0]).toBe('restore');
+    expect(callOrder[1]).toBe('pushHistory');
+    expect(callOrder[2]).toBe('liquifyRender');
   });
 });

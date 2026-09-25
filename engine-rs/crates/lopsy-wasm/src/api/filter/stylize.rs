@@ -283,7 +283,10 @@ pub fn filter_bloom(
     if let Some(loc) = blur_shader.location(gl, "u_radius") {
         gl.uniform1i(Some(&loc), radius as i32);
     }
-    for (i, &wt) in kernel.iter().enumerate().take(64) {
+    let center = radius as usize;
+    for i in 0..64usize {
+        let ki = center + i;
+        let wt = if ki < kernel.len() { kernel[ki] } else { 0.0 };
         let name = format!("u_weights[{i}]");
         if let Some(loc) = blur_shader.location(gl, &name) {
             gl.uniform1f(Some(&loc), wt);

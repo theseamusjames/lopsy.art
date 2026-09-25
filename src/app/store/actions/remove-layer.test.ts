@@ -89,4 +89,57 @@ describe('computeRemoveLayer', () => {
     expect(removed.has(sibling.id)).toBe(false);
     expect(result.document!.layers.find((l) => l.id === sibling.id)).toBeDefined();
   });
+
+  // #819 — deleting the active layer should activate the sibling next
+  // to it (below it if any, else above it), not always the bottom-most
+  // raster in the document.
+  it('activates the deleted layer\'s below-sibling inside its group (#819)', () => {
+    const child1 = createRasterLayer({ name: 'Child 1', width: 10, height: 10 });
+    const child2 = createRasterLayer({ name: 'Child 2', width: 10, height: 10 });
+    const group = createGroupLayer({ name: 'G', children: [child1.id, child2.id] });
+    const bg = createRasterLayer({ name: 'Background', width: 10, height: 10 });
+    const root = createGroupLayer({ name: 'Project', children: [bg.id, group.id] });
+
+    const layers: Layer[] = [bg, child1, child2, group, root];
+    const doc: DocumentState = {
+      id: 'doc-1', name: 'Test', width: 10, height: 10,
+      layers,
+      layerOrder: [bg.id, child1.id, child2.id, group.id, root.id],
+      rootGroupId: root.id,
+      activeLayerId: child2.id,
+      selectedLayerIds: [child2.id],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
+    };
+
+    const result = computeRemoveLayer(doc, new Map(), new Map(), child2.id)!;
+    // child2 is removed. The sibling below it inside the group is
+    // child1, so it becomes active — NOT the document-order first layer
+    // (Background).
+    expect(result.document!.activeLayerId).toBe(child1.id);
+  });
+
+  it('falls back to the sibling above when the deleted layer was the bottom child (#819)', () => {
+    const child1 = createRasterLayer({ name: 'Child 1', width: 10, height: 10 });
+    const child2 = createRasterLayer({ name: 'Child 2', width: 10, height: 10 });
+    const group = createGroupLayer({ name: 'G', children: [child1.id, child2.id] });
+    const bg = createRasterLayer({ name: 'Background', width: 10, height: 10 });
+    const root = createGroupLayer({ name: 'Project', children: [bg.id, group.id] });
+
+    const layers: Layer[] = [bg, child1, child2, group, root];
+    const doc: DocumentState = {
+      id: 'doc-1', name: 'Test', width: 10, height: 10,
+      layers,
+      layerOrder: [bg.id, child1.id, child2.id, group.id, root.id],
+      rootGroupId: root.id,
+      activeLayerId: child1.id,
+      selectedLayerIds: [child1.id],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
+    };
+
+    const result = computeRemoveLayer(doc, new Map(), new Map(), child1.id)!;
+    // child1 was the bottom child; falls back to the sibling above it.
+    expect(result.document!.activeLayerId).toBe(child2.id);
+  });
 });

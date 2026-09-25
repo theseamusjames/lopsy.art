@@ -67,6 +67,13 @@ export function applyLiquify(): void {
   const engine = getEngine();
   if (!engine) return;
 
+  // #816 — the live liquify session has been painting each dab straight
+  // into the layer texture. Restore the pre-warp preview BEFORE the
+  // history snapshot so undo returns to the true "before" state; then
+  // re-render the final warp from the preview on top.
+  restoreFilterPreview(engine);
+  syncLayerAfterFullSize(engine, session.layerId);
+
   useEditorStore.getState().pushHistory('Liquify');
 
   liquifyRender(engine, session.layerId, MAX_DISP);
