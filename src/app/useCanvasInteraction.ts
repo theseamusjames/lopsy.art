@@ -657,6 +657,12 @@ export function useCanvasInteraction(
   }, [screenToCanvas, containerRef, cancelHoldTimer]);
 
   const clearPersistentTransform = useCallback(() => {
+    // #812 — the #798 fix rasterizes a text layer whenever this
+    // function runs. Guard on a genuine transform having been committed
+    // so ordinary calls (Escape, ⌘D, clicking another layer row) don't
+    // silently rasterize a live text layer that never got transformed.
+    const hadTransform =
+      persistentTransformRef.current !== null || floatingSelectionRef.current !== null;
     persistentTransformRef.current = null;
     floatingSelectionRef.current = null;
 
@@ -678,7 +684,7 @@ export function useCanvasInteraction(
       // Auto-rasterize on commit so the transformed pixels stick and
       // subsequent text edits are no-ops on this layer.
       const activeLayer = editorState.document.layers.find((l) => l.id === activeId);
-      if (activeLayer && activeLayer.type === 'text' && eng) {
+      if (hadTransform && activeLayer && activeLayer.type === 'text' && eng) {
         const bounds = cropLayerToContentGpu(eng, activeId);
         if (bounds.length === 4 && (bounds[2] ?? 0) > 0) {
           const [nx, ny, nw, nh] = [bounds[0]!, bounds[1]!, bounds[2]!, bounds[3]!];

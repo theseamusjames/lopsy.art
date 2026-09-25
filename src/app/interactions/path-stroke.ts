@@ -23,8 +23,11 @@ export function rasterizePathToLayer(
   const buf = PixelBuffer.fromImageData(imageData);
   useToolSettingsStore.getState().addRecentColor(color);
 
-  // Translate from document space to layer-local space
-  const layer = editorState.document.layers.find((l) => l.id === layerId);
+  // #820 — getOrCreateLayerPixelData may have expanded the layer to
+  // cover the canvas, rewriting layer.x/y. Read the current bounds so
+  // we translate anchors against the buffer we actually got back, not
+  // the cropped bounds we started with.
+  const layer = useEditorStore.getState().document.layers.find((l) => l.id === layerId);
   const offsetX = layer?.x ?? 0;
   const offsetY = layer?.y ?? 0;
   const localAnchors: PathAnchor[] = anchors.map((a) => ({

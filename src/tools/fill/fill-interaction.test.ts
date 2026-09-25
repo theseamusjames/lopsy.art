@@ -222,12 +222,31 @@ describe('bucket fill — normal mode', () => {
     expect(fillMaskArg[6 * DOC_W + 3]).toBe(0); // flood hit it, selection vetoed it
   });
 
-  it('does nothing after pushing history when no engine is available', () => {
+  it('does nothing when no engine is available and does not push history', () => {
     engine = null;
     handleFillDown(makeCtx());
-    expect(editorState.pushHistory).toHaveBeenCalledWith('Bucket Fill');
+    // #811 — do not clear redo with a phantom history entry when we
+    // cannot actually perform the fill.
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
     expect(floodFill).not.toHaveBeenCalled();
     expect(applyFillToLayer).not.toHaveBeenCalled();
+  });
+
+  // #811 — a click on the pasteboard outside the document should be a
+  // no-op: no flood-fill, no empty-layer fast path, no history entry.
+  it('ignores a click outside the canvas bounds (#811)', () => {
+    handleFillDown(makeCtx({ layerPos: { x: 100, y: 200 }, canvasPos: { x: 100, y: 200 } }));
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
+    expect(bucketFillSolid).not.toHaveBeenCalled();
+    expect(bucketFillByColorGpu).not.toHaveBeenCalled();
+    expect(applyFillToLayer).not.toHaveBeenCalled();
+    expect(floodFill).not.toHaveBeenCalled();
+  });
+
+  it('ignores a click with a negative canvas coordinate (#811)', () => {
+    handleFillDown(makeCtx({ layerPos: { x: -5, y: -5 }, canvasPos: { x: -5, y: -5 } }));
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
+    expect(bucketFillSolid).not.toHaveBeenCalled();
   });
 
   // #742 — the fill's engine-side ensure_layer_full_size resets the layer

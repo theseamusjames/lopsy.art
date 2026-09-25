@@ -82,10 +82,8 @@ export function handleFillDown(ctx: InteractionContext): void {
   }
 
   // Normal mode: fill the active layer
-  editorState.pushHistory('Bucket Fill');
   const toolSettings = useToolSettingsStore.getState();
   const color = toDocumentColor(toolSettings.foregroundColor);
-  toolSettings.addRecentColor(color);
   const { tolerance, contiguous } = toolSettings.settings.fill;
 
   const engine = getEngine();
@@ -96,6 +94,13 @@ export function handleFillDown(ctx: InteractionContext): void {
   const canvasX = Math.round(layerPos.x + (layer?.x ?? 0));
   const canvasY = Math.round(layerPos.y + (layer?.y ?? 0));
 
+  // #811 — a click outside the canvas is a no-op, like Photoshop. Skip
+  // the empty-layer fast path (which would flood the whole layer) and
+  // don't push a history entry that clears redo for nothing.
+  if (canvasX < 0 || canvasX >= docW || canvasY < 0 || canvasY >= docH) {
+    return;
+  }
+
   const { selection } = editorState;
   if (selection.active && selection.mask) {
     const idx = canvasY * docW + canvasX;
@@ -103,6 +108,9 @@ export function handleFillDown(ctx: InteractionContext): void {
       return;
     }
   }
+
+  editorState.pushHistory('Bucket Fill');
+  toolSettings.addRecentColor(color);
   const selMaskBytes = (selection.active && selection.mask)
     ? new Uint8Array(selection.mask.buffer, selection.mask.byteOffset, selection.mask.byteLength)
     : null;

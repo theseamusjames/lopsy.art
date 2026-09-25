@@ -15,27 +15,31 @@ interface DisplayEntry {
  *
  * #797 — the previous formula `layers.length - 1 - from` treated `from`
  * as if it were an index into the full layers array. That silently
- * picked a HIDDEN child of any collapsed group above the dragged row,
- * so the drop reordered the wrong layer.
+ * picked a HIDDEN child of any collapsed group above the dragged row.
+ *
+ * #824 — indices must be resolved against `layerOrder`, not
+ * `document.layers`. Paste and every add after it can leave the two
+ * arrays out of order, and `moveLayer` only understands `layerOrder`
+ * indices.
  *
  * Returns null when the drag is a no-op (no motion, or the neighbour
  * cannot be resolved).
  */
 export function resolveDisplayDropIndices(
-  layers: readonly Layer[],
+  layerOrder: readonly string[],
   displayList: readonly DisplayEntry[],
   from: number,
   gap: number,
 ): { fromIdx: number; toIdx: number } | null {
   const draggedLayer = displayList[from]?.layer;
   if (!draggedLayer) return null;
-  const fromIdx = layers.findIndex((l) => l.id === draggedLayer.id);
+  const fromIdx = layerOrder.indexOf(draggedLayer.id);
   if (fromIdx < 0) return null;
 
   let toIdx: number;
   const neighborAboveEntry = gap < displayList.length ? displayList[gap] : null;
   if (neighborAboveEntry) {
-    const neighborIdx = layers.findIndex((l) => l.id === neighborAboveEntry.layer.id);
+    const neighborIdx = layerOrder.indexOf(neighborAboveEntry.layer.id);
     if (neighborIdx < 0) return null;
     toIdx = neighborIdx > fromIdx ? neighborIdx : neighborIdx + 1;
   } else {
@@ -49,6 +53,7 @@ export function resolveDisplayDropIndices(
 interface UseLayerDndParams {
   displayList: readonly DisplayEntry[];
   layers: readonly Layer[];
+  layerOrder: readonly string[];
   onReorderLayer: (from: number, to: number) => void;
   moveLayerToGroup: (layerId: string, groupId: string) => void;
 }
@@ -66,6 +71,7 @@ interface UseLayerDndResult {
 export function useLayerDnd({
   displayList,
   layers,
+  layerOrder,
   onReorderLayer,
   moveLayerToGroup,
 }: UseLayerDndParams): UseLayerDndResult {
@@ -175,14 +181,14 @@ export function useLayerDnd({
         }
       }
 
-      const resolved = resolveDisplayDropIndices(layers, displayList, from, gap);
+      const resolved = resolveDisplayDropIndices(layerOrder, displayList, from, gap);
       if (!resolved) return;
       onReorderLayer(resolved.fromIdx, resolved.toIdx);
     };
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
-  }, [layers, displayList, onReorderLayer, moveLayerToGroup]);
+  }, [layers, layerOrder, displayList, onReorderLayer, moveLayerToGroup]);
 
   return {
     dragIndex,
