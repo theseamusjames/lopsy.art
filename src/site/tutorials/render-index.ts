@@ -33,7 +33,6 @@ export function renderTutorialIndex(ctx: RenderContext, tutorials: readonly Tuto
   const body = `${renderBreadcrumbs(crumbs)}
 <header class="index-header">
   <h1>${escapeHtml(INDEX_HEADING)}</h1>
-  <p class="lede">${escapeHtml(INDEX_DESCRIPTION)}</p>
 </header>
 ${list}`;
 
