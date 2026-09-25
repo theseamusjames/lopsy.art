@@ -3,16 +3,18 @@ import { useUIStore } from '../../ui-store';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
 import type { TransformMode } from '../../../tools/transform/transform';
-import { createTransformState, mapRectThroughInverse } from '../../../tools/transform/transform';
+import { createTransformState, isShapeChangingTransform, mapRectThroughInverse } from '../../../tools/transform/transform';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import {
   floatSelection,
   compositeFloatAffine,
   dropFloat,
   hasFloat,
+  setSelectionMask,
 } from '../../../engine-wasm/wasm-bridge';
-import { selectLayerAlpha } from '../../../panels/LayerPanel/layer-selection';
+import { reconcileLayerBoundsWithEngine } from '../../reconcile-layer-bounds';
 import { growFloatToCover } from '../../interactions/float-growth';
+import { selectLayerAlpha } from '../../../panels/LayerPanel/layer-selection';
 import styles from './TransformControls.module.css';
 
 /**
@@ -35,38 +37,23 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
 
   editorState.pushHistory('Transform');
 
-  // Float if needed
+  // A float left behind by a Move drag holds its lifted pixels at their
+  // pre-drag position, while the selection (and the pixels the user sees)
+  // have moved — the layer texture already holds that moved composite.
+  // Transforming the stale float about the moved selection's centre threw
+  // every pixel outside the float buffer (#822). Commit the moved result and
+  // lift the current selection afresh. A float carrying a pending
+  // rotate/scale is left alone.
+  const pending = useUIStore.getState().transform;
+  if (hasFloat(engine) && !(pending && isShapeChangingTransform(pending))) {
+    dropFloat(engine);
+  }
+
   if (!hasFloat(engine)) {
-    const floatBounds = floatSelection(engine, activeLayerId);
-    if (floatBounds.length >= 4) {
-      const newX = floatBounds[0]!;
-      const newY = floatBounds[1]!;
-      const newW = floatBounds[2]!;
-      const newH = floatBounds[3]!;
-      const curLayer = editorState.document.layers.find(l => l.id === activeLayerId);
-      if (curLayer) {
-        const posChanged = curLayer.x !== newX || curLayer.y !== newY;
-        const sizeChanged = curLayer.type === 'raster'
-          && (curLayer.width !== newW || curLayer.height !== newH);
-        if (posChanged || sizeChanged) {
-          useEditorStore.setState((s) => ({
-            document: {
-              ...s.document,
-              layers: s.document.layers.map((l) =>
-                l.id === activeLayerId
-                  ? {
-                    ...l,
-                    x: newX,
-                    y: newY,
-                    ...(l.type === 'raster' ? { width: newW, height: newH } : {}),
-                  }
-                  : l
-              ),
-            },
-          }));
-        }
-      }
-    }
+    const maskBytes = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
+    setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
+    floatSelection(engine, activeLayerId);
+    reconcileLayerBoundsWithEngine(engine, activeLayerId);
   }
 
   // A 90° turn can carry pixels past the float buffer (#818).

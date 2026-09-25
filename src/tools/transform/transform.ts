@@ -48,6 +48,16 @@ export function createTransformState(bounds: Rect, mode: TransformMode = 'free')
   };
 }
 
+/**
+ * True when the transform changes the content's shape — rotation, scale,
+ * skew or a dragged corner — rather than only (or not even) translating it.
+ */
+export function isShapeChangingTransform(t: TransformState): boolean {
+  if (t.rotation !== 0 || t.scaleX !== 1 || t.scaleY !== 1) return true;
+  if (t.skewX !== 0 || t.skewY !== 0) return true;
+  return t.corners.some((c) => c.x !== 0 || c.y !== 0);
+}
+
 /** Get the 4 absolute corner positions for distort/perspective modes */
 export function getCornerPositions(state: TransformState): [Point, Point, Point, Point] {
   const ob = state.originalBounds;

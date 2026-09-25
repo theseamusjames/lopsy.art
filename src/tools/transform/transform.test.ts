@@ -4,6 +4,7 @@ import {
   getTransformedBounds,
   getTransformedContentBounds,
   mapRectThroughInverse,
+  isShapeChangingTransform,
   computeInverseAffineMatrix,
   getHandlePositions,
   hitTestHandle,
@@ -112,6 +113,23 @@ describe('getTransformedContentBounds', () => {
       corners: [{ x: -20, y: 0 }, { x: 0, y: -30 }, { x: 15, y: 0 }, { x: 0, y: 40 }] as typeof base.corners,
     };
     expectRect(getTransformedContentBounds(state), { x: -20, y: -30, width: 135, height: 170 });
+  });
+});
+
+describe('isShapeChangingTransform', () => {
+  const base = createTransformState({ x: 0, y: 0, width: 10, height: 10 });
+
+  it('is false for the identity and for a pure translation', () => {
+    expect(isShapeChangingTransform(base)).toBe(false);
+    expect(isShapeChangingTransform({ ...base, translateX: 30, translateY: -4 })).toBe(false);
+  });
+
+  it('is true for rotation, scale, skew or a moved corner', () => {
+    expect(isShapeChangingTransform({ ...base, rotation: 0.1 })).toBe(true);
+    expect(isShapeChangingTransform({ ...base, scaleX: -1 })).toBe(true);
+    expect(isShapeChangingTransform({ ...base, skewY: 0.2 })).toBe(true);
+    const corners = [{ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }] as typeof base.corners;
+    expect(isShapeChangingTransform({ ...base, mode: 'distort', corners })).toBe(true);
   });
 });
 
