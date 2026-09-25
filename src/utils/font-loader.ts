@@ -9,6 +9,8 @@ import {
   buildCss2SingleWeightUrl,
   buildCss2PreviewUrl,
   extractFontUrlPreferLatin,
+  previewFontFamily,
+  renameCss2FontFamily,
   resolveTtfUrl,
 } from './font-urls';
 
@@ -38,7 +40,12 @@ export function loadGoogleFont(family: string, weights: readonly number[]): Prom
 
   const promise = new Promise<void>((resolve, reject) => {
     link.onload = () => {
-      document.fonts.ready.then(() => resolve());
+      // Stylesheet faces only download once something draws with them, and
+      // Canvas2D text (path-bound layers) may have drawn before the
+      // stylesheet arrived. Load them now so `loadingdone` fires and those
+      // renders get redone with the real face.
+      const loads = weights.map((w) => document.fonts.load(`${w} 16px '${family}'`).catch(() => []));
+      Promise.all(loads).then(() => document.fonts.ready).then(() => resolve());
     };
     link.onerror = () => reject(new Error(`Failed to load font: ${family}`));
     document.head.appendChild(link);
@@ -79,20 +86,18 @@ export function loadGoogleFontPreview(family: string, text: string): Promise<voi
   return promise;
 }
 
-function loadCss2Preview(family: string, text: string): Promise<void> {
-  const href = buildCss2PreviewUrl(family, text);
-
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = href;
-
-  return new Promise<void>((resolve, reject) => {
-    link.onload = () => {
-      document.fonts.ready.then(() => resolve());
-    };
-    link.onerror = () => reject(new Error(`Failed to load font preview: ${family}`));
-    document.head.appendChild(link);
-  });
+/**
+ * Load the css2 `text=` subset under the family's preview alias (see
+ * `previewFontFamily`), so the subset never shadows the full family.
+ */
+async function loadCss2Preview(family: string, text: string): Promise<void> {
+  const resp = await fetch(buildCss2PreviewUrl(family, text));
+  if (!resp.ok) throw new Error(`Failed to load font preview: ${family}`);
+  const alias = previewFontFamily(family);
+  const style = document.createElement('style');
+  style.textContent = renameCss2FontFamily(await resp.text(), family, alias);
+  document.head.appendChild(style);
+  await document.fonts.load(`16px '${alias}'`, text);
 }
 
 /**

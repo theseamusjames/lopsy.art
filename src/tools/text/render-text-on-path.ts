@@ -93,6 +93,21 @@ export function computeBounds(
   return { x: x0, y: y0, w, h };
 }
 
+/** The CSS font shorthand path text is measured and drawn with. */
+export function pathTextFont(layer: TextLayer): string {
+  const { fontSize, fontFamily, fontWeight, fontStyle, color, letterSpacing } = layer;
+  return buildFontString({
+    fontSize,
+    fontFamily,
+    fontWeight,
+    fontStyle,
+    color: { r: color.r, g: color.g, b: color.b, a: color.a },
+    lineHeight: 1.4,
+    letterSpacing,
+    textAlign: 'left',
+  });
+}
+
 /**
  * Render `layer`'s text along the given Bezier path and return the pixel
  * data plus the document-space offset the caller should place the layer at.
@@ -107,7 +122,7 @@ export function renderTextOnPath(
   docWidth: number,
   docHeight: number,
 ): PathTextRenderResult | null {
-  const { text, fontSize, fontFamily, fontWeight, fontStyle, color, letterSpacing } = layer;
+  const { text, fontSize, color, letterSpacing } = layer;
 
   if (!text.trim() || anchors.length < 2) return null;
 
@@ -116,16 +131,7 @@ export function renderTextOnPath(
   const measureCtx = getScratchContext(1, 1);
   if (!measureCtx) return null;
 
-  const fontString = buildFontString({
-    fontSize,
-    fontFamily,
-    fontWeight,
-    fontStyle,
-    color: { r: color.r, g: color.g, b: color.b, a: color.a },
-    lineHeight: 1.4,
-    letterSpacing,
-    textAlign: 'left',
-  });
+  const fontString = pathTextFont(layer);
   measureCtx.font = fontString;
   measureCtx.textBaseline = 'alphabetic';
 

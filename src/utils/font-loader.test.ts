@@ -8,30 +8,42 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // link href without needing a full jsdom environment.
 // ---------------------------------------------------------------------------
 
-interface FakeLink {
+interface FakeElement {
+  tag: string;
   rel: string;
   href: string;
+  textContent: string;
   onload: (() => void) | null;
   onerror: (() => void) | null;
 }
 
 interface InstalledDocumentStub {
   restore: () => void;
-  links: FakeLink[];
+  links: FakeElement[];
+  styles: FakeElement[];
+  fontLoads: string[];
 }
 
 function installDocumentStub(): InstalledDocumentStub {
-  const links: FakeLink[] = [];
+  const links: FakeElement[] = [];
+  const styles: FakeElement[] = [];
+  const fontLoads: string[] = [];
   const previousDocument = (globalThis as { document?: unknown }).document;
   const doc = {
-    createElement: (_tag: string): FakeLink => ({
+    createElement: (tag: string): FakeElement => ({
+      tag,
       rel: '',
       href: '',
+      textContent: '',
       onload: null,
       onerror: null,
     }),
     head: {
-      appendChild: (node: FakeLink) => {
+      appendChild: (node: FakeElement) => {
+        if (node.tag === 'style') {
+          styles.push(node);
+          return node;
+        }
         links.push(node);
         // Fire onload asynchronously so the loader's promise resolves.
         queueMicrotask(() => node.onload?.());
@@ -40,6 +52,10 @@ function installDocumentStub(): InstalledDocumentStub {
     },
     fonts: {
       ready: Promise.resolve(),
+      load: (font: string) => {
+        fontLoads.push(font);
+        return Promise.resolve([]);
+      },
     },
   };
   (globalThis as { document?: unknown }).document = doc;
@@ -49,6 +65,8 @@ function installDocumentStub(): InstalledDocumentStub {
       else (globalThis as { document?: unknown }).document = previousDocument;
     },
     links,
+    styles,
+    fontLoads,
   };
 }
 
@@ -98,17 +116,46 @@ describe('loadGoogleFontPreview', () => {
       loadPreviewFace: () => Promise.resolve(null),
       prefetchFontPreviewsBlob: () => undefined,
     }));
+    const originalFetch = globalThis.fetch;
+    const fetched: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      fetched.push(typeof input === 'string' ? input : input.toString());
+      return new Response(
+        "@font-face { font-family: 'Sunflower'; src: url(https://fonts.gstatic.com/x.woff2); }",
+        { status: 200 },
+      );
+    }) as typeof fetch;
 
-    const mod = await import('./font-loader');
-    await mod.loadGoogleFontPreview('Sunflower', 'Sunflower');
+    try {
+      const mod = await import('./font-loader');
+      await mod.loadGoogleFontPreview('Sunflower', 'Sunflower');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
 
-    expect(stub.links.length).toBe(1);
-    expect(stub.links[0]!.rel).toBe('stylesheet');
-    expect(stub.links[0]!.href).toBe(
+    expect(fetched).toEqual([
       'https://fonts.googleapis.com/css2?family=Sunflower&text=Sunflower&display=swap',
-    );
+    ]);
     // The deleted CDN must never appear in the fallback URL either.
-    expect(stub.links[0]!.href).not.toContain('getstencil');
+    expect(fetched[0]).not.toContain('getstencil');
+    // The name-only subset is registered under the preview alias, never as
+    // 'Sunflower' itself, so it cannot shadow the full face (#823).
+    expect(stub.links.length).toBe(0);
+    expect(stub.styles.length).toBe(1);
+    expect(stub.styles[0]!.textContent).toContain("font-family: 'Sunflower Lopsy Preview';");
+    expect(stub.styles[0]!.textContent).not.toContain("font-family: 'Sunflower';");
+    expect(stub.fontLoads).toEqual(["16px 'Sunflower Lopsy Preview'"]);
+  });
+
+  it('loadGoogleFont loads each weight face once the stylesheet arrives (#823)', async () => {
+    vi.doMock('./font-previews', () => ({
+      loadPreviewFace: () => Promise.resolve(null),
+      prefetchFontPreviewsBlob: () => undefined,
+    }));
+    const mod = await import('./font-loader');
+    await mod.loadGoogleFont('Montserrat', [400, 700]);
+    expect(stub.links).toHaveLength(1);
+    expect(stub.fontLoads).toEqual(["400 16px 'Montserrat'", "700 16px 'Montserrat'"]);
   });
 
   it('dedupes repeat loads of the same family:text pair (blob touched once)', async () => {

@@ -103,7 +103,8 @@ import type { BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } 
 import type { Color } from '../types';
 import type { TextLayer } from '../types/layers';
 import type { StoredPath } from '../types/paths';
-import { renderTextOnPath } from '../tools/text/render-text-on-path';
+import { pathTextFont, renderTextOnPath } from '../tools/text/render-text-on-path';
+import { ensureFontFacesLoaded, parseFontFamilyList } from '../utils/font-face-readiness';
 import { getTracked } from './sync-state';
 import { syncLayers } from './sync-layers';
 
@@ -169,6 +170,22 @@ export function invalidatePathTextCache(layerId: string): void {
   if (!engine) return;
   const tracked = getTracked(engine);
   tracked.pathTextKeys?.delete(layerId);
+}
+
+/**
+ * Ids of the path-bound text layers whose font-family list names any of
+ * `loadedFamilies` (normalized, see `normalizeFamilyName`) — the layers whose
+ * Canvas2D render may have used a fallback face before that family loaded.
+ */
+export function pathTextLayersUsingFamilies(
+  layers: readonly Layer[],
+  loadedFamilies: readonly string[],
+): string[] {
+  const loaded = new Set(loadedFamilies);
+  return layers
+    .filter((l): l is TextLayer => l.type === 'text' && !!l.pathId)
+    .filter((l) => parseFontFamilyList(l.fontFamily).some((family) => loaded.has(family)))
+    .map((l) => l.id);
 }
 
 export function syncDocumentSize(engine: Engine, width: number, height: number): void {
@@ -848,6 +865,11 @@ export function flushLayerSync(state: {
  * texture in document space so the caller can align the Zustand layer.x/y
  * with the compact texture. Without this the bounded texture would render
  * at the layer's stale position and appear offset.
+ *
+ * Canvas2D draws with a fallback face while the layer's web font is still
+ * loading. When that happens the layer's cache entry is dropped once the
+ * font finishes loading and `onFontsSettled` is called so the caller can
+ * schedule the frame that redraws it.
  */
 export function syncPathTextLayers(
   engine: Engine,
@@ -857,11 +879,13 @@ export function syncPathTextLayers(
   docHeight: number,
   textEditing: TextEditingState | null,
   onPositionChange: (layerId: string, x: number, y: number) => void,
+  onFontsSettled?: () => void,
 ): void {
   const tracked = getTracked(engine);
   if (!tracked.pathTextKeys) {
     tracked.pathTextKeys = new Map<string, string>();
   }
+  const pathTextKeys = tracked.pathTextKeys;
 
   for (const layer of layers) {
     if (!layer.pathId) continue;
@@ -912,6 +936,11 @@ export function syncPathTextLayers(
       onPositionChange(layer.id, 0, 0);
     }
     tracked.pathTextKeys.set(layer.id, key);
+
+    ensureFontFacesLoaded(pathTextFont(layerWithLiveText), liveText, () => {
+      pathTextKeys.delete(layer.id);
+      onFontsSettled?.();
+    });
   }
 }
 
