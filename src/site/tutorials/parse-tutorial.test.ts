@@ -45,6 +45,7 @@ describe('parseTutorial', () => {
       slug: 'paint-a-sunset',
       title: 'Paint a Sunset',
       published: '2026-03-01',
+      publishedAt: '2026-03-01T00:00',
       updated: '2026-03-04',
       level: 'Beginner',
       duration: 12,
@@ -106,11 +107,31 @@ text`;
       expect.arrayContaining([
         'Missing `title`.',
         'Missing `description`.',
-        '`published` must be a date in YYYY-MM-DD form.',
+        '`published` must be a date in YYYY-MM-DD form, optionally followed by a UTC time as HH:MM.',
         '`level` must be one of: Beginner, Intermediate, Advanced.',
         '`duration` must be a whole number of minutes.',
         '`cover` needs a `coverAlt` description.',
       ]),
+    );
+  });
+
+  it('reads an optional publish time without showing it in the date', () => {
+    const { tutorial, errors } = parseTutorial(
+      'paint-a-sunset',
+      VALID.replace('published: 2026-03-01', 'published: 2026-03-01 18:40').replace('updated: 2026-03-04\n', ''),
+    );
+    expect(errors).toEqual([]);
+    expect(tutorial).toMatchObject({
+      published: '2026-03-01',
+      publishedAt: '2026-03-01T18:40',
+      updated: '2026-03-01',
+    });
+  });
+
+  it('rejects out-of-range publish times', () => {
+    const { errors } = parseTutorial('paint-a-sunset', VALID.replace('published: 2026-03-01', 'published: 2026-03-01 24:10'));
+    expect(errors).toContain(
+      '`published` must be a date in YYYY-MM-DD form, optionally followed by a UTC time as HH:MM.',
     );
   });
 

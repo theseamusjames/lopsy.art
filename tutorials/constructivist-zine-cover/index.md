@@ -1,7 +1,7 @@
 ---
 title: Design a Constructivist Zine Cover in Lopsy
 description: Make a constructivist zine cover in Lopsy with a clock-eyed kino-eye, a rotated gear, a factory skyline, misregistered diagonal type and halftone texture.
-published: 2026-09-25
+published: 2026-09-25 16:13
 level: Intermediate
 duration: 60
 tags: zine cover, constructivism, poster design, text effects, layer effects, selections, transforms, halftone

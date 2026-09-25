@@ -137,6 +137,16 @@ describe('buildTutorialSite', () => {
     expect(page).toMatchObject({ '@type': 'CollectionPage', mainEntity: { numberOfItems: 2 } });
   });
 
+  it('orders same-day tutorials by publish time', () => {
+    const { files } = build([
+      source('morning', 'published: 2026-06-01 08:00'),
+      source('evening', 'published: 2026-06-01 20:30'),
+    ]);
+    const html = files.get('tutorials/index.html') as string;
+    expect(html.indexOf('/tutorials/evening/')).toBeLessThan(html.indexOf('/tutorials/morning/'));
+    expect(html).not.toContain('20:30');
+  });
+
   it('renders an empty state when nothing is published', () => {
     const html = build([]).files.get('tutorials/index.html') as string;
     expect(html).toContain('class="empty"');

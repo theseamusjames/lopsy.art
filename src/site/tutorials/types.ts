@@ -20,6 +20,8 @@ export interface TutorialFrontmatter {
   description: string;
   /** ISO date, YYYY-MM-DD. */
   published: string;
+  /** `YYYY-MM-DDTHH:MM` (UTC), for ordering. The time is `00:00` when `published` gives none. */
+  publishedAt: string;
   /** ISO date, YYYY-MM-DD. Defaults to `published`. */
   updated: string;
   level: TutorialLevel | null;

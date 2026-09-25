@@ -5,7 +5,7 @@ function sharedTagCount(a: Tutorial, b: Tutorial): number {
 }
 
 export function byNewest(a: Tutorial, b: Tutorial): number {
-  if (a.published !== b.published) return a.published < b.published ? 1 : -1;
+  if (a.publishedAt !== b.publishedAt) return a.publishedAt < b.publishedAt ? 1 : -1;
   return a.title.localeCompare(b.title);
 }
 

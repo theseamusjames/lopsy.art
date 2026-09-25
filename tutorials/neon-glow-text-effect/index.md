@@ -1,7 +1,7 @@
 ---
 title: Make a Neon Glow Text Effect
 description: Create glowing neon sign text for free in your browser. Build a radial gradient backdrop, type your words, then add outer and inner glows in Lopsy.
-published: 2026-09-25
+published: 2026-09-25 04:50
 level: Beginner
 duration: 5
 tags: text effects, layer effects, typography, social media
