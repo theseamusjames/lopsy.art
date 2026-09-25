@@ -152,3 +152,13 @@ against a copy of the destination instead, and resample with
 `samplePremulBilinear` (`//#include premul_sample`, see
 `gpu/shaders/premul_sample.glsl`). The group-adjustment scratch is also
 straight alpha — blend it with `premultiplied = false`.
+
+## E2E: prove "no GPU readback on this event" by counting readPixels
+
+`window.__wasmBridge` is an ES module namespace — wrapping its exports
+does not intercept the app's own imports. To assert that an input event
+does no synchronous GPU→CPU read, patch
+`WebGL2RenderingContext.prototype.readPixels` with a counter and bracket
+the event with a window **capture** listener (runs before the app's
+window-level pointer handlers) and a later-registered window **bubble**
+listener (runs after them). See `e2e/mask-gpu-undo-780.spec.ts`.
