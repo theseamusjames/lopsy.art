@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { waitForStore, createDocument, getPixelAt, drawRect, addLayer, setActiveLayer, getEditorState, docToScreen } from './helpers';
+import { waitForStore, createDocument, getPixelAt, drawRect, addLayer, setActiveLayer, setForegroundColor, selectTool, getEditorState, docToScreen } from './helpers';
 
 /** Draw a rectangular selection (marquee-rect drag, no fill) at document coordinates. */
 async function selectRect(page: Page, docX: number, docY: number, docW: number, docH: number): Promise<void> {
@@ -11,6 +11,32 @@ async function selectRect(page: Page, docX: number, docY: number, docW: number, 
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 10 });
   await page.mouse.up();
+  await page.waitForTimeout(100);
+}
+
+/**
+ * Marquee-select and fill with the Fill tool, like `drawRect`, but without
+ * `drawRect`'s trailing GPU→JS pixel-cache sync. That sync calls
+ * `updateLayerPixelData`, which runs `cropLayerToContent` (e2e/GUIDE.md
+ * pitfall #1) and shrinks the layer to the painted bounds — losing the
+ * "layer is still full document size" state a real Fill-tool click leaves
+ * behind (the production Fill tool never calls `updateLayerPixelData`).
+ */
+async function fillRectViaTool(
+  page: Page,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: { r: number; g: number; b: number },
+): Promise<void> {
+  await setForegroundColor(page, color.r, color.g, color.b);
+  await selectRect(page, x, y, w, h);
+  await selectTool(page, 'fill');
+  const center = await docToScreen(page, x + w / 2, y + h / 2);
+  await page.mouse.click(center.x, center.y);
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Control+d');
   await page.waitForTimeout(100);
 }
 
@@ -234,7 +260,7 @@ test.describe('Pattern Fill', () => {
 
     // Paint a 48x2 black bar onto Layer 1 at (20,20) — this is the source
     // content for the pattern (paints Layer 1 for the first time).
-    await drawRect(page, 20, 20, 48, 2, { r: 0, g: 0, b: 0 });
+    await fillRectViaTool(page, 20, 20, 48, 2, { r: 0, g: 0, b: 0 });
 
     // Select a 48x7 region (2 black rows + 5 transparent rows) and define it
     // as a pattern.
@@ -299,7 +325,7 @@ test.describe('Pattern Fill', () => {
     const layer1 = initial.document.layers.find((l) => l.name === 'Layer 1');
     if (!layer1) throw new Error('Layer 1 not found');
 
-    await drawRect(page, 20, 20, 48, 2, { r: 0, g: 0, b: 0 });
+    await fillRectViaTool(page, 20, 20, 48, 2, { r: 0, g: 0, b: 0 });
     await selectRect(page, 20, 20, 48, 7);
     await page.click('button:has-text("Edit")');
     await page.click('button[role="menuitem"]:has-text("Define Pattern")');
