@@ -192,7 +192,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
           />
         ))}
       </div>
-      <div className={styles.toolbar}>
+      <div className={styles.toolbar} role="toolbar" aria-label="Layer actions">
         <IconButton icon={<Plus size={16} />} label="Add Layer" onClick={onAddLayer} />
         <IconButton icon={<FolderPlus size={16} />} label="New Group" onClick={() => addGroup()} />
         {selectedLayerIds.filter((id) => id !== rootGroupId).length >= 2 && (

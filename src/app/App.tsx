@@ -42,6 +42,7 @@ import { useAppEffects } from './hooks/useAppEffects';
 import { useDocumentOpenHandlers } from './hooks/useDocumentOpenHandlers';
 import { useDraggablePanel } from './hooks/useDraggablePanel';
 import { useDockedPanelAnchor } from './hooks/useDockedPanelAnchor';
+import { useReleaseToolbarButtonFocus } from './toolbar-button-focus';
 import styles from './App.module.css';
 
 // Isolated component for canvas rendering — prevents renderVersion and
@@ -57,6 +58,7 @@ function CanvasRenderer({ canvasRef, containerRef, overlayCanvasRef }: {
 
 export function App() {
   const [hasWebGL2] = useState(() => checkWebGL2Support());
+  useReleaseToolbarButtonFocus();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
