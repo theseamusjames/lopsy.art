@@ -62,23 +62,17 @@ function executePrefloat(layerId: string, mask: Uint8ClampedArray, bounds: Rect)
   const maskBytes = new Uint8Array(mask.buffer, mask.byteOffset, mask.byteLength);
   setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
 
-  floatSelection(engine, layerId);
+  const result = floatSelection(engine, layerId);
   compositeFloat(engine, 0, 0);
 
-  // #802 — do NOT push the engine's expanded bounds into the Zustand
-  // layer here. `update_layer` on the Rust side already protects x/y/
-  // width/height while a float is active (see engine-rs
-  // layer_manager.rs `update_layer`), so the engine keeps its expanded
-  // state without needing the JS layer to lie. Writing the expanded
-  // bounds into the store (previously just x=0, y=0 without touching
-  // width/height) left the store describing a phantom rectangle at
-  // the origin that Snap-to-Layers attracted drags to.
-  //
-  // If the user never actually drags, `clearSelection` will drop the
-  // float and crop the engine back to content, leaving both sides in
-  // agreement. If they do drag, `handleMoveMove` composites the float
-  // and `handleMoveUp` translates the marching-ants; the JS layer
-  // bounds get re-cropped on the next `cropLayerAndReadPosition`.
+  if (result.length >= 4) {
+    const newX = result[0]!;
+    const newY = result[1]!;
+    const curLayer = useEditorStore.getState().document.layers.find(l => l.id === layerId);
+    if (curLayer && (curLayer.x !== newX || curLayer.y !== newY)) {
+      useEditorStore.getState().updateLayerPosition(layerId, newX, newY);
+    }
+  }
 
   clearJsPixelData(layerId);
   useEditorStore.getState().notifyRender();

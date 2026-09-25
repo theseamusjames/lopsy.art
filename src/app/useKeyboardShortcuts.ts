@@ -4,8 +4,8 @@ import { useEditorStore } from './editor-store';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { strokeCurrentPath } from './useCanvasInteraction';
 import { getEngine } from '../engine-wasm/engine-state';
-import { clipboardCut, hasFloat, dropFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
-import { cancelPrefloat } from './interactions/prefloat';
+import { clipboardCut, hasFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
+import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
 import { releaseNudgeKey } from './shortcuts/nudge-coalesce';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
@@ -372,27 +372,13 @@ function handleDeleteKey(): void {
     const engine = getEngine();
     if (!engine) return;
 
-    // #801 — a live float that ISN'T from a Move/Transform on the
-    // active layer (typically the prefloat from ⌘-clicking a different
-    // layer's thumbnail) must be dropped without rebuilding the mask
-    // from the active layer's alpha. Previously we called
-    // `selectLayerAlpha(activeId)` unconditionally, which replaced the
-    // current marching-ants (e.g. Layer 1's shape) with the active
-    // layer's own alpha (Layer 2's full contents) and then wiped the
-    // entire active layer.
-    //
-    // Cancel any pending prefloat and drop any live float, then clear
-    // using the current selection mask as-is. The follow-up
-    // `setSelectionMask` re-uploads it so the GPU clear uses the right
-    // area even if the mask changed since the last render frame.
-    cancelPrefloat();
+    // Commit any active transform/move float and rebuild the selection
+    // mask from actual pixel alpha before clearing.
     if (hasFloat(engine)) {
-      dropFloat(engine);
+      selectLayerAlpha(activeId);
     }
 
-    // Re-read selection — cancelPrefloat / dropFloat do not mutate
-    // `editor.selection`, but keep the same pattern in case a future
-    // change adds a side effect.
+    // Re-read selection after potential mask rebuild
     const selNow = useEditorStore.getState().selection;
     if (!selNow.active || !selNow.mask) return;
 

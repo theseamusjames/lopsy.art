@@ -10,7 +10,6 @@ import {
   setSelectionMask,
   readMaskTexture,
   restoreFromGpuSnapshot,
-  cropLayerToContent as cropLayerToContentGpu,
 } from '../engine-wasm/wasm-bridge';
 import { flushLayerSync, resetTrackedState, seedMaskDataRef, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
 import { smoothStroke, HOLD_TIMEOUT_MS } from '../tools/smooth-line/smooth-line';
@@ -657,12 +656,6 @@ export function useCanvasInteraction(
   }, [screenToCanvas, containerRef, cancelHoldTimer]);
 
   const clearPersistentTransform = useCallback(() => {
-    // #812 — the #798 fix rasterizes a text layer whenever this
-    // function runs. Guard on a genuine transform having been committed
-    // so ordinary calls (Escape, ⌘D, clicking another layer row) don't
-    // silently rasterize a live text layer that never got transformed.
-    const hadTransform =
-      persistentTransformRef.current !== null || floatingSelectionRef.current !== null;
     persistentTransformRef.current = null;
     floatingSelectionRef.current = null;
 
@@ -675,52 +668,6 @@ export function useCanvasInteraction(
     const editorState = useEditorStore.getState();
     const activeId = editorState.document.activeLayerId;
     if (activeId) {
-      // #798 — transforming a text layer with the Move-tool handles
-      // bakes rotated/scaled pixels into the layer texture, but the
-      // JS layer stays `type: 'text'`. The next Text panel edit calls
-      // `rerenderCommittedTextLayerAnchored`, which re-renders the
-      // string from scratch at the (now zeroed) x/y — the transform
-      // silently vanishes and the text jumps to the canvas corner.
-      // Auto-rasterize on commit so the transformed pixels stick and
-      // subsequent text edits are no-ops on this layer.
-      const activeLayer = editorState.document.layers.find((l) => l.id === activeId);
-      if (hadTransform && activeLayer && activeLayer.type === 'text' && eng) {
-        const bounds = cropLayerToContentGpu(eng, activeId);
-        if (bounds.length === 4 && (bounds[2] ?? 0) > 0) {
-          const [nx, ny, nw, nh] = [bounds[0]!, bounds[1]!, bounds[2]!, bounds[3]!];
-          useEditorStore.setState((s) => ({
-            document: {
-              ...s.document,
-              layers: s.document.layers.map((l) => {
-                if (l.id !== activeId) return l;
-                // Strip text-only fields; keep the common LayerBase
-                // fields (name, visible, opacity, blendMode, effects,
-                // mask, ...). Give it explicit raster width/height so
-                // engine-sync's update_layer accepts the descriptor.
-                return {
-                  id: l.id,
-                  name: l.name,
-                  type: 'raster' as const,
-                  visible: l.visible,
-                  locked: l.locked,
-                  opacity: l.opacity,
-                  blendMode: l.blendMode,
-                  x: nx,
-                  y: ny,
-                  width: nw,
-                  height: nh,
-                  clipToBelow: l.clipToBelow,
-                  effects: l.effects,
-                  mask: l.mask,
-                  ...(l.colorTag ? { colorTag: l.colorTag } : {}),
-                };
-              }),
-            },
-            dirtyLayerIds: new Set(s.dirtyLayerIds).add(activeId),
-            renderVersion: s.renderVersion + 1,
-          }));
-        }
-      }
       clearJsPixelData(activeId);
       editorState.notifyRender();
     }

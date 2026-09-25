@@ -45,15 +45,6 @@ export type CanvasGesture =
        *  the user drags with multiple layers selected (issue #707). Empty
        *  for single-layer moves; only populated on whole-layer moves. */
       siblings: readonly SiblingMoveTarget[];
-      /**
-       * When the drag begins over a live transform float (rotated / scaled
-       * pixels held by the GPU), the pending transform state is captured
-       * here so `handleMoveMove` can composite the float with the transform
-       * matrix AND the drag translation each frame. Without this the
-       * translation is composited via plain `compositeFloat`, which drops
-       * the rotation / scale (#806 — regression of #791's #786 fix).
-       */
-      preservedTransform: TransformState | null;
     }
   | { kind: 'tool' }
   | { kind: 'liquify'; lastPoint: Point }
@@ -115,7 +106,6 @@ export function withMoveGesture(
     quickMaskOriginalWidth?: number;
     quickMaskOriginalHeight?: number;
     siblings?: readonly SiblingMoveTarget[];
-    preservedTransform?: TransformState | null;
   },
 ): InteractionState {
   return {
@@ -128,7 +118,6 @@ export function withMoveGesture(
       quickMaskOriginalWidth: payload.quickMaskOriginalWidth ?? 0,
       quickMaskOriginalHeight: payload.quickMaskOriginalHeight ?? 0,
       siblings: payload.siblings ?? [],
-      preservedTransform: payload.preservedTransform ?? null,
     },
   };
 }
