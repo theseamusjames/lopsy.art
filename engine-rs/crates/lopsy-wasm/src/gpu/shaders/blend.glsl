@@ -26,6 +26,12 @@ uniform float u_overlayOpacity; // overlay mix factor
 uniform sampler2D u_maskTex;    // layer mask texture
 uniform int u_hasMask;          // 1 if layer mask is active
 uniform vec2 u_maskSize;        // mask texture size in pixels
+// Mask's own document-space origin. Distinct from u_srcOffset/effectiveOffset:
+// a raster layer's texture can be cropped to its content bounds while inactive
+// (a storage optimization, not a content move), which shifts u_srcOffset away
+// from the mask's fixed origin. The mask must stay anchored to where it was
+// created, not follow that crop (#850).
+uniform vec2 u_maskOffset;
 uniform int u_maskOverlay;      // 1 = render mask as blue overlay (edit mode)
 // Optional brush texture (modulates stroke alpha during composite)
 uniform sampler2D u_brushTexture;
@@ -168,9 +174,10 @@ void main() {
     }
 
     // Apply layer mask: multiply source alpha by mask value.
-    // Use the same effectiveOffset so the mask wraps with the layer.
+    // Sampled at the mask's own fixed origin (u_maskOffset), NOT
+    // effectiveOffset — see the u_maskOffset comment above.
     if (u_hasMask == 1) {
-        vec2 maskUV = (docPos - effectiveOffset) / u_maskSize;
+        vec2 maskUV = (docPos - u_maskOffset) / u_maskSize;
         if (maskUV.x >= 0.0 && maskUV.x <= 1.0 && maskUV.y >= 0.0 && maskUV.y <= 1.0) {
             float maskVal = texture(u_maskTex, maskUV).r;
             src.a *= maskVal;

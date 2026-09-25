@@ -5,6 +5,26 @@ use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::framebuffer::FramebufferHandle;
 use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc};
 
+/// The document-space origin a layer's mask should be sampled at.
+///
+/// A layer mask is always created (`addLayerMask`) while its layer is the
+/// active layer, and a raster layer is always expanded to full document
+/// size — x=0, y=0 — while active (see `useCanvasRendering.ts`), so a
+/// raster layer's mask is always anchored at the document origin. The
+/// "crop on switch away" optimization then shrinks the raster texture to
+/// its content bounds and moves `layer.x/y` off (0,0) purely as a GPU
+/// memory optimization — the content hasn't moved, so the mask must not
+/// follow that offset (#850). Group layers composite through a doc-sized
+/// scratch texture, so their mask is likewise always at the origin. Shape
+/// and text layers are never auto-cropped/expanded — their mask is created
+/// at, and tracks, the layer's own (possibly non-zero) position.
+fn mask_doc_offset(layer_type: lopsy_core::layer::LayerType, layer_x: f32, layer_y: f32) -> (f32, f32) {
+    match layer_type {
+        lopsy_core::layer::LayerType::Raster | lopsy_core::layer::LayerType::Group => (0.0, 0.0),
+        _ => (layer_x, layer_y),
+    }
+}
+
 /// Main compositing pipeline — called every frame
 pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     // Copy viewport state so we don't borrow engine
@@ -187,7 +207,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                             doc_w, doc_h,
                             false,
                             None,
-                            group_mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)),
+                            group_mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h, 0.0f32, 0.0f32)),
                         )?;
                     }
                     active_group_id = None;
@@ -261,11 +281,12 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         // --- Color overlay + blend layer onto composite ---
         // In mask edit mode: skip mask clipping so full layer content is visible
         let overlay_desc = color_overlay.as_ref();
+        let (mask_offset_x, mask_offset_y) = mask_doc_offset(layer_type, layer_x, layer_y);
         let mask_arg = if is_mask_editing {
             None
         } else {
             mask_info.as_ref().and_then(|(tex, mw, mh, enabled)| {
-                if *enabled { Some((tex, *mw, *mh)) } else { None }
+                if *enabled { Some((tex, *mw, *mh, mask_offset_x, mask_offset_y)) } else { None }
             })
         };
         // If an in-progress dodge/burn stroke exists for this layer, render
@@ -286,7 +307,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         };
         let (src_handle, src_w, src_h) = composite_src.unwrap_or((tex_handle, tw, th));
         if let Some(src_tex) = engine.texture_pool.get(src_handle).cloned() {
-            blend_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), target)?;
+            blend_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target)?;
         }
 
         // --- Active stroke texture ---
@@ -296,7 +317,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             if let Some(&stroke_handle) = engine.stroke_textures.get(&layer_id) {
                 if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
                     let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
-                    blend_onto_target(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h)), target)?;
+                    blend_onto_target(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target)?;
                 }
             }
         }
@@ -433,7 +454,7 @@ fn blend_onto_composite(
     th: u32,
     premultiplied: bool,
     overlay: Option<&ColorOverlayDesc>,
-    mask_tex: Option<(&web_sys::WebGlTexture, u32, u32)>,
+    mask_tex: Option<(&web_sys::WebGlTexture, u32, u32, f32, f32)>,
 ) -> Result<(), String> {
     let target = main_target(engine);
     blend_onto_target(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target)
@@ -452,7 +473,7 @@ fn blend_onto_target(
     th: u32,
     premultiplied: bool,
     overlay: Option<&ColorOverlayDesc>,
-    mask_tex: Option<(&web_sys::WebGlTexture, u32, u32)>,
+    mask_tex: Option<(&web_sys::WebGlTexture, u32, u32, f32, f32)>,
     target: Target,
 ) -> Result<(), String> {
     let dst_texture = target.tex;
@@ -487,12 +508,13 @@ fn blend_onto_target(
         if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
     }
 
-    if let Some((mask_gl_tex, mask_w, mask_h)) = mask_tex {
+    if let Some((mask_gl_tex, mask_w, mask_h, mask_offset_x, mask_offset_y)) = mask_tex {
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_gl_tex));
         if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 2); }
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 1); }
         if let Some(loc) = shader.location(&engine.gl, "u_maskSize") { engine.gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_maskOffset") { engine.gl.uniform2f(Some(&loc), mask_offset_x, mask_offset_y); }
     } else {
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
     }
@@ -1277,8 +1299,9 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
             continue;
         }
 
+        let (mask_offset_x, mask_offset_y) = mask_doc_offset(*layer_type, *layer_x, *layer_y);
         let mask_arg = mask_info.as_ref().and_then(|(tex, mw, mh, enabled)| {
-            if *enabled { Some((tex, *mw, *mh)) } else { None }
+            if *enabled { Some((tex, *mw, *mh, mask_offset_x, mask_offset_y)) } else { None }
         });
 
         if *layer_type == lopsy_core::layer::LayerType::Group {
