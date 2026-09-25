@@ -49,7 +49,9 @@ Only this Markdown subset is supported. Anything else renders as plain text.
 
 ## What gets generated
 
-- `/tutorials/`: the list page, newest first.
+- `/tutorials/`: the list page, newest first by `published`. Add a UTC
+  time (`published: 2026-09-25 18:40`) when several tutorials share a date;
+  without one, same-day tutorials fall back to alphabetical order.
 - `/tutorials/<slug>/`: one page per tutorial with breadcrumbs, the steps,
   a call to action, and up to three related tutorials (the ones listed in
   `related` first, then the ones sharing the most tags).

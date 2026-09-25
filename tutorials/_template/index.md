@@ -11,6 +11,8 @@ title: Your Tutorial Title
 description: One or two sentences on what the reader will make and which Lopsy tools they will use along the way.
 
 # YYYY-MM-DD. Bump `updated` whenever you meaningfully change the steps.
+# `published` can end with a UTC time (2026-01-01 14:30) so tutorials released
+# the same day still list newest first. Only the date is shown on the page.
 published: 2026-01-01
 updated: 2026-01-01
 

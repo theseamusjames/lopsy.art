@@ -1,7 +1,7 @@
 ---
 title: Design a Swiss Style Exhibition Poster
 description: Build a Swiss International Style exhibition poster in Lopsy with a strict grid, giant grotesk type, eccentric circles, halftone shading and a rotated caption.
-published: 2026-09-25
+published: 2026-09-25 09:38
 level: Intermediate
 duration: 50
 tags: poster design, swiss style, typography, grid, halftone, layer effects, selections, transforms

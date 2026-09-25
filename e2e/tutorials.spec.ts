@@ -1,14 +1,29 @@
 import { test, expect } from './fixtures';
 
 test.describe('Tutorials', () => {
-  test('Help → Tutorials opens the list, and a card opens the tutorial', async ({ page, context }) => {
+  test('the Tutorials link shows before a document is open', async ({ page, context }) => {
+    await page.goto('/');
+    await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
+
+    const [tutorials] = await Promise.all([
+      context.waitForEvent('page'),
+      page.getByRole('link', { name: 'Tutorials', exact: true }).click(),
+    ]);
+    await tutorials.waitForLoadState();
+    expect(new URL(tutorials.url()).pathname).toBe('/tutorials/');
+    await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
+  });
+
+  test('the header Tutorials link opens the list, and a card opens the tutorial', async ({ page, context }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
     await page.getByText('Help', { exact: true }).click();
+    await expect(page.getByRole('menuitem', { name: 'Tutorials' })).toHaveCount(0);
+
     const [tutorials] = await Promise.all([
       context.waitForEvent('page'),
-      page.getByText('Tutorials', { exact: true }).click(),
+      page.getByRole('navigation').getByRole('link', { name: 'Tutorials', exact: true }).click(),
     ]);
     await tutorials.waitForLoadState();
 

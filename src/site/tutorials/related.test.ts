@@ -8,6 +8,7 @@ function tutorial(slug: string, overrides: Partial<Tutorial> = {}): Tutorial {
     title: slug,
     description: '',
     published: '2026-01-01',
+    publishedAt: '2026-01-01T00:00',
     updated: '2026-01-01',
     level: null,
     duration: null,
@@ -22,24 +23,25 @@ function tutorial(slug: string, overrides: Partial<Tutorial> = {}): Tutorial {
 }
 
 describe('byNewest', () => {
-  it('sorts by published date descending, then title', () => {
+  it('sorts by publish time descending, then title', () => {
     const list = [
-      tutorial('b', { published: '2026-01-01' }),
-      tutorial('c', { published: '2026-02-01' }),
-      tutorial('a', { published: '2026-01-01' }),
+      tutorial('b', { publishedAt: '2026-01-01T00:00' }),
+      tutorial('c', { publishedAt: '2026-02-01T00:00' }),
+      tutorial('a', { publishedAt: '2026-01-01T00:00' }),
+      tutorial('d', { publishedAt: '2026-01-01T09:15' }),
     ];
-    expect(list.sort(byNewest).map((t) => t.slug)).toEqual(['c', 'a', 'b']);
+    expect(list.sort(byNewest).map((t) => t.slug)).toEqual(['c', 'd', 'a', 'b']);
   });
 });
 
 describe('pickRelated', () => {
   const all = [
     tutorial('current', { tags: ['masks', 'selections'], related: ['explicit', 'missing', 'current'] }),
-    tutorial('explicit', { published: '2025-01-01' }),
-    tutorial('two-tags', { tags: ['masks', 'selections'], published: '2025-06-01' }),
-    tutorial('one-tag-old', { tags: ['masks'], published: '2025-01-01' }),
-    tutorial('one-tag-new', { tags: ['selections'], published: '2026-05-01' }),
-    tutorial('no-tags', { published: '2026-09-01' }),
+    tutorial('explicit', { publishedAt: '2025-01-01T00:00' }),
+    tutorial('two-tags', { tags: ['masks', 'selections'], publishedAt: '2025-06-01T00:00' }),
+    tutorial('one-tag-old', { tags: ['masks'], publishedAt: '2025-01-01T00:00' }),
+    tutorial('one-tag-new', { tags: ['selections'], publishedAt: '2026-05-01T00:00' }),
+    tutorial('no-tags', { publishedAt: '2026-09-01T00:00' }),
   ];
   const current = all[0]!;
 

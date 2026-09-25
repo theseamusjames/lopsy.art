@@ -15,6 +15,7 @@ export interface ParseResult {
 
 const LEVELS: readonly TutorialLevel[] = ['Beginner', 'Intermediate', 'Advanced'];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const PUBLISHED = /^(\d{4}-\d{2}-\d{2})(?:[ T]([01]\d|2[0-3]):([0-5]\d))?$/;
 const IMAGE_LINE = /^!\[([^\]]*)\]\(([^)\s]+)\)\s*$/;
 export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -46,6 +47,17 @@ function isValidDate(value: string): boolean {
   return ISO_DATE.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 }
 
+/**
+ * `published` may carry an optional UTC time (`2026-09-25 18:40`) so tutorials
+ * released on the same day still list newest first. Only the date is shown.
+ */
+function readPublished(raw: string): { date: string; sortKey: string } {
+  const match = PUBLISHED.exec(raw);
+  if (!match) return { date: raw, sortKey: raw };
+  const date = match[1] ?? '';
+  return { date, sortKey: `${date}T${match[2] ?? '00'}:${match[3] ?? '00'}` };
+}
+
 function readFrontmatter(
   fields: Map<string, string>,
   errors: string[],
@@ -53,7 +65,7 @@ function readFrontmatter(
 ): TutorialFrontmatter {
   const title = fields.get('title') ?? '';
   const description = fields.get('description') ?? '';
-  const published = fields.get('published') ?? '';
+  const { date: published, sortKey: publishedAt } = readPublished(fields.get('published') ?? '');
   const updated = fields.get('updated') || published;
   const levelRaw = fields.get('level') ?? '';
   const durationRaw = fields.get('duration') ?? '';
@@ -70,7 +82,7 @@ function readFrontmatter(
       `\`description\` is ${description.length} characters; aim for ${DESCRIPTION_MIN}–${DESCRIPTION_MAX}.`,
     );
   }
-  if (!isValidDate(published)) errors.push('`published` must be a date in YYYY-MM-DD form.');
+  if (!isValidDate(published)) errors.push('`published` must be a date in YYYY-MM-DD form, optionally followed by a UTC time as HH:MM.');
   if (!isValidDate(updated)) errors.push('`updated` must be a date in YYYY-MM-DD form.');
   if (isValidDate(published) && isValidDate(updated) && updated < published) {
     errors.push('`updated` is earlier than `published`.');
@@ -93,6 +105,7 @@ function readFrontmatter(
     title,
     description,
     published,
+    publishedAt,
     updated,
     level,
     duration: duration !== null && Number.isInteger(duration) && duration > 0 ? duration : null,

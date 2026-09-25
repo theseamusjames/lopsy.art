@@ -47,6 +47,7 @@ import { setSelectionMask, featherSelectionMask, readSelectionMask } from '../..
 import { seedSelectionMaskRef } from '../../engine-wasm/sync-state';
 import { createTransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
+import { BrandLinks } from '../../components/BrandLinks/BrandLinks';
 import styles from './MenuBar.module.css';
 
 export function MenuBar() {
@@ -380,7 +381,9 @@ export function MenuBar() {
             )}
           </div>
         ))}
-        <span className={styles.logo} aria-hidden="true">LOPSY</span>
+        <div className={styles.brand}>
+          <BrandLinks />
+        </div>
       </nav>
       {filterDef && (
         <FilterDialog

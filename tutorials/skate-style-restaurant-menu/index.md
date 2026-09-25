@@ -1,7 +1,7 @@
 ---
 title: Design a Skate-Style Restaurant Menu
 description: Make a skatepark burger-shack menu in Lopsy with a checkerboard pattern, a tilted skateboard-deck logo, a burger drawn in a group, stickers and aligned prices.
-published: 2026-09-25
+published: 2026-09-25 18:41
 level: Intermediate
 duration: 60
 tags: restaurant menu, skate, typography, layer effects, groups, selections, transforms, pattern fill

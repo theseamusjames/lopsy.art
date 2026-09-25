@@ -1,7 +1,7 @@
 ---
 title: Design a Folk Art Zine Cover
 description: Make an alpine folk art zine cover in Lopsy with radial-symmetry sunbursts, crossed alphorns, a painted medallion, woodtype titles and halftone.
-published: 2026-09-25
+published: 2026-09-25 16:16
 level: Intermediate
 duration: 60
 tags: zine cover, folk art, typography, radial symmetry, layer effects, selections, transforms, halftone

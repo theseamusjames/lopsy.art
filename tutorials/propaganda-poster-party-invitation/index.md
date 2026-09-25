@@ -1,7 +1,7 @@
 ---
 title: Design a Propaganda Poster Style Party Invitation
 description: Build a constructivist propaganda-poster invitation in Lopsy with a sunburst, a pouring teapot, diagonal bands, hard-shadow type and halftone print texture.
-published: 2026-09-25
+published: 2026-09-25 08:16
 level: Intermediate
 duration: 60
 tags: poster design, propaganda poster, invitation, text effects, layer effects, selections, halftone
