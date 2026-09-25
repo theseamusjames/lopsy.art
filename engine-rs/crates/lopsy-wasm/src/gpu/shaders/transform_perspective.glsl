@@ -15,6 +15,8 @@ uniform vec2 u_cornerBL;
 
 out vec4 fragColor;
 
+//#include premul_sample
+
 void main() {
     vec2 docPos = v_uv * u_layerSize + u_layerOffset;
 
@@ -59,6 +61,6 @@ void main() {
     if (floatUV.x < 0.0 || floatUV.x > 1.0 || floatUV.y < 0.0 || floatUV.y > 1.0) {
         fragColor = vec4(0.0);
     } else {
-        fragColor = texture(u_floatTex, floatUV);
+        fragColor = samplePremulBilinear(u_floatTex, floatUV);
     }
 }

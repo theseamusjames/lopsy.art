@@ -29,18 +29,7 @@ pub fn save_shape_preview(engine: &mut EngineInner, layer_id: &str) {
         None => return,
     };
 
-    // Copy layer → preview via temp FBO
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.render_to_texture(&preview_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        gl.use_program(Some(&engine.shaders.blit.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        engine.draw_fullscreen_quad();
-    });
+    copy_texture(engine, &layer_tex, &preview_tex, w, h);
 
     engine.shape_preview_texture = Some(preview_handle);
     engine.shape_preview_layer_id = Some(layer_id.to_string());
@@ -95,39 +84,46 @@ pub fn render_shape(
         None => return,
     };
 
-    // If we have a saved preview, restore the layer from it before drawing
-    // so that each mousemove produces a clean render instead of accumulating.
-    let has_preview = engine.shape_preview_layer_id.as_deref() == Some(layer_id)
-        && engine.shape_preview_texture.is_some();
-    if has_preview {
-        let preview_tex = engine.shape_preview_texture
-            .and_then(|h| engine.texture_pool.get(h).cloned());
-        if let Some(ptex) = preview_tex {
-            engine.gl.disable(WebGl2RenderingContext::BLEND);
-            engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
-                let gl = &engine.gl;
-                gl.use_program(Some(&engine.shaders.blit.program));
-                gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&ptex));
-                if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-                    gl.uniform1i(Some(&loc), 0);
-                }
-                engine.draw_fullscreen_quad();
-            });
+    // The shape is composited in the shader against a copy of the layer's
+    // prior content instead of with fixed-function blending: layer textures
+    // hold straight alpha, and `ONE, ONE_MINUS_SRC_ALPHA` blending of a
+    // coverage-weighted colour wrote premultiplied RGB into the anti-aliased
+    // edge, which rendered as a dark fringe (#815). During a drag the saved
+    // preview already is that copy, and sampling it also restores the layer
+    // so each mousemove renders cleanly instead of accumulating.
+    let preview_tex = if engine.shape_preview_layer_id.as_deref() == Some(layer_id) {
+        engine.shape_preview_texture.and_then(|h| engine.texture_pool.get(h).cloned())
+    } else {
+        None
+    };
+    let mut temp_handle = None;
+    let dst_tex = match preview_tex {
+        Some(t) => t,
+        None => {
+            let Ok(handle) = engine.texture_pool.acquire(&engine.gl, w, h) else { return };
+            let Some(t) = engine.texture_pool.get(handle).cloned() else {
+                engine.texture_pool.release(handle);
+                return;
+            };
+            copy_texture(engine, &layer_tex, &t, w, h);
+            temp_handle = Some(handle);
+            t
         }
-    }
+    };
 
-    // Draw the shape on top — convert center from document space to texture space
+    // Convert center from document space to texture space
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
     engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
         let gl = &engine.gl;
         let shader = &engine.shaders.shape_fill;
         gl.use_program(Some(&shader.program));
 
-        gl.enable(WebGl2RenderingContext::BLEND);
-        gl.blend_func(
-            WebGl2RenderingContext::ONE,
-            WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA,
-        );
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&dst_tex));
+        if let Some(loc) = shader.location(gl, "u_dstTex") {
+            gl.uniform1i(Some(&loc), 1);
+        }
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
 
         if let Some(loc) = shader.location(gl, "u_shapeType") {
             gl.uniform1i(Some(&loc), shape_type as i32);
@@ -160,8 +156,33 @@ pub fn render_shape(
         engine.draw_fullscreen_quad();
     });
 
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    if let Some(handle) = temp_handle {
+        engine.texture_pool.release(handle);
+    }
     engine.mark_layer_dirty(layer_id);
+}
+
+fn copy_texture(
+    engine: &EngineInner,
+    src: &web_sys::WebGlTexture,
+    dst: &web_sys::WebGlTexture,
+    w: u32,
+    h: u32,
+) {
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(dst, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        gl.use_program(Some(&engine.shaders.blit.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src));
+        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        engine.draw_fullscreen_quad();
+    });
 }
 
 /// One-shot shape render that expands the texture to cover the full shape.

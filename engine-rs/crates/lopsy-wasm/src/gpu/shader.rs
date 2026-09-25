@@ -20,6 +20,10 @@ pub const BLEND_FRAG: &str = include_str!("shaders/blend.glsl");
 /// Shared GLSL helpers spliced into fragment sources where a
 /// `//#include hsl` line appears (see `preprocess_frag`).
 pub const HSL_COMMON: &str = include_str!("shaders/hsl_common.glsl");
+/// Premultiplied bilinear sampling of straight-alpha textures, spliced in
+/// where `//#include premul_sample` appears.
+pub const PREMUL_SAMPLE: &str = include_str!("shaders/premul_sample.glsl");
+pub const BLIT_RESAMPLE_FRAG: &str = include_str!("shaders/blit_resample.glsl");
 pub const COMPOSITE_FRAG: &str = include_str!("shaders/composite.glsl");
 pub const FINAL_BLIT_FRAG: &str = include_str!("shaders/final_blit.glsl");
 pub const FLIP_FRAG: &str = include_str!("shaders/flip.glsl");
@@ -186,6 +190,7 @@ pub fn link_program(
 /// math in one file instead of three diverging copies.
 fn preprocess_frag(src: &str) -> String {
     src.replace("//#include hsl", HSL_COMMON)
+        .replace("//#include premul_sample", PREMUL_SAMPLE)
 }
 
 /// Injects `#define NAME VALUE` lines into a GLSL source. The `#version`
@@ -239,6 +244,7 @@ pub fn compile_program_with_defines(
 pub struct ShaderPrograms {
     // Core
     pub blit: ShaderProgram,
+    pub blit_resample: ShaderProgram,
     /// Blend program specialized for Normal mode (BLEND_MODE 0). Compiled at
     /// startup since nearly every composite pass uses it; the other modes are
     /// compiled lazily via `blend_for_mode`.
@@ -373,6 +379,7 @@ impl ShaderPrograms {
         Ok(Self {
             // Core
             blit: compile_program(gl, v, BLIT_FRAG)?,
+            blit_resample: compile_program(gl, v, BLIT_RESAMPLE_FRAG)?,
             blend_normal,
             blend_variants,
             composite: compile_program(gl, v, COMPOSITE_FRAG)?,
@@ -466,7 +473,10 @@ impl ShaderPrograms {
 
 #[cfg(test)]
 mod tests {
-    use super::inject_defines;
+    use super::{
+        inject_defines, preprocess_frag, BLIT_RESAMPLE_FRAG, TRANSFORM_AFFINE_FRAG,
+        TRANSFORM_PERSPECTIVE_FRAG,
+    };
 
     #[test]
     fn injects_defines_after_version_directive() {
@@ -496,5 +506,15 @@ mod tests {
     fn empty_defines_returns_source_unchanged() {
         let src = "#version 300 es\nvoid main() {}\n";
         assert_eq!(inject_defines(src, &[]), src);
+    }
+
+    #[test]
+    fn resampling_shaders_filter_in_premultiplied_space() {
+        for src in [TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, BLIT_RESAMPLE_FRAG] {
+            let out = preprocess_frag(src);
+            assert!(!out.contains("//#include"), "unresolved include");
+            assert!(out.contains("vec4 samplePremulBilinear("));
+            assert!(!out.contains("texture(u_floatTex"), "straight-alpha hardware filtering");
+        }
     }
 }

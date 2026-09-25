@@ -390,38 +390,18 @@ pub fn scale_texture(
     let new_gl_tex = engine.texture_pool.get(new_tex).cloned()
         .ok_or("New texture not found")?;
 
-    // Ensure LINEAR filtering for bilinear interpolation
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-        WebGl2RenderingContext::LINEAR as i32,
-    );
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-        WebGl2RenderingContext::LINEAR as i32,
-    );
-
-    // Blit src → new with bilinear sampling
+    // Bilinear resample in premultiplied space (see premul_sample.glsl).
     engine.gl.disable(WebGl2RenderingContext::BLEND);
     engine.render_to_texture(&new_gl_tex, new_w as i32, new_h as i32, |engine| {
-        engine.gl.use_program(Some(&engine.shaders.blit.program));
+        let shader = &engine.shaders.blit_resample;
+        engine.gl.use_program(Some(&shader.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
+        if let Some(loc) = shader.location(&engine.gl, "u_tex") {
             engine.gl.uniform1i(Some(&loc), 0);
         }
         engine.draw_fullscreen_quad();
     });
-
-    // Restore NEAREST filtering on old texture before release
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-        WebGl2RenderingContext::NEAREST as i32,
-    );
 
     // Replace old texture
     engine.texture_pool.release(tex_handle);
@@ -1332,21 +1312,9 @@ fn composite_float_transformed(
     let tmp_tex = engine.texture_pool.get(tmp).cloned()
         .ok_or("Tmp texture not found")?;
 
-    // Step 1: Render transformed float → tmp (fw×fh, correctly sized)
-    // Enable linear filtering on float texture for smooth transforms
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-        WebGl2RenderingContext::LINEAR as i32,
-    );
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-        WebGl2RenderingContext::LINEAR as i32,
-    );
-
+    // Step 1: Render transformed float → tmp (fw×fh, correctly sized).
+    // The transform shaders filter bilinearly in premultiplied space via
+    // texelFetch, so the float texture's own filter mode doesn't matter.
     engine.gl.disable(WebGl2RenderingContext::BLEND);
     engine.render_to_texture(&tmp_tex, fw as i32, fh as i32, |engine| {
         engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
@@ -1417,20 +1385,6 @@ fn composite_float_transformed(
         }
         engine.draw_fullscreen_quad();
     });
-
-    // Restore nearest filtering on float texture
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-        WebGl2RenderingContext::NEAREST as i32,
-    );
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-        WebGl2RenderingContext::NEAREST as i32,
-    );
 
     // Step 2: Blend tmp (transformed float, fw×fh) onto base → layer texture.
     // Both tmp and base_tex are fw×fh, so v_uv correctly addresses them.
