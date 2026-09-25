@@ -29,7 +29,6 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
   floatSelection: vi.fn(() => new Int32Array()),
   restoreFloatBase: vi.fn(),
   compositeFloat: vi.fn(),
-  compositeFloatAffine: vi.fn(),
   hasFloat: vi.fn(() => false),
   setSelectionMask: vi.fn(),
   readQuickMaskPixels: vi.fn(() => new Uint8Array(8)),
@@ -99,18 +98,8 @@ vi.mock('../editor-store', () => ({
   },
 }));
 
-const uiState: {
-  maskMode: 'off' | 'layerMask' | 'quickMask';
-  showGrid: boolean;
-  snapToGrid: boolean;
-  snapToLayers: boolean;
-  gridSize: number;
-  transform?: unknown;
-  setTransform: ReturnType<typeof vi.fn>;
-  setSnapLines: ReturnType<typeof vi.fn>;
-  clearSnapLines: ReturnType<typeof vi.fn>;
-} = {
-  maskMode: 'quickMask',
+const uiState = {
+  maskMode: 'quickMask' as 'off' | 'layerMask' | 'quickMask',
   showGrid: false,
   snapToGrid: false,
   snapToLayers: false,
@@ -599,115 +588,5 @@ describe('handleMoveDown/Up — bare click on the move tool must not record hist
     handleMoveMove(state, { x: ctx.canvasPos.x + 7, y: ctx.canvasPos.y + 1 }, ctx.floatingSelectionRef);
     handleMoveUp(state, { x: ctx.canvasPos.x + 7, y: ctx.canvasPos.y + 1 }, ctx.floatingSelectionRef, ctx.persistentTransformRef);
     expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
-  });
-});
-
-// #806 — regression from #791. After the user rotates a marquee with a
-// Move-tool handle and then drags inside the transform box to
-// reposition, the pending rotation must survive. The plain
-// `compositeFloat` used to be called with the drag offset, which
-// re-rendered the BASE float and threw away the rotation. Now the
-// down handler captures the pending transform and the move handler
-// composes translation into the transform via `compositeFloatAffine`.
-describe('handleMoveMove — preserves pending transform on drag-to-reposition (#806)', () => {
-  const raster: RasterLayer = {
-    id: 'raster-806',
-    name: 'Raster',
-    type: 'raster',
-    visible: true,
-    locked: false,
-    opacity: 1,
-    blendMode: 'normal',
-    x: 0,
-    y: 0,
-    width: DOC_W,
-    height: DOC_H,
-    clipToBelow: false,
-    effects: DEFAULT_EFFECTS,
-    mask: null,
-  };
-
-  beforeEach(() => {
-    editorState.document.layers = [raster];
-    editorState.document.activeLayerId = raster.id;
-    editorState.document.selectedLayerIds = [raster.id];
-    // Live marquee selection over the layer.
-    const mask = new Uint8ClampedArray(DOC_W * DOC_H);
-    for (let y = 5; y < 10; y++) for (let x = 5; x < 10; x++) mask[y * DOC_W + x] = 255;
-    editorState.selection = {
-      active: true,
-      mask,
-      bounds: { x: 5, y: 5, width: 5, height: 5 },
-      maskWidth: DOC_W,
-      maskHeight: DOC_H,
-    };
-    // GPU float is live (would be true after a rotation).
-    vi.mocked(bridge.hasFloat).mockReturnValue(true);
-    vi.mocked(bridge.compositeFloat).mockClear();
-    vi.mocked(bridge.compositeFloatAffine).mockClear();
-    // Pretend the UI transform carries a 30° rotation.
-    uiState.transform = {
-      originalBounds: { x: 5, y: 5, width: 5, height: 5 },
-      scaleX: 1,
-      scaleY: 1,
-      rotation: Math.PI / 6,
-      translateX: 0,
-      translateY: 0,
-      skewX: 0,
-      skewY: 0,
-      mode: 'free',
-      corners: [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }],
-    };
-    uiState.maskMode = 'off';
-  });
-
-  afterEach(() => {
-    vi.mocked(bridge.hasFloat).mockReturnValue(false);
-    delete uiState.transform;
-  });
-
-  it('composes translation into the pending transform (uses compositeFloatAffine, not compositeFloat)', () => {
-    const canvasPos: Point = { x: 10, y: 10 };
-    const ctx: InteractionContext = {
-      canvasPos,
-      layerPos: canvasPos,
-      shiftKey: false,
-      altKey: false,
-      metaKey: false,
-      activeLayer: raster,
-      activeLayerId: raster.id,
-      clientX: 10,
-      clientY: 10,
-      stateRef: { current: { drawing: false, tool: 'move' } as InteractionState },
-      floatingSelectionRef: { current: null },
-      // A persistent transform ref set — the rotate handle drag would
-      // have populated this.
-      persistentTransformRef: {
-        current: {
-          originalMask: editorState.selection.mask!,
-          maskWidth: DOC_W,
-          maskHeight: DOC_H,
-        },
-      },
-      stampSourceRef: { current: null },
-      stampOffsetRef: { current: null },
-      lastPaintPointRef: { current: null as LastPaintPoint | null },
-    };
-    const state = handleMoveDown(ctx);
-
-    handleMoveMove(state, { x: 25, y: 30 }, ctx.floatingSelectionRef);
-
-    // The pending rotation is composed with the drag delta and applied
-    // via compositeFloatAffine. compositeFloat must NEVER run for this
-    // path — that would drop the rotation.
-    expect(bridge.compositeFloatAffine).toHaveBeenCalled();
-    expect(bridge.compositeFloat).not.toHaveBeenCalled();
-    // The UI transform is updated with the drag translation baked in.
-    expect(uiState.setTransform).toHaveBeenCalled();
-    const calls = uiState.setTransform.mock.calls;
-    const lastArg = calls[calls.length - 1]![0];
-    expect(lastArg.rotation).toBeCloseTo(Math.PI / 6, 6);
-    expect(lastArg.translateX).toBe(15);
-    expect(lastArg.translateY).toBe(20);
   });
 });

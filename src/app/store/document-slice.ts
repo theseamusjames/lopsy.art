@@ -4,7 +4,7 @@ import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
 import { createDefaultNode, createDefaultAdjustments } from '../../filters/adjustment-node-utils';
 import { createImageData } from '../../engine/color-space';
-import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil, buildFlatDisplayList, findParentGroup, removeFromParentGroup, isGroupLayer } from '../../layers/group-utils';
+import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil, buildFlatDisplayList, findParentGroup, removeFromParentGroup } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
@@ -1000,38 +1000,21 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       newLayers = addToGroupUtil(newLayers, group.id, targetGroupId);
     }
 
-    // #807: for any selected id that is itself a group, its descendants
-    // must ride along in `layerOrder`. `children[]` already carries them
-    // (they stay in their original group), but `layerOrder` needs the
-    // whole subtree to move as a contiguous block so compositing keeps
-    // agreeing with the tree. Otherwise a selected group's children stay
-    // at their old z-index — outside the new group's contiguous block —
-    // and both the Layers panel and the compositor mis-nest them.
-    const blockIds = new Set<string>(idsBottomToTop);
-    for (const id of idsBottomToTop) {
-      const layer = doc.layers.find((l) => l.id === id);
-      if (layer && isGroupLayer(layer)) {
-        for (const desc of getDescendantIdsUtil(doc.layers, id)) blockIds.add(desc);
-      }
-    }
-    // Rebuild the bottom→top block using the ORIGINAL layerOrder to
-    // preserve every relative z-ordering inside a moved subtree.
-    const blockBottomToTop = doc.layerOrder.filter((id) => blockIds.has(id));
-
-    // Rebuild layerOrder: put the [subtree bottom→top, group] block at
+    // Rebuild layerOrder: put the [selected bottom→top, group] block at
     // the topmost selected layer's original z-index, so the group ends up
     // exactly where the selection was (#784). "Position of topmost" =
-    // count of non-block entries strictly below it in the original
+    // count of non-selected entries strictly below it in the original
     // layerOrder.
-    const filteredOrder = doc.layerOrder.filter((id) => !blockIds.has(id));
+    const toGroupSet = new Set(idsBottomToTop);
+    const filteredOrder = doc.layerOrder.filter((id) => !toGroupSet.has(id));
     const topmostIdx = doc.layerOrder.indexOf(topmostId);
     const insertAt = doc.layerOrder
       .slice(0, topmostIdx)
-      .filter((id) => !blockIds.has(id))
+      .filter((id) => !toGroupSet.has(id))
       .length;
     const newOrder = [
       ...filteredOrder.slice(0, insertAt),
-      ...blockBottomToTop,
+      ...idsBottomToTop,
       group.id,
       ...filteredOrder.slice(insertAt),
     ];

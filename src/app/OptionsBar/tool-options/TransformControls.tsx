@@ -2,8 +2,8 @@ import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
-import type { TransformMode, TransformState } from '../../../tools/transform/transform';
-import { createTransformState, computeInverseAffineMatrix } from '../../../tools/transform/transform';
+import type { TransformMode } from '../../../tools/transform/transform';
+import { createTransformState } from '../../../tools/transform/transform';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import {
   floatSelection,
@@ -14,38 +14,14 @@ import {
 import { selectLayerAlpha } from '../../../panels/LayerPanel/layer-selection';
 import styles from './TransformControls.module.css';
 
-function isIdentityTransform(t: TransformState): boolean {
-  return (
-    t.scaleX === 1 &&
-    t.scaleY === 1 &&
-    t.rotation === 0 &&
-    t.translateX === 0 &&
-    t.translateY === 0 &&
-    t.skewX === 0 &&
-    t.skewY === 0 &&
-    t.corners.every((c) => c.x === 0 && c.y === 0)
-  );
-}
-
 /**
  * Apply an instant GPU transform (flip/rotate) to the selected content:
  * 1. Float the selection on GPU
  * 2. Render with the given inverse matrix
  * 3. Drop float (commits to layer texture)
  * 4. Re-select from committed alpha (rebuilds mask cleanly)
- *
- * `flipDirection` — when supplied, and there is a pending Move-tool transform
- * that has not yet been committed, the flip composes into that pending
- * transform in place (Photoshop behaviour). Otherwise the raw `invMatrix`
- * is used and the operation commits immediately. #800 — a bare
- * `compositeFloatAffine(flip, cx, cx)` threw away the pending scale /
- * rotation because it re-rendered the base float without carrying the
- * pending transform through.
  */
-export function applyGpuTransform(
-  invMatrix: Float32Array,
-  flipDirection?: 'horizontal' | 'vertical',
-): void {
+export function applyGpuTransform(invMatrix: Float32Array): void {
   const engine = getEngine();
   if (!engine) return;
 
@@ -55,38 +31,6 @@ export function applyGpuTransform(
 
   const activeLayerId = editorState.document.activeLayerId;
   if (!activeLayerId) return;
-
-  const uiTransform = useUIStore.getState().transform;
-  const hasPendingTransform = !!(
-    flipDirection &&
-    uiTransform &&
-    uiTransform.mode === 'free' &&
-    !isIdentityTransform(uiTransform) &&
-    hasFloat(engine)
-  );
-
-  if (hasPendingTransform && uiTransform) {
-    // Compose the flip into the pending transform state and re-composite
-    // the float. The pending float already carries the base pixels; the
-    // affine shader re-renders them at the composed transform every time
-    // we call compositeFloatAffine, so we do NOT drop the float. The user
-    // can keep dragging handles, or ⌘D / Enter to commit.
-    const composed: TransformState = {
-      ...uiTransform,
-      scaleX: flipDirection === 'horizontal' ? -uiTransform.scaleX : uiTransform.scaleX,
-      scaleY: flipDirection === 'vertical' ? -uiTransform.scaleY : uiTransform.scaleY,
-    };
-    const ob = composed.originalBounds;
-    const srcCx = ob.x + ob.width / 2;
-    const srcCy = ob.y + ob.height / 2;
-    const dstCx = srcCx + composed.translateX;
-    const dstCy = srcCy + composed.translateY;
-    const composedInv = computeInverseAffineMatrix(composed);
-    compositeFloatAffine(engine, composedInv, srcCx, srcCy, dstCx, dstCy);
-    useUIStore.getState().setTransform(composed);
-    editorState.notifyRender();
-    return;
-  }
 
   editorState.pushHistory('Transform');
 
@@ -182,12 +126,12 @@ export function TransformControls() {
         <IconButton
           icon={<FlipHorizontal2 size={16} />}
           label="Flip Horizontal"
-          onClick={() => applyGpuTransform(new Float32Array([-1, 0, 0, 0, 1, 0, 0, 0, 1]), 'horizontal')}
+          onClick={() => applyGpuTransform(new Float32Array([-1, 0, 0, 0, 1, 0, 0, 0, 1]))}
         />
         <IconButton
           icon={<FlipVertical2 size={16} />}
           label="Flip Vertical"
-          onClick={() => applyGpuTransform(new Float32Array([1, 0, 0, 0, -1, 0, 0, 0, 1]), 'vertical')}
+          onClick={() => applyGpuTransform(new Float32Array([1, 0, 0, 0, -1, 0, 0, 0, 1]))}
         />
       </div>
       {transform && (

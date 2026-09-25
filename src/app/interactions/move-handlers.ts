@@ -10,15 +10,12 @@ import {
   floatSelection,
   restoreFloatBase,
   compositeFloat,
-  compositeFloatAffine,
   hasFloat,
   setSelectionMask,
   readQuickMaskPixels,
   uploadQuickMaskPixels,
   cropLayerToContent as cropLayerToContentGpu,
 } from '../../engine-wasm/wasm-bridge';
-import type { TransformState } from '../../tools/transform/transform';
-import { computeInverseAffineMatrix } from '../../tools/transform/transform';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import type {
   InteractionState,
@@ -155,16 +152,6 @@ export function flushQuickMaskDrag(): void {
  */
 let pendingWholeLayerMoveLabel: string | null = null;
 
-// #806 — module-level channel to hand a captured transform + its
-// persistent mask through the down handler into the move gesture that
-// `handleMoveDown` builds later in the same call. Both are cleared as
-// soon as the gesture is constructed; `handleMoveUp` re-arms
-// persistentTransformRef when the preservedTransform survives the drop.
-let preservedTransformForMove: TransformState | null = null;
-let preservedTransformPersistent: PersistentTransform | null = null;
-// Held during the drag so handleMoveUp can restore persistentTransformRef.
-let pendingPreservedPersistent: PersistentTransform | null = null;
-
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
@@ -251,12 +238,6 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
           originalBounds: { ...sel.bounds },
           gpuResident: true,
         };
-        // #806 — capture the pending transform so handleMoveMove can
-        // re-render the float with (transform ∘ translation) each frame.
-        // handleMoveUp writes the final translated transform back into
-        // the persistentTransformRef so a follow-up ⌘D commits it.
-        preservedTransformForMove = useUIStore.getState().transform ?? null;
-        preservedTransformPersistent = persistent;
         persistentTransformRef.current = null;
       } else {
         // Fallback: no live GPU float (e.g. engine dropped it) — commit
@@ -326,9 +307,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       };
     }
 
-    // Clear persistentTransformRef — transform is committed (unless a
-    // preservedTransform was captured above, in which case it's re-armed
-    // by handleMoveUp with the new translation baked in).
+    // Clear persistentTransformRef — transform is committed
     persistentTransformRef.current = null;
     const floatRef = floatingSelectionRef.current!;
     const baseFloat: InteractionState = {
@@ -341,17 +320,9 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       layerStartY: 0,
       ...DEFAULT_TRANSFORM_FIELDS,
     };
-    const preservedTransform = preservedTransformForMove;
-    // The persistent ref is re-armed in handleMoveUp; hold onto its mask
-    // via `pendingPreservedPersistent` so the module-level channel is
-    // consumed exactly once per gesture.
-    pendingPreservedPersistent = preservedTransformPersistent;
-    preservedTransformForMove = null;
-    preservedTransformPersistent = null;
     return withMoveGesture(baseFloat, {
       originalMask: floatRef.originalMask,
       originalBounds: floatRef.originalBounds,
-      preservedTransform,
     });
   }
 
@@ -530,41 +501,6 @@ export function handleMoveMove(
       dy = snapped.y;
     }
 
-    // #806 — when the float carries an uncommitted transform (scale /
-    // rotate held over from a handle drag), the plain `compositeFloat`
-    // would re-render the BASE float at (dx, dy) and drop the pending
-    // matrix. Compose translation into the transform instead, so the
-    // drag preserves the rotation and follows the user's hand.
-    if (move?.preservedTransform) {
-      const t = move.preservedTransform;
-      const shifted: TransformState = {
-        ...t,
-        translateX: t.translateX + dx,
-        translateY: t.translateY + dy,
-      };
-      const ob = shifted.originalBounds;
-      const srcCx = ob.x + ob.width / 2;
-      const srcCy = ob.y + ob.height / 2;
-      const dstCx = srcCx + shifted.translateX;
-      const dstCy = srcCy + shifted.translateY;
-      compositeFloatAffine(engine, computeInverseAffineMatrix(shifted), srcCx, srcCy, dstCx, dstCy);
-      useUIStore.getState().setTransform(shifted);
-      useEditorStore.getState().notifyRender();
-
-      // Sync marquee bounds to the transformed float bounds so the ants
-      // stay wrapped around the visible pixels.
-      if (move.originalBounds) {
-        const newBounds = {
-          x: move.originalBounds.x + dx,
-          y: move.originalBounds.y + dy,
-          width: move.originalBounds.width,
-          height: move.originalBounds.height,
-        };
-        useEditorStore.getState().setSelectionBounds(newBounds);
-      }
-      return;
-    }
-
     compositeFloat(engine, dx, dy);
     useEditorStore.getState().notifyRender();
 
@@ -646,7 +582,7 @@ export function handleMoveUp(
   state: InteractionState,
   canvasPos: Point,
   floatingSelectionRef: MutableRefObject<FloatingSelection | null>,
-  persistentTransformRef: MutableRefObject<PersistentTransform | null>,
+  _persistentTransformRef: MutableRefObject<PersistentTransform | null>,
 ): void {
   useUIStore.getState().clearSnapLines();
   // Whole-layer down never followed by a move → no history entry, no state
@@ -662,17 +598,6 @@ export function handleMoveUp(
   if (quickMaskMaskTarget) {
     coalescedQuickMaskMaskTranslate.flush();
     quickMaskMaskTarget = null;
-  }
-
-  // #806 — restore the persistent transform ref (if one was captured
-  // by handleMoveDown) so a follow-up ⌘D / Enter or a subsequent
-  // handle drag still knows there's an uncommitted transform. The
-  // UI transform was already updated in handleMoveMove to include the
-  // drag translation, so the ref just needs to carry the mask.
-  const preservedPersistent = pendingPreservedPersistent;
-  pendingPreservedPersistent = null;
-  if (preservedPersistent && floatingSelectionRef.current) {
-    persistentTransformRef.current = preservedPersistent;
   }
 
   if (!floatingSelectionRef.current || !state.startPoint) return;

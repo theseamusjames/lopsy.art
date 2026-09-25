@@ -42,34 +42,18 @@ export function computeDuplicateLayer(
 
     const { dx, dy } = duplicateOffsetForLayer(layer, doc.width, doc.height);
 
-    // Build duplicate layers first (no layerOrder splicing yet).
     for (const id of allIds) {
       const orig = doc.layers.find((l) => l.id === id);
       if (!orig) continue;
       const dup = shiftLayer(duplicateLayerModel(orig), dx, dy);
       idMap.set(id, dup.id);
       newLayers.push(dup);
+      const orderIdx = newOrder.indexOf(id);
+      newOrder.splice(orderIdx + 1, 0, dup.id);
       if (engine && !isGroupLayer(orig)) {
         duplicateLayerTexture(engine, id, dup.id);
       }
     }
-
-    // #805: insert the duplicated subtree as a CONTIGUOUS block directly
-    // after the source group in `layerOrder`. The old per-id
-    // `splice(orderIdx + 1, ...)` interleaved each copy with its original,
-    // so Layers panel nested the copies under the source group and
-    // compositing interleaved them. Preserve the source's own bottom-to-top
-    // order by mapping the original slice through `idMap`.
-    const blockIdsBottomToTop: string[] = [];
-    const sourceIdSet = new Set(allIds);
-    for (const id of doc.layerOrder) {
-      if (sourceIdSet.has(id)) {
-        const dupId = idMap.get(id);
-        if (dupId) blockIdsBottomToTop.push(dupId);
-      }
-    }
-    const groupOrderIdx = newOrder.indexOf(activeId);
-    newOrder.splice(groupOrderIdx + 1, 0, ...blockIdsBottomToTop);
 
     // Remap children references in duplicated groups
     for (const [, dupId] of idMap) {
@@ -94,17 +78,8 @@ export function computeDuplicateLayer(
       }
     }
 
-    // #804: leave only the new copy selected. Otherwise the pre-duplicate
-    // selection lingers and a follow-up Move drag treats the original as a
-    // multi-selected sibling and drags it along with the copy.
     return {
-      document: {
-        ...doc,
-        layers: newLayers,
-        layerOrder: newOrder,
-        activeLayerId: dupRootId,
-        selectedLayerIds: [dupRootId],
-      },
+      document: { ...doc, layers: newLayers, layerOrder: newOrder, activeLayerId: dupRootId },
     };
   }
 
@@ -127,15 +102,7 @@ export function computeDuplicateLayer(
     layers = addToGroup(layers, newId, parentGroup.id);
   }
 
-  // #804: reset selectedLayerIds to just the new copy — same reason as
-  // the group branch above.
   return {
-    document: {
-      ...doc,
-      layers,
-      layerOrder: newOrder,
-      activeLayerId: newId,
-      selectedLayerIds: [newId],
-    },
+    document: { ...doc, layers, layerOrder: newOrder, activeLayerId: newId },
   };
 }

@@ -2,8 +2,8 @@
 import '../../../test/canvas-mock';
 import { describe, it, expect, vi } from 'vitest';
 import { computeDuplicateLayer } from './duplicate-layer';
-import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
-import type { DocumentState, RasterLayer, GroupLayer } from '../../../types';
+import { createRasterLayer } from '../../../layers/layer-model';
+import type { DocumentState, RasterLayer } from '../../../types';
 
 // #746: computeDuplicateLayer must not touch the JS pixel map — it
 // runs entirely on the GPU. Any read from a passed pixel map or from
@@ -72,17 +72,6 @@ describe('computeDuplicateLayer', () => {
     expect(newIdx).toBe(origIdx + 1);
   });
 
-  // #804 — the panel button and the Layer menu ⌘J both duplicate via
-  // this action. It used to leave the pre-duplicate selection intact,
-  // so a follow-up Move drag treated the original as a multi-selected
-  // sibling (#707) and dragged it along with the copy.
-  it('clears the pre-duplicate selection so the copy is the only selected layer', () => {
-    const doc = makeDoc();
-    const r = result(doc);
-    expect(r.selectedLayerIds).toEqual([r.activeLayerId!]);
-    expect(r.selectedLayerIds).not.toContain(doc.activeLayerId!);
-  });
-
   it('offsets a layer that fits comfortably within the canvas', () => {
     const doc = makeDoc({
       layerWidth: 100, layerHeight: 100, layerX: 50, layerY: 50,
@@ -149,68 +138,3 @@ function newLayer(doc: DocumentState) {
   if (!dup) throw new Error('duplicate not found');
   return dup;
 }
-
-describe('computeDuplicateLayer (group)', () => {
-  // #805 — duplicating a group used to splice each dup id directly
-  // after its source in the per-id loop (`newOrder.splice(orderIdx + 1,
-  // 0, dup.id)`). That interleaved the copies with the originals in
-  // layerOrder, mis-nested the copy's children in the Layers panel,
-  // and produced an interleaved compositor stack.
-  it('inserts the duplicated group + its children as a contiguous block above the source', () => {
-    const child1 = createRasterLayer({ name: 'C1', width: 10, height: 10 });
-    const child2 = createRasterLayer({ name: 'C2', width: 10, height: 10 });
-    const group: GroupLayer = createGroupLayer({ name: 'G', children: [child1.id, child2.id] });
-    const doc: DocumentState = {
-      id: 'doc-1',
-      name: 'Test',
-      width: 1024,
-      height: 1024,
-      layers: [child1, child2, group],
-      layerOrder: [child1.id, child2.id, group.id],
-      activeLayerId: group.id,
-      selectedLayerIds: [group.id],
-      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
-      colorMode: 'rgb',
-    };
-
-    const r = computeDuplicateLayer(doc)!.document!;
-    const dupGroupId = r.activeLayerId!;
-    const dupGroup = r.layers.find((l) => l.id === dupGroupId) as GroupLayer;
-    expect(dupGroup.type).toBe('group');
-    // 4 layers total moved into layerOrder: original block + duplicate
-    // block, each contiguous. The duplicate block sits directly above
-    // (later in bottom→top) the original group.
-    const srcGroupIdx = r.layerOrder.indexOf(group.id);
-    const dupGroupIdx = r.layerOrder.indexOf(dupGroupId);
-    expect(dupGroupIdx).toBeGreaterThan(srcGroupIdx);
-    // Everything between the source group and the duplicate group must
-    // belong to the duplicated subtree — no originals leaking in.
-    const dupChildren = new Set(dupGroup.children);
-    for (let i = srcGroupIdx + 1; i < dupGroupIdx; i++) {
-      const between = r.layerOrder[i]!;
-      expect(dupChildren.has(between)).toBe(true);
-    }
-    // The originals stay together below the source group.
-    expect(r.layerOrder.slice(0, srcGroupIdx + 1)).toEqual([child1.id, child2.id, group.id]);
-  });
-
-  it('leaves only the duplicated group in selectedLayerIds', () => {
-    const child = createRasterLayer({ name: 'C', width: 10, height: 10 });
-    const group = createGroupLayer({ name: 'G', children: [child.id] });
-    const doc: DocumentState = {
-      id: 'doc-1',
-      name: 'Test',
-      width: 1024,
-      height: 1024,
-      layers: [child, group],
-      layerOrder: [child.id, group.id],
-      activeLayerId: group.id,
-      selectedLayerIds: [group.id],
-      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
-      colorMode: 'rgb',
-    };
-    const r = computeDuplicateLayer(doc)!.document!;
-    expect(r.selectedLayerIds).toEqual([r.activeLayerId!]);
-    expect(r.selectedLayerIds).not.toContain(group.id);
-  });
-});
