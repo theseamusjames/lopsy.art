@@ -273,15 +273,23 @@ pub struct EngineInner {
     /// adjustment scalars/LUTs plus a list of child layer IDs (in stack order)
     /// so the compositor can scope the adjustment pass to only those layers.
     pub group_adjustments: HashMap<String, GroupAdjustment>,
-    /// Scratch FBO/texture for group-scoped adjustments. Allocated on demand.
-    pub group_scratch_fbo: Option<FramebufferHandle>,
-    pub group_scratch_texture: Option<TextureHandle>,
-    /// Pre-adjustment group scratch: caches the composited children so that
-    /// when only adjustment values change (not the children), the compositor
-    /// can skip re-blending all children and just re-apply the adjustment
-    /// shader to this cached texture. Invalidated when any child layer changes.
-    pub group_pre_adj_texture: Option<TextureHandle>,
-    pub group_pre_adj_id: Option<String>,
+    /// Scratch (texture, FBO) pairs for group-scoped adjustments, indexed by
+    /// nesting depth (0 = outermost currently-open adjusted group) rather
+    /// than a single slot — a group nested inside another adjusted group
+    /// gets its own scratch instead of colliding with its ancestor's (#857).
+    /// Allocated lazily and resized on demand; kept for the engine's
+    /// lifetime like the other persistent FBOs.
+    pub group_scratch_levels: Vec<(TextureHandle, FramebufferHandle)>,
+    /// Pre-adjustment group scratch cache: for each adjusted group (keyed by
+    /// group id), caches the composited children so that when only
+    /// adjustment values change (not the children), the compositor can skip
+    /// re-blending all children and just re-apply the adjustment shader to
+    /// this cached texture. `group_pre_adj_valid` is the global "nothing has
+    /// changed since these caches were built" flag; individual entries are
+    /// only trusted while it's true. Nested groups (an adjusted group that
+    /// is itself an ancestor or descendant of another adjusted group) never
+    /// populate or read this cache — see `nested_group_ids` in compositor.rs.
+    pub group_pre_adj_cache: HashMap<String, TextureHandle>,
     pub group_pre_adj_valid: bool,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
@@ -425,10 +433,8 @@ impl EngineInner {
             selection_time: 0.0,
             adjustments: ImageAdjustmentState::default(),
             group_adjustments: HashMap::new(),
-            group_scratch_fbo: None,
-            group_scratch_texture: None,
-            group_pre_adj_texture: None,
-            group_pre_adj_id: None,
+            group_scratch_levels: Vec::new(),
+            group_pre_adj_cache: HashMap::new(),
             group_pre_adj_valid: false,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),

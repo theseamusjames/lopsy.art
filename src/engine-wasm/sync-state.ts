@@ -120,6 +120,16 @@ export interface TrackedState {
   /** True when the engine's group adjustments may be stale (e.g. after
    *  undo/redo reset). Forces a full clear + rebuild on next sync. */
   groupAdjNeedsFullSync: boolean;
+  /**
+   * Group ids that needed adjustment/mask routing as of the last
+   * syncGroupAdjustments call. When this set changes — a group starts or
+   * stops needing its own routing — every OTHER group's cached
+   * `childrenJson` may now be wrong (a newly-routed nested group needs its
+   * ancestors' descendant lists to stop at it; #857), so a change here
+   * forces those ancestors to recompute even though their own `children`
+   * reference didn't change.
+   */
+  groupAdjRoutedIds: ReadonlySet<string>;
 }
 
 export interface UploadFailureEntry {
@@ -189,6 +199,7 @@ function createTrackedState(): TrackedState {
     uploadFailures: new Map(),
     groupAdjTracked: new Map(),
     groupAdjNeedsFullSync: true,
+    groupAdjRoutedIds: new Set(),
   };
 }
 
