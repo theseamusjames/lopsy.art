@@ -2,7 +2,7 @@
 import '../../../test/canvas-mock';
 import { describe, it, expect } from 'vitest';
 import { computeAddLayer } from './add-layer';
-import { createRasterLayer } from '../../../layers/layer-model';
+import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
 import type { DocumentState } from '../../../types';
 
 function makeDoc(): DocumentState {
@@ -45,5 +45,26 @@ describe('computeAddLayer', () => {
     const doc = makeDoc();
     const result = computeAddLayer(doc);
     expect(result.layerPixelData).toBeUndefined();
+  });
+});
+
+describe('computeAddLayer children order (#824)', () => {
+  it('inserts the new id into the parent children at its stacking slot, not the end', () => {
+    const bg = createRasterLayer({ name: 'Background', width: 10, height: 10 });
+    const l1 = createRasterLayer({ name: 'Layer 1', width: 10, height: 10 });
+    const top = createRasterLayer({ name: 'Top', width: 10, height: 10 });
+    const root = createGroupLayer({ name: 'Project', children: [bg.id, l1.id, top.id] });
+    const doc: DocumentState = {
+      ...makeDoc(),
+      layers: [bg, l1, top, root],
+      layerOrder: [bg.id, l1.id, top.id, root.id],
+      activeLayerId: l1.id,
+      rootGroupId: root.id,
+    };
+    const next = computeAddLayer(doc).document!;
+    const newId = next.activeLayerId!;
+    expect(next.layerOrder).toEqual([bg.id, l1.id, newId, top.id, root.id]);
+    const nextRoot = next.layers.find((l) => l.id === root.id);
+    expect(nextRoot?.type === 'group' ? nextRoot.children : []).toEqual([bg.id, l1.id, newId, top.id]);
   });
 });

@@ -378,14 +378,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const doc = get().document;
     if (!allowLayerCreation(doc)) return;
     const group = createGroupLayer({ name: name ?? 'Group' });
-    let layers = [...doc.layers, group];
-    const targetGroupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
-    if (targetGroupId) {
-      layers = addToGroupUtil(layers, group.id, targetGroupId);
-    }
     const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId, doc.rootGroupId, doc.layers);
     const layerOrder = [...doc.layerOrder];
     layerOrder.splice(orderIdx, 0, group.id);
+    let layers = [...doc.layers, group];
+    const targetGroupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
+    if (targetGroupId) {
+      layers = addToGroupUtil(layers, group.id, targetGroupId, layerOrder);
+    }
     set({
       document: { ...doc, layers, layerOrder, activeLayerId: group.id, selectedLayerIds: [group.id] },
     });

@@ -211,7 +211,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     const groupId = getInsertionGroupId(state.document.layers, state.document.activeLayerId, state.document.rootGroupId);
     let layers = [...state.document.layers, newLayer];
-    if (groupId) layers = addToGroup(layers, newLayer.id, groupId);
+    if (groupId) layers = addToGroup(layers, newLayer.id, groupId, newOrder);
 
     set({
       document: {
@@ -261,7 +261,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     const groupId2 = getInsertionGroupId(state.document.layers, state.document.activeLayerId, state.document.rootGroupId);
     let layers2 = [...state.document.layers, newLayer];
-    if (groupId2) layers2 = addToGroup(layers2, newLayer.id, groupId2);
+    if (groupId2) layers2 = addToGroup(layers2, newLayer.id, groupId2, newOrder);
 
     set({
       document: {
@@ -294,7 +294,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
 
     const groupId3 = getInsertionGroupId(state.document.layers, state.document.activeLayerId, state.document.rootGroupId);
     let layers3 = [...state.document.layers, newLayer];
-    if (groupId3) layers3 = addToGroup(layers3, newLayer.id, groupId3);
+    if (groupId3) layers3 = addToGroup(layers3, newLayer.id, groupId3, newOrder);
 
     set({
       document: {
