@@ -77,7 +77,7 @@ test.describe('#745 — mask readback returns intact grayscale via R8 staging', 
     // topology: some pixels should be dark near the painted band, some
     // should stay bright far from it. The old bug would drop that entire
     // 26.5 s wait; the R8 fix keeps a valid mask.
-    const stats = await page.evaluate(() => {
+    const readStats = () => page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: {
@@ -103,6 +103,9 @@ test.describe('#745 — mask readback returns intact grayscale via R8 staging', 
       }
       return { darkNear, brightFar, total: width * height, size: layer.mask.data.length };
     });
+    // The JS copy is refreshed lazily once the GPU is idle (#760, #780).
+    await expect.poll(async () => (await readStats())?.darkNear ?? 0, { timeout: 30_000 }).toBeGreaterThan(100);
+    const stats = await readStats();
     expect(stats).not.toBeNull();
     // The mask array has exactly one byte per pixel (R8 == single byte
     // per pixel, which is what the readback returns after #745).

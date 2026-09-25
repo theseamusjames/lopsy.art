@@ -2110,7 +2110,7 @@ test.describe('Mask Drawing', () => {
     await drawStroke(page, { x: 150, y: 150 }, { x: 250, y: 150 }, 10);
 
     // Verify mask now has values < 255 in the painted area
-    const maskAfter = await page.evaluate((lid) => {
+    const readMaskAfter = () => page.evaluate((lid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { layers: Array<{ id: string; mask: { data: Uint8ClampedArray; width: number; height: number } | null }> };
@@ -2125,8 +2125,9 @@ test.describe('Mask Drawing', () => {
       return { blackPixels, totalPixels: layer.mask.data.length };
     }, activeLayerId);
 
-    console.log(`Mask after drawing: ${maskAfter.blackPixels} dark pixels out of ${maskAfter.totalPixels}`);
-    expect(maskAfter.blackPixels).toBeGreaterThan(0);
+    // The JS copy of the mask is refreshed lazily once the GPU is idle
+    // (#760, #780), so poll for the stroke to show up in it.
+    await expect.poll(async () => (await readMaskAfter()).blackPixels, { timeout: 30_000 }).toBeGreaterThan(0);
   });
 
   test('eraser on mask uses background color to paint', async ({ page, isMobile }) => {
@@ -2165,7 +2166,7 @@ test.describe('Mask Drawing', () => {
       return store.getState().document.activeLayerId;
     });
 
-    const darkBefore = await page.evaluate((lid) => {
+    const countDark = () => page.evaluate((lid) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { layers: Array<{ id: string; mask: { data: Uint8ClampedArray } | null }> };
@@ -2180,8 +2181,10 @@ test.describe('Mask Drawing', () => {
       return count;
     }, activeLayerId);
 
-    console.log(`Dark pixels before eraser: ${darkBefore}`);
-    expect(darkBefore).toBeGreaterThan(0);
+    // The JS copy of the mask is refreshed lazily once the GPU is idle
+    // (#760, #780), so poll for each stroke to show up in it.
+    await expect.poll(countDark, { timeout: 30_000 }).toBeGreaterThan(0);
+    const darkBefore = await countDark();
 
     // Now switch to eraser and paint back (white background = reveal)
     await page.keyboard.press('e');
@@ -2190,24 +2193,8 @@ test.describe('Mask Drawing', () => {
 
     await drawStroke(page, { x: 100, y: 150 }, { x: 300, y: 150 }, 10);
 
-    const darkAfter = await page.evaluate((lid) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { layers: Array<{ id: string; mask: { data: Uint8ClampedArray } | null }> };
-        };
-      };
-      const layer = store.getState().document.layers.find((l) => l.id === lid);
-      if (!layer?.mask) return 0;
-      let count = 0;
-      for (let i = 0; i < layer.mask.data.length; i++) {
-        if ((layer.mask.data[i] ?? 255) < 128) count++;
-      }
-      return count;
-    }, activeLayerId);
-
-    console.log(`Dark pixels after eraser: ${darkAfter}`);
     // Eraser should have restored (white = reveal), so fewer dark pixels
-    expect(darkAfter).toBeLessThan(darkBefore);
+    await expect.poll(countDark, { timeout: 30_000 }).toBeLessThan(darkBefore);
   });
 
 });

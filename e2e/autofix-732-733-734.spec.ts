@@ -110,7 +110,7 @@ test.describe('#733 — mask-edit paint no longer round-trips the layer RGBA', (
             for (const v of layer.mask.data) if (v < 200) dark++;
             return dark;
           }),
-        { timeout: 8000 },
+        { timeout: 30_000 },
       )
       .toBeGreaterThan(500);
 
