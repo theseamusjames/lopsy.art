@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { DocumentColorMode } from '../../types';
+import { BrandLinks } from '../BrandLinks/BrandLinks';
 import styles from './NewDocumentModal.module.css';
 
 type Unit = 'px' | 'in';
@@ -165,7 +166,9 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
 
   return (
     <div className={styles.overlay} role="presentation">
-      <span className={styles.logo} aria-hidden="true">LOPSY</span>
+      <div className={styles.brand}>
+        <BrandLinks />
+      </div>
       <div className={styles.modal} role="dialog" aria-label="New Document" onKeyDown={handleKeyDown}>
         <div className={styles.header}>
           <h2>New Document</h2>
