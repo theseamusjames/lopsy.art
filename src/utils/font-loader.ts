@@ -1,6 +1,7 @@
 import type { FontCategory } from './font-catalog';
 import { fontsByFamily } from './font-catalog';
-import { loadFontData } from '../engine-wasm/wasm-bridge';
+import { isFontLoaded as isEngineFontLoaded, loadFontDataForFamily } from '../engine-wasm/wasm-bridge';
+import type { Engine } from '../engine-wasm/wasm-bridge';
 import { getEngine } from '../engine-wasm/engine-state';
 import { loadPreviewFace } from './font-previews';
 import {
@@ -19,6 +20,10 @@ const previewLoadCache = new Map<string, Promise<void>>();
 // Cache of already-fetched font binaries keyed by "family:weight".
 // Avoids re-fetching when the user switches back to a previously loaded font.
 const binaryCache = new Map<string, ArrayBuffer>();
+
+// The engine each cached binary was last loaded into. fontdb registers a new
+// face on every load, so a cache hit only reloads for a new engine instance.
+const loadedIntoEngine = new Map<string, Engine>();
 
 export function loadGoogleFont(family: string, weights: readonly number[]): Promise<void> {
   const key = family;
@@ -132,6 +137,20 @@ async function fetchFontFromCssApi(family: string, weight: number): Promise<Arra
 }
 
 /**
+ * Load `buf` into `engine` under `family` and confirm the engine now has a
+ * face for that family. The engine throws for bytes it cannot parse (a
+ * failed WOFF2 decode, an HTML error page); either way the binary is useless.
+ */
+function loadIntoEngine(engine: Engine, family: string, buf: ArrayBuffer): boolean {
+  try {
+    loadFontDataForFamily(engine, new Uint8Array(buf), family);
+  } catch {
+    return false;
+  }
+  return isEngineFontLoaded(engine, family);
+}
+
+/**
  * Fetch the font binary for a Google Font and load it into the WASM engine's
  * fontdb so the engine can render that font natively.
  *
@@ -141,17 +160,25 @@ async function fetchFontFromCssApi(family: string, weight: number): Promise<Arra
  * 2. Fall back to Google Fonts CSS API → download the latin-subset WOFF2 →
  *    the WASM decoder reconstructs it (both TrueType and CFF outlines).
  *
+ * The binary is registered under the catalog family name, since web font
+ * name tables don't always match it (css2 variable subsets are named after
+ * their default instance, e.g. "Montserrat Thin").
+ *
  * Falls back silently — if all fetches fail the engine uses its bundled Inter.
  *
  * Resolves `true` when the font binary had to be freshly fetched and loaded
  * (so callers should re-render text that uses it), and `false` when it was
- * already available in the engine or could not be loaded.
+ * already available in the engine or could not be loaded. A binary the
+ * engine rejects is not cached, so a later request fetches it again.
  */
 export function loadFontBinaryToEngine(family: string, weight: number): Promise<boolean> {
   const cacheKey = `${family}:${weight}`;
-  if (binaryCache.has(cacheKey)) {
+  const cached = binaryCache.get(cacheKey);
+  if (cached) {
     const engine = getEngine();
-    if (engine) loadFontData(engine, new Uint8Array(binaryCache.get(cacheKey)!));
+    if (engine && loadedIntoEngine.get(cacheKey) !== engine && loadIntoEngine(engine, family, cached)) {
+      loadedIntoEngine.set(cacheKey, engine);
+    }
     // Already loaded — the caller's immediate render already uses this font.
     return Promise.resolve(false);
   }
@@ -163,11 +190,14 @@ export function loadFontBinaryToEngine(family: string, weight: number): Promise<
 
       if (!buf) return false;
 
-      binaryCache.set(cacheKey, buf);
-
       const engine = getEngine();
-      if (!engine) return false;
-      loadFontData(engine, new Uint8Array(buf));
+      if (!engine) {
+        binaryCache.set(cacheKey, buf);
+        return false;
+      }
+      if (!loadIntoEngine(engine, family, buf)) return false;
+      binaryCache.set(cacheKey, buf);
+      loadedIntoEngine.set(cacheKey, engine);
       return true;
     } catch {
       // All fetches failed — engine uses Inter fallback.
