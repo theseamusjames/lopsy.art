@@ -299,6 +299,46 @@ describe('syncLayers — group mask upload', () => {
     syncLayers(engine, [raster], [raster.id], new Set());
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledOnce();
   });
+
+  // #780 — undo/redo restore masks from GPU snapshots, while the store's
+  // mask bytes may still be waiting on the lazy readback. The reset used by
+  // undo must keep the mask upload gate, or the next sync would upload
+  // those lagging bytes over the restored GPU mask.
+  it('resetTrackedState({ preserveContentRefs }) does not re-upload an already-tracked mask', async () => {
+    const { resetTrackedState } = await import('./sync-state');
+    const engine = makeFakeEngine();
+    const data = new Uint8ClampedArray(64 * 64).fill(255);
+    const raster: RasterLayer = {
+      ...baseRasterLayer,
+      id: 'r1',
+      mask: { id: 'm1', enabled: true, data, width: 64, height: 64 },
+    };
+    syncLayers(engine, [raster], [raster.id], new Set());
+    expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledOnce();
+
+    resetTrackedState(engine, { preserveContentRefs: true });
+    syncLayers(engine, [raster], [raster.id], new Set([raster.id]));
+    expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledOnce();
+  });
+
+  it('re-uploads a mask that was removed and then restored with the same bytes', () => {
+    const engine = makeFakeEngine();
+    const data = new Uint8ClampedArray(64 * 64).fill(255);
+    const masked: RasterLayer = {
+      ...baseRasterLayer,
+      id: 'r1',
+      mask: { id: 'm1', enabled: true, data, width: 64, height: 64 },
+    };
+    const unmasked: RasterLayer = { ...masked, mask: null };
+
+    syncLayers(engine, [masked], [masked.id], new Set());
+    syncLayers(engine, [unmasked], [unmasked.id], new Set());
+    expect(vi.mocked(bridge.removeLayerMask)).toHaveBeenCalledOnce();
+
+    // Redo of Add Mask brings back the very same `data` reference.
+    syncLayers(engine, [masked], [masked.id], new Set());
+    expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('syncLayers — tracked-state cleanup on layer removal', () => {

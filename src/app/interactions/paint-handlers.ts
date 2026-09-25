@@ -7,7 +7,7 @@ import type { InteractionContext, InteractionState } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { swapBrushTip, restorePrimaryBrushTip } from '../../engine-wasm/engine-sync';
-import { flushPendingMaskRead } from '../mask-read-queue';
+import { markMaskDataStale } from '../mask-data-sync';
 import type { Engine } from '../../engine-wasm/wasm-bridge';
 import type { SubBrush } from '../../types/brush';
 import type { Point } from '../../types';
@@ -214,14 +214,13 @@ export function handlePaintDown(
 
   // Mask edit mode: GPU painting on the layer mask texture
   if (maskEditMode && activeLayer.mask) {
-    // #756: a previous mask stroke's readback may still be queued. Drain
-    // it so `layer.mask.data` is current before we upload it to the GPU
-    // and before pushHistory snapshots the document.
-    flushPendingMaskRead(activeLayerId);
-    const freshLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId);
-    const freshMask = freshLayer?.mask ?? activeLayer.mask;
-
+    // A previous stroke's mask readback may still be queued. Neither the
+    // history push nor this stroke needs it: the push snapshots the GPU
+    // mask, and the GPU mask is what we paint into. Draining it here was a
+    // synchronous glReadPixels behind the previous stroke's GPU backlog
+    // (#780).
     editorState.pushHistory(tool === 'eraser' ? 'Mask Erase' : 'Mask Paint');
+    markMaskDataStale(activeLayerId);
     const engine = getEngine();
 
     const state: InteractionState = {
@@ -241,10 +240,11 @@ export function handlePaintDown(
       return state;
     }
 
-    // Ensure mask texture is on GPU before painting. Gate on tracked
-    // ref equality so we don't echo the same array back to the GPU on
-    // every stroke — the GPU already holds these bytes (#780).
-    uploadLayerMaskIfChanged(engine, activeLayerId, freshMask.data, freshMask.width, freshMask.height);
+    // Upload only if the engine has never seen this mask array. When it
+    // has, the GPU copy is current or newer (painted, or restored from an
+    // undo snapshot) and `mask.data` may lag it until the lazy readback
+    // lands — re-uploading would wipe the newer GPU content (#780).
+    uploadLayerMaskIfChanged(engine, activeLayerId, activeLayer.mask.data, activeLayer.mask.width, activeLayer.mask.height);
 
     // Inverted from quick mask: brush=1 (subtract/hide), eraser=0 (add/reveal)
     const mode = tool === 'eraser' ? 0 : 1;

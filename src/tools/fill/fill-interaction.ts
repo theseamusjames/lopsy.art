@@ -7,7 +7,7 @@ import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { syncLayerAfterFullSize } from '../../app/sync-layer-after-full-size';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { flushPendingMaskRead } from '../../app/mask-read-queue';
+import { scheduleMaskDataRefresh } from '../../app/mask-data-sync';
 import {
   floodFill as wasmFloodFill,
   applyFillToLayer as wasmApplyFillToLayer,
@@ -17,7 +17,6 @@ import {
   getLayerTextureDimensions,
   fillQuickMask as wasmFillQuickMask,
   fillMask as wasmFillMask,
-  readMaskTexture,
 } from '../../engine-wasm/wasm-bridge';
 import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
 
@@ -49,12 +48,6 @@ export function handleFillDown(ctx: InteractionContext): void {
   const maskEditMode = useUIStore.getState().maskMode === 'layerMask';
   const maskLayer = editorState.document.layers.find((l) => l.id === activeLayerId);
   if (maskEditMode && maskLayer?.mask) {
-    // #756: drain any deferred read so we upload the current mask, not
-    // the pre-previous-stroke state.
-    flushPendingMaskRead(activeLayerId);
-    const freshMask = useEditorStore.getState().document.layers
-      .find((l) => l.id === activeLayerId)?.mask ?? maskLayer.mask;
-
     editorState.pushHistory('Mask Fill');
     const toolSettings = useToolSettingsStore.getState();
     const { tolerance, contiguous } = toolSettings.settings.fill;
@@ -62,10 +55,9 @@ export function handleFillDown(ctx: InteractionContext): void {
     const engine = getEngine();
     if (!engine) return;
 
-    // Skip re-uploading unchanged mask data — the GPU already holds it
-    // from the previous stroke, and the copy back into JS is what makes
-    // it new here (#780).
-    uploadLayerMaskIfChanged(engine, activeLayerId, freshMask.data, freshMask.width, freshMask.height);
+    // Skip the upload when the engine already holds this mask array: the
+    // GPU copy is current or newer than `mask.data` (#780).
+    uploadLayerMaskIfChanged(engine, activeLayerId, maskLayer.mask.data, maskLayer.mask.width, maskLayer.mask.height);
 
     const startX = Math.round(layerPos.x);
     const startY = Math.round(layerPos.y);
@@ -73,10 +65,9 @@ export function handleFillDown(ctx: InteractionContext): void {
     // mode 1 = fill black (hide), matching brush behavior
     wasmFillMask(engine, activeLayerId, startX, startY, tolerance, contiguous, 1);
 
-    const maskData = readMaskTexture(engine, activeLayerId);
-    if (maskData) {
-      editorState.updateLayerMaskData(activeLayerId, new Uint8ClampedArray(maskData));
-    }
+    // The fill's own GPU work (and any earlier stroke's) is still queued;
+    // read the result back once it has drained rather than right now (#780).
+    scheduleMaskDataRefresh(activeLayerId);
     editorState.notifyRender();
     return;
   }

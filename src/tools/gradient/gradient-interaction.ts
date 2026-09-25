@@ -8,7 +8,7 @@ import { toDocumentColor } from '../../app/document-color';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { syncLayerAfterFullSize } from '../../app/sync-layer-after-full-size';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { flushPendingMaskRead } from '../../app/mask-read-queue';
+import { markMaskDataStale } from '../../app/mask-data-sync';
 import {
   renderLinearGradient as gpuRenderLinearGradient,
   renderRadialGradient as gpuRenderRadialGradient,
@@ -36,15 +36,12 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   if (isQuickMaskMode) {
     editorState.pushHistory(gradientType === 'radial' ? 'Quick Mask Radial Gradient' : 'Quick Mask Linear Gradient');
   } else if (maskEditMode && activeLayer.mask) {
-    // #756: drain any deferred mask readback so we upload the current
-    // mask, not the pre-previous-stroke state.
-    flushPendingMaskRead(activeLayerId);
-    const freshMask = editorState.document.layers
-      .find((l) => l.id === activeLayerId)?.mask ?? activeLayer.mask;
     editorState.pushHistory(gradientType === 'radial' ? 'Mask Radial Gradient' : 'Mask Linear Gradient');
+    markMaskDataStale(activeLayerId);
     if (engine) {
-      // Skip re-uploading unchanged mask data (#780).
-      uploadLayerMaskIfChanged(engine, activeLayerId, freshMask.data, freshMask.width, freshMask.height);
+      // Skip the upload when the engine already holds this mask array:
+      // the GPU copy is current or newer than `mask.data` (#780).
+      uploadLayerMaskIfChanged(engine, activeLayerId, activeLayer.mask.data, activeLayer.mask.width, activeLayer.mask.height);
     }
   } else {
     editorState.pushHistory(gradientType === 'radial' ? 'Radial Gradient' : 'Linear Gradient');

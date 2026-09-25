@@ -116,10 +116,11 @@ import { uploadLayerMask as wasmUploadLayerMask } from './wasm-bridge';
 
 /**
  * Upload a layer's mask to the GPU only when its data reference doesn't
- * match the one syncLayers last uploaded. The GPU already holds the
- * current bytes for whatever it painted this session, so re-uploading the
- * same array is pure waste — ~17 MB / 80 ms at 4K on every mask paint,
- * fill or gradient pointer-down (#780). Callers pass the store's own
+ * match the one syncLayers last uploaded. When it matches, the GPU holds
+ * those bytes *or newer ones* — painted on the GPU, or restored from an
+ * undo snapshot — and `mask.data` may lag the GPU until the lazy readback
+ * lands, so re-uploading would be waste at best (~17 MB / 80 ms at 4K)
+ * and would wipe the newer GPU content at worst (#780). Callers pass the store's own
  * `layer.mask.data` (Uint8ClampedArray); on a real change we upload and
  * seed the tracked ref so syncLayers on the next frame also sees a hit.
  * Returns true if an upload happened.
@@ -136,6 +137,8 @@ export function uploadLayerMaskIfChanged(
   const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   wasmUploadLayerMask(engine, layerId, bytes, width, height);
   tracked.maskDataRefs.set(layerId, data);
+  tracked.masksOnEngine.add(layerId);
+  tracked.uploadFailures.delete(`${layerId}:mask`);
   return true;
 }
 

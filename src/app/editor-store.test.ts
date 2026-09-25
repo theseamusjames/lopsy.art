@@ -128,6 +128,21 @@ describe('editor-store history', () => {
     }
   });
 
+  it('pixel snapshots carry a mask entry for exactly the masked layers (#780)', () => {
+    const state = useEditorStore.getState();
+    const maskedId = state.document.activeLayerId!;
+    state.addLayerMask(maskedId);
+    useEditorStore.getState().addLayer();
+
+    useEditorStore.getState().pushHistory('Mask Paint');
+
+    const stack = useEditorStore.getState().undoStack;
+    const top = stack[stack.length - 1]!;
+    expect(top.kind).toBe('pixels');
+    if (top.kind !== 'pixels') return;
+    expect([...top.maskSnapshots.keys()]).toEqual([maskedId]);
+  });
+
   it('marks dirty layers when pixel data is updated', () => {
     const state = useEditorStore.getState();
     const layerId = state.document.activeLayerId!;

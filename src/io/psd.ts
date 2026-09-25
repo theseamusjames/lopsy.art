@@ -27,6 +27,7 @@ import type { Layer, GroupLayer, RasterLayer } from '../types/layers';
 import type { LayerEffects } from '../types/effects';
 import { DEFAULT_EFFECTS, hasEnabledEffects } from '../layers/layer-model';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
+import { materializeAllMaskData } from '../app/mask-data-sync';
 import { BLEND_MODE_TO_PSD_INDEX, BLEND_MODES_BY_PSD_INDEX } from '../types/blend-mode-tables';
 
 const BLEND_MODE_TO_U8 = BLEND_MODE_TO_PSD_INDEX;
@@ -95,6 +96,9 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
   // the rAF render loop may try to upload pending data (mutable borrow)
   // while exportPsd holds an immutable borrow, triggering a RefCell panic.
   finalizePendingStrokeGlobal();
+  // Layer masks are written from `layer.mask.data`, which lags the GPU
+  // until the lazy readback lands (#780).
+  materializeAllMaskData();
 
   const edState = useEditorStore.getState();
   flushLayerSync(edState);

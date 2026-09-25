@@ -10,6 +10,7 @@ import {
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { useEditorStore } from '../editor-store';
 import type { HistorySnapshot } from '../store/types';
+import { snapshotAllMasksFresh, EMPTY_MASK_HANDLE } from '../store/mask-history';
 import type { Rect } from '../../types';
 
 interface PrefloatState {
@@ -53,6 +54,7 @@ function executePrefloat(layerId: string, mask: Uint8ClampedArray, bounds: Rect)
     document: state.document,
     selection: state.selection,
     gpuSnapshots,
+    maskSnapshots: snapshotAllMasksFresh(state.document.layers),
     label: 'Move',
     paths: state.paths,
     selectedPathId: state.selectedPathId,
@@ -102,6 +104,9 @@ function releasePrefloat(): void {
     if (engine && prefloat.snapshot.kind === 'pixels') {
       for (const handle of prefloat.snapshot.gpuSnapshots.values()) {
         releaseGpuSnapshot(engine, handle);
+      }
+      for (const entry of prefloat.snapshot.maskSnapshots.values()) {
+        if (entry.handle !== EMPTY_MASK_HANDLE) releaseGpuSnapshot(engine, entry.handle);
       }
     }
     prefloat = null;

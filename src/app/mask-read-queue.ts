@@ -10,21 +10,17 @@
  * hits the timeout long before the GPU is done and the read stalls
  * anyway (#760).
  *
- * The bytes are only needed on the JS side for (a) the mask thumbnail,
- * (b) subsequent mask paint/fill/gradient operations that upload
- * `layer.mask.data` back to the GPU at stroke start, and (c) project
- * save. None of these need the current frame. This module waits for a
- * stretch of quiet animation frames — the browser only paces rAF at
- * ~16 ms when it is *not* waiting on the GPU, so a run of quick frames
- * is a reliable proxy for "GPU has caught up". When the app stays busy,
- * a hard cap fires the read anyway.
+ * The bytes are only needed on the JS side for the mask thumbnail,
+ * project save, PSD export, and duplicating a masked layer. None of these
+ * need the current frame — and since #780 neither undo (history holds GPU
+ * mask snapshots) nor the next mask stroke (it paints into the GPU mask)
+ * needs them at all. This module waits for a stretch of quiet animation
+ * frames — the browser only paces rAF at ~16 ms when it is *not* waiting
+ * on the GPU, so a run of quick frames is a reliable proxy for "GPU has
+ * caught up". When the app stays busy, a hard cap fires the read anyway.
  *
- * Callers that need the mask data to be current in `layer.mask.data`
- * (paint handlers about to upload it, project save about to write it to
- * disk) still call `flushPendingMaskRead(layerId)` — or
- * `flushAllPendingMaskReads()` — first. Those flushes pay the readback
- * cost synchronously, but they happen at moments the frame budget is
- * already spent, not at the gesture boundary.
+ * `mask-data-sync.ts` owns the layer-mask use of this queue, including
+ * the on-demand `materializeMaskData` for readers that need current bytes.
  */
 
 export type MaskReader = () => Uint8ClampedArray | null;

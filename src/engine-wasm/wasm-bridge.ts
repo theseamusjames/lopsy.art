@@ -6,6 +6,8 @@
 import init, {
   Engine,
   snapshotLayerGpu,
+  snapshotMaskGpu,
+  restoreMaskFromGpuSnapshot as rawRestoreMaskFromGpuSnapshot,
   restoreFromGpuSnapshot,
   releaseGpuSnapshot,
   clearGpuSnapshots,
@@ -31,8 +33,8 @@ import init, {
   decodeAndUploadDng,
   decodeAndUploadRaf,
   uploadLayerSparsePixels,
-  uploadLayerMask,
-  removeLayerMask,
+  uploadLayerMask as rawUploadLayerMask,
+  removeLayerMask as rawRemoveLayerMask,
   getLayerTextureDimensions,
   getLayerEngineBounds,
   getLayerContentBounds,
@@ -189,13 +191,13 @@ import init, {
   renderQuickMaskRadialGradient,
   readQuickMaskPixels,
   uploadQuickMaskPixels,
-  paintMaskDab,
-  paintMaskDabBatch,
-  drawMaskPencilLine,
+  paintMaskDab as rawPaintMaskDab,
+  paintMaskDabBatch as rawPaintMaskDabBatch,
+  drawMaskPencilLine as rawDrawMaskPencilLine,
   readMaskTexture,
-  fillMask,
-  renderMaskLinearGradient,
-  renderMaskRadialGradient,
+  fillMask as rawFillMask,
+  renderMaskLinearGradient as rawRenderMaskLinearGradient,
+  renderMaskRadialGradient as rawRenderMaskRadialGradient,
   screenToCanvas,
   cropToContentBounds,
   expandFromCrop,
@@ -281,6 +283,7 @@ import init, {
   cropLayerToContent,
   floodFillGraduated,
 } from './pkg/lopsy_wasm';
+import { markMaskGpuDirty } from './mask-gpu-dirty';
 
 export type { Engine };
 
@@ -309,6 +312,7 @@ export function getWasmMemoryBytes(): number {
 // Re-export everything with the same names
 export {
   snapshotLayerGpu,
+  snapshotMaskGpu,
   restoreFromGpuSnapshot,
   releaseGpuSnapshot,
   clearGpuSnapshots,
@@ -335,8 +339,6 @@ export {
   decodeAndUploadDng,
   decodeAndUploadRaf,
   uploadLayerSparsePixels,
-  uploadLayerMask,
-  removeLayerMask,
   getLayerTextureDimensions,
   getLayerEngineBounds,
   getLayerContentBounds,
@@ -493,13 +495,7 @@ export {
   renderQuickMaskRadialGradient,
   readQuickMaskPixels,
   uploadQuickMaskPixels,
-  paintMaskDab,
-  paintMaskDabBatch,
-  drawMaskPencilLine,
   readMaskTexture,
-  fillMask,
-  renderMaskLinearGradient,
-  renderMaskRadialGradient,
   screenToCanvas,
   cropToContentBounds,
   expandFromCrop,
@@ -584,3 +580,27 @@ export {
   cropLayerToContent,
   floodFillGraduated,
 };
+
+/**
+ * Every export that writes a layer-mask texture goes through this wrapper
+ * so `mask-gpu-dirty` knows the mask changed since the last undo snapshot
+ * (#780). The layer id is always the second argument.
+ */
+function markingMaskDirty<A extends [Engine, string, ...unknown[]], R>(
+  fn: (...args: A) => R,
+): (...args: A) => R {
+  return (...args: A): R => {
+    markMaskGpuDirty(args[1]);
+    return fn(...args);
+  };
+}
+
+export const uploadLayerMask = markingMaskDirty(rawUploadLayerMask);
+export const removeLayerMask = markingMaskDirty(rawRemoveLayerMask);
+export const paintMaskDab = markingMaskDirty(rawPaintMaskDab);
+export const paintMaskDabBatch = markingMaskDirty(rawPaintMaskDabBatch);
+export const drawMaskPencilLine = markingMaskDirty(rawDrawMaskPencilLine);
+export const fillMask = markingMaskDirty(rawFillMask);
+export const renderMaskLinearGradient = markingMaskDirty(rawRenderMaskLinearGradient);
+export const renderMaskRadialGradient = markingMaskDirty(rawRenderMaskRadialGradient);
+export const restoreMaskFromGpuSnapshot = markingMaskDirty(rawRestoreMaskFromGpuSnapshot);
