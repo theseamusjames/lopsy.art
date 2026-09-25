@@ -71,6 +71,47 @@ pub fn compute_edge_distance(alpha: &[u8], width: usize, height: usize, threshol
     result
 }
 
+/// Coverage for one pixel of the GPU round-brush dab, at distance `dist`
+/// from the dab centre, for a dab of the given `radius` and `hardness`
+/// (0-1). This mirrors `circleStamp` in
+/// `lopsy-wasm/src/gpu/shaders/brush/brush_dab_header.glsl` exactly —
+/// keep the two in sync. It exists so the coverage math (in particular
+/// the small-radius floor fixed for #849) can be unit tested without a
+/// WebGL context.
+///
+/// See the comment on `circleStamp` for why `coverageRadius` floors the
+/// radius and `rim` narrows: a dab centre rarely lands on a pixel
+/// centre, and the nearest achievable pixel can be up to sqrt(2)/2 px
+/// away even along a densely-dabbed stroke, so a naive 1px AA rim
+/// (radius-1..radius) swallows the whole dab once radius drops below
+/// ~1.7px.
+pub fn circle_dab_coverage(dist: f32, radius: f32, hardness: f32) -> f32 {
+    const NEAREST_PIXEL_OFFSET: f32 = 0.71; // ~= sqrt(2) / 2, plus a hair of margin
+    let coverage_radius = radius.max(NEAREST_PIXEL_OFFSET + 0.1);
+    let rim = (coverage_radius - NEAREST_PIXEL_OFFSET).clamp(0.05, 1.0);
+
+    if dist > coverage_radius {
+        return 0.0; // GLSL signals discard with -1.0; a discarded pixel is zero coverage
+    }
+
+    let hardness = hardness.clamp(0.0, 1.0);
+    let t = (dist / coverage_radius).clamp(0.0, 1.0);
+    let stamp = if t <= hardness {
+        1.0
+    } else {
+        let soft_t = (t - hardness) / (1.0 - hardness).max(0.001);
+        1.0 - smoothstep(0.0, 1.0, soft_t)
+    };
+
+    let edge = 1.0 - smoothstep(coverage_radius - rim, coverage_radius, dist);
+    stamp * edge
+}
+
+fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
+    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 /// Generate a circular brush stamp with hardness falloff
 /// Returns a flat array of alpha values (size x size), row-major
 pub fn generate_brush_stamp(size: u32, hardness: f32) -> Vec<f32> {
@@ -241,6 +282,92 @@ mod tests {
         let dist = compute_edge_distance(&alpha, 3, 3, 5);
         // Single interior pixel touching edge on all sides → distance 0
         assert_eq!(dist[4], 0);
+    }
+
+    // Worst-case distance from a densely-dabbed stroke's dab centre to the
+    // nearest achievable pixel centre (half the pixel diagonal).
+    const WORST_CASE_PIXEL_DIST: f32 = std::f32::consts::SQRT_2 / 2.0;
+
+    #[test]
+    fn test_circle_dab_coverage_hardness_100_reaches_full_alpha_at_small_radii() {
+        // #849: at Hardness 100, a dab of any of these radii must fully
+        // cover the worst-case nearest pixel — this is exactly the
+        // repro's "size 1/2/3 line reads alpha 0/53/227 instead of 255".
+        for radius in [0.5f32, 1.0, 1.5, 2.0, 3.0] {
+            let coverage = circle_dab_coverage(WORST_CASE_PIXEL_DIST, radius, 1.0);
+            assert!(
+                coverage > 0.99,
+                "radius {radius} at hardness 100 should fully cover the nearest \
+                 achievable pixel (dist {WORST_CASE_PIXEL_DIST}), got {coverage}",
+            );
+        }
+    }
+
+    #[test]
+    fn test_circle_dab_coverage_center_is_always_full_at_hardness_100() {
+        for radius in [0.5f32, 1.0, 1.5, 2.0, 3.0, 10.0] {
+            let coverage = circle_dab_coverage(0.0, radius, 1.0);
+            assert!((coverage - 1.0).abs() < 1e-4, "radius {radius}: {coverage}");
+        }
+    }
+
+    #[test]
+    fn test_circle_dab_coverage_beyond_radius_is_discarded() {
+        // A pixel well outside even the floored coverage radius must not
+        // be painted, regardless of hardness — the fix must not turn tiny
+        // dabs into large ones.
+        assert_eq!(circle_dab_coverage(5.0, 0.5, 1.0), 0.0);
+        assert_eq!(circle_dab_coverage(5.0, 1.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn test_circle_dab_coverage_hardness_0_still_fades_out_toward_the_edge() {
+        // Softness sanity guard: a fully soft brush must still fall away
+        // from full strength well before its outer radius, at every
+        // tested size — the small-radius floor must not make hardness 0
+        // behave like hardness 100.
+        for radius in [0.5f32, 1.0, 1.5, 2.0, 3.0, 10.0] {
+            let center = circle_dab_coverage(0.0, radius, 0.0);
+            let near_edge = circle_dab_coverage(radius * 0.9, radius, 0.0);
+            assert!((center - 1.0).abs() < 1e-4, "radius {radius}: center {center}");
+            assert!(
+                near_edge < center * 0.5,
+                "radius {radius}: hardness 0 should fade well before the edge, \
+                 center {center} near_edge {near_edge}",
+            );
+        }
+    }
+
+    #[test]
+    fn test_circle_dab_coverage_hardness_50_is_between_0_and_100() {
+        // At a fixed mid-radius offset, coverage should increase monotonically
+        // with hardness — hardness 50 must sit strictly between the 0 and 100
+        // curves, not collapse to either one.
+        for radius in [1.0f32, 1.5, 2.0, 5.0] {
+            let dist = radius * 0.6;
+            let soft = circle_dab_coverage(dist, radius, 0.0);
+            let mid = circle_dab_coverage(dist, radius, 0.5);
+            let hard = circle_dab_coverage(dist, radius, 1.0);
+            assert!(mid >= soft - 1e-4, "radius {radius}: mid {mid} < soft {soft}");
+            assert!(mid <= hard + 1e-4, "radius {radius}: mid {mid} > hard {hard}");
+        }
+    }
+
+    #[test]
+    fn test_circle_dab_coverage_large_radius_matches_original_fixed_1px_rim() {
+        // For radius above ~1.7px the fix must be a no-op: identical to the
+        // original `1.0 - smoothstep(radius - 1.0, radius, dist)` AA rim.
+        for radius in [2.0f32, 3.0, 5.0, 10.0, 50.0] {
+            for &frac in &[0.0f32, 0.3, 0.6, 0.9, 0.99] {
+                let dist = radius * frac;
+                let got = circle_dab_coverage(dist, radius, 1.0);
+                let expected = 1.0 - smoothstep(radius - 1.0, radius, dist);
+                assert!(
+                    (got - expected).abs() < 1e-4,
+                    "radius {radius} dist {dist}: got {got}, expected {expected}",
+                );
+            }
+        }
     }
 
     #[test]
