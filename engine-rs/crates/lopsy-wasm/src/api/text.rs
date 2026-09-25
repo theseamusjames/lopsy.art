@@ -11,17 +11,29 @@ fn ensure_text_renderer(engine: &mut Engine) -> &mut TextRendererState {
 
 /// Load raw font bytes into the engine's fontdb.
 /// Accepts TTF, OTF, or WOFF2 — WOFF2 is decoded to SFNT before loading.
+/// Errors when the bytes hold no parseable font face.
 #[wasm_bindgen(js_name = "loadFontData")]
 pub fn load_font_data(engine: &mut Engine, font_data: &[u8]) -> Result<(), JsError> {
+    load_font_bytes(engine, font_data, None)
+}
+
+/// Like `loadFontData`, but also registers every loaded face under `family`
+/// — the catalog name text layers request — whatever its name table says.
+#[wasm_bindgen(js_name = "loadFontDataForFamily")]
+pub fn load_font_data_for_family(engine: &mut Engine, font_data: &[u8], family: &str) -> Result<(), JsError> {
+    load_font_bytes(engine, font_data, Some(family))
+}
+
+fn load_font_bytes(engine: &mut Engine, font_data: &[u8], family: Option<&str>) -> Result<(), JsError> {
     let tr = ensure_text_renderer(engine);
-    if crate::woff2::is_woff2(font_data) {
-        match crate::woff2::decode_woff2(font_data) {
-            Some(sfnt) => tr.load_font(&sfnt).map_err(|e| JsError::new(&e)),
-            None => Err(JsError::new("WOFF2 decode failed")),
-        }
+    let decoded;
+    let sfnt = if crate::woff2::is_woff2(font_data) {
+        decoded = crate::woff2::decode_woff2(font_data).ok_or_else(|| JsError::new("WOFF2 decode failed"))?;
+        decoded.as_slice()
     } else {
-        tr.load_font(font_data).map_err(|e| JsError::new(&e))
-    }
+        font_data
+    };
+    tr.load_font_as(sfnt, family).map_err(|e| JsError::new(&e))
 }
 
 /// Set or update the text content and properties for a text layer.

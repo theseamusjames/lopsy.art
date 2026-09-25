@@ -3,7 +3,9 @@
 //! Phase 1: font loading, text layout, and measurement via cosmic-text.
 //! Phase 3: software rasterization via swash → RGBA bytes for GPU upload.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use cosmic_text::fontdb;
 use cosmic_text::{Align, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, Stretch, Style, SwashCache, SwashImage, Weight, Wrap};
 use swash::scale::{ScaleContext, Render, Source, StrikeWith};
 use swash::zeno::{Format, Vector};
@@ -116,6 +118,9 @@ pub struct TextRendererState {
     pub text_layers: HashMap<String, TextLayerState>,
     scale_context: ScaleContext,
     unhinted_cache: HashMap<CacheKey, Option<SwashImage>>,
+    /// (lowercased family, style, weight) combinations already tried for
+    /// variable-font instancing, so a failure is not retried every layout.
+    instanced_weights: HashSet<(String, Style, u16)>,
 }
 
 fn render_glyph_unhinted<'a>(
@@ -166,36 +171,144 @@ impl TextRendererState {
             text_layers: HashMap::new(),
             scale_context: ScaleContext::new(),
             unhinted_cache: HashMap::new(),
+            instanced_weights: HashSet::new(),
         }
     }
 
-    /// Load raw font bytes into fontdb. Returns error if bytes are unparseable.
+    /// Load raw font bytes into fontdb. fontdb silently skips data it cannot
+    /// parse, so report that as an error instead of pretending it loaded.
     pub fn load_font(&mut self, font_data: &[u8]) -> Result<(), String> {
-        self.font_system
-            .db_mut()
-            .load_font_data(font_data.to_vec());
+        self.load_font_as(font_data, None)
+    }
+
+    /// Load font bytes and, when `family_alias` is given, make every loaded
+    /// face answer to that family name too. Web font binaries often carry a
+    /// name table that differs from the catalog family they were fetched
+    /// for — css2 variable subsets are named after their default instance
+    /// ("Montserrat Thin") and some static fonts use different casing
+    /// ("IM FELL DW Pica SC") — and text layers request the catalog name.
+    pub fn load_font_as(&mut self, font_data: &[u8], family_alias: Option<&str>) -> Result<(), String> {
+        let source = fontdb::Source::Binary(Arc::new(font_data.to_vec()));
+        let ids = self.font_system.db_mut().load_font_source(source);
+        if ids.is_empty() {
+            return Err("font data contains no parseable font face".to_string());
+        }
+        let Some(alias) = family_alias.map(str::trim).filter(|a| !a.is_empty()) else {
+            return Ok(());
+        };
+        let db = self.font_system.db_mut();
+        for id in ids {
+            let Some(face) = db.face(id) else { continue };
+            if face.families.iter().any(|(name, _)| name == alias) {
+                continue;
+            }
+            let mut info = face.clone();
+            info.families.insert(0, (alias.to_string(), fontdb::Language::English_UnitedStates));
+            db.remove_face(id);
+            db.push_face_info(info);
+        }
         Ok(())
+    }
+
+    /// The family name fontdb stores for `requested`, matched exactly first
+    /// and then ASCII-case-insensitively. fontdb and cosmic-text compare
+    /// family names case-sensitively, so a request must use the stored
+    /// spelling to match at all.
+    fn resolve_family_name(&self, requested: &str) -> Option<String> {
+        let db = self.font_system.db();
+        let exact = db
+            .faces()
+            .any(|face| face.families.iter().any(|(name, _)| name == requested));
+        if exact {
+            return Some(requested.to_string());
+        }
+        db.faces().find_map(|face| {
+            face.families
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(requested))
+                .map(|(name, _)| name.clone())
+        })
+    }
+
+    fn family_faces<'a>(&'a self, family: &'a str) -> impl Iterator<Item = &'a fontdb::FaceInfo> + 'a {
+        self.font_system
+            .db()
+            .faces()
+            .filter(move |face| face.families.iter().any(|(name, _)| name.eq_ignore_ascii_case(family)))
     }
 
     /// The style/stretch to request for `family`: see [`snap_face_attrs`].
     fn available_face_attrs(&self, family: &str, requested: Style) -> (Style, Stretch) {
         let faces: Vec<(Style, Stretch)> = self
-            .font_system
-            .db()
-            .faces()
-            .filter(|face| face.families.iter().any(|(name, _)| name == family))
+            .family_faces(family)
             .map(|face| (face.style, face.stretch))
             .collect();
         snap_face_attrs(requested, &faces)
     }
 
+    /// The weight to request for `family` in `style`/`stretch`.
+    ///
+    /// cosmic-text only uses a family's face when its weight equals the
+    /// request exactly; anything else falls through to other families. So:
+    /// an exact face wins; otherwise a variable face whose `wght` axis covers
+    /// the request is instanced at that weight (see [`crate::variable_instance`]);
+    /// otherwise the request snaps to the nearest weight the family ships.
+    fn resolve_weight(&mut self, family: &str, style: Style, stretch: Stretch, requested: u16) -> u16 {
+        let weights: Vec<u16> = self
+            .family_faces(family)
+            .filter(|face| face.style == style && face.stretch == stretch)
+            .map(|face| face.weight.0)
+            .collect();
+        if weights.is_empty() || weights.contains(&requested) {
+            return requested;
+        }
+        if self.instance_variable_weight(family, style, stretch, requested) {
+            return requested;
+        }
+        snap_weight(requested, &weights)
+    }
+
+    /// Register a static instance of `family`'s variable face at `weight`.
+    /// Returns true when a face at exactly that weight now exists.
+    fn instance_variable_weight(&mut self, family: &str, style: Style, stretch: Stretch, weight: u16) -> bool {
+        let key = (family.to_ascii_lowercase(), style, weight);
+        if !self.instanced_weights.insert(key) {
+            return false;
+        }
+        let db = self.font_system.db();
+        let source = self
+            .family_faces(family)
+            .filter(|face| face.style == style && face.stretch == stretch)
+            .find_map(|face| {
+                let instance = db.with_face_data(face.id, |data, index| {
+                    let (min, _, max) = crate::variable_instance::wght_axis_range(data, index)?;
+                    if (weight as f32) < min || (weight as f32) > max {
+                        return None;
+                    }
+                    crate::variable_instance::instantiate_wght(data, index, weight)
+                })??;
+                Some((instance, face.families.clone()))
+            });
+        let Some((instance, families)) = source else { return false };
+
+        let db = self.font_system.db_mut();
+        let ids = db.load_font_source(fontdb::Source::Binary(Arc::new(instance)));
+        let mut is_loaded = false;
+        for id in ids {
+            let Some(face) = db.face(id) else { continue };
+            let mut info = face.clone();
+            info.families = families.clone();
+            info.weight = fontdb::Weight(weight);
+            is_loaded |= info.style == style && info.stretch == stretch;
+            db.remove_face(id);
+            db.push_face_info(info);
+        }
+        is_loaded
+    }
+
     /// Returns true if any font face with the given family name is loaded.
     pub fn is_font_loaded(&self, family: &str) -> bool {
-        self.font_system.db().faces().any(|f| {
-            f.families
-                .iter()
-                .any(|(name, _)| name.eq_ignore_ascii_case(family))
-        })
+        self.family_faces(family).next().is_some()
     }
 
     /// Parse props_json and create or update the Buffer for layer_id.
@@ -283,10 +396,14 @@ impl TextRendererState {
         } else {
             Style::Normal
         };
-        let (style, stretch) = self.available_face_attrs(font_family, requested_style);
+        let family = self
+            .resolve_family_name(font_family)
+            .unwrap_or_else(|| font_family.to_string());
+        let (style, stretch) = self.available_face_attrs(&family, requested_style);
+        let weight = self.resolve_weight(&family, style, stretch, font_weight);
         let attrs = Attrs::new()
-            .family(Family::Name(font_family))
-            .weight(Weight(font_weight))
+            .family(Family::Name(&family))
+            .weight(Weight(weight))
             .style(style)
             .stretch(stretch);
 
@@ -1058,6 +1175,16 @@ impl TextRendererState {
     }
 }
 
+/// The weight nearest to `requested` among `available` (heavier wins a tie),
+/// or `requested` itself when nothing is available.
+pub fn snap_weight(requested: u16, available: &[u16]) -> u16 {
+    available
+        .iter()
+        .copied()
+        .min_by_key(|&w| (w.abs_diff(requested), std::cmp::Reverse(w)))
+        .unwrap_or(requested)
+}
+
 /// cosmic-text only considers faces whose style *and* stretch equal the
 /// request exactly, and it has no cross-style fallback — so a family that
 /// ships only italic faces (Zapfino flags its single face italic) or only
@@ -1490,5 +1617,109 @@ mod tests {
         // opaque count must be strictly greater than plain text alone.
         assert!(strike_opaque > plain_opaque,
             "strikethrough should add opaque pixels; plain={plain_opaque} strike={strike_opaque}");
+    }
+
+    fn family_props(text: &str, family: &str, weight: u16) -> String {
+        format!(
+            r#"{{"text":"{text}","fontFamily":"'{family}', serif","fontSize":48,"fontWeight":{weight},"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.2,"letterSpacing":0,"textAlign":"left","areaWidth":null}}"#
+        )
+    }
+
+    /// (first family name, weight) of every face the layer's glyphs use.
+    fn faces_used(renderer: &TextRendererState, layer_id: &str) -> Vec<(String, u16)> {
+        let state = renderer.text_layers.get(layer_id).expect("layer");
+        let db = renderer.font_system.db();
+        let mut faces: Vec<(String, u16)> = state
+            .buffer
+            .layout_runs()
+            .flat_map(|run| run.glyphs.iter().map(|g| g.font_id))
+            .filter_map(|id| db.face(id))
+            .map(|face| (face.families[0].0.clone(), face.weight.0))
+            .collect();
+        faces.dedup();
+        faces
+    }
+
+    fn opaque_pixels(renderer: &mut TextRendererState, layer_id: &str) -> usize {
+        let (px, _, _, _, _) = renderer.render_text_layer_software(layer_id).expect("renders");
+        px.chunks(4).filter(|p| p[3] > 127).count()
+    }
+
+    fn im_fell_sc() -> Vec<u8> {
+        crate::woff2::decode_woff2(include_bytes!("../tests/fixtures/IMFellDWPicaSC-latin.woff2")).expect("decodes")
+    }
+
+    fn montserrat_css2() -> Vec<u8> {
+        crate::woff2::decode_woff2(include_bytes!("../tests/fixtures/Montserrat-wght-latin.woff2")).expect("decodes")
+    }
+
+    #[test]
+    fn load_font_rejects_bytes_without_a_font_face() {
+        let mut renderer = make_renderer();
+        assert!(renderer.load_font(b"definitely not a font").is_err());
+        assert!(renderer.load_font(&im_fell_sc()).is_ok());
+    }
+
+    #[test]
+    fn family_request_matches_a_face_whose_name_differs_only_in_case() {
+        let mut renderer = make_renderer();
+        renderer.load_font(&im_fell_sc()).expect("loads");
+        let stored = renderer.font_system.db().faces().last().unwrap().families[0].0.clone();
+        assert_ne!(stored, "IM Fell DW Pica SC", "fixture must exercise a case mismatch");
+        assert!(stored.eq_ignore_ascii_case("IM Fell DW Pica SC"));
+
+        renderer
+            .set_text_content("t", &family_props("Hello", "IM Fell DW Pica SC", 400))
+            .expect("ok");
+        assert_eq!(faces_used(&renderer, "t"), vec![(stored, 400)]);
+    }
+
+    #[test]
+    fn a_missing_weight_snaps_to_the_nearest_face_instead_of_falling_back() {
+        let mut renderer = make_renderer();
+        renderer.load_font(&im_fell_sc()).expect("loads");
+        renderer
+            .set_text_content("t", &family_props("Hello", "IM Fell DW Pica SC", 700))
+            .expect("ok");
+        let used = faces_used(&renderer, "t");
+        assert_eq!(used.len(), 1);
+        assert!(used[0].0.eq_ignore_ascii_case("IM Fell DW Pica SC"), "{used:?}");
+    }
+
+    #[test]
+    fn loading_under_a_family_alias_makes_the_catalog_name_match() {
+        // css2 variable subsets are named after their default instance.
+        let mut renderer = make_renderer();
+        renderer.load_font_as(&montserrat_css2(), Some("Montserrat")).expect("loads");
+        assert!(renderer.is_font_loaded("Montserrat"));
+        renderer
+            .set_text_content("t", &family_props("Hello", "Montserrat", 100))
+            .expect("ok");
+        assert_eq!(faces_used(&renderer, "t"), vec![("Montserrat".to_string(), 100)]);
+    }
+
+    #[test]
+    fn variable_font_renders_the_requested_weight() {
+        let mut renderer = make_renderer();
+        renderer.load_font_as(&montserrat_css2(), Some("Montserrat")).expect("loads");
+
+        let mut ink = Vec::new();
+        for weight in [100u16, 400, 700, 900] {
+            let id = format!("w{weight}");
+            renderer
+                .set_text_content(&id, &family_props("HAMBURGEFONTS", "Montserrat", weight))
+                .expect("ok");
+            assert_eq!(faces_used(&renderer, &id), vec![("Montserrat".to_string(), weight)]);
+            ink.push(opaque_pixels(&mut renderer, &id));
+        }
+        assert!(ink.windows(2).all(|w| w[1] > w[0]), "coverage must grow with weight: {ink:?}");
+    }
+
+    #[test]
+    fn snap_weight_picks_the_nearest_and_prefers_heavier_on_ties() {
+        assert_eq!(snap_weight(700, &[400]), 400);
+        assert_eq!(snap_weight(500, &[400, 600]), 600);
+        assert_eq!(snap_weight(650, &[100, 900, 700]), 700);
+        assert_eq!(snap_weight(300, &[]), 300);
     }
 }
