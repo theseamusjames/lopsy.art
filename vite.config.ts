@@ -5,6 +5,7 @@ import topLevelAwait from 'vite-plugin-top-level-await';
 import { resolve } from 'path';
 import { statSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { tutorialsPlugin } from './scripts/vite-plugin-tutorials';
 
 /**
  * Vite plugin that checks whether the WASM build output is older than any
@@ -68,7 +69,16 @@ function wasmFreshnessCheck(): Plugin {
 
 export default defineConfig({
   base: '/',
-  plugins: [react(), wasm(), topLevelAwait(), wasmFreshnessCheck()],
+  plugins: [
+    react(),
+    wasm(),
+    topLevelAwait(),
+    wasmFreshnessCheck(),
+    tutorialsPlugin({
+      contentDir: resolve(__dirname, 'tutorials'),
+      cssFile: resolve(__dirname, 'src/site/tutorials/tutorials.css'),
+    }),
+  ],
   server: {
     fs: {
       allow: [
