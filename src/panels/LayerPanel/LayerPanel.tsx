@@ -118,6 +118,11 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       }
 
       if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+        // While text is being edited, focus stays on document.body (the
+        // on-canvas editor has no DOM input), so the body exception below
+        // would otherwise let this select every layer too (#844). Let the
+        // text editor's own Cmd+A (useKeyboardShortcuts) handle it instead.
+        if (useUIStore.getState().textEditing) return;
         if (!panel.contains(document.activeElement) && document.activeElement !== document.body) return;
         e.preventDefault();
         const allIds = displayList
