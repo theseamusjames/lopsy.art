@@ -1,6 +1,7 @@
 import type { Guide, RulerHover, SnapLine } from '../ui-store';
 import type { Color } from '../../types';
 import { RULER_SIZE } from './ruler-constants';
+import { DEFAULT_DPI, formatRulerValue, pixelsToUnits, type RulerUnit } from './ruler-units';
 import { formatFractionLabel } from './guide-snap';
 
 const PLAYHEAD_HOVER_COLOR = 'rgba(255, 255, 255, 0.9)';
@@ -89,6 +90,8 @@ export function renderGuideRulerOverlays(
   docWidth: number,
   docHeight: number,
   guideColor: Color,
+  unit: RulerUnit = 'px',
+  dpi: number = DEFAULT_DPI,
 ): void {
   const { panX, panY, zoom } = viewport;
   const originX = panX + canvasWidth / 2 - (docWidth / 2) * zoom;
@@ -139,7 +142,7 @@ export function renderGuideRulerOverlays(
         ctx.closePath();
         ctx.fill();
 
-        drawTooltip(ctx, formatRulerLabel(rulerHover, docWidth), screenX, RULER_SIZE + 4, canvasWidth, canvasHeight);
+        drawTooltip(ctx, formatRulerLabel(rulerHover, docWidth, unit, dpi), screenX, RULER_SIZE + 4, canvasWidth, canvasHeight);
       }
     } else {
       const screenY = originY + rulerHover.position * zoom;
@@ -152,7 +155,7 @@ export function renderGuideRulerOverlays(
         ctx.closePath();
         ctx.fill();
 
-        drawTooltip(ctx, formatRulerLabel(rulerHover, docHeight), RULER_SIZE + 4, screenY, canvasWidth, canvasHeight);
+        drawTooltip(ctx, formatRulerLabel(rulerHover, docHeight, unit, dpi), RULER_SIZE + 4, screenY, canvasWidth, canvasHeight);
       }
     }
   }
@@ -215,12 +218,12 @@ export function renderSnapLines(
   ctx.restore();
 }
 
-function formatRulerLabel(rulerHover: RulerHover, docSize: number): string {
+function formatRulerLabel(rulerHover: RulerHover, docSize: number, unit: RulerUnit, dpi: number): string {
   if (rulerHover.snap) {
     const fraction = formatFractionLabel(rulerHover.position, docSize);
     if (fraction !== null) return fraction;
   }
-  return Math.round(rulerHover.position).toString();
+  return formatRulerValue(pixelsToUnits(rulerHover.position, unit, dpi), unit);
 }
 
 function drawTooltip(

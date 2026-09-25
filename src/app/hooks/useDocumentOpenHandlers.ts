@@ -25,7 +25,7 @@ export function classifyOpenFile(file: File): OpenFileKind {
 export interface DocumentOpenHandlers {
   handleDragOver: (e: React.DragEvent) => void;
   handleDrop: (e: React.DragEvent) => void;
-  handlePreDocCreate: (width: number, height: number, background: 'white' | 'transparent', colorMode: DocumentColorMode) => void;
+  handlePreDocCreate: (width: number, height: number, background: 'white' | 'transparent', colorMode: DocumentColorMode, dpi: number) => void;
   handlePreDocOpenFile: (file: File) => void;
   handlePreDocPasteClipboard: (blob: Blob) => void;
 }
@@ -82,8 +82,8 @@ export function useDocumentOpenHandlers(): DocumentOpenHandlers {
   }, [closeModalOfKind]);
 
   const handlePreDocCreate = useCallback(
-    (width: number, height: number, background: 'white' | 'transparent', colorMode: DocumentColorMode) => {
-      useEditorStore.getState().createDocument(width, height, background === 'transparent', colorMode);
+    (width: number, height: number, background: 'white' | 'transparent', colorMode: DocumentColorMode, dpi: number) => {
+      useEditorStore.getState().createDocument(width, height, background === 'transparent', colorMode, dpi);
       closeModal();
     },
     [closeModal],

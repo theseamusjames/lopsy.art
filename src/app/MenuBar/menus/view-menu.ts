@@ -1,6 +1,7 @@
 import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { nextZoomLevel } from '../../../utils/zoom-levels';
+import { RULER_UNITS, RULER_UNIT_LABELS } from '../../rendering/ruler-units';
 import type { MenuDef } from './types';
 
 export function createViewMenu(): MenuDef {
@@ -46,6 +47,14 @@ export function createViewMenu(): MenuDef {
         label: 'Show Rulers', shortcut: '\u2318R',
         checked: ui.showRulers,
         action: () => useUIStore.getState().toggleRulers(),
+      },
+      {
+        label: 'Units',
+        submenu: RULER_UNITS.map((unit) => ({
+          label: RULER_UNIT_LABELS[unit],
+          checked: ui.rulerUnit === unit,
+          action: () => useUIStore.getState().setRulerUnit(unit),
+        })),
       },
       {
         label: 'Show Grid', shortcut: "\u2318'",

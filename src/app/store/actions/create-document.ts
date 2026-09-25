@@ -30,6 +30,7 @@ export function computeCreateDocument(
   height: number,
   transparentBg: boolean,
   colorMode: DocumentColorMode = 'rgb',
+  dpi = 72,
 ): ActionResult {
   const bgLayer = createRasterLayer({ name: 'Background', width, height });
   const pixelData = new Map<string, ImageData>();
@@ -84,6 +85,7 @@ export function computeCreateDocument(
       selectedLayerIds: [activeLayerId],
       backgroundColor: { r: 0, g: 0, b: 0, a: 0 },
       colorMode,
+      dpi,
       rootGroupId: rootGroup.id,
     },
     layerPixelData: pixelData,

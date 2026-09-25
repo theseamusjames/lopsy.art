@@ -1,5 +1,6 @@
 import type { Color, Point } from '../../types';
 import { RULER_SIZE } from './ruler-constants';
+import { DEFAULT_DPI, formatRulerValue, rulerStep, type RulerUnit } from './ruler-units';
 
 const RULER_BG = '#2a2a2a';
 const RULER_TEXT = '#888888';
@@ -14,6 +15,8 @@ export function renderRulers(
   docHeight: number,
   cursorPosition: Point,
   guideColor?: Color,
+  unit: RulerUnit = 'px',
+  dpi: number = DEFAULT_DPI,
 ): void {
   const indicatorColor = guideColor
     ? `rgb(${guideColor.r}, ${guideColor.g}, ${guideColor.b})`
@@ -22,15 +25,9 @@ export function renderRulers(
   const originX = panX + canvasWidth / 2 - (docWidth / 2) * zoom;
   const originY = panY + canvasHeight / 2 - (docHeight / 2) * zoom;
 
-  // Choose tick spacing based on zoom level
-  const rawStep = 50 / zoom;
-  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
-  const norm = rawStep / mag;
-  let step: number;
-  if (norm < 2) step = mag * 1;
-  else if (norm < 5) step = mag * 2;
-  else step = mag * 5;
-  if (step < 1) step = 1;
+  // Ticks are indexed rather than accumulated so a fractional interval
+  // (28.35 px per 10 mm) never drifts along the ruler.
+  const step = rulerStep(unit, zoom, dpi);
 
   ctx.save();
 
@@ -44,17 +41,17 @@ export function renderRulers(
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
 
-  const hStart = Math.floor(-originX / zoom / step) * step;
-  const hEnd = Math.ceil((canvasWidth - originX) / zoom / step) * step;
-  for (let px = hStart; px <= hEnd; px += step) {
-    const screenX = originX + px * zoom;
+  const hStart = Math.floor(-originX / zoom / step.px);
+  const hEnd = Math.ceil((canvasWidth - originX) / zoom / step.px);
+  for (let i = hStart; i <= hEnd; i++) {
+    const screenX = originX + i * step.px * zoom;
     if (screenX < RULER_SIZE || screenX > canvasWidth) continue;
     ctx.beginPath();
     ctx.moveTo(screenX, RULER_SIZE - 6);
     ctx.lineTo(screenX, RULER_SIZE);
     ctx.stroke();
     ctx.fillStyle = RULER_TEXT;
-    ctx.fillText(String(Math.round(px)), screenX + 2, 2);
+    ctx.fillText(formatRulerValue(i * step.units, unit), screenX + 2, 2);
   }
 
   // Bottom border line of horizontal ruler
@@ -69,10 +66,10 @@ export function renderRulers(
   ctx.fillRect(0, RULER_SIZE, RULER_SIZE, canvasHeight - RULER_SIZE);
   ctx.strokeStyle = RULER_TICK;
 
-  const vStart = Math.floor(-originY / zoom / step) * step;
-  const vEnd = Math.ceil((canvasHeight - originY) / zoom / step) * step;
-  for (let px = vStart; px <= vEnd; px += step) {
-    const screenY = originY + px * zoom;
+  const vStart = Math.floor(-originY / zoom / step.px);
+  const vEnd = Math.ceil((canvasHeight - originY) / zoom / step.px);
+  for (let i = vStart; i <= vEnd; i++) {
+    const screenY = originY + i * step.px * zoom;
     if (screenY < RULER_SIZE || screenY > canvasHeight) continue;
     ctx.beginPath();
     ctx.moveTo(RULER_SIZE - 6, screenY);
@@ -85,7 +82,7 @@ export function renderRulers(
     ctx.font = '9px Inter, sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
-    ctx.fillText(String(Math.round(px)), 0, 0);
+    ctx.fillText(formatRulerValue(i * step.units, unit), 0, 0);
     ctx.restore();
   }
 

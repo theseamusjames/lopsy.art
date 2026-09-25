@@ -253,6 +253,7 @@ export async function loadProject(file: File): Promise<void> {
         backgroundColor: manifest.backgroundColor,
         colorMode: manifest.colorMode ?? 'rgb',
         indexedPalette: manifest.indexedPalette,
+        dpi: manifest.dpi,
         rootGroupId: manifest.rootGroupId,
       },
       dirtyLayerIds: new Set<string>(),
