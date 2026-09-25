@@ -110,3 +110,12 @@ one (Impact: usWidthClass 3) silently renders in Inter. `text_gpu.rs`
 snaps the request to the family's available faces (`snap_face_attrs`)
 before shaping; keep that in mind before building `Attrs` anywhere else.
 
+
+## Tutorials are static pages generated at build time — never add a root 404.html
+
+`/tutorials/` is plain HTML emitted into `dist/` by `scripts/vite-plugin-tutorials.ts`
+from `tutorials/<slug>/index.md` (renderer in `src/site/tutorials/`). In dev the
+same plugin serves them from memory with drafts included. Cloudflare Pages serves
+`dist/tutorials/<slug>/index.html` at `/tutorials/<slug>/` and treats the whole
+site as an SPA only because there is **no top-level `404.html`** — adding one
+would break deep links into the editor. Canonical tutorial URLs end in `/`.
