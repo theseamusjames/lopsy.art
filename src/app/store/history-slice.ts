@@ -198,6 +198,48 @@ function mergeMetadataLayerPositions(
   return { ...snapshot, layers };
 }
 
+const NO_DIRTY_LAYERS: Set<string> = new Set();
+
+/**
+ * GPU handles describing the live document, for the entry undo/redo pushes
+ * onto the opposite stack.
+ *
+ * Right after a restore the live textures are still the restored snapshot's,
+ * so its handles are reused — but only per layer, and only where the layer's
+ * bounds still match the ones that handle was captured with. The render loop
+ * crops / expands layers on an active-layer switch without a history entry
+ * (and an undo that changes `activeLayerId` triggers exactly that), so a
+ * layer the restore left cropped can be full-document size by now. Pairing
+ * its cropped handle with the expanded live bounds made the next undo blit a
+ * 200×200 texture into a document-sized layer at (0, 0) (#833). Layers whose
+ * bounds moved are re-snapshotted from the live texture instead.
+ */
+function snapshotLiveLayers(
+  state: { document: { layers: readonly Layer[]; layerOrder: readonly string[] }; dirtyLayerIds: Set<string> },
+  stackTop: HistorySnapshot | undefined,
+): Map<string, number> {
+  const { layers, layerOrder } = state.document;
+  if (lastRestoredSnapshot?.kind === 'pixels') {
+    return snapshotGpuLayers(layers, layerOrder, NO_DIRTY_LAYERS, lastRestoredSnapshot);
+  }
+  return snapshotGpuLayers(layers, layerOrder, state.dirtyLayerIds, stackTop);
+}
+
+/**
+ * Mask handles for the entry undo/redo pushes onto the opposite stack. Right
+ * after a restore the live mask textures are the restored snapshot's, so its
+ * handles are reused; otherwise the masks are snapshotted against the stack top.
+ */
+function liveMaskSnapshots(
+  layers: readonly Layer[],
+  stackTop: HistorySnapshot | undefined,
+): ReturnType<typeof snapshotGpuMasks> {
+  if (lastRestoredSnapshot?.kind === 'pixels') {
+    return withCurrentMaskStaleness(lastRestoredSnapshot.maskSnapshots);
+  }
+  return snapshotGpuMasks(layers, stackTop);
+}
+
 function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
   if (snapshot.kind === 'metadata') return;
 
@@ -258,30 +300,14 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         paths: state.paths,
         selectedPathId: state.selectedPathId,
       };
-    } else if (lastRestoredSnapshot && lastRestoredSnapshot.kind === 'pixels') {
-      firstSnapshot = {
-        kind: 'pixels',
-        document: state.document,
-        selection: state.selection,
-        gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
-        maskSnapshots: withCurrentMaskStaleness(lastRestoredSnapshot.maskSnapshots),
-        label: target.label,
-        paths: state.paths,
-        selectedPathId: state.selectedPathId,
-      };
     } else {
-      const gpuSnapshots = snapshotGpuLayers(
-        state.document.layers,
-        state.document.layerOrder,
-        state.dirtyLayerIds,
-        state.undoStack[S - 1],
-      );
+      const gpuSnapshots = snapshotLiveLayers(state, state.undoStack[S - 1]);
       firstSnapshot = {
         kind: 'pixels',
         document: state.document,
         selection: state.selection,
         gpuSnapshots,
-        maskSnapshots: snapshotGpuMasks(state.document.layers, state.undoStack[S - 1]),
+        maskSnapshots: liveMaskSnapshots(state.document.layers, state.undoStack[S - 1]),
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
@@ -355,30 +381,14 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         paths: state.paths,
         selectedPathId: state.selectedPathId,
       };
-    } else if (lastRestoredSnapshot && lastRestoredSnapshot.kind === 'pixels') {
-      firstSnapshot = {
-        kind: 'pixels',
-        document: state.document,
-        selection: state.selection,
-        gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
-        maskSnapshots: withCurrentMaskStaleness(lastRestoredSnapshot.maskSnapshots),
-        label: target.label,
-        paths: state.paths,
-        selectedPathId: state.selectedPathId,
-      };
     } else {
-      const gpuSnapshots = snapshotGpuLayers(
-        state.document.layers,
-        state.document.layerOrder,
-        state.dirtyLayerIds,
-        state.redoStack[R - 1],
-      );
+      const gpuSnapshots = snapshotLiveLayers(state, state.redoStack[R - 1]);
       firstSnapshot = {
         kind: 'pixels',
         document: state.document,
         selection: state.selection,
         gpuSnapshots,
-        maskSnapshots: snapshotGpuMasks(state.document.layers, state.redoStack[R - 1]),
+        maskSnapshots: liveMaskSnapshots(state.document.layers, state.redoStack[R - 1]),
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
