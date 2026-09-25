@@ -1,6 +1,7 @@
 use web_sys::WebGl2RenderingContext;
 use lopsy_core::layer::LayerDesc;
 use crate::engine::EngineInner;
+use crate::gpu::texture_pool::TextureHandle;
 
 pub fn add_layer(engine: &mut EngineInner, desc: LayerDesc) -> Result<(), String> {
     // Only create a texture if the layer doesn't already have one.
@@ -1608,4 +1609,131 @@ pub fn read_clipboard_pixels(engine: &EngineInner) -> Result<Vec<u8>, String> {
     engine.gl.delete_framebuffer(Some(&fbo));
 
     Ok(pixels)
+}
+
+// ============================================================
+// GPU snapshot store — shared by layer and mask undo snapshots
+// ============================================================
+
+/// Sentinel returned when there is nothing to snapshot.
+pub const EMPTY_SNAPSHOT: u32 = u32::MAX;
+
+fn blit_texture(
+    engine: &EngineInner,
+    src: &web_sys::WebGlTexture,
+    dst: &web_sys::WebGlTexture,
+    w: u32,
+    h: u32,
+) {
+    engine.render_to_texture(dst, w as i32, h as i32, |eng| {
+        eng.gl.use_program(Some(&eng.shaders.blit.program));
+        eng.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        eng.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src));
+        if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") {
+            eng.gl.uniform1i(Some(&loc), 0);
+        }
+        eng.draw_fullscreen_quad();
+    });
+}
+
+/// Blit `src_handle` into a freshly pooled texture and register it in the
+/// snapshot store. Returns the snapshot id, or `EMPTY_SNAPSHOT` when the
+/// source is empty or allocation fails.
+pub fn snapshot_texture(engine: &mut EngineInner, src_handle: TextureHandle) -> u32 {
+    let (w, h) = engine.texture_pool.get_size(src_handle).unwrap_or((0, 0));
+    if w == 0 || h == 0 {
+        return EMPTY_SNAPSHOT;
+    }
+    let dst_handle = match engine.texture_pool.acquire(&engine.gl, w, h) {
+        Ok(h) => h,
+        Err(_) => return EMPTY_SNAPSHOT,
+    };
+    let (dst_tex, src_tex) = match (
+        engine.texture_pool.get(dst_handle).cloned(),
+        engine.texture_pool.get(src_handle).cloned(),
+    ) {
+        (Some(d), Some(s)) => (d, s),
+        _ => {
+            engine.texture_pool.release(dst_handle);
+            return EMPTY_SNAPSHOT;
+        }
+    };
+    blit_texture(engine, &src_tex, &dst_tex, w, h);
+
+    let snap = crate::engine::SnapshotTexture { handle: dst_handle, width: w, height: h };
+    if let Some(free_id) = engine.snapshot_free_list.pop() {
+        engine.snapshot_textures[free_id as usize] = Some(snap);
+        free_id
+    } else {
+        let id = engine.snapshot_textures.len() as u32;
+        engine.snapshot_textures.push(Some(snap));
+        id
+    }
+}
+
+/// Blit snapshot `snap_id` into `existing`, re-acquiring a texture at the
+/// snapshot's size when the dimensions differ. Returns the handle that now
+/// holds the restored content so the caller can store it back in its map.
+fn restore_snapshot_into(
+    engine: &mut EngineInner,
+    existing: Option<TextureHandle>,
+    snap_id: u32,
+) -> Result<TextureHandle, String> {
+    let snap = engine.snapshot_textures.get(snap_id as usize)
+        .and_then(|s| s.as_ref())
+        .ok_or_else(|| "Invalid snapshot handle".to_string())?;
+    let (sw, sh, snap_handle) = (snap.width, snap.height, snap.handle);
+
+    let dst_handle = match existing {
+        Some(h) if engine.texture_pool.get_size(h) == Some((sw, sh)) => h,
+        Some(h) => {
+            engine.texture_pool.release(h);
+            engine.texture_pool.acquire(&engine.gl, sw, sh)?
+        }
+        None => engine.texture_pool.acquire(&engine.gl, sw, sh)?,
+    };
+
+    let dst_tex = engine.texture_pool.get(dst_handle).cloned()
+        .ok_or_else(|| "Dst texture not found".to_string())?;
+    let src_tex = engine.texture_pool.get(snap_handle).cloned()
+        .ok_or_else(|| "Snapshot texture not found".to_string())?;
+    blit_texture(engine, &src_tex, &dst_tex, sw, sh);
+    Ok(dst_handle)
+}
+
+/// Snapshot a layer's pixel texture into the snapshot store.
+pub fn snapshot_layer(engine: &mut EngineInner, layer_id: &str) -> u32 {
+    match engine.layer_textures.get(layer_id) {
+        Some(&h) => snapshot_texture(engine, h),
+        None => EMPTY_SNAPSHOT,
+    }
+}
+
+/// Restore a layer's pixel texture from a snapshot.
+pub fn restore_layer_from_snapshot(engine: &mut EngineInner, layer_id: &str, snap_id: u32) -> Result<(), String> {
+    let existing = engine.layer_textures.get(layer_id).copied();
+    let handle = restore_snapshot_into(engine, existing, snap_id)?;
+    engine.layer_textures.insert(layer_id.to_string(), handle);
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
+/// Snapshot a layer's mask texture into the snapshot store (GPU→GPU blit,
+/// no readback). Returns `EMPTY_SNAPSHOT` when the layer has no mask on
+/// the engine.
+pub fn snapshot_mask(engine: &mut EngineInner, layer_id: &str) -> u32 {
+    match engine.layer_masks.get(layer_id) {
+        Some(&h) => snapshot_texture(engine, h),
+        None => EMPTY_SNAPSHOT,
+    }
+}
+
+/// Restore a layer's mask texture from a snapshot, creating the mask
+/// texture when the layer has none on the engine.
+pub fn restore_mask_from_snapshot(engine: &mut EngineInner, layer_id: &str, snap_id: u32) -> Result<(), String> {
+    let existing = engine.layer_masks.get(layer_id).copied();
+    let handle = restore_snapshot_into(engine, existing, snap_id)?;
+    engine.layer_masks.insert(layer_id.to_string(), handle);
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
 }

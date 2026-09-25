@@ -909,96 +909,31 @@ pub fn read_composite_thumbnail(engine: &Engine, max_size: u32) -> Vec<u8> {
 /// Returns an opaque u32 handle. No pixel readback, no compression.
 #[wasm_bindgen(js_name = "snapshotLayerGpu")]
 pub fn snapshot_layer_gpu(engine: &mut Engine, layer_id: &str) -> u32 {
-    let src_handle = match engine.inner.layer_textures.get(layer_id) {
-        Some(&h) => h,
-        None => return u32::MAX,
-    };
-    let (w, h) = engine.inner.texture_pool.get_size(src_handle).unwrap_or((0, 0));
-    if w == 0 || h == 0 {
-        return u32::MAX;
-    }
-
-    let dst_handle = match engine.inner.texture_pool.acquire(&engine.inner.gl, w, h) {
-        Ok(h) => h,
-        Err(_) => return u32::MAX,
-    };
-
-    let (dst_tex, src_tex) = match (
-        engine.inner.texture_pool.get(dst_handle).cloned(),
-        engine.inner.texture_pool.get(src_handle).cloned(),
-    ) {
-        (Some(d), Some(s)) => (d, s),
-        _ => return u32::MAX,
-    };
-
-    engine.inner.render_to_texture(&dst_tex, w as i32, h as i32, |eng| {
-        eng.gl.use_program(Some(&eng.shaders.blit.program));
-        eng.gl.active_texture(web_sys::WebGl2RenderingContext::TEXTURE0);
-        eng.gl.bind_texture(web_sys::WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-        if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") {
-            eng.gl.uniform1i(Some(&loc), 0);
-        }
-        eng.draw_fullscreen_quad();
-    });
-
-    let snap = crate::engine::SnapshotTexture { handle: dst_handle, width: w, height: h };
-    let id = if let Some(free_id) = engine.inner.snapshot_free_list.pop() {
-        engine.inner.snapshot_textures[free_id as usize] = Some(snap);
-        free_id
-    } else {
-        let id = engine.inner.snapshot_textures.len() as u32;
-        engine.inner.snapshot_textures.push(Some(snap));
-        id
-    };
-    id
+    layer_manager::snapshot_layer(&mut engine.inner, layer_id)
 }
 
 /// Restore a layer's GPU texture from a snapshot (GPU blit, ~1ms).
 #[wasm_bindgen(js_name = "restoreFromGpuSnapshot")]
 pub fn restore_from_gpu_snapshot(engine: &mut Engine, layer_id: &str, snap_id: u32) -> Result<(), JsError> {
-    let snap = engine.inner.snapshot_textures.get(snap_id as usize)
-        .and_then(|s| s.as_ref())
-        .ok_or_else(|| JsError::new("Invalid snapshot handle"))?;
+    layer_manager::restore_layer_from_snapshot(&mut engine.inner, layer_id, snap_id)
+        .map_err(|e| JsError::new(&e))
+}
 
-    let sw = snap.width;
-    let sh = snap.height;
-    let snap_handle = snap.handle;
+/// Snapshot a layer's mask texture by blitting to a new texture. Shares
+/// the snapshot store (and handle space) with `snapshotLayerGpu`, so the
+/// handle is freed with `releaseGpuSnapshot`. Returns `u32::MAX` when the
+/// layer has no mask on the engine.
+#[wasm_bindgen(js_name = "snapshotMaskGpu")]
+pub fn snapshot_mask_gpu(engine: &mut Engine, layer_id: &str) -> u32 {
+    layer_manager::snapshot_mask(&mut engine.inner, layer_id)
+}
 
-    let dst_handle = if let Some(&existing) = engine.inner.layer_textures.get(layer_id) {
-        let (dw, dh) = engine.inner.texture_pool.get_size(existing).unwrap_or((0, 0));
-        if dw != sw || dh != sh {
-            engine.inner.texture_pool.release(existing);
-            let new_h = engine.inner.texture_pool.acquire(&engine.inner.gl, sw, sh)
-                .map_err(|e| JsError::new(&e))?;
-            engine.inner.layer_textures.insert(layer_id.to_string(), new_h);
-            new_h
-        } else {
-            existing
-        }
-    } else {
-        let new_h = engine.inner.texture_pool.acquire(&engine.inner.gl, sw, sh)
-            .map_err(|e| JsError::new(&e))?;
-        engine.inner.layer_textures.insert(layer_id.to_string(), new_h);
-        new_h
-    };
-
-    let dst_tex = engine.inner.texture_pool.get(dst_handle).cloned()
-        .ok_or_else(|| JsError::new("Dst texture not found"))?;
-    let src_tex = engine.inner.texture_pool.get(snap_handle).cloned()
-        .ok_or_else(|| JsError::new("Snapshot texture not found"))?;
-
-    engine.inner.render_to_texture(&dst_tex, sw as i32, sh as i32, |eng| {
-        eng.gl.use_program(Some(&eng.shaders.blit.program));
-        eng.gl.active_texture(web_sys::WebGl2RenderingContext::TEXTURE0);
-        eng.gl.bind_texture(web_sys::WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-        if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") {
-            eng.gl.uniform1i(Some(&loc), 0);
-        }
-        eng.draw_fullscreen_quad();
-    });
-
-    engine.inner.mark_layer_dirty(layer_id);
-    Ok(())
+/// Restore a layer's mask texture from a snapshot taken by
+/// `snapshotMaskGpu` (GPU blit, no upload).
+#[wasm_bindgen(js_name = "restoreMaskFromGpuSnapshot")]
+pub fn restore_mask_from_gpu_snapshot(engine: &mut Engine, layer_id: &str, snap_id: u32) -> Result<(), JsError> {
+    layer_manager::restore_mask_from_snapshot(&mut engine.inner, layer_id, snap_id)
+        .map_err(|e| JsError::new(&e))
 }
 
 /// Release a snapshot texture, freeing GPU memory.
