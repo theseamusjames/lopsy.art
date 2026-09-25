@@ -113,7 +113,7 @@ export function breadcrumbJsonLd(crumbs: Breadcrumb[]): Record<string, unknown> 
 function renderSiteHeader(): string {
   return `<header class="site-header">
   <div class="site-header-inner">
-    <a class="brand" href="/"><img src="/favicon.png" alt="" width="24" height="24">${SITE_NAME}</a>
+    <a class="brand" href="/" aria-label="${SITE_NAME} home">LOPSY</a>
     <nav class="site-nav" aria-label="Site">
       <a href="${TUTORIALS_PATH}">Tutorials</a>
       <a class="button" href="/">Open Lopsy</a>
@@ -149,6 +149,7 @@ export function renderDocument(ctx: RenderContext, options: DocumentOptions): st
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="preload" href="/fonts/inter-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jersey-10-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
 <meta property="og:site_name" content="${SITE_NAME}">
 <meta property="og:type" content="${options.ogType}">
 <meta property="og:title" content="${title}">
