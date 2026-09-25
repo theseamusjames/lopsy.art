@@ -102,6 +102,7 @@ vi.mock('../../app/tool-settings-store', () => ({
 }));
 
 import { handleFillDown } from './fill-interaction';
+import { isMaskDataStale, materializeAllMaskData, __resetMaskDataSyncForTest } from '../../app/mask-data-sync';
 import type { InteractionContext } from '../../app/interactions/interaction-types';
 
 function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContext {
@@ -128,6 +129,7 @@ function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContex
 
 beforeEach(() => {
   engine = { __engine: 'mock' };
+  __resetMaskDataSyncForTest();
   floodFill.mockReset();
   applyFillToLayer.mockClear();
   readLayerPixelsForFill.mockReset();
@@ -306,7 +308,7 @@ describe('bucket fill — quick mask mode', () => {
 });
 
 describe('bucket fill — layer mask mode', () => {
-  it('uploads the current mask, fills it black, and reads the result back', () => {
+  it('uploads the current mask, fills it black, and defers the readback', () => {
     uiState.maskMode = 'layerMask';
     const maskData = new Uint8ClampedArray(DOC_W * DOC_H).fill(255);
     editorState.document.layers = [
@@ -331,11 +333,34 @@ describe('bucket fill — layer mask mode', () => {
     expect(fm[3]).toBe(5);
     expect(fm[6]).toBe(1);
 
+    // #780: no synchronous glReadPixels on pointer-down — the read is
+    // queued until the GPU has drained the fill's work.
+    expect(readMaskTexture).not.toHaveBeenCalled();
+    expect(editorState.updateLayerMaskData).not.toHaveBeenCalled();
+    expect(isMaskDataStale('layer-1')).toBe(true);
+
+    materializeAllMaskData();
+    expect(readMaskTexture).toHaveBeenCalledTimes(1);
     expect(editorState.updateLayerMaskData).toHaveBeenCalledTimes(1);
     const [layerId, newMask] = editorState.updateLayerMaskData.mock.calls[0]! as [string, Uint8ClampedArray];
     expect(layerId).toBe('layer-1');
     expect(newMask[0]).toBe(127);
+    expect(isMaskDataStale('layer-1')).toBe(false);
     expect(floodFill).not.toHaveBeenCalled();
+  });
+
+  it('does not re-upload a mask the engine already holds', () => {
+    uiState.maskMode = 'layerMask';
+    const maskData = new Uint8ClampedArray(DOC_W * DOC_H).fill(255);
+    editorState.document.layers = [
+      { id: 'layer-1', x: 0, y: 0, mask: { data: maskData, width: DOC_W, height: DOC_H } },
+    ];
+    handleFillDown(makeCtx());
+    handleFillDown(makeCtx());
+    // The second fill paints over the GPU result of the first; uploading
+    // the (still unrefreshed) JS bytes again would wipe that result.
+    expect(uploadLayerMask).toHaveBeenCalledTimes(1);
+    expect(fillMask).toHaveBeenCalledTimes(2);
   });
 
   it('falls back to a normal bucket fill when the layer has no mask', () => {

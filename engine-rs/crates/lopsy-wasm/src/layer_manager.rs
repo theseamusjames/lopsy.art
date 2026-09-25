@@ -1,6 +1,7 @@
 use web_sys::WebGl2RenderingContext;
 use lopsy_core::layer::LayerDesc;
 use crate::engine::EngineInner;
+use crate::gpu::texture_pool::TextureHandle;
 
 pub fn add_layer(engine: &mut EngineInner, desc: LayerDesc) -> Result<(), String> {
     // Only create a texture if the layer doesn't already have one.
@@ -390,38 +391,18 @@ pub fn scale_texture(
     let new_gl_tex = engine.texture_pool.get(new_tex).cloned()
         .ok_or("New texture not found")?;
 
-    // Ensure LINEAR filtering for bilinear interpolation
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-        WebGl2RenderingContext::LINEAR as i32,
-    );
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-        WebGl2RenderingContext::LINEAR as i32,
-    );
-
-    // Blit src → new with bilinear sampling
+    // Bilinear resample in premultiplied space (see premul_sample.glsl).
     engine.gl.disable(WebGl2RenderingContext::BLEND);
     engine.render_to_texture(&new_gl_tex, new_w as i32, new_h as i32, |engine| {
-        engine.gl.use_program(Some(&engine.shaders.blit.program));
+        let shader = &engine.shaders.blit_resample;
+        engine.gl.use_program(Some(&shader.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
+        if let Some(loc) = shader.location(&engine.gl, "u_tex") {
             engine.gl.uniform1i(Some(&loc), 0);
         }
         engine.draw_fullscreen_quad();
     });
-
-    // Restore NEAREST filtering on old texture before release
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-        WebGl2RenderingContext::NEAREST as i32,
-    );
 
     // Replace old texture
     engine.texture_pool.release(tex_handle);
@@ -1170,6 +1151,102 @@ pub fn drop_float(engine: &mut EngineInner) {
     engine.float_transform_mode = 0;
 }
 
+/// Copy `src` (src_w×src_h) into a freshly acquired, transparent dst_w×dst_h
+/// texture with its top-left at (off_x, off_y). Returns the new handle.
+fn copy_into_larger_texture(
+    engine: &mut EngineInner,
+    src_handle: TextureHandle,
+    src_w: u32,
+    src_h: u32,
+    dst_w: u32,
+    dst_h: u32,
+    off_x: i32,
+    off_y: i32,
+) -> Result<TextureHandle, String> {
+    let src_tex = engine.texture_pool.get(src_handle).cloned()
+        .ok_or("Source texture not found")?;
+    let dst_handle = engine.texture_pool.acquire(&engine.gl, dst_w, dst_h)?;
+    let dst_tex = engine.texture_pool.get(dst_handle).cloned()
+        .ok_or("Destination texture not found")?;
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&dst_tex, dst_w as i32, dst_h as i32, |engine| {
+        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        engine.gl.viewport(off_x, off_y, src_w as i32, src_h as i32);
+        engine.gl.use_program(Some(&engine.shaders.blit.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
+            engine.gl.uniform1i(Some(&loc), 0);
+        }
+        engine.draw_fullscreen_quad();
+    });
+    Ok(dst_handle)
+}
+
+/// Grow the active float — its lifted pixels, its base, and the layer texture
+/// it composites into — so the float's buffer covers the document-space rect
+/// (x, y, w, h) as well as everything it already covers.
+///
+/// The float buffer starts as the union of the canvas and the layer's content.
+/// A rotate or scale can carry pixels past that (a wide bar near the bottom
+/// edge turned upright), and composite_float_transformed only writes inside
+/// the fw×fh buffer, so those pixels were silently cut off and lost for good
+/// when the float was dropped (#818). Callers pass the transformed content
+/// bounds before compositing.
+///
+/// Returns the layer's new [x, y, w, h], or None when no growth was needed.
+pub fn ensure_float_covers(
+    engine: &mut EngineInner,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> Result<Option<[i32; 4]>, String> {
+    let layer_id = engine.float_layer_id.clone().ok_or("No float layer ID")?;
+    let float_handle = engine.float_texture.ok_or("No float texture")?;
+    let base_handle = engine.float_base_texture.ok_or("No float base")?;
+    let layer_handle = *engine.layer_textures.get(&layer_id)
+        .ok_or("Layer texture not found")?;
+
+    let (fx, fy, fw, fh) = (engine.float_layer_x, engine.float_layer_y, engine.float_width, engine.float_height);
+    let min_x = fx.min(x);
+    let min_y = fy.min(y);
+    let max_x = (fx + fw as i32).max(x + w as i32);
+    let max_y = (fy + fh as i32).max(y + h as i32);
+    let new_w = (max_x - min_x) as u32;
+    let new_h = (max_y - min_y) as u32;
+    if min_x == fx && min_y == fy && new_w == fw && new_h == fh {
+        return Ok(None);
+    }
+
+    let off_x = fx - min_x;
+    let off_y = fy - min_y;
+    let new_float = copy_into_larger_texture(engine, float_handle, fw, fh, new_w, new_h, off_x, off_y)?;
+    let new_base = copy_into_larger_texture(engine, base_handle, fw, fh, new_w, new_h, off_x, off_y)?;
+    let new_layer = copy_into_larger_texture(engine, layer_handle, fw, fh, new_w, new_h, off_x, off_y)?;
+
+    engine.texture_pool.release(float_handle);
+    engine.texture_pool.release(base_handle);
+    engine.texture_pool.release(layer_handle);
+    engine.float_texture = Some(new_float);
+    engine.float_base_texture = Some(new_base);
+    engine.layer_textures.insert(layer_id.clone(), new_layer);
+    engine.float_layer_x = min_x;
+    engine.float_layer_y = min_y;
+    engine.float_width = new_w;
+    engine.float_height = new_h;
+    if let Some(desc) = engine.layer_stack.iter_mut().find(|l| l.id == layer_id) {
+        desc.x = min_x;
+        desc.y = min_y;
+        desc.width = new_w;
+        desc.height = new_h;
+    }
+
+    engine.mark_layer_dirty(&layer_id);
+    Ok(Some([min_x, min_y, new_w as i32, new_h as i32]))
+}
+
 /// Flip the float texture in-place and composite onto the layer.
 /// The flip is applied within the float texture's own coordinate space.
 pub fn flip_float(
@@ -1332,21 +1409,9 @@ fn composite_float_transformed(
     let tmp_tex = engine.texture_pool.get(tmp).cloned()
         .ok_or("Tmp texture not found")?;
 
-    // Step 1: Render transformed float → tmp (fw×fh, correctly sized)
-    // Enable linear filtering on float texture for smooth transforms
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-        WebGl2RenderingContext::LINEAR as i32,
-    );
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-        WebGl2RenderingContext::LINEAR as i32,
-    );
-
+    // Step 1: Render transformed float → tmp (fw×fh, correctly sized).
+    // The transform shaders filter bilinearly in premultiplied space via
+    // texelFetch, so the float texture's own filter mode doesn't matter.
     engine.gl.disable(WebGl2RenderingContext::BLEND);
     engine.render_to_texture(&tmp_tex, fw as i32, fh as i32, |engine| {
         engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
@@ -1417,20 +1482,6 @@ fn composite_float_transformed(
         }
         engine.draw_fullscreen_quad();
     });
-
-    // Restore nearest filtering on float texture
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-        WebGl2RenderingContext::NEAREST as i32,
-    );
-    engine.gl.tex_parameteri(
-        WebGl2RenderingContext::TEXTURE_2D,
-        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-        WebGl2RenderingContext::NEAREST as i32,
-    );
 
     // Step 2: Blend tmp (transformed float, fw×fh) onto base → layer texture.
     // Both tmp and base_tex are fw×fh, so v_uv correctly addresses them.
@@ -1654,4 +1705,131 @@ pub fn read_clipboard_pixels(engine: &EngineInner) -> Result<Vec<u8>, String> {
     engine.gl.delete_framebuffer(Some(&fbo));
 
     Ok(pixels)
+}
+
+// ============================================================
+// GPU snapshot store — shared by layer and mask undo snapshots
+// ============================================================
+
+/// Sentinel returned when there is nothing to snapshot.
+pub const EMPTY_SNAPSHOT: u32 = u32::MAX;
+
+fn blit_texture(
+    engine: &EngineInner,
+    src: &web_sys::WebGlTexture,
+    dst: &web_sys::WebGlTexture,
+    w: u32,
+    h: u32,
+) {
+    engine.render_to_texture(dst, w as i32, h as i32, |eng| {
+        eng.gl.use_program(Some(&eng.shaders.blit.program));
+        eng.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        eng.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src));
+        if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") {
+            eng.gl.uniform1i(Some(&loc), 0);
+        }
+        eng.draw_fullscreen_quad();
+    });
+}
+
+/// Blit `src_handle` into a freshly pooled texture and register it in the
+/// snapshot store. Returns the snapshot id, or `EMPTY_SNAPSHOT` when the
+/// source is empty or allocation fails.
+pub fn snapshot_texture(engine: &mut EngineInner, src_handle: TextureHandle) -> u32 {
+    let (w, h) = engine.texture_pool.get_size(src_handle).unwrap_or((0, 0));
+    if w == 0 || h == 0 {
+        return EMPTY_SNAPSHOT;
+    }
+    let dst_handle = match engine.texture_pool.acquire(&engine.gl, w, h) {
+        Ok(h) => h,
+        Err(_) => return EMPTY_SNAPSHOT,
+    };
+    let (dst_tex, src_tex) = match (
+        engine.texture_pool.get(dst_handle).cloned(),
+        engine.texture_pool.get(src_handle).cloned(),
+    ) {
+        (Some(d), Some(s)) => (d, s),
+        _ => {
+            engine.texture_pool.release(dst_handle);
+            return EMPTY_SNAPSHOT;
+        }
+    };
+    blit_texture(engine, &src_tex, &dst_tex, w, h);
+
+    let snap = crate::engine::SnapshotTexture { handle: dst_handle, width: w, height: h };
+    if let Some(free_id) = engine.snapshot_free_list.pop() {
+        engine.snapshot_textures[free_id as usize] = Some(snap);
+        free_id
+    } else {
+        let id = engine.snapshot_textures.len() as u32;
+        engine.snapshot_textures.push(Some(snap));
+        id
+    }
+}
+
+/// Blit snapshot `snap_id` into `existing`, re-acquiring a texture at the
+/// snapshot's size when the dimensions differ. Returns the handle that now
+/// holds the restored content so the caller can store it back in its map.
+fn restore_snapshot_into(
+    engine: &mut EngineInner,
+    existing: Option<TextureHandle>,
+    snap_id: u32,
+) -> Result<TextureHandle, String> {
+    let snap = engine.snapshot_textures.get(snap_id as usize)
+        .and_then(|s| s.as_ref())
+        .ok_or_else(|| "Invalid snapshot handle".to_string())?;
+    let (sw, sh, snap_handle) = (snap.width, snap.height, snap.handle);
+
+    let dst_handle = match existing {
+        Some(h) if engine.texture_pool.get_size(h) == Some((sw, sh)) => h,
+        Some(h) => {
+            engine.texture_pool.release(h);
+            engine.texture_pool.acquire(&engine.gl, sw, sh)?
+        }
+        None => engine.texture_pool.acquire(&engine.gl, sw, sh)?,
+    };
+
+    let dst_tex = engine.texture_pool.get(dst_handle).cloned()
+        .ok_or_else(|| "Dst texture not found".to_string())?;
+    let src_tex = engine.texture_pool.get(snap_handle).cloned()
+        .ok_or_else(|| "Snapshot texture not found".to_string())?;
+    blit_texture(engine, &src_tex, &dst_tex, sw, sh);
+    Ok(dst_handle)
+}
+
+/// Snapshot a layer's pixel texture into the snapshot store.
+pub fn snapshot_layer(engine: &mut EngineInner, layer_id: &str) -> u32 {
+    match engine.layer_textures.get(layer_id) {
+        Some(&h) => snapshot_texture(engine, h),
+        None => EMPTY_SNAPSHOT,
+    }
+}
+
+/// Restore a layer's pixel texture from a snapshot.
+pub fn restore_layer_from_snapshot(engine: &mut EngineInner, layer_id: &str, snap_id: u32) -> Result<(), String> {
+    let existing = engine.layer_textures.get(layer_id).copied();
+    let handle = restore_snapshot_into(engine, existing, snap_id)?;
+    engine.layer_textures.insert(layer_id.to_string(), handle);
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
+/// Snapshot a layer's mask texture into the snapshot store (GPU→GPU blit,
+/// no readback). Returns `EMPTY_SNAPSHOT` when the layer has no mask on
+/// the engine.
+pub fn snapshot_mask(engine: &mut EngineInner, layer_id: &str) -> u32 {
+    match engine.layer_masks.get(layer_id) {
+        Some(&h) => snapshot_texture(engine, h),
+        None => EMPTY_SNAPSHOT,
+    }
+}
+
+/// Restore a layer's mask texture from a snapshot, creating the mask
+/// texture when the layer has none on the engine.
+pub fn restore_mask_from_snapshot(engine: &mut EngineInner, layer_id: &str, snap_id: u32) -> Result<(), String> {
+    let existing = engine.layer_masks.get(layer_id).copied();
+    let handle = restore_snapshot_into(engine, existing, snap_id)?;
+    engine.layer_masks.insert(layer_id.to_string(), handle);
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
 }

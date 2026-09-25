@@ -5,6 +5,8 @@ import {
   buildCss2PreviewUrl,
   extractFirstFontUrl,
   extractFontUrlPreferLatin,
+  previewFontFamily,
+  renameCss2FontFamily,
 } from './font-urls';
 
 function fontFaceBlock(subset: string | null, url: string, unicodeRange: string): string {
@@ -115,5 +117,29 @@ describe('extractFontUrlPreferLatin', () => {
 
   it('returns null for CSS without any font URLs', () => {
     expect(extractFontUrlPreferLatin('/* latin */ .foo { color: red; }')).toBeNull();
+  });
+});
+
+describe('previewFontFamily / renameCss2FontFamily', () => {
+  it('gives the preview subset a family name distinct from the real family', () => {
+    expect(previewFontFamily('IM Fell English')).not.toBe('IM Fell English');
+    expect(previewFontFamily('IM Fell English')).toContain('IM Fell English');
+  });
+
+  it('renames every @font-face of the family to the alias', () => {
+    const css = [
+      "@font-face { font-family: 'Sunflower'; font-weight: 400; src: url(a.woff2); }",
+      '@font-face { font-family: "Sunflower"; font-weight: 700; src: url(b.woff2); }',
+      '@font-face { font-family: Sunflower; src: url(c.woff2); }',
+    ].join('\n');
+    const renamed = renameCss2FontFamily(css, 'Sunflower', 'Sunflower Lopsy Preview');
+    expect(renamed.match(/font-family: 'Sunflower Lopsy Preview';/g)).toHaveLength(3);
+    expect(renamed).toContain('url(a.woff2)');
+    expect(renamed).toContain('font-weight: 700');
+  });
+
+  it('leaves other families untouched', () => {
+    const css = "@font-face { font-family: 'Sunflower Mono'; src: url(a.woff2); }";
+    expect(renameCss2FontFamily(css, 'Sunflower', 'X')).toBe(css);
   });
 });

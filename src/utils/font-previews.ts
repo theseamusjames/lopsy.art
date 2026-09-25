@@ -23,6 +23,7 @@
  */
 
 import { FONT_PREVIEWS_INDEX } from './font-previews-index';
+import { previewFontFamily } from './font-urls';
 
 const BLOB_URL = '/font-previews.bin';
 
@@ -58,6 +59,10 @@ export function prefetchFontPreviewsBlob(): void {
 /**
  * Register `family`'s preview subset with `document.fonts` and resolve once
  * the browser has it loaded, so text using that family re-renders in-face.
+ * The face is registered under `previewFontFamily(family)`, never the real
+ * family name: the subset only holds the glyphs of the family's name, and
+ * sharing the name would let it stand in for the full font elsewhere (e.g.
+ * Canvas2D path text).
  * Resolves null when the family isn't baked (call sites should fall back to
  * the css2 network path) or when the blob failed to fetch.
  */
@@ -76,7 +81,7 @@ export function loadPreviewFace(family: string): Promise<FontFace | null> {
     try {
       const blob = await fetchBlob();
       const bytes = new Uint8Array(blob, slice.offset, slice.length);
-      const face = new FontFace(family, bytes);
+      const face = new FontFace(previewFontFamily(family), bytes);
       await face.load();
       document.fonts.add(face);
       return face;

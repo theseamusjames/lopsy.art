@@ -49,9 +49,9 @@ const ALLOWLIST = {
   'src/app/store/actions/resize-canvas.test.ts': 1,
   'src/app/store/actions/resize-image.test.ts': 1,
   'src/app/store/clipboard-image-match.test.ts': 1,
-  'src/app/store/history-metadata-mask-flush.test.ts': 2,  // #782 mask-read-queue fixtures
+  'src/app/store/history-metadata-mask-flush.test.ts': 1,  // #782/#780 mask-read-queue fixture
   'src/engine-wasm/engine-sync.test.ts': 7,            // +4: uploadLayerMaskIfChanged fixtures (#780)
-  'src/engine-wasm/sync-layers.test.ts': 11,           // +3: fixture buffers for #734 mask-readback seed tests
+  'src/engine-wasm/sync-layers.test.ts': 13,           // +3: #734 mask-readback seed tests, +2: #780 mask gate tests
   'src/engine-wasm/sync-selection.test.ts': 5,         // #763 seedSelectionMaskRef fixtures
   'src/engine-wasm/sync-state.test.ts': 11,            // +4: #781 preserveContentRefs fixtures
   'src/engine/pixel-data-manager.test.ts': 2,
@@ -62,6 +62,8 @@ const ALLOWLIST = {
   'src/io/project-save.test.ts': 1,
   'src/panels/AdjustmentsPanel/histogram-compute.test.ts': 2,
   'src/app/mask-read-queue.test.ts': 14,                     // +4: rAF quiescence tests for #760
+  'src/app/mask-data-sync.test.ts': 1,                       // #780 fixture mask
+  'src/app/store/mask-history.test.ts': 1,                   // #780 fixture mask
   'src/panels/LayerPanel/thumbnail-read-queue.test.ts': 1,   // fixture buffer for mocked readback
   'src/selection/selection-to-path.test.ts': 2,
   'src/selection/selection.test.ts': 17,
@@ -71,7 +73,7 @@ const ALLOWLIST = {
   'src/tools/brush/brush-texture-settings.test.ts': 1,
   'src/tools/crop/perspective-crop-interaction.test.ts': 1,
   'src/tools/crop/perspective-crop.test.ts': 3,             // see #441 (delete with prod file)
-  'src/tools/fill/fill-interaction.test.ts': 3,
+  'src/tools/fill/fill-interaction.test.ts': 4,              // +1: #780 no-re-upload fixture
   'src/tools/gradient/gradient-interaction.test.ts': 3,        // #732 mask-mode fixture buffer
   'src/tools/magnetic-lasso/magnetic-lasso-strategy.test.ts': 4,
   'src/tools/magnetic-lasso/magnetic-lasso.test.ts': 2,
@@ -81,7 +83,7 @@ const ALLOWLIST = {
   'src/tools/quick-select/quick-select-interaction.test.ts': 3,
   'src/tools/quick-select/quick-select.test.ts': 3,
   'src/tools/text/text-interaction.test.ts': 3,               // #757 drops the JS RGBA fixtures
-  'src/tools/transform/transform.test.ts': 2,
+  'src/tools/transform/transform.test.ts': 4,         // +2: #818 off-canvas float growth fixtures
   'src/tools/wand/wand-strategy.test.ts': 4,
   'src/utils/bmp-encoder.test.ts': 2,
 
@@ -99,7 +101,8 @@ const ALLOWLIST = {
   'src/app/interactions/move-handlers.ts': 5,
   'src/app/interactions/quick-mask-move.ts': 1,
   'src/app/store/actions/add-layer-mask.ts': 1,
-  'src/app/useCanvasInteraction.ts': 2,                      // mask-buffer copies (nudge path)
+  'src/app/useCanvasInteraction.ts': 1,                      // mask-buffer copies (nudge path)
+  'src/app/mask-data-sync.ts': 1,                            // lazy mask readback wrap (#780)
   'src/tools/fill/fill-interaction.ts': 1,                   // bucket fill writes mask data
 
   // ──────────────────────────────────────────────────────────────────────

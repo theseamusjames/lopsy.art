@@ -438,6 +438,9 @@ export function syncLayers(
     } else if (tracked.masksOnEngine.has(layer.id)) {
       removeLayerMask(engine, layer.id);
       tracked.masksOnEngine.delete(layer.id);
+      // Without this, re-adding the same mask (redo of Add Mask, undo of
+      // Remove Mask) looks already-uploaded and the engine stays maskless.
+      tracked.maskDataRefs.delete(layer.id);
     }
   }
 

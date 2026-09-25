@@ -17,7 +17,7 @@ import { getEngine } from '../engine-wasm/engine-state';
 import { readLayerAsImageData } from '../engine-wasm/gpu-pixel-access';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
 import { flushLayerSync } from '../engine-wasm/engine-sync';
-import { flushAllPendingMaskReads } from '../app/mask-read-queue';
+import { materializeAllMaskData } from '../app/mask-data-sync';
 import { notifyError, describeError } from '../app/notifications-store';
 import type { Layer } from '../types/layers';
 import type { DocumentColorMode } from '../types/color-mode';
@@ -221,9 +221,9 @@ export async function saveProject(): Promise<void> {
 
   try {
     finalizePendingStrokeGlobal();
-    // #756: mask readbacks are deferred; drain any pending one so the
-    // saved file contains the current mask, not the pre-stroke state.
-    flushAllPendingMaskReads();
+    // Mask readbacks are lazy (#756, #780); read back any mask whose JS
+    // copy lags the GPU so the file contains the current mask.
+    materializeAllMaskData();
     const state = useEditorStore.getState();
     flushLayerSync(state);
 

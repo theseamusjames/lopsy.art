@@ -121,7 +121,13 @@ export function loadLocalFontToEngine(family: string): Promise<boolean> {
     const current = getEngine();
     if (!current) return false;
     for (const bytes of buffers) {
-      if (bytes) loadFontData(current, bytes);
+      if (!bytes) continue;
+      try {
+        loadFontData(current, bytes);
+      } catch {
+        // The engine rejects bytes with no parseable face; the family's
+        // other faces can still load.
+      }
     }
     return isFontLoaded(current, family);
   })().finally(() => inflightEngineLoads.delete(family));

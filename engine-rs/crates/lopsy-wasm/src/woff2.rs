@@ -7,14 +7,14 @@
 use std::io::Read;
 
 const WOFF2_SIGNATURE: u32 = 0x774F4632; // 'wOF2'
-const SFNT_VERSION_TRUETYPE: u32 = 0x00010000;
-#[allow(dead_code)]
-const SFNT_VERSION_CFF: u32 = 0x4F54544F; // 'OTTO'
 
 // Known WOFF2 table tags
 const TAG_GLYF: u32 = 0x676C7966;
 const TAG_LOCA: u32 = 0x6C6F6361;
 const TAG_HEAD: u32 = 0x68656164;
+const TAG_HHEA: u32 = 0x68686561;
+const TAG_HMTX: u32 = 0x686D7478;
+const TAG_MAXP: u32 = 0x6D617870;
 
 #[derive(Debug, Clone)]
 struct TableEntry {
@@ -95,63 +95,77 @@ fn write_u32_be(buf: &mut Vec<u8>, v: u32) {
     buf.push(v as u8);
 }
 
-/// Parse known table tag from flags byte (bits 0-5).
+/// WOFF2 known table tags (spec section 5.1, Table 3). A table directory
+/// entry's flags byte stores the index into this list in bits 0-5; index 63
+/// means an arbitrary 4-byte tag follows.
+const KNOWN_TAGS: [[u8; 4]; 63] = [
+    *b"cmap",
+    *b"head",
+    *b"hhea",
+    *b"hmtx",
+    *b"maxp",
+    *b"name",
+    *b"OS/2",
+    *b"post",
+    *b"cvt ",
+    *b"fpgm",
+    *b"glyf",
+    *b"loca",
+    *b"prep",
+    *b"CFF ",
+    *b"VORG",
+    *b"EBDT",
+    *b"EBLC",
+    *b"gasp",
+    *b"hdmx",
+    *b"kern",
+    *b"LTSH",
+    *b"PCLT",
+    *b"VDMX",
+    *b"vhea",
+    *b"vmtx",
+    *b"BASE",
+    *b"GDEF",
+    *b"GPOS",
+    *b"GSUB",
+    *b"EBSC",
+    *b"JSTF",
+    *b"MATH",
+    *b"CBDT",
+    *b"CBLC",
+    *b"COLR",
+    *b"CPAL",
+    *b"SVG ",
+    *b"sbix",
+    *b"acnt",
+    *b"avar",
+    *b"bdat",
+    *b"bloc",
+    *b"bsln",
+    *b"cvar",
+    *b"fdsc",
+    *b"feat",
+    *b"fmtx",
+    *b"fvar",
+    *b"gvar",
+    *b"hsty",
+    *b"just",
+    *b"lcar",
+    *b"mort",
+    *b"morx",
+    *b"opbd",
+    *b"prop",
+    *b"trak",
+    *b"Zapf",
+    *b"Silf",
+    *b"Glat",
+    *b"Gloc",
+    *b"Feat",
+    *b"Sill",
+];
+
 fn tag_from_flags_index(index: u8) -> Option<u32> {
-    // WOFF2 known tags table (spec Table 3)
-    const KNOWN_TAGS: &[u32] = &[
-        0x636D6170, // cmap
-        0x68656164, // head
-        0x68686561, // hhea
-        0x686D7478, // hmtx
-        0x6D617870, // maxp
-        0x6E616D65, // name
-        0x4F532F32, // OS/2
-        0x706F7374, // post
-        0x63767420, // cvt
-        0x6670676D, // fpgm
-        0x676C7966, // glyf
-        0x6C6F6361, // loca
-        0x70726570, // prep
-        0x43464620, // CFF
-        0x56485141, // VHEA
-        0x766D7478, // vmtx
-        0x42415345, // BASE
-        0x47444546, // GDEF
-        0x47504F53, // GPOS
-        0x47535542, // GSUB
-        0x45425343, // EBSC
-        0x4A535446, // JSTF
-        0x4D415448, // MATH
-        0x43424454, // CBDT
-        0x43424C43, // CBLC
-        0x434F4C52, // COLR
-        0x43504154, // CPAT (CPAL)
-        0x53564720, // SVG
-        0x73626978, // sbix
-        0x61636E74, // acnt
-        0x61766172, // avar
-        0x62646174, // bdat
-        0x626C6F63, // bloc
-        0x62736C6E, // bsln
-        0x63686172, // char
-        0x66656174, // feat
-        0x67766172, // gvar
-        0x6866656D, // hsty? skip for now
-        0x6A757374, // just
-        0x6B657278, // kerx
-        0x6D6F7274, // mort
-        0x6D6F7278, // morx
-        0x6F706264, // opbd
-        0x70726F70, // prop
-        0x74726B68, // trak
-        0x7A617066, // zapf
-        0x53696C66, // Silf
-        0x47617420, // Glat
-        0x476C6F63, // Gloc
-        0x46656174, // Feat
-        0x53696C6C, // Sill
-    ];
-    KNOWN_TAGS.get(index as usize).copied()
+    KNOWN_TAGS.get(index as usize).map(|t| u32::from_be_bytes(*t))
 }
 
 /// Decode WOFF2 bytes to SFNT (OpenType) bytes.
@@ -245,66 +259,113 @@ pub fn decode_woff2(woff2_data: &[u8]) -> Option<Vec<u8>> {
         }
     }
 
-    // Now build the SFNT output.
-    // For most CFF fonts, tables have no transform (transform_version = 0 for all).
-    // For TrueType, glyf/loca may have transforms that we need to invert.
-    let _is_truetype = sfnt_version == SFNT_VERSION_TRUETYPE || sfnt_version == 0x74727565; // 'true'
-
-    // Reconstruct table data (apply inverse transforms if needed)
     let mut table_data: Vec<(u32, Vec<u8>)> = Vec::with_capacity(tables.len());
-    let mut head_index_hint: Option<usize> = None;
-    let mut glyf_table_idx: Option<usize> = None;
-    let mut loca_table_idx: Option<usize> = None;
-    let mut glyf_transformed: Option<Vec<u8>> = None;
+    let mut glyf_transformed: Option<&[u8]> = None;
+    let mut hmtx_transformed: Option<&[u8]> = None;
 
-    for (i, entry) in tables.iter().enumerate() {
+    for entry in &tables {
         let raw = &decompressed[entry.data_start..entry.data_start + entry.data_len];
         let transform_version = (entry.flags >> 6) & 0x03;
-
-        if entry.tag == TAG_HEAD {
-            head_index_hint = Some(table_data.len());
+        match entry.tag {
+            // Placeholders filled in once glyf is reconstructed.
+            TAG_GLYF if entry.transform_length.is_some() => glyf_transformed = Some(raw),
+            TAG_LOCA if entry.transform_length.is_some() => {}
+            TAG_HMTX if transform_version == 1 => hmtx_transformed = Some(raw),
+            _ if entry.transform_length.is_some() => return None,
+            _ => {
+                table_data.push((entry.tag, raw.to_vec()));
+                continue;
+            }
         }
-
-        let data = match entry.tag {
-            TAG_GLYF if entry.transform_length.is_some() => {
-                glyf_table_idx = Some(table_data.len());
-                glyf_transformed = Some(raw.to_vec());
-                vec![]
-            }
-            TAG_LOCA if entry.transform_length.is_some() => {
-                loca_table_idx = Some(table_data.len());
-                vec![]
-            }
-            _ if entry.transform_length.is_some() && transform_version != 0 => {
-                raw.to_vec()
-            }
-            _ => raw.to_vec(),
-        };
-
-        table_data.push((entry.tag, data));
-        let _ = (head_index_hint, i);
+        table_data.push((entry.tag, Vec::new()));
     }
 
-    if let (Some(gi), Some(transformed)) = (glyf_table_idx, glyf_transformed) {
-        if let Some((glyf, loca, idx_fmt)) = reconstruct_glyf_loca(&transformed) {
-            table_data[gi].1 = glyf;
-            if let Some(li) = loca_table_idx {
-                table_data[li].1 = loca;
-            } else {
-                table_data.push((TAG_LOCA, loca));
-            }
-            if let Some(hi) = head_index_hint {
-                let head = &mut table_data[hi].1;
-                if head.len() >= 52 {
-                    head[50] = (idx_fmt >> 8) as u8;
-                    head[51] = idx_fmt as u8;
-                }
-            }
+    if let Some(transformed) = glyf_transformed {
+        let (glyf, loca, idx_fmt) = reconstruct_glyf_loca(transformed)?;
+        let head = table_mut(&mut table_data, TAG_HEAD)?;
+        if head.len() < 52 {
+            return None;
+        }
+        head[50] = (idx_fmt >> 8) as u8;
+        head[51] = idx_fmt as u8;
+        *table_mut(&mut table_data, TAG_GLYF)? = glyf;
+        match table_mut(&mut table_data, TAG_LOCA) {
+            Some(slot) => *slot = loca,
+            None => table_data.push((TAG_LOCA, loca)),
         }
     }
 
-    // Assemble SFNT binary
+    if let Some(transformed) = hmtx_transformed {
+        let hmtx = reconstruct_hmtx(transformed, &table_data)?;
+        *table_mut(&mut table_data, TAG_HMTX)? = hmtx;
+    }
+
     build_sfnt(sfnt_version, &table_data)
+}
+
+fn table_mut(tables: &mut [(u32, Vec<u8>)], tag: u32) -> Option<&mut Vec<u8>> {
+    tables.iter_mut().find(|(t, _)| *t == tag).map(|(_, d)| d)
+}
+
+fn table_ref(tables: &[(u32, Vec<u8>)], tag: u32) -> Option<&[u8]> {
+    tables.iter().find(|(t, _)| *t == tag).map(|(_, d)| d.as_slice())
+}
+
+/// Invert the WOFF2 hmtx transform (spec section 5.4): left side bearings the
+/// encoder dropped are equal to each glyph's xMin in the (reconstructed) glyf.
+fn reconstruct_hmtx(transformed: &[u8], tables: &[(u32, Vec<u8>)]) -> Option<Vec<u8>> {
+    let hhea = table_ref(tables, TAG_HHEA)?;
+    let maxp = table_ref(tables, TAG_MAXP)?;
+    let head = table_ref(tables, TAG_HEAD)?;
+    let glyf = table_ref(tables, TAG_GLYF)?;
+    let loca = table_ref(tables, TAG_LOCA)?;
+    let num_h_metrics = u16::from_be_bytes([*hhea.get(34)?, *hhea.get(35)?]) as usize;
+    let num_glyphs = u16::from_be_bytes([*maxp.get(4)?, *maxp.get(5)?]) as usize;
+    let long_loca = u16::from_be_bytes([*head.get(50)?, *head.get(51)?]) != 0;
+    if num_h_metrics == 0 || num_h_metrics > num_glyphs {
+        return None;
+    }
+
+    let x_min = |gid: usize| -> Option<i16> {
+        let (start, end) = if long_loca {
+            let at = |i: usize| -> Option<usize> {
+                Some(u32::from_be_bytes([*loca.get(i * 4)?, *loca.get(i * 4 + 1)?, *loca.get(i * 4 + 2)?, *loca.get(i * 4 + 3)?]) as usize)
+            };
+            (at(gid)?, at(gid + 1)?)
+        } else {
+            let at = |i: usize| -> Option<usize> {
+                Some(u16::from_be_bytes([*loca.get(i * 2)?, *loca.get(i * 2 + 1)?]) as usize * 2)
+            };
+            (at(gid)?, at(gid + 1)?)
+        };
+        if end <= start {
+            return Some(0);
+        }
+        Some(i16::from_be_bytes([*glyf.get(start + 2)?, *glyf.get(start + 3)?]))
+    };
+
+    let mut pos = 0;
+    let flags = read_u8(transformed, &mut pos)?;
+    let mut advances = Vec::with_capacity(num_h_metrics);
+    for _ in 0..num_h_metrics {
+        advances.push(read_u16_be(transformed, &mut pos)?);
+    }
+    let mut lsbs = Vec::with_capacity(num_glyphs);
+    for gid in 0..num_h_metrics {
+        lsbs.push(if flags & 1 != 0 { x_min(gid)? } else { read_u16_be(transformed, &mut pos)? as i16 });
+    }
+    for gid in num_h_metrics..num_glyphs {
+        lsbs.push(if flags & 2 != 0 { x_min(gid)? } else { read_u16_be(transformed, &mut pos)? as i16 });
+    }
+
+    let mut out = Vec::with_capacity(num_h_metrics * 4 + (num_glyphs - num_h_metrics) * 2);
+    for (gid, lsb) in lsbs.iter().enumerate() {
+        if gid < num_h_metrics {
+            write_u16_be(&mut out, advances[gid]);
+        }
+        out.extend_from_slice(&lsb.to_be_bytes());
+    }
+    Some(out)
 }
 
 /// Returns true if the given (tag, transform_version) has a transform_length field.
@@ -353,8 +414,8 @@ fn decode_triplet(flag: usize, data: &[u8], pos: &mut usize) -> Option<(i32, i32
         let d1 = *data.get(*pos + 1)? as i32;
         let d2 = *data.get(*pos + 2)? as i32;
         *pos += 3;
-        let dx = with_sign(flag & 1 != 0, 1 + (d0 << 4) + (d1 >> 4));
-        let dy = with_sign((flag >> 1) & 1 != 0, 1 + ((d1 & 0x0F) << 8) + d2);
+        let dx = with_sign(flag & 1 != 0, (d0 << 4) + (d1 >> 4));
+        let dy = with_sign((flag >> 1) & 1 != 0, ((d1 & 0x0F) << 8) + d2);
         Some((dx, dy))
     } else {
         let d0 = *data.get(*pos)? as i32;
@@ -362,8 +423,8 @@ fn decode_triplet(flag: usize, data: &[u8], pos: &mut usize) -> Option<(i32, i32
         let d2 = *data.get(*pos + 2)? as i32;
         let d3 = *data.get(*pos + 3)? as i32;
         *pos += 4;
-        let dx = with_sign(flag & 1 != 0, 1 + (d0 << 8) + d1);
-        let dy = with_sign((flag >> 1) & 1 != 0, 1 + (d2 << 8) + d3);
+        let dx = with_sign(flag & 1 != 0, (d0 << 8) + d1);
+        let dy = with_sign((flag >> 1) & 1 != 0, (d2 << 8) + d3);
         Some((dx, dy))
     }
 }
@@ -371,15 +432,7 @@ fn decode_triplet(flag: usize, data: &[u8], pos: &mut usize) -> Option<(i32, i32
 /// Reconstruct standard glyf and loca tables from WOFF2 transformed glyf data.
 /// Returns `(glyf_bytes, loca_bytes, index_format)`.
 fn reconstruct_glyf_loca(transformed: &[u8]) -> Option<(Vec<u8>, Vec<u8>, u16)> {
-    if transformed.len() < 36 {
-        return None;
-    }
-
     let mut pos = 0;
-    let version = read_u32_be(transformed, &mut pos)?;
-    if version != 0 {
-        return None;
-    }
     let _reserved = read_u16_be(transformed, &mut pos)?;
     let option_flags = read_u16_be(transformed, &mut pos)?;
     let num_glyphs = read_u16_be(transformed, &mut pos)? as usize;
@@ -397,6 +450,12 @@ fn reconstruct_glyf_loca(transformed: &[u8]) -> Option<(Vec<u8>, Vec<u8>, u16)> 
     if pos + total > transformed.len() {
         return None;
     }
+    let has_overlap_bitmap = (option_flags & 1) != 0;
+    let overlap_bitmap: &[u8] = if has_overlap_bitmap {
+        transformed.get(pos + total..pos + total + (num_glyphs + 7) / 8)?
+    } else {
+        &[]
+    };
 
     let nc_stream = &transformed[pos..pos + nc_size];
     let np_stream = &transformed[pos + nc_size..pos + nc_size + np_size];
@@ -424,8 +483,6 @@ fn reconstruct_glyf_loca(transformed: &[u8]) -> Option<(Vec<u8>, Vec<u8>, u16)> 
     let mut co_pos: usize = 0;
     let mut bb_pos: usize = bbox_bitmap_len;
     let mut in_pos: usize = 0;
-
-    let overlap_bit = (option_flags & 1) != 0;
 
     let mut glyf = Vec::new();
     let mut offsets: Vec<u32> = Vec::with_capacity(num_glyphs + 1);
@@ -539,7 +596,7 @@ fn reconstruct_glyf_loca(transformed: &[u8]) -> Option<(Vec<u8>, Vec<u8>, u16)> 
                 if on_curves[j] {
                     flag |= 0x01;
                 }
-                if j == 0 && overlap_bit {
+                if j == 0 && has_overlap_bitmap && (overlap_bitmap[i / 8] >> (7 - (i % 8))) & 1 != 0 {
                     flag |= 0x40;
                 }
 
@@ -579,15 +636,14 @@ fn reconstruct_glyf_loca(transformed: &[u8]) -> Option<(Vec<u8>, Vec<u8>, u16)> 
             }
         } else {
             // Composite glyph (nc == -1)
-            let (x_min, y_min, x_max, y_max) = if has_bbox {
-                let xn = read_u16_be(bb_stream, &mut bb_pos)? as i16;
-                let yn = read_u16_be(bb_stream, &mut bb_pos)? as i16;
-                let xx = read_u16_be(bb_stream, &mut bb_pos)? as i16;
-                let yx = read_u16_be(bb_stream, &mut bb_pos)? as i16;
-                (xn, yn, xx, yx)
-            } else {
-                (0i16, 0i16, 0i16, 0i16)
-            };
+            // The spec requires an explicit bbox for every composite glyph.
+            if !has_bbox {
+                return None;
+            }
+            let x_min = read_u16_be(bb_stream, &mut bb_pos)? as i16;
+            let y_min = read_u16_be(bb_stream, &mut bb_pos)? as i16;
+            let x_max = read_u16_be(bb_stream, &mut bb_pos)? as i16;
+            let y_max = read_u16_be(bb_stream, &mut bb_pos)? as i16;
 
             glyf.extend_from_slice(&(-1i16).to_be_bytes());
             glyf.extend_from_slice(&x_min.to_be_bytes());
@@ -595,14 +651,14 @@ fn reconstruct_glyf_loca(transformed: &[u8]) -> Option<(Vec<u8>, Vec<u8>, u16)> 
             glyf.extend_from_slice(&x_max.to_be_bytes());
             glyf.extend_from_slice(&y_max.to_be_bytes());
 
-            let mut last_flags_offset: usize;
+            let mut has_instructions = false;
             loop {
                 if co_pos + 4 > co_stream.len() {
                     return None;
                 }
-                last_flags_offset = glyf.len();
                 let flags = u16::from_be_bytes([co_stream[co_pos], co_stream[co_pos + 1]]);
                 let more = (flags & 0x0020) != 0;
+                has_instructions |= (flags & 0x0100) != 0;
 
                 glyf.extend_from_slice(&co_stream[co_pos..co_pos + 4]);
                 co_pos += 4;
@@ -629,12 +685,8 @@ fn reconstruct_glyf_loca(transformed: &[u8]) -> Option<(Vec<u8>, Vec<u8>, u16)> 
                 }
             }
 
-            let instr_len = read_255_uint16(gl_stream, &mut gl_pos)? as usize;
-            if instr_len > 0 {
-                let old = u16::from_be_bytes([glyf[last_flags_offset], glyf[last_flags_offset + 1]]);
-                let patched = old | 0x0100;
-                glyf[last_flags_offset] = (patched >> 8) as u8;
-                glyf[last_flags_offset + 1] = patched as u8;
+            if has_instructions {
+                let instr_len = read_255_uint16(gl_stream, &mut gl_pos)? as usize;
                 glyf.extend_from_slice(&(instr_len as u16).to_be_bytes());
                 if in_pos + instr_len > in_stream.len() {
                     return None;
@@ -668,69 +720,42 @@ fn reconstruct_glyf_loca(transformed: &[u8]) -> Option<(Vec<u8>, Vec<u8>, u16)> 
     Some((glyf, loca, index_format))
 }
 
-/// Build an SFNT binary from a list of (tag, data) pairs.
-fn build_sfnt(sfnt_version: u32, tables: &[(u32, Vec<u8>)]) -> Option<Vec<u8>> {
-    // Filter out zero-length tables (loca placeholder, etc.)
-    let valid_tables: Vec<&(u32, Vec<u8>)> = tables.iter()
-        .filter(|(_, d)| !d.is_empty())
-        .collect();
+/// Build an SFNT binary from a list of (tag, data) pairs. Zero-length
+/// tables (e.g. a transformed loca placeholder) are dropped; records and
+/// data are both written in tag order as the OpenType spec requires.
+pub(crate) fn build_sfnt(sfnt_version: u32, tables: &[(u32, Vec<u8>)]) -> Option<Vec<u8>> {
+    let mut sorted: Vec<&(u32, Vec<u8>)> = tables.iter().filter(|(_, d)| !d.is_empty()).collect();
+    sorted.sort_by_key(|(tag, _)| *tag);
 
-    let n = valid_tables.len() as u16;
-    let search_range = (n.next_power_of_two() / 2) * 16;
-    let entry_selector = (n.next_power_of_two() / 2).trailing_zeros() as u16;
+    let n = u16::try_from(sorted.len()).ok()?;
+    let max_pow2 = if n == 0 { 0 } else { 1u16 << (15 - n.leading_zeros()) };
+    let search_range = max_pow2 * 16;
+    let entry_selector = if max_pow2 == 0 { 0 } else { max_pow2.trailing_zeros() as u16 };
     let range_shift = n * 16 - search_range;
 
-    let table_directory_size = 12 + n as usize * 16;
-    let mut offsets: Vec<u32> = Vec::with_capacity(n as usize);
-    let mut current_offset = table_directory_size as u32;
-
-    for (_, data) in &valid_tables {
-        offsets.push(current_offset);
-        current_offset += (data.len() as u32 + 3) & !3; // 4-byte aligned
-    }
-
-    let total_size = current_offset as usize;
-    let mut out = Vec::with_capacity(total_size);
-
-    // SFNT header
+    let mut out = Vec::new();
     write_u32_be(&mut out, sfnt_version);
     write_u16_be(&mut out, n);
     write_u16_be(&mut out, search_range);
     write_u16_be(&mut out, entry_selector);
     write_u16_be(&mut out, range_shift);
 
-    // Table records (sorted by tag for spec compliance)
-    let mut sorted: Vec<(usize, u32, u32)> = valid_tables.iter().enumerate()
-        .zip(offsets.iter())
-        .map(|((i, (tag, _)), off)| (i, *tag, *off))
-        .collect();
-    sorted.sort_by_key(|(_, tag, _)| *tag);
-
-    for &(i, tag, offset) in &sorted {
-        let data = &valid_tables[i].1;
-        let checksum = compute_checksum(data);
-        let length = data.len() as u32;
-
-        write_u32_be(&mut out, tag);
-        write_u32_be(&mut out, checksum);
-        write_u32_be(&mut out, offset);
-        write_u32_be(&mut out, length);
+    let mut offset = 12 + sorted.len() * 16;
+    for (tag, data) in &sorted {
+        write_u32_be(&mut out, *tag);
+        write_u32_be(&mut out, compute_checksum(data));
+        write_u32_be(&mut out, u32::try_from(offset).ok()?);
+        write_u32_be(&mut out, data.len() as u32);
+        offset += (data.len() + 3) & !3;
     }
 
-    // Table data (in sorted order)
-    for &(i, _, _) in &sorted {
-        let data = &valid_tables[i].1;
+    for (_, data) in &sorted {
         out.extend_from_slice(data);
-        // Pad to 4-byte boundary
         let pad = (4 - (data.len() % 4)) % 4;
-        for _ in 0..pad {
-            out.push(0);
-        }
+        out.extend(std::iter::repeat(0u8).take(pad));
     }
 
-    // Fix head table checkSumAdjustment
     fix_head_checksum(&mut out);
-
     Some(out)
 }
 
@@ -796,4 +821,163 @@ fn fix_head_checksum(sfnt: &mut [u8]) {
 /// Check if data starts with the WOFF2 magic signature.
 pub fn is_woff2(data: &[u8]) -> bool {
     data.len() >= 4 && data[0] == b'w' && data[1] == b'O' && data[2] == b'F' && data[3] == b'2'
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn tag(t: &[u8; 4]) -> u32 {
+        u32::from_be_bytes(*t)
+    }
+
+    fn write_base128(buf: &mut Vec<u8>, mut v: u32) {
+        let mut bytes = vec![(v & 0x7F) as u8];
+        v >>= 7;
+        while v > 0 {
+            bytes.push(((v & 0x7F) as u8) | 0x80);
+            v >>= 7;
+        }
+        bytes.reverse();
+        buf.extend_from_slice(&bytes);
+    }
+
+    /// Encode `tables` as a WOFF2 file with every table stored untransformed
+    /// (null transform for glyf/loca), using the known-tag index when the tag
+    /// has one.
+    fn encode_woff2(sfnt_version: u32, tables: &[(u32, Vec<u8>)]) -> Vec<u8> {
+        let mut dir = Vec::new();
+        let mut payload = Vec::new();
+        for (t, data) in tables {
+            let index = KNOWN_TAGS.iter().position(|k| u32::from_be_bytes(*k) == *t);
+            let transform_bits = if *t == TAG_GLYF || *t == TAG_LOCA { 3u8 << 6 } else { 0 };
+            match index {
+                Some(i) => dir.push(i as u8 | transform_bits),
+                None => {
+                    dir.push(63 | transform_bits);
+                    write_u32_be(&mut dir, *t);
+                }
+            }
+            write_base128(&mut dir, data.len() as u32);
+            payload.extend_from_slice(data);
+        }
+        let mut compressed = Vec::new();
+        {
+            let mut w = brotli::CompressorWriter::new(&mut compressed, 4096, 5, 22);
+            w.write_all(&payload).unwrap();
+        }
+        let mut out = Vec::new();
+        write_u32_be(&mut out, WOFF2_SIGNATURE);
+        write_u32_be(&mut out, sfnt_version);
+        write_u32_be(&mut out, 0); // length (unused by decoder)
+        write_u16_be(&mut out, tables.len() as u16);
+        write_u16_be(&mut out, 0);
+        write_u32_be(&mut out, 0); // totalSfntSize
+        write_u32_be(&mut out, compressed.len() as u32);
+        write_u16_be(&mut out, 1);
+        write_u16_be(&mut out, 0);
+        for _ in 0..5 {
+            write_u32_be(&mut out, 0); // meta / private block fields
+        }
+        out.extend_from_slice(&dir);
+        out.extend_from_slice(&compressed);
+        out
+    }
+
+    fn sfnt_tables(sfnt: &[u8]) -> Vec<(u32, Vec<u8>)> {
+        let n = u16::from_be_bytes([sfnt[4], sfnt[5]]) as usize;
+        (0..n)
+            .map(|i| {
+                let r = 12 + i * 16;
+                let be = |o: usize| u32::from_be_bytes([sfnt[o], sfnt[o + 1], sfnt[o + 2], sfnt[o + 3]]);
+                let off = be(r + 8) as usize;
+                let len = be(r + 12) as usize;
+                (be(r), sfnt[off..off + len].to_vec())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn known_tag_indices_follow_the_spec_table() {
+        let expect = |i: u8, t: &[u8; 4]| assert_eq!(tag_from_flags_index(i), Some(tag(t)), "index {i}");
+        expect(0, b"cmap");
+        expect(10, b"glyf");
+        expect(13, b"CFF ");
+        expect(14, b"VORG");
+        expect(17, b"gasp");
+        expect(19, b"kern");
+        expect(23, b"vhea");
+        expect(24, b"vmtx");
+        expect(26, b"GDEF");
+        expect(27, b"GPOS");
+        expect(28, b"GSUB");
+        expect(35, b"CPAL");
+        expect(39, b"avar");
+        expect(43, b"cvar");
+        expect(47, b"fvar");
+        expect(48, b"gvar");
+        expect(57, b"Zapf");
+        expect(62, b"Sill");
+    }
+
+    #[test]
+    fn index_63_is_not_a_known_tag() {
+        assert_eq!(KNOWN_TAGS.len(), 63);
+        assert_eq!(tag_from_flags_index(63), None);
+    }
+
+    #[test]
+    fn decoded_tables_keep_their_tags_and_bytes() {
+        let tables: Vec<(u32, Vec<u8>)> = [b"gasp", b"kern", b"GDEF", b"GPOS", b"GSUB", b"fvar", b"gvar", b"HVAR"]
+            .iter()
+            .enumerate()
+            .map(|(i, t)| (tag(t), vec![i as u8 + 1; 8 + i * 4]))
+            .collect();
+        let sfnt = decode_woff2(&encode_woff2(0x0001_0000, &tables)).expect("decodes");
+        let mut decoded = sfnt_tables(&sfnt);
+        decoded.sort_by_key(|(t, _)| *t);
+        let mut expected = tables.clone();
+        expected.sort_by_key(|(t, _)| *t);
+        assert_eq!(decoded, expected);
+    }
+
+    #[test]
+    fn real_truetype_font_round_trips_through_woff2() {
+        let ttf: &[u8] = include_bytes!("fonts/Inter-Regular.ttf");
+        let tables = sfnt_tables(ttf);
+        let woff2 = encode_woff2(0x0001_0000, &tables);
+        let sfnt = decode_woff2(&woff2).expect("decodes");
+
+        let mut db = cosmic_text::fontdb::Database::new();
+        db.load_font_data(sfnt.clone());
+        let face = db.faces().next().expect("decoded font parses as a face");
+        assert!(face.families.iter().any(|(name, _)| name == "Inter"));
+
+        let mut decoded_tags: Vec<u32> = sfnt_tables(&sfnt).into_iter().map(|(t, _)| t).collect();
+        let mut original_tags: Vec<u32> = tables.iter().map(|(t, _)| *t).collect();
+        decoded_tags.sort_unstable();
+        original_tags.sort_unstable();
+        assert_eq!(decoded_tags, original_tags);
+    }
+
+    #[test]
+    fn google_fonts_woff2_with_gasp_kern_and_gsub_decodes_to_a_usable_face() {
+        // css2 latin subset of IM Fell DW Pica SC: its table directory uses
+        // known-tag indices 17 (gasp), 19 (kern) and 28 (GSUB), which the
+        // old tag table mapped to the wrong tables.
+        let woff2: &[u8] = include_bytes!("../tests/fixtures/IMFellDWPicaSC-latin.woff2");
+        let sfnt = decode_woff2(woff2).expect("decodes");
+        let tags: Vec<u32> = sfnt_tables(&sfnt).into_iter().map(|(t, _)| t).collect();
+        for t in [b"gasp", b"kern", b"GSUB", b"glyf", b"loca", b"cmap"] {
+            assert!(tags.contains(&tag(t)), "missing {}", String::from_utf8_lossy(t));
+        }
+        assert!(!tags.contains(&tag(b"sbix")));
+
+        let mut db = cosmic_text::fontdb::Database::new();
+        db.load_font_data(sfnt);
+        let face = db.faces().next().expect("decoded font parses as a face");
+        let family = &face.families[0].0;
+        assert!(family.eq_ignore_ascii_case("IM Fell DW Pica SC"), "family {family}");
+    }
 }

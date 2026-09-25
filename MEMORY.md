@@ -103,12 +103,31 @@ members already split) that `fontdb::load_font_data` parses as-is.
 ## cosmic-text has no cross-style / cross-stretch fallback
 
 `Attrs::matches` keeps only faces whose `style` and `stretch` equal the
-request exactly (weight is a sort key, not a filter), and the fallback
-iterator then runs through *other families*. So an italic-only family
-(Zapfino: fsSelection ITALIC, style name "Regular") or a condensed-only
-one (Impact: usWidthClass 3) silently renders in Inter. `text_gpu.rs`
-snaps the request to the family's available faces (`snap_face_attrs`)
-before shaping; keep that in mind before building `Attrs` anywhere else.
+request exactly, and the fallback iterator then runs through *other
+families*. So an italic-only family (Zapfino: fsSelection ITALIC, style
+name "Regular") or a condensed-only one (Impact: usWidthClass 3) silently
+renders in Inter. `text_gpu.rs` snaps the request to the family's
+available faces (`snap_face_attrs`) before shaping; keep that in mind
+before building `Attrs` anywhere else.
+
+Weight is effectively a filter too: `FontFallbackIter` only takes the
+requested family's face when `font_weight_diff == 0`, and family names
+compare case-sensitively. `set_text_content` therefore resolves the
+stored family spelling (`resolve_family_name`) and the weight
+(`resolve_weight`: exact face → static instance of a variable face →
+nearest shipped weight) first.
+
+## Variable fonts render only their default instance unless instanced
+
+cosmic-text 0.12 never applies variation coordinates (rustybuzz shaping
+and swash rasterizing both run at the default instance), and fontdb
+registers a variable face once, at its default weight — Montserrat[wght]
+is Thin (100). `variable_instance.rs` bakes a requested `wght` into a
+static TrueType (skrifa draws gvar-varied outlines, HVAR/phantom
+advances) that is registered as an extra face of the same family.
+Also: css2 WOFF2 subsets drop name ID 16, so a variable css2 file is
+named after its default instance ("Montserrat Thin"); the loader
+registers binaries under the catalog name via `loadFontDataForFamily`.
 
 
 ## Tutorials are static pages generated at build time — never add a root 404.html
@@ -119,3 +138,27 @@ same plugin serves them from memory with drafts included. Cloudflare Pages serve
 `dist/tutorials/<slug>/index.html` at `/tutorials/<slug>/` and treats the whole
 site as an SPA only because there is **no top-level `404.html`** — adding one
 would break deep links into the editor. Canonical tutorial URLs end in `/`.
+
+## Layer textures hold straight (non-premultiplied) alpha
+
+blend.glsl, composite.glsl and every layer-texture producer assume straight
+RGBA; only the in-progress brush stroke texture is premultiplied (blend
+passes `u_srcPremultiplied = 1` for it). Two things silently break this and
+show up as a dark fringe on anti-aliased edges (#815): fixed-function
+`ONE, ONE_MINUS_SRC_ALPHA` blending of a coverage-weighted colour into a
+layer, and hardware LINEAR filtering when resampling a layer (transparent
+texels are black, so their RGB bleeds in). Composite "over" in the shader
+against a copy of the destination instead, and resample with
+`samplePremulBilinear` (`//#include premul_sample`, see
+`gpu/shaders/premul_sample.glsl`). The group-adjustment scratch is also
+straight alpha — blend it with `premultiplied = false`.
+
+## E2E: prove "no GPU readback on this event" by counting readPixels
+
+`window.__wasmBridge` is an ES module namespace — wrapping its exports
+does not intercept the app's own imports. To assert that an input event
+does no synchronous GPU→CPU read, patch
+`WebGL2RenderingContext.prototype.readPixels` with a counter and bracket
+the event with a window **capture** listener (runs before the app's
+window-level pointer handlers) and a later-registered window **bubble**
+listener (runs after them). See `e2e/mask-gpu-undo-780.spec.ts`.

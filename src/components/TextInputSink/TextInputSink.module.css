@@ -1,0 +1,26 @@
+/*
+ * Invisible but focusable and laid out: the OS docks the IME candidate
+ * window at this element's caret, so it sits under the text caret instead
+ * of being display:none or off-screen.
+ */
+.sink {
+  position: absolute;
+  left: var(--sink-x);
+  top: var(--sink-y);
+  z-index: var(--z-canvas);
+  width: 1px;
+  height: var(--sink-height);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  overflow: hidden;
+  resize: none;
+  white-space: pre;
+  font-size: var(--font-size-md);
+  color: transparent;
+  background: transparent;
+  caret-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+}

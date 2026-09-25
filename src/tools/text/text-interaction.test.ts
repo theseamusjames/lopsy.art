@@ -5,6 +5,10 @@ const renderTextLayer = vi.fn((..._args: unknown[]): Float32Array => new Float32
 const renderTextLayerToTexture = vi.fn((..._args: unknown[]): Float64Array => new Float64Array(0));
 const textHitPosition = vi.fn((..._args: unknown[]): number => 0);
 const getLayerTextureDimensions = vi.fn((..._args: unknown[]): Uint32Array => new Uint32Array([200, 40]));
+const snapshotLayerGpu = vi.fn((..._args: unknown[]): number => 7);
+const restoreFromGpuSnapshot = vi.fn();
+const releaseGpuSnapshot = vi.fn();
+const uploadLayerPixels = vi.fn();
 
 vi.mock('../../engine-wasm/wasm-bridge', () => ({
   setTextLayerContent: (...args: unknown[]) => setTextLayerContent(...args),
@@ -12,6 +16,10 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
   renderTextLayerToTexture: (...args: unknown[]) => renderTextLayerToTexture(...args),
   textHitPosition: (...args: unknown[]) => textHitPosition(...args),
   getLayerTextureDimensions: (...args: unknown[]) => getLayerTextureDimensions(...args),
+  snapshotLayerGpu: (...args: unknown[]) => snapshotLayerGpu(...args),
+  restoreFromGpuSnapshot: (...args: unknown[]) => restoreFromGpuSnapshot(...args),
+  releaseGpuSnapshot: (...args: unknown[]) => releaseGpuSnapshot(...args),
+  uploadLayerPixels: (...args: unknown[]) => uploadLayerPixels(...args),
 }));
 
 let engine: { __engine: string } | null = { __engine: 'mock' };
@@ -29,6 +37,7 @@ import type { TextEditingState } from '../../app/ui-store';
 const uiState = {
   textEditing: null as TextEditingState | null,
   commitTextEditing: vi.fn(() => { uiState.textEditing = null; }),
+  cancelTextEditing: vi.fn(() => { uiState.textEditing = null; }),
   startTextEditing: vi.fn((s: TextEditingState) => { uiState.textEditing = s; }),
   updateTextEditingSelection: vi.fn((text: string, cursorPos: number, selectionAnchor: number | null) => {
     if (uiState.textEditing) uiState.textEditing = { ...uiState.textEditing, text, cursorPos, selectionAnchor };
@@ -85,6 +94,7 @@ import {
   handleTextMove,
   handleTextUp,
   commitTextEditing,
+  cancelTextEditing,
   resetTextInteractionState,
   textLayerNameFromContent,
 } from './text-interaction';
@@ -184,9 +194,15 @@ beforeEach(() => {
   textHitPosition.mockReturnValue(0);
   getLayerTextureDimensions.mockReset();
   getLayerTextureDimensions.mockReturnValue(new Uint32Array([200, 40]));
+  snapshotLayerGpu.mockReset();
+  snapshotLayerGpu.mockReturnValue(7);
+  restoreFromGpuSnapshot.mockClear();
+  releaseGpuSnapshot.mockClear();
+  uploadLayerPixels.mockClear();
   resetTextInteractionState();
   uiState.textEditing = null;
   uiState.commitTextEditing.mockClear();
+  uiState.cancelTextEditing.mockClear();
   uiState.startTextEditing.mockClear();
   uiState.updateTextEditingSelection.mockClear();
   uiState.setTextDrag.mockClear();
@@ -515,7 +531,7 @@ describe('commitTextEditing', () => {
     expect(rt[2]).toBe(30);
     expect(rt[3]).toBe(40);
 
-    expect(editorState.pushHistory).toHaveBeenCalledWith('Text');
+    expect(editorState.pushHistory).toHaveBeenCalledWith('Text', undefined);
     expect(ts.addRecentColor).toHaveBeenCalledWith({ r: 255, g: 128, b: 0, a: 1 });
     expect(editorState.updateTextLayerProperties).toHaveBeenCalledWith(
       'text-1',
@@ -552,7 +568,7 @@ describe('commitTextEditing', () => {
       'text-1',
       expect.objectContaining({ x: 12, y: 34 }),
     );
-    expect(editorState.pushHistory).toHaveBeenCalledWith('Text');
+    expect(editorState.pushHistory).toHaveBeenCalledWith('Text', undefined);
   });
 
   it('skips the WASM render for path-bound text and pins it to the origin', () => {
@@ -631,6 +647,70 @@ describe('text down — caret + selection while editing', () => {
     handleTextMove(state, { x: 70, y: 50 });
     handleTextUp(state, { x: 70, y: 50 });
     expect(editorState.addTextLayer).not.toHaveBeenCalled();
+  });
+});
+
+describe('pre-edit history snapshot (#813)', () => {
+  function reEdit(layer: TextLayer): void {
+    editorState.document.layers = [layer];
+    handleTextDown(makeCtx({ canvasPos: { x: 110, y: 60 } }));
+    expect(uiState.textEditing).not.toBeNull();
+  }
+
+  it('captures the layer texture when re-editing starts, before any keystroke renders', () => {
+    reEdit(makeTextLayer());
+    expect(snapshotLayerGpu).toHaveBeenCalledWith(engine, 'text-1');
+    expect(renderTextLayerToTexture).not.toHaveBeenCalled();
+  });
+
+  it('commit pushes the pre-edit layer and texture as the history "before" state', () => {
+    const original = makeTextLayer({ text: 'Hello', x: 100, y: 50 });
+    reEdit(original);
+    uiState.textEditing = { ...uiState.textEditing!, text: 'Hello World' };
+    // The live preview moved the layer while editing.
+    editorState.document.layers = [{ ...original, x: 97, y: 44 }];
+    commitTextEditing();
+    expect(editorState.pushHistory).toHaveBeenCalledWith('Text', { layer: original, gpuHandle: 7 });
+    expect(releaseGpuSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('a new layer commits with the freshly added (empty) layer as its before state', () => {
+    snapshotLayerGpu.mockReturnValue(0xFFFFFFFF);
+    handleTextUp(makeState({ startPoint: { x: 40, y: 40 } }), { x: 40, y: 40 });
+    const added = editorState.addTextLayer.mock.calls[0]![0] as TextLayer;
+    editorState.document.layers = [added];
+    uiState.textEditing = { ...uiState.textEditing!, text: 'HELLO' };
+    commitTextEditing();
+    expect(editorState.pushHistory).toHaveBeenCalledWith('Text', { layer: added, gpuHandle: 0xFFFFFFFF });
+  });
+
+  it('cancel restores the pre-edit texture and descriptor, then frees the copy', () => {
+    const original = makeTextLayer();
+    reEdit(original);
+    cancelTextEditing();
+    expect(uiState.cancelTextEditing).toHaveBeenCalled();
+    expect(restoreFromGpuSnapshot).toHaveBeenCalledWith(engine, 'text-1', 7);
+    expect(releaseGpuSnapshot).toHaveBeenCalledWith(engine, 7);
+    expect(editorState.updateTextLayerProperties).toHaveBeenCalledWith('text-1', original);
+    expect(editorState.removeLayer).not.toHaveBeenCalled();
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
+  });
+
+  it('cancel on a new layer removes it and frees the copy', () => {
+    handleTextUp(makeState({ startPoint: { x: 40, y: 40 } }), { x: 40, y: 40 });
+    const added = editorState.addTextLayer.mock.calls[0]![0] as TextLayer;
+    cancelTextEditing();
+    expect(editorState.removeLayer).toHaveBeenCalledWith(added.id);
+    expect(releaseGpuSnapshot).toHaveBeenCalledWith(engine, 7);
+    expect(restoreFromGpuSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('clearing all text on a re-edit restores the pre-edit glyphs without history', () => {
+    reEdit(makeTextLayer());
+    uiState.textEditing = { ...uiState.textEditing!, text: '  ' };
+    commitTextEditing();
+    expect(restoreFromGpuSnapshot).toHaveBeenCalledWith(engine, 'text-1', 7);
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
   });
 });
 

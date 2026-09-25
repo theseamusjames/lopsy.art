@@ -93,6 +93,35 @@ export function wordAt(text: string, pos: number): [number, number] {
   return [start, end];
 }
 
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff;
+}
+
+/**
+ * Offset one code point before `pos`. Steps over a whole surrogate pair so a
+ * caret move or deletion never splits an astral character such as an emoji.
+ */
+export function prevCodePointOffset(text: string, pos: number): number {
+  if (pos <= 0) return 0;
+  if (pos >= 2 && isLowSurrogate(text.charCodeAt(pos - 1)) && isHighSurrogate(text.charCodeAt(pos - 2))) {
+    return pos - 2;
+  }
+  return pos - 1;
+}
+
+/** Offset one code point after `pos` (see prevCodePointOffset). */
+export function nextCodePointOffset(text: string, pos: number): number {
+  if (pos >= text.length) return text.length;
+  if (pos + 1 < text.length && isHighSurrogate(text.charCodeAt(pos)) && isLowSurrogate(text.charCodeAt(pos + 1))) {
+    return pos + 2;
+  }
+  return pos + 1;
+}
+
 function collapsed(text: string, cursorPos: number): TextEditState {
   return { text, cursorPos, selectionAnchor: null, preferredX: null };
 }
@@ -118,15 +147,16 @@ export function deleteBackward(state: TextEditState): TextEditState {
   if (hasSelection(state)) return deleteSelection(state);
   const { text, cursorPos } = state;
   if (cursorPos <= 0) return { ...state, selectionAnchor: null };
-  const newText = text.slice(0, cursorPos - 1) + text.slice(cursorPos);
-  return collapsed(newText, cursorPos - 1);
+  const start = prevCodePointOffset(text, cursorPos);
+  const newText = text.slice(0, start) + text.slice(cursorPos);
+  return collapsed(newText, start);
 }
 
 export function deleteForward(state: TextEditState): TextEditState {
   if (hasSelection(state)) return deleteSelection(state);
   const { text, cursorPos } = state;
   if (cursorPos >= text.length) return { ...state, selectionAnchor: null };
-  const newText = text.slice(0, cursorPos) + text.slice(cursorPos + 1);
+  const newText = text.slice(0, cursorPos) + text.slice(nextCodePointOffset(text, cursorPos));
   return collapsed(newText, cursorPos);
 }
 
@@ -149,7 +179,7 @@ function moveLeft(state: TextEditState, shift: boolean): TextEditState {
     const [start] = selectionRange(state)!;
     return collapsed(state.text, start);
   }
-  return moveTo(state, state.cursorPos - 1, shift);
+  return moveTo(state, prevCodePointOffset(state.text, state.cursorPos), shift);
 }
 
 function moveRight(state: TextEditState, shift: boolean): TextEditState {
@@ -157,7 +187,7 @@ function moveRight(state: TextEditState, shift: boolean): TextEditState {
     const [, end] = selectionRange(state)!;
     return collapsed(state.text, end);
   }
-  return moveTo(state, state.cursorPos + 1, shift);
+  return moveTo(state, nextCodePointOffset(state.text, state.cursorPos), shift);
 }
 
 /**
@@ -235,9 +265,60 @@ export function processTextKey(
 
   // Single printable character (ignore other meta/ctrl combos — clipboard etc.
   // are handled by the caller).
-  if (key.length === 1 && !meta) {
+  if (isPrintableKey(key) && !meta) {
     return insertText(state, key);
   }
 
   return null;
+}
+
+/**
+ * True when a KeyboardEvent `key` is one printable character. Counted in code
+ * points, not UTF-16 units, so an astral character such as an emoji (two
+ * units) still qualifies while named keys ("Enter", "Dead", "Process") don't.
+ */
+export function isPrintableKey(key: string): boolean {
+  return [...key].length === 1;
+}
+
+export interface KeyEventLike {
+  key: string;
+  isComposing: boolean;
+  keyCode: number;
+}
+
+/**
+ * True for a keydown that belongs to an IME composition. Such keys (including
+ * Backspace/Enter/arrows while the candidate window is open) are the IME's to
+ * handle; the committed text arrives through composition/input events instead.
+ * Browsers flag these with `isComposing`, or with key "Process" / keyCode 229
+ * (Chrome on Windows before compositionstart, Safari right after compositionend).
+ */
+export function isCompositionKeyEvent(e: KeyEventLike): boolean {
+  return e.isComposing || e.key === 'Process' || e.keyCode === 229;
+}
+
+/** Normalize platform line endings in inserted or pasted text to '\n'. */
+export function normalizeInsertedText(raw: string): string {
+  return raw.replace(/\r\n?/g, '\n');
+}
+
+/**
+ * Insert text delivered outside the keydown path (IME commit, emoji picker,
+ * `insertText`, paste), replacing any selection.
+ */
+export function insertInputText(state: TextEditState, raw: string): TextEditState {
+  const chars = normalizeInsertedText(raw);
+  if (chars === '') return state;
+  return insertText(state, chars);
+}
+
+/**
+ * The buffer while an IME composition is in progress: the composition string
+ * provisionally inserted into `base` (the state at compositionstart). Each
+ * update replaces the previous preview; an empty string (a cancelled
+ * composition) yields `base` unchanged, selection included.
+ */
+export function applyComposition(base: TextEditState, composition: string): TextEditState {
+  return insertInputText(base, composition);
 }

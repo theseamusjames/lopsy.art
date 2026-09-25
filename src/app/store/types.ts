@@ -49,6 +49,18 @@ export interface SparseLayerEntry {
  * - `pixels`: full snapshot with GPU texture handles. Actual textures
  *   live on the GPU — snapshots are just blits (~1ms), no readback.
  */
+/**
+ * One layer mask's entry in a pixel history snapshot: a GPU snapshot
+ * handle (`snapshotMaskGpu`) plus whether the snapshot's own
+ * `layer.mask.data` lagged behind that GPU copy when it was taken
+ * (a lazy readback was still outstanding). Restoring a stale entry
+ * schedules a fresh readback so the JS bytes catch up (#780).
+ */
+export interface MaskSnapshotEntry {
+  readonly handle: number;
+  readonly isDataStale: boolean;
+}
+
 export type HistorySnapshot =
   | {
       readonly kind: 'metadata';
@@ -64,6 +76,8 @@ export type HistorySnapshot =
       selection: SelectionData;
       label: string;
       gpuSnapshots: Map<string, number>;
+      /** Layer id → mask snapshot, for every layer that has a mask. */
+      maskSnapshots: ReadonlyMap<string, MaskSnapshotEntry>;
       paths: readonly StoredPath[];
       selectedPathId: string | null;
     };
@@ -126,6 +140,7 @@ export interface EditorState {
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
+  dropLayer: (layerId: string, target: import('./actions/drop-layer').LayerDropTarget) => void;
   updateLayerPosition: (id: string, x: number, y: number) => void;
   alignLayer: (edge: AlignEdge) => void;
   fitActiveLayerToCanvas: () => void;
@@ -198,7 +213,7 @@ export interface EditorState {
   undoBy: (steps: number) => void;
   /** Batched redo — see `undoBy`. */
   redoBy: (steps: number) => void;
-  pushHistory: (label?: string) => void;
+  pushHistory: (label?: string, before?: import('./layer-gpu-capture').LayerHistoryBefore) => void;
   pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => void;
   pushHistoryMetadata: (label: string) => void;
   markClean: () => void;

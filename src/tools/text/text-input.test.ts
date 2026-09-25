@@ -13,6 +13,13 @@ import {
   lineStart,
   lineEnd,
   processTextKey,
+  isPrintableKey,
+  isCompositionKeyEvent,
+  normalizeInsertedText,
+  insertInputText,
+  applyComposition,
+  prevCodePointOffset,
+  nextCodePointOffset,
   type TextEditState,
   type TextGeometry,
   type KeyModifiers,
@@ -210,5 +217,81 @@ describe('moveVertical', () => {
   it('snaps to line end when already on the last line', () => {
     const result = moveVertical(st('ab\ncd', 4), 'down', geometry, false);
     expect(result.cursorPos).toBe(5); // end of "cd"
+  });
+});
+
+describe('non-BMP and IME input (#803)', () => {
+  const EMOJI = '\u{1F600}';
+
+  it('treats a single astral code point as printable', () => {
+    expect(EMOJI.length).toBe(2);
+    expect(isPrintableKey(EMOJI)).toBe(true);
+    expect(isPrintableKey('a')).toBe(true);
+    expect(isPrintableKey('Enter')).toBe(false);
+    expect(isPrintableKey('Dead')).toBe(false);
+    expect(isPrintableKey('Process')).toBe(false);
+    expect(isPrintableKey('')).toBe(false);
+  });
+
+  it('inserts an emoji delivered as a keydown key', () => {
+    const r = processTextKey(st('ab', 1), EMOJI, NONE)!;
+    expect(r.text).toBe(`a${EMOJI}b`);
+    expect(r.cursorPos).toBe(3);
+  });
+
+  it('flags IME keydowns by isComposing, "Process" or keyCode 229', () => {
+    expect(isCompositionKeyEvent({ key: 'a', isComposing: true, keyCode: 65 })).toBe(true);
+    expect(isCompositionKeyEvent({ key: 'Process', isComposing: false, keyCode: 229 })).toBe(true);
+    expect(isCompositionKeyEvent({ key: 'Enter', isComposing: false, keyCode: 229 })).toBe(true);
+    expect(isCompositionKeyEvent({ key: 'a', isComposing: false, keyCode: 65 })).toBe(false);
+    expect(isCompositionKeyEvent({ key: 'Backspace', isComposing: false, keyCode: 8 })).toBe(false);
+  });
+
+  it('normalizes CRLF and CR to LF', () => {
+    expect(normalizeInsertedText('a\r\nb\rc\nd')).toBe('a\nb\nc\nd');
+  });
+
+  it('insertInputText inserts committed text, replacing the selection', () => {
+    expect(insertInputText(st('ab', 1), '日本')).toEqual(st('a日本b', 3));
+    expect(insertInputText(st('hello', 1, 4), '★')).toEqual(st('h★o', 2));
+    expect(insertInputText(st('ab', 1, 2), '')).toEqual(st('ab', 1, 2));
+  });
+
+  it('applyComposition previews each update against the same base', () => {
+    const base = st('xy', 1);
+    expect(applyComposition(base, 'に').text).toBe('xにy');
+    const preview = applyComposition(base, 'にほん');
+    expect(preview.text).toBe('xにほんy');
+    expect(preview.cursorPos).toBe(4);
+    const committed = applyComposition(base, '日本');
+    expect(committed).toEqual(st('x日本y', 3));
+  });
+
+  it('a cancelled composition restores the base, selection included', () => {
+    const base = st('hello', 1, 3);
+    expect(applyComposition(base, '')).toBe(base);
+  });
+
+  it('steps over surrogate pairs', () => {
+    const t = `a${EMOJI}b`;
+    expect(prevCodePointOffset(t, 3)).toBe(1);
+    expect(prevCodePointOffset(t, 1)).toBe(0);
+    expect(prevCodePointOffset(t, 0)).toBe(0);
+    expect(nextCodePointOffset(t, 1)).toBe(3);
+    expect(nextCodePointOffset(t, 3)).toBe(4);
+    expect(nextCodePointOffset(t, 4)).toBe(4);
+  });
+
+  it('Backspace and Delete remove a whole emoji', () => {
+    const t = `a${EMOJI}b`;
+    expect(deleteBackward(st(t, 3))).toEqual(st('ab', 1));
+    expect(deleteForward(st(t, 1))).toEqual(st('ab', 1));
+  });
+
+  it('arrow keys never land inside a surrogate pair', () => {
+    const t = `a${EMOJI}b`;
+    expect(processTextKey(st(t, 3), 'ArrowLeft', NONE)!.cursorPos).toBe(1);
+    expect(processTextKey(st(t, 1), 'ArrowRight', NONE)!.cursorPos).toBe(3);
+    expect(processTextKey(st(t, 1), 'ArrowRight', SHIFT)).toEqual(st(t, 3, 1));
   });
 });

@@ -8,8 +8,10 @@ import {
   releaseGpuSnapshot,
 } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { useEditorStore } from '../editor-store';
 import type { HistorySnapshot } from '../store/types';
+import { snapshotAllMasksFresh, EMPTY_MASK_HANDLE } from '../store/mask-history';
 import type { Rect } from '../../types';
 
 interface PrefloatState {
@@ -53,6 +55,7 @@ function executePrefloat(layerId: string, mask: Uint8ClampedArray, bounds: Rect)
     document: state.document,
     selection: state.selection,
     gpuSnapshots,
+    maskSnapshots: snapshotAllMasksFresh(state.document.layers),
     label: 'Move',
     paths: state.paths,
     selectedPathId: state.selectedPathId,
@@ -62,18 +65,16 @@ function executePrefloat(layerId: string, mask: Uint8ClampedArray, bounds: Rect)
   const maskBytes = new Uint8Array(mask.buffer, mask.byteOffset, mask.byteLength);
   setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
 
-  const result = floatSelection(engine, layerId);
+  floatSelection(engine, layerId);
   compositeFloat(engine, 0, 0);
 
-  if (result.length >= 4) {
-    const newX = result[0]!;
-    const newY = result[1]!;
-    const curLayer = useEditorStore.getState().document.layers.find(l => l.id === layerId);
-    if (curLayer && (curLayer.x !== newX || curLayer.y !== newY)) {
-      useEditorStore.getState().updateLayerPosition(layerId, newX, newY);
-    }
-  }
-
+  // Floating expands the layer's texture to the document (union its
+  // content). Mirror the whole new rect — not just x/y — into the store: a
+  // cropped layer left at its old width/height kept the float's (0, 0)
+  // origin but its 120x120 size, and after ⌘D the next full resync (any
+  // undo) re-applied stale bounds to the document-sized texture, throwing
+  // the content off-canvas (#810).
+  reconcileLayerBoundsWithEngine(engine, layerId);
   clearJsPixelData(layerId);
   useEditorStore.getState().notifyRender();
 
@@ -102,6 +103,9 @@ function releasePrefloat(): void {
     if (engine && prefloat.snapshot.kind === 'pixels') {
       for (const handle of prefloat.snapshot.gpuSnapshots.values()) {
         releaseGpuSnapshot(engine, handle);
+      }
+      for (const entry of prefloat.snapshot.maskSnapshots.values()) {
+        if (entry.handle !== EMPTY_MASK_HANDLE) releaseGpuSnapshot(engine, entry.handle);
       }
     }
     prefloat = null;

@@ -6,6 +6,7 @@ import type { FontEntry, FontCategory } from '../../utils/font-catalog';
 import { extractFamilyName, loadGoogleFontPreview } from '../../utils/font-loader';
 import { mergeLocalFonts } from '../../utils/local-fonts';
 import { useLocalFontsStore, useFontEntry, loadLocalFontToDom } from '../../app/local-fonts-store';
+import { previewFontFamily } from '../../utils/font-urls';
 import { useVirtualScroll } from './useVirtualScroll';
 import styles from './FontPicker.module.css';
 
@@ -367,7 +368,7 @@ function FontPickerItem({ entry, isSelected, isHighlighted, onClick }: FontPicke
     <div className={className} onClick={onClick} role="option" aria-selected={isSelected}>
       <span
         className={styles.systemFontPreview}
-        style={{ '--preview-font': `'${entry.family}', ${entry.category}` } as React.CSSProperties}
+        style={{ '--preview-font': `'${previewFontFamily(entry.family)}', '${entry.family}', ${entry.category}` } as React.CSSProperties}
       >
         {entry.family}
       </span>

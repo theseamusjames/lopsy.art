@@ -8,10 +8,9 @@ import {
   applyBrushDabBatch as gpuBrushDabBatch,
   uploadLayerPixels,
   setSelectionMask,
-  readMaskTexture,
   restoreFromGpuSnapshot,
 } from '../engine-wasm/wasm-bridge';
-import { flushLayerSync, resetTrackedState, seedMaskDataRef, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
+import { flushLayerSync, resetTrackedState, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
 import { smoothStroke, HOLD_TIMEOUT_MS } from '../tools/smooth-line/smooth-line';
 import { mirrorBatchPoints } from '../tools/symmetry';
 import { useToolSettingsStore } from './tool-settings-store';
@@ -19,7 +18,7 @@ import { useToolSettingsStore } from './tool-settings-store';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { deferCacheLayerSnapshot } from './store/history-slice';
 import { clearPendingStroke } from './interactions/pending-stroke';
-import { requestMaskRead } from './mask-read-queue';
+import { scheduleMaskDataRefresh } from './mask-data-sync';
 import { syncLayerAfterFullSize } from './sync-layer-after-full-size';
 import type {
   InteractionState, InteractionContext,
@@ -466,7 +465,7 @@ export function useCanvasInteraction(
 
           const eng = getEngine();
           if (!eng) return;
-          resetTrackedState(eng);
+          resetTrackedState(eng, { preserveContentRefs: true });
           const smoothState = useEditorStore.getState();
           flushLayerSync(smoothState);
           syncSelection(eng, smoothState.selection);
@@ -619,37 +618,13 @@ export function useCanvasInteraction(
       useUIStore.getState().setGradientPreview(null);
     }
 
-    // Sync mask GPU texture back to store — deferred to idle (#756). The
-    // readback is a synchronous `glReadPixels` that stalls on the queued
-    // compositing work a full-canvas mask stroke leaves behind (15–20 s on
-    // a 4K canvas). Idle-time lets those queued draws drain first so the
-    // read pays only its own cost. Anything that needs `layer.mask.data`
-    // to be current (paint handlers, pushHistory, project save) flushes
-    // the queue synchronously via `flushPendingMaskRead` first.
+    // Refresh the JS copy of the mask once the GPU has drained the
+    // stroke's work (#756). Nothing on the next gesture waits for it: undo
+    // snapshots masks on the GPU (#780), and the few readers that need
+    // current bytes (save, export, duplicate) materialize on demand.
     if (state.maskMode && state.layerId) {
       const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
-      if (!isQuickMaskMode) {
-        const layerId = state.layerId;
-        requestMaskRead(
-          layerId,
-          () => {
-            const eng = getEngine();
-            if (!eng) return null;
-            const bytes = readMaskTexture(eng, layerId);
-            return bytes ? new Uint8ClampedArray(bytes) : null;
-          },
-          (seeded) => {
-            const layer = useEditorStore.getState().document.layers.find((l) => l.id === layerId);
-            if (!layer?.mask) return;
-            useEditorStore.getState().updateLayerMaskData(layerId, seeded);
-            const eng = getEngine();
-            // These bytes just came *from* the GPU — record the readback's
-            // reference as the tracked one so the next frame's syncLayers
-            // doesn't upload them straight back (#734).
-            if (eng) seedMaskDataRef(eng, layerId, seeded);
-          },
-        );
-      }
+      if (!isQuickMaskMode) scheduleMaskDataRefresh(state.layerId);
     }
 
     stateRef.current = { ...INITIAL_INTERACTION_STATE };

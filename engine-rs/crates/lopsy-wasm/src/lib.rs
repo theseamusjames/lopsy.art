@@ -18,6 +18,7 @@ pub mod overlay_renderer;
 pub mod glyph_atlas;
 pub mod text_gpu;
 pub mod woff2;
+pub mod variable_instance;
 pub mod api;
 
 use wasm_bindgen::prelude::*;

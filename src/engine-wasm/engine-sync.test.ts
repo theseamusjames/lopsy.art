@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Engine } from './wasm-bridge';
 
 // The bridge module pulls in the WASM init code at import time. Mock it before
@@ -74,13 +74,20 @@ vi.mock('./wasm-bridge', () => ({
   getRenderedTextPixels: vi.fn(() => new Uint8Array(100 * 50 * 4)),
 }));
 
+vi.mock('../tools/text/render-text-on-path', () => ({
+  renderTextOnPath: vi.fn(() => ({ pixels: new Uint8Array(4), width: 1, height: 1, x: 0, y: 0 })),
+  pathTextFont: vi.fn((layer: { fontFamily: string }) => `normal 400 32px ${layer.fontFamily}`),
+}));
+
 vi.mock('./engine-state', () => ({
   getEngine: vi.fn(() => null),
 }));
 
 const bridge = await import('./wasm-bridge');
 const sync = await import('./engine-sync');
-const { createGroupLayer, createRasterLayer } = await import('../layers/layer-model');
+const { createGroupLayer, createRasterLayer, createTextLayer } = await import('../layers/layer-model');
+const { renderTextOnPath: renderTextOnPathMock } = await import('../tools/text/render-text-on-path');
+const { resetFontFaceReadinessForTests } = await import('../utils/font-face-readiness');
 const { DEFAULT_ADJUSTMENTS } = await import('../filters/image-adjustments');
 
 // A WeakMap key just needs to be an object — Engines are class instances in
@@ -667,5 +674,92 @@ describe('syncGroupAdjustments — nested descendants are routed to the group', 
     // Sub-group descendants — these are the IDs the pre-fix code dropped
     expect(ids).toContain(leaf1.id);
     expect(ids).toContain(leaf2.id);
+  });
+});
+
+describe('path-bound text and web font loading (#823)', () => {
+  const path = {
+    id: 'p1',
+    name: 'Path',
+    anchors: [
+      { point: { x: 10, y: 50 }, handleIn: null, handleOut: null },
+      { point: { x: 190, y: 50 }, handleIn: null, handleOut: null },
+    ],
+    closed: false,
+  } as unknown as import('../types/paths').StoredPath;
+
+  const makePathText = (fontFamily: string) => ({
+    ...createTextLayer({ name: 'T', text: 'Hello', fontFamily, fontSize: 32 }),
+    pathId: 'p1',
+  });
+
+  interface FakeFonts {
+    loaded: boolean;
+    resolveLoad: (() => void) | null;
+    check: () => boolean;
+    load: () => Promise<unknown[]>;
+  }
+
+  let fonts: FakeFonts;
+
+  beforeEach(() => {
+    resetFontFaceReadinessForTests();
+    fonts = {
+      loaded: false,
+      resolveLoad: null,
+      check: () => fonts.loaded,
+      load: () =>
+        new Promise((resolve) => {
+          fonts.resolveLoad = () => {
+            fonts.loaded = true;
+            resolve([]);
+          };
+        }),
+    };
+    (globalThis as { document?: unknown }).document = { fonts };
+    vi.mocked(renderTextOnPathMock).mockClear();
+  });
+
+  afterEach(() => {
+    delete (globalThis as { document?: unknown }).document;
+  });
+
+  it('redraws path text once its font finishes loading', async () => {
+    const engine = makeFakeEngine();
+    const layer = makePathText(`'IM Fell English', serif`);
+    const onFontsSettled = vi.fn();
+    const syncOnce = () =>
+      sync.syncPathTextLayers(engine, [layer], [path], 200, 100, null, () => undefined, onFontsSettled);
+
+    syncOnce();
+    syncOnce();
+    // Unchanged layer: rendered once (with the fallback face), then cached.
+    expect(renderTextOnPathMock).toHaveBeenCalledTimes(1);
+
+    fonts.resolveLoad?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onFontsSettled).toHaveBeenCalledTimes(1);
+
+    syncOnce();
+    expect(renderTextOnPathMock).toHaveBeenCalledTimes(2);
+    syncOnce();
+    expect(renderTextOnPathMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not ask for a redraw when the font was already loaded', () => {
+    fonts.loaded = true;
+    const engine = makeFakeEngine();
+    const onFontsSettled = vi.fn();
+    sync.syncPathTextLayers(engine, [makePathText('Inter')], [path], 200, 100, null, () => undefined, onFontsSettled);
+    expect(onFontsSettled).not.toHaveBeenCalled();
+  });
+
+  it('pathTextLayersUsingFamilies picks only path-bound layers of a loaded family', () => {
+    const fell = makePathText(`'IM Fell English', serif`);
+    const other = makePathText(`'Montserrat', sans-serif`);
+    const unbound = createTextLayer({ name: 'U', text: 'x', fontFamily: `'IM Fell English', serif` });
+    expect(sync.pathTextLayersUsingFamilies([fell, other, unbound], ['im fell english'])).toEqual([fell.id]);
+    expect(sync.pathTextLayersUsingFamilies([fell, other], ['im fell english lopsy preview'])).toEqual([]);
   });
 });

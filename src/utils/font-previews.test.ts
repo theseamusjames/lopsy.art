@@ -112,7 +112,9 @@ describe('loadPreviewFace', () => {
     expect(env.fetches).toEqual(['/font-previews.bin']);
     expect(env.addedFaces.length).toBe(1);
     // The slice must be exactly Roboto's baked bytes (all 0xAA), not the whole blob.
-    expect(env.addedFaces[0]!.family).toBe('Roboto');
+    // It registers under the preview alias so the name-only subset never
+    // stands in for the full Roboto face (#823).
+    expect(env.addedFaces[0]!.family).toBe('Roboto Lopsy Preview');
     expect(env.addedFaces[0]!.bytes.length).toBe(8);
     expect([...env.addedFaces[0]!.bytes]).toEqual([0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa]);
   });
@@ -129,9 +131,9 @@ describe('loadPreviewFace', () => {
     expect(inter).not.toBeNull();
     // Two families, one network request.
     expect(env.fetches).toEqual(['/font-previews.bin']);
-    expect(env.addedFaces.map((f) => f.family).sort()).toEqual(['Inter', 'Roboto']);
+    expect(env.addedFaces.map((f) => f.family).sort()).toEqual(['Inter Lopsy Preview', 'Roboto Lopsy Preview']);
     // Inter's slice is at offset 8 and must be all 0xBB, not overlap with Roboto's 0xAA.
-    const interFace = env.addedFaces.find((f) => f.family === 'Inter')!;
+    const interFace = env.addedFaces.find((f) => f.family === 'Inter Lopsy Preview')!;
     expect(interFace.bytes.length).toBe(12);
     expect(interFace.bytes.every((b) => b === 0xbb)).toBe(true);
   });

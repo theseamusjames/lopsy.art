@@ -10,6 +10,7 @@ import {
   getCornerPositions,
   computeInverseAffineMatrix,
   getTransformedBounds,
+  getTransformedContentBounds,
   createTransformState,
 } from '../../tools/transform/transform';
 import type { TransformState } from '../../tools/transform/transform';
@@ -27,6 +28,8 @@ import {
   dropFloat,
 } from '../../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
+import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
+import { growFloatToCover } from './float-growth';
 import type { InteractionState, InteractionContext, CanvasGesture } from './interaction-types';
 import type { Point } from '../../types';
 import {
@@ -127,20 +130,12 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
 
       // floatSelection returns [new_x, new_y, fw, fh] — for text layers it
       // expands the buffer to the diagonal size to prevent rotation clipping.
-      const floatBounds = floatSelection(engine, activeLayerId);
+      floatSelection(engine, activeLayerId);
       compositeFloat(engine, 0, 0);
 
-      // Sync expanded position to Zustand so engine-sync doesn't
-      // override it. Width/height are protected engine-side (update_layer
-      // preserves them while a float is active).
-      if (floatBounds.length >= 2) {
-        const newX = floatBounds[0]!;
-        const newY = floatBounds[1]!;
-        const currentLayer = useEditorStore.getState().document.layers.find(l => l.id === activeLayerId);
-        if (currentLayer && (currentLayer.x !== newX || currentLayer.y !== newY)) {
-          useEditorStore.getState().updateLayerPosition(activeLayerId, newX, newY);
-        }
-      }
+      // Mirror the float's expanded texture rect into the store so neither
+      // engine-sync nor the post-drop store holds the pre-float bounds.
+      reconcileLayerBoundsWithEngine(engine, activeLayerId);
 
       clearJsPixelData(activeLayerId);
     }
@@ -312,6 +307,7 @@ export function handleTransformMove(
   const editorState = useEditorStore.getState();
   const engine = getEngine();
   if (engine && hasFloat(engine)) {
+    if (state.layerId) growFloatToCover(engine, state.layerId, getTransformedContentBounds(newTransform));
     const isCornerMode = newTransform.mode === 'distort' || newTransform.mode === 'perspective';
 
     if (isCornerMode) {

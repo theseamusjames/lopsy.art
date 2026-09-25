@@ -29,6 +29,8 @@ export interface LayerRowProps {
   isDropTarget: boolean;
   isDropTargetEnd: boolean;
   isDropIntoGroup: boolean;
+  /** Depth the drop indicator is indented to, when this row shows it. */
+  dropDepth: number | null;
   isEditingOpacity: boolean;
   isMaskEditActive: boolean;
   showEffectsDrawer: boolean;
@@ -52,7 +54,7 @@ export interface LayerRowProps {
 export function LayerRow({
   layer, depth, rowIndex,
   isActive, isSelected, isRootGroup, isDragging,
-  isDropTarget, isDropTargetEnd, isDropIntoGroup,
+  isDropTarget, isDropTargetEnd, isDropIntoGroup, dropDepth,
   isEditingOpacity, isMaskEditActive, showEffectsDrawer,
   onClick, onContextMenu, onGripDown,
   onToggleVisibility, onToggleGroupCollapsed, onThumbnailCmdClick,
@@ -80,8 +82,9 @@ export function LayerRow({
         ]
           .filter(Boolean)
           .join(' ')}
-        style={{ '--layer-depth': depth } as React.CSSProperties}
+        style={{ '--layer-depth': depth, '--drop-depth': dropDepth ?? depth } as React.CSSProperties}
         data-layer-id={layer.id}
+        data-drop-depth={(isDropTarget || isDropTargetEnd) && dropDepth !== null ? dropDepth : undefined}
         onClick={(e) => onClick(e, layer.id)}
         onContextMenu={(e) => onContextMenu(e, layer.id)}
       >

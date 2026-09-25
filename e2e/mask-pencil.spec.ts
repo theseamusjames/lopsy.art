@@ -85,8 +85,8 @@ test.describe('Pencil on layer mask', () => {
 
     // Pencil on a mask paints "hide" (value 0). The stroke-end readback
     // syncs the GPU mask texture into layer.mask.data.
-    const after = await getMaskStats(page);
-    expect(after.zeros).toBeGreaterThan(500);
+    // The JS copy is refreshed lazily once the GPU is idle (#760, #780).
+    await expect.poll(async () => (await getMaskStats(page)).zeros, { timeout: 30_000 }).toBeGreaterThan(500);
   });
 
   test('quick mask pencil marks selection through the same GPU path', async ({ page }) => {

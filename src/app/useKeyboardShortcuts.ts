@@ -17,10 +17,13 @@ import {
   moveVertical,
   deleteSelection,
   selectionRange,
+  isCompositionKeyEvent,
+  insertInputText,
   type TextEditState,
 } from '../tools/text/text-input';
+import { isTextInputSink } from './text-input-sink';
 import { makeTextGeometry } from '../tools/text/text-geometry';
-import { commitTextEditing } from '../tools/text/text-interaction';
+import { commitTextEditing, cancelTextEditing } from '../tools/text/text-interaction';
 import { POINTER_IDLE, POINTER_SPACE_HELD, type PointerMode } from './pointer-mode';
 
 // Text-entry input types swallow global shortcuts; other input types
@@ -111,7 +114,10 @@ export function useKeyboardShortcuts({
       // Text editing mode: route keyboard input to the text editor
       const textEditing = useUIStore.getState().textEditing;
 
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      // The text tool's input sink is a textarea too, but keys aimed at it
+      // belong to the text editor below, not to the field.
+      const isSinkTarget = isTextInputSink(e.target);
+      if (!isSinkTarget && (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
         // #817 — only swallow shortcuts when a text-entry field has focus.
         // Range sliders, checkboxes, radios etc. must not eat ⌘Z / tool keys.
         const isTextEntry = e.target instanceof HTMLTextAreaElement
@@ -124,16 +130,14 @@ export function useKeyboardShortcuts({
         }
       }
       if (textEditing) {
+        // Keys that drive an IME composition are the IME's; the composed text
+        // reaches the buffer through the input sink's composition events.
+        if (isCompositionKeyEvent(e)) return;
+
         if (e.key === 'Escape') {
           e.preventDefault();
           preferredXRef.current = null;
-          const uiState = useUIStore.getState();
-          const editorState = useEditorStore.getState();
-          if (textEditing.isNew) {
-            editorState.removeLayer(textEditing.layerId);
-          }
-          uiState.cancelTextEditing();
-          editorState.notifyRender();
+          cancelTextEditing();
           return;
         }
 
@@ -270,8 +274,10 @@ export function useKeyboardShortcuts({
     // Fired by the browser's native paste event (Cmd+V keydown does NOT preventDefault,
     // so the paste event always fires).
     const handlePaste = (e: ClipboardEvent) => {
-      if (e.target instanceof HTMLTextAreaElement) return;
-      if (e.target instanceof HTMLInputElement && isTextEntryInput(e.target)) return;
+      if (!isTextInputSink(e.target)) {
+        if (e.target instanceof HTMLTextAreaElement) return;
+        if (e.target instanceof HTMLInputElement && isTextEntryInput(e.target)) return;
+      }
 
       // Cancel the fallback timer — the paste event fired as expected.
       cancelFallbackPaste();
@@ -284,12 +290,13 @@ export function useKeyboardShortcuts({
         preferredXRef.current = null;
         const raw = e.clipboardData?.getData('text/plain') ?? '';
         if (raw) {
-          const normalized = raw.replace(/\r\n?/g, '\n');
-          const { text, cursorPos, selectionAnchor } = activeTextEdit;
-          const start = selectionAnchor !== null ? Math.min(selectionAnchor, cursorPos) : cursorPos;
-          const end = selectionAnchor !== null ? Math.max(selectionAnchor, cursorPos) : cursorPos;
-          const newText = text.slice(0, start) + normalized + text.slice(end);
-          useUIStore.getState().updateTextEditingSelection(newText, start + normalized.length, null);
+          const next = insertInputText({
+            text: activeTextEdit.text,
+            cursorPos: activeTextEdit.cursorPos,
+            selectionAnchor: activeTextEdit.selectionAnchor,
+            preferredX: null,
+          }, raw);
+          useUIStore.getState().updateTextEditingSelection(next.text, next.cursorPos, next.selectionAnchor);
           useEditorStore.getState().notifyRender();
         }
         return;

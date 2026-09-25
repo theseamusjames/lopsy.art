@@ -34,6 +34,23 @@ export function buildCss2PreviewUrl(family: string, text: string): string {
   return `https://fonts.googleapis.com/css2?family=${encodedFamily}&text=${encodedText}&display=swap`;
 }
 
+/** The family name a family's name-only preview subset is registered under. */
+export function previewFontFamily(family: string): string {
+  return `${family} Lopsy Preview`;
+}
+
+/**
+ * Rename every @font-face in a css2 response from `family` to its preview
+ * alias. A `text=` subset only carries the glyphs of the requested text; if
+ * it shared the real family name, the browser would use it (and fallback
+ * glyphs for everything it lacks) wherever that family is drawn.
+ */
+export function renameCss2FontFamily(css: string, family: string, alias: string): string {
+  return css.replace(/font-family:\s*(['"]?)([^;'"]+)\1\s*;/g, (match, _quote: string, name: string) =>
+    name.trim() === family ? `font-family: '${alias.replace(/'/g, "\\'")}';` : match,
+  );
+}
+
 /**
  * URL of the TTF that serves this family at this weight, from the paths
  * baked into the catalog at generation time (see

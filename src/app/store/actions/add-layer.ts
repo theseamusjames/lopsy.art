@@ -12,15 +12,15 @@ export function computeAddLayer(
     height: doc.height,
   });
 
-  let layers = [...doc.layers, newLayer];
-  const groupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
-  if (groupId) {
-    layers = addToGroup(layers, newLayer.id, groupId);
-  }
-
   const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId, doc.rootGroupId, doc.layers);
   const layerOrder = [...doc.layerOrder];
   layerOrder.splice(orderIdx, 0, newLayer.id);
+
+  let layers = [...doc.layers, newLayer];
+  const groupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
+  if (groupId) {
+    layers = addToGroup(layers, newLayer.id, groupId, layerOrder);
+  }
 
   return {
     document: {

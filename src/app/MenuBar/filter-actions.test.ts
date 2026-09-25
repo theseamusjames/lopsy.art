@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 
 // #771 — every filter / pattern / color-lut / mesh-warp / tilt-shift /
 // liquify entry point on the menu bar now calls syncLayerAfterFullSize
@@ -137,6 +137,14 @@ vi.mock('../../tools/liquify/liquify', () => ({
   MAX_DISP: 100,
   defaultLiquifySettings: () => ({ brushSize: 40, pressure: 0.5 }),
 }));
+
+// The first dynamic import of filter-actions pulls in a large module graph
+// and can exceed the default 5 s test timeout under a loaded full-suite run.
+// A timed-out test keeps running and leaks mock calls into the next one, so
+// warm the module once here with a generous timeout.
+beforeAll(async () => {
+  await import('./filter-actions');
+}, 60_000);
 
 beforeEach(() => {
   syncLayerAfterFullSize.mockClear();

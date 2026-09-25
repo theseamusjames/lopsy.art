@@ -1,16 +1,18 @@
 import type { HistorySnapshot, SliceCreator } from './types';
 import type { Layer } from '../../types';
+import { EMPTY_HANDLE, restoreLayerGpu, type LayerHistoryBefore } from './layer-gpu-capture';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
-  endStroke, getLayerTextureDimensions, uploadLayerPixels,
-  snapshotLayerGpu, restoreFromGpuSnapshot, releaseGpuSnapshot,
+  endStroke, getLayerTextureDimensions,
+  snapshotLayerGpu, releaseGpuSnapshot,
   hasFloat, dropFloat,
 } from '../../engine-wasm/wasm-bridge';
 import { resetTrackedState, flushLayerSync, syncLayers } from '../../engine-wasm/engine-sync';
+import { clearMaskGpuDirty, markAllMasksGpuDirty } from '../../engine-wasm/mask-gpu-dirty';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 import { cancelPrefloat } from '../interactions/prefloat';
-import { flushAllPendingMaskReads } from '../mask-read-queue';
+import { snapshotGpuMasks, withCurrentMaskStaleness, restoreMasksAfterUndo } from './mask-history';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -28,13 +30,18 @@ export interface HistorySlice {
   undoBy: (steps: number) => void;
   /** Batched redo — see `undoBy`. */
   redoBy: (steps: number) => void;
-  pushHistory: (label?: string) => void;
+  /**
+   * Snapshot the current state onto the undo stack. `before` substitutes one
+   * layer's descriptor and GPU texture with a copy captured earlier — used by
+   * operations (text editing) that mutate the layer texture live before the
+   * history entry is pushed.
+   */
+  pushHistory: (label?: string, before?: LayerHistoryBefore) => void;
   pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => void;
   pushHistoryMetadata: (label: string) => void;
   markClean: () => void;
 }
 
-const EMPTY_HANDLE = 0xFFFFFFFF;
 
 let lastRestoredSnapshot: HistorySnapshot | null = null;
 
@@ -97,11 +104,17 @@ function snapshotGpuLayers(
   layerOrder: readonly string[],
   dirtyIds: Set<string>,
   previous: HistorySnapshot | undefined,
+  before?: LayerHistoryBefore,
 ): Map<string, number> {
   const engine = getEngine();
   const gpuSnapshots = new Map<string, number>();
 
   for (const layerId of layerOrder) {
+    if (before && before.layer.id === layerId) {
+      gpuSnapshots.set(layerId, before.gpuHandle);
+      continue;
+    }
+
     // Reuse previous handle when the layer hasn't changed.
     if (!dirtyIds.has(layerId) && previous?.kind === 'pixels' && previous.gpuSnapshots.has(layerId)) {
       const curLayer = layers.find((l) => l.id === layerId);
@@ -185,18 +198,53 @@ function mergeMetadataLayerPositions(
   return { ...snapshot, layers };
 }
 
+const NO_DIRTY_LAYERS: Set<string> = new Set();
+
+/**
+ * GPU handles describing the live document, for the entry undo/redo pushes
+ * onto the opposite stack.
+ *
+ * Right after a restore the live textures are still the restored snapshot's,
+ * so its handles are reused — but only per layer, and only where the layer's
+ * bounds still match the ones that handle was captured with. The render loop
+ * crops / expands layers on an active-layer switch without a history entry
+ * (and an undo that changes `activeLayerId` triggers exactly that), so a
+ * layer the restore left cropped can be full-document size by now. Pairing
+ * its cropped handle with the expanded live bounds made the next undo blit a
+ * 200×200 texture into a document-sized layer at (0, 0) (#833). Layers whose
+ * bounds moved are re-snapshotted from the live texture instead.
+ */
+function snapshotLiveLayers(
+  state: { document: { layers: readonly Layer[]; layerOrder: readonly string[] }; dirtyLayerIds: Set<string> },
+  stackTop: HistorySnapshot | undefined,
+): Map<string, number> {
+  const { layers, layerOrder } = state.document;
+  if (lastRestoredSnapshot?.kind === 'pixels') {
+    return snapshotGpuLayers(layers, layerOrder, NO_DIRTY_LAYERS, lastRestoredSnapshot);
+  }
+  return snapshotGpuLayers(layers, layerOrder, state.dirtyLayerIds, stackTop);
+}
+
+/**
+ * Mask handles for the entry undo/redo pushes onto the opposite stack. Right
+ * after a restore the live mask textures are the restored snapshot's, so its
+ * handles are reused; otherwise the masks are snapshotted against the stack top.
+ */
+function liveMaskSnapshots(
+  layers: readonly Layer[],
+  stackTop: HistorySnapshot | undefined,
+): ReturnType<typeof snapshotGpuMasks> {
+  if (lastRestoredSnapshot?.kind === 'pixels') {
+    return withCurrentMaskStaleness(lastRestoredSnapshot.maskSnapshots);
+  }
+  return snapshotGpuMasks(layers, stackTop);
+}
+
 function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
   if (snapshot.kind === 'metadata') return;
 
-  const engine = getEngine();
-  if (!engine) return;
-
   for (const [layerId, handle] of snapshot.gpuSnapshots) {
-    if (handle === EMPTY_HANDLE) {
-      uploadLayerPixels(engine, layerId, new Uint8Array(4), 1, 1, 0, 0);
-    } else {
-      restoreFromGpuSnapshot(engine, layerId, handle);
-    }
+    restoreLayerGpu(layerId, handle);
   }
 }
 
@@ -252,28 +300,14 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         paths: state.paths,
         selectedPathId: state.selectedPathId,
       };
-    } else if (lastRestoredSnapshot && lastRestoredSnapshot.kind === 'pixels') {
-      firstSnapshot = {
-        kind: 'pixels',
-        document: state.document,
-        selection: state.selection,
-        gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
-        label: target.label,
-        paths: state.paths,
-        selectedPathId: state.selectedPathId,
-      };
     } else {
-      const gpuSnapshots = snapshotGpuLayers(
-        state.document.layers,
-        state.document.layerOrder,
-        state.dirtyLayerIds,
-        state.undoStack[S - 1],
-      );
+      const gpuSnapshots = snapshotLiveLayers(state, state.undoStack[S - 1]);
       firstSnapshot = {
         kind: 'pixels',
         document: state.document,
         selection: state.selection,
         gpuSnapshots,
+        maskSnapshots: liveMaskSnapshots(state.document.layers, state.undoStack[S - 1]),
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
@@ -288,11 +322,14 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     restoreGpuFromSnapshot(target);
     lastRestoredSnapshot = target;
     const eng = getEngine();
-    // Preserve mask/selection content refs across the reset so an undo
-    // that never touched a layer's mask doesn't re-upload the whole mask
-    // (16.78 MB per masked layer at 4K, #781). Refs that DO differ from
-    // the restored `mask.data` still fail the syncLayers gate and re-upload.
-    if (eng) resetTrackedState(eng, { preserveContentRefs: true });
+    // Keep mask/selection content refs across the reset (#781): mask
+    // textures are restored from GPU snapshots below or untouched, and
+    // `mask.data` may lag them, so it must not be re-uploaded (#780).
+    if (eng) {
+      resetTrackedState(eng, { preserveContentRefs: true });
+      restoreMasksAfterUndo(eng, target, state.document.layers);
+    }
+    markAllMasksGpuDirty();
 
     pixelDataManager.clearAll();
     const restoredDocument = target.kind === 'metadata'
@@ -344,28 +381,14 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         paths: state.paths,
         selectedPathId: state.selectedPathId,
       };
-    } else if (lastRestoredSnapshot && lastRestoredSnapshot.kind === 'pixels') {
-      firstSnapshot = {
-        kind: 'pixels',
-        document: state.document,
-        selection: state.selection,
-        gpuSnapshots: lastRestoredSnapshot.gpuSnapshots,
-        label: target.label,
-        paths: state.paths,
-        selectedPathId: state.selectedPathId,
-      };
     } else {
-      const gpuSnapshots = snapshotGpuLayers(
-        state.document.layers,
-        state.document.layerOrder,
-        state.dirtyLayerIds,
-        state.redoStack[R - 1],
-      );
+      const gpuSnapshots = snapshotLiveLayers(state, state.redoStack[R - 1]);
       firstSnapshot = {
         kind: 'pixels',
         document: state.document,
         selection: state.selection,
         gpuSnapshots,
+        maskSnapshots: liveMaskSnapshots(state.document.layers, state.redoStack[R - 1]),
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
@@ -380,9 +403,14 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     restoreGpuFromSnapshot(target);
     lastRestoredSnapshot = target;
     const eng = getEngine();
-    // Same as undoBy — preserve mask/selection refs across the reset
-    // (#781).
-    if (eng) resetTrackedState(eng, { preserveContentRefs: true });
+    // Keep mask/selection content refs across the reset (#781): mask
+    // textures are restored from GPU snapshots below or untouched, and
+    // `mask.data` may lag them, so it must not be re-uploaded (#780).
+    if (eng) {
+      resetTrackedState(eng, { preserveContentRefs: true });
+      restoreMasksAfterUndo(eng, target, state.document.layers);
+    }
+    markAllMasksGpuDirty();
 
     pixelDataManager.clearAll();
     const restoredDocument = target.kind === 'metadata'
@@ -404,11 +432,10 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     }
   },
 
-  pushHistory: (label = 'Edit') => {
-    // #756: mask readbacks are deferred to idle. Ensure any pending read
-    // has settled so this snapshot captures the current mask data, not
-    // the pre-stroke state.
-    flushAllPendingMaskReads();
+  pushHistory: (label = 'Edit', before) => {
+    // Masks are captured as GPU snapshot handles below, so a mask readback
+    // still queued from the previous stroke does not have to be drained
+    // first — that synchronous drain stalled every mask stroke start (#780).
     flushPendingSnapshots();
     const state = get();
     lastRestoredSnapshot = null;
@@ -421,13 +448,24 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     flushLayerSync(state);
 
     const prevSnapshot = state.undoStack[state.undoStack.length - 1];
-    const gpuSnapshots = snapshotGpuLayers(state.document.layers, state.document.layerOrder, state.dirtyLayerIds, prevSnapshot);
+    const gpuSnapshots = snapshotGpuLayers(
+      state.document.layers, state.document.layerOrder, state.dirtyLayerIds, prevSnapshot, before,
+    );
+    const document = before
+      ? {
+        ...state.document,
+        layers: state.document.layers.map((l) => (l.id === before.layer.id ? before.layer : l)),
+      }
+      : state.document;
+    const maskSnapshots = snapshotGpuMasks(state.document.layers, prevSnapshot);
+    clearMaskGpuDirty();
 
     const snapshot: HistorySnapshot = {
       kind: 'pixels',
-      document: state.document,
+      document,
       selection: state.selection,
       gpuSnapshots,
+      maskSnapshots,
       label,
       paths: state.paths,
       selectedPathId: state.selectedPathId,
@@ -435,7 +473,10 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],
       redoStack: [],
-      dirtyLayerIds: new Set(),
+      // The substituted layer's live texture differs from the pushed one, so
+      // keep it dirty: the next snapshot (e.g. undo's redo entry) must copy
+      // the live texture instead of reusing the "before" handle.
+      dirtyLayerIds: before ? new Set([before.layer.id]) : new Set(),
       isDirty: true,
       renderVersion: state.renderVersion + 1,
     });
@@ -444,6 +485,9 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => {
     const state = get();
     lastRestoredSnapshot = null;
+    // A prebuilt snapshot was captured at some earlier moment, so masks
+    // written since then must not be matched against its handles.
+    markAllMasksGpuDirty();
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],
       redoStack: [],
@@ -454,14 +498,11 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   },
 
   pushHistoryMetadata: (label: string) => {
-    // #782: mask readbacks are deferred to idle. If a metadata step
-    // (visibility toggle, add layer, reorder …) runs within the wait
-    // window after a mask stroke, this snapshot would capture the
-    // stale pre-stroke mask array. Undoing the metadata entry would
-    // then restore that stale mask over the current GPU texture,
-    // erasing the stroke. Drain pending reads first, matching
-    // pushHistory().
-    flushAllPendingMaskReads();
+    // No mask drain here (#782 used to force one): a metadata snapshot
+    // taken inside the lazy-readback window may carry a lagging
+    // `mask.data`, but undoing it keeps the live GPU mask and only
+    // refreshes the JS copy (`restoreMasksAfterUndo`), so the lagging
+    // bytes are never uploaded over the stroke (#780).
     const state = get();
     lastRestoredSnapshot = null;
 

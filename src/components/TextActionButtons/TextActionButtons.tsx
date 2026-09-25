@@ -2,7 +2,7 @@ import { useCallback, type RefObject } from 'react';
 import { Check, X } from 'lucide-react';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
-import { commitTextEditing } from '../../tools/text/text-interaction';
+import { commitTextEditing, cancelTextEditing } from '../../tools/text/text-interaction';
 import styles from './TextActionButtons.module.css';
 
 interface TextActionButtonsProps {
@@ -20,16 +20,7 @@ export function TextActionButtons({ containerRef }: TextActionButtonsProps) {
   }, []);
 
   const handleCancel = useCallback(() => {
-    const editing = useUIStore.getState().textEditing;
-    if (!editing) return;
-    const editorState = useEditorStore.getState();
-    if (editing.isNew) {
-      editorState.removeLayer(editing.layerId);
-    }
-    // For existing layers, the pixel data was modified in real-time.
-    // Cancelling just stops editing — user can undo to revert.
-    useUIStore.getState().cancelTextEditing();
-    editorState.notifyRender();
+    cancelTextEditing();
   }, []);
 
   const stopPropagation = useCallback((e: React.PointerEvent | React.MouseEvent) => {

@@ -6,14 +6,15 @@ export function computeAddTextLayer(
   doc: DocumentState,
   textLayer: TextLayer,
 ): ActionResult {
-  let layers = [...doc.layers, textLayer];
-  const groupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
-  if (groupId) {
-    layers = addToGroup(layers, textLayer.id, groupId);
-  }
   const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId, doc.rootGroupId, doc.layers);
   const layerOrder = [...doc.layerOrder];
   layerOrder.splice(orderIdx, 0, textLayer.id);
+
+  let layers = [...doc.layers, textLayer];
+  const groupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
+  if (groupId) {
+    layers = addToGroup(layers, textLayer.id, groupId, layerOrder);
+  }
   return {
     document: {
       ...doc,

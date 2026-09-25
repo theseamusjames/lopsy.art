@@ -34,12 +34,23 @@
   opacity: 0.4;
 }
 
-.dropTarget {
-  border-top: 2px solid var(--color-accent);
+.dropTarget::before,
+.dropTargetEnd::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--drop-depth, 0) * 8px + var(--space-2));
+  right: 0;
+  height: 2px;
+  background: var(--color-accent);
+  pointer-events: none;
 }
 
-.dropTargetEnd {
-  border-bottom: 2px solid var(--color-accent);
+.dropTarget::before {
+  top: 0;
+}
+
+.dropTargetEnd::after {
+  bottom: 0;
 }
 
 .dropIntoGroup {

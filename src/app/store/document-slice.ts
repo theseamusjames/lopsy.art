@@ -25,6 +25,8 @@ import { computeAddLayer } from './actions/add-layer';
 import { computeAddTextLayer, computeUpdateTextLayerProperties } from './actions/add-text-layer';
 import { computeRemoveLayer } from './actions/remove-layer';
 import { computeMoveLayer } from './actions/move-layer';
+import { computeDropLayer } from './actions/drop-layer';
+import type { LayerDropTarget } from './actions/drop-layer';
 import { computeDuplicateLayer } from './actions/duplicate-layer';
 import { computeMergeDown } from './actions/merge-down';
 import { computeFlattenImage } from './actions/flatten-image';
@@ -43,6 +45,7 @@ import { computeAlignLayer } from './actions/align-layer';
 import { computeFitLayer } from './actions/fit-layer';
 import { computeAddLayerMask } from './actions/add-layer-mask';
 import { computeRemoveLayerMask } from './actions/remove-layer-mask';
+import { materializeAllMaskData, materializeMaskData } from '../mask-data-sync';
 import {
   computeSetActiveLayer,
   computeToggleVisibility,
@@ -212,6 +215,7 @@ export interface DocumentSlice {
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
+  dropLayer: (layerId: string, target: LayerDropTarget) => void;
   updateLayerPosition: (id: string, x: number, y: number) => void;
   alignLayer: (edge: AlignEdge) => void;
   fitActiveLayerToCanvas: () => void;
@@ -378,14 +382,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const doc = get().document;
     if (!allowLayerCreation(doc)) return;
     const group = createGroupLayer({ name: name ?? 'Group' });
-    let layers = [...doc.layers, group];
-    const targetGroupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
-    if (targetGroupId) {
-      layers = addToGroupUtil(layers, group.id, targetGroupId);
-    }
     const orderIdx = getInsertionOrderIndex(doc.layerOrder, doc.activeLayerId, doc.rootGroupId, doc.layers);
     const layerOrder = [...doc.layerOrder];
     layerOrder.splice(orderIdx, 0, group.id);
+    let layers = [...doc.layers, group];
+    const targetGroupId = getInsertionGroupId(doc.layers, doc.activeLayerId, doc.rootGroupId);
+    if (targetGroupId) {
+      layers = addToGroupUtil(layers, group.id, targetGroupId, layerOrder);
+    }
     set({
       document: { ...doc, layers, layerOrder, activeLayerId: group.id, selectedLayerIds: [group.id] },
     });
@@ -438,8 +442,10 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set({ document: { ...doc, layers } });
   },
 
-  // No history — node edits fire continuously; history is pushed on commit
   addAdjustmentNode: (groupId, nodeType) => {
+    const s = get();
+    if (!s.document.layers.some((l) => l.id === groupId && l.type === 'group')) return;
+    s.pushHistoryMetadata('Add Adjustment');
     const doc = get().document;
     const node = createDefaultNode(nodeType);
     const layers = doc.layers.map((l) => {
@@ -453,6 +459,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   removeAdjustmentNode: (groupId, nodeId) => {
+    get().pushHistoryMetadata('Remove Adjustment');
     const doc = get().document;
     const layers = doc.layers.map((l) =>
       l.id === groupId && l.type === 'group'
@@ -476,6 +483,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   toggleAdjustmentNode: (groupId, nodeId) => {
+    get().pushHistoryMetadata('Toggle Adjustment');
     const doc = get().document;
     const layers = doc.layers.map((l) => {
       if (l.id !== groupId || l.type !== 'group') return l;
@@ -488,6 +496,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   reorderAdjustmentNodes: (groupId, nodeIds) => {
+    get().pushHistoryMetadata('Reorder Adjustments');
     const doc = get().document;
     const layers = doc.layers.map((l) => {
       if (l.id !== groupId || l.type !== 'group') return l;
@@ -511,6 +520,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   moveLayer: (fromIndex, toIndex) => {
     const s = get();
     const result = computeMoveLayer(s.document, s.renderVersion, fromIndex, toIndex);
+    if (!result) return;
+    s.pushHistoryMetadata('Reorder Layer');
+    set(result);
+  },
+
+  dropLayer: (layerId, target) => {
+    const s = get();
+    const result = computeDropLayer(s.document, s.renderVersion, layerId, target);
     if (!result) return;
     s.pushHistoryMetadata('Reorder Layer');
     set(result);
@@ -605,6 +622,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   duplicateLayer: () => {
+    // The duplicate's mask is uploaded from `mask.data`, which can lag the
+    // GPU until the lazy readback lands (#780).
+    materializeAllMaskData();
     const s = get();
     if (!allowLayerCreation(s.document)) return;
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
@@ -722,6 +742,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   removeLayerMask: (id) => {
+    // Undoing the removal re-uploads the mask from this snapshot's
+    // `mask.data`, so it must match the GPU first (#780).
+    materializeMaskData(id);
     const s = get();
     const result = computeRemoveLayerMask(s.document, s.renderVersion, id);
     if (!result) return;

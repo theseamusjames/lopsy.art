@@ -8,30 +8,42 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // link href without needing a full jsdom environment.
 // ---------------------------------------------------------------------------
 
-interface FakeLink {
+interface FakeElement {
+  tag: string;
   rel: string;
   href: string;
+  textContent: string;
   onload: (() => void) | null;
   onerror: (() => void) | null;
 }
 
 interface InstalledDocumentStub {
   restore: () => void;
-  links: FakeLink[];
+  links: FakeElement[];
+  styles: FakeElement[];
+  fontLoads: string[];
 }
 
 function installDocumentStub(): InstalledDocumentStub {
-  const links: FakeLink[] = [];
+  const links: FakeElement[] = [];
+  const styles: FakeElement[] = [];
+  const fontLoads: string[] = [];
   const previousDocument = (globalThis as { document?: unknown }).document;
   const doc = {
-    createElement: (_tag: string): FakeLink => ({
+    createElement: (tag: string): FakeElement => ({
+      tag,
       rel: '',
       href: '',
+      textContent: '',
       onload: null,
       onerror: null,
     }),
     head: {
-      appendChild: (node: FakeLink) => {
+      appendChild: (node: FakeElement) => {
+        if (node.tag === 'style') {
+          styles.push(node);
+          return node;
+        }
         links.push(node);
         // Fire onload asynchronously so the loader's promise resolves.
         queueMicrotask(() => node.onload?.());
@@ -40,6 +52,10 @@ function installDocumentStub(): InstalledDocumentStub {
     },
     fonts: {
       ready: Promise.resolve(),
+      load: (font: string) => {
+        fontLoads.push(font);
+        return Promise.resolve([]);
+      },
     },
   };
   (globalThis as { document?: unknown }).document = doc;
@@ -49,6 +65,8 @@ function installDocumentStub(): InstalledDocumentStub {
       else (globalThis as { document?: unknown }).document = previousDocument;
     },
     links,
+    styles,
+    fontLoads,
   };
 }
 
@@ -60,7 +78,7 @@ describe('loadGoogleFontPreview', () => {
     stub = installDocumentStub();
     previewCalls.length = 0;
     vi.doMock('../engine-wasm/engine-state', () => ({ getEngine: () => null }));
-    vi.doMock('../engine-wasm/wasm-bridge', () => ({ loadFontData: vi.fn() }));
+    vi.doMock('../engine-wasm/wasm-bridge', () => ({ loadFontDataForFamily: vi.fn(), isFontLoaded: vi.fn() }));
   });
 
   afterEach(() => {
@@ -98,17 +116,46 @@ describe('loadGoogleFontPreview', () => {
       loadPreviewFace: () => Promise.resolve(null),
       prefetchFontPreviewsBlob: () => undefined,
     }));
+    const originalFetch = globalThis.fetch;
+    const fetched: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      fetched.push(typeof input === 'string' ? input : input.toString());
+      return new Response(
+        "@font-face { font-family: 'Sunflower'; src: url(https://fonts.gstatic.com/x.woff2); }",
+        { status: 200 },
+      );
+    }) as typeof fetch;
 
-    const mod = await import('./font-loader');
-    await mod.loadGoogleFontPreview('Sunflower', 'Sunflower');
+    try {
+      const mod = await import('./font-loader');
+      await mod.loadGoogleFontPreview('Sunflower', 'Sunflower');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
 
-    expect(stub.links.length).toBe(1);
-    expect(stub.links[0]!.rel).toBe('stylesheet');
-    expect(stub.links[0]!.href).toBe(
+    expect(fetched).toEqual([
       'https://fonts.googleapis.com/css2?family=Sunflower&text=Sunflower&display=swap',
-    );
+    ]);
     // The deleted CDN must never appear in the fallback URL either.
-    expect(stub.links[0]!.href).not.toContain('getstencil');
+    expect(fetched[0]).not.toContain('getstencil');
+    // The name-only subset is registered under the preview alias, never as
+    // 'Sunflower' itself, so it cannot shadow the full face (#823).
+    expect(stub.links.length).toBe(0);
+    expect(stub.styles.length).toBe(1);
+    expect(stub.styles[0]!.textContent).toContain("font-family: 'Sunflower Lopsy Preview';");
+    expect(stub.styles[0]!.textContent).not.toContain("font-family: 'Sunflower';");
+    expect(stub.fontLoads).toEqual(["16px 'Sunflower Lopsy Preview'"]);
+  });
+
+  it('loadGoogleFont loads each weight face once the stylesheet arrives (#823)', async () => {
+    vi.doMock('./font-previews', () => ({
+      loadPreviewFace: () => Promise.resolve(null),
+      prefetchFontPreviewsBlob: () => undefined,
+    }));
+    const mod = await import('./font-loader');
+    await mod.loadGoogleFont('Montserrat', [400, 700]);
+    expect(stub.links).toHaveLength(1);
+    expect(stub.fontLoads).toEqual(["400 16px 'Montserrat'", "700 16px 'Montserrat'"]);
   });
 
   it('dedupes repeat loads of the same family:text pair (blob touched once)', async () => {
@@ -167,7 +214,8 @@ describe('loadFontBinaryToEngine fetch behavior', () => {
       getEngine: () => null,
     }));
     vi.doMock('../engine-wasm/wasm-bridge', () => ({
-      loadFontData: vi.fn(),
+      loadFontDataForFamily: vi.fn(),
+      isFontLoaded: vi.fn(),
     }));
   });
 
@@ -222,5 +270,78 @@ describe('loadFontBinaryToEngine fetch behavior', () => {
     // latin url() was chosen over the cyrillic-ext one listed first.
     expect(fetches.some((u) => u.endsWith('latin.woff2'))).toBe(true);
     expect(fetches.every((u) => !u.includes('cyr-ext'))).toBe(true);
+  });
+});
+
+describe('loadFontBinaryToEngine engine health check', () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCount = 0;
+  let engine: object = {};
+  let hasFace = true;
+  const loadCalls: Array<{ engine: object; family: string }> = [];
+
+  beforeEach(() => {
+    fetchCount = 0;
+    engine = {};
+    hasFace = true;
+    loadCalls.length = 0;
+    globalThis.fetch = vi.fn(async () => {
+      fetchCount++;
+      return new Response(new Uint8Array([1, 2, 3]).buffer, { status: 200 });
+    }) as typeof fetch;
+    vi.doMock('../engine-wasm/engine-state', () => ({ getEngine: () => engine }));
+    vi.doMock('../engine-wasm/wasm-bridge', () => ({
+      loadFontDataForFamily: vi.fn((e: object, _bytes: Uint8Array, family: string) => {
+        loadCalls.push({ engine: e, family });
+      }),
+      isFontLoaded: vi.fn(() => hasFace),
+    }));
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.resetModules();
+    vi.doUnmock('../engine-wasm/engine-state');
+    vi.doUnmock('../engine-wasm/wasm-bridge');
+  });
+
+  it('registers the binary under the catalog family and reports a fresh load', async () => {
+    const mod = await import('./font-loader');
+    await expect(mod.loadFontBinaryToEngine('Montserrat', 700)).resolves.toBe(true);
+    expect(loadCalls).toEqual([{ engine, family: 'Montserrat' }]);
+  });
+
+  it('returns false and does not cache a binary the engine registered no face for', async () => {
+    hasFace = false;
+    const mod = await import('./font-loader');
+    await expect(mod.loadFontBinaryToEngine('Oswald', 400)).resolves.toBe(false);
+
+    hasFace = true;
+    await expect(mod.loadFontBinaryToEngine('Oswald', 400)).resolves.toBe(true);
+    expect(fetchCount).toBe(2);
+  });
+
+  it('returns false when the engine rejects the bytes outright', async () => {
+    vi.doMock('../engine-wasm/wasm-bridge', () => ({
+      loadFontDataForFamily: vi.fn(() => {
+        throw new Error('WOFF2 decode failed');
+      }),
+      isFontLoaded: vi.fn(() => true),
+    }));
+    const mod = await import('./font-loader');
+    await expect(mod.loadFontBinaryToEngine('Edu SA Hand', 400)).resolves.toBe(false);
+  });
+
+  it('does not re-register a cached binary into the same engine', async () => {
+    const mod = await import('./font-loader');
+    await mod.loadFontBinaryToEngine('Roboto', 400);
+    await expect(mod.loadFontBinaryToEngine('Roboto', 400)).resolves.toBe(false);
+    expect(loadCalls).toHaveLength(1);
+
+    engine = {};
+    await mod.loadFontBinaryToEngine('Roboto', 400);
+    expect(loadCalls).toHaveLength(2);
+    expect(loadCalls[1]!.engine).toBe(engine);
+    expect(fetchCount).toBe(1);
   });
 });

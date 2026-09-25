@@ -205,8 +205,8 @@ export function getTracked(engine: Engine): TrackedState {
 
 export interface ResetOptions {
   /**
-   * When true, `maskDataRefs`, `selectionMask` and `selectionActive` are
-   * kept across the reset. Ref-equality gating in `syncLayers` /
+   * When true, `maskDataRefs`, `masksOnEngine`, `selectionMask` and
+   * `selectionActive` are kept across the reset. Ref-equality gating in `syncLayers` /
    * `syncSelection` then re-diffs against the restored data references —
    * unchanged masks skip re-upload, actually-changed masks still re-upload.
    *
@@ -225,11 +225,20 @@ export function resetTrackedState(engine: Engine, opts?: ResetOptions): void {
     const prev = trackedByEngine.get(engine);
     if (prev) {
       fresh.maskDataRefs = prev.maskDataRefs;
+      // Which layers have a mask texture is GPU state the reset doesn't
+      // touch; losing it would leave a mask on the engine after an undo
+      // removes it from the document.
+      fresh.masksOnEngine = prev.masksOnEngine;
       fresh.selectionMask = prev.selectionMask;
       fresh.selectionActive = prev.selectionActive;
     }
   }
   trackedByEngine.set(engine, fresh);
+}
+
+/** Force the next `syncLayers` to upload `layer.mask.data` for `layerId`. */
+export function forgetMaskDataRef(engine: Engine, layerId: string): void {
+  getTracked(engine).maskDataRefs.delete(layerId);
 }
 
 /**
@@ -248,6 +257,7 @@ export function resetTrackedState(engine: Engine, opts?: ResetOptions): void {
 export function seedMaskDataRef(engine: Engine, layerId: string, data: Uint8ClampedArray): void {
   const tracked = getTracked(engine);
   tracked.maskDataRefs.set(layerId, data);
+  tracked.masksOnEngine.add(layerId);
   tracked.uploadFailures.delete(`${layerId}:mask`);
 }
 

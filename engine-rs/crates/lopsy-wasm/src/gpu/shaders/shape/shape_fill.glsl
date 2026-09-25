@@ -10,6 +10,8 @@ uniform float u_strokeWidth;
 uniform float u_cornerRadius;
 uniform int u_sides;
 uniform vec2 u_texSize;
+// Copy of the layer's content before this shape (straight alpha).
+uniform sampler2D u_dstTex;
 out vec4 fragColor;
 
 const float PI = 3.14159265359;
@@ -124,7 +126,23 @@ void main() {
     float fill = 1.0 - smoothstep(-0.5, 0.5, d);
     float halfW = u_strokeWidth * 0.5;
     float stroke = 1.0 - smoothstep(halfW - 0.5, halfW + 0.5, abs(d));
-    vec4 color = u_fillColor * fill;
-    if (u_strokeWidth > 0.0) color = mix(color, u_strokeColor, stroke * u_strokeColor.a);
-    fragColor = color;
+
+    // Coverage-weighted colours are premultiplied; the layer texture is
+    // straight alpha, so the "over" is resolved here and un-premultiplied
+    // before writing. Writing the premultiplied edge directly is what
+    // produced the dark anti-aliasing fringe of #815.
+    vec4 src = vec4(u_fillColor.rgb * u_fillColor.a, u_fillColor.a) * fill;
+    if (u_strokeWidth > 0.0) {
+        vec4 strokeP = vec4(u_strokeColor.rgb * u_strokeColor.a, u_strokeColor.a) * stroke;
+        src = strokeP + src * (1.0 - strokeP.a);
+    }
+
+    vec4 dst = texture(u_dstTex, v_uv);
+    float outA = src.a + dst.a * (1.0 - src.a);
+    if (outA < 1e-6) {
+        fragColor = vec4(0.0);
+        return;
+    }
+    vec3 outRGB = (src.rgb + dst.rgb * dst.a * (1.0 - src.a)) / outA;
+    fragColor = vec4(outRGB, outA);
 }

@@ -290,6 +290,7 @@ dependencies = [
  "lopsy-core",
  "serde",
  "serde_json",
+ "skrifa",
  "swash",
  "wasm-bindgen",
  "web-sys",

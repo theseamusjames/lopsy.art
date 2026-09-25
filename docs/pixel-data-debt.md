@@ -94,6 +94,9 @@ data to preserve a snapshot during a drag.
 - `src/app/interactions/quick-mask-move.ts` — full-size mask alloc on commit.
 - `src/app/store/actions/add-layer-mask.ts` — initial mask allocation.
 - `src/app/useCanvasInteraction.ts` — nudge/mask copies.
+- `src/app/mask-data-sync.ts` — wraps the lazy GPU mask readback that
+  refreshes `layer.mask.data` for save/export/thumbnail. Undo no longer
+  depends on these bytes: history holds GPU mask snapshots (#780).
 - `src/engine/mask-utils.ts` — mask surface ↔ RGBA helpers.
 - `src/tools/fill/fill-interaction.ts` — bucket fill writes mask data when active.
 

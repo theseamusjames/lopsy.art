@@ -224,17 +224,33 @@ export function getInsertionOrderIndex(
 
 /**
  * Insert a new layer ID into a group's children array.
+ * With `layerOrder`, the id lands at the slot that matches its stacking
+ * position (children are bottom→top like layerOrder); without it, it is
+ * appended as the topmost child.
  * Returns updated layers array.
  */
 export function addToGroup(
   layers: readonly Layer[],
   layerId: string,
   groupId: string,
+  layerOrder?: readonly string[],
 ): Layer[] {
   return layers.map((l) => {
     if (l.id === groupId && isGroupLayer(l)) {
-      return { ...l, children: [...l.children, layerId] };
+      return { ...l, children: insertChildByOrder(l.children, layerId, layerOrder) };
     }
     return l;
   });
+}
+
+function insertChildByOrder(
+  children: readonly string[],
+  layerId: string,
+  layerOrder: readonly string[] | undefined,
+): string[] {
+  const rank = layerOrder?.indexOf(layerId) ?? -1;
+  if (!layerOrder || rank < 0) return [...children, layerId];
+  const insertAt = children.findIndex((c) => layerOrder.indexOf(c) > rank);
+  if (insertAt < 0) return [...children, layerId];
+  return [...children.slice(0, insertAt), layerId, ...children.slice(insertAt)];
 }

@@ -23,13 +23,20 @@ const {
 } = await import('../mask-read-queue');
 
 /**
- * #782 — pushHistoryMetadata used to skip `flushAllPendingMaskReads`,
- * so a metadata step (visibility toggle, add layer, reorder, …) taken
- * within the ~3s wait window after a mask stroke would snapshot the
- * pre-stroke mask array and lose the painted pixels on undo. The fix
- * mirrors pushHistory: drain pending reads before snapshotting.
+ * #782 — a metadata step (visibility toggle, add layer, reorder, …) taken
+ * inside the lazy-readback window after a mask stroke snapshots a
+ * `mask.data` that lags the GPU. #782 fixed the resulting undo bug by
+ * draining pending mask reads in pushHistoryMetadata — a synchronous
+ * glReadPixels behind the stroke's GPU backlog.
+ *
+ * Since #780 the undo itself is safe: restoring a metadata entry keeps
+ * the live GPU mask, seeds the upload gate with the restored bytes, and
+ * only schedules a refresh of the JS copy (covered in
+ * mask-history.test.ts, "queues a readback on a metadata undo whose
+ * snapshot bytes predate the live ones"). So the push no longer pays for
+ * a readback.
  */
-describe('pushHistoryMetadata flushes pending mask reads (#782)', () => {
+describe('pushHistoryMetadata does not drain pending mask reads (#782, #780)', () => {
   beforeEach(() => {
     __resetMaskReadQueueForTest();
     vi.useFakeTimers();
@@ -49,7 +56,7 @@ describe('pushHistoryMetadata flushes pending mask reads (#782)', () => {
     __resetMaskReadQueueForTest();
   });
 
-  it('drains the queued mask read before the snapshot is captured', () => {
+  it('leaves the queued mask read for the idle queue', () => {
     const reader = vi.fn(() => new Uint8ClampedArray([9, 9, 9, 9]));
     const cb = vi.fn();
     requestMaskRead('layer-1', reader, cb);
@@ -57,10 +64,7 @@ describe('pushHistoryMetadata flushes pending mask reads (#782)', () => {
 
     useEditorStore.getState().pushHistoryMetadata('Toggle Visibility');
 
-    // The queued reader must have run synchronously before the snapshot
-    // — otherwise the metadata undo would restore a stale mask (#782).
-    expect(reader).toHaveBeenCalledTimes(1);
-    expect(cb).toHaveBeenCalledWith(new Uint8ClampedArray([9, 9, 9, 9]));
-    expect(pendingMaskReadCount()).toBe(0);
+    expect(reader).not.toHaveBeenCalled();
+    expect(pendingMaskReadCount()).toBe(1);
   });
 });

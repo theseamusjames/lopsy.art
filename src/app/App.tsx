@@ -34,6 +34,7 @@ import { useContextMenu } from './useContextMenu';
 import { ContextMenu } from '../components/ContextMenu/ContextMenu';
 import { Toasts } from '../components/Toasts/Toasts';
 import { TextActionButtons } from '../components/TextActionButtons/TextActionButtons';
+import { TextInputSink } from '../components/TextInputSink/TextInputSink';
 import { PathActionButtons } from '../components/PathActionButtons/PathActionButtons';
 import { TiltShiftControls } from './OptionsBar/tool-options/TiltShiftControls';
 import { POINTER_IDLE, type PointerMode } from './pointer-mode';
@@ -42,6 +43,7 @@ import { useAppEffects } from './hooks/useAppEffects';
 import { useDocumentOpenHandlers } from './hooks/useDocumentOpenHandlers';
 import { useDraggablePanel } from './hooks/useDraggablePanel';
 import { useDockedPanelAnchor } from './hooks/useDockedPanelAnchor';
+import { useReleaseToolbarButtonFocus } from './toolbar-button-focus';
 import styles from './App.module.css';
 
 // Isolated component for canvas rendering — prevents renderVersion and
@@ -57,6 +59,7 @@ function CanvasRenderer({ canvasRef, containerRef, overlayCanvasRef }: {
 
 export function App() {
   const [hasWebGL2] = useState(() => checkWebGL2Support());
+  useReleaseToolbarButtonFocus();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -243,6 +246,7 @@ export function App() {
             <canvas ref={canvasRef} aria-label="Drawing canvas" />
             <canvas ref={overlayCanvasRef} className={styles.overlayCanvas} aria-hidden="true" />
             <TextActionButtons containerRef={containerRef} />
+            <TextInputSink containerRef={containerRef} />
             <PathActionButtons containerRef={containerRef} />
             <TiltShiftControls />
             <CanvasRenderer canvasRef={canvasRef} containerRef={containerRef} overlayCanvasRef={overlayCanvasRef} />

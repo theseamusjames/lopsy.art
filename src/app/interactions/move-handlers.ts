@@ -5,6 +5,7 @@ import { createTransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   floatSelection,
@@ -278,19 +279,14 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       const maskBytes = new Uint8Array(selNow.mask.buffer, selNow.mask.byteOffset, selNow.mask.byteLength);
       setSelectionMask(engine, maskBytes, selNow.maskWidth, selNow.maskHeight);
 
-      const floatBoundsMove = floatSelection(engine, activeLayerId);
+      floatSelection(engine, activeLayerId);
       compositeFloat(engine, 0, 0);
 
-      // Sync expanded position only. Width/height are protected
-      // engine-side (update_layer preserves them while a float is active).
-      if (floatBoundsMove.length >= 2) {
-        const newX = floatBoundsMove[0]!;
-        const newY = floatBoundsMove[1]!;
-        const curLayer = useEditorStore.getState().document.layers.find(l => l.id === activeLayerId);
-        if (curLayer && (curLayer.x !== newX || curLayer.y !== newY)) {
-          useEditorStore.getState().updateLayerPosition(activeLayerId, newX, newY);
-        }
-      }
+      // The float expanded the layer texture; mirror its full rect into the
+      // store. update_layer shields the engine only while the float lives —
+      // a store left at the pre-float width/height outlives it and feeds
+      // stale bounds to later operations and resyncs (#822).
+      reconcileLayerBoundsWithEngine(engine, activeLayerId);
 
       if (altKey) {
         restoreFloatBase(engine, activeLayerId);
@@ -705,39 +701,9 @@ export function handleNudgeMove(
       const maskBytes = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
       setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
 
-      const floatBoundsDup = floatSelection(engine, activeId);
+      floatSelection(engine, activeId);
       compositeFloat(engine, 0, 0);
-
-      // Sync expanded position AND dimensions to Zustand.
-      if (floatBoundsDup.length >= 4) {
-        const newX = floatBoundsDup[0]!;
-        const newY = floatBoundsDup[1]!;
-        const newW = floatBoundsDup[2]!;
-        const newH = floatBoundsDup[3]!;
-        const curLayer = useEditorStore.getState().document.layers.find(l => l.id === activeId);
-        if (curLayer) {
-          const posChanged = curLayer.x !== newX || curLayer.y !== newY;
-          const sizeChanged = curLayer.type === 'raster'
-            && (curLayer.width !== newW || curLayer.height !== newH);
-          if (posChanged || sizeChanged) {
-            useEditorStore.setState((s) => ({
-              document: {
-                ...s.document,
-                layers: s.document.layers.map((l) =>
-                  l.id === activeId
-                    ? {
-                      ...l,
-                      x: newX,
-                      y: newY,
-                      ...(l.type === 'raster' ? { width: newW, height: newH } : {}),
-                    }
-                    : l
-                ),
-              },
-            }));
-          }
-        }
-      }
+      reconcileLayerBoundsWithEngine(engine, activeId);
 
       clearJsPixelData(activeId);
 
