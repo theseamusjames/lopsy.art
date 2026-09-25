@@ -471,6 +471,16 @@ pub fn drop_float(engine: &mut Engine) {
     layer_manager::drop_float(&mut engine.inner);
 }
 
+/// Grow the active float so it covers the document-space rect (x, y, w, h).
+/// Returns the float layer's new [x, y, w, h], or [] when it already covered
+/// the rect.
+#[wasm_bindgen(js_name = "ensureFloatCovers")]
+pub fn ensure_float_covers(engine: &mut Engine, x: i32, y: i32, w: u32, h: u32) -> Result<Vec<i32>, JsError> {
+    layer_manager::ensure_float_covers(&mut engine.inner, x, y, w, h)
+        .map(|grown| grown.map(|b| b.to_vec()).unwrap_or_default())
+        .map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "hasFloat")]
 pub fn has_float(engine: &Engine) -> bool {
     engine.inner.float_texture.is_some()

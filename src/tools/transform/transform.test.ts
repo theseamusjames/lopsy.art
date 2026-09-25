@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   createTransformState,
   getTransformedBounds,
+  getTransformedContentBounds,
+  mapRectThroughInverse,
+  computeInverseAffineMatrix,
   getHandlePositions,
   hitTestHandle,
   isScaleHandle,
@@ -56,6 +59,88 @@ describe('getTransformedBounds', () => {
     const bounds = getTransformedBounds(state);
     expect(bounds.x).toBe(10);
     expect(bounds.y).toBe(20);
+  });
+});
+
+describe('getTransformedContentBounds', () => {
+  function expectRect(actual: { x: number; y: number; width: number; height: number }, expected: typeof actual): void {
+    expect(actual.x).toBeCloseTo(expected.x, 6);
+    expect(actual.y).toBeCloseTo(expected.y, 6);
+    expect(actual.width).toBeCloseTo(expected.width, 6);
+    expect(actual.height).toBeCloseTo(expected.height, 6);
+  }
+
+  it('is the original rect for the identity transform', () => {
+    const state = createTransformState({ x: 10, y: 20, width: 100, height: 50 });
+    expectRect(getTransformedContentBounds(state), { x: 10, y: 20, width: 100, height: 50 });
+  });
+
+  // #818: a 200x40 bar centred at (200, 260) turned a quarter turn is a
+  // 40x200 bar spanning y 160..360 — past the bottom of a 300px canvas.
+  it('swaps extents for a quarter-turn rotation about the centre', () => {
+    const state = {
+      ...createTransformState({ x: 100, y: 240, width: 200, height: 40 }),
+      rotation: Math.PI / 2,
+    };
+    expectRect(getTransformedContentBounds(state), { x: 180, y: 160, width: 40, height: 200 });
+  });
+
+  it('covers the rotated corners of a 45° turn', () => {
+    const state = {
+      ...createTransformState({ x: 0, y: 0, width: 100, height: 100 }),
+      rotation: Math.PI / 4,
+    };
+    const half = 50 * Math.SQRT2;
+    expectRect(getTransformedContentBounds(state), { x: 50 - half, y: 50 - half, width: 2 * half, height: 2 * half });
+  });
+
+  it('applies scale and translation together', () => {
+    const state = {
+      ...createTransformState({ x: 0, y: 0, width: 100, height: 100 }),
+      scaleX: 2,
+      scaleY: 0.5,
+      translateX: 10,
+      translateY: -5,
+    };
+    expectRect(getTransformedContentBounds(state), { x: -40, y: 20, width: 200, height: 50 });
+  });
+
+  it('uses the dragged corners in distort mode', () => {
+    const base = createTransformState({ x: 0, y: 0, width: 100, height: 100 }, 'distort');
+    const state = {
+      ...base,
+      corners: [{ x: -20, y: 0 }, { x: 0, y: -30 }, { x: 15, y: 0 }, { x: 0, y: 40 }] as typeof base.corners,
+    };
+    expectRect(getTransformedContentBounds(state), { x: -20, y: -30, width: 135, height: 170 });
+  });
+});
+
+describe('mapRectThroughInverse', () => {
+  const bar = { x: 100, y: 240, width: 200, height: 40 };
+
+  it('leaves the bounds unchanged for a horizontal flip', () => {
+    expect(mapRectThroughInverse(bar, new Float32Array([-1, 0, 0, 0, 1, 0, 0, 0, 1]))).toEqual(bar);
+  });
+
+  it('swaps extents about the centre for a 90° rotation', () => {
+    const cw = new Float32Array([0, -1, 0, 1, 0, 0, 0, 0, 1]);
+    expect(mapRectThroughInverse(bar, cw)).toEqual({ x: 180, y: 160, width: 40, height: 200 });
+  });
+
+  it('agrees with getTransformedContentBounds for an arbitrary affine transform', () => {
+    const state = {
+      ...createTransformState(bar),
+      rotation: 0.4,
+      scaleX: 1.5,
+      scaleY: 0.75,
+      skewX: 0.2,
+    };
+    const expected = getTransformedContentBounds(state);
+    const actual = mapRectThroughInverse(bar, computeInverseAffineMatrix(state));
+    expect(actual.x).toBeCloseTo(expected.x, 3);
+    expect(actual.y).toBeCloseTo(expected.y, 3);
+    expect(actual.width).toBeCloseTo(expected.width, 3);
+    expect(actual.height).toBeCloseTo(expected.height, 3);
   });
 });
 

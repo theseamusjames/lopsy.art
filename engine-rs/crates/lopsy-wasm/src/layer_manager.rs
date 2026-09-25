@@ -1151,6 +1151,102 @@ pub fn drop_float(engine: &mut EngineInner) {
     engine.float_transform_mode = 0;
 }
 
+/// Copy `src` (src_w×src_h) into a freshly acquired, transparent dst_w×dst_h
+/// texture with its top-left at (off_x, off_y). Returns the new handle.
+fn copy_into_larger_texture(
+    engine: &mut EngineInner,
+    src_handle: TextureHandle,
+    src_w: u32,
+    src_h: u32,
+    dst_w: u32,
+    dst_h: u32,
+    off_x: i32,
+    off_y: i32,
+) -> Result<TextureHandle, String> {
+    let src_tex = engine.texture_pool.get(src_handle).cloned()
+        .ok_or("Source texture not found")?;
+    let dst_handle = engine.texture_pool.acquire(&engine.gl, dst_w, dst_h)?;
+    let dst_tex = engine.texture_pool.get(dst_handle).cloned()
+        .ok_or("Destination texture not found")?;
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&dst_tex, dst_w as i32, dst_h as i32, |engine| {
+        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        engine.gl.viewport(off_x, off_y, src_w as i32, src_h as i32);
+        engine.gl.use_program(Some(&engine.shaders.blit.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
+            engine.gl.uniform1i(Some(&loc), 0);
+        }
+        engine.draw_fullscreen_quad();
+    });
+    Ok(dst_handle)
+}
+
+/// Grow the active float — its lifted pixels, its base, and the layer texture
+/// it composites into — so the float's buffer covers the document-space rect
+/// (x, y, w, h) as well as everything it already covers.
+///
+/// The float buffer starts as the union of the canvas and the layer's content.
+/// A rotate or scale can carry pixels past that (a wide bar near the bottom
+/// edge turned upright), and composite_float_transformed only writes inside
+/// the fw×fh buffer, so those pixels were silently cut off and lost for good
+/// when the float was dropped (#818). Callers pass the transformed content
+/// bounds before compositing.
+///
+/// Returns the layer's new [x, y, w, h], or None when no growth was needed.
+pub fn ensure_float_covers(
+    engine: &mut EngineInner,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> Result<Option<[i32; 4]>, String> {
+    let layer_id = engine.float_layer_id.clone().ok_or("No float layer ID")?;
+    let float_handle = engine.float_texture.ok_or("No float texture")?;
+    let base_handle = engine.float_base_texture.ok_or("No float base")?;
+    let layer_handle = *engine.layer_textures.get(&layer_id)
+        .ok_or("Layer texture not found")?;
+
+    let (fx, fy, fw, fh) = (engine.float_layer_x, engine.float_layer_y, engine.float_width, engine.float_height);
+    let min_x = fx.min(x);
+    let min_y = fy.min(y);
+    let max_x = (fx + fw as i32).max(x + w as i32);
+    let max_y = (fy + fh as i32).max(y + h as i32);
+    let new_w = (max_x - min_x) as u32;
+    let new_h = (max_y - min_y) as u32;
+    if min_x == fx && min_y == fy && new_w == fw && new_h == fh {
+        return Ok(None);
+    }
+
+    let off_x = fx - min_x;
+    let off_y = fy - min_y;
+    let new_float = copy_into_larger_texture(engine, float_handle, fw, fh, new_w, new_h, off_x, off_y)?;
+    let new_base = copy_into_larger_texture(engine, base_handle, fw, fh, new_w, new_h, off_x, off_y)?;
+    let new_layer = copy_into_larger_texture(engine, layer_handle, fw, fh, new_w, new_h, off_x, off_y)?;
+
+    engine.texture_pool.release(float_handle);
+    engine.texture_pool.release(base_handle);
+    engine.texture_pool.release(layer_handle);
+    engine.float_texture = Some(new_float);
+    engine.float_base_texture = Some(new_base);
+    engine.layer_textures.insert(layer_id.clone(), new_layer);
+    engine.float_layer_x = min_x;
+    engine.float_layer_y = min_y;
+    engine.float_width = new_w;
+    engine.float_height = new_h;
+    if let Some(desc) = engine.layer_stack.iter_mut().find(|l| l.id == layer_id) {
+        desc.x = min_x;
+        desc.y = min_y;
+        desc.width = new_w;
+        desc.height = new_h;
+    }
+
+    engine.mark_layer_dirty(&layer_id);
+    Ok(Some([min_x, min_y, new_w as i32, new_h as i32]))
+}
+
 /// Flip the float texture in-place and composite onto the layer.
 /// The flip is applied within the float texture's own coordinate space.
 pub fn flip_float(

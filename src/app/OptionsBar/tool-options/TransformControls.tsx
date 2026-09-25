@@ -3,7 +3,7 @@ import { useUIStore } from '../../ui-store';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
 import type { TransformMode } from '../../../tools/transform/transform';
-import { createTransformState } from '../../../tools/transform/transform';
+import { createTransformState, mapRectThroughInverse } from '../../../tools/transform/transform';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import {
   floatSelection,
@@ -12,6 +12,7 @@ import {
   hasFloat,
 } from '../../../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../../../panels/LayerPanel/layer-selection';
+import { growFloatToCover } from '../../interactions/float-growth';
 import styles from './TransformControls.module.css';
 
 /**
@@ -67,6 +68,9 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
       }
     }
   }
+
+  // A 90° turn can carry pixels past the float buffer (#818).
+  growFloatToCover(engine, activeLayerId, mapRectThroughInverse(sel.bounds, invMatrix));
 
   // Apply transform centered on selection bounds
   const cx = sel.bounds.x + sel.bounds.width / 2;

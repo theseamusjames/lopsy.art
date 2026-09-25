@@ -79,7 +79,8 @@ export function getTransformedBounds(state: TransformState): Rect {
  * Forward chain: T(cx+tx, cy+ty) · R(rot) · S(sx, sy) · Skew(kx, ky) · T(-cx, -cy)
  * Returns column-major Float32Array(9) for the GLSL mat3 uniform.
  */
-export function computeInverseAffineMatrix(t: TransformState): Float32Array {
+/** Forward 2×2 `[a b; c d]` = R · S · Skew, applied about the bounds centre. */
+function forwardAffine2x2(t: TransformState): [number, number, number, number] {
   const cos = Math.cos(t.rotation);
   const sin = Math.sin(t.rotation);
   const kx = Math.tan(t.skewX);
@@ -87,14 +88,82 @@ export function computeInverseAffineMatrix(t: TransformState): Float32Array {
   const sx = t.scaleX;
   const sy = t.scaleY;
 
-  // Forward 2×2 = R · S · Skew
   // Skew matrix: [1 kx; ky 1]
   // S · Skew: [sx  sx*kx; sy*ky  sy]
   // R · S · Skew:
-  const a = cos * sx + (-sin) * sy * ky;
-  const b = cos * sx * kx + (-sin) * sy;
-  const c = sin * sx + cos * sy * ky;
-  const d = sin * sx * kx + cos * sy;
+  return [
+    cos * sx + (-sin) * sy * ky,
+    cos * sx * kx + (-sin) * sy,
+    sin * sx + cos * sy * ky,
+    sin * sx * kx + cos * sy,
+  ];
+}
+
+/**
+ * Axis-aligned document-space bounds of the transformed content: where the
+ * pixels of `originalBounds` land once rotation, scale, skew, translation or
+ * per-corner distortion is applied. Unlike `getTransformedBounds` this
+ * accounts for rotation and skew, so it covers the whole rendered result.
+ */
+export function getTransformedContentBounds(t: TransformState): Rect {
+  const ob = t.originalBounds;
+  let points: Point[];
+  if (t.mode === 'distort' || t.mode === 'perspective') {
+    points = getCornerPositions(t);
+  } else {
+    const [a, b, c, d] = forwardAffine2x2(t);
+    const cx = ob.x + ob.width / 2;
+    const cy = ob.y + ob.height / 2;
+    const corners: Point[] = [
+      { x: ob.x, y: ob.y },
+      { x: ob.x + ob.width, y: ob.y },
+      { x: ob.x + ob.width, y: ob.y + ob.height },
+      { x: ob.x, y: ob.y + ob.height },
+    ];
+    points = corners.map((p) => {
+      const dx = p.x - cx;
+      const dy = p.y - cy;
+      return {
+        x: a * dx + b * dy + cx + t.translateX,
+        y: c * dx + d * dy + cy + t.translateY,
+      };
+    });
+  }
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  return { x: minX, y: minY, width: Math.max(...xs) - minX, height: Math.max(...ys) - minY };
+}
+
+/**
+ * Axis-aligned bounds of `rect` after the transform whose INVERSE is `inv`
+ * (column-major mat3, as passed to compositeFloatAffine), applied about the
+ * rect's centre. Used for the instant flip / rotate-90° buttons, which only
+ * hold the inverse matrix.
+ */
+export function mapRectThroughInverse(rect: Rect, inv: Float32Array): Rect {
+  const ia = inv[0] ?? 1;
+  const ic = inv[1] ?? 0;
+  const ib = inv[3] ?? 0;
+  const id = inv[4] ?? 1;
+  const det = ia * id - ib * ic;
+  if (Math.abs(det) < 1e-12) return { ...rect };
+  const a = id / det;
+  const b = -ib / det;
+  const c = -ic / det;
+  const d = ia / det;
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
+  const hw = rect.width / 2;
+  const hh = rect.height / 2;
+  const extentX = Math.abs(a) * hw + Math.abs(b) * hh;
+  const extentY = Math.abs(c) * hw + Math.abs(d) * hh;
+  return { x: cx - extentX, y: cy - extentY, width: 2 * extentX, height: 2 * extentY };
+}
+
+export function computeInverseAffineMatrix(t: TransformState): Float32Array {
+  const [a, b, c, d] = forwardAffine2x2(t);
 
   // Forward 3×3 (with translation folded in):
   // [a b tx+cx; c d ty+cy; 0 0 1] where the translate(-cx,-cy) is pre-applied
