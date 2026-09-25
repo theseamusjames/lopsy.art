@@ -189,7 +189,7 @@ function createInitialDocument() {
 export interface DocumentSlice {
   document: ReturnType<typeof createInitialDocument>;
   documentReady: boolean;
-  createDocument: (width: number, height: number, transparentBg: boolean, colorMode?: DocumentColorMode) => void;
+  createDocument: (width: number, height: number, transparentBg: boolean, colorMode?: DocumentColorMode, dpi?: number) => void;
   openImageAsDocument: (imageData: ImageData, name: string) => void;
   addLayer: () => void;
   addTextLayer: (layer: import('../../types').TextLayer) => void;
@@ -244,11 +244,11 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   document: createInitialDocument(),
   documentReady: false,
 
-  createDocument: (width, height, transparentBg, colorMode) => {
+  createDocument: (width, height, transparentBg, colorMode, dpi) => {
     cancelLiquify();
     clearBitmapCache();
     clearEngine();
-    const result = computeCreateDocument(width, height, transparentBg, colorMode);
+    const result = computeCreateDocument(width, height, transparentBg, colorMode, dpi);
     applyActionResult(set, result);
     // clearEngine() released the GPU clipboard texture; drop the stale JS
     // clipboard so a subsequent paste doesn't operate on a freed texture.

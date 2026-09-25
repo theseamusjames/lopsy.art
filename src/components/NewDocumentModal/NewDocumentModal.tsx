@@ -50,6 +50,7 @@ interface NewDocumentModalProps {
     height: number,
     background: BackgroundType,
     colorMode: DocumentColorMode,
+    dpi: number,
   ) => void;
   onOpenFile: (file: File) => void;
   onPasteClipboard?: (blob: Blob) => void;
@@ -139,7 +140,7 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
     const dpiNum = parseInt(dpi, 10) || 72;
     const pxW = Math.max(1, Math.min(16384, toPixels(wNum, unit, dpiNum)));
     const pxH = Math.max(1, Math.min(16384, toPixels(hNum, unit, dpiNum)));
-    onCreateDocument(pxW, pxH, background, colorMode);
+    onCreateDocument(pxW, pxH, background, colorMode, dpiNum);
   }, [width, height, unit, dpi, background, colorMode, onCreateDocument, activePreset, clipboardImage, onPasteClipboard]);
 
   const handleOpenFile = useCallback(() => {

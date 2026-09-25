@@ -101,7 +101,7 @@ export interface EditorState {
   updatePathAnchors: (id: string, anchors: readonly PathAnchor[], closed: boolean) => void;
 
   // Document creation
-  createDocument: (width: number, height: number, transparentBg: boolean, colorMode?: DocumentColorMode) => void;
+  createDocument: (width: number, height: number, transparentBg: boolean, colorMode?: DocumentColorMode, dpi?: number) => void;
   openImageAsDocument: (imageData: ImageData, name: string) => void;
 
   // Document mutations

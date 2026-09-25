@@ -4,6 +4,7 @@ import { useToolSettingsStore } from '../tool-settings-store';
 import { getBrushCursorInfo } from '../useCanvasCursor';
 import { getEngine, getEngineCanvas } from '../../engine-wasm/engine-state';
 import { renderGrid, renderPixelGrid, renderRulers } from './render-grid';
+import { DEFAULT_DPI } from './ruler-units';
 import { renderSelectionAnts, renderTransformHandles, renderMarqueeDraftAnts } from './render-selection';
 import { getMarqueePreview } from '../../tools/marquee/marquee-preview';
 import { createTransformState, type TransformState } from '../../tools/transform/transform';
@@ -47,6 +48,8 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
   const showGrid = uiState.showGrid;
   const showPixelGrid = uiState.showPixelGrid;
   const showRulers = uiState.showRulers;
+  const rulerUnit = uiState.rulerUnit;
+  const dpi = doc.dpi ?? DEFAULT_DPI;
   const gridSize = uiState.gridSize;
   const pathAnchors = uiState.pathDraft?.anchors ?? [];
   const pathClosed = uiState.pathDraft?.closed ?? false;
@@ -215,9 +218,9 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
   }
 
   if (showRulers) {
-    renderRulers(overlayCtx, screenW, screenH, viewport, doc.width, doc.height, cursorPosition, guideColor);
+    renderRulers(overlayCtx, screenW, screenH, viewport, doc.width, doc.height, cursorPosition, guideColor, rulerUnit, dpi);
     if (showGuides) {
-      renderGuideRulerOverlays(overlayCtx, guides, selectedGuideId, hoveredGuideId, rulerHover, screenW, screenH, viewport, doc.width, doc.height, guideColor);
+      renderGuideRulerOverlays(overlayCtx, guides, selectedGuideId, hoveredGuideId, rulerHover, screenW, screenH, viewport, doc.width, doc.height, guideColor, rulerUnit, dpi);
       renderGuideColorSwatch(overlayCtx, guideColor);
     }
   }

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { RulerUnit } from './rendering/ruler-units';
 import type { Color, Point, Rect, ToolId } from '../types';
 import type { TransformHandle, TransformState } from '../tools/transform/transform';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
@@ -137,6 +138,8 @@ interface UIState {
   showGrid: boolean;
   showPixelGrid: boolean;
   showRulers: boolean;
+  /** Unit both rulers (and the guide hover readout) are labelled in. */
+  rulerUnit: RulerUnit;
   showGuides: boolean;
   showSeamlessPattern: boolean;
   dimSeamlessPattern: boolean;
@@ -224,6 +227,7 @@ interface UIState {
   toggleGrid: () => void;
   togglePixelGrid: () => void;
   toggleRulers: () => void;
+  setRulerUnit: (unit: RulerUnit) => void;
   toggleGuides: () => void;
   toggleSeamlessPattern: () => void;
   toggleDimSeamlessPattern: () => void;
@@ -317,6 +321,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   showGrid: false,
   showPixelGrid: true,
   showRulers: true,
+  rulerUnit: 'px',
   showGuides: true,
   showSeamlessPattern: false,
   dimSeamlessPattern: true,
@@ -415,6 +420,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   }),
   togglePixelGrid: () => set((state) => ({ showPixelGrid: !state.showPixelGrid })),
   toggleRulers: () => set((state) => ({ showRulers: !state.showRulers })),
+  setRulerUnit: (unit) => set({ rulerUnit: unit }),
   toggleGuides: () => set((state) => ({ showGuides: !state.showGuides })),
   toggleSeamlessPattern: () => set((state) => ({ showSeamlessPattern: !state.showSeamlessPattern })),
   toggleDimSeamlessPattern: () => set((state) => ({ dimSeamlessPattern: !state.dimSeamlessPattern })),

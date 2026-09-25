@@ -15,6 +15,12 @@ export interface DocumentState {
   readonly selectedLayerIds: readonly string[];
   readonly backgroundColor: Color;
   readonly colorMode: DocumentColorMode;
+  /**
+   * Pixels per inch, from the New Document modal. Only the ruler unit
+   * conversion reads it. Absent on opened images and files saved before it
+   * was stored → treated as 72.
+   */
+  readonly dpi?: number;
   /** Palette for `indexed` mode (≤256 entries). Absent in other modes. */
   readonly indexedPalette?: readonly Color[];
   readonly rootGroupId?: string | null;

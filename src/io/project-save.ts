@@ -41,6 +41,8 @@ export interface LopsyManifest {
   readonly colorMode?: DocumentColorMode;
   /** Palette for indexed-mode documents. Absent in every other mode. */
   readonly indexedPalette?: readonly { r: number; g: number; b: number; a: number }[];
+  /** Pixels per inch from the New Document modal. Absent in older files → 72. */
+  readonly dpi?: number;
   /** Stored vector paths (Paths panel). Absent in files saved before these were serialized. */
   readonly paths?: readonly StoredPath[];
   /** Canvas guides. Absent in files saved before these were serialized. */
@@ -276,6 +278,7 @@ export async function saveProject(): Promise<void> {
       activeLayerId: doc.activeLayerId ?? null,
       colorMode: doc.colorMode,
       indexedPalette: doc.indexedPalette,
+      dpi: doc.dpi,
       paths: state.paths,
       guides: useUIStore.getState().guides,
     };

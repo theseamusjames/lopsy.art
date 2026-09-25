@@ -41,8 +41,8 @@ export function ModalHost() {
   }, [modal, closeModal]);
 
   const handleCreateDocument = useCallback(
-    (width: number, height: number, background: 'white' | 'transparent', colorMode: DocumentColorMode) => {
-      useEditorStore.getState().createDocument(width, height, background === 'transparent', colorMode);
+    (width: number, height: number, background: 'white' | 'transparent', colorMode: DocumentColorMode, dpi: number) => {
+      useEditorStore.getState().createDocument(width, height, background === 'transparent', colorMode, dpi);
       closeModal();
     },
     [closeModal],
